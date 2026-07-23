@@ -1,7 +1,7 @@
 ---
 type: dossier
-status: new
-run:
+status: final
+run: r20260723-215841
 created: 2026-07-23
 updated: 2026-07-23
 subject: Vlaams Instituut Gezond Leven (gezondleven.be) as prospective client for StrideLMS
