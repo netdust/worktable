@@ -42,11 +42,19 @@ dossier's factual claims until provided.
   enterprise fork of Moodle.
   Source: https://www.gezondlevenacademie.be/totara/catalog/explore.php
   Source: https://www.gezondlevenacademie.be/course/index.php?categoryid=4
-- Implication (analysis, not sourced fact): per-user subscription
-  licensing + typically a Totara partner/agency for hosting and
-  support; costs scale with audience size — an awkward model for an
-  org whose mission is REACH (broad, often free, professional
-  audiences).
+- Totara's licensing model (the product's, not necessarily this
+  customer's contract): annual subscription priced in tiers of
+  active users (bands from 500 up), i.e. costs scale with audience
+  size.
+  Source: https://www.totara.com/us/license/
+  Source: https://elearningindustry.com/directory/elearning-software/totara-learn/pricing
+- Gezond Leven's ACTUAL contract terms are unknown (analysis caveat):
+  the cost-scaling implication applies to Totara's published model;
+  their negotiated deal could differ.
+- Catalog includes a "Basisopleiding gezondheidsbevordering" for
+  beginning health-promotion professionals, alongside the e-learnings
+  and programs listed above.
+  Source: https://www.gezondlevenacademie.be/course/index.php?categoryid=4
 
 ## StrideLMS (public footprint)
 

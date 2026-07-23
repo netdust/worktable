@@ -8,21 +8,25 @@ to the Sources section; analysis is marked as such.
 Vlaams Instituut Gezond Leven vzw is the Flemish government's partner
 organization for health promotion — and it operates a serious digital
 training arm, the Gezond Leven Academie, on its own platform domain.
-That platform is **Totara Learn**, the commercially licensed,
-per-seat enterprise fork of Moodle (visible in the platform's own
-catalog URLs). This makes them close to an ideal StrideLMS prospect:
-an organization whose *mission* is maximum professional reach, paying
-for a platform whose *pricing* scales against reach. StrideLMS —
-fixed rate, unlimited users, Belgian hosting — inverts exactly that
-cost curve, and it carries a sector-native origin story: it grew out
-of the training platform of VAD, Gezond Leven's peer expertise center
-in the same Flemish prevention landscape, training 1,000+
-professionals annually.
+That platform is **Totara Learn**, the commercially licensed
+enterprise fork of Moodle (visible in the platform's own catalog
+URLs). Totara's published licensing model is an annual subscription
+priced in tiers of active users — costs that scale with audience
+size — though Gezond Leven's actual contract terms are unknown. This
+makes them a strong StrideLMS prospect: an organization whose
+*mission* is maximum professional reach, on a platform whose
+*published pricing model* scales against reach. StrideLMS — fixed
+rate, unlimited users, Belgian hosting — inverts that cost curve,
+and it carries a sector-native origin story: it was developed from
+years of practical experience with the training platform of VAD,
+Gezond Leven's peer expertise center in the same Flemish prevention
+landscape, which trains 1,000+ professionals annually.
 
 **Verdict: pursue.** Warm-adjacent approach via the VAD provenance,
 aimed at the Academie team, with a cost-predictability and
-sector-fit argument. Not a cold lead in the usual sense: the
-reference customer is their institutional neighbor.
+sector-fit argument — after confirming with the owner whether VAD
+can be named as a reference (its role today is sourced only as
+Stride's origin, not as a referenceable customer).
 
 ## The organization
 
@@ -41,11 +45,14 @@ reference customer is their institutional neighbor.
 - Own platform at gezondlevenacademie.be with a multi-category
   catalog (basisopleiding gezondheidsbevordering, e-learnings such as
   Rookvrije Start, programs like Kleurrijk Gezond).
+- Catalog includes a basisopleiding gezondheidsbevordering for
+  beginning health-promotion professionals.
 - **Platform: Totara Learn** — evidenced by `/totara/catalog/` and
-  Moodle-style course paths in their own URLs. Analysis: per-user
-  licensing plus (typically) a Totara partner for hosting/support;
-  cost grows with the audience, which conflicts with a
-  reach-maximizing, largely open training mission.
+  Moodle-style course paths in their own URLs. Totara's published
+  licensing: annual subscription in active-user tiers, so cost grows
+  with audience — which conflicts with a reach-maximizing training
+  mission. (Their negotiated terms are unknown; the argument rests
+  on the published model and should be validated in conversation.)
 
 ## Why StrideLMS fits (analysis)
 
@@ -55,10 +62,12 @@ reference customer is their institutional neighbor.
 2. **Cost-model inversion** — fixed rate + unlimited users turns
    their growth (more professionals trained) from a cost driver into
    a free win. This is the headline argument.
-3. **Sector-native credibility** — StrideLMS was built from VAD's
-   training platform; VAD is their peer organization with the same
-   audience shape. Few vendors can open with "built inside your
-   sector, for your kind of academy."
+3. **Sector-native credibility** — StrideLMS was developed from
+   years of practical experience with VAD's training platform; VAD is
+   their peer organization with the same audience shape. Few vendors
+   can open with "grown inside your sector, for your kind of
+   academy." [OWNER INPUT: whether VAD may be named/used as a
+   reference — do not deploy this angle unconfirmed.]
 4. **Belgian hosting** — congruent with a government-partner
    organization's data governance expectations.
 
@@ -100,3 +109,6 @@ reference customer is their institutional neighbor.
 - https://stridelms.be/
 - https://vad.be/vormingen/
 - https://vormingen.vad.be/
+- https://www.totara.com/us/license/
+- https://elearningindustry.com/directory/elearning-software/totara-learn/pricing
+- https://www.gezondlevenacademie.be/course/index.php?categoryid=4
