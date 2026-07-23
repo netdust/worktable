@@ -1,0 +1,140 @@
+{
+  "flow": "dossier",
+  "version": 1,
+  "state": {
+    "gate": {}
+  },
+  "nodes": [
+    {
+      "id": "research",
+      "kind": "agent",
+      "craft": [
+        "skills/sourcing-from-docs"
+      ],
+      "out": [
+        "research.md"
+      ]
+    },
+    {
+      "id": "gate-research",
+      "kind": "gate",
+      "run": "{worktable}/bin/item-check.py {feature_dir} research"
+    },
+    {
+      "id": "draft",
+      "kind": "agent",
+      "craft": [
+        "skills/spec-authoring"
+      ],
+      "in": [
+        "research.md"
+      ],
+      "out": [
+        "dossier.md"
+      ]
+    },
+    {
+      "id": "gate-draft",
+      "kind": "gate",
+      "run": "{worktable}/bin/item-check.py {feature_dir} draft"
+    },
+    {
+      "id": "review",
+      "kind": "agent",
+      "craft": [
+        "agents/reviewer"
+      ],
+      "in": [
+        "dossier.md",
+        "research.md"
+      ],
+      "out": [
+        "reviews/dossier.md"
+      ]
+    },
+    {
+      "id": "gate-review",
+      "kind": "gate",
+      "run": "{worktable}/bin/review-check.py {feature_dir} dossier"
+    },
+    {
+      "id": "approve",
+      "kind": "human",
+      "out": [
+        "seal dossier"
+      ]
+    },
+    {
+      "id": "gate-seal",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {feature_dir} dossier"
+    }
+  ],
+  "edges": [
+    {
+      "from": "__start__",
+      "to": "research"
+    },
+    {
+      "from": "research",
+      "to": "gate-research"
+    },
+    {
+      "from": "gate-research",
+      "to": "draft",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-research",
+      "to": "research",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "draft",
+      "to": "gate-draft"
+    },
+    {
+      "from": "gate-draft",
+      "to": "review",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-draft",
+      "to": "draft",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "review",
+      "to": "gate-review"
+    },
+    {
+      "from": "gate-review",
+      "to": "approve",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-review",
+      "to": "draft",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "approve",
+      "to": "gate-seal"
+    },
+    {
+      "from": "gate-seal",
+      "to": "__end__",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-seal",
+      "to": "draft",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-seal",
+      "to": "approve",
+      "when": "gate.exit == 1"
+    }
+  ]
+}
