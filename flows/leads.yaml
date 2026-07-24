@@ -1,0 +1,70 @@
+# flows/dossier.yaml — the first domain: research → gated draft →
+# attested review → human seal. A dossier is DONE when the evidence
+# says so and the human sealed it — never when an agent feels done.
+#
+# v2: every gate composes its check with the flow-owned status write
+# (bin/gate-then-status.py) — run 0001 finding F1: a convention that
+# "only flows move status" needs a flow that actually moves it.
+#
+# Binds: worktable (this repo root), netdust_flow (runtime root),
+# feature_dir (the record folder, records/dossiers/<slug>).
+
+flow: leads
+version: 2
+
+state:
+  gate: {}                # last gate exit code — written by the walker
+
+nodes:
+  - id: research          # gather sources into research.md — every
+    kind: agent           # claim carries its source (AGENTS.md)
+    craft: [skills/sourcing-from-docs]
+    out: [research.md]
+
+  - id: gate-research     # item frontmatter valid + research.md
+    kind: gate            # present with sourced content
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} researched -- {worktable}/bin/item-check.py {feature_dir} research"
+
+  - id: draft             # dossier.md drafted FROM research.md only
+    kind: agent
+    craft: [skills/spec-authoring]
+    in: [research.md]
+    out: [dossier.md]
+
+  - id: gate-draft        # structure + every claim traceable
+    kind: gate
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} drafted -- {worktable}/bin/item-check.py {feature_dir} draft"
+
+  - id: review            # fresh-context reviewer; verdict written
+    kind: agent           # tree-bound to reviews/dossier.md (I5)
+    craft: [agents/reviewer]
+    in: [dossier.md, research.md]
+    out: [reviews/dossier.md]
+
+  - id: gate-review       # CLEAN verdict bound to the current tree
+    kind: gate
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} reviewed --seal outreach -- {worktable}/bin/review-check.py {feature_dir} dossier"
+
+  - id: approve           # yield point only — the decision is the seal
+    kind: human
+    out: [seal outreach]
+
+  - id: gate-seal         # the finish reads the recorded decision
+    kind: gate
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} sent -- {netdust_flow}/bin/seal.py check {feature_dir} outreach"
+
+edges:
+  - {from: __start__,     to: research}
+  - {from: research,      to: gate-research}
+  - {from: gate-research, to: draft,    when: gate.exit == 0}
+  - {from: gate-research, to: research, when: gate.exit != 0}
+  - {from: draft,         to: gate-draft}
+  - {from: gate-draft,    to: review,   when: gate.exit == 0}
+  - {from: gate-draft,    to: draft,    when: gate.exit != 0}
+  - {from: review,        to: gate-review}
+  - {from: gate-review,   to: approve,  when: gate.exit == 0}
+  - {from: gate-review,   to: draft,    when: gate.exit != 0}
+  - {from: approve,       to: gate-seal}
+  - {from: gate-seal,     to: __end__,  when: gate.exit == 0}
+  - {from: gate-seal,     to: draft,    when: gate.exit == 2}
+  - {from: gate-seal,     to: approve,  when: gate.exit == 1}
