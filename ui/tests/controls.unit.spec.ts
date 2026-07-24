@@ -7,6 +7,8 @@ import {
   applyControls,
   groupRecordsBy,
   controllableFields,
+  effectiveGroup,
+  GROUP_NONE,
   type ViewControls,
 } from "../src/view-controls";
 import { projectsOf } from "../src/lib/records";
@@ -44,6 +46,28 @@ test("empty controls encode to all-null (no URL params)", () => {
     sort: null,
     filters: null,
   });
+});
+
+test("codec round-trips filter values containing the delimiters (F3)", () => {
+  const c: ViewControls = {
+    filters: [{ field: "url", op: "has", value: "https://x.io/a?b=1,c:2" }],
+    group: GROUP_NONE,
+    sortKey: null,
+    sortDir: "desc",
+  };
+  const enc = encodeControls(c);
+  expect(decodeControls(enc.group, enc.sort, enc.filters)).toEqual(c);
+});
+
+test("effectiveGroup resolves the three group states (F1)", () => {
+  // null control → the view's own default
+  expect(effectiveGroup(null, "area")).toBe("area");
+  // an explicit field wins over the default
+  expect(effectiveGroup("status", "area")).toBe("status");
+  // GROUP_NONE → flat, even when the view declares a group_by
+  expect(effectiveGroup(GROUP_NONE, "area")).toBe(null);
+  // no control, no default → flat
+  expect(effectiveGroup(null, undefined)).toBe(null);
 });
 
 test("matchesClause covers every operator", () => {

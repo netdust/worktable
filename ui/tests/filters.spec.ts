@@ -23,9 +23,20 @@ test("T13 — adding a filter narrows the rows and persists in the URL", async (
   await expect(page.getByText("Gamma task")).toHaveCount(0);
 
   // the filter is in the URL → a reload keeps it (ephemeral but shareable)
-  expect(page.url()).toContain("filters=status%7Cis%7Ctodo");
+  expect(page.url()).toContain("filters=");
   await page.reload();
   await expect(page.locator("tr.record-row")).toHaveCount(2);
+});
+
+test("T13 — Group → None ungroups a default-grouped view (flat list)", async ({
+  page,
+}) => {
+  await signIn(page, "tasks-list"); // default group_by: area
+  await expect(page.locator("tr.group-header").first()).toBeVisible();
+  // pick None: an explicit ungrouped state, distinct from "use default"
+  await page.getByLabel("group by").selectOption("__none__");
+  await expect(page.locator("tr.group-header")).toHaveCount(0); // flat
+  await expect(page.locator("tr.record-row")).toHaveCount(4); // all rows, no headers
 });
 
 test("T13 — the group control regroups the view live", async ({ page }) => {
@@ -43,8 +54,11 @@ test("T13 — the group control regroups the view live", async ({ page }) => {
 
 test("T13 — the sort control reorders the rows live", async ({ page }) => {
   await signIn(page, "tasks-list");
-  // drop grouping so the test is purely about row order
-  await page.getByLabel("group by").selectOption("");
+  // drop grouping so the test is purely about row order (and assert it
+  // actually ungrouped — the header-count check makes this real, not a
+  // coincidence of the grouped order matching the flat order)
+  await page.getByLabel("group by").selectOption("__none__");
+  await expect(page.locator("tr.group-header")).toHaveCount(0);
   // sort by title ascending
   await page.getByLabel("sort by").selectOption("title");
   // default dir is desc; toggle to asc

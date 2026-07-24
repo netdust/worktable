@@ -3,11 +3,16 @@ import { parseList, humanize } from "../../lib/records";
 import {
   controllableFields,
   FILTER_OPS,
+  GROUP_NONE,
   type FilterClause,
   type FilterOp,
   type ViewControls,
 } from "../../view-controls";
 import { Icon } from "./Icon";
+
+// Grouping is meaningless on the calendar (records placed by date) and
+// timeline (lanes per record), so the Group control is hidden there.
+const GROUPLESS = new Set(["calendar", "timeline"]);
 
 // The shared control bar above every view (folio's FilterBar shape):
 // filter clauses as removable pills, a `+ Filter` field-picker, and
@@ -15,11 +20,13 @@ import { Icon } from "./Icon";
 // the ViewControls object (held in the URL); no file is written.
 export function FilterBar({
   view,
+  type,
   records,
   controls,
   onChange,
 }: {
   view: ResolvedView;
+  type: string;
   records: RecordSummary[];
   controls: ViewControls;
   onChange: (next: ViewControls) => void;
@@ -35,7 +42,9 @@ export function FilterBar({
   ].filter(Boolean) as string[]);
 
   const defaultGroup = view.definition.group_by || "";
-  const effectiveGroup = controls.group ?? defaultGroup;
+  // the select reflects the effective group: an explicit control, else
+  // the view default, else "None" (GROUP_NONE) when the view has none.
+  const groupValue = controls.group ?? (defaultGroup || GROUP_NONE);
 
   const setFilters = (filters: FilterClause[]) =>
     onChange({ ...controls, filters });
@@ -111,23 +120,23 @@ export function FilterBar({
 
       <div className="ctrl-spacer" />
 
-      <label className="ctrl ctrl-group">
-        <span className="ctrl-key">Group</span>
-        <select
-          value={effectiveGroup}
-          aria-label="group by"
-          onChange={(e) =>
-            onChange({ ...controls, group: e.target.value || null })
-          }
-        >
-          <option value="">none</option>
-          {fields.map((f) => (
-            <option key={f} value={f}>
-              {humanize(f)}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!GROUPLESS.has(type) && (
+        <label className="ctrl ctrl-group">
+          <span className="ctrl-key">Group</span>
+          <select
+            value={groupValue}
+            aria-label="group by"
+            onChange={(e) => onChange({ ...controls, group: e.target.value })}
+          >
+            <option value={GROUP_NONE}>None</option>
+            {fields.map((f) => (
+              <option key={f} value={f}>
+                {humanize(f)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label className="ctrl ctrl-sort">
         <span className="ctrl-key">Sort</span>

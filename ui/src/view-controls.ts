@@ -16,9 +16,16 @@ export interface FilterClause {
   value: string;
 }
 
+// The group field has THREE states, so ungrouping is reachable:
+//   null          → use the view's own group_by (the default)
+//   GROUP_NONE     → explicitly ungrouped (a flat list), even when the
+//                    view declares a group_by
+//   "<field>"      → group by that field
+export const GROUP_NONE = "__none__";
+
 export interface ViewControls {
   filters: FilterClause[];
-  group: string | null; // overrides the view's group_by; null = view default
+  group: string | null; // null = view default; GROUP_NONE = flat; else field
   sortKey: string | null; // overrides the view's sort; null = server order
   sortDir: "asc" | "desc";
 }
@@ -28,8 +35,15 @@ export function emptyControls(): ViewControls {
 }
 
 // ── URL codec ────────────────────────────────────────────────────────
-// group → `g`, sort → `s` = "field.dir", filters → `flt` = clauses joined
-// by "~", each "field|op|value". Compact and human-legible in the bar.
+// group → `group`, sort → `sort` = "field.dir", filters → `filters` =
+// clauses joined by "," each "field:op:value". Each field/value is
+// percent-encoded, and the delimiters ("," / ":") are chars that
+// encodeURIComponent escapes — so a filter value containing a comma,
+// colon, or any delimiter round-trips intact (F3).
+function enc(s: string): string {
+  return encodeURIComponent(s);
+}
+
 export function encodeControls(c: ViewControls): {
   group: string | null;
   sort: string | null;
@@ -39,7 +53,7 @@ export function encodeControls(c: ViewControls): {
     group: c.group || null,
     sort: c.sortKey ? `${c.sortKey}.${c.sortDir}` : null,
     filters: c.filters.length
-      ? c.filters.map((f) => `${f.field}|${f.op}|${f.value}`).join("~")
+      ? c.filters.map((f) => `${enc(f.field)}:${f.op}:${enc(f.value)}`).join(",")
       : null,
   };
 }
@@ -59,14 +73,32 @@ export function decodeControls(
     }
   }
   if (filters) {
-    for (const raw of filters.split("~")) {
-      const parts = raw.split("|");
-      if (parts.length === 3 && parts[0] && FILTER_OPS.includes(parts[1] as FilterOp)) {
-        c.filters.push({ field: parts[0], op: parts[1] as FilterOp, value: parts[2] });
+    for (const raw of filters.split(",")) {
+      const parts = raw.split(":");
+      if (
+        parts.length === 3 &&
+        parts[0] &&
+        FILTER_OPS.includes(parts[1] as FilterOp)
+      ) {
+        c.filters.push({
+          field: decodeURIComponent(parts[0]),
+          op: parts[1] as FilterOp,
+          value: decodeURIComponent(parts[2]),
+        });
       }
     }
   }
   return c;
+}
+
+// The effective group field for a view, resolving the three-state
+// control against the view's own default. GROUP_NONE → null (flat).
+export function effectiveGroup(
+  control: string | null,
+  viewDefault: string | undefined,
+): string | null {
+  if (control === GROUP_NONE) return null;
+  return control ?? viewDefault ?? null;
 }
 
 // ── predicates ───────────────────────────────────────────────────────

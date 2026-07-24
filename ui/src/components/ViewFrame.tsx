@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { resolveView, type ResolvedView } from "../api";
-import { applyControls, type ViewControls } from "../view-controls";
+import { applyControls, effectiveGroup, type ViewControls } from "../view-controls";
 import { ViewRouter } from "./folio/ViewRouter";
 import { FilterBar } from "./folio/FilterBar";
 import { TableSkeleton, ErrorState } from "./folio/Feedback";
@@ -48,12 +48,13 @@ export function ViewFrame({
   if (error) return <ErrorState message={error} />;
   if (!view) return <TableSkeleton />;
 
-  const effectiveGroup = controls.group ?? view.definition.group_by ?? null;
+  const group = effectiveGroup(controls.group, view.definition.group_by);
 
   return (
     <div className="view-frame">
       <FilterBar
         view={view}
+        type={type}
         records={view.records}
         controls={controls}
         onChange={onControlsChange}
@@ -63,7 +64,7 @@ export function ViewFrame({
           type={type}
           view={view}
           records={records}
-          groupBy={effectiveGroup || null}
+          groupBy={group}
           onOpen={onOpen}
         />
       </div>
