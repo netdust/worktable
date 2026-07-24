@@ -36,7 +36,9 @@ export function App() {
       .then((r) => {
         if (!live) return;
         setViews(r.views);
-        if (!url.view && r.views.length) navigate({ view: r.views[0].name });
+        // seed the default view without a history push (Back stays live)
+        if (!url.view && r.views.length)
+          navigate({ view: r.views[0].name }, { replace: true });
       })
       .catch((e) => live && setError(e.message));
     return () => {

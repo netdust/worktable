@@ -20,6 +20,8 @@ export default async function globalSetup() {
   );
   writeFileSync(join(demo, "research.md"), "# research\n\nsourced findings\n");
   writeFileSync(join(demo, "dossier.md"), "# dossier\n\n## Summary\n\nok\n");
+  mkdirSync(join(demo, "reviews"), { recursive: true });
+  writeFileSync(join(demo, "reviews", "dossier.md"), "VERDICT: CLEAN\n");
 
   const done = join(FIXTURE_DIR, "records", "dossiers", "shipped");
   mkdirSync(done, { recursive: true });

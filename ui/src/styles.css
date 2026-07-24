@@ -86,6 +86,8 @@ table.records th { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: u
 .chip { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
 .chip-empty { color: var(--muted); background: transparent; }
 
+.reviews-badge { color: var(--accent); font-size: 0.8rem; font-weight: 600; }
+
 /* record panel */
 .panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; justify-content: flex-end; }
 .panel {

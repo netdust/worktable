@@ -4,7 +4,7 @@
 // change` frame. No state lives here — the tick just tells the UI to
 // re-read (the server is the source of truth).
 
-import { getToken } from "./api";
+import { getToken, notifyUnauthorized } from "./api";
 
 export function subscribeChanges(
   onChange: () => void,
@@ -27,6 +27,13 @@ export function subscribeChanges(
           headers: { Authorization: `Bearer ${getToken()}` },
           signal: controller.signal,
         });
+        if (res.status === 401) {
+          // the token went stale — route to the gate, don't reconnect
+          // forever against a 401 (review finding)
+          stopped = true;
+          notifyUnauthorized();
+          return;
+        }
         if (!res.ok || !res.body) throw new Error(`events ${res.status}`);
         const reader = res.body.getReader();
         const decoder = new TextDecoder();

@@ -22,6 +22,11 @@ let onUnauthorized: UnauthorizedHandler = () => {};
 export function setUnauthorizedHandler(h: UnauthorizedHandler): void {
   onUnauthorized = h;
 }
+// so non-request paths (the SSE stream in live.ts) can route a 401
+// back to the gate the same way the fetch wrapper does
+export function notifyUnauthorized(): void {
+  onUnauthorized();
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

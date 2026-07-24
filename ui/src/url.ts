@@ -15,7 +15,9 @@ function read(): UrlState {
   return { view: p.get("view"), record: p.get("record") };
 }
 
-export function useUrlState(): [UrlState, (next: Partial<UrlState>) => void] {
+type Navigate = (next: Partial<UrlState>, opts?: { replace?: boolean }) => void;
+
+export function useUrlState(): [UrlState, Navigate] {
   const [state, setState] = useState<UrlState>(read);
 
   useEffect(() => {
@@ -24,15 +26,22 @@ export function useUrlState(): [UrlState, (next: Partial<UrlState>) => void] {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const navigate = useCallback((next: Partial<UrlState>) => {
-    const merged = { ...read(), ...next };
-    const p = new URLSearchParams();
-    if (merged.view) p.set("view", merged.view);
-    if (merged.record) p.set("record", merged.record);
-    const qs = p.toString();
-    window.history.pushState(null, "", qs ? `?${qs}` : window.location.pathname);
-    setState(merged);
-  }, []);
+  // `replace` for state the user didn't choose (the default-view seed)
+  // so it doesn't leave a dead Back-button entry; push otherwise.
+  const navigate = useCallback(
+    (next: Partial<UrlState>, opts: { replace?: boolean } = {}) => {
+      const merged = { ...read(), ...next };
+      const p = new URLSearchParams();
+      if (merged.view) p.set("view", merged.view);
+      if (merged.record) p.set("record", merged.record);
+      const qs = p.toString();
+      const url = qs ? `?${qs}` : window.location.pathname;
+      if (opts.replace) window.history.replaceState(null, "", url);
+      else window.history.pushState(null, "", url);
+      setState(merged);
+    },
+    [],
+  );
 
   return [state, navigate];
 }

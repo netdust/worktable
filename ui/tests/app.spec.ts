@@ -142,3 +142,13 @@ test("A06 — deep link restores view + open record", async ({ page }) => {
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Demo Dossier" })).toBeVisible();
 });
+
+test("panel closes on Escape and shows the reviews badge", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/?view=dossiers&record=dossiers/demo");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".reviews-badge")).toContainText("1 review");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
