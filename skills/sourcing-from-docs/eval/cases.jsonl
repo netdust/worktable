@@ -1,0 +1,1 @@
+{"id":"C-src-1","lesson":"L-dfe4b08542","input":"Produce research for a lead dossier","assert":[{"kind":"min_chars","n":300},{"kind":"min_links","n":3},{"kind":"has_section","name":"Findings"}]}
