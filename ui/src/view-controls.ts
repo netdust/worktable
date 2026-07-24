@@ -44,6 +44,17 @@ function enc(s: string): string {
   return encodeURIComponent(s);
 }
 
+// decodeURIComponent throws (URIError) on a malformed percent-sequence
+// (e.g. a hand-crafted `?filters=%ZZ`); the codec must never crash the
+// render on a hostile URL, so a bad clause is dropped, not thrown.
+function dec(s: string): string | null {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return null;
+  }
+}
+
 export function encodeControls(c: ViewControls): {
   group: string | null;
   sort: string | null;
@@ -80,11 +91,12 @@ export function decodeControls(
         parts[0] &&
         FILTER_OPS.includes(parts[1] as FilterOp)
       ) {
-        c.filters.push({
-          field: decodeURIComponent(parts[0]),
-          op: parts[1] as FilterOp,
-          value: decodeURIComponent(parts[2]),
-        });
+        const field = dec(parts[0]);
+        const value = dec(parts[2]);
+        // a malformed percent-encoding drops just this clause
+        if (field !== null && value !== null) {
+          c.filters.push({ field, op: parts[1] as FilterOp, value });
+        }
       }
     }
   }

@@ -59,6 +59,13 @@ test("codec round-trips filter values containing the delimiters (F3)", () => {
   expect(decodeControls(enc.group, enc.sort, enc.filters)).toEqual(c);
 });
 
+test("decode never throws on a malformed URL (drops the bad clause)", () => {
+  // a hand-crafted hostile ?filters= with a bad percent-sequence must
+  // not crash the render — the bad clause is dropped, good ones survive
+  const c = decodeControls(null, null, "%ZZ:is:x,status:is:todo");
+  expect(c.filters).toEqual([{ field: "status", op: "is", value: "todo" }]);
+});
+
 test("effectiveGroup resolves the three group states (F1)", () => {
   // null control → the view's own default
   expect(effectiveGroup(null, "area")).toBe("area");
