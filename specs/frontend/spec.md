@@ -1,78 +1,102 @@
-# Spec: worktable UI (phase 2b, v1 — the human layer)
+# Spec: worktable UI (phase 2b, v2 — folio-fidelity, all views)
 
-The browser layer for people not in a terminal: render worktable's
-records as views, open a record as one panel, and let the owner seal.
-Lean by contract — this is not a heavy application. It speaks ONLY to
-the phase-2a server API (docs/SERVER.md); it never touches the folder.
+Supersedes the v1 spec after the shake-out rejection: v1 shipped one
+thin table and a UX far from folio. v2 targets a real folio-class UI —
+all five views and folio's actual feel — by a HYBRID strategy grounded
+in a review of folio's view layer (docs/folio-view-review carried into
+this run): port folio's pure view *math* and clean leaf components,
+rewire the calendar/timeline renderers, rebuild the folio-shaped
+mini-apps (kanban shell, table, detail panel) lean.
+
+It speaks ONLY to the phase-2a server API (docs/SERVER.md) and keeps
+worktable's own data layer, auth, and seal from v1.
 
 ## Problem
 
-worktable's records, views, and flow state are files served by a JSON
-API. A human away from the terminal needs to see them and to perform
-exactly one write — the seal. Existing options force a choice between
-local-only (Obsidian) and a heavyweight app (folio's DB stack). We
-want the lean middle: a small SPA over the server, carrying folio's
-view DESIGN (docs/folio-view-harvest.md) and none of its DB-era
-machinery.
+The human layer must look and work like folio — table, grouped table,
+kanban, calendar, timeline, and a record detail panel with folio's
+polish — over worktable's records, with the owner's seal as the one
+write. v1 under-scoped both the view set and the fidelity. Rebuilding
+all of folio is wrong (46% of its view tree is agents/wiki/comments/
+settings/editors, none of it view rendering); re-deriving folio's
+proven view math is also wrong. The right path carries the elegant,
+dependency-free logic and rebuilds only the folio-shaped shells.
 
 ## Requirements
 
-- R01 App shell: a nav rail listing the server's view documents
-  (`GET /views`); selecting one renders it. The owner's bearer token
-  is entered once and kept in the browser (localStorage); every
-  request carries it; a 401 sends the user back to token entry.
-- R02 Table view: render a resolved view (`GET /views/<name>`) as a
-  table — one row per record, columns from the view definition
-  (record title/link, status, plus declared columns), sorted and
-  grouped as the definition says. Status shows as a colored chip.
-- R03 Grouped table (`list`): the same table, sectioned by the
-  view's `group_by`, each group a header with its record count. One
-  renderer, grouping as a mode (the harvested rule).
-- R04 Record panel: clicking a row opens a slideover showing the
-  record as ONE thing (`GET /records/<domain>/<slug>`): header from
-  the frontmatter core, a Cover tab (item.md body), and one read-only
-  tab per artifact, lazy-loaded (`…/artifacts/<file>`). Tab order
-  follows the record's flow definition (`GET /flows/<name>` node
-  `out:` sequence) when resolvable, else artifact name order.
-- R05 The seal: when a record is at a human node (its status implies
-  a pending decision), the panel shows Approve and Reject actions
-  that POST to `/seal` with `{record, node, decision, note?}`. This
-  is the ONLY write the UI performs. Success reflects via the live
-  refresh (R06); failure shows the server's reason.
-- R06 Live updates: subscribe to `/events` (via fetch-stream, since
-  native EventSource cannot send the auth header) and refetch the
-  active view/record on a change tick, debounced. No client state
-  owns record data — the server is the source, the UI re-reads.
-- R07 URL as state: the active view and open record live in the URL
-  (query params), so a view/record is shareable and reload-stable;
-  one place hydrates the URL, the URL drives the queries.
-- R08 Lean build: Vite + React + TypeScript, plain CSS, a hand-rolled
-  data layer (fetch + SSE) and URL-state — no meta-framework, no
-  data-fetching library, no CSS framework. The framework-free layout
-  helpers may be lifted from the harvest. Dependency list stays short
-  and is justified in the plan.
+- R01 All five views render via a single exhaustive ViewType→renderer
+  map (carried from folio's view-router): `table`, `list` (grouped
+  table), `kanban`, `calendar`, `timeline`. The view definition
+  (frontmatter of a `views/*.md`) selects type, source, group_by,
+  sort, columns, and per-type settings (date field, lane fields).
+- R02 Table + grouped table: columns from the definition (over the
+  ported `columns` machinery), sort + group per definition, group
+  headers with counts and the ported aggregate/distribution-bar
+  components, status as the ported pill. Grouping is a mode of one
+  renderer.
+- R03 Kanban: columns by the group_by field, cards draggable BETWEEN
+  columns to change that field's value (a seal-gated status change is
+  still a flow decision, so kanban drag that would move `status`
+  routes through the seal, never a silent write — see R08). Uses the
+  ported board-grouping math and `@dnd-kit/core`; a lean shell, not
+  folio's 518-line quirk-mass. Within-column manual ordering is out of
+  v2 (no board-rank/sortable dep).
+- R04 Calendar: month grid over the ported `calendar-grid` math, a
+  configurable date field, drag-to-reschedule where the dragged field
+  is not flow-owned; a flow-owned field (status) is read-only in the
+  view.
+- R05 Timeline: lanes over the ported `timeline-lanes` math, a start/
+  end field pair from the view settings, day/week/month zoom.
+- R06 Record panel (rebuilt, folio-fidelity shell): the ported
+  slideover-shell chrome; folder-as-one — header from frontmatter,
+  cover + flow-ordered artifact tabs, the reviews badge, the seal
+  actions. NO milkdown/relations/wikilinks/comments (folio's detail
+  bloat stays excluded).
+- R07 Fidelity + polish carried from v1 and folio's leaves: the token
+  gate, nav rail, live SSE refresh, URL-as-state (view + record +
+  active view), skeleton loading states per view, empty states,
+  keyboard (Escape closes the panel), light/dark.
+- R08 The seal stays the ONLY write. Any view interaction that would
+  change a flow-owned field (`status`, decision records) does not
+  write it directly — it opens the record to its seal actions. Other
+  frontmatter fields a view can reschedule/regroup (a non-flow date,
+  a free tag) MAY write via a second guarded endpoint IF the server
+  offers one; absent that, such drags are visual-only-until-sealed and
+  the UI says so. v2 assumes no field-write endpoint yet, so kanban/
+  calendar drag on flow-owned fields routes to the seal, and on
+  non-flow fields is disabled with a note (documented honestly, not
+  faked).
+- R09 Lean deps: Vite + React + TS + plain CSS + `@dnd-kit/core` only.
+  No milkdown, codemirror, cmdk, router, or data-fetching library.
+  Ported pure modules carry their own (zero) deps. Attribution to
+  folio preserved in carried files (same owner; a header note).
 
 ## Acceptance
 
-- A01 With a valid token, the shell lists the dossiers view and
-  renders it; a wrong token shows token entry, not a broken view (R01).
-- A02 The dossiers view renders gezondleven-be with its status chip,
-  under the `final` group; column order and sort match the definition
-  (R02, R03).
-- A03 Opening gezondleven-be shows the Cover plus a tab per artifact
-  (dossier.md, research.md); each tab lazy-loads its content; tab
-  order matches the dossier flow's node sequence (R04).
-- A04 A record at a human node shows Approve/Reject; approving POSTs a
-  well-formed seal and the panel reflects the new status after the
-  change tick; a server rejection surfaces its reason (R05, R06).
-- A05 Editing a record file on disk produces a view refresh in the
-  open browser within the debounce window (R06).
-- A06 Deep-linking a URL with a selected view + open record restores
-  that state on load (R07).
+- A01 The nav lists views; a `type: table` and a `type: kanban` and a
+  `type: calendar` and a `type: timeline` view each render their
+  distinct renderer from the one map (R01).
+- A02 Table/grouped: gezondleven-be (or fixtures) render with ported
+  status pills, correct column + sort + group ORDER, group counts,
+  and an aggregate/distribution header where configured (R02).
+- A03 Kanban: records appear as cards in the column of their group_by
+  value; dragging a card to another column whose field is flow-owned
+  opens the seal instead of writing (R03, R08).
+- A04 Calendar: records with the configured date field land on the
+  right day; a flow-owned date is read-only (R04).
+- A05 Timeline: records with start/end render as bars in the right
+  lane at the right span; zoom switches day/week/month (R05).
+- A06 Record panel: folder-as-one (cover + artifact tabs, flow-
+  ordered), reviews badge, seal actions when awaiting_seal; Escape
+  closes; no editor/relations/comments present (R06).
+- A07 Live + URL + auth from v1 still hold: SSE refresh, deep-link
+  restores view+record, 401 → gate (R07).
+- A08 Deps audit: package.json's runtime deps are exactly react,
+  react-dom, @dnd-kit/core — nothing from the excluded bucket (R09).
 
-## Non-goals (v1 — deferred to a later run, not dropped)
+## Non-goals (v2)
 
-Kanban, calendar, timeline views (the harvest's other three — carried
-when built, with their pure layout modules). Editing record bodies in
-the browser (a second guarded write, later). Multi-user anything. The
-UI stays read + seal.
+Within-column manual kanban ordering (board-rank). A general field-
+write API (only the seal writes; other field edits wait for a sealed
+server change). folio's editor/relations/wikilinks/comments/agents/
+settings — permanently out of the view layer.
