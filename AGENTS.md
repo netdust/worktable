@@ -41,6 +41,18 @@ contract, and the flow runtime enforces what conventions cannot.
   edit a flow that is currently driving an armed run, and compiled
   `.json` twins are written only by a green `flow-lint --compile`.
 
+## Two disciplines learned in run 0001
+
+- **Red reviews go through the gate.** When a reviewer returns
+  FINDINGS, do NOT fix in place: run the stop cycle first, so the
+  red verdict executes at gate-review, lands in the journal, and the
+  walker routes you to `draft` — where fixing belongs. A quality
+  event that never hits a gate is invisible to the eval.
+- **Render before you push.** `python3 bin/render-views.py`
+  materializes every view and each record's Artifacts section —
+  derived wallpaper between markers, safe to regenerate always. The
+  boards on GitHub are only as fresh as the last render.
+
 ## Working a run
 
 The runtime is netdust-flow (symlinked at `~/.claude/netdust-flow`).

@@ -1,6 +1,6 @@
 {
   "flow": "dossier",
-  "version": 1,
+  "version": 2,
   "state": {
     "gate": {}
   },
@@ -18,7 +18,7 @@
     {
       "id": "gate-research",
       "kind": "gate",
-      "run": "{worktable}/bin/item-check.py {feature_dir} research"
+      "run": "{worktable}/bin/gate-then-status.py {feature_dir} researched -- {worktable}/bin/item-check.py {feature_dir} research"
     },
     {
       "id": "draft",
@@ -36,7 +36,7 @@
     {
       "id": "gate-draft",
       "kind": "gate",
-      "run": "{worktable}/bin/item-check.py {feature_dir} draft"
+      "run": "{worktable}/bin/gate-then-status.py {feature_dir} drafted -- {worktable}/bin/item-check.py {feature_dir} draft"
     },
     {
       "id": "review",
@@ -55,7 +55,7 @@
     {
       "id": "gate-review",
       "kind": "gate",
-      "run": "{worktable}/bin/review-check.py {feature_dir} dossier"
+      "run": "{worktable}/bin/gate-then-status.py {feature_dir} reviewed -- {worktable}/bin/review-check.py {feature_dir} dossier"
     },
     {
       "id": "approve",
@@ -67,7 +67,7 @@
     {
       "id": "gate-seal",
       "kind": "gate",
-      "run": "{netdust_flow}/bin/seal.py check {feature_dir} dossier"
+      "run": "{worktable}/bin/gate-then-status.py {feature_dir} final -- {netdust_flow}/bin/seal.py check {feature_dir} dossier"
     }
   ],
   "edges": [

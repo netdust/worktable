@@ -10,3 +10,11 @@ domain: lead-research
 
 Prospect dossier: is gezondleven.be a fit for StrideLMS, and if so,
 what is the angle? Driven by flows/dossier.yaml.
+
+<!-- artifacts:begin -->
+## Artifacts
+
+- [dossier.md](dossier.md)
+- [research.md](research.md)
+- reviews/: 1 report(s) (gitignored working papers)
+<!-- artifacts:end -->

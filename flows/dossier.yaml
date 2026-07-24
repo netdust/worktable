@@ -2,11 +2,15 @@
 # attested review → human seal. A dossier is DONE when the evidence
 # says so and the human sealed it — never when an agent feels done.
 #
+# v2: every gate composes its check with the flow-owned status write
+# (bin/gate-then-status.py) — run 0001 finding F1: a convention that
+# "only flows move status" needs a flow that actually moves it.
+#
 # Binds: worktable (this repo root), netdust_flow (runtime root),
 # feature_dir (the record folder, records/dossiers/<slug>).
 
 flow: dossier
-version: 1
+version: 2
 
 state:
   gate: {}                # last gate exit code — written by the walker
@@ -19,7 +23,7 @@ nodes:
 
   - id: gate-research     # item frontmatter valid + research.md
     kind: gate            # present with sourced content
-    run: "{worktable}/bin/item-check.py {feature_dir} research"
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} researched -- {worktable}/bin/item-check.py {feature_dir} research"
 
   - id: draft             # dossier.md drafted FROM research.md only
     kind: agent
@@ -29,7 +33,7 @@ nodes:
 
   - id: gate-draft        # structure + every claim traceable
     kind: gate
-    run: "{worktable}/bin/item-check.py {feature_dir} draft"
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} drafted -- {worktable}/bin/item-check.py {feature_dir} draft"
 
   - id: review            # fresh-context reviewer; verdict written
     kind: agent           # tree-bound to reviews/dossier.md (I5)
@@ -39,7 +43,7 @@ nodes:
 
   - id: gate-review       # CLEAN verdict bound to the current tree
     kind: gate
-    run: "{worktable}/bin/review-check.py {feature_dir} dossier"
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} reviewed -- {worktable}/bin/review-check.py {feature_dir} dossier"
 
   - id: approve           # yield point only — the decision is the seal
     kind: human
@@ -47,7 +51,7 @@ nodes:
 
   - id: gate-seal         # the finish reads the recorded decision
     kind: gate
-    run: "{netdust_flow}/bin/seal.py check {feature_dir} dossier"
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} final -- {netdust_flow}/bin/seal.py check {feature_dir} dossier"
 
 edges:
   - {from: __start__,     to: research}
