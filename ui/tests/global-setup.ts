@@ -66,23 +66,26 @@ export default async function globalSetup() {
       .join("\n");
     writeFileSync(join(dir, "item.md"), `---\n${body}\n---\n\n${slug} body\n`);
   };
+  // `area` groups the tasks by something OTHER than status, so a list
+  // view produces mixed-status groups — the only way the distribution
+  // bar (single-status groups render null) is ever exercised.
   task("alpha", {
-    status: "todo", title: "Alpha task", updated: "2026-07-20",
+    status: "todo", title: "Alpha task", area: "build", updated: "2026-07-20",
     start: "2026-07-06", end: "2026-07-10", due: "2026-07-08",
   });
   task("beta", {
-    status: "doing", title: "Beta task", updated: "2026-07-21",
+    status: "doing", title: "Beta task", area: "build", updated: "2026-07-21",
     start: "2026-07-13", end: "2026-07-17", due: "2026-07-15",
     // parked at a human node: dragging its card (flow-owned status)
     // must open the record's seal, never write the field (A03/R08).
     awaiting_seal: "task", flow: "task",
   });
   task("gamma", {
-    status: "done", title: "Gamma task", updated: "2026-07-22",
+    status: "done", title: "Gamma task", area: "ship", updated: "2026-07-22",
     start: "2026-07-20", end: "2026-07-24", due: "2026-07-22",
   });
   task("delta", {
-    status: "todo", title: "Delta task", updated: "2026-07-19",
+    status: "todo", title: "Delta task", area: "build", updated: "2026-07-19",
     due: "2026-07-08", // single-date: no start/end, timeline uses fallback
   });
 
@@ -95,6 +98,11 @@ export default async function globalSetup() {
   const tl = `---\ntype: view\nview: timeline\nsource: records/tasks\n` +
     `start_field: start\nend_field: end\ndate_field: due\nsort: start asc\n---\n`;
   writeFileSync(join(views, "tasks-timeline.md"), tl);
+  // a grouped `list` view over a non-status field: the build group holds
+  // todo+doing+todo (mixed) so its distribution bar renders.
+  const list = `---\ntype: view\nview: list\nsource: records/tasks\n` +
+    `group_by: area\ncolumns: [title, status, area]\nsort: updated desc\n---\n`;
+  writeFileSync(join(views, "tasks-list.md"), list);
 
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: FIXTURE_DIR });

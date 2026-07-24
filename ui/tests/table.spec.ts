@@ -24,3 +24,22 @@ test("A02 — grouped table shows a group header with a count", async ({ page })
   await expect(finalHeader.locator(".group-label")).toHaveText("final");
   await expect(finalHeader.locator(".count")).toHaveText("1");
 });
+
+test("A02 — a mixed-status group renders the ported distribution bar", async ({
+  page,
+}) => {
+  // the `list` view groups tasks by `area`; the build group holds
+  // todo+doing+todo — >1 distinct status, so the distribution bar shows
+  // its segments (single-status groups render it null).
+  await signIn(page, "tasks-list");
+  const build = page.locator("tr.group-header", { hasText: "build" });
+  await expect(build.locator(".group-label")).toHaveText("build");
+  await expect(build.locator(".count")).toHaveText("3");
+  const bar = build.locator(".dist-bar");
+  await expect(bar).toBeVisible();
+  // two distinct statuses in the group → two segments (todo, doing)
+  await expect(bar.locator(".dist-seg")).toHaveCount(2);
+  // the single-status `ship` group has no bar
+  const ship = page.locator("tr.group-header", { hasText: "ship" });
+  await expect(ship.locator(".dist-bar")).toHaveCount(0);
+});

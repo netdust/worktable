@@ -84,16 +84,24 @@ export function App() {
       <main className="content">
         {error && <div className="pane-msg error">{error}</div>}
         {url.view ? (
-          <ViewRouter
-            key={url.view}
-            type={
-              (views || []).find((v) => v.name === url.view)?.definition.view ||
-              "table"
-            }
-            name={url.view}
-            refreshKey={refreshKey}
-            onOpen={(record) => navigate({ record })}
-          />
+          // Wait for the view list before choosing a renderer: deriving
+          // the type from an unloaded list would flash TableView on a
+          // deep-link to a calendar/kanban view. Once loaded, an unknown
+          // view name is surfaced by the router, not defaulted.
+          views === null ? (
+            <div className="pane-msg muted">Loading…</div>
+          ) : (
+            <ViewRouter
+              key={url.view}
+              type={
+                views.find((v) => v.name === url.view)?.definition.view ||
+                "table"
+              }
+              name={url.view}
+              refreshKey={refreshKey}
+              onOpen={(record) => navigate({ record })}
+            />
+          )
         ) : (
           <div className="pane-msg muted">Select a view.</div>
         )}
@@ -101,6 +109,7 @@ export function App() {
 
       {url.record && (
         <RecordPanel
+          key={url.record}
           record={url.record}
           refreshKey={refreshKey}
           onClose={() => navigate({ record: null })}

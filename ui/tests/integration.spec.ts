@@ -14,6 +14,7 @@ async function signIn(page: Page, view: string) {
 // render its OWN renderer root, proving the router dispatches distinctly.
 const RENDERERS: [string, string][] = [
   ["dossiers", "table.records"],
+  ["tasks-list", "table.records"], // `list` aliases the table renderer (grouped)
   ["tasks-board", ".kanban"],
   ["tasks-calendar", ".calendar"],
   ["tasks-timeline", ".tl-grid"],

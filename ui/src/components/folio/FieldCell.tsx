@@ -38,7 +38,18 @@ export function FieldCell({
         </a>
       );
     case "image":
-      return <img className="cell-img" src={value} alt={field} loading="lazy" />;
+      // A record may hold a hostile image URL; render it inert (scheme
+      // is gated to http(s) by the classifier) AND suppress the referer
+      // so viewing a record never leaks the app origin to that host.
+      return (
+        <img
+          className="cell-img"
+          src={value}
+          alt={field}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      );
     case "multi_select":
       return (
         <span className="cell-tags">
