@@ -1,1 +1,2 @@
 {"kind": "lesson", "id": "L-dfe4b08542", "skill": "sourcing-from-docs", "source": "gate", "symptom": "FAIL  [item-check]  research.md is trivial (<300 chars)", "run": "r20260724-160746", "feature": "records/dossiers/smoke-1", "ts": "2026-07-24T16:07:57+0000"}
+{"kind": "retire", "id": "L-dfe4b08542", "by": "r20260724-210457-40e4", "case": "C-src-1", "ts": "2026-07-24T21:06:31+0000"}
