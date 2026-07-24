@@ -112,3 +112,84 @@ table.records th { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: u
 .seal-actions .approve { background: var(--approve); }
 .seal-actions .reject { background: var(--reject); }
 .seal-actions button:disabled { opacity: 0.5; cursor: default; }
+
+/* ── field cells (folio field-typed rendering) ─────────────────── */
+.cell-empty { color: var(--muted); }
+.cell-link { color: var(--accent); text-decoration: none; }
+.cell-link:hover { text-decoration: underline; }
+.cell-img { max-height: 34px; max-width: 90px; border-radius: 4px; vertical-align: middle; object-fit: cover; }
+.cell-date { font-variant-numeric: tabular-nums; color: var(--muted); }
+.cell-tags { display: inline-flex; gap: 0.3rem; flex-wrap: wrap; }
+.tag { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 0.05rem 0.4rem; font-size: 0.78rem; }
+
+/* ── group header + distribution bar ───────────────────────────── */
+.group-label { font-weight: 600; }
+.dist-bar { display: inline-flex; width: 120px; height: 7px; border-radius: 999px; overflow: hidden; margin-left: 0.75rem; vertical-align: middle; border: 1px solid var(--line); }
+.dist-seg { height: 100%; }
+
+/* ── kanban ────────────────────────────────────────────────────── */
+.kanban-wrap { display: flex; flex-direction: column; gap: 0.75rem; }
+.kanban-note { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.6rem 0.9rem; display: flex; gap: 0.75rem; align-items: flex-start; }
+.kanban-note .note-x { border: none; background: transparent; color: var(--muted); font-size: 1.1rem; margin-left: auto; line-height: 1; }
+.kanban { display: flex; gap: 0.9rem; align-items: flex-start; overflow-x: auto; padding-bottom: 0.5rem; }
+.kan-col { flex: 0 0 260px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; display: flex; flex-direction: column; min-height: 120px; }
+.kan-col.over { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.kan-col-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--line); }
+.kan-col-head .count { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+.kan-col-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem; min-height: 40px; }
+.kan-card { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 0.6rem 0.7rem; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.kan-card:active { cursor: grabbing; }
+.kan-card.dragging { opacity: 0.85; box-shadow: 0 6px 18px rgba(0,0,0,0.18); z-index: 5; position: relative; }
+.kan-card-title { font-weight: 500; margin-bottom: 0.35rem; }
+.kan-card-meta { display: flex; gap: 0.5rem; align-items: center; font-size: 0.78rem; flex-wrap: wrap; }
+.seal-flag { color: var(--accent); font-weight: 600; }
+
+/* ── calendar ──────────────────────────────────────────────────── */
+.calendar { display: flex; flex-direction: column; gap: 0.5rem; }
+.cal-head { display: flex; align-items: center; gap: 0.75rem; }
+.cal-head h2 { margin: 0; font-size: 1.1rem; min-width: 11rem; text-align: center; }
+.cal-nav { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; width: 2rem; height: 2rem; font-size: 1.1rem; }
+.cal-field { margin-left: auto; }
+.cal-dow, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-dow-cell { text-align: center; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 0.2rem 0; }
+.cal-cell { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-height: 92px; padding: 0.3rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.cal-cell.out { background: var(--bg); opacity: 0.6; }
+.cal-day { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-item { display: flex; align-items: center; gap: 0.3rem; border: none; background: var(--bg); border-radius: 5px; padding: 0.15rem 0.3rem; text-align: left; width: 100%; overflow: hidden; }
+.cal-item:hover { background: var(--line); }
+.cal-item-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.78rem; }
+.cal-unscheduled, .tl-unplaced { font-size: 0.8rem; }
+
+/* ── timeline ──────────────────────────────────────────────────── */
+.timeline-wrap { display: flex; flex-direction: column; gap: 0.75rem; }
+.tl-head { display: flex; align-items: center; gap: 0.9rem; }
+.tl-zoom { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.tl-zoom-btn { border: none; background: var(--surface); color: var(--muted); padding: 0.35rem 0.8rem; text-transform: capitalize; }
+.tl-zoom-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+.tl-fields { margin-left: auto; }
+.tl-grid { display: grid; grid-template-columns: 160px 1fr; align-items: stretch; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; background: var(--surface); }
+.tl-corner { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); position: sticky; left: 0; background: var(--surface); z-index: 2; }
+.tl-scale { display: grid; grid-template-columns: repeat(var(--cols), minmax(64px, 1fr)); border-bottom: 1px solid var(--line); }
+.tl-col-head { font-size: 0.72rem; color: var(--muted); padding: 0.4rem 0.5rem; text-align: center; border-left: 1px solid var(--line); white-space: nowrap; }
+.tl-lane-label { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.tl-lane { display: grid; grid-template-columns: repeat(var(--cols), minmax(64px, 1fr)); border-bottom: 1px solid var(--line); align-items: center; padding: 0.3rem 0; }
+.tl-bar { display: flex; align-items: center; gap: 0.4rem; background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; padding: 0.2rem 0.45rem; margin: 0 2px; overflow: hidden; min-width: 0; }
+.tl-bar.clamped { border-style: dashed; border-color: var(--reject); }
+.tl-bar-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.78rem; }
+
+/* ── empty + skeleton states ───────────────────────────────────── */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 3rem; color: var(--muted); }
+.empty-mark { font-size: 2rem; opacity: 0.5; }
+.skel { --skel: color-mix(in srgb, var(--muted) 22%, transparent); }
+@keyframes skel-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.75; } }
+.skel-bar, .skel-card, .skel-cell, .skel-col, .skel-lane, .skel-row { animation: skel-pulse 1.2s ease-in-out infinite; }
+.skel-bar { display: inline-block; height: 0.75rem; background: var(--skel); border-radius: 4px; }
+.skel-table { display: flex; flex-direction: column; gap: 0.9rem; padding: 0.5rem; }
+.skel-row { display: flex; gap: 1rem; }
+.skel-board { display: flex; gap: 0.9rem; }
+.skel-col { flex: 0 0 240px; display: flex; flex-direction: column; gap: 0.6rem; padding: 0.6rem; background: var(--bg); border-radius: 8px; }
+.skel-card { height: 48px; background: var(--skel); border-radius: 6px; }
+.skel-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.skel-cell { height: 80px; background: var(--skel); border-radius: 6px; }
+.skel-lanes { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.5rem; }
+.skel-lane { height: 1.4rem; display: flex; align-items: center; }

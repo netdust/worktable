@@ -9,7 +9,7 @@ import {
 import { subscribeChanges } from "./live";
 import { useUrlState } from "./url";
 import { TokenGate } from "./components/TokenGate";
-import { TableView } from "./components/TableView";
+import { ViewRouter } from "./components/folio/ViewRouter";
 import { RecordPanel } from "./components/RecordPanel";
 
 export function App() {
@@ -84,7 +84,12 @@ export function App() {
       <main className="content">
         {error && <div className="pane-msg error">{error}</div>}
         {url.view ? (
-          <TableView
+          <ViewRouter
+            key={url.view}
+            type={
+              (views || []).find((v) => v.name === url.view)?.definition.view ||
+              "table"
+            }
             name={url.view}
             refreshKey={refreshKey}
             onOpen={(record) => navigate({ record })}

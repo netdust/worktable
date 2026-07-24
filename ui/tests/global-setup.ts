@@ -52,6 +52,50 @@ export default async function globalSetup() {
     }),
   );
 
+  // A second domain (tasks) with dated records, so the kanban,
+  // calendar, and timeline views each have real data to render:
+  // status lanes, `due` dates in July 2026, and start/end spans.
+  const task = (
+    slug: string,
+    fm: Record<string, string>,
+  ) => {
+    const dir = join(FIXTURE_DIR, "records", "tasks", slug);
+    mkdirSync(dir, { recursive: true });
+    const body = Object.entries({ type: "task", ...fm })
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n");
+    writeFileSync(join(dir, "item.md"), `---\n${body}\n---\n\n${slug} body\n`);
+  };
+  task("alpha", {
+    status: "todo", title: "Alpha task", updated: "2026-07-20",
+    start: "2026-07-06", end: "2026-07-10", due: "2026-07-08",
+  });
+  task("beta", {
+    status: "doing", title: "Beta task", updated: "2026-07-21",
+    start: "2026-07-13", end: "2026-07-17", due: "2026-07-15",
+    // parked at a human node: dragging its card (flow-owned status)
+    // must open the record's seal, never write the field (A03/R08).
+    awaiting_seal: "task", flow: "task",
+  });
+  task("gamma", {
+    status: "done", title: "Gamma task", updated: "2026-07-22",
+    start: "2026-07-20", end: "2026-07-24", due: "2026-07-22",
+  });
+  task("delta", {
+    status: "todo", title: "Delta task", updated: "2026-07-19",
+    due: "2026-07-08", // single-date: no start/end, timeline uses fallback
+  });
+
+  const board = `---\ntype: view\nview: kanban\nsource: records/tasks\n` +
+    `group_by: status\nlanes: [todo, doing, done]\nsort: updated desc\n---\n`;
+  writeFileSync(join(views, "tasks-board.md"), board);
+  const cal = `---\ntype: view\nview: calendar\nsource: records/tasks\n` +
+    `date_field: due\nsort: due asc\n---\n`;
+  writeFileSync(join(views, "tasks-calendar.md"), cal);
+  const tl = `---\ntype: view\nview: timeline\nsource: records/tasks\n` +
+    `start_field: start\nend_field: end\ndate_field: due\nsort: start asc\n---\n`;
+  writeFileSync(join(views, "tasks-timeline.md"), tl);
+
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: FIXTURE_DIR });
   git("init", "-qb", "main");

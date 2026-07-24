@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { resolveView, type ResolvedView } from "../api";
-import { columnsOf, groupRecords } from "../lib/records";
-import { StatusChip } from "./StatusChip";
+import { resolveView, type ResolvedView, type RecordSummary } from "../api";
+import { columnsOf, groupRecords, type Column } from "../lib/records";
+import { GroupHeader } from "./folio/GroupHeader";
+import { FieldCell } from "./folio/FieldCell";
+import { TableSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
 
 // One renderer for both `table` and `list` (grouped) — grouping is a
 // mode driven by the view's group_by, not a second component (the
-// harvested rule). Records are body-less here; the panel loads detail.
+// harvested folio rule). Columns come from the ported `columns`
+// machinery; each cell renders by inferred field type (FieldCell);
+// group headers carry counts + the ported distribution bar. Records are
+// body-less here; the panel loads detail.
 export function TableView({
   name,
   refreshKey,
@@ -29,8 +34,10 @@ export function TableView({
     };
   }, [name, refreshKey]);
 
-  if (error) return <div className="pane-msg error">{error}</div>;
-  if (!view) return <div className="pane-msg muted">Loading…</div>;
+  if (error) return <ErrorState message={error} />;
+  if (!view) return <TableSkeleton />;
+  if (view.records.length === 0)
+    return <EmptyState label="No records in this view." />;
 
   const columns = columnsOf(view.definition);
   const groupBy = view.definition.group_by;
@@ -59,13 +66,6 @@ export function TableView({
               onOpen={onOpen}
             />
           ))}
-          {view.records.length === 0 && (
-            <tr>
-              <td colSpan={colSpan} className="muted">
-                No records.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>
@@ -80,19 +80,15 @@ function GroupRows({
   onOpen,
 }: {
   value: string | null;
-  records: { domain: string; slug: string; frontmatter: Record<string, string> }[];
-  columns: { key: string; label: string }[];
+  records: RecordSummary[];
+  columns: Column[];
   colSpan: number;
   onOpen: (record: string) => void;
 }) {
   return (
     <>
       {value !== null && (
-        <tr className="group-header">
-          <td colSpan={colSpan}>
-            {value} <span className="count">{records.length}</span>
-          </td>
-        </tr>
+        <GroupHeader label={value} records={records} colSpan={colSpan} />
       )}
       {records.map((r) => {
         const id = `${r.domain}/${r.slug}`;
@@ -101,11 +97,7 @@ function GroupRows({
             <td className="record-link">{r.frontmatter.title || r.slug}</td>
             {columns.map((c) => (
               <td key={c.key}>
-                {c.key === "status" ? (
-                  <StatusChip status={r.frontmatter.status || ""} />
-                ) : (
-                  r.frontmatter[c.key] || "—"
-                )}
+                <FieldCell field={c.key} value={r.frontmatter[c.key]} />
               </td>
             ))}
           </tr>

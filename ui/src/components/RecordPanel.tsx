@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getRecord,
   getFlow,
@@ -9,6 +9,7 @@ import {
 } from "../api";
 import { orderArtifacts } from "../lib/records";
 import { StatusChip } from "./StatusChip";
+import { Slideover } from "./folio/Slideover";
 
 // The record panel: a folder presented as ONE thing. Header from the
 // frontmatter core, a Cover tab (item.md body), one read-only tab per
@@ -37,18 +38,6 @@ export function RecordPanel({
   const [flow, setFlow] = useState<FlowDef | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState("__cover__");
-  const panelRef = useRef<HTMLElement>(null);
-
-  // Escape closes the dialog; move focus into the panel on open so
-  // keyboard users land inside it (review finding).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    panelRef.current?.focus();
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   useEffect(() => {
     let live = true;
@@ -72,20 +61,8 @@ export function RecordPanel({
   );
 
   return (
-    <div className="panel-overlay" onClick={onClose}>
-      <aside
-        className="panel"
-        ref={panelRef}
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`record ${slug}`}
-      >
-        <button className="panel-close" onClick={onClose} aria-label="close">
-          ×
-        </button>
-        {error && <div className="pane-msg error">{error}</div>}
+    <Slideover label={`record ${slug}`} onClose={onClose}>
+      {error && <div className="pane-msg error">{error}</div>}
         {detail && (
           <>
             <header className="panel-head">
@@ -139,8 +116,7 @@ export function RecordPanel({
             />
           </>
         )}
-      </aside>
-    </div>
+    </Slideover>
   );
 }
 
