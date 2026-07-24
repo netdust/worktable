@@ -1,6 +1,6 @@
 ---
 type: lead
-status: drafted
+status: sent
 run: r20260724-161022
 created: 2026-07-24
 updated: 2026-07-24
