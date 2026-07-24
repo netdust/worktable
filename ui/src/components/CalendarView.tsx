@@ -1,49 +1,28 @@
-import { useEffect, useState } from "react";
-import { resolveView, type ResolvedView } from "../api";
+import { useState } from "react";
 import { buildMonthGrid, placeDocuments } from "../lib/ported/calendar-grid";
 import { StatusChip } from "./StatusChip";
-import { GridSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
+import { EmptyState } from "./folio/Feedback";
 import { Icon } from "./folio/Icon";
+import type { RenderProps } from "./folio/ViewRouter";
 
 // Calendar view over the ported (folio) calendar-grid math. The date
 // field comes from the view definition's `date_field`; a flow-owned
 // field (status) is never dragged here — v2 has no field-write
 // endpoint, so the calendar is read + open (drag-to-reschedule is
-// deferred with the field-write API).
-export function CalendarView({
-  name,
-  refreshKey,
-  onOpen,
-}: {
-  name: string;
-  refreshKey: number;
-  onOpen: (record: string) => void;
-}) {
-  const [view, setView] = useState<ResolvedView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// deferred with the field-write API). Presentational: records arrive
+// already filtered.
+export function CalendarView({ view, records, onOpen }: RenderProps) {
   const [ym, setYm] = useState(() => {
     const d = new Date();
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
   });
 
-  useEffect(() => {
-    let live = true;
-    resolveView(name)
-      .then((v) => live && setView(v))
-      .catch((e) => live && setError(e.message));
-    return () => {
-      live = false;
-    };
-  }, [name, refreshKey]);
-
-  if (error) return <ErrorState message={error} />;
-  if (!view) return <GridSkeleton />;
-  if (view.records.length === 0)
-    return <EmptyState label="No records in this view." />;
+  if (records.length === 0)
+    return <EmptyState label="No records match." />;
 
   const dateField = view.definition.date_field || "updated";
   const grid = buildMonthGrid(ym.year, ym.month);
-  const { byDay, unscheduled } = placeDocuments(view.records, dateField);
+  const { byDay, unscheduled } = placeDocuments(records, dateField);
   const monthName = new Date(Date.UTC(ym.year, ym.month - 1, 1)).toLocaleString(
     "en",
     { month: "long", year: "numeric", timeZone: "UTC" },

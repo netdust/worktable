@@ -1,48 +1,25 @@
-import { useEffect, useState } from "react";
-import { resolveView, type ResolvedView, type RecordSummary } from "../api";
-import { columnsOf, groupRecords, type Column } from "../lib/records";
+import type { RecordSummary } from "../api";
+import { columnsOf, type Column } from "../lib/records";
+import { groupRecordsBy } from "../view-controls";
 import { GroupHeader } from "./folio/GroupHeader";
 import { FieldCell } from "./folio/FieldCell";
 import { Icon } from "./folio/Icon";
-import { TableSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
+import { EmptyState } from "./folio/Feedback";
+import type { RenderProps } from "./folio/ViewRouter";
 
 // One renderer for both `table` and `list` (grouped) — grouping is a
-// mode driven by the view's group_by, not a second component (the
-// harvested folio rule). Columns come from the ported `columns`
-// machinery; each cell renders by inferred field type (FieldCell);
-// group headers carry counts + the ported distribution bar. Records are
-// body-less here; the panel loads detail.
-export function TableView({
-  name,
-  refreshKey,
-  onOpen,
-}: {
-  name: string;
-  refreshKey: number;
-  onOpen: (record: string) => void;
-}) {
-  const [view, setView] = useState<ResolvedView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    setError(null);
-    resolveView(name)
-      .then((v) => live && setView(v))
-      .catch((e) => live && setError(e.message));
-    return () => {
-      live = false;
-    };
-  }, [name, refreshKey]);
-
-  if (error) return <ErrorState message={error} />;
-  if (!view) return <TableSkeleton />;
-  if (view.records.length === 0)
-    return <EmptyState label="No records in this view." />;
+// mode driven by the effective group field, not a second component (the
+// harvested folio rule). Presentational: the records arrive already
+// filtered + sorted by the ViewFrame; columns come from the ported
+// `columns` machinery; each cell renders by inferred field type.
+export function TableView({ view, records, groupBy, onOpen }: RenderProps) {
+  if (records.length === 0)
+    return <EmptyState label="No records match." />;
 
   const columns = columnsOf(view.definition);
-  const groupBy = view.definition.group_by;
-  const groups = groupRecords(view.records, view.groups, groupBy);
+  const groups = groupBy
+    ? groupRecordsBy(records, groupBy)
+    : [{ value: null as string | null, records }];
   const colSpan = columns.length + 1;
 
   return (

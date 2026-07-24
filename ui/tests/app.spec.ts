@@ -22,7 +22,10 @@ test("A01/A02 — valid token lists the view, grouped and ordered per definition
   page,
 }) => {
   await signIn(page);
-  await expect(page.getByRole("button", { name: "dossiers" })).toBeVisible();
+  // exact: the view nav button "dossiers" vs the project head "Dossiers"
+  await expect(
+    page.getByRole("button", { name: "dossiers", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Demo Dossier")).toBeVisible();
   await expect(page.getByText("Shipped One")).toBeVisible();
   await expect(page.locator(".chip", { hasText: "reviewed" })).toBeVisible();

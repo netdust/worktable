@@ -32,10 +32,13 @@ test("A01 — every view type is listed in the nav and switchable", async ({
 }) => {
   await signIn(page, "dossiers");
   for (const [view] of RENDERERS) {
-    await expect(page.getByRole("button", { name: view })).toBeVisible();
+    // exact: view nav labels (lowercase) vs project heads (Capitalized)
+    await expect(
+      page.getByRole("button", { name: view, exact: true }),
+    ).toBeVisible();
   }
   // switching the nav swaps the renderer without a reload
-  await page.getByRole("button", { name: "tasks-board" }).click();
+  await page.getByRole("button", { name: "tasks-board", exact: true }).click();
   await expect(page.locator(".kanban")).toBeVisible();
   await expect(page.locator("table.records")).toBeHidden();
 });

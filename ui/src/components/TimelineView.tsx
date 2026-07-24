@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { resolveView, type ResolvedView, type RecordSummary } from "../api";
+import { useMemo, useState } from "react";
+import type { RecordSummary } from "../api";
 import {
   buildTimeScale,
   placeOnTimeline,
@@ -7,68 +7,47 @@ import {
 } from "../lib/ported/timeline-lanes";
 import { bucketKey } from "../lib/ported/calendar-grid";
 import { StatusChip } from "./StatusChip";
-import { LanesSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
+import { EmptyState } from "./folio/Feedback";
+import type { RenderProps } from "./folio/ViewRouter";
 
 // Timeline (Gantt-ish) over the ported timeline-lanes math. Each record
 // is a lane; a bar spans the columns between its start and end fields
 // (single-date records get a one-column bar). Zoom switches the column
 // granularity day/week/month. The date fields come from the view
 // definition: start_field / end_field / date_field (fallback). The
-// visible range is derived from the records' own dates.
+// visible range is derived from the records' own dates. Presentational:
+// records arrive already filtered.
 const ZOOMS: TimelineZoom[] = ["day", "week", "month"];
 
-export function TimelineView({
-  name,
-  refreshKey,
-  onOpen,
-}: {
-  name: string;
-  refreshKey: number;
-  onOpen: (record: string) => void;
-}) {
-  const [view, setView] = useState<ResolvedView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function TimelineView({ view, records, onOpen }: RenderProps) {
   const [zoom, setZoom] = useState<TimelineZoom>("week");
 
-  useEffect(() => {
-    let live = true;
-    setError(null);
-    resolveView(name)
-      .then((v) => live && setView(v))
-      .catch((e) => live && setError(e.message));
-    return () => {
-      live = false;
-    };
-  }, [name, refreshKey]);
-
   const fields = useMemo(() => {
-    const d = view?.definition;
+    const d = view.definition;
     return {
-      startField: d?.start_field || "start",
-      endField: d?.end_field || "end",
-      fallbackField: d?.date_field || "updated",
+      startField: d.start_field || "start",
+      endField: d.end_field || "end",
+      fallbackField: d.date_field || "updated",
     };
-  }, [view?.definition]);
+  }, [view.definition]);
 
   const range = useMemo(
-    () => (view ? deriveRange(view.records, fields) : null),
-    [view, fields],
+    () => deriveRange(records, fields),
+    [records, fields],
   );
   const scale = useMemo(
     () => (range ? buildTimeScale(range.start, range.end, zoom) : []),
     [range, zoom],
   );
   const placement = useMemo(
-    () => (view ? placeOnTimeline(view.records, fields, scale) : null),
-    [view, fields, scale],
+    () => (range ? placeOnTimeline(records, fields, scale) : null),
+    [records, fields, scale, range],
   );
 
-  if (error) return <ErrorState message={error} />;
-  if (!view) return <LanesSkeleton />;
   if (!range)
     return <EmptyState label="No records with a date to place on the timeline." />;
 
-  const bySlug = new Map(view.records.map((r) => [r.slug, r]));
+  const bySlug = new Map(records.map((r) => [r.slug, r]));
 
   return (
     <div className="timeline-wrap">

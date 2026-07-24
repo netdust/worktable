@@ -11,3 +11,16 @@
 - [ ] T09 independent security review (attested via review-check)
 - [ ] T10 independent correctness/UX review vs folio (attested via review-check)
 - [ ] T11 SUITE green (Playwright e2e, all views)
+
+## Increment 2 — folio IA (sidebar tree + live controls), after shakeout feedback
+
+Pure-frontend additions; no new writes (the seal stays the only write).
+The create-from-UI / saved-filter-to-file features are parked in
+docs/DEFERRED-UI.md. The reviews (T09/T10) and SUITE (T11) re-run on the
+final tree to cover this increment.
+
+- [ ] T12 rail project→view tree: views grouped by their `source` folder,
+  collapsible, active-view highlight (R10, A09)
+- [ ] T13 shared filter/group/sort control bar (folio FilterBar shape),
+  ephemeral (URL-held, client-side over loaded records), reset on view
+  switch (R11, A10)

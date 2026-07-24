@@ -94,6 +94,33 @@ dependency-free logic and rebuilds only the folio-shaped shells.
 - A08 Deps audit: package.json's runtime deps are exactly react,
   react-dom, @dnd-kit/core — nothing from the excluded bucket (R09).
 
+## Increment 2 — folio IA (after shakeout feedback)
+
+Comparing worktable against a live, seeded folio instance surfaced two
+missing folio patterns, both buildable as PURE FRONTEND (no new writes):
+
+- R10 **Rail project→view tree.** The sidebar groups views by their
+  `source` folder (the "project"), nested and collapsible with view-type
+  icons and an active-view highlight — folio's rail shape, derived
+  entirely from `GET /views`. (folio's rail lists a project's views, not
+  its individual records; worktable matches that.)
+- R11 **Shared filter/group/sort control bar.** A folio-style FilterBar
+  above every view: filter clauses (field · op · value, ops
+  is/isnot/has/before/after), a `+ Filter` field picker, and Group / Sort
+  dropdowns. Controls are EPHEMERAL — held in the URL, applied client-
+  side to the already-loaded records; no file is written (the seal stays
+  the only write). Switching views resets them.
+- A09 The rail shows each source as a project with its views nested;
+  collapsing a project hides its views; the project holding the active
+  view stays open (R10).
+- A10 On a view, adding a `status is <v>` filter narrows the rows (and
+  persists in the URL); the Group control regroups live; the Sort
+  control reorders live; switching views clears the controls (R11).
+
+Deferred (need writes; parked in docs/DEFERRED-UI.md): saving filters
+into view files, create-from-UI (projects/views/records), per-project
+field/status registries, inline field edit.
+
 ## Non-goals (v2)
 
 Within-column manual kanban ordering (board-rank). A general field-

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -8,67 +8,46 @@ import {
   useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { resolveView, type ResolvedView, type RecordSummary } from "../api";
+import type { RecordSummary } from "../api";
 import { buildColumns } from "../lib/ported/board-grouping";
 import { decideCardDrop } from "../lib/kanban";
 import { parseList } from "../lib/records";
 import { StatusChip } from "./StatusChip";
-import { BoardSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
+import { EmptyState } from "./folio/Feedback";
+import type { RenderProps } from "./folio/ViewRouter";
 
 // Kanban over the ported board-grouping math + a lean @dnd-kit/core
-// shell (not folio's 518-line quirk-mass). Columns are the group_by
-// field's values; cards drag BETWEEN columns to regroup. The drop
+// shell (not folio's 518-line quirk-mass). Columns are the effective
+// group field's values; cards drag BETWEEN columns to regroup. The drop
 // decision is the pure, unit-tested `decideCardDrop` (seal-gating,
-// R08) — this shell only renders it. Within-column ordering is out.
-export function KanbanView({
-  name,
-  refreshKey,
-  onOpen,
-}: {
-  name: string;
-  refreshKey: number;
-  onOpen: (record: string) => void;
-}) {
-  const [view, setView] = useState<ResolvedView | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// R08) — this shell only renders it. Presentational: records arrive
+// already filtered. Within-column ordering is out.
+export function KanbanView({ view, records, groupBy, onOpen }: RenderProps) {
   const [note, setNote] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
 
-  useEffect(() => {
-    let live = true;
-    setError(null);
-    resolveView(name)
-      .then((v) => live && setView(v))
-      .catch((e) => live && setError(e.message));
-    return () => {
-      live = false;
-    };
-  }, [name, refreshKey]);
-
-  const groupBy = view?.definition.group_by || "status";
+  const field = groupBy || "status";
   const order = useMemo(
-    () => parseList(view?.definition.lanes),
-    [view?.definition.lanes],
+    () => parseList(view.definition.lanes),
+    [view.definition.lanes],
   );
   const columns = useMemo(
-    () => (view ? buildColumns(view.records, groupBy, order) : []),
-    [view, groupBy, order],
+    () => buildColumns(records, field, order),
+    [records, field, order],
   );
 
-  if (error) return <ErrorState message={error} />;
-  if (!view) return <BoardSkeleton />;
-  if (view.records.length === 0)
-    return <EmptyState label="No records in this view." />;
+  if (records.length === 0)
+    return <EmptyState label="No records match." />;
 
   function onDragEnd(e: DragEndEvent) {
     const action = decideCardDrop({
-      groupBy,
+      groupBy: field,
       record: String(e.active.id),
       from: (e.active.data.current?.column as string | null) ?? null,
       to: e.over ? String(e.over.id) : null,
-      records: view!.records,
+      records,
     });
     if (action.kind === "open") onOpen(action.record);
     else if (action.kind === "note") setNote(action.message);

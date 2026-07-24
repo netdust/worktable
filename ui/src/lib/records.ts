@@ -2,11 +2,41 @@
 // functions, unit-tested (T07), carried in spirit from the folio
 // harvest's framework-free layout modules. No React here.
 
-import type { RecordSummary, ViewDef, FlowDef } from "../api";
+import type { RecordSummary, ViewDef, FlowDef, ViewListItem } from "../api";
 
 export interface Column {
   key: string;
   label: string;
+}
+
+// A "project" in worktable is a source folder (records/<domain>) that
+// one or more views read from — the sidebar nests views under their
+// project, mirroring folio's rail (project → views). Derived purely
+// from the view list; no backend concept required.
+export interface Project {
+  source: string;
+  label: string;
+  views: ViewListItem[];
+}
+
+export function projectsOf(views: ViewListItem[]): Project[] {
+  const bySource = new Map<string, ViewListItem[]>();
+  for (const v of views) {
+    const src = v.definition.source || "(no source)";
+    const bucket = bySource.get(src);
+    if (bucket) bucket.push(v);
+    else bySource.set(src, [v]);
+  }
+  return [...bySource.entries()].map(([source, vs]) => ({
+    source,
+    label: projectLabel(source),
+    views: vs,
+  }));
+}
+
+function projectLabel(source: string): string {
+  const seg = source.replace(/\/+$/, "").split("/");
+  return humanize(seg[seg.length - 1] || source);
 }
 
 /** Columns for a table: the record link is always first (rendered by

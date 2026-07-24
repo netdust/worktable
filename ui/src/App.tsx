@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listViews,
   getToken,
@@ -8,26 +8,11 @@ import {
 } from "./api";
 import { subscribeChanges } from "./live";
 import { useUrlState } from "./url";
+import { decodeControls, encodeControls, type ViewControls } from "./view-controls";
 import { TokenGate } from "./components/TokenGate";
-import { ViewRouter } from "./components/folio/ViewRouter";
-import { Icon } from "./components/folio/Icon";
+import { Rail } from "./components/Rail";
+import { ViewFrame } from "./components/ViewFrame";
 import { RecordPanel } from "./components/RecordPanel";
-
-// The rail glyph for a view type — falls back to the list mark for an
-// unknown/absent type so a mis-typed view still gets an icon.
-function viewIcon(
-  type: string | undefined,
-): "table" | "list" | "kanban" | "calendar" | "timeline" {
-  switch (type) {
-    case "table":
-    case "kanban":
-    case "calendar":
-    case "timeline":
-      return type;
-    default:
-      return "list";
-  }
-}
 
 export function App() {
   const [authed, setAuthed] = useState<boolean>(() => Boolean(getToken()));
@@ -69,57 +54,56 @@ export function App() {
     return subscribeChanges(bump);
   }, [authed, bump]);
 
+  // the ephemeral view controls, decoded from the URL
+  const controls = useMemo(
+    () => decodeControls(url.group, url.sort, url.filters),
+    [url.group, url.sort, url.filters],
+  );
+  const onControlsChange = useCallback(
+    (next: ViewControls) => navigate(encodeControls(next)),
+    [navigate],
+  );
+  // switching views resets the ephemeral controls (a dossier filter
+  // must not carry to the tasks view) and closes any open record
+  const selectView = useCallback(
+    (view: string) =>
+      navigate({ view, record: null, group: null, sort: null, filters: null }),
+    [navigate],
+  );
+
   if (!authed) return <TokenGate onReady={() => setAuthed(true)} />;
+
+  const activeType =
+    (views || []).find((v) => v.name === url.view)?.definition.view || "table";
 
   return (
     <div className="app">
-      <nav className="rail">
-        <div className="rail-brand">
-          <span className="rail-mark">w</span>
-          <span className="rail-name">worktable</span>
-        </div>
-        <div className="rail-section">Views</div>
-        <ul>
-          {(views || []).map((v) => (
-            <li key={v.name}>
-              <button
-                className={url.view === v.name ? "nav active" : "nav"}
-                onClick={() => navigate({ view: v.name, record: null })}
-              >
-                <Icon name={viewIcon(v.definition.view)} size={15} />
-                <span className="nav-label">{v.name}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          className="rail-signout"
-          onClick={() => {
-            clearToken();
-            setAuthed(false);
-          }}
-        >
-          Sign out
-        </button>
-      </nav>
+      <Rail
+        views={views || []}
+        activeView={url.view}
+        onSelect={selectView}
+        onSignOut={() => {
+          clearToken();
+          setAuthed(false);
+        }}
+      />
 
       <main className="content">
         {error && <div className="pane-msg error">{error}</div>}
         {url.view ? (
           // Wait for the view list before choosing a renderer: deriving
-          // the type from an unloaded list would flash TableView on a
-          // deep-link to a calendar/kanban view. Once loaded, an unknown
-          // view name is surfaced by the router, not defaulted.
+          // the type from an unloaded list would flash the wrong renderer
+          // on a deep-link. Once loaded, an unknown view name is surfaced
+          // by the router, not defaulted.
           views === null ? (
             <div className="pane-msg muted">Loading…</div>
           ) : (
-            <ViewRouter
+            <ViewFrame
               key={url.view}
-              type={
-                views.find((v) => v.name === url.view)?.definition.view ||
-                "table"
-              }
               name={url.view}
+              type={activeType}
+              controls={controls}
+              onControlsChange={onControlsChange}
               refreshKey={refreshKey}
               onOpen={(record) => navigate({ record })}
             />
