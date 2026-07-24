@@ -4,6 +4,7 @@
 // The panel's CONTENT (header, tabs, seal) is passed as children; this
 // owns only the chrome, so the record panel is just its body.
 import { useEffect, useRef, type ReactNode } from "react";
+import { Icon } from "./Icon";
 
 export function Slideover({
   label,
@@ -37,7 +38,7 @@ export function Slideover({
         aria-label={label}
       >
         <button className="panel-close" onClick={onClose} aria-label="close">
-          ×
+          <Icon name="close" size={17} />
         </button>
         {children}
       </aside>

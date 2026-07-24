@@ -10,7 +10,24 @@ import { subscribeChanges } from "./live";
 import { useUrlState } from "./url";
 import { TokenGate } from "./components/TokenGate";
 import { ViewRouter } from "./components/folio/ViewRouter";
+import { Icon } from "./components/folio/Icon";
 import { RecordPanel } from "./components/RecordPanel";
+
+// The rail glyph for a view type — falls back to the list mark for an
+// unknown/absent type so a mis-typed view still gets an icon.
+function viewIcon(
+  type: string | undefined,
+): "table" | "list" | "kanban" | "calendar" | "timeline" {
+  switch (type) {
+    case "table":
+    case "kanban":
+    case "calendar":
+    case "timeline":
+      return type;
+    default:
+      return "list";
+  }
+}
 
 export function App() {
   const [authed, setAuthed] = useState<boolean>(() => Boolean(getToken()));
@@ -57,7 +74,11 @@ export function App() {
   return (
     <div className="app">
       <nav className="rail">
-        <div className="rail-brand">worktable</div>
+        <div className="rail-brand">
+          <span className="rail-mark">w</span>
+          <span className="rail-name">worktable</span>
+        </div>
+        <div className="rail-section">Views</div>
         <ul>
           {(views || []).map((v) => (
             <li key={v.name}>
@@ -65,7 +86,8 @@ export function App() {
                 className={url.view === v.name ? "nav active" : "nav"}
                 onClick={() => navigate({ view: v.name, record: null })}
               >
-                {v.name}
+                <Icon name={viewIcon(v.definition.view)} size={15} />
+                <span className="nav-label">{v.name}</span>
               </button>
             </li>
           ))}

@@ -4,7 +4,7 @@ import {
   columnsOf,
   groupRecords,
   orderArtifacts,
-  statusColor,
+  statusCategory,
 } from "../src/lib/records";
 import type { RecordSummary, FlowDef } from "../src/api";
 
@@ -66,11 +66,13 @@ test("orderArtifacts follows flow out: order, extras by name", () => {
   expect(orderArtifacts(["b.md", "a.md"], null)).toEqual(["a.md", "b.md"]);
 });
 
-test("statusColor is stable and contrasting", () => {
-  const a = statusColor("final");
-  const b = statusColor("final");
-  expect(a).toEqual(b);
-  expect(a.bg).not.toEqual(a.fg);
-  // unknown status still yields a color, deterministically
-  expect(statusColor("weird-one")).toEqual(statusColor("weird-one"));
+test("statusCategory maps statuses to folio's five semantic categories", () => {
+  expect(statusCategory("final")).toBe("completed");
+  expect(statusCategory("Reviewed")).toBe("started"); // case-insensitive
+  expect(statusCategory("new")).toBe("unstarted");
+  expect(statusCategory("rejected")).toBe("cancelled");
+  // unknown / free-form status falls to the neutral backlog category,
+  // never an invented hue
+  expect(statusCategory("weird-one")).toBe("backlog");
+  expect(statusCategory("")).toBe("backlog");
 });

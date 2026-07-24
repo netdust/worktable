@@ -30,28 +30,47 @@ export function humanize(key: string): string {
   return key.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** A stable, legible color for a status value — derived from the
- *  string so the palette is consistent without per-status config.
- *  Returns an { bg, fg } pair with adequate contrast. */
-export function statusColor(status: string): { bg: string; fg: string } {
-  const known: Record<string, string> = {
-    new: "210",
-    researched: "265",
-    drafted: "45",
-    reviewed: "170",
-    final: "140",
-    rejected: "0",
-    contacted: "200",
-    sent: "140",
-  };
-  const hue = known[status] ?? String(hashHue(status));
-  return { bg: `hsl(${hue} 70% 92%)`, fg: `hsl(${hue} 65% 28%)` };
-}
+/** The folio status model: every status maps to one of five semantic
+ *  CATEGORIES, and the category — not the raw string — drives colour.
+ *  This is what gives folio its calm palette (a coloured dot + coloured
+ *  text, per Linear) instead of a per-string rainbow. Worktable statuses
+ *  are free-form, so an unknown value falls to the neutral `backlog`
+ *  category rather than inventing a hue. */
+export type StatusCategory =
+  | "backlog"
+  | "unstarted"
+  | "started"
+  | "completed"
+  | "cancelled";
 
-function hashHue(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-  return h;
+const CATEGORY_OF: Record<string, StatusCategory> = {
+  // unstarted — queued, not begun (info / blue)
+  new: "unstarted",
+  todo: "unstarted",
+  backlog: "unstarted",
+  planned: "unstarted",
+  // started — work in flight (warning / amber)
+  researched: "started",
+  drafted: "started",
+  reviewed: "started",
+  doing: "started",
+  "in-progress": "started",
+  contacted: "started",
+  building: "started",
+  // completed — done (success / green)
+  final: "completed",
+  done: "completed",
+  sent: "completed",
+  approved: "completed",
+  shipped: "completed",
+  // cancelled — abandoned (danger / muted, struck)
+  rejected: "cancelled",
+  cancelled: "cancelled",
+  dropped: "cancelled",
+};
+
+export function statusCategory(status: string): StatusCategory {
+  return CATEGORY_OF[status.trim().toLowerCase()] ?? "backlog";
 }
 
 /** Ordered non-empty groups for a grouped table; if the view has no

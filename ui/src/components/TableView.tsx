@@ -3,6 +3,7 @@ import { resolveView, type ResolvedView, type RecordSummary } from "../api";
 import { columnsOf, groupRecords, type Column } from "../lib/records";
 import { GroupHeader } from "./folio/GroupHeader";
 import { FieldCell } from "./folio/FieldCell";
+import { Icon } from "./folio/Icon";
 import { TableSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
 
 // One renderer for both `table` and `list` (grouped) — grouping is a
@@ -59,6 +60,7 @@ export function TableView({
           {groups.map((g) => (
             <GroupRows
               key={g.value ?? "_all"}
+              field={groupBy || ""}
               value={g.value}
               records={g.records}
               columns={columns}
@@ -73,12 +75,14 @@ export function TableView({
 }
 
 function GroupRows({
+  field,
   value,
   records,
   columns,
   colSpan,
   onOpen,
 }: {
+  field: string;
   value: string | null;
   records: RecordSummary[];
   columns: Column[];
@@ -88,13 +92,23 @@ function GroupRows({
   return (
     <>
       {value !== null && (
-        <GroupHeader label={value} records={records} colSpan={colSpan} />
+        <GroupHeader
+          field={field}
+          label={value}
+          records={records}
+          colSpan={colSpan}
+        />
       )}
       {records.map((r) => {
         const id = `${r.domain}/${r.slug}`;
         return (
           <tr key={id} className="record-row" onClick={() => onOpen(id)}>
-            <td className="record-link">{r.frontmatter.title || r.slug}</td>
+            <td className="record-link">
+              <span className="row-open" aria-hidden>
+                <Icon name="open" size={14} />
+              </span>
+              <span className="row-title">{r.frontmatter.title || r.slug}</span>
+            </td>
             {columns.map((c) => (
               <td key={c.key}>
                 <FieldCell field={c.key} value={r.frontmatter[c.key]} />

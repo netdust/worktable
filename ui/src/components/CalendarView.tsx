@@ -3,6 +3,7 @@ import { resolveView, type ResolvedView } from "../api";
 import { buildMonthGrid, placeDocuments } from "../lib/ported/calendar-grid";
 import { StatusChip } from "./StatusChip";
 import { GridSkeleton, EmptyState, ErrorState } from "./folio/Feedback";
+import { Icon } from "./folio/Icon";
 
 // Calendar view over the ported (folio) calendar-grid math. The date
 // field comes from the view definition's `date_field`; a flow-owned
@@ -58,9 +59,13 @@ export function CalendarView({
   return (
     <div className="calendar">
       <div className="cal-head">
-        <button className="cal-nav" onClick={() => step(-1)} aria-label="previous month">‹</button>
+        <button className="cal-nav" onClick={() => step(-1)} aria-label="previous month">
+          <Icon name="left" size={16} />
+        </button>
         <h2>{monthName}</h2>
-        <button className="cal-nav" onClick={() => step(1)} aria-label="next month">›</button>
+        <button className="cal-nav" onClick={() => step(1)} aria-label="next month">
+          <Icon name="right" size={16} />
+        </button>
         <span className="muted cal-field">by {dateField}</span>
       </div>
       <div className="cal-dow">

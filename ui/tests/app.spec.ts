@@ -31,13 +31,23 @@ test("A01/A02 — valid token lists the view, grouped and ordered per definition
   // `group_by: status, sort: updated desc`. shipped (updated 07-25,
   // final) sorts before demo (07-24, reviewed), so the `final` group
   // header must appear before the `reviewed` one, and each record sits
-  // under its own group header.
-  const rows = page.locator("table.records tr");
-  const texts = await rows.allInnerTexts();
-  const finalGroup = texts.findIndex((t) => /^final\b/.test(t.trim()));
-  const reviewedGroup = texts.findIndex((t) => /^reviewed\b/.test(t.trim()));
-  const shippedRow = texts.findIndex((t) => t.includes("Shipped One"));
-  const demoRow = texts.findIndex((t) => t.includes("Demo Dossier"));
+  // under its own group header. Read the DOM order via the structural
+  // hooks (.group-label for headers, .row-title for records) so the
+  // assertion survives the folio header layout (FIELD · value · N items).
+  const order = await page
+    .locator("table.records tbody tr")
+    .evaluateAll((trs) =>
+      trs.map((tr) => {
+        const g = tr.querySelector(".group-label");
+        if (g) return `group:${g.textContent?.trim()}`;
+        const t = tr.querySelector(".row-title");
+        return `row:${t?.textContent?.trim() ?? ""}`;
+      }),
+    );
+  const finalGroup = order.indexOf("group:final");
+  const reviewedGroup = order.indexOf("group:reviewed");
+  const shippedRow = order.indexOf("row:Shipped One");
+  const demoRow = order.indexOf("row:Demo Dossier");
   expect(finalGroup).toBeGreaterThanOrEqual(0);
   expect(finalGroup).toBeLessThan(reviewedGroup); // updated desc order
   expect(finalGroup).toBeLessThan(shippedRow); // record under its header
