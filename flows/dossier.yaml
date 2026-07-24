@@ -51,7 +51,7 @@ nodes:
 
   - id: gate-seal         # the finish reads the recorded decision
     kind: gate
-    run: "{worktable}/bin/gate-then-status.py {feature_dir} final -- {netdust_flow}/bin/seal.py check {feature_dir} dossier"
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} final -- {netdust_flow}/bin/seal.py check {feature_dir} dossier --fresh"
 
 edges:
   - {from: __start__,     to: research}

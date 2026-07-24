@@ -67,7 +67,7 @@
     {
       "id": "gate-seal",
       "kind": "gate",
-      "run": "{worktable}/bin/gate-then-status.py {feature_dir} final -- {netdust_flow}/bin/seal.py check {feature_dir} dossier"
+      "run": "{worktable}/bin/gate-then-status.py {feature_dir} final -- {netdust_flow}/bin/seal.py check {feature_dir} dossier --fresh"
     }
   ],
   "edges": [
