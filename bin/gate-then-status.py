@@ -5,7 +5,8 @@ Run 0001 finding: the dossier flow's gates verified artifacts but
 nothing mechanically moved `status` — the convention said "only flows
 move status" while the flow had no writer. This wrapper closes that:
 
-    gate-then-status.py <record-folder> <new-status> -- <check cmd...>
+    gate-then-status.py <record-folder> <new-status>
+        [--seal <name>] -- <check cmd...>
 
 Runs the check with stdout passing straight through (the walker reads
 gate output). On exit 0, writes into <record-folder>/item.md
@@ -13,6 +14,14 @@ frontmatter: status=<new-status>, run=<run id from the marker, when
 armed>, updated=<today> — then propagates the exit code. On a red
 check, nothing is written. A green check whose status write fails is
 a FAIL (exit 1): a transition that half-happened must not pass.
+
+`--seal <name>` marks the record as awaiting a human decision at the
+named seal: on green it writes `awaiting_seal: <name>` into the
+frontmatter; any status write WITHOUT --seal clears it (empty). This
+is the flow-owned signal the UI reads to show Approve/Reject — a
+record is awaiting a seal because the flow parked it there, never
+because a field was hand-authored (run 0003 correctness finding: the
+seal must derive from real flow state, not a fixture-only field).
 
 The verifier stays a verifier; the mutation is the walker's, under
 the flow. Agents and humans never touch `status` by hand.
@@ -61,10 +70,17 @@ def set_fm(item: Path, updates: dict) -> bool:
 def main() -> int:
     argv = sys.argv[1:]
     if "--" not in argv or argv.index("--") < 2:
-        print("FAIL  [gate-then-status]  usage: <record-folder> <status> -- <cmd...>")
+        print("FAIL  [gate-then-status]  usage: <record-folder> <status> "
+              "[--seal <name>] -- <cmd...>")
         return 1
     split = argv.index("--")
-    folder, status = Path(argv[0]), argv[1]
+    head = argv[:split]
+    folder, status = Path(head[0]), head[1]
+    seal_name = ""
+    if "--seal" in head:
+        i = head.index("--seal")
+        if i + 1 < len(head):
+            seal_name = head[i + 1]
     cmd = argv[split + 1:]
     if cmd and cmd[0].endswith(".py"):
         cmd = [sys.executable] + cmd
@@ -73,7 +89,12 @@ def main() -> int:
     if rc != 0:
         return rc
 
-    updates = {"status": status, "updated": date.today().isoformat()}
+    # awaiting_seal is flow-owned derived state: set when this gate
+    # parks the record at a human node, cleared by every other status
+    # write. The UI reads it to show Approve/Reject — never a
+    # hand-authored field (run 0003 finding).
+    updates = {"status": status, "updated": date.today().isoformat(),
+               "awaiting_seal": seal_name}
     try:
         run_id = json.loads(MARKER.read_text()).get("run_id")
         if run_id:

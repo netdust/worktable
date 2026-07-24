@@ -18,18 +18,38 @@ test("A01 — wrong token shows the gate, not a broken view", async ({ page }) =
   await expect(page.getByLabel("access token")).toBeVisible();
 });
 
-test("A01/A02 — valid token lists the view and renders grouped rows", async ({
+test("A01/A02 — valid token lists the view, grouped and ordered per definition", async ({
   page,
 }) => {
   await signIn(page);
   await expect(page.getByRole("button", { name: "dossiers" })).toBeVisible();
-  // grouped by status: a group header per status, records beneath
-  await expect(page.getByText("reviewed", { exact: false }).first()).toBeVisible();
   await expect(page.getByText("Demo Dossier")).toBeVisible();
   await expect(page.getByText("Shipped One")).toBeVisible();
-  // sort desc by updated: Shipped One (07-25) group ordering is stable;
-  // the demo row carries a status chip
   await expect(page.locator(".chip", { hasText: "reviewed" })).toBeVisible();
+
+  // A02 is about ORDER, not mere presence. The view is
+  // `group_by: status, sort: updated desc`. shipped (updated 07-25,
+  // final) sorts before demo (07-24, reviewed), so the `final` group
+  // header must appear before the `reviewed` one, and each record sits
+  // under its own group header.
+  const rows = page.locator("table.records tr");
+  const texts = await rows.allInnerTexts();
+  const finalGroup = texts.findIndex((t) => /^final\b/.test(t.trim()));
+  const reviewedGroup = texts.findIndex((t) => /^reviewed\b/.test(t.trim()));
+  const shippedRow = texts.findIndex((t) => t.includes("Shipped One"));
+  const demoRow = texts.findIndex((t) => t.includes("Demo Dossier"));
+  expect(finalGroup).toBeGreaterThanOrEqual(0);
+  expect(finalGroup).toBeLessThan(reviewedGroup); // updated desc order
+  expect(finalGroup).toBeLessThan(shippedRow); // record under its header
+  expect(reviewedGroup).toBeLessThan(demoRow);
+  // columns follow the definition: [status, updated] after the record
+  // (compare lowercased — CSS uppercases the header text for display)
+  const headers = await page.locator("table.records thead th").allInnerTexts();
+  expect(headers.map((h) => h.toLowerCase())).toEqual([
+    "record",
+    "status",
+    "updated",
+  ]);
 });
 
 test("A03 — opening a record shows cover + flow-ordered artifact tabs", async ({
@@ -57,7 +77,9 @@ test("A04 — approve posts a real seal and the panel reflects it", async ({
   await expect(page.getByText("Decision on", { exact: false })).toBeVisible();
   await page.getByLabel("seal note").fill("looks good");
   await page.getByRole("button", { name: "Approve" }).click();
-  // the seal is real: seal.py check reads it back
+  // the seal is real: seal.py check reads it back under the seal name
+  // the flow uses (dossier — what gate-seal checks), which is exactly
+  // the node the UI posts from awaiting_seal
   await expect
     .poll(
       () => {
@@ -68,7 +90,7 @@ test("A04 — approve posts a real seal and the panel reflects it", async ({
               `${NETDUST_FLOW}/bin/seal.py`,
               "check",
               "records/dossiers/demo",
-              "approve",
+              "dossier",
             ],
             { cwd: FIXTURE_DIR },
           );
@@ -82,25 +104,26 @@ test("A04 — approve posts a real seal and the panel reflects it", async ({
     .toBe(0);
 });
 
-test("A04 — a bad seal surfaces the server's reason", async ({ page }) => {
+test("A04 — a server rejection surfaces through the SealBar UI", async ({
+  page,
+}) => {
   await signIn(page);
   await page.getByText("Demo Dossier").click();
-  // drive a rejection through a broken decision by intercepting? no —
-  // instead verify the error path shows server text on a 4xx: seal an
-  // already-final record has no seal_node, so use the network directly
-  const res = await page.evaluate(async (token) => {
-    const r = await fetch("/seal", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ record: "dossiers/demo", node: "approve", decision: "maybe" }),
-    });
-    return { status: r.status, body: await r.json() };
-  }, TOKEN);
-  expect(res.status).toBe(400);
-  expect(res.body.error).toContain("approved or rejected");
+  await expect(page.getByText("Decision on", { exact: false })).toBeVisible();
+  // Force the server to reject THIS record's seal: intercept the POST
+  // and return a 400, so the SealBar's own error path renders the
+  // server reason (not a raw fetch bypassing the component).
+  await page.route("**/seal", (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "decision must be approved or rejected" }),
+    }),
+  );
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(
+    page.locator(".seal-bar .pane-msg.error"),
+  ).toContainText("approved or rejected");
 });
 
 test("A05 — a file change on disk refreshes the open view", async ({ page }) => {

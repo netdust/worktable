@@ -9,10 +9,13 @@ export default async function globalSetup() {
   rmSync(FIXTURE_DIR, { recursive: true, force: true });
   const demo = join(FIXTURE_DIR, "records", "dossiers", "demo");
   mkdirSync(demo, { recursive: true });
+  // awaiting_seal is what a real gate-then-status --seal writes when it
+  // parks the record at the human node — NOT a hand-authored field.
+  // Its value (dossier) is the seal name gate-seal checks.
   writeFileSync(
     join(demo, "item.md"),
     `---\ntype: dossier\nstatus: reviewed\nrun: r-e2e\nflow: dossier\n` +
-      `seal_node: approve\ncreated: 2026-07-24\nupdated: 2026-07-24\n` +
+      `awaiting_seal: dossier\ncreated: 2026-07-24\nupdated: 2026-07-24\n` +
       `title: Demo Dossier\n---\n\nThis is the cover body.\n`,
   );
   writeFileSync(join(demo, "research.md"), "# research\n\nsourced findings\n");

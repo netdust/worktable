@@ -55,7 +55,7 @@
     {
       "id": "gate-review",
       "kind": "gate",
-      "run": "{worktable}/bin/gate-then-status.py {feature_dir} reviewed -- {worktable}/bin/review-check.py {feature_dir} dossier"
+      "run": "{worktable}/bin/gate-then-status.py {feature_dir} reviewed --seal dossier -- {worktable}/bin/review-check.py {feature_dir} dossier"
     },
     {
       "id": "approve",

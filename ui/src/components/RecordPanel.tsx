@@ -13,12 +13,13 @@ import { StatusChip } from "./StatusChip";
 // The record panel: a folder presented as ONE thing. Header from the
 // frontmatter core, a Cover tab (item.md body), one read-only tab per
 // artifact (lazy-loaded, ordered by the flow), and — when the record
-// sits at a human node — the seal actions, the UI's only write.
+// is parked at a human node — the seal actions, the UI's only write.
 //
-// A status is "pending a decision" when the flow has a human node
-// whose seal has not yet moved the record past it. v1 uses a simple,
-// declared mapping the owner controls per flow via the seal_node
-// frontmatter hint; absent that, no seal UI is shown (fail closed:
+// "Awaiting a decision" is a FLOW-OWNED signal: the gate that parks
+// the record at a human node writes `awaiting_seal: <name>` into the
+// frontmatter (bin/gate-then-status.py --seal), and every other status
+// write clears it. The UI never infers it and never reads a
+// hand-authored field — absent awaiting_seal, no seal UI (fail closed:
 // never invent an approvable state).
 export function RecordPanel({
   record,
@@ -113,7 +114,7 @@ export function RecordPanel({
 
             <SealBar
               record={record}
-              node={detail.frontmatter.seal_node || ""}
+              node={detail.frontmatter.awaiting_seal || ""}
               onSealed={onSealed}
             />
           </>
