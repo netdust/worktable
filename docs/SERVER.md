@@ -52,6 +52,22 @@ choice is an implementation detail; smallest wins). The view layer
 folio's harvest identified (five hooks), so the harvested view
 designs port onto this API without translation.
 
+## The record panel (phase 2b contract)
+
+A record folder is presented as ONE thing, because the API already
+returns it as one thing: `GET /records/:domain/:slug` = frontmatter
+core + item.md body + `artifacts[]`. The panel (folio's slideover,
+reborn) renders: header from the core (status, dates, run link),
+first tab = the cover (item.md body), then one read-only tab per
+artifact, lazy-loaded. Tab order derives from the flow definition —
+the nodes' `out:` sequence is the lifecycle order, so the file that
+declares the flow also orders the presentation; unknown artifacts
+sort after, by name. Reviews appear as a tab when reports exist on
+the serving host; activity starts as seal + run info (per-folder git
+history is derivable and may become a read endpoint later). The
+frontend never sees "files in a folder" — it sees a record with
+sections. Folder-ness stays below the API waterline.
+
 ## Non-goals, permanently
 
 Databases as truth · multi-user auth · agent write APIs · view or
