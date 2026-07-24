@@ -1,14 +1,15 @@
-# Outreach draft — ACME Corp
+# Outreach draft — ACME Corp (v2, softened)
 
 ## Summary
 
-Personalised cold email proposing a StrideLMS pilot for ACME's
-compliance-training mandate, referencing their multi-region L&D need.
+Warmer, outcome-led cold email for ACME's compliance-training mandate.
 
-Subject: Compliance training that tracks itself
-Body: Hi — saw ACME's new compliance-training mandate. StrideLMS gives
-you per-employee tracking and auto-issued certificates out of the box;
-teams switch off spreadsheets in a week. Worth a 20-minute pilot look?
+Subject: A lighter lift for ACME's compliance training
+Body: Hi — congratulations on the new compliance-training programme.
+Teams rolling one out usually lose weeks to spreadsheet tracking;
+StrideLMS handles per-employee progress and certificates automatically,
+so your L&D team can focus on content. If it's useful, I'd be glad to
+show a 20-minute pilot tailored to ACME — no pressure either way.
 
 ## Sources
 
