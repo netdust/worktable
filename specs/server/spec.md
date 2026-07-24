@@ -14,16 +14,21 @@ write" recreates the folio drift.
 - R01 `GET /views` lists view documents (name + definition
   frontmatter); `GET /views/<name>` returns the definition plus
   matching records (frontmatter core + open bag, body excluded),
-  filtered/grouped/sorted per the definition.
+  scoped to the definition's `source` folder and grouped/sorted per
+  its `group_by`/`sort`. (Arbitrary `filter:` predicates are not a
+  query language in 2a — source scoping only; revisit if a real view
+  needs more.)
 - R02 `GET /records/<domain>/<slug>` returns one record: frontmatter,
   item.md body, and its artifact file list; `…/artifacts/<file>`
   returns one artifact's content, read-only.
 - R03 `GET /events` is an SSE stream emitting invalidation ticks when
   files change; it carries no state and no payloads — clients
   refetch.
-- R04 `POST /seal` `{record, decision, note?}` executes netdust-flow's
-  `seal.py record` on the owner's behalf and is THE ONLY write.
-  decision ∈ approved|rejected; anything else is rejected.
+- R04 `POST /seal` `{record, node, decision, note?}` executes
+  netdust-flow's `seal.py record` on the owner's behalf and is THE
+  ONLY write. `record` is `<domain>/<slug>`; `node` names the flow's
+  human node being sealed (seal.py records per node); decision ∈
+  approved|rejected; anything else is a 400 recording nothing.
 - R05 Every request requires the owner bearer token (single token,
   from environment); a missing or wrong token gets 401 with no body
   detail. There are no other principals, accounts, or roles.

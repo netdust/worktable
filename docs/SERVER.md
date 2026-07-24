@@ -18,9 +18,14 @@ survive that test, it doesn't belong in the server.
 | `GET /views` | list of view documents (name + definition frontmatter) |
 | `GET /views/:name` | the view resolved: definition + matching records (frontmatter core + open bag; body excluded) |
 | `GET /records/:domain/:slug` | one record: frontmatter, body, artifact file list |
-| `GET /records/:domain/:slug/artifacts/:file` | one artifact's content (read-only) |
+| `GET /records/:domain/:slug/artifacts/:file` | one artifact's content, bytes with a guessed content-type (read-only) |
+| `GET /flows/:name` | a flow's compiled twin — the panel reads node `out:` order from it for tab ordering |
 | `GET /events` | SSE: invalidation ticks on file change (no payloads, no state — the client refetches) |
-| `POST /seal` | `{record, decision, note}` → executes `seal.py record` on the owner's behalf. **The only write.** |
+| `POST /seal` | `{record, node, decision, note?}` → executes `seal.py record` on the owner's behalf. **The only write.** `record` is `<domain>/<slug>`; `node` is the flow's human node being sealed; `decision` ∈ approved\|rejected. |
+
+> Browser note: native `EventSource` cannot send an `Authorization`
+> header — the phase-2b client reads `/events` via fetch (or carries
+> the token by another channel). Stated here so 2b plans for it.
 
 Nothing else. No record-editing API (agents use files; the owner
 fine-tunes via files/Obsidian until the frontend adds body editing —
@@ -62,11 +67,15 @@ first tab = the cover (item.md body), then one read-only tab per
 artifact, lazy-loaded. Tab order derives from the flow definition —
 the nodes' `out:` sequence is the lifecycle order, so the file that
 declares the flow also orders the presentation; unknown artifacts
-sort after, by name. Reviews appear as a tab when reports exist on
-the serving host; activity starts as seal + run info (per-folder git
-history is derivable and may become a read endpoint later). The
-frontend never sees "files in a folder" — it sees a record with
-sections. Folder-ness stays below the API waterline.
+sort after, by name. Tab order derives from `GET /flows/:name` (the node `out:` sequence).
+Reviews are gitignored working papers — not guaranteed present on a
+deploy host — so the record response carries a review COUNT, not
+their content; the panel shows a reviews indicator, and the durable
+review evidence is the attest note, not the report file. Activity
+starts as seal + run info (per-folder git history is derivable and
+may become a read endpoint later). The frontend never sees "files in
+a folder" — it sees a record with sections. Folder-ness stays below
+the API waterline.
 
 ## Non-goals, permanently
 

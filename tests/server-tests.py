@@ -54,16 +54,27 @@ def build_fixture(base: Path) -> Path:
         "---\ntype: dossier\nstatus: final\nrun: r-test\n"
         "created: 2026-07-24\nupdated: 2026-07-24\n---\n\nDemo record.\n")
     (demo / "research.md").write_text("# research\n\nsourced things\n")
-    other = root / "records" / "dossiers" / "open-one"
-    other.mkdir(parents=True)
-    (other / "item.md").write_text(
-        "---\ntype: dossier\nstatus: new\ncreated: 2026-07-24\n"
-        "updated: 2026-07-23\n---\n")
+    # sort counterexample: alphabetical folder order (aaa < zzz) is the
+    # OPPOSITE of updated-desc order, so a working sort must reorder
+    # them — a no-op parser would return folder order and be caught.
+    old = root / "records" / "dossiers" / "aaa-old"
+    old.mkdir(parents=True)
+    (old / "item.md").write_text(
+        "---\ntype: dossier\nstatus: new\ncreated: 2026-01-01\n"
+        "updated: 2026-01-01\n---\n")
+    new = root / "records" / "dossiers" / "zzz-new"
+    new.mkdir(parents=True)
+    (new / "item.md").write_text(
+        "---\ntype: dossier\nstatus: new\ncreated: 2026-07-25\n"
+        "updated: 2026-07-25\n---\n")
     (root / "views").mkdir()
     (root / "views" / "pipeline.md").write_text(
         "---\ntype: view\nview: table\nsource: records/dossiers\n"
         "group_by: status\ncolumns: [status, updated]\nsort: updated desc\n"
         "---\n\n# pipeline\n")
+    (root / "flows").mkdir()
+    (root / "flows" / "dossier.json").write_text(json.dumps({
+        "flow": "dossier", "nodes": [{"id": "research"}, {"id": "draft"}]}))
     (root / "secret-outside.md").write_text("must never be served via artifacts\n")
     for args in (["init", "-qb", "main"],
                  ["config", "user.email", "t@t"],
@@ -176,8 +187,11 @@ def run_groups(root: Path, port: int, proc, tmp: Path) -> None:
               "view documents listed (R01)")
         code, view = get("/views/pipeline", port)
         slugs = [r["slug"] for r in view["records"]]
-        check(slugs == ["demo", "open-one"],
-              "records sorted by updated desc (R01)")
+        # the REAL assertion: updated desc must put zzz-new (2026-07-25)
+        # AND demo (2026-07-24) ahead of aaa-old (2026-01-01) — folder
+        # order would be [aaa-old, demo, zzz-new], the opposite tail
+        check(slugs == ["zzz-new", "demo", "aaa-old"],
+              f"records sorted by updated desc, not folder order (R01) — got {slugs}")
         check(all("body" not in r for r in view["records"]),
               "view records are body-less (R01)")
         final = next((g for g in view["groups"] if g["value"] == "final"), None)
@@ -185,6 +199,28 @@ def run_groups(root: Path, port: int, proc, tmp: Path) -> None:
               "grouped under final (A01)")
         check(status_of(lambda: get("/views/ghost", port)) == 404,
               "unknown view 404")
+
+    if group("robustness"):
+        # binary artifact: listed AND fetchable without a connection drop
+        demo = root / "records" / "dossiers" / "demo"
+        (demo / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x01\x02\x03")
+        code, rec = get("/records/dossiers/demo", port)
+        check("logo.png" in rec["artifacts"], "binary artifact listed")
+        code, content = get("/records/dossiers/demo/artifacts/logo.png",
+                            port, raw=True)
+        check(code == 200 and content.startswith(b"\x89PNG"),
+              "binary artifact served as bytes, no crash")
+        (demo / "logo.png").unlink()
+        # malformed names get a clean status, never a dropped connection
+        check(status_of(lambda: get(
+            "/records/dossiers/demo/artifacts/a%00b", port)) in (404, 500),
+              "null-byte name → clean status, not a dropped connection (R07)")
+        # the flows endpoint feeds panel tab ordering
+        code, flow = get("/flows/dossier", port)
+        check(code == 200 and "nodes" in flow,
+              "flow twin served for tab ordering")
+        check(status_of(lambda: get("/flows/ghost", port)) == 404,
+              "unknown flow 404")
 
     if group("events"):
         import http.client

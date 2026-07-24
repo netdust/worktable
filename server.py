@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import mimetypes
 import os
 import re
 import subprocess
@@ -73,10 +74,15 @@ def body_of(text: str) -> str:
 
 
 def parse_list(raw: str) -> list[str]:
+    """Accept every form a view definition uses: `[a, b]`, `a, b`,
+    `a b`, `a`. The space form matters — `sort: updated desc` is the
+    natural way to write it, and silently ignoring it was the HIGH
+    correctness finding."""
     raw = (raw or "").strip()
     if raw.startswith("[") and raw.endswith("]"):
-        return [p.strip() for p in raw[1:-1].split(",") if p.strip()]
-    return [raw] if raw else []
+        raw = raw[1:-1]
+    sep = "," if "," in raw else None  # None → split on any whitespace
+    return [p.strip() for p in raw.split(sep) if p.strip()]
 
 
 class Folder:
@@ -93,11 +99,11 @@ class Folder:
         folder — belt and braces, symlink escapes included."""
         if not name or "/" in name or "\\" in name or name.startswith("."):
             return None
-        candidate = (folder / name).resolve()
         try:
+            candidate = (folder / name).resolve()
             candidate.relative_to(folder.resolve())
         except ValueError:
-            return None
+            return None      # traversal escape OR embedded null byte etc.
         return candidate if candidate.is_file() else None
 
     def record_folder(self, domain: str, slug: str) -> Path | None:
@@ -122,18 +128,37 @@ class Folder:
             "reviews": len(list(reviews.glob("*.md"))) if reviews.is_dir() else 0,
         }
 
-    def artifact(self, domain: str, slug: str, name: str) -> str | None:
+    def artifact(self, domain: str, slug: str, name: str) -> bytes | None:
+        """Bytes, not text — artifacts may be binary (a PNG, a signed
+        contract PDF). The caller sets content-type from the name."""
         folder = self.record_folder(domain, slug)
         if folder is None:
             return None
         path = self._safe(folder, name)
-        return path.read_text() if path else None
+        return path.read_bytes() if path else None
+
+    def flow(self, name: str) -> dict | None:
+        """A flow definition, for the panel's tab ordering (nodes' out:
+        sequence). Serves the compiled twin — the runtime artifact."""
+        if not SLUG_RE.match(name):
+            return None
+        twin = self.root / "flows" / f"{name}.json"
+        if not twin.is_file():
+            return None
+        try:
+            return json.loads(twin.read_text())
+        except Exception:
+            return None
 
     def views(self) -> list[dict]:
         out = []
         views_dir = self.root / "views"
         if views_dir.is_dir():
             for path in sorted(views_dir.glob("*.md")):
+                # listed names must be resolvable — same rule both sides,
+                # so no listed-but-unreachable view (LOW finding)
+                if not SLUG_RE.match(path.stem):
+                    continue
                 fm = frontmatter(path.read_text())
                 if fm.get("type") == "view":
                     out.append({"name": path.stem, "definition": fm})
@@ -275,6 +300,12 @@ def make_handler(folder: Folder, watcher: Watcher, token: str,
         def do_GET(self) -> None:
             if not self._authed():
                 return self._deny()
+            try:
+                self._route_get()
+            except Exception:      # every malformed input is a 404/500,
+                self._safe_500()   # never a dropped connection (R07)
+
+        def _route_get(self) -> None:
             seg = [unquote(s) for s in self.path.split("?")[0].split("/")
                    if s != ""]
             if seg == ["views"]:
@@ -283,17 +314,21 @@ def make_handler(folder: Folder, watcher: Watcher, token: str,
                 view = folder.resolve_view(seg[1])
                 return self._json(200, view) if view else \
                     self._json(404, {"error": "no such view"})
+            if len(seg) == 2 and seg[0] == "flows":
+                doc = folder.flow(seg[1])
+                return self._json(200, doc) if doc else \
+                    self._json(404, {"error": "no such flow"})
             if len(seg) == 3 and seg[0] == "records":
                 rec = folder.record(seg[1], seg[2])
                 return self._json(200, rec) if rec else \
                     self._json(404, {"error": "no such record"})
             if len(seg) == 5 and seg[0] == "records" and seg[3] == "artifacts":
-                content = folder.artifact(seg[1], seg[2], seg[4])
-                if content is None:
+                body = folder.artifact(seg[1], seg[2], seg[4])
+                if body is None:
                     return self._json(404, {"error": "no such artifact"})
-                body = content.encode()
+                ctype = mimetypes.guess_type(seg[4])[0] or "application/octet-stream"
                 self.send_response(200)
-                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -301,6 +336,12 @@ def make_handler(folder: Folder, watcher: Watcher, token: str,
             if seg == ["events"]:
                 return self._events()
             self._json(404, {"error": "not found"})
+
+        def _safe_500(self) -> None:
+            try:
+                self._json(500, {"error": "internal error"})
+            except Exception:
+                pass  # response already partly sent; connection closes
 
         def _events(self) -> None:
             self.send_response(200)
@@ -337,7 +378,12 @@ def make_handler(folder: Folder, watcher: Watcher, token: str,
                     raise ValueError
             except Exception:
                 return self._json(400, {"error": "invalid JSON body"})
-            code, out = record_seal(folder, netdust_flow, payload)
+            try:
+                code, out = record_seal(folder, netdust_flow, payload)
+            except subprocess.TimeoutExpired:
+                code, out = 504, {"error": "seal timed out"}
+            except Exception:
+                return self._safe_500()
             self._json(code, out)
 
     return Handler
