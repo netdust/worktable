@@ -1,3 +1,9 @@
 tasks/.harness-loop.json
 .flow-journal.jsonl
 reviews/
+
+# ui build artifacts
+ui/node_modules/
+ui/dist/
+ui/test-results/
+ui/playwright-report/
