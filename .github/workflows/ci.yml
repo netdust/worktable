@@ -57,13 +57,6 @@ jobs:
         run: python tests/runtime-contract.py
       - name: craft the flows declare actually exists
         run: python bin/craft-check.py
-      - name: WordPress pack — gates tested, flow shape asserted
-        run: |
-          python .netdust-flow/bin/flow-lint.py \
-            templates/wordpress-site/.flow/flows/site.yaml \
-            --check-gates --project templates/wordpress-site \
-            --bind netdust_flow=$GITHUB_WORKSPACE/.netdust-flow --compile
-          cd templates/wordpress-site && python .flow/tests/pack-tests.py
 
   ui:
     runs-on: ubuntu-latest

@@ -10,7 +10,8 @@ One folder per site. The record is the project; the code is elsewhere.
       reviews/       independent review verdicts (gitignored working papers)
 
 `item.md` carries `repo:` — the git remote of the site repo where the
-build actually happens through `templates/wordpress-site/.flow`. That
+build actually happens through the pack from
+[netdust/wordpress-site-pack](https://github.com/netdust/wordpress-site-pack). That
 is the only link between the two, and it is deliberate: the record
 outlives the build, and the repo can be handed over without it.
 

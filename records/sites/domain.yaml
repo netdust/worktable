@@ -1,7 +1,7 @@
 # records/sites/domain.yaml — a website as a tracked record.
 #
 # The CODE for a site lives in its own repo, driven by that repo's
-# .flow/ pack (templates/wordpress-site). This domain tracks the
+# .flow/ pack (netdust/wordpress-site-pack). This domain tracks the
 # PROJECT: what the site is for, what was researched, what was decided,
 # and the human seals along the way. Two different objects, two
 # different places, deliberately:

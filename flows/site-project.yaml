@@ -6,7 +6,7 @@
 # it independently reviewed, and get the owner's approval.
 #
 # The build then happens in the SITE REPO, driven by that repo's own
-# .flow/ pack (templates/wordpress-site). Two roads, because they are
+# .flow/ pack (netdust/wordpress-site-pack). Two roads, because they are
 # two different objects with two different lifetimes — see
 # records/sites/README.md.
 #

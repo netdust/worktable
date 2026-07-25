@@ -4,7 +4,7 @@
 # convention (~/.claude/netdust-flow); CI overrides it with a checkout.
 NETDUST_FLOW ?= $(HOME)/.claude/netdust-flow
 
-.PHONY: help deps test contract craft flows pack ui check
+.PHONY: help deps test contract craft flows ui check
 
 help:
 	@echo "make deps      install test/authoring dependencies"
@@ -12,7 +12,6 @@ help:
 	@echo "make contract  every gate command is understood by the runtime"
 	@echo "make craft     every craft path a flow declares exists"
 	@echo "make flows     lint domain flows, verify gates exist, compile twins"
-	@echo "make pack      WordPress pack gates + flow shape"
 	@echo "make ui        typecheck + e2e (needs npm ci in ui/ first)"
 	@echo "make check     test + contract + flows — this repo's gate command"
 
@@ -40,17 +39,7 @@ flows:
 		--bind worktable=$(CURDIR) --bind netdust_flow=$(NETDUST_FLOW) \
 		--compile
 
-# The WordPress pack's gates are code, so they are tested like code: a
-# security gate nobody tested reports clean because its regex never
-# matched anything.
-pack:
-	cd templates/wordpress-site && python3 .flow/tests/pack-tests.py
-	python3 $(NETDUST_FLOW)/bin/flow-lint.py \
-		templates/wordpress-site/.flow/flows/site.yaml \
-		--check-gates --project templates/wordpress-site \
-		--bind netdust_flow=$(NETDUST_FLOW) --compile
-
 ui:
 	cd ui && npx tsc -b --noEmit && npm run test:ci
 
-check: test contract craft flows pack
+check: test contract craft flows
