@@ -1,0 +1,267 @@
+{
+  "flow": "site",
+  "version": 1,
+  "state": {
+    "gate": {}
+  },
+  "nodes": [
+    {
+      "id": "brief",
+      "kind": "agent",
+      "craft": [
+        ".flow/craft/site-builder.md"
+      ],
+      "out": [
+        "spec.md"
+      ]
+    },
+    {
+      "id": "gate-brief",
+      "kind": "gate",
+      "run": ".flow/bin/spec-gate.py {feature_dir}"
+    },
+    {
+      "id": "plan",
+      "kind": "agent",
+      "craft": [
+        ".flow/craft/site-builder.md"
+      ],
+      "in": [
+        "spec.md"
+      ],
+      "out": [
+        "plan.md",
+        "tasks.md"
+      ]
+    },
+    {
+      "id": "gate-plan",
+      "kind": "gate",
+      "run": ".flow/bin/spec-gate.py {feature_dir}"
+    },
+    {
+      "id": "approve-plan",
+      "kind": "human",
+      "out": [
+        "seal approve-plan"
+      ]
+    },
+    {
+      "id": "gate-approval",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {feature_dir} approve-plan"
+    },
+    {
+      "id": "build",
+      "kind": "agent",
+      "craft": [
+        ".flow/craft/site-builder.md",
+        ".flow/craft/wp-reviewer.md"
+      ],
+      "in": [
+        "tasks.md"
+      ],
+      "out": [
+        "theme",
+        "checked tasks"
+      ]
+    },
+    {
+      "id": "gate-ledger",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/ledger.py {feature_dir}"
+    },
+    {
+      "id": "unblock",
+      "kind": "human",
+      "out": [
+        "resolved task"
+      ]
+    },
+    {
+      "id": "gate-syntax",
+      "kind": "gate",
+      "run": ".flow/bin/wp-lint.sh {base_ref}"
+    },
+    {
+      "id": "gate-security",
+      "kind": "gate",
+      "run": ".flow/bin/wp-security.py --base {base_ref}"
+    },
+    {
+      "id": "gate-standards",
+      "kind": "gate",
+      "run": ".flow/bin/wp-standards.sh {base_ref}"
+    },
+    {
+      "id": "gate-render",
+      "kind": "gate",
+      "run": ".flow/bin/wp-render.sh {theme}"
+    },
+    {
+      "id": "gate-a11y",
+      "kind": "gate",
+      "run": ".flow/bin/wp-a11y.sh"
+    },
+    {
+      "id": "shakeout",
+      "kind": "human",
+      "craft": [
+        ".flow/craft/site-builder.md"
+      ],
+      "out": [
+        "seal shakeout"
+      ]
+    },
+    {
+      "id": "gate-acceptance",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {feature_dir} shakeout --fresh"
+    }
+  ],
+  "edges": [
+    {
+      "from": "__start__",
+      "to": "brief"
+    },
+    {
+      "from": "brief",
+      "to": "gate-brief"
+    },
+    {
+      "from": "gate-brief",
+      "to": "plan",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-brief",
+      "to": "brief",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "plan",
+      "to": "gate-plan"
+    },
+    {
+      "from": "gate-plan",
+      "to": "approve-plan",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-plan",
+      "to": "plan",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "approve-plan",
+      "to": "gate-approval"
+    },
+    {
+      "from": "gate-approval",
+      "to": "build",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-approval",
+      "to": "plan",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-approval",
+      "to": "approve-plan",
+      "when": "gate.exit == 1"
+    },
+    {
+      "from": "build",
+      "to": "gate-ledger"
+    },
+    {
+      "from": "gate-ledger",
+      "to": "build",
+      "when": "gate.exit == 1"
+    },
+    {
+      "from": "gate-ledger",
+      "to": "unblock",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-ledger",
+      "to": "gate-syntax",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "unblock",
+      "to": "gate-ledger"
+    },
+    {
+      "from": "gate-syntax",
+      "to": "gate-security",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-syntax",
+      "to": "build",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "gate-security",
+      "to": "gate-standards",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-security",
+      "to": "build",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "gate-standards",
+      "to": "gate-render",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-standards",
+      "to": "build",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "gate-render",
+      "to": "gate-a11y",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-render",
+      "to": "build",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "gate-a11y",
+      "to": "shakeout",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-a11y",
+      "to": "build",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "shakeout",
+      "to": "gate-acceptance"
+    },
+    {
+      "from": "gate-acceptance",
+      "to": "__end__",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-acceptance",
+      "to": "build",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-acceptance",
+      "to": "shakeout",
+      "when": "gate.exit == 1"
+    }
+  ]
+}

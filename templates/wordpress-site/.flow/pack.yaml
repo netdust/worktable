@@ -1,0 +1,30 @@
+# .flow/pack.yaml — the WordPress site delivery pack.
+pack: wordpress-site
+description: >
+  Build a WordPress site through gates: syntax, security, coding
+  standards, real-browser render, accessibility — then a human seal on
+  the only question a machine cannot answer.
+
+flows:
+  site: flows/site.yaml
+
+binds:
+  netdust_flow:
+    description: the netdust-flow runtime root
+    example: "~/.claude/netdust-flow"
+  theme:
+    description: the theme slug wp-render.sh activates before requesting routes
+    example: "acme"
+  base_ref:
+    description: the ref the syntax/security/standards scans diff against
+    example: "main"
+
+requires:
+  - {name: php,     why: "gate-syntax (php -l)"}
+  - {name: ddev,    why: "gate-render, gate-a11y — booting real WordPress"}
+  - {name: npx,     why: "gate-a11y (Playwright)"}
+  - {name: composer, why: "gate-standards (PHPCS + WPCS), installed into vendor/"}
+
+# Every one of these is required, not optional. A gate whose tool is
+# missing FAILS — it does not skip. See bin/tool.sh for why: a gate that
+# passes when it could not run makes green mean nothing.

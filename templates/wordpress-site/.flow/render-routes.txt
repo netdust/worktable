@@ -1,0 +1,8 @@
+# Routes wp-render.sh must render without a PHP diagnostic.
+# One path per line, relative to the site root. Add every template you
+# actually ship — a route not listed here is a route nothing checks.
+/
+/?p=1
+/?s=test
+/no-such-page-404
+/?feed=rss2

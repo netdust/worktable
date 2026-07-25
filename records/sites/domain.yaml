@@ -1,0 +1,42 @@
+# records/sites/domain.yaml — a website as a tracked record.
+#
+# The CODE for a site lives in its own repo, driven by that repo's
+# .flow/ pack (templates/wordpress-site). This domain tracks the
+# PROJECT: what the site is for, what was researched, what was decided,
+# and the human seals along the way. Two different objects, two
+# different places, deliberately:
+#
+#   the record  survives the build, outlives the repo, and is what you
+#               read a year later to remember why the nav works that way
+#   the repo    is the deliverable, and can be handed to a host or a
+#               client on its own without dragging the CRM along
+#
+# The link between them is `repo:` in the record's frontmatter.
+
+domain: sites
+type: site
+title: Website projects — briefed, researched, approved, built, launched.
+
+seal: launch
+final_status: live
+
+stages:
+  research:
+    artifact: research.md
+    min_chars: 500
+    min_links: 3
+    # Sources for a site brief: the client's existing site, their
+    # competitors, whatever they published about the audience. A brief
+    # with no evidence behind it is a preference.
+  brief:
+    artifact: brief.md
+    sections: ["## Audience", "## Pages", "## Content", "## Constraints",
+               "## Done means"]
+    min_chars: 800
+    # `## Done means` is not ceremony. It is what the shake-out is
+    # driven from, and a site with no written definition of done is a
+    # site that gets "one more small thing" until the budget is gone.
+
+review:
+  required: true
+  artifact: reviews/brief.md
