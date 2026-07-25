@@ -1,0 +1,87 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # worktable's gates call into the flow runtime; the suite needs it
+      # at the path the flows bind, so check it out beside this repo.
+      - uses: actions/checkout@v4
+        with:
+          repository: netdust/netdust-flow
+          path: .netdust-flow
+      - run: pip install -r requirements-dev.txt
+      - run: |
+          git config --global user.email "ci@worktable.invalid"
+          git config --global user.name "worktable ci"
+      - name: server + gate suite
+        env:
+          WORKTABLE_NETDUST_FLOW: ${{ github.workspace }}/.netdust-flow
+        run: python tests/server-tests.py
+
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/checkout@v4
+        with:
+          repository: netdust/netdust-flow
+          path: .netdust-flow
+      - run: pip install -r requirements-dev.txt
+      - name: every domain flow lints, names gates that exist, twins fresh
+        run: |
+          python .netdust-flow/bin/flow-lint.py flows/*.yaml \
+            --check-gates --project . --compile
+          git diff --exit-code -- flows/ \
+            || { echo "::error::a committed .json twin is stale"; exit 1; }
+      # The break this job exists to catch: worktable's finishing gates
+      # call seal.py with flags a given netdust-flow may not have. An
+      # unknown flag exits 2, which the flows route as `rejected` — a
+      # human's approval silently read as a refusal. Prove the contract.
+      - name: the runtime supports every flag our gates pass it
+        run: python tests/runtime-contract.py
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/checkout@v4
+        with:
+          repository: netdust/netdust-flow
+          path: .netdust-flow
+      - run: npm ci
+      - run: npx tsc -b --noEmit
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          git config --global user.email "ci@worktable.invalid"
+          git config --global user.name "worktable ci"
+      - name: e2e against the real server
+        env:
+          WORKTABLE_NETDUST_FLOW: ${{ github.workspace }}/.netdust-flow
+        run: npm run test:ci

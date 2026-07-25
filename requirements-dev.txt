@@ -1,0 +1,8 @@
+# worktable's own code is stdlib-only ON PURPOSE: server.py boots with
+# nothing installed, and the gate scripts in bin/ shell out rather than
+# import. That property is worth keeping — it is why the server is
+# "safe to kill at any time" and why a gate cannot break on a bad venv.
+#
+# These are needed to TEST and to author flows, not to run worktable.
+pyyaml>=6.0        # tests/runtime-contract.py reads flows/*.yaml
+jsonschema>=4.0    # flow-lint, when linting our flows against the schema

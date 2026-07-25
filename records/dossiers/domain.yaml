@@ -1,0 +1,38 @@
+# records/dossiers/domain.yaml — what a dossier IS.
+#
+# A domain is definitions, not code (README, CLAUDE.md). Before this
+# file, bin/item-check.py hardcoded `dossier.md` at the draft stage —
+# which is why a lead's outreach draft and an article's newsletter copy
+# were both, literally, files named dossier.md. The kernel now reads
+# the domain instead of knowing it.
+
+domain: dossiers
+type: dossier
+title: Prospect and subject dossiers — research, drafted, reviewed, sealed.
+
+# The human decision this domain ends on, and the status it lands in.
+seal: dossier
+final_status: final
+
+stages:
+  research:
+    artifact: research.md
+    min_chars: 300
+    min_links: 3        # a proxy for rigor, NOT rigor — see the note
+  draft:
+    artifact: dossier.md
+    sections: ["## Summary", "## Sources"]
+    # links counted inside the LAST named section, not the whole file:
+    # three citations in the body and none under Sources is an
+    # unsourced dossier with a decorative heading.
+    min_links_in: "## Sources"
+    min_links: 3
+
+# The reviewer is not optional here, and the reason is recorded:
+# the link count above accepts three fabricated `.invalid` URLs (stress
+# test 2026-07, finding F3). Counting is gameable by a drifting agent;
+# a fresh-context reviewer refuting unsourced claims is not. Any domain
+# that carries facts in front of a client keeps this true.
+review:
+  required: true
+  artifact: reviews/dossier.md

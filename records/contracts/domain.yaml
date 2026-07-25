@@ -1,0 +1,29 @@
+# records/contracts/domain.yaml — contract drafting.
+#
+# Contracts run the `patch` road, not a research road: the artifact
+# already exists and is being amended. The floors are what matter here
+# — a payment or liability clause pushes the work up to `deliver`
+# (stress test 2026-07: a Mollie clause tripped the payments floor and
+# routed to human re-dispatch, which is the intended behaviour).
+
+domain: contracts
+type: contract
+title: Contracts and agreements — drafted, reviewed, signed.
+
+seal: sign
+final_status: signed
+
+stages:
+  draft:
+    artifact: contract.md
+    sections: ["## Parties", "## Term", "## Payment"]
+    # No link minimum: a contract cites clauses, not URLs. Requiring
+    # three http links here would be the count-as-proxy mistake with
+    # none of the excuse.
+    min_chars: 500
+
+# A contract is signed, not shipped. The reviewer reads for what is
+# MISSING (indemnity, term, termination) as much as what is wrong.
+review:
+  required: true
+  artifact: reviews/contract.md

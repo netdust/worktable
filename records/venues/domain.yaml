@@ -1,0 +1,27 @@
+# records/venues/domain.yaml — production/touring venue research.
+#
+# Same shape as dossiers (it was created by running the dossier flow
+# against a different folder), kept as its own domain so its artifacts
+# can diverge without touching dossiers.
+
+domain: venues
+type: venue
+title: Venue research for touring and production.
+
+seal: dossier
+final_status: final
+
+stages:
+  research:
+    artifact: research.md
+    min_chars: 300
+    min_links: 3
+  draft:
+    artifact: dossier.md
+    sections: ["## Summary", "## Sources"]
+    min_links_in: "## Sources"
+    min_links: 3
+
+review:
+  required: true
+  artifact: reviews/dossier.md

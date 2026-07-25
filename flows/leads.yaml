@@ -25,11 +25,11 @@ nodes:
     kind: gate            # present with sourced content
     run: "{worktable}/bin/gate-then-status.py {feature_dir} researched -- {worktable}/bin/item-check.py {feature_dir} research"
 
-  - id: draft             # dossier.md drafted FROM research.md only
+  - id: draft             # outreach.md drafted FROM research.md only
     kind: agent
     craft: [skills/spec-authoring]
     in: [research.md]
-    out: [dossier.md]
+    out: [outreach.md]
 
   - id: gate-draft        # structure + every claim traceable
     kind: gate
@@ -38,12 +38,12 @@ nodes:
   - id: review            # fresh-context reviewer; verdict written
     kind: agent           # tree-bound to reviews/dossier.md (I5)
     craft: [agents/reviewer]
-    in: [dossier.md, research.md]
-    out: [reviews/dossier.md]
+    in: [outreach.md, research.md]
+    out: [reviews/outreach.md]
 
   - id: gate-review       # CLEAN verdict bound to the current tree
     kind: gate
-    run: "{worktable}/bin/gate-then-status.py {feature_dir} reviewed --seal outreach -- {worktable}/bin/review-check.py {feature_dir} dossier"
+    run: "{worktable}/bin/gate-then-status.py {feature_dir} reviewed --seal outreach -- {worktable}/bin/review-check.py {feature_dir} outreach"
 
   - id: approve           # yield point only — the decision is the seal
     kind: human

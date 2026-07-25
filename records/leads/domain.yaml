@@ -1,0 +1,30 @@
+# records/leads/domain.yaml — CRM outreach.
+#
+# A lead's draft is an outreach message, not a dossier. Until this file
+# existed the gate demanded a file literally named `dossier.md`, which
+# is why records/leads/acme-corp/ still contains one.
+
+domain: leads
+type: lead
+title: Prospect outreach — researched, drafted, reviewed, sent.
+
+seal: outreach
+final_status: sent
+
+stages:
+  research:
+    artifact: research.md
+    min_chars: 300
+    min_links: 3
+  draft:
+    artifact: outreach.md
+    sections: ["## Message", "## Basis"]
+    # Every claim in an outreach message is a claim made TO a prospect.
+    # `## Basis` is where each one points at the research that supports
+    # it — the reviewer refuses anything asserted without one.
+    min_links_in: "## Basis"
+    min_links: 3
+
+review:
+  required: true
+  artifact: reviews/outreach.md

@@ -1,0 +1,26 @@
+# records/articles/domain.yaml — newsletter and article production.
+
+domain: articles
+type: article
+title: Articles and newsletters — researched, drafted, reviewed, published.
+
+seal: publish
+final_status: published
+
+stages:
+  research:
+    artifact: research.md
+    min_chars: 300
+    min_links: 3
+  draft:
+    artifact: article.md
+    sections: ["## Body", "## Sources"]
+    min_links_in: "## Sources"
+    min_links: 3
+
+# Publishing is the least reversible thing this system does: once it is
+# out, a correction is a new artifact, not an edit. The reviewer is
+# mandatory and the seal is fresh-checked.
+review:
+  required: true
+  artifact: reviews/article.md

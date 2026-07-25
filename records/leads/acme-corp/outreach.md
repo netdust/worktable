@@ -1,6 +1,6 @@
 # Outreach draft — ACME Corp (v2, softened)
 
-## Summary
+## Message
 
 Warmer, outcome-led cold email for ACME's compliance-training mandate.
 
@@ -11,8 +11,11 @@ StrideLMS handles per-employee progress and certificates automatically,
 so your L&D team can focus on content. If it's useful, I'd be glad to
 show a 20-minute pilot tailored to ACME — no pressure either way.
 
-## Sources
+## Basis
 
-- https://example.com/acme/about
-- https://example.com/acme/press/compliance
-- https://example.com/acme/careers
+Each claim above and the source it rests on:
+
+- "new compliance-training programme" — https://example.com/acme/press/compliance
+- company size / L&D team exists — https://example.com/acme/about
+- active L&D hiring, so the programme is staffed and real —
+  https://example.com/acme/careers
