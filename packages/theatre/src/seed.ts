@@ -185,9 +185,9 @@ export const views: SavedViewSeed[] = [
     source: 'voorstellingen',
     skin: 'table',
     filters: {},
-    sort: ['plandag', 'start'],
+    sort: ['datum', 'start'],
     group_by: null,
-    visible_fields: ['productie', 'plandag', 'start', 'venue', 'adres'],
+    visible_fields: ['productie', 'datum', 'start', 'venue', 'adres'],
   },
   {
     name: 'Producties',

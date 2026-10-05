@@ -202,11 +202,11 @@ describe('voorstellingen', () => {
     for (const row of all) {
       const { custom, lookups, ...columns } = row
       expect({ custom, lookups }).toEqual({ custom: {}, lookups: {} })
-      expect(Object.keys(columns).sort()).toEqual(['adres', 'id', 'plandag', 'productie', 'start', 'venue'])
+      expect(Object.keys(columns).sort()).toEqual(['adres', 'datum', 'id', 'productie', 'start', 'venue'])
     }
     expect(all.find((r) => r.id === 9)).toMatchObject({
       productie: 'De Kersentuin',
-      plandag: '2026-10-13',
+      datum: '2026-10-14',
       start: '00:30',
       venue: 'Theater Het Anker',
     })

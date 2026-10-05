@@ -153,9 +153,9 @@ test('voorstellingen-public', async ({ page }) => {
     expect(Object.keys(one).sort()).toEqual([
       'adres',
       'custom',
+      'datum',
       'id',
       'lookups',
-      'plandag',
       'productie',
       'start',
       'venue',

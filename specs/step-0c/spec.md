@@ -68,9 +68,10 @@ Source: "Beschikbaarheid (persoon only)" and Stefan's datetime decision above.
 
 ### R7 The voorstellingen view, public columns only
 - **What it holds:** one row per live Activiteit with `soort = 'voorstelling'` and `status = 'bevestigd'`, joined to its productie, and to its venue through `locatie_id`. A show without a venue is still listed, with empty venue columns.
-- **Columns, and only these:** `id`, `productie` (titel), `plandag`, `start` (time `HH:mm`), `venue` (naam) and `adres`.
+- **Columns, and only these:** `id`, `productie` (titel), `datum` (the calendar date of `start_at`), `start` (time `HH:mm`), `venue` (naam) and `adres`.
 - **What it must not hold:** no notes, no status and no ids other than `id`.
 - It is read-only and gets a SavedView, "Voorstellingen".
+- `datum` was ruled in the final fix wave: a public calendar needs the calendar date, not the day-line `plandag` (`docs/SPEC.md`: 'productie, date, time').
 
 Source: "the voorstellingen view exposing public columns only" and `docs/SPEC.md` ("productie, date, time, venue name and address").
 
