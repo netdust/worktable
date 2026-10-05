@@ -50,6 +50,11 @@ First working version: Task 1 — `bun packages/engine/src/serve.ts --domain @wo
 **Mitigations — where they live.** `inUse()` and its call in `runWrite`'s delete branch, and `exists()` in the write context, `packages/engine/src/writes.ts` (1, 2, 3, 4, 5).
 
 **Deferrals.** Rows that point at an already soft-deleted target (from before this rule) are not repaired. Relation columns not declared as relations (`speelreeks_id`) are not checked. No auth (from 0b).
+- **Auth (step 0, security M1):** the authorization decision must run before `inUse()`, and `by` must be filtered to datasets the actor may read. A refused actor gets 403 with no `by`.
+- **Self-reference:** a dataset with a relation to itself would block its own delete through its own pointer. No such dataset exists yet.
+- **Relations in custom fields:** relations stored in `custom` fields (Field, step 5) are not seen by `inUse()`.
+- **Legacy rows at import (0e):** the theatre writers judge the cross-field rules on every write, while Laika judged only writes that touched those fields. An imported Laika row holding both persoon and naam, or a duplicate pair, must be cleaned at import, or a later edit of its `notitie` will be refused.
+- **A site `error.in_use` string** would override the sentence built from `by`. When site strings arrive, prefer `inUse(by)`.
 
 ## Test map
 
@@ -77,11 +82,13 @@ E2E flows: **fiche-edits** — on the fiche grid (second engine `--domain @workt
 
 | Task | Start | End |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
-| 4 | | |
-| 5 | | |
+| 1 | 2026-10-05 22:04 | 22:05 |
+| 2 | 2026-10-05 22:09 | 22:14 |
+| 3 | 2026-10-05 22:14 | 22:21 |
+| 4 | 2026-10-05 22:22 | 22:31 |
+| 5 | 2026-10-05 22:32 | 22:42 |
+
+Final review and security audit 22:43–22:49; final fix wave 22:49–22:57. Agent wall-clock, not human days.
 
 ---
 
