@@ -97,6 +97,8 @@ const strings = {
   deleteConfirm: 'Zeker?',
   inUse: 'Nog in gebruik door {by}.',
   and: 'en',
+  fixedFilter: '+ {n} vaste filter',
+  fixedFilters: '+ {n} vaste filters',
 }
 
 export type StringKey = keyof typeof strings
@@ -146,4 +148,9 @@ export function inUse(by: { label: string; count: number }[]): string {
 
 export function rowCount(n: number): string {
   return n === 1 ? t('row') : t('rows', { n })
+}
+
+/** What a view's saved filters with no chip are called in the toolbar. */
+export function fixedCount(n: number): string {
+  return n === 1 ? t('fixedFilter', { n }) : t('fixedFilters', { n })
 }

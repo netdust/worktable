@@ -1,5 +1,5 @@
 import { BoolCell } from './Bool'
-import { DateCell, DateEditor } from './Date'
+import { DateCell, DateEditor, DateTimeEditor } from './Date'
 import { NumberCell, NumberEditor } from './Number'
 import type { CellProps, EditorProps } from './props'
 import { RelationCell, RelationEditor } from './Relation'
@@ -12,6 +12,7 @@ export function Display({ column, row, onToggle }: CellProps & { onToggle: () =>
     case 'select':
       return <SelectCell column={column} row={row} />
     case 'date':
+    case 'datetime':
       return <DateCell column={column} row={row} />
     case 'time':
       return <TimeCell column={column} row={row} />
@@ -33,6 +34,8 @@ export function Editor(props: EditorProps) {
       return <SelectEditor {...props} />
     case 'date':
       return <DateEditor {...props} />
+    case 'datetime':
+      return <DateTimeEditor {...props} />
     case 'time':
       return <TimeEditor {...props} />
     case 'number':

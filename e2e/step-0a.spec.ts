@@ -85,8 +85,8 @@ test('planning-grouped-sorted', async ({ page }) => {
   }
 
   const tuesday = found.find((section) => iso(section.day) === '2026-10-13')
-  expect(tuesday?.starts).toContain('2026-10-14T00:30')
-  expect(found.find((section) => iso(section.day) === '2026-10-14')?.starts).not.toContain('2026-10-14T00:30')
+  expect(tuesday?.starts).toContain('Wed 14/10 00:30')
+  expect(found.find((section) => iso(section.day) === '2026-10-14')?.starts).not.toContain('Wed 14/10 00:30')
 })
 
 test('planning-status-filter', async ({ page }) => {

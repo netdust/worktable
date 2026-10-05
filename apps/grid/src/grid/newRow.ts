@@ -6,7 +6,7 @@ import type { DateWindow, Field, Model, Scope, View } from '../types'
  */
 export type NewRow = { fields: Record<string, unknown>; needs: string[]; offers: string[] } | { missing: string[] }
 
-const TYPED = ['text', 'textarea', 'html', 'email', 'url', 'int', 'float']
+const TYPED = ['text', 'datetime', 'textarea', 'html', 'email', 'url', 'int', 'float']
 
 function iso(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -25,7 +25,8 @@ export function newRow(model: Model, view: View, window: DateWindow | null, toda
   const now = iso(today)
   const day = window && (now < window.from || now > window.to) ? window.from : now
   const fields: Record<string, unknown> = {}
-  const needs: string[] = model.title_readonly ? [] : ['title']
+  // The title is asked only when the writer requires it and the grid may write it.
+  const needs: string[] = model.title_readonly || model.title_required === false ? [] : ['title']
   const missing: string[] = []
   const offers: string[] = []
 

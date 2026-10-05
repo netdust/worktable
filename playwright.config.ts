@@ -13,7 +13,7 @@ export default defineConfig({
     },
     {
       command: 'cd apps/grid && bunx vite --port 5174 --strictPort --host 127.0.0.1',
-      env: { ENGINE_URL: 'http://127.0.0.1:4311' },
+      env: { ENGINE_URL: 'http://127.0.0.1:4311', VITE_RECORDS_PAGE_SIZE: '2' },
       wait: { stdout: /127\.0\.0\.1:5174/ },
       reuseExistingServer: false,
     },

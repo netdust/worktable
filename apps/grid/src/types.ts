@@ -1,7 +1,7 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
 
 export type FieldType =
-  | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date'
+  | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date' | 'datetime'
   | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
 
 export interface Field {
@@ -23,6 +23,8 @@ export interface Model {
   label: string
   title_label: string
   title_readonly: boolean
+  /** The title column is not nullable: absent means required. */
+  title_required?: boolean
   /** The title comes through a relation: never written, sorted, grouped or filtered on. */
   title_derived?: boolean
   /** A query's rows: joined, never created. */

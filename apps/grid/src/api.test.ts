@@ -163,7 +163,26 @@ describe('records()', () => {
 
     expect(found).toEqual({ rows: [expect.objectContaining({ id: 1, title: 'De Kersentuin' })], total: 1 })
     expect(all.total).toBe(2)
-    expect(urls()).toEqual(['/api/rows/productie', '/api/rows/productie'])
+    expect(urls()).toEqual(['/api/rows/productie?limit=5000&offset=0', '/api/rows/productie?limit=5000&offset=0'])
+  })
+
+  it('pages with offset until the total: five rows at page size 2 take three calls', async () => {
+    vi.stubEnv('VITE_RECORDS_PAGE_SIZE', '2')
+    const every = [1, 2, 3, 4, 5].map((id) => ({ id, titel: `P${id}`, title: `P${id}`, custom: {}, lookups: {} }))
+    fetcher.mockImplementation(async (input) => {
+      const url = new URL(String(input), 'http://x')
+      if (url.pathname === '/api/schema') return json(engine)
+      const [limit, offset] = [Number(url.searchParams.get('limit')), Number(url.searchParams.get('offset'))]
+      return json({ rows: every.slice(offset, offset + limit), total: 5 })
+    })
+
+    const found = await records('productie', '')
+
+    expect(found.rows.map((r) => r.id)).toEqual([1, 2, 3, 4, 5])
+    expect(urls().filter((u) => u.startsWith('/api/rows/'))).toEqual([
+      '/api/rows/productie?limit=2&offset=0', '/api/rows/productie?limit=2&offset=2', '/api/rows/productie?limit=2&offset=4',
+    ])
+    vi.unstubAllEnvs()
   })
 })
 

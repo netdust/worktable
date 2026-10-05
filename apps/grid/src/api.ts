@@ -73,7 +73,7 @@ export function schema(): Promise<Schema> {
 }
 
 /** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope has no route yet: no space is served. */
-export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field'>, window: Partial<DateWindow>, _scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
+export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>, window: Partial<DateWindow>, _scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
   const title = titleColumn(await sourceOf(view.model))
   const query: Query = layout ? rowsQuery(view, layout, window, title) : { ...window }
   return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
@@ -86,11 +86,24 @@ export async function awayRows(away: MatrixAway, window: Partial<DateWindow>): P
   return (await rowsOf(away.model, { filter: JSON.stringify(filter) })).rows
 }
 
+/** The rows a relation's options are read in; the engine's own cap, unless a deployment asks for smaller pages. */
+const pageSize = () => Number(import.meta.env.VITE_RECORDS_PAGE_SIZE) || 5000
+
+/** Every live row of a model, a page at a time until the engine's `total` is reached. */
+async function everyRow(model: string): Promise<Row[]> {
+  const all: Row[] = []
+  for (;;) {
+    const page = await rowsOf(model, { limit: String(pageSize()), offset: String(all.length) })
+    all.push(...page.rows)
+    if (page.rows.length === 0 || all.length >= page.total) return all
+  }
+}
+
 /** A model's records for a picker: titles holding `search`, every record without one. The engine has no search: the titles are narrowed here. */
 export async function records(model: string, search: string): Promise<RowsResponse> {
-  const all = await rowsOf(model, {})
+  const all = await everyRow(model)
   const wanted = search.toLocaleLowerCase()
-  const found = wanted === '' ? all.rows : all.rows.filter((row) => row.title.toLocaleLowerCase().includes(wanted))
+  const found = wanted === '' ? all : all.filter((row) => row.title.toLocaleLowerCase().includes(wanted))
   return { rows: found, total: found.length }
 }
 

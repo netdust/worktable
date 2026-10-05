@@ -210,6 +210,7 @@ export function App() {
             onRevert: revert,
           } : null}
           viewNote={viewNote}
+          fixed={Object.keys(view?.fixed ?? {}).length}
         />
         <div className="nv-work">
         <section className="nv-sheet">

@@ -81,9 +81,9 @@ export interface EngineRow {
   [column: string]: unknown
 }
 
-/** ISO datetimes stay text: they sort as they read. */
+/** A datetime is stored as ISO text: it sorts as it reads. */
 const TYPES: Record<EngineColumn['type'], FieldType> = {
-  text: 'text', datetime: 'text', json: 'json', integer: 'int', real: 'float', boolean: 'bool', date: 'date',
+  text: 'text', datetime: 'datetime', json: 'json', integer: 'int', real: 'float', boolean: 'bool', date: 'date',
 }
 
 const isReadonly = (column: EngineColumn | undefined, source: EngineSource): boolean =>
@@ -131,6 +131,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     label: source.label,
     title_label: titleLabel(source),
     title_readonly: !source.writable || Boolean(source.title_via) || isReadonly(source.columns[source.title], source),
+    ...(source.columns[source.title]?.nullable ? { title_required: false } : {}),
     ...(source.title_via ? { title_derived: true } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.deletable ? { deletable: true } : {}),
@@ -312,11 +313,10 @@ function engineColumn(id: string, title: string | null): string | null {
 }
 
 /** The layout's filters, sort and group as `/rows` params; the grid sorts lookups and rollups itself. */
-export function rowsQuery(view: Pick<View, 'date_field'>, layout: Layout, window: Partial<DateWindow>, title: string | null): Record<string, string> {
+export function rowsQuery(view: Pick<View, 'date_field' | 'fixed'>, layout: Layout, window: Partial<DateWindow>, title: string | null): Record<string, string> {
   const query: Record<string, string> = {}
-  if (layout.filters.length > 0) {
-    query.filter = JSON.stringify(Object.fromEntries(layout.filters.map((f) => [f.field, { $eq: f.value }])))
-  }
+  const filters = mergeFilters(layout.filters, view.fixed ?? {})
+  if (Object.keys(filters).length > 0) query.filter = JSON.stringify(filters)
   const sort = layout.sort.flatMap(({ id, desc }) => {
     const column = engineColumn(id, title)
     return column === null ? [] : [desc ? `-${column}` : column]

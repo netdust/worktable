@@ -55,7 +55,8 @@ describe('toSchema', () => {
   it("maps a dataset's columns to model fields by type", () => {
     const fields = toSchema(engine).models.activiteit.fields
 
-    expect(fields.start_at.type).toBe('text')
+    expect(fields.start_at.type).toBe('datetime')
+    expect(toSchema(engine).models.activiteit.title_required).toBe(false)
     expect(fields.extra.type).toBe('json')
     expect(fields.uren.type).toBe('float')
     expect(fields.betaald.type).toBe('bool')
@@ -280,6 +281,14 @@ describe('rowsQuery', () => {
     const sort = [{ id: 'title', desc: false }, { id: 'lookups.productie_id.titel', desc: false }, { id: 'rollups.uren', desc: true }, { id: 'start_at', desc: true }]
 
     expect(rowsQuery(view, { ...layout, sort }, {}, 'omschrijving').sort).toBe('omschrijving,-start_at')
+  })
+
+  it('keeps a chip and a fixed filter on the same key, and a fixed filter alone', () => {
+    const fixed = { status: { $in: ['optie', 'bevestigd'] }, soort: { $ne: 'repetitie' } }
+    const query = rowsQuery({ ...view, fixed }, { ...layout, filters: [{ field: 'status', value: 'bevestigd' }] }, {}, 'omschrijving')
+
+    expect(JSON.parse(query.filter)).toEqual({ status: { $in: ['optie', 'bevestigd'], $eq: 'bevestigd' }, soort: { $ne: 'repetitie' } })
+    expect(JSON.parse(rowsQuery({ ...view, fixed }, layout, {}, 'omschrijving').filter)).toEqual(fixed)
   })
 
   it('sends chips as $eq filter JSON, sort with - for desc, group and the window', () => {
