@@ -15,7 +15,7 @@ Worktable is a standalone planning and views engine. `docs/SPEC.md` is the contr
 Bun, Hono, Drizzle, SQLite, Zod, Biome, TypeScript. One engine instance per client, one database file each. No WordPress code anywhere in this repo. Multi-tenant hosting is out.
 
 ## Scope
-Build only what the Scope lock in the spec lists as "in". Anything in the "out" column (admin-created datasets, resources, run-of-show, child spaces, urensaldo, leave approval) is not built, not stubbed, not "prepared for". Changing scope is a decision by the owner, made by editing the spec first.
+Build only what the Scope lock in the spec lists as "in". Anything in the "out" column (admin-created datasets, resources, run-of-show, child spaces, urensaldo, leave approval, production-skeleton templates anchored to a première, any engine code inside WordPress, any sync from the website into the engine, building public create or the board skin before a domain needs them) is not built, not stubbed, not "prepared for". Changing scope is a decision by the owner, made by editing the spec first.
 
 ## Order of work
 Follow the build steps in the spec. A step is done when its acceptance gate passes in a real browser, not when the code exists. Do not start step N+1 before step N's gate passes.
@@ -23,11 +23,12 @@ Follow the build steps in the spec. A step is done when its acceptance gate pass
 ## Working rules
 - Do not propose a different architecture. If something in the spec cannot work, say what and why, with evidence, and stop.
 - Domain rules (refuse rules, day line, conflict types) live in domain writers and SQL views, never in the engine.
-- Queries are SQL views. They store nothing and join datasets only.
-- Custom fields live in each dataset's `velden` JSON column, declared in the Veld table. Never create a table for them.
+- Queries are SQL views. They store nothing and join datasets, other queries and the engine's generic tables.
+- Custom fields live in each dataset's custom JSON column, declared in the Field table. Never create a table for them.
 - Datasets are code. Admins create fields, views, templates and publications, never datasets.
-- Names in the domain are Dutch as in the spec (Activiteit, Toewijzing, Weergave). Names in the engine are English and generic.
+- Names in the domain are Dutch as in the spec (Activiteit, Toewijzing, Beschikbaarheid). Names in the engine are English and generic (Field, SavedView, Revision, Publication, Attachment).
 - Copy from Folio: the filter AST compiler, the shape of its views and fields tables, magic-link sessions. Copy from ntdst-baseline only the TypeScript and React of its views app (services/views/app), never PHP. Nothing else.
 - No client data in this repo. Fixtures are invented.
+- docs/SPEC.md is the spec of record. Changing scope means editing it first.
 - Gates run in this repo's own browser e2e harness, not Laika's.
 - Importing existing data is a generic command that reads JSON. Exporters live in the client's own repo. No client data and no WordPress code here.
