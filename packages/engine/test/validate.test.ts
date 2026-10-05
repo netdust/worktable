@@ -38,31 +38,40 @@ const writes = (over: Partial<NonNullable<ColumnDecl['writes']>> = {}): ColumnDe
 describe('validateDomain', () => {
   test('the fixture domain validates', () => expect(() => validateDomain(domain)).not.toThrow())
 
+  test('the error keeps its own name', () => {
+    expect(failure(withDomain({ datasets: [dataset({ title: 'nope' })], queries: [] })).name).toBe('DomainError')
+  })
+
+  test('a dataset date and index may name the implicit id', () => {
+    const d = dataset({ date: 'id', indexes: [['id']] })
+    expect(() => validateDomain(withDomain({ datasets: [d], queries: [] }))).not.toThrow()
+  })
+
   test('title naming an undeclared column throws naming it', () => {
     const e = failure(withDomain({ datasets: [dataset({ title: 'nope' })], queries: [] }))
-    expect({ declaration: e.declaration, name: e.name }).toEqual({ declaration: 'a', name: 'nope' })
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'nope' })
     expect(e.message).toContain('nope')
   })
 
   test('date naming an undeclared column throws', () => {
     const e = failure(withDomain({ datasets: [dataset({ date: 'dag' })], queries: [] }))
-    expect({ declaration: e.declaration, name: e.name }).toEqual({ declaration: 'a', name: 'dag' })
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'dag' })
   })
 
   test('a query title naming an undeclared column throws', () => {
     const e = failure(withDomain({ datasets: [dataset()], queries: [query({ title: 'nope' })] }))
-    expect({ declaration: e.declaration, name: e.name }).toEqual({ declaration: 'q', name: 'nope' })
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'q', bad: 'nope' })
   })
 
   test('index column undeclared throws', () => {
     const e = failure(withDomain({ datasets: [dataset({ indexes: [['naam', 'weg']] })], queries: [] }))
-    expect({ declaration: e.declaration, name: e.name }).toEqual({ declaration: 'a', name: 'weg' })
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'weg' })
   })
 
   test('relation to an undeclared dataset throws', () => {
     const columns = { naam: text, b_id: { type: 'integer', label: 'B', relation: 'b' } } as const
     const e = failure(withDomain({ datasets: [dataset({ columns })], queries: [] }))
-    expect({ declaration: e.declaration, name: e.name }).toEqual({ declaration: 'a', name: 'b' })
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'b' })
   })
 
   const bad = (label: string, columns: Record<string, ColumnDecl>, datasets = [dataset()], name?: string) =>
@@ -70,7 +79,7 @@ describe('validateDomain', () => {
       const q = query({ columns: { id: { type: 'integer', label: 'Id' }, naam: text, a_id: text, ...columns } })
       const e = failure(withDomain({ datasets, queries: [q] }))
       expect(e.declaration).toBe('q')
-      if (name) expect(e.name).toBe(name)
+      if (name) expect(e.bad).toBe(name)
     })
 
   bad('to an undeclared dataset', { w: writes({ dataset: 'zzz' }) }, undefined, 'zzz')
