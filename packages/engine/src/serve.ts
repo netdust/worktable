@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite'
-import { rmSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
 import type { Domain } from './declare'
@@ -23,6 +24,7 @@ const name: string = values.domain
 const domain = (await import(Bun.resolveSync(name, process.cwd()))).default as Domain
 
 if (values.fresh) for (const suffix of ['', '-wal', '-shm']) rmSync(values.db + suffix, { force: true })
+mkdirSync(dirname(values.db), { recursive: true })
 const sqlite = new Database(values.db, { create: true })
 migrate(sqlite, domain)
 if (values.fresh) seedDomain(sqlite, domain)
