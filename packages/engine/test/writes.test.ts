@@ -41,14 +41,16 @@ async function denied(
   return res
 }
 
-const quietly = async (run: () => Promise<unknown>) => {
+const quietly = async (run: () => Promise<unknown>): Promise<string[]> => {
   const log = console.error
-  console.error = () => {}
+  const logged: string[] = []
+  console.error = (err: unknown) => void logged.push(err instanceof Error ? err.message : String(err))
   try {
     await run()
   } finally {
     console.error = log
   }
+  return logged
 }
 
 describe('write denials', () => {
@@ -169,11 +171,26 @@ describe('in-use denials', () => {
     expect(projectDeletes).toEqual([])
   })
 
-  test.each(Object.keys(probes))('ctx.exists asked "%s" throws: 500 internal, nothing written', (probe) =>
-    quietly(async () => {
-      await denied(() => patch('notitie/1', { tekst: probe }), 500, 'internal')
-      await denied(() => post('notitie', { project_id: 1, tekst: probe }), 500, 'internal')
-    }),
+  const thrown: Record<keyof typeof probes, string> = {
+    'probe undeclared': 'exists: "onbekend" is not a declared column of notitie',
+    'probe id': 'exists: "id" is not a declared column of notitie',
+    'probe null': 'exists: "dag" may not be matched against null',
+    'probe undefined': 'exists: "dag" may not be matched against null',
+    'probe empty': 'exists: a match names no column',
+    'probe revision': 'exists: "revision" is not a dataset',
+    'probe saved_view': 'exists: "saved_view" is not a dataset',
+    'probe query': 'exists: "per_project" is not a dataset',
+  }
+
+  test.each(Object.keys(probes))(
+    'ctx.exists asked "%s" throws its own error: 500 internal, nothing written',
+    async (probe) => {
+      const logged = await quietly(async () => {
+        await denied(() => patch('notitie/1', { tekst: probe }), 500, 'internal')
+        await denied(() => post('notitie', { project_id: 1, tekst: probe }), 500, 'internal')
+      })
+      expect(logged).toEqual([thrown[probe], thrown[probe]] as string[])
+    },
   )
 })
 

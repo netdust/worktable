@@ -163,12 +163,13 @@ function finder(store: Store): WriteContext['find'] {
 }
 
 function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: string | number][] {
-  return Object.entries(match).map(([key, value]) => {
+  const entries = Object.entries(match)
+  if (entries.length === 0) throw new Error('exists: a match names no column')
+  return entries.map(([key, value]) => {
     const column = columnOf(dataset, key)
     if (!column) throw new Error(`exists: "${key}" is not a declared column of ${dataset.name}`)
-    const stored = encode(column, value)
-    if (stored === null) throw new Error(`exists: "${key}" may not be matched against null`)
-    return [`"${key}" = ?`, stored]
+    if (value === null || value === undefined) throw new Error(`exists: "${key}" may not be matched against null`)
+    return [`"${key}" = ?`, encode(column, value) as string | number]
   })
 }
 

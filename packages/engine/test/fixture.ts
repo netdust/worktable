@@ -93,6 +93,8 @@ export const probes: Record<string, [string, Record<string, unknown>]> = {
   'probe undeclared': ['notitie', { onbekend: 1 }],
   'probe id': ['notitie', { id: 1 }],
   'probe null': ['notitie', { dag: null }],
+  'probe undefined': ['notitie', { dag: undefined }],
+  'probe empty': ['notitie', {}],
   'probe revision': ['revision', { entity: 'notitie' }],
   'probe saved_view': ['saved_view', { name: 'Open' }],
   'probe query': ['per_project', { naam: 'Alfa' }],
