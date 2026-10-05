@@ -1,3 +1,20 @@
+# Plan re-review: step-0c (fiche proof, in-use refusal, theatre parity)
+Reviewed-plan: 16bf6a45cc87dc9e5a44792f91a6d68ffda77cd6 specs/step-0c/plan.md
+Verdict: ready
+
+Nothing is Blocking or Should fix. The revision answers B1 and S1–S5. The proposed `ctx.exists` can be built where the plan puts it: `ctx` is built inside the write transaction (`writes.ts:234-237`), and `ctx.current` carries `id` for `exceptId`. Task 3's duplicate rule works with it on create and on update. `project`, with a delete-only writer, stays `writable: false`.
+
+## Note
+- **N10.** State the value semantics of `exists()`: each value goes through `encode(column, value)`; null is refused, or compared with `IS ?`.
+- **N11.** `exists()` must reuse `finder`'s dataset guard, so it cannot reach `revision` or `saved_view`; add an "unknown dataset throws" test. Name the fixture pair: `(project_id, tekst)`, whose existing no-op PATCH then doubles as the regression test for exclusion. Name the trigger for the undeclared-key test (the 500 pattern at `writes.test.ts:129`).
+- **N12.** The duplicate rule must merge `{ ...ctx.current, ...values }`, never `??`, with `exceptId = ctx.current?.id`. Add a Step 1 case that moves `activiteit_id` onto an activiteit where that persoon is already assigned.
+- **N13.** The Test map's "a generic table does not count" has no matching step: name one or reword the row. Also say what happens if Stefan rejects F6.
+
+---
+Answered by the author in blob 369f52c109f84e829ee0240558c1f8eeeeddeb8f: N10 (encode, null refused), N11 (finder's guard, unknown-dataset test, `(project_id, tekst)`, the 500 pattern), N12 (merge rule, `exceptId`, the moved-activiteit case), N13 (Revision rows naming an id do not count; F6-rejected fallback in Decisions).
+
+---
+
 # Plan review: step-0c (fiche proof, in-use refusal, theatre parity)
 Reviewed-plan: 8a3f5a9dd8083d3f920c4191febf70faa708d447 specs/step-0c/plan.md
 Verdict: not ready
