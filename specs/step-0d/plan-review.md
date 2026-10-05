@@ -1,3 +1,26 @@
+# Plan review: step 0d, re-review after the rewrite
+Reviewed-plan: 1205500c5785403d11855f15fc4cb38c38374144 specs/step-0d/plan.md
+Verdict: ready with fixes
+
+The plan answers B1, B2 and S1–S8. The rewrite adds two new Should-fix problems and one gap in a file list. None is Blocking.
+
+## Should fix
+- **N1. A via title makes its `else` column impossible to edit.** The grid strips and aliases the title column (`engine.ts:91,119,139,198,208`), and `columns.ts:157` blocks editing it. That breaks R5's grid half and the person-to-name flow. Fix: the `else` column stays an ordinary writable field; only the computed title is read-only. Test that `naam` is editable and the title is not.
+- **N2. Task 5 uses the View's `fixed` filters before Task 6 creates them** (`chipsOf`, `engine.ts:127-132`). A Save between those two tasks would permanently drop a seeded `$in` filter. Fix: move `fixed` and its "survives a save" test into Task 5.
+- **N3. The overlap read for away rows needs `App.tsx:120` to change, and no task lists that file.** Today the read goes through the windowed `rows()`. Fix: add `awayRows(away, window)`, which sends only the filter and skips the read when the window has no `from` or `to`.
+
+## Note
+- The overlap filter can be written in today's filter grammar.
+- The per-view local key fits `layout.ts`'s storage. Merge it back inside `arrangementOf`, and have "Save as new" copy it to the new id.
+- The `title`/`title_via` shape is consistent across tasks.
+- No intermediate state breaks the grid's boot; the only ordering gap was N2.
+- Giving Beschikbaarheid a `date` makes its plain grid view dated, so it hides periods that started before the window. Say so in Task 3.
+
+---
+Answered by the author in blob 0e2ee980e3803e7e39dfd818cc80a249eb000714: N1 (`else` column stays writable; only the computed title is read-only; test added), N2 (`fixed` and the survives-a-save test moved to Task 5), N3 (`awayRows`, `App.tsx` listed, empty window guarded); notes taken (merge inside `arrangementOf`, "Save as new" copies the local key, the Beschikbaarheden side effect stated in Task 3).
+
+---
+
 # Plan review: step 0d (matrix, saved views, parity items)
 Reviewed-plan: 8a4216030c08fdd211dd8c8fbed2bf1d56f29f3b specs/step-0d/plan.md
 Verdict: not ready
