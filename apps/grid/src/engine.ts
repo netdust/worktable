@@ -23,6 +23,7 @@ export interface EngineSource {
   date: string | null
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
+  deletable?: boolean
   columns: Record<string, EngineColumn>
 }
 
@@ -94,6 +95,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     title_label: source.columns[source.title]?.label ?? source.title,
     title_readonly: !source.writable || isReadonly(source.columns[source.title], source),
     ...(source.kind === 'query' ? { query: true } : {}),
+    ...(source.deletable ? { deletable: true } : {}),
     fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
   }
 }
@@ -184,10 +186,10 @@ export function toRow(r: EngineRow, title: string): Row {
   }
 }
 
-/** The grid holds a relation as a list of ids, and a cleared cell as ''; the engine takes one id, and null. */
+/** The grid holds a relation as a list of ids, and a cleared cell as ''; the engine takes one id, and null. A cleared non-nullable text stays '' for its writer to refuse. */
 function wireValue(column: EngineColumn | undefined, value: unknown): unknown {
   if (column?.relation && Array.isArray(value)) return value[0] ?? null
-  return column && column.type !== 'text' && value === '' ? null : value
+  return column && value === '' && (column.type !== 'text' || column.nullable) ? null : value
 }
 
 /** A write's grid fields as the engine's columns: the grid's `title` is the source's title column. */

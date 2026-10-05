@@ -19,8 +19,11 @@ const engine: EngineSchema = {
         start_at: { type: 'datetime', label: 'Start' },
         eind_at: { type: 'datetime', label: 'Einde', nullable: true },
         personen: { type: 'integer', label: 'Personen', nullable: true },
+        zaal: { type: 'text', label: 'Zaal', nullable: true, options: { groot: 'Grote zaal', klein: 'Kleine zaal' } },
+        notitie: { type: 'text', label: 'Notitie' },
       },
       writable: true,
+      deletable: true,
     },
     dagplanning: {
       kind: 'query', label: 'Dagplanning', title: 'omschrijving', date: 'plandag', writable: true,
@@ -67,6 +70,7 @@ describe('schema() and savedViews()', () => {
 
     expect(urls()).toEqual(['/api/schema'])
     expect(served.tables.map((t) => t.key)).toEqual(['activiteit'])
+    expect([served.models.activiteit.deletable, served.models.productie.deletable]).toEqual([true, undefined])
     expect(saved.map((v) => [v.key, v.label, v.table])).toEqual([['1', 'Planning', 'activiteit']])
   })
 
@@ -236,10 +240,17 @@ describe('writes', () => {
       expect(sent().map(([, , body]) => body)).toEqual([JSON.stringify({ productie_id: 2 }), JSON.stringify({ productie_id: null })])
     })
 
-    it("clearing a datetime, an integer and a date sends null; a cleared text stays ''", async () => {
-      await update('activiteit', 7, { eind_at: '', personen: '', plandag: '', title: '' })
+    it("clearing a datetime, an integer, a date and a nullable text sends null; a cleared non-nullable text stays ''", async () => {
+      await update('activiteit', 7, { eind_at: '', personen: '', plandag: '', title: '', notitie: '' })
 
-      expect(sent()[0][2]).toBe(JSON.stringify({ eind_at: null, personen: null, plandag: null, omschrijving: '' }))
+      expect(sent()[0][2]).toBe(JSON.stringify({ eind_at: null, personen: null, plandag: null, omschrijving: null, notitie: '' }))
+    })
+
+    it("clearing a nullable select sends null; clearing a non-nullable select still sends '' for its writer to refuse", async () => {
+      await update('activiteit', 7, { zaal: '' })
+      await update('activiteit', 7, { status: '' })
+
+      expect(sent().map(([, , body]) => body)).toEqual([JSON.stringify({ zaal: null }), JSON.stringify({ status: '' })])
     })
 
     it("a mapped query column sends its target column's type", async () => {
@@ -267,6 +278,15 @@ describe('writes', () => {
 
     await expect(update('activiteit', 7, { status: 'bevestigd' })).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
     await expect(update('dagplanning', 40, { status: 'bevestigd' }, planned)).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
+  })
+
+  it("a 409 in_use reaches the store with the engine's by", async () => {
+    const by = [{ label: 'Activiteiten', count: 3 }, { label: 'Personen', count: 1 }]
+    fetcher.mockImplementation(async (input) =>
+      String(input) === '/api/schema' ? json(engine) : json({ by, code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)' }, 409),
+    )
+
+    await expect(remove('productie', 1)).rejects.toEqual({ code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)', by })
   })
 
   it('reject with the not-found the engine answers', async () => {

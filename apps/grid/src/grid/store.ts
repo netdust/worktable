@@ -1,4 +1,4 @@
-import { errorText } from '../i18n'
+import { errorText, inUse } from '../i18n'
 import type { ApiError, Lookup, Row } from '../types'
 
 export type SaveState = 'saved' | 'saving' | 'error'
@@ -23,6 +23,7 @@ export interface StoreApi {
   /** `row` as it was before the write: a query routes the write by its key. */
   update: (model: string, id: number, data: Record<string, unknown>, row: Row) => Promise<Row>
   create: (model: string, data: Record<string, unknown>) => Promise<Row>
+  remove?: (model: string, id: number) => Promise<unknown>
 }
 
 export interface StoreState {
@@ -50,6 +51,8 @@ export interface Store {
   draft: (fields: Record<string, unknown>, needs?: string[], offers?: string[]) => void
   discard: () => void
   create: (fields: Record<string, unknown>) => Promise<void>
+  /** Soft-deletes the record; a refusal keeps the row and raises the notice. No undo. */
+  remove: (id: number) => Promise<void>
   dismiss: (id: number, field: string) => void
 }
 
@@ -91,9 +94,10 @@ function same(a: unknown, b: unknown): boolean {
 }
 
 function toError(change: Change, error: unknown): CellError {
-  const { code, message } = (error ?? {}) as Partial<ApiError>
+  const { code, message, by } = (error ?? {}) as Partial<ApiError>
   const known = String(code ?? 'unknown')
-  return { id: change.id, field: change.field, code: known, message: errorText(known, String(message ?? error)) }
+  const said = known === 'in_use' && by?.length ? inUse(by) : String(message ?? error)
+  return { id: change.id, field: change.field, code: known, message: errorText(known, said) }
 }
 
 export function createStore({ model, rows, api }: Options): Store {
@@ -271,6 +275,26 @@ export function createStore({ model, rows, api }: Options): Store {
         set({ rows: [row, ...state.rows] })
       } catch (error) {
         set({ error: toError({ id: DRAFT, field: 'title', value: '' }, error) })
+      }
+      set({ save: settle() })
+    },
+    async remove(id) {
+      if (!api.remove) return
+      track(id, 1)
+      set({ save: 'saving', error: null })
+      try {
+        // After any write still queued for the record, as an undo waits for the write it undoes.
+        await queues.get(id)?.catch(() => undefined)
+        await api.remove(model, id)
+        track(id, -1)
+        // An undo would PATCH a soft-deleted record.
+        for (const stack of [undoStack, redoStack]) stack.splice(0, stack.length, ...stack.filter((entry) => entry.id !== id))
+        confirmed.delete(id)
+        const errors = Object.fromEntries(Object.entries(state.errors).filter(([, error]) => error.id !== id))
+        set({ rows: state.rows.filter((r) => r.id !== id), errors })
+      } catch (error) {
+        track(id, -1)
+        set({ error: toError({ id, field: 'title', value: undefined }, error) })
       }
       set({ save: settle() })
     },

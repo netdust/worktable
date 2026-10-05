@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, rowsQuery, toEngineData, toRow, toSavedViews, toSchema } from './engine'
 import type { Layout } from './grid/layout'
-import type { ApiError, DateWindow, NewView, Prefs, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { ApiError, DateWindow, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -14,7 +14,8 @@ function endpoint(path: string, query: Query = {}): string {
 
 function toApiError(error: unknown): ApiError {
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
-    return { code: String(error.code), message: String(error.message) }
+    const by = 'by' in error && Array.isArray(error.by) ? { by: error.by as Referrer[] } : {}
+    return { code: String(error.code), message: String(error.message), ...by }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }

@@ -25,6 +25,8 @@ export interface Model {
   title_readonly: boolean
   /** A query's rows: joined, never created. */
   query?: boolean
+  /** Its writer deletes: the drawer offers Verwijderen. */
+  deletable?: boolean
   fields: Record<string, Field>
 }
 
@@ -199,9 +201,16 @@ export interface RowsResponse {
   total: number
 }
 
+/** A dataset still pointing at a record, as the engine's 409 `in_use` names it. */
+export interface Referrer {
+  label: string
+  count: number
+}
+
 export interface ApiError {
   code: string
   message: string
+  by?: Referrer[]
 }
 
 /** The inclusive window a dated view shows, as local `YYYY-MM-DD` days. */

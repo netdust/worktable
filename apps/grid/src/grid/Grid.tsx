@@ -1,4 +1,4 @@
-import { EmptyState } from '@sakaniui/react'
+import { Button, EmptyState } from '@sakaniui/react'
 import { type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
@@ -278,10 +278,21 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridFoot columns={visible} count={total(groups) - drafts.length} sums={sums(shown, visible)} />
           </table>
         </div>
-        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} />}
+        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)}
+          editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>
       )}
     </div>
     </RelationContext.Provider>
+  )
+}
+
+/** Two presses: Verwijderen, then Zeker?. Keyed by its row, so leaving the drawer starts it over. */
+function DeleteRow({ onDelete }: { onDelete: () => void }) {
+  const [sure, setSure] = useState(false)
+  return (
+    <Button variant="destructive" size="sm" onClick={() => (sure ? onDelete() : setSure(true))}>
+      {t(sure ? 'deleteConfirm' : 'delete')}
+    </Button>
   )
 }
