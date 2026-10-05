@@ -87,7 +87,7 @@ E2E flows: **matrix-cell-persists** — open "Toewijzingen per activiteit" (it o
 | 1b | | |
 | 2 | | |
 | 3 | | |
-| 4 | | |
+| 4 | 00:06 | 00:20 |
 | 5 | | |
 | 6 | | |
 | 7 | | |

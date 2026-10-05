@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { create, forgetSchema, prefs, records, remove, rows, savePrefs, savedViews, schema, update } from './api'
-import type { EngineSchema } from './engine'
+import { awayRows, create, forgetSchema, prefs, records, remove, rows, savePrefs, savedViews, schema, update } from './api'
+import { type EngineRow, type EngineSchema, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
-import type { Row, View } from './types'
+import { createMatrixStore } from './matrix/store'
+import type { MatrixAway, MatrixColumn, Row, View } from './types'
+
+const toRowShape = (row: EngineRow): Row => toRow(row)
 
 const fetcher = vi.fn<typeof fetch>()
 
@@ -107,10 +110,10 @@ describe('rows()', () => {
     expect(urls().slice(1)).toEqual(['/api/rows/activiteit?from=2026-10-12&to=2026-10-18', '/api/rows/activiteit'])
   })
 
-  it("maps the engine's flat rows to the grid's, titled by the source's title column", async () => {
+  it("maps the engine's flat rows to the grid's, titled by the engine", async () => {
     answer({
       '/api/rows/activiteit': {
-        rows: [{ id: 4, omschrijving: 'opbouw Gent', status: 'bevestigd', productie_id: 1, plandag: '2026-10-12', custom: {}, lookups: { productie_id: { id: 1, title: 'De Kersentuin' } } }],
+        rows: [{ id: 4, omschrijving: 'opbouw Gent', title: 'opbouw Gent', status: 'bevestigd', productie_id: 1, plandag: '2026-10-12', custom: {}, lookups: { productie_id: { id: 1, title: 'De Kersentuin' } } }],
         total: 1,
       },
     })
@@ -148,7 +151,7 @@ describe('records()', () => {
   it("lists a model's records, narrowed to the titles holding the search", async () => {
     answer({
       '/api/rows/productie': {
-        rows: [{ id: 1, titel: 'De Kersentuin', custom: {}, lookups: {} }, { id: 2, titel: 'Wachten op Godot', custom: {}, lookups: {} }],
+        rows: [{ id: 1, titel: 'De Kersentuin', title: 'De Kersentuin', custom: {}, lookups: {} }, { id: 2, titel: 'Wachten op Godot', title: 'Wachten op Godot', custom: {}, lookups: {} }],
         total: 2,
       },
     })
@@ -158,7 +161,7 @@ describe('records()', () => {
 
     expect(found).toEqual({ rows: [expect.objectContaining({ id: 1, title: 'De Kersentuin' })], total: 1 })
     expect(all.total).toBe(2)
-    expect(urls().slice(1)).toEqual(['/api/rows/productie', '/api/rows/productie'])
+    expect(urls()).toEqual(['/api/rows/productie', '/api/rows/productie'])
   })
 })
 
@@ -170,7 +173,7 @@ describe('prefs', () => {
 })
 
 describe('writes', () => {
-  const stored = { id: 7, omschrijving: 'opbouw Gent', status: 'optie', productie_id: 1, plandag: '2026-10-12', custom: {}, lookups: { productie_id: null } }
+  const stored = { id: 7, omschrijving: 'opbouw Gent', title: 'opbouw Gent', status: 'optie', productie_id: 1, plandag: '2026-10-12', custom: {}, lookups: { productie_id: null } }
   /** A dagplanning row whose id is not its activiteit's: routing must read the key. */
   const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, status: 'optie' }, lookups: {} }
   const sent = () => fetcher.mock.calls.slice(1).map(([input, init]) => [decodeURIComponent(String(input)), init?.method ?? 'GET', init?.body])
@@ -194,7 +197,7 @@ describe('writes', () => {
   })
 
   it('update on dagplanning status sends PATCH /rows/activiteit/<row.activiteit_id> and re-reads the query row', async () => {
-    const reread = { id: 40, activiteit_id: 7, omschrijving: 'opbouw Gent', status: 'bevestigd', custom: {}, lookups: {} }
+    const reread = { id: 40, activiteit_id: 7, omschrijving: 'opbouw Gent', title: 'opbouw Gent', status: 'bevestigd', custom: {}, lookups: {} }
     fetcher.mockImplementation(async (input, init) => {
       if (String(input) === '/api/schema') return json(engine)
       return init?.method === 'PATCH' ? json({ ...stored, status: 'bevestigd' }) : json({ rows: [reread], total: 1 })
@@ -308,5 +311,85 @@ describe('writes', () => {
     fetcher.mockImplementation(async () => new Response('404 Not Found', { status: 404, statusText: 'Not Found' }))
 
     await expect(savePrefs({ order: {}, last: {} })).rejects.toEqual({ code: 'unknown', message: '404 Not Found' })
+  })
+})
+
+describe('the matrix on the engine', () => {
+  const matrixEngine: EngineSchema = {
+    sources: {
+      activiteit: { ...engine.sources.activiteit, matrix_join: 'toewijzing' },
+      toewijzing: {
+        kind: 'dataset', label: 'Toewijzingen', title: 'naam', title_via: 'persoon_id', date: null, writable: true, deletable: true,
+        columns: {
+          activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+          persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon', nullable: true },
+          naam: { type: 'text', label: 'Naam', nullable: true },
+          state: { type: 'text', label: 'Status', options: { uitgenodigd: 'Uitgenodigd', bevestigd: 'Bevestigd' } },
+        },
+        matrix: { down: 'activiteit_id', across: 'persoon_id', label: 'naam', cell: 'state', keys: { b: 'bevestigd' }, marks: { bevestigd: '✓' }, count: 'bevestigd' },
+      },
+    },
+    views: [],
+  }
+  const matrixView: View = {
+    key: '4', label: 'Toewijzingen per activiteit', table: 'activiteit', model: 'activiteit', type: 'matrix', date_field: 'plandag',
+    join: { model: 'toewijzing', row_field: 'activiteit_id', column_field: 'persoon_id', name_field: 'naam', cell_field: 'state', keys: { b: 'bevestigd' }, marks: { bevestigd: '✓' }, count: 'bevestigd' },
+  }
+  const lotte: MatrixColumn = { key: 'record:1', kind: 'record', id: 1, title: 'Lotte Verhaegen' }
+  const cell: EngineRow = { id: 4, activiteit_id: 2, persoon_id: 1, naam: null, state: 'bevestigd', title: 'Lotte Verhaegen', custom: {}, lookups: {} }
+  const activiteit = (cells: EngineRow[]): EngineRow => ({ id: 2, omschrijving: 'repetitie Gent', plandag: '2026-10-12', title: 'repetitie Gent', custom: {}, lookups: {}, cells })
+  const sent = () => fetcher.mock.calls.filter(([input]) => String(input) !== '/api/schema').map(([input, init]) => [decodeURIComponent(String(input)), init?.method ?? 'GET', init?.body])
+  const on = (reply: (path: string, init?: RequestInit) => Response) =>
+    fetcher.mockImplementation(async (input, init) => (String(input) === '/api/schema' ? json(matrixEngine) : reply(String(input), init)))
+
+  it('asks a matrix view its rows with cells=1 and the window, and carries the cells as rollups.cells', async () => {
+    on(() => json({ rows: [activiteit([cell])], total: 1 }))
+
+    const found = await rows(matrixView, { from: '2026-10-12', to: '2026-10-18' }, null, { ...defaults(matrixView), filters: [], sort: [], group: null })
+
+    expect(new URL(String(sent()[0][0]), 'http://x').searchParams.get('cells')).toBe('1')
+    expect(sent()[0][0]).toContain('from=2026-10-12&to=2026-10-18')
+    expect(found.rows[0].rollups?.cells).toEqual([expect.objectContaining({ id: 4, title: 'Lotte Verhaegen', fields: expect.objectContaining({ persoon_id: 1, state: 'bevestigd' }) })])
+  })
+
+  it('reads the away rows by overlap only, with no window; nothing without one', async () => {
+    const away: MatrixAway = { table: 'beschikbaarheid', model: 'beschikbaarheid', column_field: 'persoon_id', label_field: 'reden', date_field: 'start_at', end_field: 'eind_at' }
+    on(() => json({ rows: [{ id: 3, persoon_id: 1, start_at: '2026-10-09T09:00', eind_at: '2026-10-12T12:00', reden: 'Studiedag', title: 'Lotte', custom: {}, lookups: {} }], total: 1 }))
+
+    expect(await awayRows(away, { from: '2026-10-12' })).toEqual([])
+    expect(fetcher).not.toHaveBeenCalled()
+    const found = await awayRows(away, { from: '2026-10-12', to: '2026-10-18' })
+
+    expect(found.map((r) => r.fields.reden)).toEqual(['Studiedag'])
+    expect(sent()).toEqual([[`/api/rows/beschikbaarheid?filter=${JSON.stringify({ start_at: { $lte: '2026-10-18T23:59:59' }, eind_at: { $gte: '2026-10-12' } })}`, 'GET', undefined]])
+  })
+
+  it('a cell create sends one id per relation; clearing it sends DELETE', async () => {
+    on((_path, init) => (init?.method === 'DELETE' ? json({ id: 9 }) : json({ ...cell, id: 9, activiteit_id: 2 })))
+    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create, update, remove } })
+
+    expect(await store.set(2, lotte, 'bevestigd')).toBe(true)
+    expect(await store.set(2, lotte, null)).toBe(true)
+
+    expect(sent()).toEqual([
+      ['/api/rows/toewijzing', 'POST', JSON.stringify({ activiteit_id: 2, persoon_id: 1, state: 'bevestigd' })],
+      ['/api/rows/toewijzing/9', 'DELETE', undefined],
+    ])
+  })
+
+  it("a 422 reverts the cell with the writer's message", async () => {
+    on(() => json({ code: 'refused', message: 'Deze persoon staat al op deze activiteit.' }, 422))
+    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create, update, remove } })
+
+    expect(await store.set(2, lotte, 'bevestigd')).toBe(false)
+
+    expect(store.cellError(2, lotte)?.message).toBe('Deze persoon staat al op deze activiteit.')
+    expect(store.getState().rows[0].rollups?.cells).toEqual([])
+  })
+
+  it('a via-title record is titled by the engine, and a picker searches that title', async () => {
+    on(() => json({ rows: [cell, { ...cell, id: 5, persoon_id: null, naam: 'Gastmuzikant', title: 'Gastmuzikant' }], total: 2 }))
+
+    expect((await records('toewijzing', 'gast')).rows.map((r) => [r.id, r.title, r.fields.naam])).toEqual([[5, 'Gastmuzikant', 'Gastmuzikant']])
   })
 })

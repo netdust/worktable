@@ -144,26 +144,23 @@ describe('writes', () => {
 })
 
 describe('toRow', () => {
-  it('takes the title from the declared title column', () => {
-    const row = toRow(
-      {
-        id: 3, productie_id: 1, omschrijving: 'opbouw Gent', soort: 'opbouw', plandag: '2026-10-12',
-        custom: {}, lookups: { productie_id: { id: 1, title: 'De Kersentuin' } },
-      },
-      'omschrijving',
-    )
+  it('takes the title the engine gives', () => {
+    const row = toRow({
+      id: 3, productie_id: 1, omschrijving: 'opbouw Gent', soort: 'opbouw', plandag: '2026-10-12', title: 'opbouw Gent',
+      custom: {}, lookups: { productie_id: { id: 1, title: 'De Kersentuin' } },
+    })
 
     expect(row).toEqual({
       id: 3,
       title: 'opbouw Gent',
       status: '',
-      fields: { productie_id: 1, soort: 'opbouw', plandag: '2026-10-12' },
+      fields: { productie_id: 1, omschrijving: 'opbouw Gent', soort: 'opbouw', plandag: '2026-10-12' },
       lookups: { productie_id: { id: 1, title: 'De Kersentuin', status: '', fields: {} } },
     })
   })
 
   it('keeps an empty relation empty, and a missing title as empty text', () => {
-    const row = toRow({ id: 4, omschrijving: null, custom: {}, lookups: { productie_id: null } }, 'omschrijving')
+    const row = toRow({ id: 4, omschrijving: null, title: '', custom: {}, lookups: { productie_id: null } })
 
     expect(row.title).toBe('')
     expect(row.lookups).toEqual({ productie_id: null })
@@ -227,5 +224,106 @@ describe('rowsQuery', () => {
 
   it('sends nothing for an empty layout and no window', () => {
     expect(rowsQuery(view, { ...layout, sort: [], group: null }, {}, 'omschrijving')).toEqual({})
+  })
+})
+
+describe('the matrix and titles through a relation', () => {
+  /** Theatre's matrix: toewijzing joins activiteit to persoon; beschikbaarheid says who is away. */
+  const theatre: EngineSchema = {
+    sources: {
+      persoon: { kind: 'dataset', label: 'Personen', title: 'weergavenaam', date: null, writable: true, columns: { weergavenaam: { type: 'text', label: 'Weergavenaam' } } },
+      activiteit: { ...engine.sources.activiteit, writable: true, matrix_join: 'toewijzing' },
+      toewijzing: {
+        kind: 'dataset', label: 'Toewijzingen', title: 'naam', title_via: 'persoon_id', date: null, writable: true, deletable: true,
+        columns: {
+          activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+          persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon', nullable: true },
+          naam: { type: 'text', label: 'Naam', nullable: true },
+          state: { type: 'text', label: 'Status', options: { uitgenodigd: 'Uitgenodigd', bevestigd: 'Bevestigd' } },
+          notitie: { type: 'text', label: 'Notitie', nullable: true },
+        },
+        matrix: {
+          down: 'activiteit_id', across: 'persoon_id', label: 'naam', cell: 'state', note: 'notitie',
+          keys: { u: 'uitgenodigd', b: 'bevestigd' }, marks: { uitgenodigd: '?', bevestigd: '✓' }, count: 'bevestigd',
+          away: { dataset: 'beschikbaarheid', across: 'persoon_id', label: 'reden', end: 'eind_at' },
+        },
+      },
+      beschikbaarheid: {
+        kind: 'dataset', label: 'Beschikbaarheden', title: 'reden', title_via: 'persoon_id', date: 'start_at', writable: true,
+        columns: {
+          persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
+          start_at: { type: 'datetime', label: 'Start' },
+          eind_at: { type: 'datetime', label: 'Einde' },
+          reden: { type: 'text', label: 'Reden', nullable: true },
+        },
+      },
+    },
+    views: [
+      { id: 4, name: 'Toewijzingen per activiteit', source_type: 'dataset', source: 'activiteit', skin: 'matrix', filters: {}, sort: [], group_by: null, visible_fields: ['status'] },
+      { id: 8, name: 'Toewijzingen', source_type: 'dataset', source: 'toewijzing', skin: 'table', filters: {}, sort: ['naam'], group_by: null, visible_fields: ['activiteit_id', 'persoon_id', 'naam', 'state'] },
+    ],
+  }
+
+  it("builds the down source's table with the join and away from the join dataset's matrix", () => {
+    const table = toSchema(theatre).tables.find((t) => t.key === 'activiteit')
+
+    expect(table).toMatchObject({
+      types: ['grid', 'matrix'],
+      join: {
+        model: 'toewijzing', row_field: 'activiteit_id', column_field: 'persoon_id', name_field: 'naam', cell_field: 'state', note_field: 'notitie',
+        keys: { u: 'uitgenodigd', b: 'bevestigd' }, marks: { uitgenodigd: '?', bevestigd: '✓' }, count: 'bevestigd',
+      },
+      away: { table: 'beschikbaarheid', model: 'beschikbaarheid', column_field: 'persoon_id', label_field: 'reden', date_field: 'start_at', end_field: 'eind_at' },
+    })
+    expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')).toMatchObject({ types: ['grid'] })
+  })
+
+  it('opens a matrix-skinned saved view as a matrix, with its table\'s join', () => {
+    expect(toSavedViews(theatre)[0]).toMatchObject({ key: '4', type: 'matrix', join: { model: 'toewijzing' }, away: { model: 'beschikbaarheid' } })
+    expect(toSavedViews(theatre)[1].type).toBe('grid')
+  })
+
+  it("takes the row's title from the engine and its cells as rollups.cells", () => {
+    const row = toRow({
+      id: 2, omschrijving: 'repetitie Gent', title: 'repetitie Gent', custom: {}, lookups: {},
+      cells: [{ id: 4, activiteit_id: 2, persoon_id: 1, naam: null, state: 'bevestigd', title: 'Lotte Verhaegen', custom: {}, lookups: { persoon_id: { id: 1, title: 'Lotte Verhaegen' } } }],
+    })
+
+    expect(row.title).toBe('repetitie Gent')
+    expect(row.fields.cells).toBeUndefined()
+    expect(row.rollups?.cells).toEqual([
+      { id: 4, title: 'Lotte Verhaegen', status: '', fields: { activiteit_id: 2, persoon_id: 1, naam: null, state: 'bevestigd' }, lookups: { persoon_id: { id: 1, title: 'Lotte Verhaegen', status: '', fields: {} } } },
+    ])
+    expect(toRow({ id: 3, custom: {}, lookups: {} }).title).toBe('')
+  })
+
+  it('on Toewijzing naam is an editable field and the title is not, nor sortable', () => {
+    const schema = toSchema(theatre)
+    const model = schema.models.toewijzing
+    const columns = columnsFor(model, { key: 't', label: 't', table: 'toewijzing', model: 'toewijzing' }, schema.writable.toewijzing)
+    const byId = Object.fromEntries(columns.map((c) => [c.id, c]))
+
+    expect(model.title_readonly).toBe(true)
+    expect(model.title_label).toBe('Persoon / Naam')
+    expect(model.fields.naam).toMatchObject({ type: 'text', label: 'Naam' })
+    expect(byId.naam.editable).toBe(true)
+    expect(byId.title.editable).toBe(false)
+    expect(byId.title.sortable).toBe(false)
+    expect(byId.naam.sortable).not.toBe(false)
+  })
+
+  it("keeps naam as naam in a via-title view's arrangement and on the wire, and never writes the title", () => {
+    const toewijzingen = toSavedViews(theatre)[1]
+
+    expect(toewijzingen.arrangement.sort).toEqual([{ id: 'naam', desc: false }])
+    expect(toewijzingen.arrangement.hidden).toEqual(['notitie'])
+    expect(toEngineData({ title: 'Lotte', naam: 'Gastmuzikant' }, theatre.sources.toewijzing, theatre.sources)).toEqual({ naam: 'Gastmuzikant' })
+    expect(toEngineData({ persoon_id: [5], activiteit_id: [2] }, theatre.sources.toewijzing, theatre.sources)).toEqual({ persoon_id: 5, activiteit_id: 2 })
+  })
+
+  it('never sends the title of a via-title source as sort or group', () => {
+    const layout = { ...defaults(toSavedViews(theatre)[1]), filters: [], sort: [{ id: 'title', desc: false }, { id: 'naam', desc: true }], group: 'title' }
+
+    expect(rowsQuery({}, layout, {}, null)).toEqual({ sort: '-naam' })
   })
 })

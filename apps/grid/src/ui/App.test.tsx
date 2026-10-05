@@ -5,7 +5,7 @@ import type { SavedView, Schema } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 
 const api = vi.hoisted(() => ({
-  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
+  schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
 }))
 vi.mock('../api', () => api)
@@ -50,6 +50,7 @@ const tableEntry = (name: string) => {
 beforeEach(() => {
   api.schema.mockResolvedValue(served)
   api.rows.mockResolvedValue({ rows: [], total: 0 })
+  api.awayRows.mockResolvedValue([])
   api.records.mockResolvedValue({ rows: [], total: 0 })
   api.savedViews.mockResolvedValue([])
   api.prefs.mockResolvedValue({ order: {}, last: {} })
@@ -356,7 +357,7 @@ describe('a matrix view', () => {
     await screen.findByRole('columnheader', { name: 'Sien' })
     const window = { from: '2026-05-18', to: '2026-05-24' }
     expect(api.rows).toHaveBeenCalledWith(matrixSchema.views[0], window, null, expect.any(Object))
-    expect(api.rows).toHaveBeenCalledWith({ model: 'absence', table: 'afwezigheden' }, window, null)
+    expect(api.awayRows).toHaveBeenCalledWith(bezetting.away, window)
     expect(api.records).toHaveBeenCalledWith('person', '')
   })
 

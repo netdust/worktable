@@ -1,6 +1,6 @@
-import { type EngineRow, type EngineSchema, type EngineSource, rowsQuery, toEngineData, toRow, toSavedViews, toSchema } from './engine'
+import { type EngineRow, type EngineSchema, type EngineSource, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema } from './engine'
 import type { Layout } from './grid/layout'
-import type { ApiError, DateWindow, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -63,23 +63,27 @@ async function sourceOf(name: string): Promise<EngineSource> {
   return source
 }
 
-async function titleOf(source: string): Promise<string> {
-  return (await sourceOf(source)).title
-}
-
 async function rowsOf(source: string, query: Query): Promise<RowsResponse> {
-  const [title, found] = await Promise.all([titleOf(source), request<{ rows: EngineRow[]; total: number }>('GET', `/rows/${source}`, query)])
-  return { rows: found.rows.map((row) => toRow(row, title)), total: found.total }
+  const found = await request<{ rows: EngineRow[]; total: number }>('GET', `/rows/${source}`, query)
+  return { rows: found.rows.map(toRow), total: found.total }
 }
 
 export function schema(): Promise<Schema> {
   return engineSchema().then(toSchema)
 }
 
-/** A source's rows with the layout's filters, sort and group applied by the engine. The scope has no route yet: no space is served. */
+/** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope has no route yet: no space is served. */
 export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field'>, window: Partial<DateWindow>, _scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
-  const title = await titleOf(view.model)
-  return rowsOf(view.model, layout ? rowsQuery(view, layout, window, title) : { ...window })
+  const title = titleColumn(await sourceOf(view.model))
+  const query: Query = layout ? rowsQuery(view, layout, window, title) : { ...window }
+  return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
+}
+
+/** The away rows overlapping the window: begun before its end, ended after its start. Not the dated window, which would miss a period begun before it. */
+export async function awayRows(away: MatrixAway, window: Partial<DateWindow>): Promise<Row[]> {
+  if (!window.from || !window.to) return []
+  const filter = { [away.date_field]: { $lte: `${window.to}T23:59:59` }, [away.end_field]: { $gte: window.from } }
+  return (await rowsOf(away.model, { filter: JSON.stringify(filter) })).rows
 }
 
 /** A model's records for a picker: titles holding `search`, every record without one. The engine has no search: the titles are narrowed here. */
@@ -93,7 +97,7 @@ export async function records(model: string, search: string): Promise<RowsRespon
 export async function create(model: string, data: Record<string, unknown>): Promise<Row> {
   const source = await sourceOf(model)
   const sent = toEngineData(data, source, (await engineSchema()).sources)
-  return toRow(await request<EngineRow>('POST', `/rows/${model}`, {}, sent), source.title)
+  return toRow(await request<EngineRow>('POST', `/rows/${model}`, {}, sent))
 }
 
 /** A query's row is written through its mapped column, so `row` is needed to find the target record. */
@@ -101,7 +105,7 @@ export async function update(model: string, id: number, data: Record<string, unk
   const source = await sourceOf(model)
   const sent = toEngineData(data, source, (await engineSchema()).sources)
   if (source.kind === 'query') return updateThrough(model, source, id, sent, row)
-  return toRow(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent), source.title)
+  return toRow(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent))
 }
 
 /** The write lands on the target record; the row is then read again as the query now computes it. */
@@ -115,7 +119,7 @@ async function updateThrough(model: string, source: EngineSource, id: number, se
   const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.
   const found = await request<{ rows: EngineRow[] }>('GET', `/rows/${model}`, { filter: JSON.stringify({ id }) }).catch(() => null)
-  return found?.rows[0] ? toRow(found.rows[0], source.title) : written
+  return found?.rows[0] ? toRow(found.rows[0]) : written
 }
 
 export function remove(model: string, id: number): Promise<unknown> {

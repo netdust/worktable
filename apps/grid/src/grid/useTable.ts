@@ -30,6 +30,7 @@ export function useGridTable(columns: Column[], rows: Row[], layout: Layout, onL
       minSize: 48,
       sortingFn: column.kind === 'number' || column.kind === 'rollup' ? 'basic' : 'text',
       enableHiding: column.id !== 'title',
+      enableSorting: column.sortable !== false,
     })),
     [columns],
   )

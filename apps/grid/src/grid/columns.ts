@@ -13,6 +13,8 @@ export interface Column {
   label: string
   kind: CellKind
   editable: boolean
+  /** False for a title the server computes from a relation. */
+  sortable?: boolean
   required: boolean
   align: 'start' | 'end'
   width: number
@@ -155,6 +157,7 @@ function titleColumn(model: Model, writable: boolean): Column {
   column.field = 'title'
   column.required = true
   column.editable = writable && !model.title_readonly
+  if (model.title_derived) column.sortable = false
   return column
 }
 

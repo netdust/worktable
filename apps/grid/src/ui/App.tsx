@@ -1,6 +1,6 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { prefs, records, rows, savedViews, schema } from '../api'
+import { awayRows, prefs, records, rows, savedViews, schema } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
@@ -11,7 +11,7 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { ApiError, Row, RowsResponse, Schema, Scope, View } from '../types'
+import type { ApiError, Row, Schema, Scope, View } from '../types'
 import { Filters } from './Filters'
 import { Rail } from './Rail'
 import { readHash, writeHash } from './hash'
@@ -29,9 +29,7 @@ import { formatWindow, useWindow } from './Window'
 
 type Rows = { status: 'loading' } | { status: 'unscoped' } | { status: 'ready'; rows: Row[]; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
-const none: Promise<RowsResponse> = Promise.resolve({ rows: [], total: 0 })
-
-/** A matrix's column titles: the published records of the model its join points at. */
+/** A matrix's column titles: the live records of the model its join points at. */
 async function titlesOf(view: View, served: Schema | null): Promise<Map<number, string>> {
   const join = view.type === 'matrix' ? view.join : undefined
   const model = join ? served?.models[join.model]?.fields[join.column_field]?.relation?.model : undefined
@@ -117,8 +115,8 @@ export function App() {
     setResult({ status: 'loading' })
     const asked = dated ? range : {}
     const away = view.type === 'matrix' ? view.away : undefined
-    Promise.all([rows(view, asked, scope, layout), away ? rows({ model: away.model, table: away.table }, asked, null) : none, titlesOf(view, served)]).then(
-      ([r, away, titles]) => live && setResult({ status: 'ready', rows: r.rows, away: away.rows, titles }),
+    Promise.all([rows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
+      ([r, away, titles]) => live && setResult({ status: 'ready', rows: r.rows, away, titles }),
       (error: ApiError) => live && setResult({ status: 'error', error }),
     )
     return () => {
