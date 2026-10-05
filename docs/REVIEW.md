@@ -1,3 +1,5 @@
+Historical. This review assessed the earlier WordPress-internal plan for step 0 (table store in ntdst-core, module extraction). The spec has since been rewritten as a standalone engine. The file and line map of the PHP views module stays valid as a guide to the grid's TypeScript and React and to the old write path.
+
 # Planning Engine — review against the code
 
 Oct 4, 2026 · @Stefan
