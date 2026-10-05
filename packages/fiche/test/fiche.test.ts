@@ -52,6 +52,28 @@ describe('the fiche writer refuses', () => {
 
   test('a postcode that is not four digits', () =>
     refused(() => request('PATCH', '/api/rows/fiche/1', { postcode: '12' }), 'Postcode moet vier cijfers hebben.'))
+
+  test('a website without http:// or https://', async () => {
+    const message = 'Website moet met http:// of https:// beginnen.'
+    await refused(() => request('POST', '/api/rows/fiche', { ...NEW, website: 'javascript:alert(1)' }), message)
+    await refused(() => request('PATCH', '/api/rows/fiche/1', { website: 'voorbeeld.invalid' }), message)
+  })
+
+  test('an email without @', async () => {
+    await refused(() => request('POST', '/api/rows/fiche', { ...NEW, email: 'geen-adres' }), 'Ongeldig e-mailadres.')
+    await refused(() => request('PATCH', '/api/rows/fiche/1', { email: 'geen-adres' }), 'Ongeldig e-mailadres.')
+  })
+})
+
+describe('the fiche writer accepts', () => {
+  test.each([
+    ['filled', { website: 'http://voorbeeld.invalid', email: 'info@voorbeeld.invalid' }],
+    ['empty', { website: '', email: '' }],
+    ['null', { website: null, email: null }],
+  ])('a %s website and email', async (_, values) => {
+    expect((await request('POST', '/api/rows/fiche', { ...NEW, ...values })).status).toBe(201)
+    expect((await request('PATCH', '/api/rows/fiche/1', values)).status).toBe(200)
+  })
 })
 
 describe('the fiche domain', () => {
