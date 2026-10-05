@@ -12,9 +12,14 @@ function endpoint(path: string, query: Query = {}): string {
   return `/api${path}${search === '' ? '' : `?${search}`}`
 }
 
+function isReferrer(entry: unknown): entry is Referrer {
+  const { label, count } = (entry ?? {}) as Partial<Record<keyof Referrer, unknown>>
+  return typeof label === 'string' && Number.isSafeInteger(count)
+}
+
 function toApiError(error: unknown): ApiError {
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
-    const by = 'by' in error && Array.isArray(error.by) ? { by: error.by as Referrer[] } : {}
+    const by = 'by' in error && Array.isArray(error.by) ? { by: error.by.filter(isReferrer) } : {}
     return { code: String(error.code), message: String(error.message), ...by }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }

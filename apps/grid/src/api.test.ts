@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, forgetSchema, prefs, records, remove, rows, savePrefs, savedViews, schema, update } from './api'
 import type { EngineSchema } from './engine'
 import { defaults } from './grid/layout'
+import { createStore } from './grid/store'
 import type { Row, View } from './types'
 
 const fetcher = vi.fn<typeof fetch>()
@@ -287,6 +288,20 @@ describe('writes', () => {
     )
 
     await expect(remove('productie', 1)).rejects.toEqual({ code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)', by })
+  })
+
+  it('a 409 keeps only the well-formed by entries, and the store settles on their sentence', async () => {
+    const by = [null, { label: 'Activiteiten', count: 3 }, { label: 'Personen', count: 'veel' }, { label: 7, count: 1 }, { label: 'Tijden', count: 1.5 }, { label: 'Leveranciers', count: 2 }]
+    fetcher.mockImplementation(async (input) =>
+      String(input) === '/api/schema' ? json(engine) : json({ by, code: 'in_use', message: 'Still referenced' }, 409),
+    )
+
+    const refused = await remove('productie', 1).catch((error: unknown) => error)
+    expect(refused).toEqual({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Activiteiten', count: 3 }, { label: 'Leveranciers', count: 2 }] })
+
+    const store = createStore({ model: 'productie', rows: [{ id: 1, title: 'Alfa', status: '', fields: {} }], api: { update: vi.fn(), create: vi.fn(), remove: () => Promise.reject(refused) } })
+    await store.remove(1)
+    expect(store.getState()).toMatchObject({ save: 'error', error: { code: 'in_use', message: 'Nog in gebruik door Activiteiten (3) en Leveranciers (2).' } })
   })
 
   it('reject with the not-found the engine answers', async () => {

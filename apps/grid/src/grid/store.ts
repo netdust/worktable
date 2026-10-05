@@ -291,7 +291,10 @@ export function createStore({ model, rows, api }: Options): Store {
       const removal = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(() => send(model, id))
       queues.set(id, removal)
       try {
-        await removal
+        // A 404 means the record is already gone: drop it like a success.
+        await removal.catch((error: unknown) => {
+          if ((error as Partial<ApiError> | null)?.code !== 'unknown_record') throw error
+        })
         track(id, -1)
         // An undo would PATCH a soft-deleted record.
         for (const stack of [undoStack, redoStack]) stack.splice(0, stack.length, ...stack.filter((entry) => entry.id !== id))

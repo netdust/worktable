@@ -425,6 +425,18 @@ describe('remove', () => {
     expect(store.getState().error).toMatchObject({ id: 103, code: 'in_use', message: 'Nog in gebruik door Activiteiten (3) en Personen (1).' })
   })
 
+  it('on a 404 unknown_record drops the row and its undo entries, with no notice', async () => {
+    const { api, store, ids } = removable()
+    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
+    api.remove.mockRejectedValueOnce({ code: 'unknown_record', message: 'unknown record 103' })
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+
+    await store.remove(103)
+
+    expect(ids()).not.toContain(103)
+    expect(store.getState()).toMatchObject({ save: 'saved', error: null, canUndo: false })
+  })
+
   it("on a 422 keeps the row and raises the writer's message", async () => {
     const { api, store, ids } = removable()
     api.remove.mockRejectedValueOnce({ code: 'refused', message: 'Een bevestigde activiteit verwijder je niet.' })
