@@ -64,7 +64,6 @@
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-/* #root outranks wp-admin's own `.wrap h1` and `input[type=search]` rules. */
 #root .nv-toolbar__title {
   margin: 0 8px 0 0;
   padding: 0;
