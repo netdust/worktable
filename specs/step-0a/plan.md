@@ -35,12 +35,13 @@ First working version: Task 2 — `bun packages/engine/src/serve.ts --domain @wo
 2. **SQL injection through a value** — `filter={"status":"x' OR '1'='1"}` → **every value is a Drizzle bound parameter, never interpolated.**
 3. **Injection through `sort` / `group`** — `sort=titel;DROP TABLE activiteit` → **each sort and group key must be a declared column of the source (custom keys not sortable in 0a); else 400.**
 4. **Source selection beyond declarations** — `/rows/_migrations`, `/rows/sqlite_master`, `/rows/saved_view` → **`:source` resolves only against declared dataset and query names; anything else is 404.**
-5. **Resource exhaustion and malformed filters** — 500 keys, `$contains` or `$in` with 10k values, an unknown operator, a value of the wrong shape (`{"status":[1,2]}`, `{"status":{"$eq":{"a":1}}}`), `$contains` on a declared column, `custom.<key>` on a query → **Folio's `MAX_FILTER_CLAUSES = 50` and `CONTAINS_MAX_VALUES = 100` kept, plus `IN_MAX_VALUES = 100` for `$in` / `$nin`; values must be scalars (arrays only for `$in` / `$nin` / `$contains`); `$contains` only on `custom.<key>`; `custom.<key>` only on a dataset; malformed JSON and every `FilterCompileError` become 400 `bad_filter`.**
+5. **Resource exhaustion and malformed filters** — 500 keys, `$contains` or `$in` with 10k values, an unknown operator, a value of the wrong shape (`{"status":[1,2]}`, `{"status":{"$eq":{"a":1}}}`), `$contains` on a declared column, `custom.<key>` on a query → **Folio's `MAX_FILTER_CLAUSES = 50` and `CONTAINS_MAX_VALUES = 100` kept, plus `IN_MAX_VALUES = 100` for `$in` / `$nin`; values must be scalars (arrays only for `$in` / `$nin` / `$contains`); `$contains` only on `custom.<key>`, one subquery per `$contains` key; `custom.<key>` only on a dataset; malformed JSON and every `FilterCompileError` become 400 `bad_filter`.**
 6. **Window injection** — `from=2026-01-01' OR 1=1` → **`from` / `to` must match `^\d{4}-\d{2}-\d{2}$`, bound as parameters.**
+7. **DNS rebinding through the Host header** — a web page rebinds its own name to 127.0.0.1 and reads `/api/rows/*` from the browser → **Host allowlist middleware in `app.ts`, 403 otherwise; Vite pinned to 127.0.0.1.**
 
-**Mitigations — where they live.** `filterCompile()` in `packages/engine/src/filter-compile.ts` and `resolveKey()` / `compileFilter()` in `packages/engine/src/filter.ts`, which converts every `FilterCompileError` into `ApiError(400, 'bad_filter')` (1, 2, 5); `parseRowsParams()` in `packages/engine/src/params.ts` (3, 6); `sourceOf()` in `packages/engine/src/registry.ts` (4).
+**Mitigations — where they live.** `filterCompile()` in `packages/engine/src/filter-compile.ts` and `resolveKey()` / `compileFilter()` in `packages/engine/src/filter.ts`, which converts every `FilterCompileError` into `ApiError(400, 'bad_filter')` (1, 2, 5); `parseRowsParams()` in `packages/engine/src/params.ts` (3, 6); `sourceOf()` in `packages/engine/src/registry.ts` (4); the Host allowlist middleware in `createEngine()` in `packages/engine/src/app.ts` and `server.host` in `apps/grid/vite.config.ts` (7).
 
-**Deferrals.** No authentication or actor scoping: 0a is read-only and bound to 127.0.0.1, so any local process may read every row — acceptable for a dev slice with invented fixtures; auth is step 0's magic-link and actor work. No rate limiting, same reason. A query's own SQL is trusted: it is code in a domain package, not input.
+**Deferrals.** No authentication or actor scoping: 0a is read-only and bound to 127.0.0.1, so only local processes and pages served from 127.0.0.1/localhost:<port> may read every row; `vite --host` or a proxy on another interface breaks this deferral — acceptable for a dev slice with invented fixtures; auth is step 0's magic-link and actor work. No rate limiting, same reason. No row cap or pagination: fixtures are ~25 rows; a cap or `limit` lands in step 0 before the Laika import. A query's own SQL is trusted: it is code in a domain package, not input. CLI arguments and environment (`--domain`, `--db`, `ENGINE_URL`) are operator input, trusted like a domain's own SQL.
 
 ## Test map
 
@@ -69,10 +70,12 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
 
 | Task | Start | End | Estimate it counts against |
 |---|---|---|---|
-| 1 | | | engine 3–5 d |
-| 2 | | | engine 3–5 d |
-| 3 | | | grid 2–3 d |
-| 4 | | | harness + gate 1 d |
+| 1 | 17:46 | 17:48 | engine 3–5 d |
+| 2 | 17:49 | 17:57 | engine 3–5 d |
+| 3 | 17:59 | 18:17 (incl. 1-min review fix) | grid 2–3 d |
+| 4 | 18:20 | 18:38 | harness + gate 1 d |
+
+Reviews and fixes: per-task reviews ran between tasks; final review and security audit 18:40–18:45; final fix wave 18:46–19:00. Times are agent wall-clock, not human days.
 
 ---
 
