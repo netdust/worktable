@@ -24,8 +24,8 @@ Branch: `feature/step-0c`, from `main` @ `5fa7cbe`.
 Source: "the fiche proof first: packages/fiche declares one fiche dataset with custom fields, a writer and one query, is served with --domain @worktable/fiche, and renders and edits in the same grid with zero engine changes. If an engine change is needed, stop and report it as a spec finding." · the custom-field scope: Stefan's decision above.
 
 ### R2 A referenced row cannot be soft-deleted
-- **The rule.** `DELETE /api/rows/:dataset/:id` answers 409 `{ code: 'in_use', message }` when any live row of any domain dataset has a declared relation column pointing at that record. Nothing changes.
-- **The message** names each referencing dataset by its label, with a count (for example `Still referenced by Activiteiten (3), Personen (1)`).
+- **The rule.** `DELETE /api/rows/:dataset/:id` answers 409 `{ code: 'in_use', message, by: [{ label, count }] }` when any live row of any domain dataset has a declared relation column pointing at that record. Nothing changes.
+- **The message** is an English fallback naming each referencing dataset by its label, with a count (for example `Still referenced by Activiteiten (3), Personen (1)`). `by` carries the same as data, one entry per referencing dataset; the grid formats its own Dutch sentence from `by` through i18n (Stefan, 2026-10-05).
 - **Scope.** The engine's generic tables (Revision, SavedView) and queries do not count. A soft-deleted referencing row does not count.
 - **Order.** The check runs inside the write transaction, before the writer's `delete`.
 
@@ -43,7 +43,7 @@ Source: "Theatre datasets at parity with Laika today: Organisatie" and `docs/SPE
 - **Left out of 0c:** `token` and `user_id`, because record tokens and auth are out.
 - **The writer** refuses a missing `voornaam` or `achternaam`, and an `email` without an `@`.
 
-Source: "Theatre datasets at parity with Laika today: … Persoon". The `weergavenaam` column is invented and pending Stefan's approval: the spec gives Persoon no display column, and the title rule needs one so a Toewijzing's person shows a name.
+Source: "Theatre datasets at parity with Laika today: … Persoon". The `weergavenaam` column is invented, approved with the plan on 2026-10-05: the spec gives Persoon no display column, and the title rule needs one so a Toewijzing's person shows a name.
 
 ### R5 Theatre: Toewijzing without slots
 - **Columns:**
@@ -82,7 +82,7 @@ Source: "the voorstellingen view exposing public columns only" and `docs/SPEC.md
   - toewijzingen, including one name-only row;
   - beschikbaarheden;
   - venues on several activiteiten.
-- **SavedViews:** Organisaties, Personen, Toewijzingen, Afwezigheden, Voorstellingen, and Producties (invented, pending Stefan's approval: the gate's Productie delete needs a view to open it from).
+- **SavedViews:** Organisaties, Personen, Toewijzingen, Afwezigheden, Voorstellingen, and Producties (approved by Stefan, 2026-10-05: the gate's Productie delete needs a view to open it from).
 
 Source: the gate's "deleting a referenced Organisatie or Productie" needs a Productie that can be deleted · invented seeds.
 
@@ -93,17 +93,17 @@ Source: the gate's "deleting a referenced Organisatie or Productie" needs a Prod
 Source: "Grid: clearing a nullable select sends null."
 
 ### R10 Grid: deleting a row
-- **The action.** The row drawer gets a "Verwijderen" action for a dataset whose writer has `delete`. It calls `DELETE`.
+- **The action.** The row drawer gets a two-step delete for a dataset whose writer has `delete`: "Verwijderen", then "Zeker?", which calls `DELETE` (Stefan, 2026-10-05).
 - **On success** the row leaves the sheet.
-- **On a refusal** (409 `in_use`, or 422) the engine's message shows in the grid's existing error notice, and the row stays.
+- **On a refusal** the grid's existing error notice shows it and the row stays: a 409 `in_use` as the grid's Dutch sentence built from `by`, a 422 as the writer's message.
 - **Undo:** none. Delete is soft, and undo is later.
 
-Source: invented and pending Stefan's approval. The gate's "deleting a referenced Organisatie or Productie shows the in-use message" needs a delete action in the browser, and the copied grid has none (only the matrix calls `remove()`).
+Source: invented, approved with the plan on 2026-10-05; the two-step confirm is Stefan's, same date. The copied grid had no delete action (only the matrix calls `remove()`).
 
 ### R11 Gate
 `bun run gate` passes, and Playwright proves in a real browser:
 1. The fiche renders and edits: a second engine on the fiche domain plus a Vite server pointed at it; a fiche's declared column is edited, and the edit persists after a reload.
-2. Deleting a referenced Organisatie, and a referenced Productie, shows the in-use message and leaves the database unchanged.
+2. Deleting a referenced Organisatie, and a referenced Productie, through Verwijderen → Zeker?, shows the in-use message and leaves the database unchanged; the gate asserts the 409's `code` and the counts in `by`.
 3. A duplicate assignment shows its refusal.
 4. `voorstellingen` returns only confirmed voorstellingen and only the public columns.
 5. Clearing a select persists a null.
@@ -121,7 +121,10 @@ Source: "Out: matrix, saved-view saving, auth, import, the WordPress block, life
 3. **Persoon has no display column** in the spec (R4 proposes `weergavenaam`). Toewijzing and Beschikbaarheid have no natural title; 0c uses `naam` and `reden`, which are empty on most rows.
 4. **Laika's organisation role is a multi-valued taxonomy** (venue, coproducer, funder, presenter); the spec's `soort` is a single value with different terms. The mapping is needed at import.
 5. **Laika absences are whole days;** the spec's are datetimes (decided above).
-6. **A writer cannot look rows up by value.** `WriteContext` offers only `find(dataset, id)`, so "one assignment per person per activity" cannot be refused in the theatre writer, and a UNIQUE index would answer 500, not the Dutch 422. Proposed: a second engine change, `ctx.exists(dataset, match, exceptId?)`, a live-rows equality lookup inside the write transaction (pending Stefan).
+6. **A writer cannot look rows up by value.** `WriteContext` offers only `find(dataset, id)`, so "one assignment per person per activity" cannot be refused in the theatre writer, and a UNIQUE index would answer 500, not the Dutch 422. Approved by Stefan, 2026-10-05: a second engine change, `ctx.exists(dataset, match, exceptId?)`, a live-rows equality lookup inside the write transaction.
+
+## Entry condition carried forward
+The table-rebuild migrator (ALTER and SQLite's table rebuild, 0a's R3) must exist before the first real import. It is the entry condition of step 0e: an import into a schema that cannot change in place would freeze it (Stefan, 2026-10-05).
 
 ## Report (at the end)
 - Which ledger rows moved, with line counts.
