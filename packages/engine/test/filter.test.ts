@@ -51,6 +51,7 @@ describe('compileFilter', () => {
     expect(ids({ 'custom.labels': { $contains: 'a' } })).toEqual([1])
     expect(ids({ 'custom.labels': { $contains: ['a', 'b'] } })).toEqual([1])
     expect(ids({ 'custom.labels': { $contains: ['a', 'z'] } })).toEqual([])
+    expect(ids({ 'custom.labels': { $contains: ['a', 'a', 'b'] } })).toEqual([1])
   })
   test('clauses combine with AND', () => {
     expect(ids({ status: 'open', prio: { $gt: 1 } })).toEqual([1, 4])

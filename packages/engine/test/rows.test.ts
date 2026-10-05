@@ -1,7 +1,7 @@
-import type { Database } from 'bun:sqlite'
+import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { createEngine } from '../src'
+import { createEngine, type Domain, defineDataset, migrate, seedDomain } from '../src'
 import { domain, freshDb } from './fixture'
 
 let sqlite: Database
@@ -120,6 +120,41 @@ describe('rows', () => {
     expect(body.rows[2].lookups).toEqual({ project_id: null })
   })
 
+  test('a lookup to a row whose title is null gives title empty', async () => {
+    const groep = defineDataset({
+      name: 'groep',
+      label: 'Groepen',
+      title: 'naam',
+      custom: false,
+      columns: { naam: { type: 'text', label: 'Naam', nullable: true } },
+    })
+    const lid = defineDataset({
+      name: 'lid',
+      label: 'Leden',
+      title: 'naam',
+      custom: false,
+      columns: {
+        naam: { type: 'text', label: 'Naam' },
+        groep_id: { type: 'integer', label: 'Groep', relation: 'groep' },
+      },
+    })
+    const nullTitle: Domain = {
+      datasets: [groep, lid],
+      queries: [],
+      seed: (insert) => {
+        insert('groep', [{ naam: null }])
+        insert('lid', [{ naam: 'x', groep_id: 1 }])
+      },
+      views: [],
+    }
+    sqlite = new Database(':memory:')
+    migrate(sqlite, nullTitle)
+    seedDomain(sqlite, nullTitle)
+    app = createEngine(sqlite, nullTitle, { port: 4310 })
+    const { body } = await rows('lid')
+    expect(body.rows[0].lookups).toEqual({ groep_id: { id: 1, title: '' } })
+  })
+
   test('a view is served through the same route with its declared relation lookups', async () => {
     const { body } = await rows('per_project', 'sort=id')
     expect(body.total).toBe(3)
@@ -200,5 +235,23 @@ describe('rows', () => {
     console.error = log
     expect(status).toBe(500)
     expect(body).toEqual({ code: 'internal', message: 'Internal error' })
+  })
+})
+
+describe('cost', () => {
+  test('a 100-value $contains over 20k rows answers within a second', async () => {
+    const all = Array.from({ length: 100 }, (_, i) => `v${i}`)
+    const insert = sqlite.prepare(
+      "INSERT INTO taak (project_id, omschrijving, status, start_at, dag, custom) VALUES (1, 'x', 'open', '2026-10-12T09:00', '2026-10-12', ?)",
+    )
+    sqlite.transaction(() => {
+      for (let i = 0; i < 20_000; i++) insert.run(JSON.stringify({ labels: i % 1000 === 0 ? all : all.slice(0, 99) }))
+    })()
+    const started = performance.now()
+    const { status, body } = await filtered('taak', { 'custom.labels': { $contains: all } })
+    const took = performance.now() - started
+    console.log(`$contains 100 values over 20k rows: ${took.toFixed(0)} ms`)
+    expect({ status, total: body.total, rows: body.rows.length }).toEqual({ status: 200, total: 20, rows: 20 })
+    expect(took).toBeLessThan(1000)
   })
 })

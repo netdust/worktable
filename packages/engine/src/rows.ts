@@ -1,4 +1,4 @@
-import { and, asc, count, desc, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { Domain } from './declare'
@@ -50,7 +50,7 @@ function titlesOf(db: BunSQLiteDatabase, domain: Domain, relation: string, ids: 
     .from(table)
     .where(inArray(columnOf(table, 'id'), ids))
     .all() as { id: number; title: unknown }[]
-  return new Map(found.map((r) => [r.id, String(r.title)]))
+  return new Map(found.map((r) => [r.id, r.title === null ? '' : String(r.title)]))
 }
 
 function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Source, raws: Raw[]): EngineRow[] {
@@ -88,6 +88,6 @@ export function readRows(
     .where(where)
     .orderBy(...orderOf(table, params))
     .all() as Raw[]
-  const [{ total }] = db.select({ total: count() }).from(table).where(where).all() as [{ total: number }]
-  return { rows: withLookups(db, domain, source, raws), total }
+  // No pagination yet, so the total is the rows read; a second count would run the WHERE twice.
+  return { rows: withLookups(db, domain, source, raws), total: raws.length }
 }

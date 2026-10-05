@@ -41,13 +41,14 @@ function list(key: string, op: string, value: JsonValue): unknown[] {
 function contains(lhs: Lhs, key: string, column: SQLiteColumn, value: JsonValue): SQL {
   if (!lhs.custom) throw new ApiError(400, 'bad_filter', `$contains is only supported on custom keys, not "${key}"`)
   const path = lhs.custom
-  const values = Array.isArray(value) ? value : [value]
+  const values = [...new Set(Array.isArray(value) ? value : [value])]
   // Two-arg json_each/json_type: a scalar at the path yields no match instead of a malformed-JSON 500.
-  const parts = values.map(
-    (v) =>
-      sql`EXISTS (SELECT 1 FROM json_each(${column}, ${path}) WHERE json_type(${column}, ${path}) = 'array' AND value = ${v})`,
+  // One subquery per key, not an EXISTS per value: 100 values over 20k rows took seconds that way.
+  const wanted = sql.join(
+    values.map((v) => sql`${v}`),
+    sql`, `,
   )
-  return and(...parts) as SQL
+  return sql`(SELECT count(DISTINCT value) FROM json_each(${column}, ${path}) WHERE json_type(${column}, ${path}) = 'array' AND value IN (${wanted})) = ${values.length}`
 }
 
 function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: SQLiteTable): SQL {
