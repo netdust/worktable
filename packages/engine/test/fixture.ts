@@ -1,5 +1,14 @@
 import { Database } from 'bun:sqlite'
-import { type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
+import {
+  type Domain,
+  defineDataset,
+  defineQuery,
+  migrate,
+  refuse,
+  seedDomain,
+  type WriteContext,
+  type Writer,
+} from '../src'
 
 const project = defineDataset({
   name: 'project',
@@ -50,9 +59,49 @@ const perProject = defineQuery({
   },
 })
 
+const notitie = defineDataset({
+  name: 'notitie',
+  label: 'Notities',
+  title: 'tekst',
+  custom: true,
+  columns: {
+    project_id: { type: 'integer', label: 'Project', relation: 'project' },
+    tekst: { type: 'text', label: 'Tekst' },
+    lengte: { type: 'integer', label: 'Lengte', readonly: true },
+    klaar: { type: 'boolean', label: 'Klaar', default: false },
+    soort: { type: 'text', label: 'Soort', options: { kort: 'Kort', lang: 'Lang' }, default: 'kort' },
+    dag: { type: 'date', label: 'Dag', nullable: true },
+    start_at: { type: 'datetime', label: 'Start', nullable: true },
+    extra: { type: 'json', label: 'Extra', nullable: true },
+  },
+})
+
+const notitieLijst = defineQuery({
+  name: 'notitie_lijst',
+  label: 'Notitielijst',
+  title: 'tekst',
+  sql: 'SELECT n.id, n.tekst, p.naam FROM notitie n JOIN project p ON p.id = n.project_id WHERE n.deleted_at IS NULL',
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    tekst: { type: 'text', label: 'Tekst', writes: { dataset: 'notitie', field: 'tekst', key: 'id' } },
+    naam: { type: 'text', label: 'Naam' },
+  },
+})
+
+// Checks no relation and no option itself, so the engine's own backstops are what the tests reach.
+function derive(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown> {
+  const merged = { ...ctx.current, ...values }
+  const project = typeof merged.project_id === 'number' ? ctx.find('project', merged.project_id) : null
+  if (project?.naam === 'Beta') refuse('project Beta is gesloten')
+  return typeof merged.tekst === 'string' ? { ...values, lengte: merged.tekst.length } : values
+}
+
+const notitieWriter: Writer = { create: derive, update: derive, delete: () => {} }
+
 export const domain: Domain = {
-  datasets: [project, taak, plat],
-  queries: [perProject],
+  datasets: [project, taak, plat, notitie],
+  queries: [perProject, notitieLijst],
+  writers: { notitie: notitieWriter },
   seed: (insert) => {
     insert('project', [{ naam: 'Alfa', custom: { kleur: 'rood', labels: ['a', 'b'] } }, { naam: 'Beta' }])
     insert('taak', [
@@ -86,6 +135,7 @@ export const domain: Domain = {
       { project_id: 2, omschrijving: 'vier', status: 'open', prio: 5, start_at: '2026-10-15T10:00', dag: '2026-10-15' },
     ])
     insert('plat', [{ naam: 'x' }])
+    insert('notitie', [{ project_id: 1, tekst: 'eerste', lengte: 6 }])
   },
   views: [
     {
@@ -106,4 +156,31 @@ export function freshDb(): Database {
   migrate(sqlite, domain)
   seedDomain(sqlite, domain)
   return sqlite
+}
+
+export const contents = (sqlite: Database, table: string): unknown[] =>
+  sqlite.query(`SELECT * FROM "${table}" ORDER BY id`).all()
+
+export interface Sent {
+  body?: string
+  type?: string | null
+  site?: string
+  host?: string
+  origin?: string
+}
+
+export function send(app: { request: (path: string, init: RequestInit) => Response | Promise<Response> }) {
+  return async (
+    method: string,
+    path: string,
+    { body, type = 'application/json', site, host = '127.0.0.1:4310', origin }: Sent = {},
+  ) => {
+    const headers: Record<string, string> = { host }
+    if (type) headers['content-type'] = type
+    if (site) headers['sec-fetch-site'] = site
+    if (origin) headers.origin = origin
+    const res = await app.request(path, { method, headers, body })
+    // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
+    return { status: res.status, body: (await res.json()) as Record<string, any> }
+  }
 }

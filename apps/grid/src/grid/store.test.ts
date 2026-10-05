@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { forgetSchema, update } from '../api'
+import type { EngineSchema } from '../engine'
 import type { Row } from '../types'
-import { calais, planning } from './calais.test.data'
+import { calais } from './calais.test.data'
 import { createStore, type StoreApi } from './store'
 
 function deferred<T>() {
@@ -15,7 +17,7 @@ function deferred<T>() {
 
 function setup(rows: Row[] = calais) {
   const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-  const store = createStore({ model: 'activity', table: planning.table, rows, api })
+  const store = createStore({ model: 'activity', rows, api })
   const row = (id: number) => store.getState().rows.find((r) => r.id === id)!
   return { api, store, row }
 }
@@ -32,7 +34,7 @@ describe('apply', () => {
 
     expect(row(103).fields.kind).toBe('show')
     expect(store.getState().save).toBe('saving')
-    expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
 
     answer.resolve(served(calais[2], { kind: 'show' }, { rollups: { confirmed: 7 } }))
     await done
@@ -47,7 +49,7 @@ describe('apply', () => {
 
     await store.apply({ id: 101, field: 'title', value: 'Auto Pavel' })
 
-    expect(api.update).toHaveBeenCalledWith('activity', 101, { title: 'Auto Pavel' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 101, { title: 'Auto Pavel' }, expect.objectContaining({ id: 101 }))
     expect(row(101).title).toBe('Auto Pavel')
   })
 
@@ -95,12 +97,12 @@ describe('undo and redo', () => {
     expect(store.getState().canUndo).toBe(true)
 
     await store.undo()
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'meal' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'meal' }, expect.objectContaining({ id: 103 }))
     expect(row(103).fields.kind).toBe('meal')
     expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true })
 
     await store.redo()
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'show' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
     expect(row(103).fields.kind).toBe('show')
     expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false })
   })
@@ -117,7 +119,7 @@ describe('undo and redo', () => {
 
     first.resolve(served(calais[2], { kind: 'show' }))
     await Promise.all([typed, undone])
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'meal' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'meal' }, expect.objectContaining({ id: 103 }))
     expect(row(103).fields.kind).toBe('meal')
     expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true })
   })
@@ -136,8 +138,8 @@ describe('undo and redo', () => {
     redoAnswer.resolve(served(calais[1], { start: '11:00' }))
     await Promise.all([redone, undone])
 
-    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { start: '10:00' }, 'planning')
-    expect(api.update).not.toHaveBeenCalledWith('activity', 101, { start: '07:30' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { start: '10:00' }, expect.objectContaining({ id: 102 }))
+    expect(api.update).not.toHaveBeenCalledWith('activity', 101, { start: '07:30' }, expect.objectContaining({ id: 101 }))
   })
 
   it('ends at the original after type, undo, redo, undo, undo pressed inside one round-trip', async () => {
@@ -280,7 +282,7 @@ describe('a new row', () => {
     store.draft({ status: 'requested' }, ['activity'], ['activity', 'person', 'venue'])
     await store.apply({ id: -1, field: 'activity', value: [102] })
 
-    expect(api.create).toHaveBeenLastCalledWith('activity', { status: 'requested', activity: [102], title: '' }, 'planning')
+    expect(api.create).toHaveBeenLastCalledWith('activity', { status: 'requested', activity: [102], title: '' })
     expect(store.getState().rows[0]).toMatchObject({ id: -1, fields: { activity: [102] } })
     expect(store.getState().error?.message).toBe('A person or a name is required.')
     expect(store.getState().needs).toEqual(['person', 'venue'])
@@ -288,7 +290,7 @@ describe('a new row', () => {
     await store.apply({ id: -1, field: 'person', value: [5] })
 
     expect(api.create).toHaveBeenCalledTimes(2)
-    expect(api.create).toHaveBeenLastCalledWith('activity', { status: 'requested', activity: [102], person: [5], title: '' }, 'planning')
+    expect(api.create).toHaveBeenLastCalledWith('activity', { status: 'requested', activity: [102], person: [5], title: '' })
     expect(store.getState().rows[0]).toMatchObject({ id: 300 })
     expect(store.getState().rows.some((r) => r.id === -1)).toBe(false)
     expect(store.getState()).toMatchObject({ error: null, needs: [], save: 'saved' })
@@ -303,7 +305,7 @@ describe('a new row', () => {
 
     await store.apply({ id: -1, field: 'title', value: 'Soundcheck' })
 
-    expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-18', kind: 'travel', status: 'confirmed', title: 'Soundcheck' }, 'planning')
+    expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-18', kind: 'travel', status: 'confirmed', title: 'Soundcheck' })
     expect(store.getState().rows[0]).toMatchObject({ id: 200, title: 'Soundcheck' })
     expect(store.getState().rows.some((r) => r.id === -1)).toBe(false)
   })
@@ -352,7 +354,7 @@ describe('a new row', () => {
 
     await store.create({ date: '2026-05-18' })
 
-    expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-18' }, 'planning')
+    expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-18' })
     expect(store.getState().rows[0].id).toBe(300)
   })
 })
@@ -366,5 +368,57 @@ describe('dismiss', () => {
     store.dismiss(101, 'start')
 
     expect(store.getState().errors).toEqual({})
+  })
+})
+
+describe('writes through the engine', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    forgetSchema()
+  })
+
+  it("a refused update reverts the cell and keeps the writer's message on it", async () => {
+    const { api, store, row } = setup()
+    api.update.mockRejectedValueOnce({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
+
+    await store.apply({ id: 105, field: 'status', value: 'confirmed' })
+
+    expect(row(105).fields.status).toBe('option')
+    expect(store.getState().errors['105:status']).toEqual({ id: 105, field: 'status', code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
+  })
+
+  it('undo of a dagplanning edit PATCHes /rows/activiteit/<row[key]> with the old value', async () => {
+    const engine: EngineSchema = {
+      sources: {
+        dagplanning: {
+          kind: 'query', label: 'Dagplanning', title: 'omschrijving', date: 'plandag', writable: true,
+          columns: {
+            activiteit_id: { type: 'integer', label: 'Activiteit' },
+            omschrijving: { type: 'text', label: 'Omschrijving' },
+            status: { type: 'text', label: 'Status', writes: { dataset: 'activiteit', field: 'status', key: 'activiteit_id' } },
+          },
+        },
+      },
+      views: [],
+    }
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input).split('?')[0]
+      if (path === '/api/schema') return json(engine)
+      return path === '/api/rows/dagplanning' ? json({ rows: [], total: 0 }) : json({ id: 7, custom: {}, lookups: {} })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, status: 'optie' }, lookups: {} }
+    const store = createStore({ model: 'dagplanning', rows: [planned], api: { update, create: vi.fn() } })
+
+    await store.apply({ id: 40, field: 'status', value: 'bevestigd' })
+    await store.undo()
+
+    const patches = fetcher.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([input, init]) => [String(input), init?.body])
+    expect(patches).toEqual([
+      ['/api/rows/activiteit/7', JSON.stringify({ status: 'bevestigd' })],
+      ['/api/rows/activiteit/7', JSON.stringify({ status: 'optie' })],
+    ])
+    expect(store.getState().rows[0]).toMatchObject({ id: 40, fields: { status: 'optie' } })
   })
 })

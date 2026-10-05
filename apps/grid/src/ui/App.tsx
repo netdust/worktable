@@ -145,7 +145,7 @@ export function App() {
   const [named, waiting] = useFilterNames(model, fields, layout?.filters ?? [])
 
   const plan = model && view ? newRow(model, view, dated ? range : null, new Date(), scope ?? null) : null
-  const addBlocked = !writable || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
+  const addBlocked = !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
   const add = () => {
     if (!store || !model || !plan || 'missing' in plan) return
     if (plan.needs.length === 0) void store.create(plan.fields)

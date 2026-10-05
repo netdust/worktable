@@ -12,6 +12,10 @@ export interface Field {
   options?: Record<string, string>
   relation?: { model: string; multiple: boolean }
   description?: string
+  /** Shown, never written: a readonly column, or a query column no writer takes. */
+  readonly?: boolean
+  /** A query column's write: to `dataset`'s `field`, on the record the row's `key` names. */
+  writes?: { dataset: string; field: string; key: string }
 }
 
 export interface Model {
@@ -19,6 +23,8 @@ export interface Model {
   label: string
   title_label: string
   title_readonly: boolean
+  /** A query's rows: joined, never created. */
+  query?: boolean
   fields: Record<string, Field>
 }
 

@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
-import { migrate, seedDomain } from '@worktable/engine'
+import { migrate, seedDomain, validateDomain } from '@worktable/engine'
 import theatre from '../src'
 
 test('the theatre domain migrates, seeds and answers productie_dag', () => {
@@ -13,4 +13,8 @@ test('the theatre domain migrates, seeds and answers productie_dag', () => {
   expect(dag).toEqual({ activiteiten: 5, voorstellingen: 1 })
   const night = sqlite.query("SELECT plandag FROM activiteit WHERE start_at = '2026-10-14T00:30'").get()
   expect(night).toEqual({ plandag: '2026-10-13' })
+})
+
+test('the theatre domain validates', () => {
+  expect(() => validateDomain(theatre)).not.toThrow()
 })

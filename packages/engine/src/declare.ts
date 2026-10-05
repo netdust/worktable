@@ -9,6 +9,8 @@ export interface ColumnDecl {
   default?: string | number | boolean | null
   options?: Record<string, string>
   relation?: string
+  readonly?: boolean
+  writes?: { dataset: string; field: string; key: string }
 }
 
 export interface DatasetDecl {
@@ -48,6 +50,24 @@ export interface Domain {
   queries: QueryDecl[]
   seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void
   views: SavedViewSeed[]
+  writers?: Record<string, Writer>
+}
+
+export interface Actor {
+  id: number
+  role: string
+}
+
+export interface WriteContext {
+  actor: Actor
+  current: Record<string, unknown> | null
+  find(dataset: string, id: number): Record<string, unknown> | null
+}
+
+export interface Writer {
+  create?(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown>
+  update?(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown>
+  delete?(ctx: WriteContext): void
 }
 
 const IDENTIFIER = /^[a-z][a-z0-9_]*$/

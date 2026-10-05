@@ -76,4 +76,14 @@ export const views: SavedViewSeed[] = [
     group_by: null,
     visible_fields: ['productie', 'plandag', 'activiteiten', 'voorstellingen', 'repetities'],
   },
+  {
+    name: 'Dagplanning',
+    source_type: 'query',
+    source: 'dagplanning',
+    skin: 'table',
+    filters: {},
+    sort: ['start_at'],
+    group_by: 'plandag',
+    visible_fields: ['productie', 'soort', 'start_at', 'status'],
+  },
 ]

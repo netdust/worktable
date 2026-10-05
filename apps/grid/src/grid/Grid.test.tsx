@@ -18,7 +18,7 @@ let saved: Layout | null
 
 function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode } = {}) {
   api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-  const store = createStore({ model: 'activity', table: 'planning', rows, api })
+  const store = createStore({ model: 'activity', rows, api })
   function Harness() {
     const [layout, setLayout] = useState(options.layout ?? defaults(planning))
     const change = (next: Layout) => {
@@ -165,7 +165,7 @@ describe('editing', () => {
     fireEvent.change(editor(), { target: { value: 'Zaal 2' } })
     type(editor(), 'Enter')
 
-    expect(api.update).toHaveBeenCalledWith('activity', 102, { place: 'Zaal 2' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { place: 'Zaal 2' }, expect.objectContaining({ id: 102 }))
     expect(cell('Montage', 'place').textContent).toBe('Zaal 2')
     await act(async () => undefined)
   })
@@ -215,7 +215,7 @@ describe('editing', () => {
       type(listbox, 'Enter')
     })
 
-    expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
     expect(cell('Lunch bistrot', 'kind').textContent).toBe('Voorstelling')
   })
 
@@ -231,7 +231,7 @@ describe('editing', () => {
       type(editor(), 'Tab')
     })
 
-    expect(api.update).toHaveBeenCalledWith('activity', 102, { start: '09:30' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { start: '09:30' }, expect.objectContaining({ id: 102 }))
   })
 
   it('empties an optional field on Delete and leaves a required one', async () => {
@@ -246,7 +246,7 @@ describe('editing', () => {
     await act(async () => {
       type(cell('Montage', 'place'), 'Delete')
     })
-    expect(api.update).toHaveBeenCalledWith('activity', 102, { place: '' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { place: '' }, expect.objectContaining({ id: 102 }))
   })
 
   it('undoes the last write on Ctrl+Z with the inverse write', async () => {
@@ -261,7 +261,7 @@ describe('editing', () => {
       type(cell('Montage', 'place'), 'z', { ctrlKey: true })
     })
 
-    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
     expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
@@ -276,7 +276,7 @@ describe('editing', () => {
       type(editor(), 'Enter')
     })
 
-    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { start: '14:00' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { start: '14:00' }, expect.objectContaining({ id: 102 }))
     const titles = screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)
     expect(titles.indexOf('Montage')).toBeGreaterThan(titles.indexOf('Lunch bistrot'))
     expect(document.activeElement).toBe(cell('Lunch bistrot', 'start'))
@@ -286,7 +286,7 @@ describe('editing', () => {
     await act(async () => {
       type(editor(), 'Enter')
     })
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { start: '15:00' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { start: '15:00' }, expect.objectContaining({ id: 103 }))
   })
 
   it('commits an open editor to its own record when a server answer re-sorts underneath it', async () => {
@@ -307,7 +307,7 @@ describe('editing', () => {
       type(editor(), 'Enter')
     })
 
-    expect(api.update).toHaveBeenLastCalledWith('activity', 101, { place: 'Xavier' }, 'planning')
+    expect(api.update).toHaveBeenLastCalledWith('activity', 101, { place: 'Xavier' }, expect.objectContaining({ id: 101 }))
   })
 
   it('leaves Enter on a header to its sort button once a cell was active', () => {
@@ -392,7 +392,7 @@ describe('editing', () => {
     await act(async () => {
       fireEvent.paste(cell('Montage', 'kind'), { clipboardData })
     })
-    expect(api.update).toHaveBeenCalledWith('activity', 102, { kind: 'meal' }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { kind: 'meal' }, expect.objectContaining({ id: 102 }))
   })
 
   it('opens a new row with its title in edit and creates it on Enter', async () => {
@@ -407,7 +407,7 @@ describe('editing', () => {
       type(editor(), 'Enter')
     })
 
-    expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-19', kind: 'travel', status: 'confirmed', title: 'Soundcheck' }, 'planning')
+    expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-19', kind: 'travel', status: 'confirmed', title: 'Soundcheck' })
   })
 })
 
@@ -440,6 +440,7 @@ describe('the toolbar over the grid', () => {
     vi.setSystemTime(new Date(2026, 4, 19, 10, 0))
     remote.schema.mockResolvedValue(schema)
     remote.rows.mockResolvedValue({ rows: calais, total: calais.length })
+    remote.records.mockResolvedValue({ rows: [], total: 0 })
     try {
       window.localStorage.clear()
     } catch {
@@ -556,7 +557,7 @@ describe('the toolbar over the grid', () => {
     await act(async () => {
       fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }))
     })
-    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, 'planning')
+    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
   })
 
   it('keeps an edited cell and its undo through Save on a saved view', async () => {
@@ -586,7 +587,7 @@ describe('the toolbar over the grid', () => {
     await act(async () => {
       type(cell('Montage', 'place'), 'z', { ctrlKey: true })
     })
-    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, 'planning')
+    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
     expect(remote.rows).toHaveBeenCalledTimes(1)
   })
 
@@ -633,7 +634,7 @@ describe('the toolbar over the grid', () => {
     await act(async () => {
       fireEvent.click(within(screen.getByRole('status', { name: 'Changed' })).getByRole('button', { name: 'Undo' }))
     })
-    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, 'planning')
+    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
   })
 
   it("+ New opens a row at the top of today's group with its title in edit", async () => {
@@ -674,7 +675,7 @@ describe('the toolbar over the grid', () => {
       search.focus()
     })
 
-    expect(remote.update).toHaveBeenCalledWith('activity', 103, { place: 'x' }, 'planning')
+    expect(remote.update).toHaveBeenCalledWith('activity', 103, { place: 'x' }, expect.objectContaining({ id: 103 }))
     expect(document.activeElement).toBe(search)
   })
 
@@ -795,7 +796,7 @@ describe('a new row the writer refuses', () => {
     })
 
     expect(remote.create).toHaveBeenCalledTimes(2)
-    expect(remote.create).toHaveBeenLastCalledWith('assignment', { status: 'requested', activity: [102], person: [5], title: '' }, 'toewijzingen')
+    expect(remote.create).toHaveBeenLastCalledWith('assignment', { status: 'requested', activity: [102], person: [5], title: '' })
     expect(screen.getAllByRole('row').some((r) => r.dataset.title === 'Ann op Montage')).toBe(true)
     expect(screen.getAllByRole('row').some((r) => r.classList.contains('nv-tr--draft'))).toBe(false)
   })
@@ -842,7 +843,7 @@ describe('a new record with a required relation', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Ann' }))
     await act(async () => undefined)
 
-    expect(remote.create).toHaveBeenCalledWith('absence', { person: [5], from: '2026-05-19', to: '2026-05-19', title: '' }, 'absences')
+    expect(remote.create).toHaveBeenCalledWith('absence', { person: [5], from: '2026-05-19', to: '2026-05-19', title: '' })
     expect(picker.isConnected).toBe(false)
     expect(screen.getAllByRole('row').some((r) => r.dataset.title === 'Ann 19/05')).toBe(true)
   })
@@ -859,7 +860,7 @@ describe('a new record with a required relation', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Ann' }))
     await act(async () => undefined)
 
-    expect(remote.create).toHaveBeenCalledWith('absence', { person: [5], from: '2026-05-19', to: '2026-05-19', title: '' }, 'absences')
+    expect(remote.create).toHaveBeenCalledWith('absence', { person: [5], from: '2026-05-19', to: '2026-05-19', title: '' })
   })
 
   it('keeps the draft when focus leaves its picker, and drops it on Escape', async () => {

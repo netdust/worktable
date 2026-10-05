@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { columnsFor } from './grid/columns'
 import { defaults } from './grid/layout'
-import { type EngineSchema, rowsQuery, toRow, toSavedViews, toSchema } from './engine'
+import { type EngineSchema, rowsQuery, toEngineData, toRow, toSavedViews, toSchema } from './engine'
 
 /** The theatre declarations and seeded views, trimmed to what the adapter reads. */
 const engine: EngineSchema = {
@@ -75,6 +76,70 @@ describe('toSchema', () => {
     expect(schema.tables[0]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] })
     expect(schema.views).toEqual([])
     expect(schema.writable).toEqual({ productie: false, activiteit: false, productie_dag: false })
+  })
+})
+
+describe('writes', () => {
+  /** The theatre's writable shapes: activiteit has a writer, dagplanning maps status to it, productie has none. */
+  const writes: EngineSchema = {
+    sources: {
+      productie: { ...engine.sources.productie, writable: false },
+      activiteit: {
+        ...engine.sources.activiteit, writable: true,
+        columns: { ...engine.sources.activiteit.columns, plandag: { type: 'date', label: 'Plandag', readonly: true } },
+      },
+      dagplanning: {
+        kind: 'query', label: 'Dagplanning', title: 'omschrijving', date: 'plandag', writable: true,
+        columns: {
+          id: { type: 'integer', label: 'Id' },
+          activiteit_id: { type: 'integer', label: 'Activiteit' },
+          omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
+          productie: { type: 'text', label: 'Productie' },
+          status: { type: 'text', label: 'Status', writes: { dataset: 'activiteit', field: 'status', key: 'activiteit_id' } },
+        },
+      },
+    },
+    views: [],
+  }
+  const editable = (source: string) => {
+    const model = toSchema(writes).models[source]
+    const view = { key: source, label: source, table: source, model: source }
+    return Object.fromEntries(columnsFor(model, view, toSchema(writes).writable[source]).map((c) => [c.id, c.editable]))
+  }
+
+  it('a readonly column and an unmapped query column are not editable', () => {
+    expect(toSchema(writes).writable).toEqual({ productie: false, activiteit: true, dagplanning: true })
+    expect(editable('activiteit')).toMatchObject({ title: true, status: true, plandag: false })
+    expect(editable('dagplanning')).toMatchObject({ title: false, status: true, activiteit_id: false, productie: false })
+    expect(editable('productie')).toMatchObject({ title: false })
+  })
+
+  it('the title field maps to the title column on write', () => {
+    expect(toEngineData({ title: 'opbouw Gent', status: 'optie' }, writes.sources.activiteit, writes.sources)).toEqual({ omschrijving: 'opbouw Gent', status: 'optie' })
+  })
+
+  it("a mapped query column takes its target's options and relation, unless it declares its own", () => {
+    const own: EngineSchema = {
+      ...writes,
+      sources: {
+        ...writes.sources,
+        dagplanning: {
+          ...writes.sources.dagplanning,
+          columns: {
+            ...writes.sources.dagplanning.columns,
+            soort: { type: 'text', label: 'Soort', options: { reis: 'Reis' }, writes: { dataset: 'activiteit', field: 'soort', key: 'activiteit_id' } },
+            productie_id: { type: 'integer', label: 'Productie', writes: { dataset: 'activiteit', field: 'productie_id', key: 'activiteit_id' } },
+          },
+        },
+      },
+    }
+    const fields = toSchema(own).models.dagplanning.fields
+    const status = columnsFor(toSchema(own).models.dagplanning, { key: 'd', label: 'd', table: 'dagplanning', model: 'dagplanning' }, true).find((c) => c.id === 'status')
+
+    expect(fields.status).toMatchObject({ type: 'select', options: { optie: 'Optie', bevestigd: 'Bevestigd' } })
+    expect(status?.text?.({ id: 40, title: '', status: '', fields: { status: 'optie' } })).toBe('Optie')
+    expect(fields.soort).toMatchObject({ type: 'select', options: { reis: 'Reis' } })
+    expect(fields.productie_id).toMatchObject({ type: 'relation', relation: { model: 'productie', multiple: false } })
   })
 })
 

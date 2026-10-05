@@ -20,8 +20,9 @@ export interface CellError {
 }
 
 export interface StoreApi {
-  update: (model: string, id: number, data: Record<string, unknown>, table?: string) => Promise<Row>
-  create: (model: string, data: Record<string, unknown>, table?: string) => Promise<Row>
+  /** `row` as it was before the write: a query routes the write by its key. */
+  update: (model: string, id: number, data: Record<string, unknown>, row: Row) => Promise<Row>
+  create: (model: string, data: Record<string, unknown>) => Promise<Row>
 }
 
 export interface StoreState {
@@ -54,8 +55,6 @@ export interface Store {
 
 interface Options {
   model: string
-  /** The table a write answers through: its lookups and rollups come back on the row. */
-  table: string
   rows: Row[]
   api: StoreApi
 }
@@ -97,7 +96,7 @@ function toError(change: Change, error: unknown): CellError {
   return { id: change.id, field: change.field, code: known, message: errorText(known, String(message ?? error)) }
 }
 
-export function createStore({ model, table, rows, api }: Options): Store {
+export function createStore({ model, rows, api }: Options): Store {
   let state: StoreState = { rows, save: 'saved', error: null, errors: {}, canUndo: false, canRedo: false, needs: [], asked: 0 }
   const listeners = new Set<() => void>()
   const undoStack: Entry[] = []
@@ -137,7 +136,7 @@ export function createStore({ model, table, rows, api }: Options): Store {
     return state.error ? 'error' : 'saved'
   }
 
-  /** One write in flight per record: PHP workers could otherwise land an undo before the write it undoes. */
+  /** One write in flight per record: two connections could otherwise land an undo before the write it undoes. */
   function queued(change: Change, row: Row): Promise<Row> {
     const previous = queues.get(change.id)
     const next = previous ? previous.catch(() => undefined).then(() => send(change, row)) : send(change, row)
@@ -151,9 +150,9 @@ export function createStore({ model, table, rows, api }: Options): Store {
 
   function send(change: Change, row: Row): Promise<Row> {
     const data = { [change.field]: change.value }
-    if (change.id !== DRAFT) return api.update(model, change.id, data, table)
+    if (change.id !== DRAFT) return api.update(model, change.id, data, row)
     const { title, ...fields } = { ...row.fields, title: row.title, ...data }
-    return api.create(model, { ...fields, title }, table)
+    return api.create(model, { ...fields, title })
   }
 
   /** True when the server took it; the stacks are the caller's. */
@@ -267,7 +266,7 @@ export function createStore({ model, table, rows, api }: Options): Store {
     async create(fields) {
       set({ save: 'saving', error: null })
       try {
-        const row = await api.create(model, fields, table)
+        const row = await api.create(model, fields)
         confirmed.set(row.id, row)
         set({ rows: [row, ...state.rows] })
       } catch (error) {

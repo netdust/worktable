@@ -122,7 +122,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   const column = base(key, kind, field.label, (row) => row.fields[key])
   column.field = key
   column.required = field.required
-  column.editable = writable && (EDITABLE.includes(kind) || (kind === 'relation' && field.relation?.multiple === false))
+  column.editable = writable && !field.readonly && (EDITABLE.includes(kind) || (kind === 'relation' && field.relation?.multiple === false))
   column.options = field.options
   column.relation = field.relation
 

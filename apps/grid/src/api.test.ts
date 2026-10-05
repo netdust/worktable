@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, forgetSchema, prefs, records, remove, rows, savePrefs, savedViews, schema, update } from './api'
 import type { EngineSchema } from './engine'
 import { defaults } from './grid/layout'
-import type { View } from './types'
+import type { Row, View } from './types'
 
 const fetcher = vi.fn<typeof fetch>()
 
@@ -16,6 +16,21 @@ const engine: EngineSchema = {
         omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
         status: { type: 'text', label: 'Status', options: { optie: 'Optie', bevestigd: 'Bevestigd' } },
         plandag: { type: 'date', label: 'Plandag' },
+        start_at: { type: 'datetime', label: 'Start' },
+        eind_at: { type: 'datetime', label: 'Einde', nullable: true },
+        personen: { type: 'integer', label: 'Personen', nullable: true },
+      },
+      writable: true,
+    },
+    dagplanning: {
+      kind: 'query', label: 'Dagplanning', title: 'omschrijving', date: 'plandag', writable: true,
+      columns: {
+        id: { type: 'integer', label: 'Id' },
+        activiteit_id: { type: 'integer', label: 'Activiteit' },
+        omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
+        status: { type: 'text', label: 'Status', writes: { dataset: 'activiteit', field: 'status', key: 'activiteit_id' } },
+        productie_id: { type: 'text', label: 'Productie', writes: { dataset: 'activiteit', field: 'productie_id', key: 'activiteit_id' } },
+        start_at: { type: 'text', label: 'Start', writes: { dataset: 'activiteit', field: 'start_at', key: 'activiteit_id' } },
       },
     },
   },
@@ -149,21 +164,109 @@ describe('prefs', () => {
   })
 })
 
-describe('writes, as copied: the engine serves no route for them yet', () => {
-  it('send JSON to the row and prefs paths under /api', async () => {
-    fetcher.mockImplementation(async () => json({}))
+describe('writes', () => {
+  const stored = { id: 7, omschrijving: 'opbouw Gent', status: 'optie', productie_id: 1, plandag: '2026-10-12', custom: {}, lookups: { productie_id: null } }
+  /** A dagplanning row whose id is not its activiteit's: routing must read the key. */
+  const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, status: 'optie' }, lookups: {} }
+  const sent = () => fetcher.mock.calls.slice(1).map(([input, init]) => [decodeURIComponent(String(input)), init?.method ?? 'GET', init?.body])
 
-    await create('activiteit', { omschrijving: 'Montage' })
-    await update('activiteit', 7, { status: 'optie' })
+  it('send JSON to the row paths under /api, the title as the title column, and map the reply', async () => {
+    fetcher.mockImplementation(async (input, init) => (String(input) === '/api/schema' ? json(engine) : init?.method === 'DELETE' ? json({ id: 7 }) : json(stored)))
+
+    const made = await create('activiteit', { title: 'opbouw Gent' })
+    const changed = await update('activiteit', 7, { status: 'optie' })
     await remove('activiteit', 7)
     await savePrefs({ order: {}, last: {} })
 
-    expect(fetcher.mock.calls.map(([input, init]) => [String(input), init?.method, init?.body])).toEqual([
-      ['/api/rows/activiteit', 'POST', JSON.stringify({ omschrijving: 'Montage' })],
+    expect(made).toMatchObject({ id: 7, title: 'opbouw Gent', fields: { status: 'optie' } })
+    expect(changed.title).toBe('opbouw Gent')
+    expect(sent()).toEqual([
+      ['/api/rows/activiteit', 'POST', JSON.stringify({ omschrijving: 'opbouw Gent' })],
       ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ status: 'optie' })],
       ['/api/rows/activiteit/7', 'DELETE', undefined],
       ['/api/views/prefs', 'PUT', JSON.stringify({ order: {}, last: {} })],
     ])
+  })
+
+  it('update on dagplanning status sends PATCH /rows/activiteit/<row.activiteit_id> and re-reads the query row', async () => {
+    const reread = { id: 40, activiteit_id: 7, omschrijving: 'opbouw Gent', status: 'bevestigd', custom: {}, lookups: {} }
+    fetcher.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/schema') return json(engine)
+      return init?.method === 'PATCH' ? json({ ...stored, status: 'bevestigd' }) : json({ rows: [reread], total: 1 })
+    })
+
+    const row = await update('dagplanning', 40, { status: 'bevestigd' }, planned)
+
+    expect(sent()).toEqual([
+      ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ status: 'bevestigd' })],
+      ['/api/rows/dagplanning?filter={"id":40}', 'GET', undefined],
+    ])
+    expect(row).toMatchObject({ id: 40, title: 'opbouw Gent', fields: { activiteit_id: 7, status: 'bevestigd' } })
+  })
+
+  it('a re-read that finds no row, or fails, returns the patched row', async () => {
+    fetcher.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/schema') return json(engine)
+      return init?.method === 'PATCH' ? json(stored) : json({ rows: [], total: 0 })
+    })
+    const gone = await update('dagplanning', 40, { status: 'geannuleerd' }, planned)
+
+    fetcher.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/schema') return json(engine)
+      return init?.method === 'PATCH' ? json(stored) : new Response('Bad Gateway', { status: 502 })
+    })
+    const failed = await update('dagplanning', 40, { status: 'bevestigd' }, planned)
+
+    expect(gone).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'geannuleerd' } })
+    expect(failed).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'bevestigd' } })
+  })
+
+  describe('the wire format follows the engine column types', () => {
+    beforeEach(() => {
+      fetcher.mockImplementation(async (input, init) => {
+        if (String(input) === '/api/schema') return json(engine)
+        return init?.method === 'PATCH' ? json(stored) : json({ rows: [], total: 0 })
+      })
+    })
+
+    it('a relation pick sends the id, and clearing it sends null', async () => {
+      await update('activiteit', 7, { productie_id: [2] })
+      await update('activiteit', 7, { productie_id: [] })
+
+      expect(sent().map(([, , body]) => body)).toEqual([JSON.stringify({ productie_id: 2 }), JSON.stringify({ productie_id: null })])
+    })
+
+    it("clearing a datetime, an integer and a date sends null; a cleared text stays ''", async () => {
+      await update('activiteit', 7, { eind_at: '', personen: '', plandag: '', title: '' })
+
+      expect(sent()[0][2]).toBe(JSON.stringify({ eind_at: null, personen: null, plandag: null, omschrijving: '' }))
+    })
+
+    it("a mapped query column sends its target column's type", async () => {
+      await update('dagplanning', 40, { start_at: '' }, planned)
+      await update('dagplanning', 40, { productie_id: [3] }, planned)
+
+      expect(sent().filter(([, method]) => method === 'PATCH')).toEqual([
+        ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ start_at: null })],
+        ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ productie_id: 3 })],
+      ])
+    })
+  })
+
+  it("a query row without its key's value is refused read_only before any request", async () => {
+    const keyless: Row = { ...planned, fields: { activiteit_id: null, status: 'optie' } }
+
+    await expect(update('dagplanning', 40, { status: 'bevestigd' }, keyless)).rejects.toMatchObject({ code: 'read_only' })
+    expect(urls()).toEqual(['/api/schema'])
+  })
+
+  it('a 422 reaches the store as {code:\'refused\', message}', async () => {
+    fetcher.mockImplementation(async (input) =>
+      String(input) === '/api/schema' ? json(engine) : json({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' }, 422),
+    )
+
+    await expect(update('activiteit', 7, { status: 'bevestigd' })).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
+    await expect(update('dagplanning', 40, { status: 'bevestigd' }, planned)).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
   })
 
   it('reject with the not-found the engine answers', async () => {
