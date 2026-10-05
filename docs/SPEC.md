@@ -34,16 +34,16 @@ Read left to right: the domain registers its shapes with the engine; the engine 
 
 ## The engine
 
-The engine is a standalone TypeScript service on the Folio stack (Drizzle, SQLite) with its own REST API, plus the React grid that exists today pointed at that API instead of WordPress. Its TypeScript and React code is copied from ntdst-baseline's views app; no PHP is copied. The PHP behind the grid — `RowQuery`, `Lookups`, `Rollups`, `Writes` in ntdst-baseline — is replaced, not ported; the review showed it to be a thin wrapper over `WP_Query`. Baseline drops the views module and goes back to hardening. The same REST that serves the grid serves agents and any website that wants a view.
+The engine is a standalone TypeScript service on the Folio stack (Drizzle, SQLite) with its own REST API, plus the React grid that exists today pointed at that API instead of WordPress. Its TypeScript and React code is copied from ntdst-baseline's views app; no PHP is copied. The PHP behind the grid — `RowQuery`, `Lookups`, `Rollups`, `Writes` in ntdst-baseline — is replaced, not ported; the review showed it to be a thin wrapper over `WP_Query`. Baseline drops the views module and goes back to hardening. The same REST that serves the grid serves agents and any website that wants a view. `GET /rows/:source` returns at most 5000 rows by default; a requested limit above 5000 is refused with a 400; `total` is an exact count from a separate query, never the length of the page.
 
 **What it knows.** Four shapes, each registered by a domain package:
 
 | Shape | Declared as | Engine does with it |
 | --- | --- | --- |
 | Dataset | name, columns (type, nullable, default), relations (to another dataset), indexes, `custom` JSON on/off, owner columns by actor role (the column naming who a row belongs to, one per role that can own rows), an optional lifecycle (for a status column: allowed transitions, the roles that may make each, hooks), an optional record token (a token column plus the public subset of the row it exposes), one optional public-create action | Creates and migrates the table; exposes rows, schema and writes to the grid; keys Field, Revision and Attachment rows on it |
-| Query | name, the SQL view, its owner columns by actor role, a column map: each column read-only or `writes: {dataset, field, key}` | Creates the view in a versioned migration; exposes it to the grid exactly like a dataset, with mapped columns editable and the rest not |
+| Query | name, the SQL view (which exposes an `id` column), its owner columns by actor role, a column map: each column read-only or `writes: {dataset, field, key}` | Creates the view in a versioned migration; exposes it to the grid exactly like a dataset, with mapped columns editable and the rest not |
 | Writer | a callable per dataset: create / update / delete, free to refuse | The only path a row takes into a table; a dataset without one is read-only; a mapped query column routes its write to the target dataset's writer with `row[key]` |
-| Skin needs | which column is the date, which relation pair is the matrix join/away, optionally a match column and a label column for the matrix open column, which status column the board groups on | Renders calendar, matrix and board without knowing the domain |
+| Skin needs | which column is the title (the row's display name: the grid's first column, search, and the label of a relation pointing at it), which column is the date, which relation pair is the matrix join/away, optionally a match column and a label column for the matrix open column, which status column the board groups on | Renders calendar, matrix and board without knowing the domain |
 
 **Generic tables.** Five tables the engine owns because they are keyed on `((entity, record_id))` or on a view, never on a domain name:
 
@@ -72,6 +72,8 @@ The engine is a standalone TypeScript service on the Folio stack (Drizzle, SQLit
 | Owner | a record token on the owning dataset (a stable signed link), optional engine account linked from it | Read rows where the owner column for their role is their id; write only what the dataset's writer allows; run the lifecycle transitions their role may make |
 | Recipient | `share_token` of a SavedView or Publication, a record token, or no token for a declared public-create action | Read-only rendering of that view or snapshot, in its `format` |
 
+The engine rejects any request whose Host is not its bound address; this check stays when auth lands.
+
 Scoping is declared, not coded: a dataset or query names an owner column per actor role (person, customer, courier and so on), and the engine filters by the one that matches the caller's role. Writers receive the actor and may refuse on it; `refuse()` rules stay domain. Action links (confirm, decline, register) are single-purpose signed tokens with an expiry; the owner link itself only reads.
 
 **Custom fields.** Keys are addressed `entity.key`, never flattened. A query passes each joined dataset's `custom` through as its own column (`persoon_custom`, `activiteit_custom`); the grid flattens them using Field. Filters compile to `JSON_EXTRACT`; a hot key gets an expression index, not a schema change.
@@ -83,9 +85,9 @@ Scoping is declared, not coded: a dataset or query names an owner column per act
 A domain package implements exactly five things. If it needs a sixth, the engine is missing a shape, not the domain a feature.
 
 1. **Datasets.** One declaration per table: columns, relations, indexes, owner columns by actor role, an optional lifecycle, an optional record token with its public projection, whether it carries `custom`, and which parent relation Attachment and custom values inherit along.
-2. **Queries.** One SQL file per view plus its column map. The SQL joins datasets, other queries and the engine's generic tables. Each column either reads or declares its write target.
+2. **Queries.** One SQL file per view plus its column map. Every query exposes an `id` column, so each row has an identity. The SQL joins datasets, other queries and the engine's generic tables. Each column either reads or declares its write target.
 3. **Writers.** One module per dataset with create, update and delete, free to refuse. The rules that live in atelier's PHP repositories today — one of person or name, one assignment per person per activity — move here as they are; the classes do not. Domain rules live here and nowhere else.
-4. **Skin needs.** Which column is the date for calendar, which relation pair the matrix uses and optionally its match and label columns, which status column the board groups on. One line each.
+4. **Skin needs.** Which column is the title, which column is the date for calendar, which relation pair the matrix uses and optionally its match and label columns, which status column the board groups on. One line each.
 5. **Seeds and parameters.** Sjabloon rows, Rol rows, the organisation's day-line hour and working-time limits — all data seeded by the package, editable by the admin.
 
 What a domain package does **not** contain: grid components, saved-view logic, publication, share links, audit, custom-field rendering. Those belong to the engine, once.
@@ -102,7 +104,7 @@ The engine owns its data. One database per engine instance; nothing of the plann
 | --- | --- | --- |
 | Database | SQLite through Drizzle, as Folio does; Postgres behind the same schema when a client's size or hosting asks for it | Theatre-scale data is thousands of rows; SQLite handles it on one file, and both engines support the views and JSON functions the queries need |
 | Datasets | Real tables with real columns, foreign keys between datasets, indexes per table: Activiteit `(plandag)`, Toewijzing `(persoon_id)` and `(activiteit_id)`, Attachment and Revision `((entity, record_id))`. persoon_dag joins across tables, so no index spans two | Every query is a join on a column; no pivot, no serialised id list |
-| Queries | SQL views created by versioned migrations from `migrations/views/*.sql` | A view is the contract between a query and the grid; the grid reads it like a table |
+| Queries | SQL views created at startup from each query's `.sql` file in its domain package, each recorded with its SQL hash in `_migrations`; a changed hash drops and recreates the view | A view is the contract between a query and the grid; the grid reads it like a table |
 | Custom fields | One `custom` JSON column per dataset, declared in Field, `json_extract` in filters, an expression index on a hot key | Real columns stay real; the admin never changes a table |
 | Derived columns | `plandag` is the one that is stored, computed by the writer from `start_at` and the organisation's day-line hour | Grouping and indexing on it is the whole grid; everything else stays computed in a view |
 | What was in WordPress | A one-off export from the private Laika repo to JSON, loaded by the engine's generic import command, with a `legacy_post_id` kept for one release | The existing Laika data moves once; after that the private CPTs are deleted |
