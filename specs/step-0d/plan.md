@@ -23,6 +23,8 @@ First working version: Task 1a — `GET /api/rows/<fixture>?offset=2` and a fixt
 - Every existing database needs `--fresh` (SavedView's DDL changes; ALTER is step 0e's entry condition).
 - Last write wins (0b) stands for views too.
 - 0e requirement recorded: the permission check runs before the in-use check, with a test.
+- Checkpoint after Task 4 (Stefan, 2026-10-05): the matrix's ledger rows and line counts are reported before Task 5 starts; if the matrix's production rework exceeds about 150 lines, execution stops for Stefan's answer.
+- The proposed spec diff states that last write wins also applies to views (Stefan, 2026-10-05).
 
 ## Global Constraints
 
@@ -63,9 +65,9 @@ First working version: Task 1a — `GET /api/rows/<fixture>?offset=2` and a fixt
 | Grid: matrix and via titles | the app against `/api` | unit · `apps/grid/src/engine.test.ts`, `api.test.ts`, `matrix/*.test.ts(x)`, `ui/App.test.tsx` | matrix-cell-persists |
 | Grid: saved views | the app against `/api/views` | unit · `apps/grid/src/api.test.ts`, `ui/views.test.ts`, `ui/App.test.tsx` | view-saved-after-reload, in-filter-applies |
 | Grid: parity | the app | unit · `grid/columns.test.ts`, `grid/newRow.test.ts`, `api.test.ts` | datetime-shown, new-without-title, relation-beyond-page, in-filter-applies |
-| Gate | `bun run gate` | e2e · `e2e/step-0d.spec.ts` · `bun run e2e` | all |
+| Gate | `bun run gate` | e2e · `e2e/step-0d.spec.ts` · `bun run e2e` | all, incl. matrix-two-activities-undo and foreign-view-hidden |
 
-E2E flows: **matrix-cell-persists** — open "Toewijzingen per activiteit" (it opens as a matrix), type `b` in an empty person cell, reload, the cell shows ✓ and `GET /api/rows/toewijzing` holds it with `state: bevestigd`; clear it: the toewijzing is soft-deleted; a person with a Beschikbaarheid covering that week shows the away mark. **view-saved-after-reload** — change a chip on Planning, "Save as new" "Mijn planning", reload: listed, opens with the chip, `GET /api/views` holds it with `mine: true`; a width set before saving is still set after reload. **person-to-name** — in Toewijzingen type a name in the naam cell of a person row: one PATCH, `persoon_id` null, the title shows the name. **datetime-shown** — Planning's Start cell reads a formatted date and `HH:mm`. **in-filter-applies** — the seeded "Optie of bevestigd" view shows only those, with "+ 1 vaste filter"; adding a Status chip keeps both conditions. **new-without-title** — "+ New" on Planning focuses Productie first. **relation-beyond-page** — the e2e Vite server sets `VITE_RECORDS_PAGE_SIZE=2`; the productie chip lists every productie, read in several `limit=2&offset=…` requests the test counts.
+E2E flows: **matrix-cell-persists** — open "Toewijzingen per activiteit" (it opens as a matrix), type `b` in an empty person cell, reload, the cell shows ✓ and `GET /api/rows/toewijzing` holds it with `state: bevestigd`; clear it: the toewijzing is soft-deleted; a person with a Beschikbaarheid covering that week shows the away mark. **view-saved-after-reload** — change a chip on Planning, "Save as new" "Mijn planning", reload: listed, opens with the chip, `GET /api/views` holds it with `mine: true`; a width set before saving is still set after reload. **person-to-name** — in Toewijzingen type a name in the naam cell of a person row: one PATCH, `persoon_id` null, the title shows the name. **datetime-shown** — Planning's Start cell reads a formatted date and `HH:mm`. **in-filter-applies** — the seeded "Optie of bevestigd" view shows only those, with "+ 1 vaste filter"; adding a Status chip keeps both conditions. **new-without-title** — "+ New" on Planning focuses Productie first. **matrix-two-activities-undo** — in one session, give one person cells on two different activiteiten (type `b` on the first, `u` on the second), press undo once: the second cell is gone (its toewijzing soft-deleted), the first stays ✓; reload: same state in `GET /api/rows/toewijzing`. **foreign-view-hidden** — a `beforeAll` inserts one unshared view owned by id 7 into the e2e database (`bun -e` with `bun:sqlite` on `e2e/.tmp/e2e.db`, after the engine started); `GET /api/views` never lists it and the rail never shows its name. **relation-beyond-page** — the e2e Vite server sets `VITE_RECORDS_PAGE_SIZE=2`; the productie chip lists every productie, read in several `limit=2&offset=…` requests the test counts.
 
 ## Review Focus
 
@@ -177,6 +179,7 @@ if (sets('naam') && filled(values.naam) && !sets('persoon_id')) values.persoon_i
 
 - [ ] **Step 1: Tests first** — `tableDefOf` builds join/away; `rollups.cells` from `cells`; a cell create sends one id per relation (already the 0b wire format: assert it); clearing sends DELETE; a 422 reverts with the writer's message; an away period starting before the window marks the week; a via title is not editable and sorting never sends `title`; on Toewijzing `naam` is an editable field and the title is not. Run → FAIL.
 - [ ] **Step 2: Implement**, **Step 3: Ledger**, **Step 4: Run** grid tests + `bun run check` + `rm -rf e2e/.tmp && bun run e2e`, **Step 5: Commit** — `feat(grid): the matrix on the engine, and titles through a relation`.
+- [ ] **Checkpoint:** the controller reports the matrix's ledger rows and line counts to Stefan before Task 5; above about 150 production lines of matrix rework, stop for his answer.
 
 ### Task 5: Grid — saved views on the engine
 
@@ -200,8 +203,8 @@ if (sets('naam') && filled(values.naam) && !sets('persoon_id')) values.persoon_i
 - Create: `e2e/step-0d.spec.ts`
 - Modify: earlier e2e specs only if the matrix seed, `shared` or the page size break them (state which)
 
-- [ ] **Step 1: Write the seven flows**; each uses its own rows; no sleeps.
+- [ ] **Step 1: Write the nine flows** (the seven plus matrix-two-activities-undo and foreign-view-hidden); each uses its own rows; no sleeps.
 - [ ] **Step 2: Run** `rm -rf e2e/.tmp && bun run e2e` → all pass; `bun run gate` → 0.
 - [ ] **Step 3: Commit** — `test(e2e): step 0d gate in a real browser`.
 
-Then stop: the Close (whole-branch review + security-sentinel, one fix wave), the report (matrix ledger rows first), and the proposed `docs/SPEC.md` diff (matrix declaration incl. `away.end` and `matrix_join`, title via relation, offset, SavedView `shared` without `scope`, the 0e permission-before-in-use requirement).
+Then stop: the Close (whole-branch review + security-sentinel, one fix wave), the report (matrix ledger rows first), and the proposed `docs/SPEC.md` diff (matrix declaration incl. `away.end` and `matrix_join`, title via relation, offset, SavedView `shared` without `scope`, last write wins also for views, the 0e permission-before-in-use requirement).
