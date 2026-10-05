@@ -115,8 +115,19 @@ export const persoon = defineDataset({
 export const toewijzing = defineDataset({
   name: 'toewijzing',
   label: 'Toewijzingen',
-  title: 'naam',
+  title: { via: 'persoon_id', else: 'naam' },
   custom: true,
+  matrix: {
+    down: 'activiteit_id',
+    across: 'persoon_id',
+    label: 'naam',
+    cell: 'state',
+    note: 'notitie',
+    keys: { u: 'uitgenodigd', b: 'bevestigd', g: 'geweigerd', x: 'geannuleerd' },
+    marks: { uitgenodigd: '?', bevestigd: '✓', geweigerd: '✗', geannuleerd: '–' },
+    count: 'bevestigd',
+    away: { dataset: 'beschikbaarheid', across: 'persoon_id', label: 'reden', end: 'eind_at' },
+  },
   columns: {
     activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
     persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
@@ -141,7 +152,8 @@ export const toewijzing = defineDataset({
 export const beschikbaarheid = defineDataset({
   name: 'beschikbaarheid',
   label: 'Beschikbaarheden',
-  title: 'reden',
+  title: { via: 'persoon_id', else: 'reden' },
+  date: 'start_at',
   custom: true,
   columns: {
     persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },

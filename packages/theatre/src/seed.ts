@@ -97,6 +97,7 @@ const toewijzingen = [
 const beschikbaarheden = [
   { persoon_id: 3, start_at: '2026-10-14T00:00', eind_at: '2026-10-14T23:59', reden: 'Familiefeest' },
   { persoon_id: 2, start_at: '2026-10-19T09:00', eind_at: '2026-10-19T13:00', reden: 'Tandarts' },
+  { persoon_id: 1, start_at: '2026-10-09T09:00', eind_at: '2026-10-12T12:00', reden: 'Studiedag' },
 ]
 
 export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void {
@@ -138,6 +139,26 @@ export const views: SavedViewSeed[] = [
     sort: ['start_at'],
     group_by: 'plandag',
     visible_fields: ['productie', 'soort', 'start_at', 'status'],
+  },
+  {
+    name: 'Toewijzingen per activiteit',
+    source_type: 'dataset',
+    source: 'activiteit',
+    skin: 'matrix',
+    filters: {},
+    sort: ['start_at'],
+    group_by: null,
+    visible_fields: ['productie_id', 'soort', 'start_at', 'status'],
+  },
+  {
+    name: 'Optie of bevestigd',
+    source_type: 'dataset',
+    source: 'activiteit',
+    skin: 'table',
+    filters: { status: { $in: ['optie', 'bevestigd'] } },
+    sort: ['start_at'],
+    group_by: null,
+    visible_fields: ['productie_id', 'soort', 'start_at', 'eind_at', 'status', 'plaats'],
   },
   {
     name: 'Organisaties',
