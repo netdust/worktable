@@ -17,7 +17,9 @@ const sizeCap = bodyLimit({
 // Decides before the body is read: a CORS-simple text/plain POST from another page never reaches a writer.
 export function writeGuard(): MiddlewareHandler {
   return createMiddleware(async (c, next) => {
-    if (FOREIGN_SITES.has(c.req.header('sec-fetch-site') ?? '')) {
+    const site = c.req.header('sec-fetch-site')?.toLowerCase()
+    // A browser without fetch metadata still sends Origin on a write: refuse it rather than trust it.
+    if (FOREIGN_SITES.has(site ?? '') || (site === undefined && c.req.header('origin') !== undefined)) {
       return deny(c, 403, 'forbidden_site', 'Writes from another site are not allowed')
     }
     if (c.req.method !== 'DELETE' && !isJson(c.req.header('content-type'))) {

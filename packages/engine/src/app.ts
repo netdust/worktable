@@ -41,7 +41,7 @@ async function bodyOf(c: Context): Promise<Record<string, unknown>> {
 
 function writeRoutes(app: Hono, store: Store): void {
   const { domain } = store
-  app.on(['POST', 'PATCH', 'DELETE'], '/rows/*', writeGuard())
+  app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
 
   app.post('/rows/:dataset', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'create')

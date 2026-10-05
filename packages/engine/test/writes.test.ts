@@ -141,8 +141,8 @@ describe('write denials', () => {
 
 type Revision = {
   field: string
-  old: string | null
-  new: string | null
+  old: unknown
+  new: unknown
   actor_id: number
   at: string
   batch_id: string
@@ -171,11 +171,11 @@ describe('writes', () => {
     })
     const rows = await revisionsOf('notitie', 2)
     expect(changes(rows)).toEqual([
-      ['project_id', null, '1'],
-      ['tekst', null, '"hallo"'],
-      ['lengte', null, '5'],
-      ['klaar', null, 'true'],
-      ['soort', null, '"kort"'],
+      ['project_id', null, 1],
+      ['tekst', null, 'hallo'],
+      ['lengte', null, 5],
+      ['klaar', null, true],
+      ['soort', null, 'kort'],
     ])
     expect(new Set(rows.map((r) => r.batch_id)).size).toBe(1)
   })
@@ -186,8 +186,8 @@ describe('writes', () => {
     expect(res.body).toMatchObject({ id: 1, tekst: 'ander', lengte: 5 })
     const rows = await revisionsOf('notitie', 1)
     expect(changes(rows)).toEqual([
-      ['tekst', '"eerste"', '"ander"'],
-      ['lengte', '6', '5'],
+      ['tekst', 'eerste', 'ander'],
+      ['lengte', 6, 5],
     ])
     expect(rows.map((r) => r.actor_id)).toEqual([0, 0])
     expect(rows[0]?.batch_id).toBe(rows[1]?.batch_id as string)
@@ -196,8 +196,8 @@ describe('writes', () => {
 
   test('a create revises the columns the database filled with a default, old null', async () => {
     await post('notitie', { project_id: 1, tekst: 'x' })
-    expect(changes(await revisionsOf('notitie', 2))).toContainEqual(['klaar', null, 'false'])
-    expect(changes(await revisionsOf('notitie', 2))).toContainEqual(['soort', null, '"kort"'])
+    expect(changes(await revisionsOf('notitie', 2))).toContainEqual(['klaar', null, false])
+    expect(changes(await revisionsOf('notitie', 2))).toContainEqual(['soort', null, 'kort'])
   })
 
   test('valid date, datetime with and without seconds, and option values are stored', async () => {
@@ -210,10 +210,14 @@ describe('writes', () => {
     await patch('notitie/1', { extra: { a: [1, 'b'] }, klaar: true })
     await patch('notitie/1', { extra: { a: 2 }, klaar: false })
     expect(changes(await revisionsOf('notitie', 1))).toEqual([
-      ['klaar', 'false', 'true'],
-      ['extra', null, '{"a":[1,"b"]}'],
-      ['klaar', 'true', 'false'],
-      ['extra', '{"a":[1,"b"]}', '{"a":2}'],
+      ['klaar', false, true],
+      ['extra', null, { a: [1, 'b'] }],
+      ['klaar', true, false],
+      ['extra', { a: [1, 'b'] }, { a: 2 }],
+    ])
+    expect(sqlite.query("SELECT old, new FROM revision WHERE field = 'extra' ORDER BY id").all()).toEqual([
+      { old: null, new: '{"a":[1,"b"]}' },
+      { old: '{"a":[1,"b"]}', new: '{"a":2}' },
     ])
   })
 
@@ -227,7 +231,7 @@ describe('writes', () => {
   test('a writer-derived readonly column is stored and revised', async () => {
     await patch('notitie/1', { tekst: 'veel langer', lengte: 1 })
     expect(sqlite.query('SELECT lengte FROM notitie WHERE id = 1').get()).toEqual({ lengte: 11 })
-    expect(changes(await revisionsOf('notitie', 1))).toContainEqual(['lengte', '6', '11'])
+    expect(changes(await revisionsOf('notitie', 1))).toContainEqual(['lengte', 6, 11])
   })
 
   test('delete is soft: the row leaves /rows, deleted_at is revised', async () => {
@@ -235,17 +239,41 @@ describe('writes', () => {
     expect((await request('GET', '/api/rows/notitie')).body.total).toBe(0)
     const stored = sqlite.query('SELECT deleted_at FROM notitie WHERE id = 1').get() as { deleted_at: string }
     expect(stored.deleted_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect(changes(await revisionsOf('notitie', 1))).toEqual([['deleted_at', null, json(stored.deleted_at)]])
+    expect(changes(await revisionsOf('notitie', 1))).toEqual([['deleted_at', null, stored.deleted_at]])
   })
 
   test('GET /api/revisions returns them oldest first; unknown dataset 404', async () => {
     await patch('notitie/1', { tekst: 'twee' })
     await patch('notitie/1', { tekst: 'drie' })
-    expect(changes(await revisionsOf('notitie', 1)).map(([, , n]) => n)).toEqual(['"twee"', '4', '"drie"'])
+    expect(changes(await revisionsOf('notitie', 1)).map(([, , n]) => n)).toEqual(['twee', 4, 'drie'])
     expect(await revisions('notitie', 42)).toEqual({ status: 200, body: { revisions: [] } })
-    for (const name of ['nope', 'revision', 'saved_view', 'per_project']) {
-      expect((await revisions(name, 1)).body.code).toBe('unknown_source')
+    for (const name of ['nope', 'revision', 'saved_view', 'per_project', 'taak']) {
+      expect(await revisions(name, 1)).toMatchObject({ status: 404, body: { code: 'unknown_source' } })
     }
+  })
+
+  test('GET /api/revisions answers at most 5000, the oldest first', async () => {
+    const add = sqlite.query(
+      "INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id) VALUES ('notitie', 1, 'tekst', NULL, ?, 0, 'x', 'b')",
+    )
+    sqlite.transaction(() => {
+      for (let i = 0; i < 5001; i++) add.run(json(`v${i}`))
+    })()
+    const rows = await revisionsOf('notitie', 1)
+    expect(rows.length).toBe(5000)
+    expect([rows[0]?.new, rows[4999]?.new]).toEqual(['v0', 'v4999'])
+  })
+
+  test('a body naming actor_id and batch_id does not forge the audit; POST /api/rows/revision is 404', async () => {
+    await patch('notitie/1', { tekst: 'ander', actor_id: 99, batch_id: 'x' })
+    const rows = await revisionsOf('notitie', 1)
+    expect(rows.map((r) => r.actor_id)).toEqual([0, 0])
+    expect(rows.every((r) => /^[0-9a-f-]{36}$/.test(r.batch_id))).toBe(true)
+    await denied(
+      () => post('revision', { entity: 'notitie', record_id: 1, field: 'tekst', actor_id: 99 }),
+      404,
+      'unknown_source',
+    )
   })
 
   test('/schema marks a dataset with an update writer and a query with a mapped column writable, others not', async () => {

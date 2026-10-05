@@ -166,17 +166,19 @@ export interface Sent {
   type?: string | null
   site?: string
   host?: string
+  origin?: string
 }
 
 export function send(app: { request: (path: string, init: RequestInit) => Response | Promise<Response> }) {
   return async (
     method: string,
     path: string,
-    { body, type = 'application/json', site, host = '127.0.0.1:4310' }: Sent = {},
+    { body, type = 'application/json', site, host = '127.0.0.1:4310', origin }: Sent = {},
   ) => {
     const headers: Record<string, string> = { host }
     if (type) headers['content-type'] = type
     if (site) headers['sec-fetch-site'] = site
+    if (origin) headers.origin = origin
     const res = await app.request(path, { method, headers, body })
     // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
     return { status: res.status, body: (await res.json()) as Record<string, any> }

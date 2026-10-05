@@ -253,13 +253,18 @@ export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow
   return withLookups(store.db, store.domain, dataset, [raw])[0] as EngineRow
 }
 
+const MAX_REVISIONS = 5000
+
+const parsed = (raw: string | null): unknown => (raw === null ? null : JSON.parse(raw))
+
 export function readRevisions(store: Store, name: string, id: number): Values[] {
-  if (!store.domain.datasets.some((d) => d.name === name)) {
+  if (!store.domain.datasets.some((d) => d.name === name) || !writerOf(store.domain, name)) {
     throw new ApiError(404, 'unknown_source', `unknown source "${name}"`)
   }
-  return store.sqlite
+  const rows = store.sqlite
     .query(
-      'SELECT field, old, new, actor_id, at, batch_id FROM revision WHERE entity = ? AND record_id = ? ORDER BY id',
+      'SELECT field, old, new, actor_id, at, batch_id FROM revision WHERE entity = ? AND record_id = ? ORDER BY id LIMIT ?',
     )
-    .all(name, id) as Values[]
+    .all(name, id, MAX_REVISIONS) as Stored[]
+  return rows.map((r) => ({ ...r, old: parsed(r.old as string | null), new: parsed(r.new as string | null) }))
 }

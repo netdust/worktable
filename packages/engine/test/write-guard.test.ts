@@ -41,6 +41,17 @@ describe('write guard denials', () => {
     )
   }
 
+  test.each(['Cross-Site', 'SAME-SITE'])('Sec-Fetch-Site: %s in any case is 403 forbidden_site', (site) =>
+    denied('PATCH', '/api/rows/notitie/1', { ...writes[1]?.[2], site }, 403, 'forbidden_site'),
+  )
+
+  test.each(writes)('Origin without Sec-Fetch-Site is 403 forbidden_site on %s', (method, path, sent) =>
+    denied(method, path, { ...sent, origin: 'http://localhost:3999' }, 403, 'forbidden_site'),
+  )
+
+  test('a cross-site POST /api/views is 403 forbidden_site, not 404', () =>
+    denied('POST', '/api/views', { body: json({ name: 'x' }), site: 'cross-site' }, 403, 'forbidden_site'))
+
   test('body over 64 kB is 413', () =>
     denied('POST', '/api/rows/notitie', { body: json({ tekst: 'a'.repeat(70_000) }) }, 413, 'body_too_large'))
 
@@ -63,6 +74,11 @@ describe('write guard passes', () => {
     ['absent', undefined],
   ])('Sec-Fetch-Site %s is accepted', async (_, site) => {
     expect((await request('PATCH', '/api/rows/notitie/1', { ...writes[1]?.[2], site })).status).toBe(200)
+  })
+
+  test('Origin with Sec-Fetch-Site same-origin is accepted', async () => {
+    const sent = { ...writes[1]?.[2], site: 'same-origin', origin: 'http://127.0.0.1:4310' }
+    expect((await request('PATCH', '/api/rows/notitie/1', sent)).status).toBe(200)
   })
 
   test('a body-less DELETE needs no content type', async () => {
