@@ -5,6 +5,7 @@ export type {
   ColumnType,
   DatasetDecl,
   Domain,
+  MatrixDecl,
   QueryDecl,
   SavedViewSeed,
   WriteContext,

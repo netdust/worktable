@@ -22,6 +22,7 @@ export interface RowsParams {
   to: string | null
   limit: number
   offset: number
+  cells: boolean
 }
 
 export const MAX_LIMIT = 5000
@@ -35,6 +36,7 @@ const shape = z.object({
   to: day.optional(),
   limit: z.string().optional(),
   offset: z.string().optional(),
+  cells: z.string().optional(),
 })
 
 export function isRealDate(value: string): boolean {
@@ -96,11 +98,14 @@ function parseGroup(raw: string | undefined, source: Source): string | null {
 export function parseRowsParams(source: Source, query: Record<string, string | undefined>): RowsParams {
   const parsed = shape.safeParse(query)
   if (!parsed.success) throw new ApiError(400, 'bad_window', 'from and to must be YYYY-MM-DD')
-  const { filter, sort, group, from, to, limit, offset } = parsed.data
+  const { filter, sort, group, from, to, limit, offset, cells } = parsed.data
   for (const day of [from, to]) {
     if (day && !isRealDate(day)) throw new ApiError(400, 'bad_window', `"${day}" is not a calendar date`)
   }
   if ((from || to) && !source.date) throw new ApiError(400, 'no_date_column', `"${source.name}" has no date column`)
+  if (cells === '1' && !(from && to)) {
+    throw new ApiError(400, 'window_required', 'cells need both from and to')
+  }
   return {
     filter: parseFilter(filter),
     sort: parseSort(sort, source),
@@ -109,5 +114,6 @@ export function parseRowsParams(source: Source, query: Record<string, string | u
     to: to ?? null,
     limit: parseLimit(limit),
     offset: parseOffset(offset),
+    cells: cells === '1',
   }
 }

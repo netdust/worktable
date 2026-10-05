@@ -1,7 +1,7 @@
 import { and, asc, count, desc, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import type { Domain } from './declare'
+import type { DatasetDecl, Domain, MatrixDecl } from './declare'
 import { filterWhere } from './filter'
 import type { RowsParams } from './params'
 import { type Source, sourceOf } from './registry'
@@ -100,4 +100,36 @@ export function readRows(
     .all() as Raw[]
   const counted = db.select({ total: count() }).from(table).where(where).get()
   return { rows: withLookups(db, domain, source, raws), total: counted?.total ?? 0 }
+}
+
+const CHUNK = 500
+
+export function matrixOf(domain: Domain, source: Source): { join: DatasetDecl; matrix: MatrixDecl } | null {
+  const join = domain.datasets.find((d) => d.matrix?.down && d.columns[d.matrix.down]?.relation === source.name)
+  return join?.matrix ? { join, matrix: join.matrix } : null
+}
+
+export function cellsOf(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  { join, matrix }: NonNullable<ReturnType<typeof matrixOf>>,
+  downIds: number[],
+): Map<number, EngineRow[]> {
+  const table = tableOf(join)
+  const raws: Raw[] = []
+  for (let i = 0; i < downIds.length; i += CHUNK) {
+    const ids = downIds.slice(i, i + CHUNK)
+    const chunk = db
+      .select()
+      .from(table)
+      .where(and(isNull(columnOf(table, 'deleted_at')), inArray(columnOf(table, matrix.down), ids)))
+      .orderBy(asc(columnOf(table, 'id')))
+      .all() as Raw[]
+    raws.push(...chunk)
+  }
+  const cells = new Map<number, EngineRow[]>(downIds.map((id) => [id, []]))
+  withLookups(db, domain, join, raws).forEach((row, i) => {
+    cells.get((raws[i] as Raw)[matrix.down] as number)?.push(row)
+  })
+  return cells
 }

@@ -15,6 +15,18 @@ export interface ColumnDecl {
 
 export type TitleDecl = string | { via: string; else: string }
 
+export interface MatrixDecl {
+  down: string
+  across: string
+  label?: string
+  cell: string
+  note?: string
+  keys: Record<string, string>
+  marks: Record<string, string>
+  count: string
+  away?: { dataset: string; across: string; label: string; end: string }
+}
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
@@ -24,6 +36,7 @@ export interface DatasetDecl {
   columns: Record<string, ColumnDecl>
   indexes?: string[][]
   custom: boolean
+  matrix?: MatrixDecl
 }
 
 export interface QueryDecl {

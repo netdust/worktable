@@ -4,7 +4,7 @@ import { type Context, Hono } from 'hono'
 import type { Domain, SavedViewSeed } from './declare'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { readRows } from './rows'
+import { cellsOf, matrixOf, readRows } from './rows'
 import { writeGuard } from './write-guard'
 import { parseBody, parseId, readRevisions, rowOf, runWrite, type Store, writableOf } from './writes'
 
@@ -95,6 +95,8 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
           title: typeof s.title === 'string' ? s.title : s.title.else,
           ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
           date: s.date ?? null,
+          ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
+          ...(matrixOf(domain, s) ? { matrix_join: matrixOf(domain, s)?.join.name } : {}),
           columns: s.columns,
           writable: isWritable(domain, s),
           deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
@@ -108,7 +110,18 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
     const name = c.req.param('source')
     const source = sourceOf(domain, name)
     if (!source) throw new ApiError(404, 'unknown_source', `unknown source "${name}"`)
-    return c.json(readRows(db, domain, source, parseRowsParams(source, c.req.query())))
+    const params = parseRowsParams(source, c.req.query())
+    const found = params.cells ? matrixOf(domain, source) : null
+    if (params.cells && !found) throw new ApiError(400, 'no_matrix', `"${name}" is not the down source of a matrix`)
+    const read = readRows(db, domain, source, params)
+    if (!found) return c.json(read)
+    const cells = cellsOf(
+      db,
+      domain,
+      found,
+      read.rows.map((r) => r.id),
+    )
+    return c.json({ ...read, rows: read.rows.map((r) => ({ ...r, cells: cells.get(r.id) })) })
   })
 
   writeRoutes(app, { sqlite, db, domain })
