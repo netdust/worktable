@@ -16,7 +16,8 @@ First working version: Task 2 — `bun test packages/engine/test/writes.test.ts`
 ## Decisions
 
 - **Last write wins; no row versioning.** Two planners editing the same field: the later PATCH is stored, and both writes appear in Revision. There is no version column, no `If-Match`, no conflict answer. Lifecycle transitions (step 2) bring the one conditional update the spec asks for. — Stefan, 2026-10-05.
-- **Foreign keys are enforced on the serving connection.** `PRAGMA foreign_keys = ON` is set by `migrate()` (`migrate.ts:48`) on the connection `serve.ts` passes to `createEngine`; `createEngine` sets it too, so writes never depend on `migrate` having run on that connection. A relation to a missing or soft-deleted row is refused before the INSERT/UPDATE (the FK alone does not see soft deletes).
+- **Foreign keys are enforced on the serving connection.** `PRAGMA foreign_keys = ON` is set by `migrate()` (`migrate.ts:51`) on the connection `serve.ts` passes to `createEngine`; `createEngine` sets it too, so writes never depend on `migrate` having run on that connection. A relation to a missing or soft-deleted row is refused before the INSERT/UPDATE (the FK alone does not see soft deletes).
+- **A relation column an update does not touch is not re-checked;** a row may keep pointing at a productie soft-deleted later (soft-deleting productie has no route in 0b).
 
 ## Global Constraints
 
@@ -36,7 +37,7 @@ First working version: Task 2 — `bun test packages/engine/test/writes.test.ts`
 
 **Attacks.**
 1. **Cross-site write from a page the planner visits** — a hostile page sends `fetch('http://127.0.0.1:4310/api/rows/activiteit', {method:'POST', body: '{…}'})` as `text/plain` (a CORS-simple request, no preflight, correct Host) → **POST and PATCH require `Content-Type: application/json`, and every write route refuses `Sec-Fetch-Site: same-site` or `cross-site`, 415 / 403, before the body is read.** A preflight alone is not relied on: behind Vite, Vite's default CORS answers preflights for any localhost origin.
-2. **Cross-site write through the Vite proxy** — a page on another local port sends a JSON PATCH to `127.0.0.1:5173/api/…`; Vite answers its preflight and forwards it, and `changeOrigin` rewrites Host → **the browser marks that request `Sec-Fetch-Site: same-site` (or `cross-site`), the proxy forwards the header untouched, and the engine refuses it 403 `forbidden_site`.** Proven through the proxy in e2e.
+2. **Cross-site write through the Vite proxy** — a page on another local port sends a JSON PATCH to `127.0.0.1:5173/api/…`; Vite answers its preflight and forwards it, and `changeOrigin` rewrites Host → **the browser marks that request `Sec-Fetch-Site: same-site` (or `cross-site`), the proxy forwards the header untouched, and the engine refuses it 403 `forbidden_site`; a request carrying `Origin` without `Sec-Fetch-Site` is refused (older browsers fail closed).** Proven through the proxy in e2e.
 3. **Writing columns the writer did not mean to expose** — a body with `id`, `deleted_at`, `created_at`, `custom`, `plandag` or an undeclared key → **`cutBody()` keeps only declared non-readonly columns; the rest is dropped before the writer sees it.**
 4. **Wrong-typed values reaching SQLite** — `{"productie_id":"1 OR 1=1"}`, `{"start_at":{"a":1}}`, `{"status":[1]}`, a 1 MB string → **`checkValues()` checks each kept value against its column type and nullability (400 `bad_value`); values are bound parameters; Hono's body is read once with a size cap of 64 kB (413 `body_too_large`).**
 5. **Bypassing the writer** — PATCH a dataset with no writer, a generic table (`revision`, `saved_view`, `_migrations`), or a query → **`writableOf()` resolves only domain datasets with a registered writer and that operation; everything else 404 `unknown_source` or 405 `read_only`.** A create missing a non-nullable, no-default column is 400 `bad_value` naming it, checked after the writer returns, never a 500 from the INSERT.
@@ -47,9 +48,9 @@ First working version: Task 2 — `bun test packages/engine/test/writes.test.ts`
 9. **DNS rebinding** — a page whose name rebinds to 127.0.0.1 sends its own Host → **the 0a Host check (`app.ts`, 403 `forbidden_host`) is what stops it, for reads and writes; it stays.** `Sec-Fetch-Site` does not: a rebound page is `same-origin` to itself.
 10. **A relation to a row that is missing or soft-deleted** — `{"productie_id": 999}` or the id of a soft-deleted productie on any dataset → **`checkRelations()` runs on the values the writer returns, for every relation column of any dataset: 400 `bad_relation` naming the column; the writer's own refusal (e.g. theatre's Dutch message) comes first when it checks; never a 500 from the FK.**
 
-**Mitigations — where they live.** `writeGuard()` in `packages/engine/src/write-guard.ts` (1, 2, 4's size cap via `hono/body-limit`); `cutBody()` / `checkValues()` / `checkRelations()` / `writableOf()` / `runWrite()` in `packages/engine/src/writes.ts` (3, 4, 5, 6, 7, 10); the Host check in `app.ts` (9); `parseRowsParams()` in `params.ts` (8).
+**Mitigations — where they live.** `writeGuard()` in `packages/engine/src/write-guard.ts` (1, 2, 4's size cap via `hono/body-limit`); `cutBody()` / `checkValues()` / `checkRelations()` / `writableOf()` / `runWrite()` in `packages/engine/src/writes.ts` (3, 4, 5, 6, 7, 10); `app.ts` (direct) + Vite `allowedHosts` (proxied; `changeOrigin` hides the Host from the engine) (9); `parseRowsParams()` in `params.ts` (8).
 
-**Deferrals.** No authentication: every write runs as the temporary dev actor, so any local process — and any page served from an allowed origin — can write; acceptable while bound to 127.0.0.1 with invented fixtures; auth replaces `dev-actor.ts` in step 0. No rate limit on writes, same reason. Pre-existing read exposure (0a): Vite's default CORS lets any page on a local port read `/api/rows` through the dev proxy; reads stay unguarded until auth. Non-browser clients (curl) send no `Sec-Fetch-Site` and are allowed: they cannot be driven by a web page. A writer's own code is trusted (domain code). Revision `old`/`new` are stored as JSON text of the stored values; no redaction (no secret columns exist).
+**Deferrals.** No authentication: every write runs as the temporary dev actor, so any local process — and any page served from an allowed origin — can write; acceptable while bound to 127.0.0.1 with invented fixtures; auth replaces `dev-actor.ts` in step 0. No rate limit on writes, same reason. Pre-existing read exposure (0a): Vite's default CORS lets any page on a local port read `/api/rows` through the dev proxy; reads stay unguarded until auth. Non-browser clients (curl) send no `Sec-Fetch-Site` and are allowed: they cannot be driven by a web page. A writer's own code is trusted (domain code). Revision `old`/`new` are stored as JSON text of the stored values; no redaction (no secret columns exist). `records()` reads at most the `/rows` default of 5000 per target; paging comes with a source that large.
 
 ## Test map
 
@@ -77,11 +78,13 @@ E2E flows (Planning opens filtered on `status = bevestigd`; each flow names its 
 
 | Task | Start | End | Estimate it counts against |
 |---|---|---|---|
-| 1 | | | engine (validation, limit) |
-| 2 | | | engine writes 3–5 d share |
-| 3 | | | theatre writers 1–2 d share |
-| 4 | | | grid `writes:` 2–3 d share |
-| 5 | | | harness + gate |
+| 1 | 19:22 | 19:27 (incl. fix) | engine (validation, limit) |
+| 2 | 19:28 | 19:38 (incl. fix; logged 19:41, its last commit is 19:37:22) | engine writes 3–5 d share |
+| 3 | 19:39 (logged 19:43, its first commit is 19:39:17) | 19:47 (incl. fix) | theatre writers 1–2 d share |
+| 4 | 19:48 | 19:59 | grid `writes:` 2–3 d share |
+| 5 | 20:01 | 20:27 (incl. fix) | harness + gate |
+
+Final review and security audit 20:28–20:35; final fix wave 20:56–21:22. Agent wall-clock, not human days.
 
 ---
 
