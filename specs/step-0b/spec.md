@@ -68,10 +68,10 @@ Source: "Revision table: the first generic table after SavedView. One row per ch
 `GET /api/revisions/:dataset/:id` returns that record's Revision rows, oldest first. It is read-only and exists so the gate can prove R7 in the browser.
 Source: invented, pending Stefan's approval. The alternative is the e2e test opening the database file from Node, which needs a native SQLite dependency in the test runner.
 
-### R9 Writes from a browser need JSON and an allowed Origin
+### R9 Writes from a browser need JSON and a same-origin request
 - **The gap the Host rule leaves.** The Host rule stops DNS rebinding, but it does not stop a hostile page from sending a plain `text/plain` POST to `127.0.0.1:4310`. Such a POST carries a correct Host and runs without a CORS preflight.
-- **The rule.** Every write route requires `Content-Type: application/json`, or it answers 415 `bad_content_type`. A request that carries an `Origin` header must carry an allowed one, or it answers 403 `forbidden_origin`.
-- **Which origins are allowed:** the engine's own, plus each `--origin` given on the CLI. The grid's dev and e2e servers pass theirs.
+- **The rule.** POST and PATCH require `Content-Type: application/json`, or they answer 415 `bad_content_type`. Every write route refuses a request the browser marks `Sec-Fetch-Site: same-site` or `cross-site` with 403 `forbidden_site`; `same-origin` and an absent header (curl, scripts) pass.
+- **Why this header and not an Origin list:** the grid's own fetch through the Vite proxy is `same-origin`, so no server needs a configured origin; a page on another local port is `same-site` and is refused, also through the proxy.
 - **Lifetime.** Kept when auth lands, like the Host rule.
 
 Source: invented, pending Stefan's approval. This is the 0b threat model's consequence of shipping writes with no auth (proposed spec diff below).
@@ -121,7 +121,7 @@ Source: "Out: actors and auth, lifecycle, record tokens, public create, the boar
 
 ## Proposed change to docs/SPEC.md (needs Stefan's approval before committing)
 - **Dataset shape:** columns "(type, nullable, default, readonly)". A readonly column is cut from write bodies and set only by the writer.
-- **Access**, after the Host rule: "Writes require a JSON content type and, when the request carries an Origin, an allowed one; this check stays when auth lands."
+- **Access**, after the Host rule: "Writes require a JSON content type, and a browser request must be same-origin (`Sec-Fetch-Site`); this check stays when auth lands."
 
 ## Report (at the end)
 - Which ledger rows moved from deferred to done, with line counts (the re-measure of the writes estimate).
