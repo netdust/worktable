@@ -177,6 +177,7 @@ describe('in-use denials', () => {
     'probe null': 'exists: "dag" may not be matched against null',
     'probe undefined': 'exists: "dag" may not be matched against null',
     'probe empty': 'exists: a match names no column',
+    'probe array': 'exists: "tekst" must be text',
     'probe revision': 'exists: "revision" is not a dataset',
     'probe saved_view': 'exists: "saved_view" is not a dataset',
     'probe query': 'exists: "per_project" is not a dataset',

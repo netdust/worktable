@@ -169,6 +169,7 @@ function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: stri
     const column = columnOf(dataset, key)
     if (!column) throw new Error(`exists: "${key}" is not a declared column of ${dataset.name}`)
     if (value === null || value === undefined) throw new Error(`exists: "${key}" may not be matched against null`)
+    if (!fits(column.type, value)) throw new Error(`exists: "${key}" must be ${column.type}`)
     return [`"${key}" = ?`, encode(column, value) as string | number]
   })
 }
@@ -279,24 +280,26 @@ function storedOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx
 export function runWrite(store: Store, target: Writable, op: WriteOp, id: number | null, body: Values): number {
   const { sqlite } = store
   const table = target.dataset.name
-  return sqlite.transaction(() => {
-    const current = id === null ? null : liveRow(sqlite, table, id)
-    if (id !== null && !current) throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
-    const ctx = {
-      actor: DEV_ACTOR,
-      current: current && decodeAll(target.dataset, current),
-      find: finder(store),
-      exists: existence(store),
-    }
-    const now = new Date().toISOString()
-    const stored = storedOf(store, target, op, body, ctx, now)
-    if (id === null || current === null) return create(sqlite, target.dataset, stored, now)
-    const changes = diff(stored, current)
-    if (changes.length === 0) return id
-    update(sqlite, table, id, stored, now)
-    revise(sqlite, target.dataset, id, changes, now)
-    return id
-  })()
+  return sqlite
+    .transaction(() => {
+      const current = id === null ? null : liveRow(sqlite, table, id)
+      if (id !== null && !current) throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
+      const ctx = {
+        actor: DEV_ACTOR,
+        current: current && decodeAll(target.dataset, current),
+        find: finder(store),
+        exists: existence(store),
+      }
+      const now = new Date().toISOString()
+      const stored = storedOf(store, target, op, body, ctx, now)
+      if (id === null || current === null) return create(sqlite, target.dataset, stored, now)
+      const changes = diff(stored, current)
+      if (changes.length === 0) return id
+      update(sqlite, table, id, stored, now)
+      revise(sqlite, target.dataset, id, changes, now)
+      return id
+    })
+    .immediate()
 }
 
 export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow {
