@@ -20,7 +20,7 @@ let api: { update: ReturnType<typeof vi.fn<StoreApi['update']>>; create: ReturnT
 
 function renderGrid(scope: Scope | null = null, spaceModel = 'production') {
   api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-  const store = createStore({ model: 'activity', table: 'planning', rows: calais, api })
+  const store = createStore({ model: 'activity', rows: calais, api })
   render(
     <Grid model={activity} view={planning} store={store} writable layout={defaults(planning)} onLayout={() => undefined}
       query="" emptyTitle="" models={models} scope={scope} spaceModel={spaceModel} />,
@@ -60,7 +60,7 @@ describe('the relation picker', () => {
       fireEvent.keyDown(picker(), { key: 'Enter' })
     })
 
-    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [15] }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [15] }, expect.objectContaining({ id: 103 }))
     expect(cell('Lunch bistrot', 'location').textContent).toBe('Vooruit')
     expect(screen.queryByRole('combobox', { name: 'Locatie' })).toBeNull()
   })
@@ -127,7 +127,7 @@ describe('the relation picker', () => {
     await act(async () => {
       fireEvent.keyDown(picker(), { key: 'Enter' })
     })
-    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [16] }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [16] }, expect.objectContaining({ id: 103 }))
   })
 
   it('keeps the list open while its scrollbar is dragged', async () => {
@@ -150,7 +150,7 @@ describe('the relation picker', () => {
       fireEvent.keyDown(picker(), { key: 'Delete' })
     })
 
-    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [] }, 'planning')
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [] }, expect.objectContaining({ id: 103 }))
   })
 
   it('says when there are more matches than it lists', async () => {

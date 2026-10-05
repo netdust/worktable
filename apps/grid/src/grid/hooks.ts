@@ -29,7 +29,7 @@ const never = () => () => undefined
 /** One store per loaded window of one view: a new window starts a new undo history. */
 export function useGridStore(view: View | undefined, rows: Row[] | null): [Store | null, StoreState] {
   const store = useMemo(
-    () => (view && rows ? createStore({ model: view.model, table: view.table, rows, api: { update, create } }) : null),
+    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create } }) : null),
     [view, rows],
   )
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))

@@ -17,13 +17,18 @@ export function filterValue(row: Row, field: string): string {
   return first === null || first === undefined ? '' : String(first)
 }
 
+/** A relation's options by title: from its target's records, or the loaded rows while those are not read. */
+export function byTitle(titles: Map<string, string>): [string, string][] {
+  return [...titles.entries()].sort((a, b) => a[1].localeCompare(b[1], locale()))
+}
+
 function relationOptions(rows: Row[], field: string): [string, string][] {
   const seen = new Map<string, string>()
   for (const row of rows) {
     const id = filterValue(row, field)
     if (id !== '' && !seen.has(id)) seen.set(id, row.lookups?.[field]?.title ?? `#${id}`)
   }
-  return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1], locale()))
+  return byTitle(seen)
 }
 
 /** The model's filterable fields: the view's `filters` first, in their declared order, the rest after. */

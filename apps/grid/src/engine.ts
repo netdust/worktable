@@ -10,6 +10,9 @@ export interface EngineColumn {
   options?: Record<string, string>
   /** The dataset its integer points at. */
   relation?: string
+  readonly?: true
+  /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
+  writes?: { dataset: string; field: string; key: string }
 }
 
 export interface EngineSource {
@@ -18,6 +21,8 @@ export interface EngineSource {
   /** The column the grid shows as a row's title. */
   title: string
   date: string | null
+  /** A dataset with a writer, or a query with a mapped column. */
+  writable?: boolean
   columns: Record<string, EngineColumn>
 }
 
@@ -51,7 +56,10 @@ const TYPES: Record<EngineColumn['type'], FieldType> = {
   text: 'text', datetime: 'text', json: 'json', integer: 'int', real: 'float', boolean: 'bool', date: 'date',
 }
 
-function fieldOf(column: EngineColumn): Field {
+const isReadonly = (column: EngineColumn | undefined, source: EngineSource): boolean =>
+  Boolean(column?.readonly) || (source.kind === 'query' && !column?.writes)
+
+function fieldOf(column: EngineColumn, source: EngineSource): Field {
   const type: FieldType = column.relation ? 'relation' : column.options ? 'select' : TYPES[column.type]
   return {
     type,
@@ -60,6 +68,8 @@ function fieldOf(column: EngineColumn): Field {
     fact: false,
     ...(column.options ? { options: column.options } : {}),
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
+    ...(isReadonly(column, source) ? { readonly: true } : {}),
+    ...(column.writes ? { writes: column.writes } : {}),
   }
 }
 
@@ -70,8 +80,9 @@ function modelOf(name: string, source: EngineSource): Model {
     key: name,
     label: source.label,
     title_label: source.columns[source.title]?.label ?? source.title,
-    title_readonly: true,
-    fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column)])),
+    title_readonly: !source.writable || isReadonly(source.columns[source.title], source),
+    ...(source.kind === 'query' ? { query: true } : {}),
+    fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source)])),
   }
 }
 
@@ -86,7 +97,7 @@ export function toSchema(s: EngineSchema): Schema {
     models: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, modelOf(name, source)])),
     tables: usedSources(s).map((name) => tableDefOf(name, s.sources[name])),
     views: [],
-    writable: Object.fromEntries(Object.keys(s.sources).map((name) => [name, false])),
+    writable: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, source.writable === true])),
   }
 }
 
@@ -159,6 +170,11 @@ export function toRow(r: EngineRow, title: string): Row {
     fields,
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
   }
+}
+
+/** A write's grid fields as the engine's columns: the grid's `title` is the source's title column. */
+export function toEngineData(data: Record<string, unknown>, titleColumn: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'title' ? titleColumn : key, value]))
 }
 
 /** A grid column id as the engine's column; null for what only the grid computes. */

@@ -1,4 +1,4 @@
-import { type EngineRow, type EngineSchema, rowsQuery, toRow, toSavedViews, toSchema } from './engine'
+import { type EngineRow, type EngineSchema, type EngineSource, rowsQuery, toEngineData, toRow, toSavedViews, toSchema } from './engine'
 import type { Layout } from './grid/layout'
 import type { ApiError, DateWindow, NewView, Prefs, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
@@ -51,10 +51,14 @@ export function forgetSchema(): void {
   served = null
 }
 
+async function sourceOf(name: string): Promise<EngineSource> {
+  const source = (await engineSchema()).sources[name]
+  if (!source) throw { code: 'unknown_source', message: `unknown source "${name}"` } satisfies ApiError
+  return source
+}
+
 async function titleOf(source: string): Promise<string> {
-  const title = (await engineSchema()).sources[source]?.title
-  if (!title) throw { code: 'unknown_source', message: `unknown source "${source}"` } satisfies ApiError
-  return title
+  return (await sourceOf(source)).title
 }
 
 async function rowsOf(source: string, query: Query): Promise<RowsResponse> {
@@ -80,12 +84,30 @@ export async function records(model: string, search: string): Promise<RowsRespon
   return { rows: found, total: found.length }
 }
 
-export function create(model: string, data: Record<string, unknown>): Promise<Row> {
-  return request('POST', `/rows/${model}`, {}, data)
+export async function create(model: string, data: Record<string, unknown>): Promise<Row> {
+  const title = await titleOf(model)
+  return toRow(await request<EngineRow>('POST', `/rows/${model}`, {}, toEngineData(data, title)), title)
 }
 
-export function update(model: string, id: number, data: Record<string, unknown>): Promise<Row> {
-  return request('PATCH', `/rows/${model}/${id}`, {}, data)
+/** A query's row is written through its mapped column, so `row` is needed to find the target record. */
+export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row): Promise<Row> {
+  const source = await sourceOf(model)
+  const sent = toEngineData(data, source.title)
+  if (source.kind === 'query') return updateThrough(model, source, id, sent, row)
+  return toRow(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent), source.title)
+}
+
+/** The write lands on the target record; the row is then read again as the query now computes it. */
+async function updateThrough(model: string, source: EngineSource, id: number, sent: Record<string, unknown>, row?: Row): Promise<Row> {
+  const [[column, value] = ['', undefined]] = Object.entries(sent)
+  const writes = source.columns[column]?.writes
+  if (!writes || !row) throw { code: 'read_only', message: `"${column}" of "${model}" is not written` } satisfies ApiError
+  const target = writes.key === 'id' ? row.id : row.fields[writes.key]
+  await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
+  const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
+  // An edit can move the row out of the query; the write still landed.
+  const found = await request<{ rows: EngineRow[] }>('GET', `/rows/${model}`, { filter: JSON.stringify({ id }) }).catch(() => null)
+  return found?.rows[0] ? toRow(found.rows[0], source.title) : written
 }
 
 export function remove(model: string, id: number): Promise<unknown> {

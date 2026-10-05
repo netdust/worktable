@@ -50,6 +50,7 @@ const tableEntry = (name: string) => {
 beforeEach(() => {
   api.schema.mockResolvedValue(served)
   api.rows.mockResolvedValue({ rows: [], total: 0 })
+  api.records.mockResolvedValue({ rows: [], total: 0 })
   api.savedViews.mockResolvedValue([])
   api.prefs.mockResolvedValue({ order: {}, last: {} })
   api.savePrefs.mockImplementation((sent) => Promise.resolve(sent))
@@ -1193,5 +1194,54 @@ describe("a saved view's actions", () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), { target: { value: 'montage' } })
 
     expect(screen.getByRole('button', { name: 'Go to Planning · Montage' })).toBeTruthy()
+  })
+})
+
+describe('writes on the engine', () => {
+  const productie = { type: 'relation' as const, label: 'Productie', required: true, fact: false, relation: { model: 'productie', multiple: false } }
+  const engineSchema: Schema = {
+    models: {
+      activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { productie_id: productie } },
+      dagplanning: { key: 'dagplanning', label: 'Dagplanning', title_label: 'Omschrijving', title_readonly: true, query: true, fields: { productie_id: { ...productie, readonly: true } } },
+      productie: { key: 'productie', label: 'Productie', title_label: 'Titel', title_readonly: true, fields: {} },
+    },
+    tables: [
+      { key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['grid'] },
+      { key: 'dagplanning', label: 'Dagplanning', model: 'dagplanning', types: ['grid'] },
+    ],
+    views: [
+      { key: 'activiteit', label: 'Activiteiten', table: 'activiteit', model: 'activiteit' },
+      { key: 'dagplanning', label: 'Dagplanning', table: 'dagplanning', model: 'dagplanning' },
+    ],
+    writable: { activiteit: true, dagplanning: true, productie: false },
+  }
+  const kersentuin = { id: 1, title: 'De Kersentuin', status: '', fields: {} }
+  const opbouw = { id: 7, title: 'opbouw Gent', status: '', fields: { productie_id: 1 }, lookups: { productie_id: kersentuin } }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(engineSchema)
+    api.rows.mockResolvedValue({ rows: [opbouw], total: 1 })
+    api.records.mockImplementation((model: string) => Promise.resolve(model === 'productie'
+      ? { rows: [kersentuin, { id: 2, title: 'Wachten op Godot', status: '', fields: {} }], total: 2 }
+      : { rows: [], total: 0 }))
+  })
+
+  it("relation chip options list the target's rows even when the loaded rows hold one productie", async () => {
+    render(<App />)
+    await screen.findByText('opbouw Gent')
+    await waitFor(() => expect(api.records).toHaveBeenCalledWith('productie', ''))
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+
+    const options = within(screen.getByRole('group', { name: 'Productie' })).getAllByRole('button')
+    await waitFor(() => expect(options.map((o) => o.textContent)).toEqual(['De Kersentuin', 'Wachten op Godot']))
+  })
+
+  it('+ New is blocked on a query view', async () => {
+    window.location.hash = '#view=dagplanning'
+    render(<App />)
+    await screen.findByText('opbouw Gent')
+
+    expect((screen.getByRole('button', { name: 'New Dagplanning' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
