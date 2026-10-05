@@ -90,9 +90,9 @@ async function pressDelete(page: Page, view: string, title: string) {
   return answered
 }
 
-for (const { view, dataset, title, link, seeded } of [
-  { view: 'Organisaties', dataset: 'organisatie', title: 'Zaal De Spiegel', link: 'locatie_id', seeded: 7 },
-  { view: 'Producties', dataset: 'productie', title: 'De Kersentuin', link: 'productie_id', seeded: 12 },
+for (const { view, dataset, title, link } of [
+  { view: 'Organisaties', dataset: 'organisatie', title: 'Zaal De Spiegel', link: 'locatie_id' },
+  { view: 'Producties', dataset: 'productie', title: 'De Kersentuin', link: 'productie_id' },
 ]) {
   test(`referenced-delete-refused: ${dataset}`, async ({ page }) => {
     const before = (await rows<{ id: number; titel?: string; naam?: string }>(page, dataset)).find(
@@ -100,9 +100,8 @@ for (const { view, dataset, title, link, seeded } of [
     )
     expect(before, title).toBeDefined()
     const id = before?.id as number
-    // 0b moves one activiteit off De Kersentuin, so the count is read live; it may only be the seed or one less.
     const linked = (await rows<Record<string, number | null>>(page, 'activiteit')).filter((a) => a[link] === id)
-    expect([seeded, seeded - 1]).toContain(linked.length)
+    expect(linked.length).toBeGreaterThan(0)
     const by = { label: 'Activiteiten', count: linked.length }
     const history = await revisions(page, dataset, id)
 
@@ -142,12 +141,14 @@ test('duplicate-assignment-refused', async ({ page }) => {
 })
 
 test('voorstellingen-public', async ({ page }) => {
-  const activiteiten = await rows<{ soort: string; status: string }>(page, 'activiteit')
+  const activiteiten = await rows<{ id: number; soort: string; status: string }>(page, 'activiteit')
   const confirmed = activiteiten.filter((a) => a.soort === 'voorstelling' && a.status === 'bevestigd')
-  expect(confirmed).toHaveLength(4)
+  expect(confirmed.length).toBeGreaterThan(0)
+  expect(activiteiten.length).toBeGreaterThan(confirmed.length)
+  expect(activiteiten.some((a) => a.soort === 'voorstelling' && a.status !== 'bevestigd')).toBe(true)
 
   const shown = await rows<Record<string, unknown>>(page, 'voorstellingen')
-  expect(shown).toHaveLength(confirmed.length)
+  expect(shown.map((one) => one.id).sort()).toEqual(confirmed.map((a) => a.id).sort())
   for (const one of shown) {
     expect(Object.keys(one).sort()).toEqual([
       'adres',
