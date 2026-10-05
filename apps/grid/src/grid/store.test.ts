@@ -399,6 +399,21 @@ describe('remove', () => {
     expect(api.remove).toHaveBeenCalledWith('activity', 103)
   })
 
+  it('sends no write to a row while its DELETE is in flight, nor after it', async () => {
+    const { api, store, ids } = removable()
+    const answer = deferred<unknown>()
+    api.remove.mockReturnValueOnce(answer.promise)
+
+    const removing = store.remove(103)
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    answer.resolve({ id: 103 })
+    await removing
+    await store.apply({ id: 103, field: 'kind', value: 'build' })
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(ids()).not.toContain(103)
+  })
+
   it('on a 409 in_use keeps the row and raises the Dutch sentence built from by', async () => {
     const { api, store, ids } = removable()
     api.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)', by: [{ label: 'Activiteiten', count: 3 }, { label: 'Personen', count: 1 }] })

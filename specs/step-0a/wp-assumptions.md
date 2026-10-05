@@ -106,14 +106,14 @@ Counted with `git diff --numstat 48420c8 HEAD -- apps/grid` after the final fix 
 
 ## Totals, 0c (Task 4: clear a select, delete from the drawer; base `ee3baa1`)
 
-Counted with `git diff --numstat ee3baa1 HEAD -- apps/grid` at Task 4's commit. 0a's and 0b's totals above are unchanged.
+Counted with `git diff --numstat ee3baa1 HEAD -- apps/grid` after Task 4's fix round 1. 0a's and 0b's totals above are unchanged.
 
 - **Headline: no WordPress row paid with lines; 4 rows reached at 0 lines, none reopened.** Everything this task changed in `apps/grid` is new behaviour (R9, R10), not a WordPress removal.
   - Row 3 (refusals as `WP_Error`): reached — the engine's 409 carries `by: [{label, count}]` beside `{code, message}`; `toApiError` now keeps `by` (`api.ts` 5, counted under R10). The `WP_Error` shape stays gone.
   - Row 23 (site strings, `error.<code>`): reached — the in-use sentence passes through `errorText`, the button labels through `t()`. Still deferred: no strings are served. Note the English base table now holds four Dutch entries (`delete`, `deleteConfirm`, `inUse`, `and`), as the brief and R10 fix the Dutch wording; the table is mixed until a locale step.
-  - Row 47 (one write in flight per record): reached — `store.remove` waits for the record's write queue before it sends `DELETE` (in `store.ts`, counted under R10). The queue itself is unchanged.
+  - Row 47 (one write in flight per record): reached — `store.remove` takes its place in the record's write queue (after any write in flight), and no write goes to a record whose `DELETE` is in flight or landed (in `store.ts`, counted under R10).
   - `remove()` (`api.ts:78-79` in `c9873c3`, the generic `DELETE /rows/<model>/<id>` that row 49's matrix uses): first called from the grid, 0 lines; the path was already the engine's. Row 49 (matrix join records) stays deferred.
   - Row 60 (`wireValue`): amended, not WordPress — a cleared cell is `null` for every nullable column, text included; a non-nullable text or select still sends `''` for its writer to refuse (`engine.ts` 4).
-- **Production: 80 lines** — R9's wire format 4 (`engine.ts`); R10 76: `/schema`'s `deletable` into the model 4 (`engine.ts` 2, `types.ts` 2), `by` on the error 12 (`types.ts` 7, `api.ts` 5), the Dutch words and `inUse()` 11 (`i18n.ts`), `Store.remove` with its undo pruning, queue wait and in-use message 30 (`store.ts`), `api.remove` into the store 4 (`hooks.ts`), the two-step `DeleteRow` in the drawer's editor slot 15 (`Grid.tsx`). By file: `store.ts` 30, `Grid.tsx` 15, `i18n.ts` 11, `types.ts` 9, `engine.ts` 6, `api.ts` 5, `hooks.ts` 4.
-- **Tests: 166 lines** — `Grid.test.tsx` 68, `store.test.ts` 62, `api.test.ts` 26, `i18n.test.ts` 10. `api.test.ts` rewrites 0b's "a cleared text stays `''`" assertion: the fixture's `omschrijving` is nullable, so it now sends `null`.
-- **All 0c Task 4 grid lines: 246** (80 production + 166 tests).
+- **Production: 103 lines** — R9's wire format 4 (`engine.ts`); R10 99: `/schema`'s `deletable` into the model 4 (`engine.ts` 2, `types.ts` 2), `by` on the error 12 (`types.ts` 7, `api.ts` 5), the Dutch words and `inUse()` 11 (`i18n.ts`), `Store.remove` with its undo pruning, place in the record's queue, the write guard on a removed record and the in-use message 42 (`store.ts`), `api.remove` into the store 4 (`hooks.ts`), the two-step `DeleteRow` in the drawer's editor slot — a double click's second click does not confirm, one `DELETE` per confirmation, the label swap in a polite live region — 26 (`Grid.tsx`). By file: `store.ts` 42, `Grid.tsx` 26, `i18n.ts` 11, `types.ts` 9, `engine.ts` 6, `api.ts` 5, `hooks.ts` 4.
+- **Tests: 231 lines** — `Grid.test.tsx` 118, `store.test.ts` 77, `api.test.ts` 26, `i18n.test.ts` 10. `api.test.ts` rewrites 0b's "a cleared text stays `''`" assertion: the fixture's `omschrijving` is nullable, so it now sends `null`.
+- **All 0c Task 4 grid lines: 334** (103 production + 231 tests).

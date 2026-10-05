@@ -110,6 +110,8 @@ export function createStore({ model, rows, api }: Options): Store {
   const queues = new Map<number, Promise<unknown>>()
   // What the server last said each record holds: a refusal reverts to this, never to another write's paint.
   const confirmed = new Map<number, Row>(rows.map((row) => [row.id, row]))
+  // Records whose DELETE is in flight or landed: no write goes to them.
+  const removed = new Set<number>()
   let ticket = 0
   // A refused create sends again on the draft's next write: the writer's own rules decide, not the schema's.
   let refused = false
@@ -162,7 +164,7 @@ export function createStore({ model, rows, api }: Options): Store {
   /** True when the server took it; the stacks are the caller's. */
   async function commit(change: Change): Promise<boolean> {
     const row = state.rows.find((r) => r.id === change.id)
-    if (!row) return false
+    if (!row || removed.has(change.id)) return false
     const before = read(row, change.field)
     const key = cellKey(change.id, change.field)
     // A draft carries one refusal at a time: each retry clears the last.
@@ -229,7 +231,7 @@ export function createStore({ model, rows, api }: Options): Store {
     },
     async apply(change) {
       const row = state.rows.find((r) => r.id === change.id)
-      if (!row) return
+      if (!row || removed.has(change.id)) return
       if (change.id === DRAFT) {
         // The draft's create is in flight; a second write would create a second record.
         if (pending.has(DRAFT)) return
@@ -279,13 +281,17 @@ export function createStore({ model, rows, api }: Options): Store {
       set({ save: settle() })
     },
     async remove(id) {
-      if (!api.remove) return
+      const send = api.remove
+      if (!send || removed.has(id)) return
+      removed.add(id)
       track(id, 1)
       set({ save: 'saving', error: null })
+      // In the record's queue: after any write still in flight, before any that follows.
+      const previous = queues.get(id)
+      const removal = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(() => send(model, id))
+      queues.set(id, removal)
       try {
-        // After any write still queued for the record, as an undo waits for the write it undoes.
-        await queues.get(id)?.catch(() => undefined)
-        await api.remove(model, id)
+        await removal
         track(id, -1)
         // An undo would PATCH a soft-deleted record.
         for (const stack of [undoStack, redoStack]) stack.splice(0, stack.length, ...stack.filter((entry) => entry.id !== id))
@@ -293,9 +299,11 @@ export function createStore({ model, rows, api }: Options): Store {
         const errors = Object.fromEntries(Object.entries(state.errors).filter(([, error]) => error.id !== id))
         set({ rows: state.rows.filter((r) => r.id !== id), errors })
       } catch (error) {
+        removed.delete(id)
         track(id, -1)
         set({ error: toError({ id, field: 'title', value: undefined }, error) })
       }
+      if (queues.get(id) === removal) queues.delete(id)
       set({ save: settle() })
     },
     dismiss(id, field) {

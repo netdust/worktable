@@ -471,6 +471,38 @@ describe('the drawer', () => {
     expect(api.remove).not.toHaveBeenCalled()
   })
 
+  it('a double click does not confirm: Zeker? is armed only by a fresh press', async () => {
+    renderGrid(calais, { model: deletable })
+    const drawer = openDrawer('Lunch bistrot')
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }), { detail: 1 })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }), { detail: 2 })
+    expect(api.remove).not.toHaveBeenCalled()
+
+    api.remove.mockResolvedValueOnce({ id: 103 })
+    await act(async () => {
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }), { detail: 1 })
+    })
+    expect(api.remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends one DELETE however often Zeker? is pressed while it is in flight, and announces the swap', async () => {
+    renderGrid(calais, { model: deletable })
+    api.remove.mockReturnValueOnce(new Promise(() => undefined))
+    const drawer = openDrawer('Lunch bistrot')
+
+    const button = within(drawer).getByRole('button', { name: 'Verwijderen' })
+    expect(button.closest('[aria-live="polite"]')).not.toBeNull()
+    fireEvent.click(button)
+    await act(async () => {
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+    })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+
+    expect(api.remove).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the row and its drawer when the delete is refused', async () => {
     const { store } = renderGrid(calais, { model: deletable })
     api.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Toewijzingen', count: 2 }] })
@@ -538,6 +570,24 @@ describe('the toolbar over the grid', () => {
     expect(within(toolbar()).getByText('Previous')).toBeTruthy()
     expect(within(toolbar()).getByText('Next')).toBeTruthy()
     expect(within(toolbar()).getByRole('status').textContent).toContain('Saved')
+  })
+
+  it('shows a refused delete in the toolbar as the Dutch in-use sentence', async () => {
+    remote.schema.mockResolvedValue({ ...schema, models: { activity: { ...schema.models.activity, deletable: true } } })
+    remote.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced by Toewijzingen (2)', by: [{ label: 'Toewijzingen', count: 2 }, { label: 'Personen', count: 1 }] })
+    render(<App />)
+    await screen.findByText('Maandag 18 mei')
+
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Open' }))
+    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await act(async () => {
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+    })
+
+    // The drawer's own header is a banner too: the toolbar is found by its class.
+    expect(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('status').textContent).toContain('Nog in gebruik door Toewijzingen (2) en Personen (1).')
+    expect(screen.getAllByRole('row').some((r) => r.dataset.title === 'Lunch bistrot')).toBe(true)
   })
 
   it('says a refusal in the site\'s words when it has them, as text', async () => {
