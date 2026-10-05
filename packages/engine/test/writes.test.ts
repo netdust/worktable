@@ -1,12 +1,13 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { createEngine, migrate } from '../src'
-import { contents, domain, freshDb, send } from './fixture'
+import { createEngine, defineQuery, migrate, seedDomain } from '../src'
+import { contents, domain, freshDb, probes, projectDeletes, send } from './fixture'
 
 let sqlite: Database
 let request: ReturnType<typeof send>
 
 beforeEach(() => {
+  projectDeletes.length = 0
   sqlite = freshDb()
   request = send(createEngine(sqlite, domain, { port: 4310 }))
 })
@@ -37,6 +38,17 @@ async function denied(
   expect({ status: res.status, code: res.body.code }).toEqual({ status, code })
   if (names) expect(res.body.message).toContain(names)
   expect(state()).toEqual(before)
+  return res
+}
+
+const quietly = async (run: () => Promise<unknown>) => {
+  const log = console.error
+  console.error = () => {}
+  try {
+    await run()
+  } finally {
+    console.error = log
+  }
 }
 
 describe('write denials', () => {
@@ -136,6 +148,114 @@ describe('write denials', () => {
     own.run('PRAGMA foreign_keys = OFF')
     createEngine(own, domain, { port: 4310 })
     expect(own.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
+  })
+})
+
+describe('in-use denials', () => {
+  test('delete of project 1 is 409 in_use with by per referencing dataset and the English fallback message', async () => {
+    const res = await denied(() => remove('project/1'), 409, 'in_use')
+    expect(res.body).toEqual({
+      code: 'in_use',
+      message: 'Still referenced by Taken (2), Notities (1)',
+      by: [
+        { label: 'Taken', count: 2 },
+        { label: 'Notities', count: 1 },
+      ],
+    })
+  })
+
+  test("on a 409 the referenced dataset's writer delete did not run", async () => {
+    await denied(() => remove('project/1'), 409, 'in_use')
+    expect(projectDeletes).toEqual([])
+  })
+
+  test.each(Object.keys(probes))('ctx.exists asked "%s" throws: 500 internal, nothing written', (probe) =>
+    quietly(async () => {
+      await denied(() => patch('notitie/1', { tekst: probe }), 500, 'internal')
+      await denied(() => post('notitie', { project_id: 1, tekst: probe }), 500, 'internal')
+    }),
+  )
+})
+
+describe('in use', () => {
+  const live = (table: string, id: number) =>
+    sqlite.query(`SELECT deleted_at FROM "${table}" WHERE id = ?`).get(id) as { deleted_at: string | null }
+
+  test('/schema marks a dataset whose writer has delete as deletable, others not', async () => {
+    const { body } = await request('GET', '/api/schema')
+    const deletable = Object.fromEntries(
+      Object.entries(body.sources).map(([n, s]) => [n, (s as { deletable: boolean }).deletable]),
+    )
+    expect(deletable).toEqual({
+      project: true,
+      taak: false,
+      plat: false,
+      notitie: true,
+      per_project: false,
+      notitie_lijst: false,
+    })
+  })
+
+  test('a soft-deleted referrer does not block', async () => {
+    softDelete('taak', 1)
+    softDelete('taak', 2)
+    expect(await remove('project/1')).toMatchObject({ status: 409, body: { by: [{ label: 'Notities', count: 1 }] } })
+    softDelete('taak', 3)
+    softDelete('taak', 4)
+    expect(await remove('project/2')).toEqual({ status: 200, body: { id: 2 } })
+  })
+
+  test('an unreferenced project, and one referenced only from a query, is deletable', async () => {
+    const vast = defineQuery({
+      name: 'vast',
+      label: 'Vast',
+      title: 'naam',
+      sql: "SELECT 3 AS id, 3 AS project_id, 'x' AS naam",
+      columns: {
+        id: { type: 'integer', label: 'Id' },
+        project_id: { type: 'integer', label: 'Project', relation: 'project' },
+        naam: { type: 'text', label: 'Naam' },
+      },
+    })
+    const withQuery = { ...domain, queries: [...domain.queries, vast] }
+    sqlite = new Database(':memory:')
+    migrate(sqlite, withQuery)
+    seedDomain(sqlite, withQuery)
+    request = send(createEngine(sqlite, withQuery, { port: 4310 }))
+    sqlite.run("INSERT INTO project (naam) VALUES ('Gamma'), ('Delta')")
+    expect((await request('GET', '/api/rows/vast')).body.total).toBe(1)
+    expect(await remove('project/3')).toEqual({ status: 200, body: { id: 3 } })
+    expect(await remove('project/4')).toEqual({ status: 200, body: { id: 4 } })
+  })
+
+  test("Revision rows that name a project's id do not count as references", async () => {
+    sqlite.run("INSERT INTO project (naam) VALUES ('Gamma')")
+    sqlite.run(
+      "INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id) VALUES ('project', 3, 'naam', NULL, '\"Gamma\"', 0, 'x', 'b'), ('taak', 1, 'project_id', '1', '3', 0, 'x', 'b')",
+    )
+    expect(await remove('project/3')).toEqual({ status: 200, body: { id: 3 } })
+  })
+
+  test('ctx.exists finds a live match, ignores soft-deleted rows and the excepted id', async () => {
+    const duplicate = { status: 422, body: { code: 'refused', message: 'deze notitie bestaat al' } }
+    expect(await post('notitie', { project_id: 1, tekst: 'eerste' })).toEqual(duplicate)
+    expect((await patch('notitie/1', { tekst: 'eerste' })).status).toBe(200)
+    expect((await post('notitie', { project_id: 1, tekst: 'tweede' })).status).toBe(201)
+    expect(await patch('notitie/2', { tekst: 'eerste' })).toEqual(duplicate)
+    softDelete('notitie', 1)
+    expect((await patch('notitie/2', { tekst: 'eerste' })).status).toBe(200)
+    expect((await post('notitie', { project_id: 1, tekst: 'tweede' })).status).toBe(201)
+  })
+
+  test('after the referrer is deleted, the delete succeeds, reaches the writer and is revised', async () => {
+    softDelete('taak', 1)
+    softDelete('taak', 2)
+    expect((await remove('notitie/1')).status).toBe(200)
+    expect(await remove('project/1')).toEqual({ status: 200, body: { id: 1 } })
+    expect(projectDeletes).toEqual([1])
+    const { deleted_at } = live('project', 1)
+    expect(deleted_at).toMatch(/^\d{4}-/)
+    expect(changes(await revisionsOf('project', 1))).toEqual([['deleted_at', null, deleted_at]])
   })
 })
 

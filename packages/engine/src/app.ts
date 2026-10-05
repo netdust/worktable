@@ -96,6 +96,7 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
           date: s.date ?? null,
           columns: s.columns,
           writable: isWritable(domain, s),
+          deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
         },
       ]),
     )
@@ -112,7 +113,7 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
   writeRoutes(app, { sqlite, db, domain })
 
   root.onError((err, c) => {
-    if (err instanceof ApiError) return c.json({ code: err.code, message: err.message }, err.status)
+    if (err instanceof ApiError) return c.json({ ...err.details, code: err.code, message: err.message }, err.status)
     console.error(err)
     return c.json({ code: 'internal', message: 'Internal error' }, 500)
   })

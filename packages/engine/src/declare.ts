@@ -62,6 +62,7 @@ export interface WriteContext {
   actor: Actor
   current: Record<string, unknown> | null
   find(dataset: string, id: number): Record<string, unknown> | null
+  exists(dataset: string, match: Record<string, unknown>, exceptId?: number): boolean
 }
 
 export interface Writer {
