@@ -21,7 +21,7 @@ function checkColumn(source: DatasetDecl | QueryDecl, what: string, column: stri
   }
 }
 
-function checkTitle(domain: Domain, source: DatasetDecl | QueryDecl): void {
+function checkTitle(source: DatasetDecl | QueryDecl): void {
   if (typeof source.title === 'string') {
     checkColumn(source, 'title', source.title)
     return
@@ -30,21 +30,24 @@ function checkTitle(domain: Domain, source: DatasetDecl | QueryDecl): void {
   checkColumn(source, 'title else', fallback)
   const target = source.columns[via]?.relation
   if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
-  const hop = domain.datasets.find((d) => d.name === target)
-  if (hop && typeof hop.title !== 'string') {
-    throw new DomainError(
-      source.name,
-      via,
-      `title via "${via}" reaches "${target}", whose title is itself through a relation`,
-    )
-  }
 }
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
+  if (Object.hasOwn(source.columns, 'title')) {
+    throw new DomainError(source.name, 'title', 'a column named "title" would be overwritten by the computed row title')
+  }
   const names = new Set(domain.datasets.map((d) => d.name))
   for (const [column, decl] of Object.entries(source.columns)) {
     if (decl.relation && !names.has(decl.relation)) {
       throw new DomainError(source.name, decl.relation, `${column} relates to undeclared dataset "${decl.relation}"`)
+    }
+    const target = domain.datasets.find((d) => d.name === decl.relation)
+    if (target && typeof target.title !== 'string') {
+      throw new DomainError(
+        source.name,
+        column,
+        `${column} relates to "${target.name}", whose title is through a relation`,
+      )
     }
   }
 }
@@ -69,7 +72,7 @@ function checkWrites(
 
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
-    checkTitle(domain, source)
+    checkTitle(source)
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
   }

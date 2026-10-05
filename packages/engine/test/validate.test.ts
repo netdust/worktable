@@ -52,6 +52,29 @@ describe('validateDomain', () => {
   test('else on an undeclared column is refused', () =>
     expect(failure(viaOf({ title: { via: 'a_id', else: 'nope' }, columns: viaA })).bad).toBe('nope'))
 
+  test('a plain relation to a dataset with a via title is refused', () => {
+    const b = defineDataset({
+      name: 'b',
+      label: 'B',
+      custom: false,
+      title: { via: 'a_id', else: 'naam' },
+      columns: viaA,
+    })
+    const c = defineDataset({
+      name: 'c',
+      label: 'C',
+      custom: false,
+      title: 'naam',
+      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, naam: text },
+    })
+    expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
+  })
+
+  test('a column named title is refused', () =>
+    expect(
+      failure(withDomain({ datasets: [...domain.datasets, dataset({ columns: { naam: text, title: text } })] })).bad,
+    ).toBe('title'))
+
   test('a relation to a dataset with a via title is refused', () => {
     const b = defineDataset({
       name: 'b',
