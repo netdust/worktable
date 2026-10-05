@@ -5,6 +5,7 @@ const WEEK = '/#from=2026-10-12'
 
 interface Activiteit {
   id: number
+  productie_id: number
   omschrijving: string
   start_at: string
   eind_at: string | null
@@ -120,8 +121,9 @@ test('query-edit-lands', async ({ page }) => {
   await open(page, 'Dagplanning')
 
   const status = await cell(page, name, 'Status')
-  await typeInto(status, 'optie')
-  await expect(status).toHaveText('optie')
+  await expect(status).toHaveText('Bevestigd')
+  await pickOption(status, 'o')
+  await expect(status).toHaveText('Optie')
 
   const filter = encodeURIComponent(JSON.stringify({ id: before.id }))
   const response = await page.request.get(`/api/rows/activiteit?filter=${filter}`)
@@ -138,14 +140,15 @@ test('revisions-recorded', async ({ page }) => {
   await open(page, 'Dagplanning')
 
   const status = await cell(page, name, 'Status')
-  await typeInto(status, 'bevestigd')
-  await expect(status).toHaveText('bevestigd')
+  await expect(status).toHaveText('Geannuleerd')
+  await pickOption(status, 'b')
+  await expect(status).toHaveText('Bevestigd')
 
   await expect.poll(async () => (await revisions(page, before.id)).length).toBe(1)
   const [revision] = await revisions(page, before.id)
   expect(revision.field).toBe('status')
-  expect(revision.old).toBe('"geannuleerd"')
-  expect(revision.new).toBe('"bevestigd"')
+  expect(revision.old).toBe('geannuleerd')
+  expect(revision.new).toBe('bevestigd')
 })
 
 test('day-line-move', async ({ page }) => {
@@ -173,7 +176,36 @@ test('day-line-move', async ({ page }) => {
   expect(fields).toContain('start_at')
   expect(fields).toContain('plandag')
   const plandag = (await revisions(page, before.id)).filter((revision) => revision.field === 'plandag')
-  expect(plandag.map((revision) => [revision.old, revision.new])).toEqual([['"2026-10-12"', '"2026-10-13"']])
+  expect(plandag.map((revision) => [revision.old, revision.new])).toEqual([['2026-10-12', '2026-10-13']])
+})
+
+test('relation-pick', async ({ page }) => {
+  const name = 'reis Gent'
+  const before = await activiteit(page, name)
+  expect([before.status, before.productie_id]).toEqual(['bevestigd', 1])
+  await open(page, 'Planning')
+
+  const productie = await cell(page, name, 'Productie')
+  await expect(productie).toHaveText('De Kersentuin')
+  await productie.click()
+  await productie.press('Enter')
+  await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
+  await page.getByRole('option', { name: 'Nachtwacht' }).click()
+
+  await expect.poll(async () => (await activiteit(page, name)).productie_id).toBe(2)
+  await expect(productie).toHaveText('Nachtwacht')
+})
+
+test('clear-end', async ({ page }) => {
+  const name = 'afbouw Gent'
+  expect((await activiteit(page, name)).eind_at).toBe('2026-10-13T01:00')
+  await open(page, 'Planning')
+
+  const einde = await cell(page, name, 'Einde')
+  await typeInto(einde, '')
+
+  await expect.poll(async () => (await activiteit(page, name)).eind_at).toBeNull()
+  await expect(einde).toHaveText('')
 })
 
 test('limit-refused', async ({ page }) => {
@@ -234,6 +266,19 @@ test.describe('cross-site-refused', () => {
     expect(direct.status()).toBe(403)
     expect(((await direct.json()) as { code: string }).code).toBe('forbidden_site')
     expect((await activiteit(page, name)).status).toBe(before.status)
+  })
+
+  test('rebound-host-refused', async ({ page }) => {
+    const name = 'voorstelling Kortrijk'
+    const before = await activiteit(page, name)
+
+    const response = await page.request.patch(`http://127.0.0.1:5174/api/rows/activiteit/${before.id}`, {
+      headers: { Host: 'evil.example', 'Content-Type': 'application/json' },
+      data: { status: 'optie' },
+    })
+    expect(response.status()).toBe(403)
+    expect(await response.text()).toContain('evil.example')
+    expect(await activiteit(page, name)).toEqual(before)
   })
 
   test('json-charset-accepted', async ({ page }) => {

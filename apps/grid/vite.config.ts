@@ -7,8 +7,9 @@ const proxy = { '/api': { target: process.env.ENGINE_URL ?? 'http://127.0.0.1:43
 
 export default defineConfig({
   plugins: [react()],
-  server: { host: '127.0.0.1', strictPort: true, proxy },
-  preview: { host: '127.0.0.1' },
+  // changeOrigin hides a rebound page's Host from the engine, so Vite's own host check guards the proxied path.
+  server: { host: '127.0.0.1', strictPort: true, allowedHosts: [], proxy },
+  preview: { host: '127.0.0.1', allowedHosts: [] },
   build: {
     outDir: 'dist',
     // The one chunk past the default is exceljs, fetched only when Export is pressed.
