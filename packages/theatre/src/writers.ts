@@ -16,9 +16,11 @@ function checkProductie(values: Values, ctx: WriteContext): void {
   if (id !== undefined && !ctx.find('productie', id as number)) refuse('Productie bestaat niet.')
 }
 
+const withSeconds = (at: string): string => (at.length === 16 ? `${at}:00` : at)
+
 function checkOrder(values: Values, ctx: WriteContext): void {
   const { start_at, eind_at } = { ...ctx.current, ...values }
-  if (typeof start_at === 'string' && typeof eind_at === 'string' && eind_at < start_at) {
+  if (typeof start_at === 'string' && typeof eind_at === 'string' && withSeconds(eind_at) < withSeconds(start_at)) {
     refuse('Einde ligt voor de start.')
   }
 }

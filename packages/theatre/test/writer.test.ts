@@ -71,6 +71,12 @@ describe('the Activiteit writer refuses', () => {
 })
 
 describe('the Activiteit writer', () => {
+  test('an eind_at without seconds equal to a start_at with seconds is accepted', async () => {
+    const res = await patch(1, { start_at: '2026-10-12T14:00:00', eind_at: '2026-10-12T14:00' })
+    expect(res.status).toBe(200)
+    expect(stored(1)).toMatchObject({ start_at: '2026-10-12T14:00:00', eind_at: '2026-10-12T14:00' })
+  })
+
   test('create stores plandag from start_at', async () => {
     const res = await post({ ...NEW, start_at: '2026-10-21T03:30', eind_at: null })
     expect({ status: res.status, plandag: res.body.plandag }).toEqual({ status: 201, plandag: '2026-10-20' })
