@@ -1,3 +1,50 @@
+# Plan review: step-0a, the read-only engine slice (second re-review)
+Reviewed-plan: 3f28bfc679c22a1e6c708c7b161cc42f27bfcd59 specs/step-0a/plan.md
+Verdict: ready with fixes. Nothing is Blocking. There is one small Should-fix finding, which the revision itself introduced.
+
+## Previous findings: answered?
+- **A1: answered.** Task 3 Step 1's override now turns off the formatter, the linter and the assist. This matches the configuration I verified as clean last round.
+- **S-A: answered.** `toSavedViews` now spreads `tableDefOf(source)`, which gives `key` = the source name and `date_field` = the source's `date`. It also sets `key: String(row.id)`, `label`, `table`, `table_label` and `starting: false`. This matches `Json::saved` and `App.tsx:100` (`view?.date_field`). The Step 3 test pins `key`, `label`, `table` and `date_field 'plandag'`.
+- **S-B: answered in substance.** `rowsQuery` now maps `title` and drops `lookups.*` and `rollups.*`, and there is a test for it. The signature has a gap, covered in S-D below.
+- **S-C: answered.** `filter-compile.ts`, including the `IN_MAX_VALUES = 100` cap, moved to Task 1's Files. Task 2 consumes it.
+- **N-A to N-F: answered.**
+  - N-A: the memoised promise is used, and `api.test.ts` resets it.
+  - N-B: Duplicate, + New view and `savePrefs` are named in Step 4.
+  - N-C: `grid/layout.ts` is dropped from the Modify list.
+  - N-D: the seed pins the `2026-10-14T00:30 bevestigd` row.
+  - N-E: the `$in` case holding an object is now in the denial test.
+  - N-F: the rows effect deps use `JSON.stringify`.
+- **N-G: answered.** Review Focus 4 now says the grid half is not proven.
+
+## Should fix
+
+**S-D. `rowsQuery` cannot know the title column from the arguments the plan gives it.**
+- **Plan:** Task 3 Interfaces says `rowsQuery(view: View, layout: Layout, window)` maps "`title` … to the source's title column". The Step 3 test asserts the same thing.
+- **Source:** none of the grid's types carries the name of the title column:
+  - `View` / `TableDef` (`apps/grid` ← `src/types.ts:28-66`) has `key`, `model`, `date_field` and so on, but no title column.
+  - `Model` (`types.ts:18-24`) has only `title_label` and `title_readonly`.
+  - `toRow(r, title)` already needs the title column passed in separately for the same reason.
+- **Risk:** as written, the executor will either widen `View` without telling anyone or hard-code the mapping.
+- **Smallest change:** give `rowsQuery` the title column explicitly, as `rowsQuery(view, layout, window, titleColumn: string)`. The caller in `api.ts` takes it from the memoised schema, the same way `toRow` gets it. The other option is to state that `tableDefOf` adds a `title_field` to the adapter's view type.
+
+## Note
+
+- **N-H. One description says two things twice.** In the `toSavedViews` line in Task 3 Interfaces, `shared: true, mine: false, editable: false, owner: {…}` appears twice: once in the object literal and again after the `arrangement` clause. It is harmless, but the second copy can be deleted.
+- **N-I. `bun run check` now runs against the copied Folio file one task earlier.** Folio's `filter-compile.ts` uses semicolons (for example `| '$contains';`), and this repo's Biome config is set to no semicolons. Task 1 Step 4's `bun run check` therefore needs the copy formatted, or adapted, when it is made. This was already true when the file lived in Task 2, so it is not a new problem. The executor should just expect a `biome check --write` on that file.
+
+## Premises checked
+- The `apps/grid/**` override with the formatter, linter and assist off makes `check` pass → verified last round with biome 2.5.15 → holds.
+- `date_field` on the view object drives the window → `src/ui/App.tsx:100` → holds with `tableDefOf`.
+- The title column can be found from `View` → `src/types.ts:28-66`, `18-24` → **does not hold** (S-D).
+- The grid's column ids are `title`, a field key, `lookups.*` or `rollups.*` → `src/grid/columns.ts:9` → holds. The plan's mapping covers all of them.
+- Filter chips only ever name fields that have options, never `title` → `src/ui/Filters.tsx:15` → holds, so filters need no title mapping.
+- `filter-compile.ts` is available to Task 1 → now in Task 1's Files → holds.
+- The grid at 7efef97 → the worktree HEAD is `7efef97` → holds.
+
+Answered by the author in blob a093e798ffc7137f7b69487669e831c0988101ef: S-D (`rowsQuery(view, layout, window, titleColumn)`, fed from the memoised schema), N-H (duplicate removed), N-I (`biome check --write` on the copy, in Task 1's Files).
+
+---
+
 # Plan review: step-0a, the read-only engine slice (re-review)
 Reviewed-plan: a969ce750c69468f5c5f17caa82261b063c9b3d7 specs/step-0a/plan.md
 Verdict: not ready. There is one Blocking finding, and it is a one-key fix: the B1 answer misses Biome's assist. There are three Should-fix findings. S1–S4 from the previous review are answered. S1 is answered in substance, but the `SavedView` shape it specifies is incomplete (S-A below).
