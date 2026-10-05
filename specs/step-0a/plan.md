@@ -11,7 +11,7 @@ First working version: Task 2 — `bun packages/engine/src/serve.ts --domain @wo
 
 **Spec:** `specs/step-0a/spec.md` (parent: `docs/SPEC.md`).
 
-**Simplest design:** The simplest thing that meets the ask is the grid's own client-side filtering against an engine that returns every row of a source. It is not used: the handoff asks for filter, sort, group and window as route parameters, the spec compiles filters to `JSON_EXTRACT` server-side, and the port number is only honest if the grid's real path (layout → server) is ported now. Everything else is the simplest available: one generated-DDL migrator, no drizzle-kit, one adapter file between engine and grid, unreachable grid code left as copied.
+**Simplest design:** The simplest thing that meets the ask is the grid's own client-side filtering against an engine that returns every row of a source. It is not used because R5 and R9 require filter, sort, group and window as route parameters and the layout sent to the server; the grid today applies all three in the browser (`grid/filter.ts`, `grid/useTable.ts`, `grid/group.ts`) and keeps doing so on the rows it receives, so server and client agree and the client still draws the group headers. Saved views reuse the grid's own `SavedView.arrangement` seam (`ui/views.ts`) instead of a new one. Everything else is the simplest available: one generated-DDL migrator, no drizzle-kit, one adapter file between engine and grid, unreachable grid code left as copied.
 
 ## Global Constraints
 
@@ -35,10 +35,10 @@ First working version: Task 2 — `bun packages/engine/src/serve.ts --domain @wo
 2. **SQL injection through a value** — `filter={"status":"x' OR '1'='1"}` → **every value is a Drizzle bound parameter, never interpolated.**
 3. **Injection through `sort` / `group`** — `sort=titel;DROP TABLE activiteit` → **each sort and group key must be a declared column of the source (custom keys not sortable in 0a); else 400.**
 4. **Source selection beyond declarations** — `/rows/_migrations`, `/rows/sqlite_master`, `/rows/saved_view` → **`:source` resolves only against declared dataset and query names; anything else is 404.**
-5. **Resource exhaustion through the filter** — 500 keys, or `$contains` with 10k values → **Folio's `MAX_FILTER_CLAUSES = 50` and `CONTAINS_MAX_VALUES = 100` kept; malformed JSON is 400.**
+5. **Resource exhaustion and malformed filters** — 500 keys, `$contains` or `$in` with 10k values, an unknown operator, a value of the wrong shape (`{"status":[1,2]}`, `{"status":{"$eq":{"a":1}}}`), `$contains` on a declared column, `custom.<key>` on a query → **Folio's `MAX_FILTER_CLAUSES = 50` and `CONTAINS_MAX_VALUES = 100` kept, plus `IN_MAX_VALUES = 100` for `$in` / `$nin`; values must be scalars (arrays only for `$in` / `$nin` / `$contains`); `$contains` only on `custom.<key>`; `custom.<key>` only on a dataset; malformed JSON and every `FilterCompileError` become 400 `bad_filter`.**
 6. **Window injection** — `from=2026-01-01' OR 1=1` → **`from` / `to` must match `^\d{4}-\d{2}-\d{2}$`, bound as parameters.**
 
-**Mitigations — where they live.** `resolveKey()` and `compileFilter()` in `packages/engine/src/filter.ts` (1, 2, 5); `parseRowsParams()` in `packages/engine/src/params.ts` (3, 6); `sourceOf()` in `packages/engine/src/registry.ts` (4).
+**Mitigations — where they live.** `filterCompile()` in `packages/engine/src/filter-compile.ts` and `resolveKey()` / `compileFilter()` in `packages/engine/src/filter.ts`, which converts every `FilterCompileError` into `ApiError(400, 'bad_filter')` (1, 2, 5); `parseRowsParams()` in `packages/engine/src/params.ts` (3, 6); `sourceOf()` in `packages/engine/src/registry.ts` (4).
 
 **Deferrals.** No authentication or actor scoping: 0a is read-only and bound to 127.0.0.1, so any local process may read every row — acceptable for a dev slice with invented fixtures; auth is step 0's magic-link and actor work. No rate limiting, same reason. A query's own SQL is trusted: it is code in a domain package, not input.
 
@@ -48,12 +48,12 @@ First working version: Task 2 — `bun packages/engine/src/serve.ts --domain @wo
 |---|---|---|---|
 | Grid port (copy, WP removal, adapter, layout → server) | the app rendered against `/api` | unit · `apps/grid/src/**/*.test.ts(x)` (ported suite) + `apps/grid/src/engine.test.ts` · `bun run --filter @worktable/grid test` | planning-grouped-sorted, planning-status-filter, query-view-loads |
 | Rows REST + filter compiler + params | `GET /api/rows/:source`, `GET /api/schema` | integration · `packages/engine/test/rows.test.ts`, `packages/engine/test/filter.test.ts` · `bun test packages/engine` — denials first: attacks 1–6 each assert 400/404 and that the database is unchanged | planning-status-filter |
-| Migrator | `migrate(sqlite, domain)` | integration · `packages/engine/test/migrate.test.ts` · `bun test packages/engine` | none — proven by flow |
+| Migrator (R3's refusal) | `migrate(sqlite, domain)` | integration · `packages/engine/test/migrate.test.ts` · `bun test packages/engine` | none — proven by flow |
 | plandag | `plandag(startAt, dayLineHour)` | unit · `packages/theatre/test/plandag.test.ts` · `bun test packages/theatre` | planning-grouped-sorted |
 | Theatre declarations, view, seeds | `@worktable/theatre` default export | none — configuration over the engine; proven by flow | all three |
 | Gate | `bun run gate` | e2e · `e2e/step-0a.spec.ts` · `bun run e2e` | all three |
 
-E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in plandag order; inside a day rows run by `start_at`. **planning-status-filter** — the Planning view opens filtered on `status = bevestigd`; choosing `optie` on the status chip shows only optie rows and the `/api/rows/activiteit` request carries `filter` with `optie`. **query-view-loads** — open "Per productie per dag"; rows load from `/api/rows/productie_dag`.
+E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in plandag order; inside a day rows run by `start_at`. **planning-status-filter** — the Planning view opens filtered on `status = bevestigd`; removing that chip and adding Status: optie shows only optie rows and the `/api/rows/activiteit` request carries `filter` with `optie`. **query-view-loads** — open "Per productie per dag"; rows load from `/api/rows/productie_dag`.
 
 ## Review Focus
 
@@ -81,7 +81,7 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
 **Files:**
 - Create: `packages/engine/src/declare.ts`, `packages/engine/src/ddl.ts`, `packages/engine/src/migrate.ts`, `packages/engine/src/tables.ts`, `packages/engine/src/saved-view.ts`, `packages/engine/test/migrate.test.ts`
 - Create: `packages/theatre/src/plandag.ts`, `packages/theatre/src/datasets.ts`, `packages/theatre/src/queries/productie_dag.sql`, `packages/theatre/src/queries.ts`, `packages/theatre/src/seed.ts`, `packages/theatre/test/plandag.test.ts`
-- Modify: `packages/engine/src/index.ts`, `packages/theatre/src/index.ts`, `packages/engine/package.json`, `packages/theatre/package.json` (deps: `drizzle-orm`, `zod`; theatre depends on `@worktable/engine`), root `package.json` (`gate`, `test` scripts)
+- Modify: `packages/engine/src/index.ts`, `packages/theatre/src/index.ts`, `packages/engine/package.json`, `packages/theatre/package.json` (deps: `drizzle-orm`, `zod`; theatre depends on `@worktable/engine`), root `package.json` (`test` script: `bun test packages`)
 
 **Interfaces:**
 - Produces (`@worktable/engine`):
@@ -89,10 +89,12 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
   - `interface ColumnDecl { type: ColumnType; label: string; nullable?: boolean; default?: string | number | boolean | null; options?: Record<string, string>; relation?: string /* dataset name */ }`
   - `interface DatasetDecl { kind: 'dataset'; name: string; label: string; title: string; date?: string; columns: Record<string, ColumnDecl>; indexes?: string[][]; custom: boolean }`
   - `interface QueryDecl { kind: 'query'; name: string; label: string; title: string; date?: string; sql: string; columns: Record<string, ColumnDecl> }` — `columns` must include `id`
+  - Ruling: R1's `relations` are declared per column as `ColumnDecl.relation` — one place for a column and its target; a many-to-many is not needed before step 2.
   - `defineDataset(d: Omit<DatasetDecl, 'kind'>): DatasetDecl`, `defineQuery(q: Omit<QueryDecl, 'kind'>): QueryDecl`
   - `interface SavedViewSeed { name: string; source_type: 'dataset' | 'query'; source: string; skin: 'table'; filters: FilterInput; sort: string[]; group_by: string | null; visible_fields: string[] }`
   - `interface Domain { datasets: DatasetDecl[]; queries: QueryDecl[]; seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void; views: SavedViewSeed[] }`
-  - `migrate(sqlite: Database, domain: Domain): void` — throws `MigrationError` (`.source` = dataset name) on a changed dataset hash
+  - `migrate(sqlite: Database, domain: Domain): void` — throws `MigrationError` (`.source` = dataset name) on a changed dataset hash; this refusal is R3's placeholder, and the end report names ALTER/rebuild as the step 1–2 item
+  - `seedDomain(sqlite: Database, domain: Domain): void`
   - `tableOf(decl: DatasetDecl | QueryDecl): SQLiteTable` (runtime Drizzle table; a view is read through `sqliteView`-free `sqliteTable` of its declared columns)
 - Produces (`@worktable/theatre`): `plandag(startAt: string, dayLineHour: number): string`; default export `Domain`.
 
@@ -108,16 +110,17 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
 - `a second run with the same declarations changes nothing`
 - `a changed dataset declaration throws MigrationError naming it and leaves the table as it was`
 - `a changed query SQL recreates the view`
-- `creates saved_view and inserts the domain's views once`
+- `creates saved_view`
+- `seedDomain inserts the domain's rows and its saved views` (in `migrate.test.ts`)
 
 - [ ] **Step 2: Run, expect FAIL** — `bun test packages/theatre packages/engine` → module not found.
 
 - [ ] **Step 3: Implement**
 
 `ddl.ts`: `datasetDdl(d: DatasetDecl): string[]` and `viewDdl(q: QueryDecl): string[]` — pure, deterministic text (the hash input). Column types: text/date/datetime/json → `TEXT`, integer/boolean → `INTEGER`, real → `REAL`; `relation` → `REFERENCES <dataset>(id)`; `custom` → `custom TEXT NOT NULL DEFAULT '{}'`. Identifiers are declaration names, validated `^[a-z][a-z0-9_]*$` at `define*` time (throw on others).
-`migrate.ts`: one transaction; `_migrations(source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)`; SHA-256 of the joined DDL via `Bun.CryptoHasher`; datasets before queries; `saved_view` is an engine-owned dataset declared in `saved-view.ts` (spec's columns) migrated the same way; views seeded only when `saved_view` is empty.
+`migrate.ts`: one transaction; `_migrations(source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)`; SHA-256 of the joined DDL via `Bun.CryptoHasher`; datasets before queries; `saved_view` is an engine-owned dataset declared in `saved-view.ts` (spec's columns) migrated the same way; `migrate` only creates; seeding — domain rows and SavedView rows alike — is `seedDomain(sqlite, domain)`, run by `serve.ts --fresh` and by the tests, in one place.
 `theatre/datasets.ts`: Productie (title `titel`; status options ontwikkeling · actief · archief; `organisatie_id` plain integer) and Activiteit (title `omschrijving`, date `plandag`; `productie_id` relation `productie`; soort, status, bron options from the spec; `speelreeks_id`, `locatie_id` plain integers; index `[['plandag']]`), both `custom: true`, labels Dutch.
-`productie_dag.sql`: `SELECT MIN(a.id) AS id, a.productie_id, p.titel AS productie, a.plandag, COUNT(*) AS activiteiten, SUM(a.soort = 'voorstelling') AS voorstellingen, SUM(a.soort = 'repetitie') AS repetities, SUM(a.soort IN ('opbouw','afbouw')) AS op_afbouw FROM activiteit a JOIN productie p ON p.id = a.productie_id WHERE a.deleted_at IS NULL GROUP BY a.productie_id, a.plandag`; declared with title `productie`, date `plandag`, `productie_id` relation `productie`.
+`queries.ts` reads the file with `readFileSync(new URL('./queries/productie_dag.sql', import.meta.url), 'utf8')`. `productie_dag.sql`: `SELECT MIN(a.id) AS id, a.productie_id, p.titel AS productie, a.plandag, COUNT(*) AS activiteiten, SUM(a.soort = 'voorstelling') AS voorstellingen, SUM(a.soort = 'repetitie') AS repetities, SUM(a.soort = 'opbouw') AS opbouw, SUM(a.soort = 'afbouw') AS afbouw, SUM(a.soort = 'reis') AS reis, SUM(a.soort = 'overnachting') AS overnachting, SUM(a.soort = 'maaltijd') AS maaltijd, SUM(a.soort = 'vergadering') AS vergadering, SUM(a.soort = 'andere') AS andere FROM activiteit a JOIN productie p ON p.id = a.productie_id WHERE a.deleted_at IS NULL GROUP BY a.productie_id, a.plandag`; declared with title `productie`, date `plandag`, `productie_id` relation `productie`.
 `seed.ts`: 3 invented producties, ~25 activiteiten over two weeks from 2026-10-12, every status present, at least one start at 00:30 and one at 23:00; `plandag` from `plandag(start_at, 5)`. Views: "Planning" (activiteit, group `plandag`, sort `['start_at']`, filters `{ status: 'bevestigd' }`, visible fields `productie_id, soort, start_at, eind_at, status, plaats`) and "Per productie per dag" (query `productie_dag`, sort `['plandag']`).
 
 - [ ] **Step 4: Run, expect PASS** — `bun test packages/theatre packages/engine` → all pass; `bun run check` → exit 0.
@@ -134,7 +137,7 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
 - Produces:
   - `createEngine(sqlite: Database, domain: Domain): Hono` — routes under `/api`
   - `GET /api/schema` → `{ sources: Record<string, { kind: 'dataset' | 'query'; label: string; title: string; date: string | null; columns: Record<string, ColumnDecl> }>; views: SavedViewRow[] }` where `SavedViewRow = SavedViewSeed & { id: number }` (filters parsed from JSON)
-  - `GET /api/rows/:source?filter=<json>&sort=a,-b&group=col&from=YYYY-MM-DD&to=YYYY-MM-DD` → `{ rows: EngineRow[]; total: number }`, `EngineRow = { id: number; custom: Record<string, unknown>; lookups: Record<string, { id: number; title: string } | null>; [column: string]: unknown }`
+  - `GET /api/rows/:source?filter=<json>&sort=a,-b&group=col&from=YYYY-MM-DD&to=YYYY-MM-DD` → `{ rows: EngineRow[]; total: number }`, `EngineRow = { id: number; custom: Record<string, unknown> /* {} for a query */; lookups: Record<string, { id: number; title: string } | null>; [column: string]: unknown }`
   - errors → `{ code: string; message: string }` with 400 (`bad_filter`, `bad_sort`, `bad_group`, `bad_window`, `no_date_column`) or 404 (`unknown_source`)
   - CLI: `bun packages/engine/src/serve.ts --domain <module> --db <file> [--port 4310] [--fresh]` (`--fresh` deletes the file, migrates, seeds); `Bun.serve({ hostname: '127.0.0.1' })`
 
@@ -145,7 +148,11 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
   - `sort on an undeclared key is 400 bad_sort` — `titel;DROP TABLE x`
   - `group on an undeclared key is 400 bad_group`
   - `unknown, internal and generic sources are 404 unknown_source` — `_migrations`, `sqlite_master`, `saved_view`
-  - `51 filter keys is 400; $contains with 101 values is 400; malformed JSON is 400`
+  - `51 filter keys is 400; $contains with 101 values is 400; $in with 101 values is 400; malformed JSON is 400`
+  - `unknown operator $regex is 400 bad_filter`
+  - `$contains on a declared column is 400 bad_filter`
+  - `array value without $in and object value under $eq are 400 bad_filter`
+  - `custom.key on a query is 400 bad_filter`
   - `window with a non-date is 400 bad_window`; `window on a source without date column is 400 no_date_column`
   Run → FAIL (no module).
 
@@ -160,7 +167,7 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
   - `schema lists every declared source and the saved views with parsed filters`
 
 - [ ] **Step 3: Implement**
-`registry.ts` `sourceOf(name): DatasetDecl | QueryDecl | null` over the domain's declarations only. `params.ts` `parseRowsParams(source, query): RowsParams | ApiError` with Zod for shape. `filter.ts` `compileFilter(ast: FilterAST, source, table): SQL | undefined` — `resolveKey()` maps a declared column to `table[col]`, `custom.<key>` to ``sql`json_extract(${table.custom}, ${'$.' + key})` ``; `$contains` keeps Folio's two-arg `json_each` guard. `rows.ts` runs one select with where/order/window and one `count(*)`, then one `IN` query per relation for lookups. Hono `onError` maps thrown `ApiError` to its status; anything else 500 with `code: 'internal'` and no SQL in the message.
+`registry.ts` `sourceOf(name): DatasetDecl | QueryDecl | null` over the domain's declarations only. `params.ts` `parseRowsParams(source, query): RowsParams | ApiError` with Zod for shape; parameters it does not know (the grid's `search`) are ignored, not refused. `filter.ts` `compileFilter(ast: FilterAST, source, table): SQL | undefined` — `resolveKey()` maps a declared column to `table[col]`, `custom.<key>` to ``sql`json_extract(${table.custom}, ${'$.' + key})` ``; `$contains` keeps Folio's two-arg `json_each` guard. `rows.ts` runs one select with where/order/window and one `count(*)`, then one `IN` query per relation for lookups. Hono `onError` maps thrown `ApiError` to its status; anything else 500 with `code: 'internal'` and no SQL in the message.
 
 - [ ] **Step 4: Run, expect PASS** — `bun test packages/engine` → all pass; `bun run check` → 0. Then `bun packages/engine/src/serve.ts --domain @worktable/theatre --db /tmp/wt.db --fresh &` and `curl -s '127.0.0.1:4310/api/rows/activiteit?group=plandag&sort=start_at' | head -c 400` shows rows; `ss -ltn | grep 4310` shows `127.0.0.1:4310` only.
 - [ ] **Step 5: Commit** — `feat(engine): GET /api/schema and /api/rows/:source with the filter AST, sort, group and window`.
@@ -172,16 +179,17 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
 - Create: `apps/grid/src/engine.ts` (adapter), `apps/grid/src/engine.test.ts`, `specs/step-0a/wp-assumptions.md`
 - Modify: `apps/grid/src/api.ts`, `main.tsx`, `types.ts`, `ui/App.tsx`, `grid/layout.ts`, `vite.config.ts` (proxy `/api` → `ENGINE_URL ?? http://127.0.0.1:4310`), `index.html`, `apps/grid/package.json` (`dev`, `test`, `typecheck`); whatever the ledger finds
 - Delete: `apps/grid/src/index.ts` (skeleton)
+- Modify: `biome.json` (override for `apps/grid/**`)
 
 **Interfaces:**
 - Consumes: Task 2's `/api/schema` and `/api/rows/:source` shapes.
-- Produces (`engine.ts`): `toSchema(s: EngineSchema): Schema` (sources → `models`, one `TableDef` per source a saved view uses, saved views → `View` with `key: 'saved:<id>'`, `writable` all false); `toRow(r: EngineRow, title: string): Row` (`title` from the title column, `fields` = the other columns, `lookups` as `{ id, title, status: '', fields: {} }`); `rowsQuery(view: View, layout: Layout, window): Record<string, string>` (filter JSON from layout chips as `$eq`, sort, group, from/to).
+- Produces (`engine.ts`): `toSchema(s: EngineSchema): Schema` (sources → `models`, one `TableDef` per source a saved view uses, no starting `views`, `writable` all false); `toSavedViews(s: EngineSchema): SavedView[]` (each row → the grid's `SavedView` with `id`, `table`/`model` = source, `type: 'grid'`, `arrangement` built from its filters (`{field, value}` chips from `$eq` scalars), sort (`-x` → `desc`), `group_by` and `visible_fields` (as `hidden` = the other columns), `shared: true`, `mine: false`, `editable: false`, `owner: { id: 0, name: '' }`); `toRow(r: EngineRow, title: string): Row` (`title` from the title column, `fields` = the other columns, `lookups` as `{ id, title, status: '', fields: {} }`); `rowsQuery(view: View, layout: Layout, window): Record<string, string>` (filter JSON from layout chips as `$eq`, sort, group, from/to).
 
-- [ ] **Step 1: Copy and commit verbatim** — `git commit -m "chore(grid): copy ntdst-baseline services/views/app @ 7efef97 verbatim"` so the rework is the next diff.
+- [ ] **Step 1: Copy and commit verbatim** — with it, a `biome.json` `overrides` entry for `apps/grid/**` that turns the formatter and the linter off (the copied code fails 82 format and 89 lint checks under this repo's config, none WordPress — plan-review B1); the ledger lists it as "repo lint on the copied grid: not WordPress, deferred". `git commit -m "chore(grid): copy ntdst-baseline services/views/app @ 7efef97 verbatim"` so the rework is the next diff.
 - [ ] **Step 2: Write the ledger** — `specs/step-0a/wp-assumptions.md`, one row per assumption: `file:line · what it assumes · reachable? · rework (done in 0a: lines changed / deferred: to step N)`. Sweep with `grep -rnE "nonce|apiFetch|wp\.|rest_route|wp-json|ntdstViews|Boot|table:|publish|draft|post|capability|title_readonly|status"` over `src/` including tests, then read `api.ts`, `types.ts`, `App.tsx`, `space.ts`, `useSavedViews.ts`, `views.ts`, `matrix/*`, `grid/store.ts`, `grid/newRow.ts`, `grid/columns.ts`, `export/*`, `i18n.ts`. Unreachable code is logged too, marked deferred with the step that reaches it.
-- [ ] **Step 3: Write `engine.test.ts`** — `toSchema maps a dataset's columns to model fields by type (text→text, integer→int, real→float, boolean→bool, date→date, options→select, relation→relation)`; `toRow takes title from the declared title column`; `a saved view's filters become the layout's starting chips`; `rowsQuery sends chips as $eq filter JSON, sort with - for desc, group and the window`. Run `bun run --filter @worktable/grid test` → FAIL.
-- [ ] **Step 4: Rework** — `api.ts`: `fetch('/api' + path)`, errors from the engine's `{code, message}`; `rows()` takes the layout and calls `rowsQuery`; no `window.wp`, `window.ntdstViews`, `rest_route`, `?table=`. `main.tsx`: mount on `#root`, App boots from `schema()` (Boot type and boot props removed; App shows its spinner until the schema answers). `layout.ts` `defaults()`: starting chips from the view's filters. `App.tsx`: the rows effect also depends on the layout's filters, sort and group. Ported tests that encode WordPress (e.g. `api.test.ts`'s apiFetch mocks) are rewritten to the new seam, each listed in the ledger. Everything unreachable stays as copied.
-- [ ] **Step 5: Run, expect PASS** — `bun run --filter @worktable/grid test` → all pass; `bun run check` → 0 (`apps/grid` keeps its own `tsconfig.json`; it does not extend the base, so no rework comes from `noUncheckedIndexedAccess` that is not WordPress).
+- [ ] **Step 3: Write `engine.test.ts`** — `toSchema maps a dataset's columns to model fields by type (text→text, datetime→text (ISO text sorts correctly), json→json, integer→int, real→float, boolean→bool, date→date, options→select, relation→relation)`; `toRow takes title from the declared title column`; `toSavedViews builds the arrangement: Planning opens with the status chip bevestigd, sort start_at, group plandag`; `rowsQuery sends chips as $eq filter JSON, sort with - for desc, group and the window`. Run `bun run --filter @worktable/grid test` → FAIL.
+- [ ] **Step 4: Rework** — `api.ts`: `fetch('/api' + path)`, errors from the engine's `{code, message}`; `rows()` takes the layout and calls `rowsQuery`; no `window.wp`, `window.ntdstViews`, `rest_route`, `?table=`. `main.tsx`: mount on `#root`, App boots from `schema()` (Boot type and boot props removed; App shows its spinner until the schema answers). `savedViews()` resolves to `toSavedViews` of the cached schema; `prefs()` resolves to `{ order: {}, last: {} }`; `records(model, search)` calls `/api/rows/<model>` (the engine ignores `search`; the grid filters titles itself). `App.tsx`: move `useLayout` / `layout` above the rows effect and add the layout's filters, sort and group to its deps (one refetch and a store rebuild per chip change, accepted). Save and "Save as new" stay visible on a changed view and fail into the copied error toast (no `/api/views` route) — reachable, logged in the ledger, deferred to the SavedView-writes step. Ported tests that encode WordPress (e.g. `api.test.ts`'s apiFetch mocks) are rewritten to the new seam, each listed in the ledger. Everything unreachable stays as copied.
+- [ ] **Step 5: Run, expect PASS** — `bun run --filter @worktable/grid test` → all pass; `bun run check` → 0 (the skeleton's `apps/grid/tsconfig.json` is replaced by the copied one, which does not extend the base, so no rework comes from `noUncheckedIndexedAccess`; the grid keeps its own `typescript ~6.0.2` dev dependency for its `typecheck`).
 - [ ] **Step 6: Commit** — `feat(grid): read the engine's REST; every WordPress assumption removed or ledgered`.
 
 ### Task 4: The browser gate
@@ -193,11 +201,11 @@ E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in 
 **Interfaces:**
 - Consumes: Task 2's CLI, Task 3's `vite` dev server.
 
-- [ ] **Step 1: Write the three flows** in `e2e/step-0a.spec.ts` against `webServer`: engine `--fresh --db e2e/.tmp/e2e.db --port 4311`, Vite on 5174 with `ENGINE_URL=http://127.0.0.1:4311`, window navigated to `#from=2026-10-12&to=2026-10-25`:
+- [ ] **Step 1: Write the three flows** in `e2e/step-0a.spec.ts` against `webServer`: engine `--fresh --db e2e/.tmp/e2e.db --port 4311`, Vite on 5174 with `ENGINE_URL=http://127.0.0.1:4311`, window navigated to `#from=2026-10-12` (the grid shows the Monday–Sunday week of `from`; `to` is ignored):
   - **planning-grouped-sorted** — group headers' days ascend; within each group `start_at` cells ascend; the 00:30 activity of 2026-10-14 sits under the 2026-10-13 header
-  - **planning-status-filter** — every row's status reads `bevestigd`; choose `optie` on the status chip; `page.waitForRequest` on `/api/rows/activiteit` has a `filter` containing `optie`; every row reads `optie`
+  - **planning-status-filter** — every row's status reads `bevestigd`; remove the status chip, then "+ Filter" → Status → optie; `page.waitForRequest` on `/api/rows/activiteit` has a `filter` containing `optie`; every row reads `optie`
   - **query-view-loads** — open "Per productie per dag"; the response for `/api/rows/productie_dag` is 200 and the grid shows its rows
-- [ ] **Step 2: Run** — `bun run e2e` → 3 passed. Then `bun run gate` → exit 0.
+- [ ] **Step 2: Run** — `bunx playwright install chromium` once, then `bun run e2e` → 3 passed. Then `bun run gate` → exit 0.
 - [ ] **Step 3: Commit** — `test(e2e): step 0a gate in a real browser`.
 
 Then stop: the Close (`make review` equivalent, `/shakeout`) and the report to Stefan.
