@@ -1,0 +1,223 @@
+import type { Filter, Layout, SortKey } from './grid/layout'
+
+export type FieldType =
+  | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date'
+  | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
+
+export interface Field {
+  type: FieldType
+  label: string
+  required: boolean
+  fact: boolean
+  options?: Record<string, string>
+  relation?: { model: string; multiple: boolean }
+  description?: string
+}
+
+export interface Model {
+  key: string
+  label: string
+  title_label: string
+  title_readonly: boolean
+  fields: Record<string, Field>
+}
+
+export type ViewType = 'grid' | 'matrix'
+
+/** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
+export interface TableDef {
+  key: string
+  label: string
+  model: string
+  date_field?: string
+  /** A range's last day: with it, the window shows every record whose range overlaps the week. */
+  end_field?: string
+  columns?: string[]
+  lookups?: Record<string, string[]>
+  rollups?: Record<string, Rollup>
+  /** The fields the "+ Filter" menu offers first, in this order. */
+  filters?: string[]
+  /** Field keys in order; a leading `-` sorts that key descending. */
+  sort?: string[]
+  /** `scoped`: its rows are the selected space record's; `global`: beside any space. */
+  space?: 'scoped' | 'global'
+  /** A matrix table: the records that join a row to a column, and what they mean. */
+  join?: MatrixJoin
+  /** A matrix table: the table whose rows say which columns are away when. */
+  away?: MatrixAway
+  types: ViewType[]
+}
+
+/** A view as served: its table's keys, then the view's own over them (`Json::view`). */
+export interface View extends Omit<TableDef, 'types'> {
+  types?: ViewType[]
+  type?: ViewType
+  /** The table this view is one way of working with. */
+  table: string
+  table_label?: string
+  group?: string | null
+  /** The field a type is built on; null for a grid and a matrix. */
+  field?: string | null
+  /** Column ids the view starts hidden. */
+  hidden?: string[]
+  /** A site's starting view: shared, never written. */
+  starting?: boolean
+}
+
+/** A view's arrangement in the app: the grid's layout, plus the columns a matrix picked. */
+export type Arrangement = Layout & { picked: number[] }
+
+/** An arrangement as the server stores it (`Arrangement::clean()`): widths are a list. */
+export interface StoredArrangement {
+  hidden: string[]
+  order: string[]
+  widths: { id: string; width: number }[]
+  sort: SortKey[]
+  filters: Filter[]
+  group: string | null
+  picked: number[]
+}
+
+/** A view someone saved, merged with its table by the server; its key is its id. */
+export interface SavedView extends View {
+  id: number
+  arrangement: StoredArrangement
+  shared: boolean
+  owner: { id: number; name: string }
+  mine: boolean
+  /** Its owner, or an administrator on a shared one, may write it. */
+  editable: boolean
+}
+
+/** What `POST views` takes: a new view, always of no field. */
+export interface NewView {
+  name: string
+  table: string
+  type: ViewType
+  field: null
+  shared: boolean
+  arrangement: StoredArrangement
+}
+
+/** A user's own order of each table's views and the view last used there, by table key. */
+export interface Prefs {
+  order: Record<string, string[]>
+  last: Record<string, string>
+}
+
+export interface MatrixJoin {
+  model: string
+  row_field: string
+  column_field: string
+  name_field?: string
+  cell_field: string
+  note_field?: string
+  /** What a typed key means: key → the cell's value. */
+  keys: Record<string, string>
+  /** The mark a cell shows: value → mark. */
+  marks: Record<string, string>
+  /** The cell value the counts add up. */
+  count: string
+}
+
+export interface MatrixAway {
+  table: string
+  column_field: string
+  label_field: string
+  model: string
+  date_field: string
+  end_field: string
+}
+
+/** A join record as a row carries it under `rollups.cells`. */
+export type MatrixCell = Lookup
+
+export interface MatrixColumn {
+  /** `record:<id>` or `name:<normalised name>`. */
+  key: string
+  kind: 'record' | 'name'
+  id?: number
+  title: string
+}
+
+export interface Rollup {
+  /** The column's header; the humanised key without one. */
+  label?: string
+  model: string
+  field: string
+  count?: boolean
+  list?: boolean
+  filter?: Record<string, string | number | boolean>
+}
+
+export interface Schema {
+  models: Record<string, Model>
+  tables: TableDef[]
+  views: View[]
+  writable: Record<string, boolean>
+  capability: string
+  /** The relation that scopes a view, and the model it points at; null when the site configured none. */
+  space?: Space | null
+  /** The site's words for the app's own strings, by `i18n.ts` key. */
+  strings?: Record<string, string>
+}
+
+export interface Space {
+  field: string
+  model: string
+}
+
+/** The space record a scoped view's rows belong to. */
+export interface Scope {
+  field: string
+  id: number
+}
+
+export interface Row {
+  id: number
+  title: string
+  status: string
+  fields: Record<string, unknown>
+  lookups?: Record<string, Lookup | null>
+  rollups?: Record<string, number | unknown[]>
+}
+
+export interface Lookup {
+  id: number
+  title: string
+  status: string
+  fields: Record<string, unknown>
+}
+
+export interface RowsResponse {
+  rows: Row[]
+  total: number
+}
+
+/** `window.ntdstViews`, as AdminApp::config() inlines it. */
+export interface Boot {
+  root: string
+  tables: TableDef[]
+  views: View[]
+  writable: Record<string, boolean>
+  capability: string
+}
+
+export interface ApiError {
+  code: string
+  message: string
+}
+
+export interface ApiFetchOptions {
+  url: string
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  data?: Record<string, unknown>
+}
+
+export type ApiFetch = (options: ApiFetchOptions) => Promise<unknown>
+
+/** The inclusive window a dated view shows, as local `YYYY-MM-DD` days. */
+export interface DateWindow {
+  from: string
+  to: string
+}

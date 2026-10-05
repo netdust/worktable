@@ -1,0 +1,47 @@
+import { BoolCell } from './Bool'
+import { DateCell, DateEditor } from './Date'
+import { NumberCell, NumberEditor } from './Number'
+import type { CellProps, EditorProps } from './props'
+import { RelationCell, RelationEditor } from './Relation'
+import { SelectCell, SelectEditor } from './Select'
+import { InputEditor, LongTextEditor, TextCell } from './Text'
+import { TimeCell, TimeEditor } from './Time'
+
+export function Display({ column, row, onToggle }: CellProps & { onToggle: () => void }) {
+  switch (column.kind) {
+    case 'select':
+      return <SelectCell column={column} row={row} />
+    case 'date':
+      return <DateCell column={column} row={row} />
+    case 'time':
+      return <TimeCell column={column} row={row} />
+    case 'relation':
+      return <RelationCell column={column} row={row} />
+    case 'bool':
+      return <BoolCell column={column} row={row} onToggle={onToggle} />
+    case 'number':
+    case 'rollup':
+      return <NumberCell column={column} row={row} />
+    default:
+      return <TextCell column={column} row={row} />
+  }
+}
+
+export function Editor(props: EditorProps) {
+  switch (props.column.kind) {
+    case 'select':
+      return <SelectEditor {...props} />
+    case 'date':
+      return <DateEditor {...props} />
+    case 'time':
+      return <TimeEditor {...props} />
+    case 'number':
+      return <NumberEditor {...props} />
+    case 'longtext':
+      return <LongTextEditor {...props} />
+    case 'relation':
+      return <RelationEditor {...props} />
+    default:
+      return <InputEditor {...props} />
+  }
+}
