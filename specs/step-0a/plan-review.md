@@ -1,3 +1,99 @@
+# Plan review: step-0a, the read-only engine slice (re-review)
+Reviewed-plan: a969ce750c69468f5c5f17caa82261b063c9b3d7 specs/step-0a/plan.md
+Verdict: not ready. There is one Blocking finding, and it is a one-key fix: the B1 answer misses Biome's assist. There are three Should-fix findings. S1–S4 from the previous review are answered. S1 is answered in substance, but the `SavedView` shape it specifies is incomplete (S-A below).
+
+## Previous findings: answered?
+- **B1, answered in part.** The new `overrides` entry turns the formatter and the linter off, but Biome 2's `biome check` also runs the assist, and `organizeImports` still fails. See Blocking A1.
+- **S1, answered.** Saved views now go through `SavedView.arrangement`, and the `defaults()` edit is gone from Step 4. Two loose ends: `grid/layout.ts` is still in Task 3's Modify list, and the field list for `toSavedViews` is incomplete (S-A).
+- **S2, answered.** `savedViews`, `prefs` and `records` are each named with their rework. The engine ignores unknown params. Save and Save-as stay reachable and go to the ledger. More reachable writes are listed in N-B.
+- **S3, answered.** There is a denial test for each input, plus the `IN_MAX_VALUES` cap. `FilterCompileError` becomes `ApiError(400,'bad_filter')`, and `custom` is `{}` on a query row.
+- **S4, answered.** Task 1 adds only `test`, and Task 4 owns `gate`.
+- **N1–N13, all answered** (N3/N4 wording, N5 mapping, N6 ruling, N7 all nine soorten, N8 `readFileSync`, N9 one `seedDomain`, N10 R3 pointer, N12 tsconfig wording, N13 the chromium install).
+
+## Blocking
+
+**A1. Turning the formatter and the linter off is not enough for `bun run check` to pass on the verbatim grid in Biome 2.5.15.**
+- **Plan:** Task 3 Step 1 says "a `biome.json` `overrides` entry for `apps/grid/**` that turns the formatter and the linter off". Step 5 then says "`bun run check` → 0".
+- **What I ran:** the repo's `biome.json` (`/home/ntdst/Sites/worktable/biome.json`, schema 2.5.15, no `assist` key, so the assist is on by default) with exactly that override (`"includes": ["apps/grid/**"], "formatter": {"enabled": false}, "linter": {"enabled": false}`), over the 7efef97 app copied with the plan's exclusions, using the repo's own `node_modules/.bin/biome` 2.5.15.
+- **Result:** 20 errors remain, all `assist/source/organizeImports`, for example in `src/ui/views.test.ts`. The `check` script (`package.json:10`, `biome check .`) exits non-zero.
+- **With the assist off as well:** adding `"assist": { "enabled": false }` to the same override gives a clean `biome check` ("Checked 1 file … No fixes applied", meaning every grid file is skipped).
+- **Fix:** in Task 3 Step 1, the override turns off the formatter, the linter **and the assist**. The ledger row is unchanged.
+
+## Should fix
+
+**S-A. `toSavedViews` as specified leaves out the keys the grid reads from the view itself, and the date window goes off without any error.**
+- **Plan:** Task 3 Interfaces says `toSavedViews` builds "`id`, `table`/`model` = source, `type: 'grid'`, `arrangement` …, `shared: true`, `mine: false`, `editable: false`, `owner`".
+- **What the grid expects:** in the source, a saved view arrives already merged with its table.
+  - `services/views/Rest/Json.php:83-94` (`Json::saved`) gives the table's keys first, then `key => (string) $saved['id']`, `label`, `table`, `table_label`, then the saved keys.
+  - The grid's own fixture matches: `ui/App.test.tsx:956` has `key: String(id), id, label, table, table_label, model, date_field: 'date', type: 'grid', starting: false, …`.
+- **Why it matters:** App takes the window and the filter menu from the open view object, not from its `TableDef`.
+  - `ui/App.tsx:100` `const dated = Boolean(view?.date_field)`
+  - `App.tsx:112` `const asked = dated ? range : {}`
+  - `App.tsx:140` `view?.filters`
+- **What breaks:** tsc forces `key` and `label`, but the plan does not say what they hold. tsc does not force `date_field`, because it is optional. Without it, Planning and "Per productie per dag" are not dated:
+  - no week toolbar;
+  - `from`/`to` are never sent, so `rowsQuery`'s window path is dead;
+  - both seeded weeks render.
+  - Task 4's premise "the grid shows the Monday–Sunday week of `from`" is false. The three flows would still pass, so the gate would not catch it.
+- **What does hold:**
+  - `isSaved` (`views.ts:34-36`: `id` is a number and `arrangement` is an object) holds.
+  - `useLayout` → `layoutOf` → `arrangementOf` → `fromStored` (`grid/hooks.ts:12`, `views.ts:39-47`) applies the arrangement.
+  - `groupTables` (`ui/tables.ts:12-21`) keeps a table only when `view.table === table.key`, so `TableDef.key` must equal the source name.
+  - With `mine: false`, `onSave` is undefined (`App.tsx:197`), and the Toolbar's Save button falls through to `onSaveAs` (`Toolbar.tsx:44-50`).
+- **Fix:** specify `toSavedViews(row) = { ...tableDefOf(row.source), key: String(row.id), label: row.name, table: row.source, table_label, type: 'grid', starting: false, id, arrangement, shared: true, owner, mine: false, editable: false }`, where the `TableDef` carries `date_field` = the source's `date`. Add an `engine.test.ts` case: "Planning's SavedView has key '<id>', label 'Planning', date_field 'plandag'".
+
+**S-B. `rowsQuery` sends every layout sort key to a route that refuses undeclared keys.**
+- **Plan:** Task 3 Interfaces: "`rowsQuery(view, layout, window)` (… sort, group …)". Threat model attack 3: "each sort and group key must be a declared column … else 400".
+- **The grid's column ids:** `title`, a field key, `lookups.<field>.<name>` or `rollups.<key>` (`grid/columns.ts:10`).
+- **What breaks:** a click on the title column header puts `{id:'title'}` in `layout.sort`. `rowsQuery` sends `sort=title`, the engine answers 400 `bad_sort`, and the sheet shows the error state.
+- **Fix:** `rowsQuery` maps `title` to the source's title column and leaves out non-field ids, which the grid sorts on the client anyway. Add one `engine.test.ts` case for it.
+
+**S-C. Task 1 uses a type that only Task 2 creates.**
+- **Plan:** Task 1 Interfaces has `SavedViewSeed { … filters: FilterInput … }`, and Task 1 Step 4 runs `bun run check`, which typechecks.
+- **The problem:** `FilterInput` comes from `packages/engine/src/filter-compile.ts`, which Task 2's Files creates. Task 1's Files does not.
+- **Fix:** move the copy of `filter-compile.ts` (types and limits) into Task 1's Files, or type the field `Record<string, unknown>` in Task 1.
+
+## Note
+
+- **N-A. Cache the `/api/schema` promise, not its result.** App calls `schema()` and `savedViews()` in the same synchronous effect (`App.tsx:72,77`). If "the cached schema" is a variable filled when `schema()` resolves, `savedViews()` runs before that and finds nothing. Say "the memoised `/api/schema` promise" in Task 3 Step 4. `api.test.ts` then needs a reset between tests.
+- **N-B. More saved-view writes are reachable than the plan names.**
+  - "Duplicate" is offered on every saved view (`ui/ViewList.tsx:49`) and goes to `createView`.
+  - "+ New view" (`Rail.tsx:43`, `onNewView`) goes to `create` → `createView`.
+  - `savePrefs` fires 500 ms after any view switch (`useSavedViews.ts:42-46`; e2e flow 3 triggers it). Its 404 is swallowed.
+  - The ledger sweep should find all three. Naming them in Step 4 next to Save / Save-as keeps the "reachable" column honest.
+- **N-C. Leftover Modify entry.** Task 3 Files still lists `grid/layout.ts`, but no step changes it now that S1 is answered. Drop it, or the executor will look for an edit to make.
+- **N-D. The seed row the e2e flow relies on is not pinned.**
+  - planning-grouped-sorted asserts that "the 00:30 activity of 2026-10-14 sits under the 2026-10-13 header" on Planning, which opens filtered on `bevestigd`.
+  - Task 1's seed says only "at least one start at 00:30". Pin it as `start_at 2026-10-14T00:30`, status `bevestigd`.
+- **N-E. Element shape inside `$in`/`$nin` is not covered.** Folio's `filterCompile` checks only that `$in` is an array (`filter-compile.ts:85-87`). `{"status":{"$in":[{"a":1}]}}` would bind an object and give a 500. Attack 5's "values must be scalars" covers it in words, but the denial list tests only a top-level array and an object under `$eq`. Add `$in` holding an object to that test.
+- **N-F. Use stable deps when the rows effect takes layout values.** The `layout` object changes identity on every width or hidden-column change (`grid/hooks.ts:13`). Keying on serialised filters, sort and group keeps "one refetch per chip change" true.
+- **N-G.** Review Focus 4 cites "the grid's empty state", but only the Rows REST row tests the `[]` answer. That is fine as long as the reader knows the grid half is unproven.
+
+## Premises checked
+- Biome override with formatter and linter off makes `check` pass → repo `biome.json` + `package.json:10`, run with biome 2.5.15 → **does not hold** (20 organizeImports errors). With the assist also off → holds (A1).
+- `overrides` with `includes` is valid in Biome 2.5 → biome 2.5.15 accepted it → holds.
+- `SavedView.arrangement` drives the layout → `ui/views.ts:39-47`, `grid/hooks.ts:9-24` → holds.
+- `isSaved` accepts the adapter's rows → `views.ts:34-36` → holds.
+- Saved-view key shape → `Rest/Json.php:86` and `App.test.tsx:956` give `String(id)` → the plan does not specify it (S-A).
+- Window driven by the view's own `date_field` → `App.tsx:100,112` → **does not hold** for `toSavedViews` as specified (S-A).
+- `mine:false/editable:false` → Save falls through to Save-as → `App.tsx:197`, `Toolbar.tsx:44-50` → holds.
+- `savedViews()`/`prefs()` called on mount → `App.tsx:77-78` → holds, with a promise cache (N-A).
+- `records()` reachable through `useFilterNames` → `useFilterNames.ts:28` → holds. The engine ignores `search` → holds.
+- `Filter.value` is a string, so `$eq` scalar chips round-trip → `grid/layout.ts:8-12`, `filter.ts:13-18` → holds.
+- A relation scalar works in `filterValue` → `filter.ts:15` → holds.
+- Sort ids sent as declared columns → `columns.ts:10` (`title`, `lookups.*`) → does not hold for every id (S-B).
+- Folio `filterCompile`: unknown op, `$in` non-array and `$contains` limits throw `FilterCompileError`; an array or object value without an operator passes as `$eq` → `filter-compile.ts:72-73,81-111` → holds. The plan's own check in `compileFilter` is required, and the plan states it.
+- Folio `$contains` two-arg `json_each` guard, path bound → `filter-to-drizzle.ts:84-89` → holds.
+- `FilterInput` available to Task 1 → created in Task 2 → does not hold (S-C).
+- Engine dynamic import of the domain by name passes the boundary check → `scripts/check-boundaries.ts:10-11` (string literals only) → holds.
+- Copied grid `package.json` / `tsconfig.json` → its own `typescript ~6.0.2`, `types: ["vite/client","node"]`, does not extend the base; root `check` runs `--filter '*' typecheck` → holds as the plan states.
+- Copied `index.html` mounts on `#ntdst-views-root` and `main.tsx` requires `window.ntdstViews` → both are in Task 3's Modify list → holds.
+- Activiteit columns `plaats`, `status` (optie · bevestigd · geannuleerd) and the nine soorten → `docs/SPEC.md:136` → holds. `productie_dag` counts every soort → holds.
+- R1–R11 each have a task, and threat-model attacks 1–6 each have a denial test → holds. Gaps are N-E and S-B.
+- No `ARCHITECTURE-INVARIANTS.md` in the repo → none to check.
+
+---
+
 # Plan review: step-0a, the read-only engine slice
 Reviewed-plan: c1d645563fec019a7ddee20905852aa46aea4f3a specs/step-0a/plan.md
 Verdict: not ready (one Blocking finding. The fix is small, but the plan has to make a decision there before anyone executes it.)
