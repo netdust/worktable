@@ -166,6 +166,17 @@ describe('records()', () => {
     expect(urls()).toEqual(['/api/rows/productie?limit=5000&offset=0', '/api/rows/productie?limit=5000&offset=0'])
   })
 
+  it('clamps a page size the engine would refuse', async () => {
+    vi.stubEnv('VITE_RECORDS_PAGE_SIZE', '99999')
+    answer()
+    await records('productie', '')
+    vi.stubEnv('VITE_RECORDS_PAGE_SIZE', '-3')
+    await records('productie', '')
+    vi.unstubAllEnvs()
+
+    expect(urls().filter((u) => u.startsWith('/api/rows/'))).toEqual(['/api/rows/productie?limit=5000&offset=0', '/api/rows/productie?limit=1&offset=0'])
+  })
+
   it('pages with offset until the total: five rows at page size 2 take three calls', async () => {
     vi.stubEnv('VITE_RECORDS_PAGE_SIZE', '2')
     const every = [1, 2, 3, 4, 5].map((id) => ({ id, titel: `P${id}`, title: `P${id}`, custom: {}, lookups: {} }))

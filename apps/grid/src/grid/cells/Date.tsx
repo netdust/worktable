@@ -5,7 +5,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/
 const MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
 
 export function DateCell({ column, row }: CellProps) {
-  return <span className="nv-cell__tabular">{column.text(row)}</span>
+  return <span className="nv-cell__tabular" data-value={column.kind === 'datetime' ? column.edit(row) : undefined}>{column.text(row)}</span>
 }
 
 /** A typed character cannot start a date: the editor opens on the current day instead. */

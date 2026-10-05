@@ -87,7 +87,7 @@ export async function awayRows(away: MatrixAway, window: Partial<DateWindow>): P
 }
 
 /** The rows a relation's options are read in; the engine's own cap, unless a deployment asks for smaller pages. */
-const pageSize = () => Number(import.meta.env.VITE_RECORDS_PAGE_SIZE) || 5000
+const pageSize = () => Math.min(5000, Math.max(1, Math.trunc(Number(import.meta.env.VITE_RECORDS_PAGE_SIZE)) || 5000))
 
 /** Every live row of a model, a page at a time until the engine's `total` is reached. */
 async function everyRow(model: string): Promise<Row[]> {

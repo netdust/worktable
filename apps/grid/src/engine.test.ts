@@ -291,6 +291,12 @@ describe('rowsQuery', () => {
     expect(JSON.parse(rowsQuery({ ...view, fixed }, layout, {}, 'omschrijving').filter)).toEqual(fixed)
   })
 
+  it('lets a chip win over a bare fixed value on the same key: both are $eq', () => {
+    const query = rowsQuery({ ...view, fixed: { status: null } }, { ...layout, filters: [{ field: 'status', value: 'optie' }] }, {}, 'omschrijving')
+
+    expect(JSON.parse(query.filter)).toEqual({ status: { $eq: 'optie' } })
+  })
+
   it('sends chips as $eq filter JSON, sort with - for desc, group and the window', () => {
     const query = rowsQuery(
       view,

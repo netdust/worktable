@@ -5,6 +5,7 @@ const WEEK = '/#from=2026-10-12'
 interface Section {
   day: string
   starts: string[]
+  values: string[]
 }
 
 async function open(page: Page, view: string) {
@@ -38,11 +39,14 @@ async function sections(page: Page): Promise<Section[]> {
     .locator('tbody')
     .first()
     .evaluate((body, i) => {
-      const out: { day: string; starts: string[] }[] = []
+      const out: { day: string; starts: string[]; values: string[] }[] = []
       for (const tr of Array.from(body.querySelectorAll('tr'))) {
-        if (tr.classList.contains('nv-group')) out.push({ day: tr.textContent?.trim() ?? '', starts: [] })
-        else if (tr.classList.contains('nv-tr'))
-          out[out.length - 1]?.starts.push(tr.querySelectorAll('td')[i]?.textContent?.trim() ?? '')
+        if (tr.classList.contains('nv-group')) out.push({ day: tr.textContent?.trim() ?? '', starts: [], values: [] })
+        else if (tr.classList.contains('nv-tr')) {
+          const td = tr.querySelectorAll('td')[i]
+          out[out.length - 1]?.starts.push(td?.textContent?.trim() ?? '')
+          out[out.length - 1]?.values.push(td?.querySelector('[data-value]')?.getAttribute('data-value') ?? '')
+        }
       }
       return out
     }, start)
@@ -81,7 +85,7 @@ test('planning-grouped-sorted', async ({ page }) => {
   expect(days).toEqual(ascending(days))
   for (const section of found) {
     expect(section.starts.length).toBeGreaterThan(0)
-    expect(section.starts).toEqual(ascending(section.starts))
+    expect(section.values).toEqual(ascending(section.values))
   }
 
   const tuesday = found.find((section) => iso(section.day) === '2026-10-13')
