@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { eq } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
+import type { Context } from 'hono'
 import type { ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
 import { DEV_ACTOR } from './dev-actor'
 import { ApiError, isRealDate } from './params'
@@ -59,6 +60,15 @@ export function parseBody(body: unknown): Values {
     throw new ApiError(400, 'bad_body', 'body must be a JSON object')
   }
   return body as Values
+}
+
+export async function bodyOf(c: Context): Promise<Values> {
+  try {
+    return parseBody(await c.req.json())
+  } catch (err) {
+    if (err instanceof ApiError) throw err
+    throw new ApiError(400, 'bad_body', 'body is not valid JSON')
+  }
 }
 
 export function cutBody(dataset: DatasetDecl, body: Values): Values {
@@ -246,7 +256,7 @@ function asJson(dataset: DatasetDecl, field: string, value: string | number | nu
   return value === null ? null : JSON.stringify(column ? decode(column, value) : value)
 }
 
-function revise(sqlite: Database, dataset: DatasetDecl, id: number, changes: Change[], now: string): void {
+export function revise(sqlite: Database, dataset: DatasetDecl, id: number, changes: Change[], now: string): void {
   const batch = crypto.randomUUID()
   const row = sqlite.query(
     'INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

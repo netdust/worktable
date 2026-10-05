@@ -53,7 +53,7 @@ export interface SavedViewSeed {
   name: string
   source_type: 'dataset' | 'query'
   source: string
-  skin: 'table'
+  skin: 'table' | 'matrix'
   filters: FilterInput
   sort: string[]
   group_by: string | null

@@ -147,7 +147,7 @@ describe('migrate', () => {
         'visible_fields',
       ]),
     )
-    expect(columns).toEqual(expect.arrayContaining(['scope', 'owner_id', 'share_token', 'format', 'public']))
+    expect(columns).toEqual(expect.arrayContaining(['shared', 'owner_id', 'share_token', 'format', 'public']))
   })
 
   test("seedDomain inserts the domain's rows and its saved views", () => {
