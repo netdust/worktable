@@ -152,3 +152,34 @@ export function clearLayout(view: View, storage: StorageAccess = browser): void 
 export function save(view: View, layout: Layout, storage: StorageAccess = browser): void {
   writeStored(PREFIX, view, layout, storage)
 }
+
+const KEPT = 'ntdst-views/kept/v1/'
+
+/** What this browser keeps of a view past a Save or a revert: widths, a matrix's picked columns and its hidden column keys. Never sent. */
+export interface Kept {
+  widths?: Record<string, number>
+  picked?: number[]
+  hidden?: string[]
+}
+
+function parseKept(raw: unknown): Kept | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const { widths, picked, hidden } = raw as Record<string, unknown>
+  const ok =
+    (widths === undefined || (typeof widths === 'object' && widths !== null && Object.values(widths).every((w) => typeof w === 'number')))
+    && (picked === undefined || (Array.isArray(picked) && picked.every((id) => typeof id === 'number')))
+    && (hidden === undefined || isStrings(hidden))
+  return ok ? (raw as Kept) : null
+}
+
+export function storedKept(view: View, storage: StorageAccess = browser): Kept | null {
+  return readStored(KEPT, view, parseKept, storage)
+}
+
+export function saveKept(view: View, kept: Kept, storage: StorageAccess = browser): void {
+  writeStored(KEPT, view, kept, storage)
+}
+
+export function clearKept(view: View, storage: StorageAccess = browser): void {
+  removeStored(KEPT, view, storage)
+}

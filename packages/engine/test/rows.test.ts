@@ -213,7 +213,7 @@ describe('rows', () => {
     expect((await rows('taak', 'search=een')).body.total).toBe(4)
   })
 
-  test('schema lists every declared source and the saved views with parsed filters', async () => {
+  test('schema lists every declared source and no saved views: GET /api/views serves those', async () => {
     const { status, body } = await get('/api/schema')
     expect(status).toBe(200)
     expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'notitie', 'per_project', 'notitie_lijst'])
@@ -221,19 +221,7 @@ describe('rows', () => {
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })
     expect(body.sources.project.date).toBeNull()
     expect(body.sources.per_project.kind).toBe('query')
-    expect(body.views).toEqual([
-      {
-        id: 1,
-        name: 'Open',
-        source_type: 'dataset',
-        source: 'taak',
-        skin: 'table',
-        filters: { status: 'open' },
-        sort: ['start_at'],
-        group_by: 'dag',
-        visible_fields: ['omschrijving'],
-      },
-    ])
+    expect(Object.keys(body)).toEqual(['sources'])
   })
 
   test('an unexpected failure is 500 internal without SQL', async () => {

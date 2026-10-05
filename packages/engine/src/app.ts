@@ -5,14 +5,9 @@ import type { Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
-import { type SavedViewRow, viewOf, viewRoutes } from './views'
+import { viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import { bodyOf, parseId, readRevisions, rowOf, runWrite, type Store, writableOf } from './writes'
-
-function readViews(sqlite: Database): SavedViewRow[] {
-  const raws = sqlite.query('SELECT * FROM saved_view ORDER BY id').all() as Record<string, string | number | null>[]
-  return raws.map(viewOf)
-}
 
 function isWritable(domain: Domain, source: Source): boolean {
   if (source.kind === 'dataset') return Boolean(writerOf(domain, source.name)?.update)
@@ -83,7 +78,7 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
         },
       ]),
     )
-    return c.json({ sources, views: readViews(sqlite) })
+    return c.json({ sources })
   })
 
   app.get('/rows/:source', (c) => {

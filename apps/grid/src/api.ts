@@ -1,4 +1,4 @@
-import { type EngineRow, type EngineSchema, type EngineSource, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema } from './engine'
+import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
 import type { ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
@@ -44,7 +44,7 @@ async function request<T>(method: Method, path: string, query?: Query, data?: Re
 
 let served: Promise<EngineSchema> | null = null
 
-/** One `/schema` read for the schema and the saved views both; a failed one is asked again. */
+/** One `/schema` read for the schema and every saved-view mapping; a failed one is asked again. */
 function engineSchema(): Promise<EngineSchema> {
   served ??= request<EngineSchema>('GET', '/schema').catch((error: unknown) => {
     served = null
@@ -126,25 +126,39 @@ export function remove(model: string, id: number): Promise<unknown> {
   return request('DELETE', `/rows/${model}/${id}`)
 }
 
-/** The saved views the schema serves, merged over their sources' tables. */
-export function savedViews(): Promise<SavedView[]> {
-  return engineSchema().then(toSavedViews)
+/** One saved view as the grid holds it; a view on a source the schema does not serve is refused. */
+async function savedOf(found: EngineView): Promise<SavedView> {
+  const [view] = toSavedViews([found], (await engineSchema()).sources)
+  if (!view) throw { code: 'unknown_source', message: `unknown source "${found.source}"` } satisfies ApiError
+  return view
 }
 
-export function createView(view: NewView): Promise<SavedView> {
-  return request('POST', '/views', {}, { ...view })
+/** This user's saved views and the shared ones, merged over their sources' tables. */
+export async function savedViews(): Promise<SavedView[]> {
+  const [served, { views }] = await Promise.all([engineSchema(), request<{ views: EngineView[] }>('GET', '/views')])
+  return toSavedViews(views, served.sources)
 }
 
-export function updateView(id: number, data: { name?: string; arrangement?: StoredArrangement; shared?: boolean }): Promise<SavedView> {
-  return request('PATCH', `/views/${id}`, {}, data)
+export async function createView(view: NewView): Promise<SavedView> {
+  const stored = toStoredView(view.arrangement, view.fixed ?? {}, await sourceOf(view.table))
+  const skin = view.type === 'matrix' ? 'matrix' : 'table'
+  return savedOf(await request<EngineView>('POST', '/views', {}, { name: view.name, source: view.table, skin, shared: view.shared, ...stored }))
+}
+
+/** A rename, a share, or a Save of the arrangement, which keeps the view's fixed filters. */
+export async function updateView(view: SavedView, data: { name?: string; arrangement?: StoredArrangement; shared?: boolean }): Promise<SavedView> {
+  const { arrangement, ...rest } = data
+  const stored = arrangement ? toStoredView(arrangement, view.fixed ?? {}, await sourceOf(view.table)) : {}
+  return savedOf(await request<EngineView>('PATCH', `/views/${view.id}`, {}, { ...rest, ...stored }))
 }
 
 export function deleteView(id: number): Promise<unknown> {
   return request('DELETE', `/views/${id}`)
 }
 
-export function restoreView(id: number): Promise<SavedView> {
-  return request('POST', `/views/${id}/restore`)
+/** An empty JSON body: the engine's write guard refuses a POST that is not JSON. */
+export async function restoreView(id: number): Promise<SavedView> {
+  return savedOf(await request<EngineView>('POST', `/views/${id}/restore`, {}, {}))
 }
 
 /** No prefs are stored yet: every table opens on its first view. */
@@ -152,7 +166,7 @@ export function prefs(): Promise<Prefs> {
   return Promise.resolve({ order: {}, last: {} })
 }
 
-/** Replaces this user's prefs; the answer is what the server kept. */
+/** Prefs are not stored yet: the change holds for this visit. */
 export function savePrefs(data: Prefs): Promise<Prefs> {
-  return request('PUT', '/views/prefs', {}, { ...data })
+  return Promise.resolve(data)
 }

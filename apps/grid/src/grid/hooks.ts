@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { create, remove, update } from '../api'
 import type { Row, View } from '../types'
-import { layoutOf, useStoredRevision } from '../ui/views'
-import { type Layout, save, storedRevision } from './layout'
+import { layoutOf, storeLayout, useStoredRevision } from '../ui/views'
+import { type Layout, storedRevision } from './layout'
 import { createStore, type Store, type StoreState } from './store'
 
 /** The layout of the view on screen: this browser's copy, else the saved one; read again after any other write. */
@@ -15,7 +15,7 @@ export function useLayout(view: View | undefined): [Layout | null, (layout: Layo
   const set = useCallback(
     (layout: Layout) => {
       if (!view) return
-      save(view, layout)
+      storeLayout(view, layout)
       setHeld({ key: view.key, layout, revision: storedRevision() })
     },
     [view],

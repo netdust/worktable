@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { columnsFor } from './grid/columns'
 import { defaults } from './grid/layout'
-import { type EngineSchema, rowsQuery, toEngineData, toRow, toSavedViews, toSchema } from './engine'
+import { type EngineSchema, type EngineView, fromStoredView, rowsQuery, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import { orderOf, show } from './grid/layout'
 
 /** The theatre declarations and seeded views, trimmed to what the adapter reads. */
 const engine: EngineSchema = {
@@ -34,18 +35,21 @@ const engine: EngineSchema = {
       },
     },
   },
-  views: [
-    {
-      id: 1, name: 'Planning', source_type: 'dataset', source: 'activiteit', skin: 'table',
-      filters: { status: 'bevestigd' }, sort: ['start_at'], group_by: 'plandag',
-      visible_fields: ['productie_id', 'soort', 'start_at', 'status'],
-    },
-    {
-      id: 2, name: 'Per productie per dag', source_type: 'query', source: 'productie_dag', skin: 'table',
-      filters: {}, sort: ['-productie'], group_by: null, visible_fields: ['productie', 'plandag'],
-    },
-  ],
 }
+
+/** As `GET /api/views` serves them: the seeded ones are the dev actor's, and shared. */
+const owned = { shared: true, owner_id: 0, mine: true, editable: true }
+const views: EngineView[] = [
+  {
+    id: 1, name: 'Planning', source_type: 'dataset', source: 'activiteit', skin: 'table',
+    filters: { status: 'bevestigd' }, sort: ['start_at'], group_by: 'plandag',
+    visible_fields: ['productie_id', 'soort', 'start_at', 'status'], ...owned,
+  },
+  {
+    id: 2, name: 'Per productie per dag', source_type: 'query', source: 'productie_dag', skin: 'table',
+    filters: {}, sort: ['-productie'], group_by: null, visible_fields: ['productie', 'plandag'], ...owned,
+  },
+]
 
 describe('toSchema', () => {
   it("maps a dataset's columns to model fields by type", () => {
@@ -69,11 +73,11 @@ describe('toSchema', () => {
     expect(model.fields.omschrijving).toBeUndefined()
   })
 
-  it('declares one table per source a saved view uses, no starting views, nothing writable', () => {
+  it('declares a table for every source, no starting views, nothing writable', () => {
     const schema = toSchema(engine)
 
-    expect(schema.tables.map((t) => t.key)).toEqual(['activiteit', 'productie_dag'])
-    expect(schema.tables[0]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] })
+    expect(schema.tables.map((t) => t.key)).toEqual(['productie', 'activiteit', 'productie_dag'])
+    expect(schema.tables[1]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] })
     expect(schema.views).toEqual([])
     expect(schema.writable).toEqual({ productie: false, activiteit: false, productie_dag: false })
   })
@@ -99,7 +103,6 @@ describe('writes', () => {
         },
       },
     },
-    views: [],
   }
   const editable = (source: string) => {
     const model = toSchema(writes).models[source]
@@ -168,35 +171,109 @@ describe('toRow', () => {
 })
 
 describe('toSavedViews', () => {
+  const saved = () => toSavedViews(views, engine.sources)
+
   it('builds the arrangement: Planning opens with the status chip bevestigd, sort start_at, group plandag', () => {
-    const planning = toSavedViews(engine)[0]
+    const planning = saved()[0]
 
     expect(planning.arrangement.filters).toEqual([{ field: 'status', value: 'bevestigd' }])
     expect(planning.arrangement.sort).toEqual([{ id: 'start_at', desc: false }])
     expect(planning.arrangement.group).toBe('plandag')
     expect(planning.arrangement.hidden).toEqual(['plandag', 'uren', 'betaald', 'extra'])
+    expect(planning.arrangement.order).toEqual(['productie_id', 'soort', 'start_at', 'status'])
   })
 
-  it("Planning's SavedView has key '1', label 'Planning', table 'activiteit', date_field 'plandag'", () => {
-    expect(toSavedViews(engine)[0]).toMatchObject({
+  it("Planning's SavedView has key '1', label 'Planning', table 'activiteit', date_field 'plandag', and the engine's owner flags", () => {
+    expect(saved()[0]).toMatchObject({
       key: '1', id: 1, label: 'Planning', table: 'activiteit', table_label: 'Activiteiten', model: 'activiteit',
-      date_field: 'plandag', type: 'grid', starting: false, shared: true, mine: false, editable: false,
+      date_field: 'plandag', type: 'grid', starting: false, shared: true, owner: { id: 0, name: '' }, mine: true, editable: true,
     })
+    const foreign = toSavedViews([{ ...views[0], shared: false, owner_id: 7, mine: false, editable: false }], engine.sources)[0]
+    expect(foreign).toMatchObject({ shared: false, owner: { id: 7, name: '' }, mine: false, editable: false })
   })
 
   it("sorts on the title column as the grid's title, descending on a leading -", () => {
-    expect(toSavedViews(engine)[1].arrangement.sort).toEqual([{ id: 'title', desc: true }])
+    expect(saved()[1].arrangement.sort).toEqual([{ id: 'title', desc: true }])
   })
 
-  it('reads $eq chips and leaves other operators out', () => {
-    const views = toSavedViews({ ...engine, views: [{ ...engine.views[0], filters: { soort: { $eq: 'opbouw' }, plandag: { $gte: '2026-10-01' } } }] })
+  it('reads $eq chips and keeps every other filter as fixed: an operator beside $eq, $in, a range, a custom key', () => {
+    const filters = {
+      soort: { $eq: 'opbouw' }, plandag: { $gte: '2026-10-01' }, status: { $in: ['optie', 'bevestigd'], $eq: 'optie' }, 'custom.zaal': { $in: ['groot'] },
+    }
+    const [view] = toSavedViews([{ ...views[0], filters }], engine.sources)
 
-    expect(views[0].arrangement.filters).toEqual([{ field: 'soort', value: 'opbouw' }])
+    expect(view.arrangement.filters).toEqual([{ field: 'soort', value: 'opbouw' }, { field: 'status', value: 'optie' }])
+    expect(view.fixed).toEqual({ plandag: { $gte: '2026-10-01' }, status: { $in: ['optie', 'bevestigd'] }, 'custom.zaal': { $in: ['groot'] } })
+  })
+
+  it('leaves out a view whose source is not served', () => {
+    expect(toSavedViews([{ ...views[0], source: 'gone' }], engine.sources)).toEqual([])
+  })
+})
+
+describe('an arrangement on the wire', () => {
+  const activiteit = engine.sources.activiteit
+  const planning = views[0]
+
+  it('round-trips: chips, sort, group, the visible columns in order, the title column first', () => {
+    const { arrangement, fixed } = fromStoredView(planning, activiteit)
+    const stored = toStoredView(arrangement, fixed, activiteit)
+
+    expect(stored).toEqual({
+      filters: { status: { $eq: 'bevestigd' } },
+      sort: ['start_at'],
+      group_by: 'plandag',
+      visible_fields: ['omschrijving', 'productie_id', 'soort', 'start_at', 'status'],
+    })
+    expect(fromStoredView({ ...planning, ...stored }, activiteit)).toEqual({ arrangement, fixed })
+  })
+
+  it('keeps a reorder and drops what only the grid keeps: widths, picks, matrix keys, lookups and the title id', () => {
+    const { arrangement } = fromStoredView(planning, activiteit)
+    const changed = {
+      ...arrangement, order: ['title', 'status', 'lookups.productie_id.titel', 'productie_id', 'soort', 'start_at'], hidden: [...arrangement.hidden, 'record:5', 'name:lieve'],
+      widths: [{ id: 'status', width: 90 }], picked: [5], sort: [{ id: 'title', desc: true }, { id: 'rollups.uren', desc: false }],
+    }
+
+    expect(toStoredView(changed, {}, activiteit)).toEqual({
+      filters: { status: { $eq: 'bevestigd' } },
+      sort: ['-omschrijving'],
+      group_by: 'plandag',
+      visible_fields: ['omschrijving', 'status', 'productie_id', 'soort', 'start_at'],
+    })
+  })
+
+  it('loses a hidden column\'s place: shown again after a re-read, it comes last', () => {
+    const { arrangement } = fromStoredView(planning, activiteit)
+    const hidden = { ...arrangement, hidden: [...arrangement.hidden, 'soort'] }
+    const reread = fromStoredView({ ...planning, ...toStoredView(hidden, {}, activiteit) }, activiteit).arrangement
+    const fields = ['productie_id', 'soort', 'start_at', 'status']
+
+    expect(orderOf({ ...arrangement, widths: {} }, fields)).toEqual(['productie_id', 'soort', 'start_at', 'status'])
+    expect(orderOf(show({ ...reread, widths: {} }, 'soort'), fields)).toEqual(['productie_id', 'start_at', 'status', 'soort'])
+  })
+
+  it('merges a chip and a fixed filter per key: both conditions survive a Save', () => {
+    const seeded = { ...planning, filters: { status: { $in: ['optie', 'bevestigd'] } } }
+    const { arrangement, fixed } = fromStoredView(seeded, activiteit)
+
+    expect(toStoredView(arrangement, fixed, activiteit).filters).toEqual({ status: { $in: ['optie', 'bevestigd'] } })
+    const chipped = { ...arrangement, filters: [{ field: 'status', value: 'optie' }, { field: 'soort', value: 'opbouw' }] }
+    expect(toStoredView(chipped, fixed, activiteit).filters).toEqual({ status: { $in: ['optie', 'bevestigd'], $eq: 'optie' }, soort: { $eq: 'opbouw' } })
+  })
+
+  it("keeps a via-title source's else column as an ordinary column, with no title column", () => {
+    const toewijzing = { ...engine.sources.productie, title: 'naam', title_via: 'persoon_id', columns: { persoon_id: { type: 'integer' as const, label: 'Persoon', relation: 'productie' }, naam: { type: 'text' as const, label: 'Naam' } } }
+    const view = { ...planning, source: 'toewijzing', filters: {}, sort: ['naam'], group_by: null, visible_fields: ['naam'] }
+    const { arrangement, fixed } = fromStoredView(view, toewijzing)
+
+    expect(arrangement.hidden).toEqual(['persoon_id'])
+    expect(toStoredView(arrangement, fixed, toewijzing)).toEqual({ filters: {}, sort: ['naam'], group_by: null, visible_fields: ['naam'] })
   })
 })
 
 describe('rowsQuery', () => {
-  const view = toSavedViews(engine)[0]
+  const view = toSavedViews(views, engine.sources)[0]
   const layout = { ...defaults(view), filters: [] }
 
   it("maps a title sort to the source's title column and drops lookups.* and rollups.* ids", () => {
@@ -258,11 +335,11 @@ describe('the matrix and titles through a relation', () => {
         },
       },
     },
-    views: [
-      { id: 4, name: 'Toewijzingen per activiteit', source_type: 'dataset', source: 'activiteit', skin: 'matrix', filters: {}, sort: [], group_by: null, visible_fields: ['status'] },
-      { id: 8, name: 'Toewijzingen', source_type: 'dataset', source: 'toewijzing', skin: 'table', filters: {}, sort: ['naam'], group_by: null, visible_fields: ['activiteit_id', 'persoon_id', 'naam', 'state'] },
-    ],
   }
+  const theatreViews: EngineView[] = [
+    { id: 4, name: 'Toewijzingen per activiteit', source_type: 'dataset', source: 'activiteit', skin: 'matrix', filters: {}, sort: [], group_by: null, visible_fields: ['status'], ...owned },
+    { id: 8, name: 'Toewijzingen', source_type: 'dataset', source: 'toewijzing', skin: 'table', filters: {}, sort: ['naam'], group_by: null, visible_fields: ['activiteit_id', 'persoon_id', 'naam', 'state'], ...owned },
+  ]
 
   it("builds the down source's table with the join and away from the join dataset's matrix", () => {
     const table = toSchema(theatre).tables.find((t) => t.key === 'activiteit')
@@ -279,8 +356,8 @@ describe('the matrix and titles through a relation', () => {
   })
 
   it('opens a matrix-skinned saved view as a matrix, with its table\'s join', () => {
-    expect(toSavedViews(theatre)[0]).toMatchObject({ key: '4', type: 'matrix', join: { model: 'toewijzing' }, away: { model: 'beschikbaarheid' } })
-    expect(toSavedViews(theatre)[1].type).toBe('grid')
+    expect(toSavedViews(theatreViews, theatre.sources)[0]).toMatchObject({ key: '4', type: 'matrix', join: { model: 'toewijzing' }, away: { model: 'beschikbaarheid' } })
+    expect(toSavedViews(theatreViews, theatre.sources)[1].type).toBe('grid')
   })
 
   it("takes the row's title from the engine and its cells as rollups.cells", () => {
@@ -313,7 +390,7 @@ describe('the matrix and titles through a relation', () => {
   })
 
   it("keeps naam as naam in a via-title view's arrangement and on the wire, and never writes the title", () => {
-    const toewijzingen = toSavedViews(theatre)[1]
+    const toewijzingen = toSavedViews(theatreViews, theatre.sources)[1]
 
     expect(toewijzingen.arrangement.sort).toEqual([{ id: 'naam', desc: false }])
     expect(toewijzingen.arrangement.hidden).toEqual(['notitie'])
@@ -322,7 +399,7 @@ describe('the matrix and titles through a relation', () => {
   })
 
   it('never sends the title of a via-title source as sort or group', () => {
-    const layout = { ...defaults(toSavedViews(theatre)[1]), filters: [], sort: [{ id: 'title', desc: false }, { id: 'naam', desc: true }], group: 'title' }
+    const layout = { ...defaults(toSavedViews(theatreViews, theatre.sources)[1]), filters: [], sort: [{ id: 'title', desc: false }, { id: 'naam', desc: true }], group: 'title' }
 
     expect(rowsQuery({}, layout, {}, null)).toEqual({ sort: '-naam' })
   })

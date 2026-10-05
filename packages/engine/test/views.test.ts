@@ -343,9 +343,11 @@ describe('views', () => {
     expect(state()).toEqual(before)
   })
 
-  test('/schema still serves the views', async () => {
+  test('/schema serves no views: neither a foreign unshared one nor a deleted one leaks through it', async () => {
     const res = await request('GET', '/api/schema')
-    expect(res.body.views[0]).toMatchObject({ id: SEEDED, name: 'Alles' })
+    expect(res.status).toBe(200)
+    expect(res.body.views).toBeUndefined()
+    expect(JSON.stringify(res.body)).not.toContain('Van Zeven')
   })
 })
 

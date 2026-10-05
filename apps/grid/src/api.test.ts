@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, create, forgetSchema, prefs, records, remove, rows, savePrefs, savedViews, schema, update } from './api'
-import { type EngineRow, type EngineSchema, toRow } from './engine'
+import { awayRows, create, createView, deleteView, forgetSchema, prefs, records, remove, restoreView, rows, savePrefs, savedViews, schema, update, updateView } from './api'
+import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
 import { createMatrixStore } from './matrix/store'
@@ -41,19 +41,21 @@ const engine: EngineSchema = {
       },
     },
   },
-  views: [{
-    id: 1, name: 'Planning', source_type: 'dataset', source: 'activiteit', skin: 'table',
-    filters: { status: 'bevestigd' }, sort: ['plandag'], group_by: null, visible_fields: ['status'],
-  }],
 }
+const served: EngineView[] = [{
+  id: 1, name: 'Planning', source_type: 'dataset', source: 'activiteit', skin: 'table',
+  filters: { status: 'bevestigd' }, sort: ['plandag'], group_by: null, visible_fields: ['status'],
+  shared: true, owner_id: 0, mine: true, editable: true,
+}]
 const planning: View = { key: '1', label: 'Planning', table: 'activiteit', model: 'activiteit', date_field: 'plandag' }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-/** Each path its answer; the schema for `/api/schema`. */
+/** Each path its answer; the schema for `/api/schema`, the saved views for `/api/views`. */
 function answer(byPath: Record<string, unknown> = {}) {
   fetcher.mockImplementation(async (input) => {
     const path = String(input).split('?')[0]
-    return path === '/api/schema' ? json(engine) : json(byPath[path] ?? { rows: [], total: 0 })
+    if (path === '/api/schema') return json(engine)
+    return json(byPath[path] ?? (path === '/api/views' ? { views: served } : { rows: [], total: 0 }))
   })
 }
 const urls = () => fetcher.mock.calls.map(([input]) => String(input))
@@ -69,13 +71,13 @@ afterEach(() => {
 })
 
 describe('schema() and savedViews()', () => {
-  it('read /api/schema once between them', async () => {
-    const [served, saved] = await Promise.all([schema(), savedViews()])
+  it('boot from a /schema without views: one /api/schema read between them, the saved views from GET /api/views', async () => {
+    const [schemaOut, saved] = await Promise.all([schema(), savedViews()])
 
-    expect(urls()).toEqual(['/api/schema'])
-    expect(served.tables.map((t) => t.key)).toEqual(['activiteit'])
-    expect([served.models.activiteit.deletable, served.models.productie.deletable]).toEqual([true, undefined])
-    expect(saved.map((v) => [v.key, v.label, v.table])).toEqual([['1', 'Planning', 'activiteit']])
+    expect([...urls()].sort()).toEqual(['/api/schema', '/api/views'])
+    expect(schemaOut.tables.map((t) => t.key)).toEqual(['productie', 'activiteit', 'dagplanning'])
+    expect([schemaOut.models.activiteit.deletable, schemaOut.models.productie.deletable]).toEqual([true, undefined])
+    expect(saved.map((v) => [v.key, v.label, v.table, v.mine, v.editable, v.shared])).toEqual([['1', 'Planning', 'activiteit', true, true, true]])
   })
 
   it('asks again after a failed read', async () => {
@@ -166,9 +168,97 @@ describe('records()', () => {
 })
 
 describe('prefs', () => {
-  it('starts from no prefs without asking', async () => {
+  it('starts from no prefs, and keeps a change, without asking', async () => {
     await expect(prefs()).resolves.toEqual({ order: {}, last: {} })
+    await expect(savePrefs({ order: { activiteit: ['1'] }, last: {} })).resolves.toEqual({ order: { activiteit: ['1'] }, last: {} })
     expect(fetcher).not.toHaveBeenCalled()
+  })
+})
+
+describe('saved views on the engine', () => {
+  const sent = () => fetcher.mock.calls.filter(([input]) => String(input) !== '/api/schema').map(([input, init]) => [String(input), init?.method ?? 'GET', init?.body && JSON.parse(String(init.body))])
+  const out = (view: Partial<EngineView>): EngineView => ({ ...served[0], ...view })
+  const seeded = out({ id: 5, name: 'Optie of bevestigd', filters: { status: { $in: ['optie', 'bevestigd'] } }, sort: ['plandag'], visible_fields: ['status', 'productie_id'] })
+  const routes = (byRoute: Record<string, unknown>) =>
+    fetcher.mockImplementation(async (input, init) => {
+      const path = String(input)
+      if (path === '/api/schema') return json(engine)
+      const [status, body] = (byRoute[`${init?.method ?? 'GET'} ${path}`] ?? [200, { views: [seeded] }]) as [number, unknown]
+      return json(body, status)
+    })
+
+  it('"Save as new" posts the arrangement as the engine stores it, and opens what comes back', async () => {
+    routes({ 'POST /api/views': [201, out({ id: 9, name: 'Mijn planning', shared: false })] })
+    const arrangement = {
+      hidden: ['plandag', 'personen', 'zaal', 'notitie', 'eind_at'], order: ['status', 'productie_id', 'start_at'], widths: [{ id: 'status', width: 90 }],
+      sort: [{ id: 'title', desc: true }], filters: [{ field: 'zaal', value: 'groot' }], group: 'plandag', picked: [],
+    }
+
+    const created = await createView({ name: 'Mijn planning', table: 'activiteit', type: 'grid', field: null, shared: false, arrangement, fixed: { personen: { $gt: 2 } } })
+
+    expect(sent()).toEqual([['/api/views', 'POST', {
+      name: 'Mijn planning', source: 'activiteit', skin: 'table', shared: false,
+      filters: { zaal: { $eq: 'groot' }, personen: { $gt: 2 } }, sort: ['-omschrijving'], group_by: 'plandag',
+      visible_fields: ['omschrijving', 'status', 'productie_id', 'start_at'],
+    }]])
+    expect(created).toMatchObject({ key: '9', id: 9, label: 'Mijn planning', table: 'activiteit', type: 'grid', shared: false, mine: true })
+  })
+
+  it('a new matrix view is created with the matrix skin', async () => {
+    routes({ 'POST /api/views': [201, out({ id: 9, skin: 'matrix' })] })
+
+    await createView({ name: 'Bezetting', table: 'activiteit', type: 'matrix', field: null, shared: true, arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] } })
+
+    expect(sent()[0][2]).toMatchObject({ skin: 'matrix', shared: true })
+  })
+
+  it("a seeded $in filter survives a Save, beside a chip on the same column", async () => {
+    routes({ 'PATCH /api/views/5': [200, out({ ...seeded, filters: { status: { $in: ['optie', 'bevestigd'], $eq: 'optie' } } })] })
+    const [view] = await savedViews()
+    fetcher.mockClear()
+
+    const fresh = await updateView(view, { arrangement: { ...view.arrangement, filters: [{ field: 'status', value: 'optie' }] } })
+
+    expect(sent()).toEqual([['/api/views/5', 'PATCH', {
+      filters: { status: { $in: ['optie', 'bevestigd'], $eq: 'optie' } }, sort: ['plandag'], group_by: null, visible_fields: ['omschrijving', 'status', 'productie_id'],
+    }]])
+    expect(fresh.arrangement.filters).toEqual([{ field: 'status', value: 'optie' }])
+    expect(fresh.fixed).toEqual({ status: { $in: ['optie', 'bevestigd'] } })
+  })
+
+  it('a rename or a share sends only that', async () => {
+    routes({ 'PATCH /api/views/5': [200, out({ ...seeded, name: 'Opties', shared: false })] })
+    const [view] = await savedViews()
+    fetcher.mockClear()
+
+    const renamed = await updateView(view, { name: 'Opties' })
+    await updateView(view, { shared: false })
+
+    expect(sent()).toEqual([['/api/views/5', 'PATCH', { name: 'Opties' }], ['/api/views/5', 'PATCH', { shared: false }]])
+    expect(renamed).toMatchObject({ label: 'Opties', shared: false })
+  })
+
+  it('deletes, and restores what the engine gives back', async () => {
+    routes({ 'DELETE /api/views/5': [200, { id: 5 }], 'POST /api/views/5/restore': [200, seeded] })
+
+    await deleteView(5)
+    const back = await restoreView(5)
+
+    expect(sent()).toEqual([['/api/views/5', 'DELETE', undefined], ['/api/views/5/restore', 'POST', {}]])
+    const restore = fetcher.mock.calls.find(([input]) => String(input) === '/api/views/5/restore')
+    expect(restore?.[1]?.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(back).toMatchObject({ key: '5', label: 'Optie of bevestigd', table: 'activiteit' })
+  })
+
+  it("rejects with the engine's unknown_view and not_owner", async () => {
+    routes({
+      'PATCH /api/views/5': [404, { code: 'unknown_view', message: 'unknown view 5' }],
+      'DELETE /api/views/5': [403, { code: 'not_owner', message: 'only the owner may change this view' }],
+    })
+    const [view] = await savedViews()
+
+    await expect(updateView(view, { name: 'x' })).rejects.toEqual({ code: 'unknown_view', message: 'unknown view 5' })
+    await expect(deleteView(5)).rejects.toEqual({ code: 'not_owner', message: 'only the owner may change this view' })
   })
 })
 
@@ -184,7 +274,6 @@ describe('writes', () => {
     const made = await create('activiteit', { title: 'opbouw Gent' })
     const changed = await update('activiteit', 7, { status: 'optie' })
     await remove('activiteit', 7)
-    await savePrefs({ order: {}, last: {} })
 
     expect(made).toMatchObject({ id: 7, title: 'opbouw Gent', fields: { status: 'optie' } })
     expect(changed.title).toBe('opbouw Gent')
@@ -192,7 +281,6 @@ describe('writes', () => {
       ['/api/rows/activiteit', 'POST', JSON.stringify({ omschrijving: 'opbouw Gent' })],
       ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ status: 'optie' })],
       ['/api/rows/activiteit/7', 'DELETE', undefined],
-      ['/api/views/prefs', 'PUT', JSON.stringify({ order: {}, last: {} })],
     ])
   })
 
@@ -310,7 +398,7 @@ describe('writes', () => {
   it('reject with the not-found the engine answers', async () => {
     fetcher.mockImplementation(async () => new Response('404 Not Found', { status: 404, statusText: 'Not Found' }))
 
-    await expect(savePrefs({ order: {}, last: {} })).rejects.toEqual({ code: 'unknown', message: '404 Not Found' })
+    await expect(deleteView(5)).rejects.toEqual({ code: 'unknown', message: '404 Not Found' })
   })
 })
 
@@ -329,7 +417,6 @@ describe('the matrix on the engine', () => {
         matrix: { down: 'activiteit_id', across: 'persoon_id', label: 'naam', cell: 'state', keys: { b: 'bevestigd' }, marks: { bevestigd: '✓' }, count: 'bevestigd' },
       },
     },
-    views: [],
   }
   const matrixView: View = {
     key: '4', label: 'Toewijzingen per activiteit', table: 'activiteit', model: 'activiteit', type: 'matrix', date_field: 'plandag',

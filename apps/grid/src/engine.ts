@@ -46,22 +46,29 @@ export interface EngineSource {
   columns: Record<string, EngineColumn>
 }
 
-/** A saved view row; a bare scalar in `filters` means `$eq`. */
-export interface EngineView {
-  id: number
-  name: string
-  source_type: 'dataset' | 'query'
-  source: string
-  skin: 'table' | 'matrix'
+/** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
+export interface EngineArrangement {
   filters: Record<string, unknown>
   sort: string[]
   group_by: string | null
   visible_fields: string[]
 }
 
+/** A saved view as `GET /api/views` serves it. */
+export interface EngineView extends EngineArrangement {
+  id: number
+  name: string
+  source_type: 'dataset' | 'query'
+  source: string
+  skin: 'table' | 'matrix'
+  shared: boolean
+  owner_id: number
+  mine: boolean
+  editable: boolean
+}
+
 export interface EngineSchema {
   sources: Record<string, EngineSource>
-  views: EngineView[]
 }
 
 export interface EngineRow {
@@ -151,12 +158,11 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
   return { ...table, types: ['grid', 'matrix'], join: joinOf(source.matrix_join, matrix), ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
 }
 
-const usedSources = (s: EngineSchema): string[] => [...new Set(s.views.map((view) => view.source))].filter((name) => name in s.sources)
-
+/** A table for every source: the rail lists those a saved view is on. */
 export function toSchema(s: EngineSchema): Schema {
   return {
     models: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, modelOf(name, source, s.sources)])),
-    tables: usedSources(s).map((name) => tableDefOf(name, s.sources[name], s.sources)),
+    tables: Object.entries(s.sources).map(([name, source]) => tableDefOf(name, source, s.sources)),
     views: [],
     writable: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, source.writable === true])),
   }
@@ -170,38 +176,84 @@ function chipValue(value: unknown): string | null {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : null
 }
 
-/** Only `$eq` on a scalar is a chip; the grid has no word for the other operators. */
-function chipsOf(filters: Record<string, unknown>): Filter[] {
-  return Object.entries(filters).flatMap(([field, raw]) => {
-    const value = chipValue(typeof raw === 'object' && raw !== null && '$eq' in raw ? raw.$eq : raw)
-    return value === null ? [] : [{ field, value }]
-  })
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** Only `$eq` on a scalar is a chip, the grid has no word for the other operators; those stay as the view's fixed filters. */
+function splitFilters(filters: Record<string, unknown>): { chips: Filter[]; fixed: Record<string, unknown> } {
+  const chips: Filter[] = []
+  const fixed: Record<string, unknown> = {}
+  for (const [field, raw] of Object.entries(filters)) {
+    const { $eq, ...rest } = isObject(raw) ? raw : { $eq: raw }
+    const value = chipValue($eq)
+    if (value !== null) chips.push({ field, value })
+    const kept = value === null ? raw : rest
+    if (!isObject(kept) || Object.keys(kept).length > 0) fixed[field] = kept
+  }
+  return { chips, fixed }
 }
 
-function arrangementOf(view: EngineView, source: EngineSource): StoredArrangement {
+/** The grid's field ids, in declared order: never the title column nor `id`. */
+const fieldsOf = (source: EngineSource): string[] => Object.keys(source.columns).filter((key) => key !== titleColumn(source) && key !== 'id')
+
+/** A stored view as the grid's arrangement: its visible columns are the order, the rest hidden; widths and picks are never stored. */
+export function fromStoredView(view: EngineArrangement, source: EngineSource): { arrangement: StoredArrangement; fixed: Record<string, unknown> } {
   const sort: SortKey[] = view.sort.map((key) => {
     const desc = key.startsWith('-')
     return { id: columnId(source, desc ? key.slice(1) : key), desc }
   })
-  const fields = Object.keys(source.columns).filter((key) => key !== titleColumn(source) && key !== 'id')
-  return {
+  const fields = fieldsOf(source)
+  const { chips, fixed } = splitFilters(view.filters)
+  const arrangement = {
     hidden: fields.filter((key) => !view.visible_fields.includes(key)),
-    order: [],
+    order: view.visible_fields.filter((key) => fields.includes(key)),
     widths: [],
     sort,
-    filters: chipsOf(view.filters),
+    filters: chips,
     group: view.group_by === null ? null : columnId(source, view.group_by),
     picked: [],
   }
+  return { arrangement, fixed }
 }
 
-/** Each saved view merged over its source's table, as `Json::saved` merged one over its table. */
-export function toSavedViews(s: EngineSchema): SavedView[] {
-  return s.views.flatMap((view) => {
-    const source = s.sources[view.source]
+/** A chip and a fixed filter on one column both hold: `{ status: { $in: [...], $eq: 'x' } }`. */
+function mergeFilters(chips: Filter[], fixed: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...fixed }
+  for (const { field, value } of chips) {
+    const kept = merged[field]
+    merged[field] = isObject(kept) ? { ...kept, $eq: value } : { $eq: value }
+  }
+  return merged
+}
+
+/**
+ * The arrangement as the engine stores it. `visible_fields` is the title column, then the shown fields in their order:
+ * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks, matrix keys, lookups and rollups stay in the browser.
+ */
+export function toStoredView(arrangement: StoredArrangement, fixed: Record<string, unknown>, source: EngineSource): EngineArrangement {
+  const title = titleColumn(source)
+  const fields = fieldsOf(source)
+  const kept = arrangement.order.filter((id) => fields.includes(id))
+  const shown = [...kept, ...fields.filter((id) => !kept.includes(id))].filter((id) => !arrangement.hidden.includes(id))
+  const group = arrangement.group === null ? null : engineColumn(arrangement.group, title)
+  return {
+    filters: mergeFilters(arrangement.filters, fixed),
+    sort: arrangement.sort.flatMap(({ id, desc }) => {
+      const column = engineColumn(id, title)
+      return column === null ? [] : [desc ? `-${column}` : column]
+    }),
+    group_by: group,
+    visible_fields: [...(title ? [title] : []), ...shown],
+  }
+}
+
+/** Each saved view merged over its source's table, as `Json::saved` merged one over its table; a view on a source not served is left out. */
+export function toSavedViews(views: EngineView[], sources: Sources): SavedView[] {
+  return views.flatMap((view) => {
+    const source = sources[view.source]
     if (!source) return []
+    const { arrangement, fixed } = fromStoredView(view, source)
     return [{
-      ...tableDefOf(view.source, source, s.sources),
+      ...tableDefOf(view.source, source, sources),
       key: String(view.id),
       label: view.name,
       table: view.source,
@@ -209,11 +261,12 @@ export function toSavedViews(s: EngineSchema): SavedView[] {
       type: view.skin === 'matrix' ? 'matrix' : 'grid',
       starting: false,
       id: view.id,
-      arrangement: arrangementOf(view, source),
-      shared: true,
-      owner: { id: 0, name: '' },
-      mine: false,
-      editable: false,
+      arrangement,
+      fixed,
+      shared: view.shared,
+      owner: { id: view.owner_id, name: '' },
+      mine: view.mine,
+      editable: view.editable,
     }]
   })
 }
