@@ -115,7 +115,31 @@ describe('writes', () => {
   })
 
   it('the title field maps to the title column on write', () => {
-    expect(toEngineData({ title: 'opbouw Gent', status: 'optie' }, 'omschrijving')).toEqual({ omschrijving: 'opbouw Gent', status: 'optie' })
+    expect(toEngineData({ title: 'opbouw Gent', status: 'optie' }, writes.sources.activiteit, writes.sources)).toEqual({ omschrijving: 'opbouw Gent', status: 'optie' })
+  })
+
+  it("a mapped query column takes its target's options and relation, unless it declares its own", () => {
+    const own: EngineSchema = {
+      ...writes,
+      sources: {
+        ...writes.sources,
+        dagplanning: {
+          ...writes.sources.dagplanning,
+          columns: {
+            ...writes.sources.dagplanning.columns,
+            soort: { type: 'text', label: 'Soort', options: { reis: 'Reis' }, writes: { dataset: 'activiteit', field: 'soort', key: 'activiteit_id' } },
+            productie_id: { type: 'integer', label: 'Productie', writes: { dataset: 'activiteit', field: 'productie_id', key: 'activiteit_id' } },
+          },
+        },
+      },
+    }
+    const fields = toSchema(own).models.dagplanning.fields
+    const status = columnsFor(toSchema(own).models.dagplanning, { key: 'd', label: 'd', table: 'dagplanning', model: 'dagplanning' }, true).find((c) => c.id === 'status')
+
+    expect(fields.status).toMatchObject({ type: 'select', options: { optie: 'Optie', bevestigd: 'Bevestigd' } })
+    expect(status?.text?.({ id: 40, title: '', status: '', fields: { status: 'optie' } })).toBe('Optie')
+    expect(fields.soort).toMatchObject({ type: 'select', options: { reis: 'Reis' } })
+    expect(fields.productie_id).toMatchObject({ type: 'relation', relation: { model: 'productie', multiple: false } })
   })
 })
 

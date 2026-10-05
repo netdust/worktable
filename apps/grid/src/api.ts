@@ -85,14 +85,15 @@ export async function records(model: string, search: string): Promise<RowsRespon
 }
 
 export async function create(model: string, data: Record<string, unknown>): Promise<Row> {
-  const title = await titleOf(model)
-  return toRow(await request<EngineRow>('POST', `/rows/${model}`, {}, toEngineData(data, title)), title)
+  const source = await sourceOf(model)
+  const sent = toEngineData(data, source, (await engineSchema()).sources)
+  return toRow(await request<EngineRow>('POST', `/rows/${model}`, {}, sent), source.title)
 }
 
 /** A query's row is written through its mapped column, so `row` is needed to find the target record. */
 export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row): Promise<Row> {
   const source = await sourceOf(model)
-  const sent = toEngineData(data, source.title)
+  const sent = toEngineData(data, source, (await engineSchema()).sources)
   if (source.kind === 'query') return updateThrough(model, source, id, sent, row)
   return toRow(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent), source.title)
 }
@@ -103,6 +104,7 @@ async function updateThrough(model: string, source: EngineSource, id: number, se
   const writes = source.columns[column]?.writes
   if (!writes || !row) throw { code: 'read_only', message: `"${column}" of "${model}" is not written` } satisfies ApiError
   const target = writes.key === 'id' ? row.id : row.fields[writes.key]
+  if (target === null || target === undefined) throw { code: 'read_only', message: `"${column}" of "${model}" has no ${writes.key}` } satisfies ApiError
   await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
   const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.

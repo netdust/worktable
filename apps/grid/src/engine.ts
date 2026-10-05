@@ -59,7 +59,19 @@ const TYPES: Record<EngineColumn['type'], FieldType> = {
 const isReadonly = (column: EngineColumn | undefined, source: EngineSource): boolean =>
   Boolean(column?.readonly) || (source.kind === 'query' && !column?.writes)
 
-function fieldOf(column: EngineColumn, source: EngineSource): Field {
+type Sources = Record<string, EngineSource>
+
+/** A mapped query column reads as its target column, unless it declares its own options or relation. */
+function asTarget(column: EngineColumn, sources: Sources): EngineColumn {
+  const target = column.writes ? sources[column.writes.dataset]?.columns[column.writes.field] : undefined
+  if (!target) return column
+  const options = column.options ?? target.options
+  const relation = column.relation ?? target.relation
+  return { ...column, ...(options ? { options } : {}), ...(relation ? { relation } : {}) }
+}
+
+function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources): Field {
+  const column = asTarget(declared, sources)
   const type: FieldType = column.relation ? 'relation' : column.options ? 'select' : TYPES[column.type]
   return {
     type,
@@ -74,7 +86,7 @@ function fieldOf(column: EngineColumn, source: EngineSource): Field {
 }
 
 /** The row's own id is the grid's `id`, never a field. */
-function modelOf(name: string, source: EngineSource): Model {
+function modelOf(name: string, source: EngineSource, sources: Sources): Model {
   const fields = Object.entries(source.columns).filter(([key]) => key !== source.title && key !== 'id')
   return {
     key: name,
@@ -82,7 +94,7 @@ function modelOf(name: string, source: EngineSource): Model {
     title_label: source.columns[source.title]?.label ?? source.title,
     title_readonly: !source.writable || isReadonly(source.columns[source.title], source),
     ...(source.kind === 'query' ? { query: true } : {}),
-    fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source)])),
+    fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
   }
 }
 
@@ -94,7 +106,7 @@ const usedSources = (s: EngineSchema): string[] => [...new Set(s.views.map((view
 
 export function toSchema(s: EngineSchema): Schema {
   return {
-    models: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, modelOf(name, source)])),
+    models: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, modelOf(name, source, s.sources)])),
     tables: usedSources(s).map((name) => tableDefOf(name, s.sources[name])),
     views: [],
     writable: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, source.writable === true])),
@@ -172,9 +184,20 @@ export function toRow(r: EngineRow, title: string): Row {
   }
 }
 
+/** The grid holds a relation as a list of ids, and a cleared cell as ''; the engine takes one id, and null. */
+function wireValue(column: EngineColumn | undefined, value: unknown): unknown {
+  if (column?.relation && Array.isArray(value)) return value[0] ?? null
+  return column && column.type !== 'text' && value === '' ? null : value
+}
+
 /** A write's grid fields as the engine's columns: the grid's `title` is the source's title column. */
-export function toEngineData(data: Record<string, unknown>, titleColumn: string): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'title' ? titleColumn : key, value]))
+export function toEngineData(data: Record<string, unknown>, source: EngineSource, sources: Sources): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).map(([key, value]) => {
+    const name = key === 'title' ? source.title : key
+    const declared = source.columns[name]
+    const target = declared?.writes ? sources[declared.writes.dataset]?.columns[declared.writes.field] : declared
+    return [name, wireValue(target ?? declared, value)]
+  }))
 }
 
 /** A grid column id as the engine's column; null for what only the grid computes. */

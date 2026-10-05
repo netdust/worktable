@@ -16,6 +16,9 @@ const engine: EngineSchema = {
         omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
         status: { type: 'text', label: 'Status', options: { optie: 'Optie', bevestigd: 'Bevestigd' } },
         plandag: { type: 'date', label: 'Plandag' },
+        start_at: { type: 'datetime', label: 'Start' },
+        eind_at: { type: 'datetime', label: 'Einde', nullable: true },
+        personen: { type: 'integer', label: 'Personen', nullable: true },
       },
       writable: true,
     },
@@ -26,6 +29,8 @@ const engine: EngineSchema = {
         activiteit_id: { type: 'integer', label: 'Activiteit' },
         omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
         status: { type: 'text', label: 'Status', writes: { dataset: 'activiteit', field: 'status', key: 'activiteit_id' } },
+        productie_id: { type: 'text', label: 'Productie', writes: { dataset: 'activiteit', field: 'productie_id', key: 'activiteit_id' } },
+        start_at: { type: 'text', label: 'Start', writes: { dataset: 'activiteit', field: 'start_at', key: 'activiteit_id' } },
       },
     },
   },
@@ -214,6 +219,45 @@ describe('writes', () => {
 
     expect(gone).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'geannuleerd' } })
     expect(failed).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'bevestigd' } })
+  })
+
+  describe('the wire format follows the engine column types', () => {
+    beforeEach(() => {
+      fetcher.mockImplementation(async (input, init) => {
+        if (String(input) === '/api/schema') return json(engine)
+        return init?.method === 'PATCH' ? json(stored) : json({ rows: [], total: 0 })
+      })
+    })
+
+    it('a relation pick sends the id, and clearing it sends null', async () => {
+      await update('activiteit', 7, { productie_id: [2] })
+      await update('activiteit', 7, { productie_id: [] })
+
+      expect(sent().map(([, , body]) => body)).toEqual([JSON.stringify({ productie_id: 2 }), JSON.stringify({ productie_id: null })])
+    })
+
+    it("clearing a datetime, an integer and a date sends null; a cleared text stays ''", async () => {
+      await update('activiteit', 7, { eind_at: '', personen: '', plandag: '', title: '' })
+
+      expect(sent()[0][2]).toBe(JSON.stringify({ eind_at: null, personen: null, plandag: null, omschrijving: '' }))
+    })
+
+    it("a mapped query column sends its target column's type", async () => {
+      await update('dagplanning', 40, { start_at: '' }, planned)
+      await update('dagplanning', 40, { productie_id: [3] }, planned)
+
+      expect(sent().filter(([, method]) => method === 'PATCH')).toEqual([
+        ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ start_at: null })],
+        ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ productie_id: 3 })],
+      ])
+    })
+  })
+
+  it("a query row without its key's value is refused read_only before any request", async () => {
+    const keyless: Row = { ...planned, fields: { activiteit_id: null, status: 'optie' } }
+
+    await expect(update('dagplanning', 40, { status: 'bevestigd' }, keyless)).rejects.toMatchObject({ code: 'read_only' })
+    expect(urls()).toEqual(['/api/schema'])
   })
 
   it('a 422 reaches the store as {code:\'refused\', message}', async () => {
