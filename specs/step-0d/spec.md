@@ -5,8 +5,8 @@ The fourth slice of build step 0 in `docs/SPEC.md`. It ports the grid's matrix s
 Branch: `feature/step-0d`, from `main` @ `c2f5ee0`.
 
 ## Decisions taken before this spec (Stefan, 2026-10-05)
-- **Matrix: the domain declares it, the engine serves the cells.** The matrix skin need grows from "relation pair, match, label" to a declaration on the join dataset: `down`, `across`, `label`, `cell`, `note`, `keys`, `marks`, `count`, and `away { dataset, across, label }`. `GET /rows/<down>?cells=1` returns each down row with its live join rows in one generic query. This amends the spec's Skin needs shape.
-- **SavedView gains `shared`.**
+- **Matrix: the domain declares it, the engine serves the cells.** The matrix skin need grows from "relation pair, match, label" to a declaration on the join dataset: `down`, `across`, `label`, `cell`, `note`, `keys`, `marks`, `count`, and `away { dataset, across, label, end }`. `GET /rows/<down>?cells=1` returns each down row with its live join rows in one generic query. This amends the spec's Skin needs shape.
+- **SavedView gains `shared`** (and drops the unused `scope`).
   - `visible_fields` carries column order and hidden columns.
   - Column widths and the matrix's picked columns stay per viewer, in the browser.
   - The owner is the dev actor until auth; a view is editable by its owner.
@@ -26,9 +26,9 @@ Branch: `feature/step-0d`, from `main` @ `c2f5ee0`.
   - `cell` is an options column, and `note` a text column;
   - `keys` maps a typed key to a `cell` option, and `marks` maps a `cell` option to a glyph;
   - `count` is one `cell` option;
-  - `away` is `{ dataset, across, label }`: a dataset whose `across` relation targets the same dataset as the join's `across`, with a date range taken from that dataset's `date` and a declared end column.
+  - `away` is `{ dataset, across, label, end }`: a dataset whose `across` relation targets the same dataset as the join's `across`; the away dataset must declare `date`, and `end` names its end column. Away rows for a window are read by overlap (start before the window's end, end after its start), so a period that starts before the week still marks it.
 - **Validation.** `validateDomain` checks every name and option at startup.
-- **`/schema`** serves the declaration on the join dataset and marks the down source `matrix: <join dataset name>`.
+- **`/schema`** serves the declaration on the join dataset and marks the down source `matrix_join: <join dataset name>`.
 - **Cells.** `GET /rows/<down>?cells=1` requires `from` and `to`, else 400 `window_required`. It returns each row with `cells`: the live join rows whose `down` equals the row id, in the `/rows` row shape.
 - **Writes.** Matrix cells write through the join dataset's writer, with the routes and refusals of step 0b.
 
@@ -41,7 +41,7 @@ Source: "the matrix skin, ported with the match-column and label-column declarat
   - keys `u`→uitgenodigd, `b`→bevestigd, `g`→geweigerd, `x`→geannuleerd;
   - marks uitgenodigd `?`, bevestigd `✓`, geweigerd `✗`, geannuleerd `–`;
   - `count: bevestigd`;
-  - `away: { dataset: beschikbaarheid, across: persoon_id, label: reden }`.
+  - `away: { dataset: beschikbaarheid, across: persoon_id, label: reden, end: eind_at }`; Beschikbaarheid declares `date: start_at`.
 - **A new SavedView,** "Toewijzingen per activiteit", on `activiteit`, with the matrix skin.
 - **The grid** renders it from `/schema` and `?cells=1`:
   - record columns are personen, titled by `weergavenaam`, and name columns are free-text `naam`s;
@@ -67,7 +67,7 @@ Source: as R1 · keys, marks and count: invented, pending Stefan (Dutch domain w
   - `filters` must be accepted by `filterCompile` against the source's columns;
   - `sort`, `group_by` and `visible_fields` must name declared columns;
   - `shared` must be a boolean;
-  - the whole view is at most 16 kB;
+  - the view as it would be stored is at most 16 kB (400 `view_too_large`);
   - the owner is never taken from the body;
   - each failure is 400 with its code.
 - **Ownership.** The owner is the dev actor until auth, and only the owner may change, delete or restore a view.
