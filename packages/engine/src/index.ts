@@ -1,3 +1,4 @@
+export { createEngine } from './app'
 export type { ColumnDecl, ColumnType, DatasetDecl, Domain, QueryDecl, SavedViewSeed } from './declare'
 export { defineDataset, defineQuery } from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'
