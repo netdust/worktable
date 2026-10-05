@@ -46,7 +46,7 @@ export const activiteit = defineDataset({
     omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
     start_at: { type: 'datetime', label: 'Start' },
     eind_at: { type: 'datetime', label: 'Einde', nullable: true },
-    plandag: { type: 'date', label: 'Plandag' },
+    plandag: { type: 'date', label: 'Plandag', readonly: true },
     locatie_id: { type: 'integer', label: 'Locatie', nullable: true },
     plaats: { type: 'text', label: 'Plaats', nullable: true },
     status: {

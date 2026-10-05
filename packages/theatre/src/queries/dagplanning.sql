@@ -1,0 +1,1 @@
+SELECT a.id AS id, a.id AS activiteit_id, a.productie_id, p.titel AS productie, a.omschrijving, a.soort, a.start_at, a.plandag, a.status FROM activiteit a JOIN productie p ON p.id = a.productie_id WHERE a.deleted_at IS NULL
