@@ -91,7 +91,7 @@ Source: "Theatre: the Activiteit writer, computing plandag through the shared fu
 - **The mapping.** A query column may declare `writes: { dataset, field, key }`, and `/schema` serves it.
 - **How the grid uses it.** An edit to a mapped column goes to `PATCH /api/rows/<dataset>/<row[key]>` with `{ <field>: value }`. The returned row and every undo entry refer to that target record. The grid then reloads the query row, so the view shows what the query now computes.
 - **The stand-in.** One query over Activiteit proves it: `dagplanning`, one row per live activiteit joined to its productie, with `status` and `start_at` mapped to `activiteit` through `key: activiteit_id`.
-- **The engine test.** It uses a fixture whose `id` differs from `key`, so routing by `row[key]` is proven, not assumed.
+- **The proof.** Routing is the grid's, so the grid's API test uses a fixture whose `id` differs from `key`, and routing by `row[key]` is proven, not assumed.
 
 Source: "writes: on query columns: a mapped column routes its edit to the target dataset's writer using row[key], and the returned row and undo key refer to the target record. Prove it with one stand-in query over Activiteit."
 
