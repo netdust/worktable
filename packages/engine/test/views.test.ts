@@ -1,6 +1,9 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { drizzle } from 'drizzle-orm/bun-sqlite'
+import { Hono } from 'hono'
 import { type ColumnDecl, createEngine, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
+import { viewRoutes } from '../src/views'
 import { contents, type Sent, send } from './fixture'
 
 const text: ColumnDecl = { type: 'text', label: 'T', nullable: true }
@@ -344,4 +347,17 @@ describe('views', () => {
     const res = await request('GET', '/api/schema')
     expect(res.body.views[0]).toMatchObject({ id: SEEDED, name: 'Alles' })
   })
+})
+
+test('view writes credit the actor the routes were built with', async () => {
+  const api = new Hono().basePath('/api')
+  viewRoutes(api, { sqlite, db: drizzle(sqlite), domain }, { id: 5, role: 'planner' })
+  const as5 = send(api)
+  const created = await as5('POST', '/api/views', body(NEW))
+  expect(created.body).toMatchObject({ owner_id: 5, mine: true })
+  await as5('PATCH', `/api/views/${created.body.id}`, body({ name: 'Anders' }))
+  await as5('DELETE', `/api/views/${created.body.id}`, { type: null })
+  const actors = revisions(created.body.id).map((r) => r.actor_id)
+  expect(actors.length).toBeGreaterThan(2)
+  expect(new Set(actors)).toEqual(new Set([5]))
 })

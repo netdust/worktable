@@ -144,13 +144,13 @@ function changed(next: Raw, current: Raw): Change[] {
     .filter(([, old, value]) => old !== value)
 }
 
-function save(sqlite: Database, id: number, next: Raw, current: Raw): void {
+function save(sqlite: Database, actor: Actor, id: number, next: Raw, current: Raw): void {
   const changes = changed(next, current)
   if (changes.length === 0) return
   const now = new Date().toISOString()
   const sets = [...changes.map(([key]) => `"${key}" = ?`), 'updated_at = ?']
   sqlite.query(`UPDATE saved_view SET ${sets.join(', ')} WHERE id = ?`).run(...changes.map(([, , v]) => v), now, id)
-  revise(sqlite, savedView, id, changes, now)
+  revise(sqlite, savedView, id, changes, now, actor.id)
 }
 
 function create(sqlite: Database, fields: ViewFields, actor: Actor): number {
@@ -166,6 +166,7 @@ function create(sqlite: Database, fields: ViewFields, actor: Actor): number {
     id,
     changes.filter(([, , value]) => value !== null),
     raw.created_at as string,
+    actor.id,
   )
   return id
 }
@@ -197,20 +198,20 @@ export function viewRoutes(app: Hono, { sqlite, domain }: Store, actor: Actor = 
     const patch = patchOf(await bodyOf(c))
     write(() => {
       const current = ownedView(sqlite, id, actor)
-      save(sqlite, id, stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false)), current)
+      save(sqlite, actor, id, stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false)), current)
     })
     return c.json(outById(id))
   })
 
   app.delete('/views/:id', (c) => {
     const id = viewId(c.req.param('id'))
-    write(() => save(sqlite, id, { deleted_at: new Date().toISOString() }, ownedView(sqlite, id, actor)))
+    write(() => save(sqlite, actor, id, { deleted_at: new Date().toISOString() }, ownedView(sqlite, id, actor)))
     return c.json({ id })
   })
 
   app.post('/views/:id/restore', (c) => {
     const id = viewId(c.req.param('id'))
-    write(() => save(sqlite, id, { deleted_at: null }, ownedView(sqlite, id, actor, true)))
+    write(() => save(sqlite, actor, id, { deleted_at: null }, ownedView(sqlite, id, actor, true)))
     return c.json(outById(id))
   })
 }

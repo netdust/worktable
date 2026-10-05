@@ -158,6 +158,7 @@ test('voorstellingen-public', async ({ page }) => {
       'lookups',
       'productie',
       'start',
+      'title',
       'venue',
     ])
   }
