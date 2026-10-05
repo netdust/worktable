@@ -5,3 +5,6 @@ dist/
 *.sqlite
 .env
 .DS_Store
+e2e/.tmp/
+test-results/
+playwright-report/
