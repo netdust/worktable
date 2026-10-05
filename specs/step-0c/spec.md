@@ -58,7 +58,7 @@ Source: "Theatre datasets at parity with Laika today: … Persoon". The `weergav
   - a second live Toewijzing for the same `persoon_id` on the same `activiteit_id`, not counting the record itself on update. Name-only rows are exempt;
   - a `state` outside its options.
 
-Source: "Toewijzing without slots (a person or a free-text name, one assignment per person per activity)" · Laika's `person_or_name` and `duplicate_assignment` rules (`AssignmentRepository.php:225-260`).
+Source: "Toewijzing without slots (a person or a free-text name, one assignment per person per activity)" · Laika's `person_or_name` and `duplicate_assignment` rules (`AssignmentRepository.php:183`, `:198-215`). The duplicate rule needs `ctx.exists` (finding 6).
 
 ### R6 Theatre: Beschikbaarheid, persoon only
 - **Columns:** `persoon_id` (relation, required), `start_at` (datetime), `eind_at` (datetime), and `reden` (nullable), which is the title column.
@@ -82,7 +82,7 @@ Source: "the voorstellingen view exposing public columns only" and `docs/SPEC.md
   - toewijzingen, including one name-only row;
   - beschikbaarheden;
   - venues on several activiteiten.
-- **SavedViews:** Organisaties, Personen, Toewijzingen, Afwezigheden and Voorstellingen.
+- **SavedViews:** Organisaties, Personen, Toewijzingen, Afwezigheden, Voorstellingen, and Producties (invented, pending Stefan's approval: the gate's Productie delete needs a view to open it from).
 
 Source: the gate's "deleting a referenced Organisatie or Productie" needs a Productie that can be deleted · invented seeds.
 
@@ -121,6 +121,7 @@ Source: "Out: matrix, saved-view saving, auth, import, the WordPress block, life
 3. **Persoon has no display column** in the spec (R4 proposes `weergavenaam`). Toewijzing and Beschikbaarheid have no natural title; 0c uses `naam` and `reden`, which are empty on most rows.
 4. **Laika's organisation role is a multi-valued taxonomy** (venue, coproducer, funder, presenter); the spec's `soort` is a single value with different terms. The mapping is needed at import.
 5. **Laika absences are whole days;** the spec's are datetimes (decided above).
+6. **A writer cannot look rows up by value.** `WriteContext` offers only `find(dataset, id)`, so "one assignment per person per activity" cannot be refused in the theatre writer, and a UNIQUE index would answer 500, not the Dutch 422. Proposed: a second engine change, `ctx.exists(dataset, match, exceptId?)`, a live-rows equality lookup inside the write transaction (pending Stefan).
 
 ## Report (at the end)
 - Which ledger rows moved, with line counts.
