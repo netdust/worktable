@@ -1,0 +1,1567 @@
+/* What Sakani does not lay out: the rail / toolbar / sheet frame of the mockup. Every class carries nv-. */
+#root {
+  font: 13px/1.45 var(--font-sans);
+  color: var(--color-fg-default);
+  background: var(--color-bg-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+.nv-app {
+  display: grid;
+  grid-template-columns: 216px 1fr;
+  height: 100%;
+  min-width: 0;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.nv-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 10px;
+  background: var(--color-bg-subtle);
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.nv-rail__label {
+  margin: 0 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-fg-subtle);
+}
+
+.nv-rail__views {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+#root .nv-rail__views [aria-current="page"] {
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font-weight: 500;
+  box-shadow: 0 0 0 1px var(--color-border-subtle);
+}
+
+.nv-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.nv-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+#root .nv-toolbar__title {
+  margin: 0 8px 0 0;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-fg-default);
+}
+
+#root .nv-toolbar__end input[type="search"] {
+  min-height: 0;
+  height: 24px;
+  padding: 0;
+  line-height: 24px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+
+.nv-toolbar > .nv-toolbar__end {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.nv-toolbar > * {
+  flex: none;
+}
+
+/* The last resort of a changed view: its end takes a second row rather than leaving the screen. */
+.nv-toolbar--crowded {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+
+/* The rail's foot: the sheet's keys, then the theme. */
+.nv-rail__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding: 12px 8px 0;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-theme {
+  margin-top: 6px;
+}
+
+#root .nv-theme [role="tab"] {
+  flex: none;
+  min-width: 0;
+  padding: 3px 4px;
+  font-size: 11px;
+}
+
+.nv-rail__types [disabled] {
+  opacity: 0.6;
+}
+
+/* After a change: what happened and the way back, over the sheet's foot. */
+.nv-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 8px;
+  background: var(--color-bg-inverse);
+  color: var(--color-fg-on-inverse);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+#root .nv-toast button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.nv-toast kbd {
+  color: inherit;
+  background: transparent;
+  border-color: currentColor;
+  opacity: 0.7;
+}
+
+.nv-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nv-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 999px;
+  color: var(--color-fg-default);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nv-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+
+#root .nv-day input {
+  width: 30px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: transparent;
+  cursor: pointer;
+}
+
+.nv-day input:hover {
+  border-color: var(--color-border-subtle);
+}
+
+.nv-day input::-webkit-datetime-edit {
+  display: none;
+}
+
+.nv-day input::-webkit-calendar-picker-indicator {
+  margin: 0;
+  cursor: pointer;
+}
+
+.nv-sheet {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nv-center {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+}
+
+.nv-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.nv-toolbar__note {
+  max-width: 280px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-save {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nv-save--saving {
+  color: var(--color-fg-subtle);
+}
+
+/* Only a refusal gives way; the quiet word stays whole. */
+.nv-toolbar__end > .nv-save--saved,
+.nv-toolbar__end > .nv-save--saving {
+  flex: none;
+}
+
+.nv-save--error {
+  color: var(--color-danger-fg);
+  font-weight: 500;
+}
+
+.nv-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.nv-chip--filter {
+  gap: 6px;
+  padding-right: 4px;
+  color: var(--color-fg-muted);
+  font-weight: 400;
+}
+
+.nv-chip--filter b {
+  color: var(--color-fg-default);
+  font-weight: 500;
+}
+
+#root .nv-chip__remove,
+#root .nv-chip--add {
+  font: inherit;
+  cursor: pointer;
+  background: none;
+}
+
+#root .nv-chip__remove {
+  height: 18px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.nv-chip__remove:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+#root .nv-chip--add {
+  border-style: dashed;
+  color: var(--color-fg-subtle);
+  font-weight: 400;
+}
+
+.nv-filters__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow: auto;
+  min-width: 200px;
+}
+
+.nv-filters__field {
+  display: flex;
+  flex-direction: column;
+}
+
+.nv-filters__label {
+  padding: 2px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-fg-subtle);
+}
+
+#root .nv-filters__option,
+#root .nv-pop__option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#root .nv-filters__option:hover,
+#root .nv-pop__option:hover {
+  background: var(--color-bg-muted);
+}
+
+#root .nv-pop__option[aria-selected="true"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+  font-weight: 500;
+}
+
+/* At its narrowest the placeholder still reads whole beside the icon and ⌘K. */
+.nv-search {
+  position: relative;
+  flex: 0 1 164px;
+  min-width: 150px;
+}
+
+/* The placeholder must read whole beside the ⌘K hint. */
+#root .nv-search input {
+  font-size: 13px;
+}
+
+.nv-toolbar__end > :not(.nv-search):not(.nv-save) {
+  flex: none;
+}
+
+.nv-search__views {
+  top: 34px;
+  left: 0;
+  right: 0;
+}
+
+/* The rail's space: the record being worked in, and its picker. */
+.nv-space {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+#root .nv-space__name {
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#root .nv-space__button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-space__button:hover {
+  background: var(--color-bg-muted);
+}
+
+.nv-space__button svg {
+  margin-left: auto;
+  color: var(--color-fg-subtle);
+  flex: none;
+}
+
+.nv-space__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-default);
+  flex: none;
+}
+
+.nv-space .nv-picker {
+  top: 100%;
+  left: 0;
+  right: 0;
+}
+
+.nv-rail__section {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* The record picker: a search over one model, its matches under it. */
+.nv-picker {
+  width: 260px;
+}
+
+#root .nv-picker__input {
+  width: 100%;
+  height: 28px;
+  margin: 0 0 4px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  box-shadow: none;
+}
+
+.nv-picker__list {
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.nv-picker__note {
+  margin: 4px 8px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+/* The sheet: the bar, then the scrolling table with the drawer beside it. */
+.nv-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.nv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 5px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-bar b {
+  color: var(--color-fg-muted);
+  font-weight: 500;
+}
+
+.nv-bar__group {
+  display: flex;
+  align-items: center;
+}
+
+#root .nv-bar__group > * {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+#root .nv-bar__group label {
+  margin: 0;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+#root .nv-bar__group [role="combobox"] {
+  min-width: 110px;
+  min-height: 0;
+  height: 24px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 12px;
+}
+
+#root .nv-bar__button {
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nv-bar__columns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 300px;
+}
+
+.nv-bar__column {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 4px;
+}
+
+#root .nv-bar__move {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#root .nv-bar__move:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nv-bar__count {
+  margin-left: auto;
+}
+
+.nv-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.nv-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+.nv-grid {
+  table-layout: fixed;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-grid:focus-within {
+  outline: none;
+}
+
+.nv-th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0;
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#root .nv-th__sort {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  font: inherit;
+  text-align: inherit;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.nv-th__sort:hover {
+  color: var(--color-fg-default);
+}
+
+.nv-th[aria-sort] .nv-th__sort {
+  color: var(--color-fg-default);
+}
+
+.nv-th__resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.nv-th__resize:hover {
+  background: var(--color-accent-subtle);
+}
+
+/* A required cell left empty: a quiet corner mark, never a header asterisk. */
+.nv-td__missing {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-top: 7px solid var(--color-danger-fg);
+  border-right: 7px solid transparent;
+}
+
+/* Select cells: the mockup's pills, toned by meaning, and kinds with their icon. */
+.nv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.nv-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.nv-pill--ok {
+  background: var(--color-success-bg);
+  color: var(--color-success-fg);
+}
+
+.nv-pill--warn {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+
+.nv-pill--bad {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+}
+
+.nv-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nv-kind svg {
+  color: var(--color-fg-subtle);
+  flex: none;
+}
+
+.nv-td {
+  position: relative;
+  height: 34px;
+  padding: 0 10px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  cursor: default;
+}
+
+.nv-end {
+  text-align: right;
+}
+
+.nv-th.nv-end .nv-th__sort {
+  text-align: right;
+}
+
+.nv-first {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding-left: 16px;
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.nv-th.nv-first {
+  z-index: 3;
+}
+
+.nv-th.nv-first .nv-th__sort {
+  padding-left: 16px;
+}
+
+.nv-tr:hover .nv-td {
+  background: var(--color-bg-subtle);
+}
+
+.nv-td:focus {
+  outline: none;
+}
+
+.nv-td--active {
+  box-shadow: inset 0 0 0 2px var(--color-accent-default);
+}
+
+.nv-td--editing {
+  overflow: visible;
+  z-index: 4;
+  background: var(--color-accent-subtle);
+}
+
+.nv-tr--draft .nv-td {
+  background: var(--color-accent-subtle);
+}
+
+.nv-td--error {
+  z-index: 4;
+  overflow: visible;
+  box-shadow: inset 0 0 0 2px var(--color-danger-fg);
+}
+
+.nv-td--empty {
+  height: 64px;
+  color: var(--color-fg-subtle);
+}
+
+.nv-cell__title {
+  font-weight: 500;
+}
+
+.nv-cell__tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-cell__muted {
+  margin-left: 6px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-cell__bool {
+  display: inline-flex;
+  align-items: center;
+}
+
+#root .nv-editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 0;
+  background: var(--color-bg-surface);
+  box-shadow: inset 0 0 0 2px var(--color-accent-default);
+  color: var(--color-fg-default);
+  font: inherit;
+  text-align: inherit;
+}
+
+#root .nv-first .nv-editor {
+  padding-left: 15px;
+}
+
+.nv-pop {
+  position: absolute;
+  left: 6px;
+  top: 32px;
+  z-index: 5;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  white-space: normal;
+}
+
+.nv-pop:focus {
+  outline: none;
+}
+
+.nv-pop--text {
+  width: 320px;
+}
+
+#root .nv-open {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 11px;
+  opacity: 0;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.nv-tr:hover .nv-open,
+.nv-td--active .nv-open,
+.nv-open:focus-visible {
+  opacity: 1;
+}
+
+.nv-td__error {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 0;
+  z-index: 6;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: max-content;
+  max-width: 300px;
+  padding: 5px 8px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--color-danger-fg);
+  color: #fff;
+  font-size: 12px;
+  white-space: normal;
+}
+
+#root .nv-td__error button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.nv-group th {
+  height: 30px;
+  padding: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.nv-sticky {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  padding-left: 16px;
+}
+
+.nv-groupfoot td {
+  height: 24px;
+  padding: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+}
+
+.nv-grid__foot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  height: 32px;
+  padding: 0 10px;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nv-grid__foot td.nv-first {
+  z-index: 3;
+  padding-left: 16px;
+}
+
+/* The matrix: the grid's table, its tokens and its sticky header and first column, with a mark per cell. */
+/* Its columns keep their widths: the side panel opening must not move a cell under the pointer. */
+.nv-grid.nv-mx {
+  min-width: 0;
+}
+
+/* What scrolls a cell into view stops short of the frozen header, first column and foot. */
+.nv-mx__scroll {
+  scroll-padding: 36px 0 36px 256px;
+}
+
+.nv-mx .nv-th__label {
+  display: block;
+  padding: 7px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nv-mx .nv-th.nv-first .nv-th__label {
+  padding-left: 16px;
+}
+
+.nv-mx .nv-mx__head {
+  text-align: center;
+}
+
+.nv-mx .nv-mx__cell {
+  text-align: center;
+}
+
+.nv-mx .nv-mx__count {
+  text-align: center;
+}
+
+.nv-mx .nv-mx__split {
+  border-left: 1px solid var(--color-border-default);
+}
+
+.nv-mx .nv-mx__mark {
+  color: var(--color-fg-subtle);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nv-mx .nv-mx__mark[data-counted="true"] {
+  color: var(--color-success-fg);
+}
+
+.nv-mx .nv-mx__warn {
+  margin-left: 4px;
+  color: var(--color-warning-fg);
+  font-size: 12px;
+}
+
+.nv-mx .nv-mx__dot {
+  display: inline-block;
+  margin-left: 2px;
+  vertical-align: super;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent-default);
+}
+
+.nv-mx .nv-mx__away {
+  background: repeating-linear-gradient(135deg, var(--color-warning-bg) 0 4px, var(--color-bg-surface) 4px 8px);
+}
+
+.nv-mx .nv-tr:hover .nv-mx__away {
+  background: repeating-linear-gradient(135deg, var(--color-warning-bg) 0 4px, var(--color-bg-subtle) 4px 8px);
+}
+
+.nv-mx:not([aria-readonly="true"]) .nv-mx__cell {
+  cursor: cell;
+}
+
+.nv-mx .nv-mx__selected,
+.nv-mx .nv-tr:hover .nv-mx__selected {
+  background: var(--color-accent-subtle);
+}
+
+.nv-mx .nv-first.nv-td {
+  font-weight: 500;
+  text-align: left;
+}
+
+.nv-mx__picker {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-subtle);
+}
+
+.nv-mx__picker .nv-picker__input {
+  max-width: 260px;
+}
+
+.nv-mx__columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-mx__columns li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.nv-mx__picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 120px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+#root .nv-mx__pick {
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  cursor: pointer;
+}
+
+#root .nv-mx__pick:hover {
+  background: var(--color-bg-muted);
+}
+
+.nv-drawer {
+  flex: 0 0 360px;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+}
+
+.nv-drawer__head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+}
+
+#root .nv-drawer__title {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+}
+
+.nv-drawer__fields {
+  margin: 0;
+  padding: 8px 16px 16px;
+}
+
+.nv-drawer__field {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.nv-drawer__field dt {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-drawer__field dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The matrix's editor in the drawer: the drawer's tokens, its fields stacked, long text kept inside. */
+.nv-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 16px 16px;
+}
+
+#root .nv-panel p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#root .nv-panel__where {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-panel__away {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+  color: var(--color-fg-default);
+}
+
+#root .nv-panel__warn {
+  color: var(--color-warning-fg);
+  font-weight: 600;
+}
+
+.nv-panel__warn::before {
+  content: "⚠ ";
+}
+
+.nv-panel textarea {
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+#root .nv-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+#root .nv-choices__option {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#root .nv-choices__option:hover:not(:disabled) {
+  background: var(--color-bg-muted);
+}
+
+#root .nv-choices__option[aria-checked="true"] {
+  border-color: var(--color-accent-default);
+  background: var(--color-accent-subtle);
+  font-weight: 600;
+}
+
+#root .nv-choices__option:focus-visible {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: 1px;
+}
+
+#root .nv-choices__option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+#root .nv-panel__label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.nv-panel__others,
+.nv-panel__people {
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.nv-panel__others li,
+.nv-panel__people li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  overflow-wrap: anywhere;
+}
+
+.nv-panel__people li span:last-child {
+  color: var(--color-fg-subtle);
+}
+
+.nv-mx .nv-first.nv-td[scope="row"] {
+  cursor: pointer;
+}
+
+/* The sheet and the panel beside it: a new view is named here, never in a popover. */
+.nv-work {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.nv-work > .nv-sheet {
+  min-width: 0;
+}
+
+/* The active table's views: one item each, a saved one marked mine or the team's. */
+.nv-views {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 1px;
+}
+
+/* The group and the menus are the grid's two halves; their items share its rows. */
+.nv-views__items,
+.nv-views__menus {
+  display: contents;
+}
+
+.nv-view {
+  position: relative;
+  grid-column: 1;
+  min-width: 0;
+  user-select: none;
+}
+
+/* Dragged to a new place: the row goes faint, a line marks the edge it lands on. */
+.nv-view--dragging {
+  opacity: 0.45;
+}
+
+.nv-view--drop-before::after,
+.nv-view--drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-accent-default);
+  pointer-events: none;
+}
+
+.nv-view--drop-before::after {
+  top: -1px;
+}
+
+.nv-view--drop-after::after {
+  bottom: -1px;
+}
+
+#root .nv-view:has(.nv-view__mark) > button {
+  padding-right: 26px;
+}
+
+#root .nv-views--actions .nv-view > button {
+  padding-right: 30px;
+}
+
+#root .nv-views--actions .nv-view:has(.nv-view__mark) > button {
+  padding-right: 50px;
+}
+
+.nv-views--actions .nv-view__mark {
+  right: 32px;
+}
+
+/*
+ * A view's ⋯ over the end of its row: shown on the open view, and on the list's hover or focus.
+ * Above its row by tree order, not a z-index: a z-index here would hold its popover under the sheet.
+ */
+.nv-view__menu {
+  position: relative;
+  grid-column: 1;
+  align-self: center;
+  justify-self: end;
+  margin-right: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.nv-views:hover .nv-view__menu,
+.nv-view__menu--active,
+.nv-view__menu:focus-within,
+.nv-view__menu:has([aria-expanded="true"]) {
+  opacity: 1;
+}
+
+.nv-menu {
+  display: inline-flex;
+}
+
+/* A disabled item's reason, on its own line under the label. */
+.nv-menu__reason {
+  display: block;
+  max-width: 220px;
+  margin-top: 2px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+/* The popover only places the menu: the menu draws its own frame. */
+#root .nv-menu [role="dialog"] {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+#root .nv-view__menu .nv-more {
+  height: 24px;
+}
+
+#root .nv-view__rename {
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--color-accent-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-view__menu {
+    transition: none;
+  }
+}
+
+.nv-view__mark {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: flex;
+  color: var(--color-fg-subtle);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+#root .nv-views__new {
+  width: 100%;
+  margin-top: 2px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-subtle);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+#root .nv-views__new:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+/* The view differs from how it is saved: the word, then what to do with it. */
+.nv-modified {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+#root .nv-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-more:hover,
+#root .nv-more[aria-expanded="true"] {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+.nv-modified__word {
+  margin-right: 2px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nv-viewpanel__field {
+  margin-bottom: -8px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+#root .nv-viewpanel__name {
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  box-shadow: none;
+}
+
+#root .nv-viewpanel__name:focus {
+  border-color: var(--color-accent-default);
+  outline: 2px solid var(--color-accent-subtle);
+}
+
+.nv-viewpanel__types {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nv-viewpanel__type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nv-viewpanel__type:hover {
+  background: var(--color-bg-muted);
+}
+
+.nv-viewpanel__type--soon {
+  color: var(--color-fg-subtle);
+  cursor: default;
+}
+
+.nv-viewpanel__type--soon:hover {
+  background: none;
+}
+
+.nv-viewpanel__soon {
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.nv-viewpanel__refusal {
+  color: var(--color-danger-fg);
+  font-size: 12px;
+}
+
+.nv-viewpanel__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .nv-app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .nv-rail {
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .nv-rail__label {
+    display: none;
+  }
+
+  .nv-rail__views {
+    flex-direction: row;
+  }
+
+  .nv-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .nv-toolbar__end {
+    margin-left: 0;
+  }
+
+  .nv-rail__foot,
+  .nv-rail__types [disabled] {
+    display: none;
+  }
+
+  .nv-views {
+    display: flex;
+    flex-direction: row;
+  }
+
+  /* A row of views has no room over its items: the actions wait for a wider screen. */
+  .nv-views__menus {
+    display: none;
+  }
+
+  /* The table's views are the only way to its other views: they stay, beside the tables. */
+  .nv-rail__types {
+    display: flex;
+    margin: 0;
+    padding: 0 0 0 8px;
+    border-top: 0;
+    border-left: 1px solid var(--color-border-subtle);
+  }
+}

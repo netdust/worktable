@@ -7,11 +7,16 @@
     "apps/*"
   ],
   "scripts": {
-    "check": "bun scripts/check-boundaries.ts && biome check . && bun run --filter '*' typecheck"
+    "test": "bun test packages",
+    "check": "bun scripts/check-boundaries.ts && biome check . && bun run --filter '*' typecheck",
+    "e2e": "playwright test",
+    "gate": "bun run check && bun test packages && bun run --filter @worktable/grid test && bun run e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@playwright/test": "^1.63.0",
     "@types/bun": "^1.4.2",
+    "@worktable/theatre": "workspace:*",
     "typescript": "^7.0.2"
   }
 }

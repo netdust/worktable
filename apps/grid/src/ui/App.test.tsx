@@ -1,0 +1,1197 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setStrings } from '../i18n'
+import type { SavedView, Schema } from '../types'
+import { calais, schema as calaisSchema } from '../grid/calais.test.data'
+
+const api = vi.hoisted(() => ({
+  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
+  savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
+}))
+vi.mock('../api', () => api)
+const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
+vi.mock('../export/download', () => exporter)
+const { App } = await import('./App')
+
+const served: Schema = {
+  models: {
+    activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: {} },
+    absence: { key: 'absence', label: 'Afwezigheid', title_label: 'Titel', title_readonly: false, fields: {} },
+  },
+  tables: [
+    { key: 'planning', label: 'Planning', model: 'activity', date_field: 'date', types: ['grid'] },
+    { key: 'absences', label: 'Afwezigheden', model: 'absence', types: ['grid'] },
+  ],
+  views: [
+    { key: 'planning', label: 'Planning', table: 'planning', model: 'activity', date_field: 'date' },
+    { key: 'absences', label: 'Afwezigheden', table: 'absences', model: 'absence' },
+  ],
+  writable: { activity: true, absence: false },
+}
+
+const rail = () => screen.getByRole('navigation', { name: 'Views' })
+/** The app once the schema answered: the shell renders only then. */
+const shell = async () => {
+  const rendered = render(<App />)
+  await screen.findByRole('navigation', { name: 'Views' })
+  return rendered
+}
+/** The toolbar's ⋯ opened, and the item it names. */
+const toolbarItem = (name: string | RegExp) => {
+  fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'More actions' }))
+  return within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name })
+}
+/** A rail entry for a table, never the item of the same name in the views list. */
+const tableEntry = (name: string) => {
+  const types = within(rail()).getByRole('group', { name: 'View type' })
+  return within(rail()).getAllByRole('button', { name }).find((b) => !types.contains(b))!
+}
+
+beforeEach(() => {
+  api.schema.mockResolvedValue(served)
+  api.rows.mockResolvedValue({ rows: [], total: 0 })
+  api.savedViews.mockResolvedValue([])
+  api.prefs.mockResolvedValue({ order: {}, last: {} })
+  api.savePrefs.mockImplementation((sent) => Promise.resolve(sent))
+  exporter.exportSheet.mockResolvedValue(undefined)
+})
+afterEach(() => {
+  cleanup()
+  vi.resetAllMocks()
+  setStrings(undefined)
+  window.location.hash = ''
+})
+
+describe('App shell', () => {
+  it('renders the rail with the views from the schema', async () => {
+    await shell()
+
+    expect(await within(rail()).findByRole('button', { name: 'Afwezigheden' })).toBeTruthy()
+    expect(tableEntry('Planning').getAttribute('aria-current')).toBe('page')
+    await screen.findByText('No rows in this window')
+  })
+
+  it('falls back to the first view when the hash names an unknown one', async () => {
+    window.location.hash = '#view=gone'
+    await shell()
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
+  })
+
+  it("titles the toolbar with the active view's label", async () => {
+    await shell()
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    await screen.findByText('No rows in this window')
+  })
+
+  it('shows the empty state when the window has no rows', async () => {
+    render(<App />)
+
+    expect(await screen.findByText('No rows in this window')).toBeTruthy()
+  })
+
+  it("shows the schema route's refusal, and asks for no rows, when the schema fails", async () => {
+    api.schema.mockRejectedValue({ code: 'not_found', message: 'Engine unreachable.' })
+
+    render(<App />)
+
+    expect(await screen.findByText('Engine unreachable.')).toBeTruthy()
+    expect(api.rows).not.toHaveBeenCalled()
+  })
+
+  it("switching view in the rail retitles the toolbar and requests that view's rows", async () => {
+    await shell()
+    fireEvent.click(await within(rail()).findByRole('button', { name: 'Afwezigheden' }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Afwezigheden' })).toBeTruthy()
+    await screen.findByText('No rows')
+    expect(api.rows).toHaveBeenLastCalledWith(served.views[1], {}, null, expect.any(Object))
+    expect(screen.queryByText(/^Week /)).toBeNull()
+  })
+
+  it("names the add button after the view's model, enabled only when it is writable", async () => {
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    const add = screen.getByRole('button', { name: 'New Activiteit' })
+    expect((add as HTMLButtonElement).disabled).toBe(false)
+
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Afwezigheden' }))
+    expect((screen.getByRole('button', { name: 'New Afwezigheid' }) as HTMLButtonElement).disabled).toBe(true)
+    await screen.findByText('No rows')
+  })
+
+  it("speaks the schema's strings once it loads", async () => {
+    api.schema.mockResolvedValue({ ...served, strings: { saved: 'Opgeslagen', noRowsInWindow: 'Geen rijen in deze week', new: 'Nieuw' } })
+
+    render(<App />)
+
+    expect(await screen.findByText('Geen rijen in deze week')).toBeTruthy()
+    expect(screen.getByText('Opgeslagen')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
+  })
+
+  it('opens the view the hash names, and names the view it switches to', async () => {
+    window.location.hash = '#view=absences'
+    await shell()
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Afwezigheden' })).toBeTruthy()
+    await screen.findByText('No rows')
+    fireEvent.click(tableEntry('Planning'))
+
+    expect(new URLSearchParams(window.location.hash.slice(1)).get('view')).toBe('planning')
+    await screen.findByText('No rows in this window')
+  })
+
+  it('says so when no view is declared', async () => {
+    api.schema.mockResolvedValue({ ...served, views: [] })
+
+    render(<App />)
+
+    expect(await screen.findByText('No views declared')).toBeTruthy()
+    expect(api.rows).not.toHaveBeenCalled()
+  })
+
+  it('focuses the search on Cmd/Ctrl+K', async () => {
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.keyDown(document, { key: 'k', metaKey: true })
+
+    expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Search' }))
+  })
+
+  it('exports what is on screen: the view, its window and the layout\'s columns and groups', async () => {
+    window.location.hash = '#from=2026-05-18&to=2026-05-24'
+    window.localStorage.setItem('ntdst-views/layout/v1/planning', JSON.stringify({
+      hidden: ['place'], order: ['title', 'kind', 'date'], widths: {}, sort: [{ id: 'start', desc: true }],
+      filters: [{ field: 'status', value: 'confirmed' }], group: 'date',
+    }))
+    const tabel = { ...calaisSchema.views[0], label: 'Tabel', table: 'planning', table_label: 'Planning' }
+    api.schema.mockResolvedValue({ ...calaisSchema, views: [tabel] })
+    api.rows.mockResolvedValue({ rows: calais, total: calais.length })
+
+    render(<App />)
+    await screen.findByText('Montage')
+    fireEvent.click(toolbarItem('Export'))
+
+    expect(exporter.exportSheet).toHaveBeenCalledTimes(1)
+    const [view, columns, groups, range, title] = exporter.exportSheet.mock.calls[0]
+    expect(view).toBe(tabel)
+    expect(title).toBe('Planning')
+    expect(range).toEqual({ from: '2026-05-18', to: '2026-05-24' })
+    expect(columns.map((c: { id: string }) => c.id).slice(0, 3)).toEqual(['title', 'kind', 'start'])
+    expect(columns.map((c: { id: string }) => c.id)).not.toContain('place')
+    expect(columns.map((c: { id: string }) => c.id)).not.toContain('date')
+    expect(groups.map((g: { key: string }) => g.key)).toEqual(['2026-05-18', '2026-05-19', '2026-05-20'])
+    expect(groups[0].rows.map((r: { title: string }) => r.title)).toEqual(['Lunch bistrot', 'Montage', 'Auto Pavel + Sien'])
+    expect(groups[1].rows.map((r: { title: string }) => r.title)).toEqual(['Repetitie'])
+    window.localStorage.clear()
+  })
+
+  it('says so when the export fails', async () => {
+    exporter.exportSheet.mockRejectedValue(new Error('Failed to fetch dynamically imported module'))
+    api.schema.mockResolvedValue(calaisSchema)
+    api.rows.mockResolvedValue({ rows: calais, total: calais.length })
+
+    render(<App />)
+    await screen.findByText('Montage')
+    fireEvent.click(toolbarItem('Export'))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Export failed')
+  })
+})
+
+describe('the production space', () => {
+  const production = { key: 'production', label: 'Productie', title_label: 'Titel', title_readonly: false, fields: {} }
+  const spaced: Schema = {
+    models: {
+      activity: {
+        key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false,
+        fields: {
+          production: { type: 'relation', label: 'Productie', required: false, fact: true, relation: { model: 'production', multiple: false } },
+          status: { type: 'select', label: 'Status', required: true, fact: true, options: { confirmed: 'Bevestigd', option: 'Optie' } },
+        },
+      },
+      absence: served.models.absence,
+      production,
+    },
+    tables: [
+      { key: 'planning', label: 'Planning', model: 'activity', date_field: 'date', space: 'scoped', types: ['grid'] },
+      { key: 'absences', label: 'Afwezigheden', model: 'absence', space: 'global', types: ['grid'] },
+    ],
+    views: [
+      { key: 'planning', label: 'Planning', table: 'planning', model: 'activity', date_field: 'date', space: 'scoped' },
+      { key: 'absences', label: 'Afwezigheden', table: 'absences', model: 'absence', space: 'global' },
+    ],
+    space: { field: 'production', model: 'production' },
+    writable: { activity: true, absence: false },
+  }
+  const productions = [
+    { id: 7, title: 'Glimworm', status: 'publish', fields: {} },
+    { id: 9, title: 'Wat de uil zag', status: 'publish', fields: {} },
+  ]
+  const key = () => `ntdst-views:${window.location.host}:production`
+  const activities = [
+    { id: 1, title: 'Montage', status: 'publish', fields: { production: [7], status: 'confirmed' }, lookups: { production: { id: 7, title: 'Glimworm', status: 'publish', fields: {} } } },
+  ]
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    api.schema.mockResolvedValue(spaced)
+    api.records.mockResolvedValue({ rows: productions, total: 2 })
+  })
+
+  it('heads the rail with the first production and lists the others in its selector', async () => {
+    await shell()
+
+    expect(await within(rail()).findByRole('heading', { level: 2, name: 'Glimworm' })).toBeTruthy()
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Glimworm' }))
+    const options = await within(rail()).findAllByRole('option')
+    expect(options.map((o) => o.textContent)).toEqual(['Glimworm', 'Wat de uil zag'])
+    expect(api.records).toHaveBeenCalledWith('production', '')
+  })
+
+  it('asks a scoped view for the selected production\'s rows, and again when it changes', async () => {
+    await shell()
+    await within(rail()).findByRole('heading', { level: 2, name: 'Glimworm' })
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 7 }, expect.any(Object))
+
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Glimworm' }))
+    fireEvent.click(await within(rail()).findByRole('option', { name: 'Wat de uil zag' }))
+
+    expect(within(rail()).getByRole('heading', { level: 2, name: 'Wat de uil zag' })).toBeTruthy()
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object))
+  })
+
+  it('lists a global view under General and asks it for every row', async () => {
+    await shell()
+    const general = await within(rail()).findByRole('group', { name: 'General' })
+
+    fireEvent.click(within(general).getByRole('button', { name: 'Afwezigheden' }))
+
+    await screen.findByText('No rows')
+    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[1], {}, null, expect.any(Object))
+  })
+
+  it('offers no filter on the production in a scoped view', async () => {
+    api.rows.mockResolvedValue({ rows: activities, total: 1 })
+    render(<App />)
+    await screen.findByText('Montage')
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+
+    expect(screen.getByRole('group', { name: 'Status' })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: 'Productie' })).toBeNull()
+  })
+
+  it('keeps the selection across a remount, per site', async () => {
+    const first = await shell()
+    fireEvent.click(await within(rail()).findByRole('button', { name: 'Glimworm' }))
+    fireEvent.click(await within(rail()).findByRole('option', { name: 'Wat de uil zag' }))
+    await screen.findByText('No rows in this window')
+    first.unmount()
+
+    expect(window.localStorage.getItem(key())).toBe('9')
+    await shell()
+    expect(await within(rail()).findByRole('heading', { level: 2, name: 'Wat de uil zag' })).toBeTruthy()
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object))
+  })
+
+  it('asks for a production when there is none, and loads no rows for a scoped view', async () => {
+    api.records.mockResolvedValue({ rows: [], total: 0 })
+    await shell()
+
+    expect(await within(screen.getByRole('main')).findByText('Choose where to work')).toBeTruthy()
+    expect(api.rows).not.toHaveBeenCalled()
+  })
+})
+
+describe('a matrix view', () => {
+  const join = {
+    model: 'assignment', row_field: 'activity', column_field: 'person', name_field: 'name', cell_field: 'status', note_field: 'note',
+    keys: { x: 'confirmed' }, marks: { confirmed: '✓' }, count: 'confirmed',
+  }
+  const bezetting = {
+    key: 'bezetting', label: 'Bezetting', table: 'bezetting', model: 'activity', type: 'matrix' as const, date_field: 'date', space: 'global' as const,
+    join, away: { table: 'afwezigheden', column_field: 'person', label_field: 'reason', model: 'absence', date_field: 'from', end_field: 'to' },
+  }
+  const absences = { key: 'afwezigheden', label: 'Afwezigheden', table: 'afwezigheden', model: 'absence', date_field: 'from', end_field: 'to' }
+  const tables = [
+    { key: 'bezetting', label: 'Bezetting', model: 'activity', types: ['grid' as const, 'matrix' as const] },
+    { key: 'afwezigheden', label: 'Afwezigheden', model: 'absence', types: ['grid' as const] },
+  ]
+  const matrixSchema: Schema = {
+    models: {
+      ...served.models,
+      assignment: {
+        key: 'assignment', label: 'Toewijzing', title_label: 'Titel', title_readonly: false,
+        fields: { person: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false } } },
+      },
+    },
+    tables,
+    views: [bezetting, absences],
+    writable: { activity: true, assignment: true, absence: false },
+  }
+  const montage = { id: 1, title: 'Montage', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [{ id: 11, title: 'j', status: 'publish', fields: { person: [5], status: 'confirmed' } }] } }
+
+  beforeEach(() => {
+    window.location.hash = '#view=bezetting&from=2026-05-18&to=2026-05-24'
+    api.schema.mockResolvedValue(matrixSchema)
+    api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'bezetting' ? [montage] : [], total: 1 }))
+    api.records.mockResolvedValue({ rows: [{ id: 5, title: 'Sien', status: 'publish', fields: {} }], total: 1 })
+  })
+
+  it("fetches the matrix view's rows and the away view's rows, and shows the matrix", async () => {
+    render(<App />)
+
+    expect(await screen.findByRole('grid', { name: 'Bezetting' })).toBeTruthy()
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    const window = { from: '2026-05-18', to: '2026-05-24' }
+    expect(api.rows).toHaveBeenCalledWith(matrixSchema.views[0], window, null, expect.any(Object))
+    expect(api.rows).toHaveBeenCalledWith({ model: 'absence', table: 'afwezigheden' }, window, null)
+    expect(api.records).toHaveBeenCalledWith('person', '')
+  })
+
+  it('has no add button and a disabled export with its word', async () => {
+    render(<App />)
+    await screen.findByRole('grid', { name: 'Bezetting' })
+
+    expect(screen.queryByRole('button', { name: /^New/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Export' })).toBeNull()
+    const item = toolbarItem(/^Export/)
+    expect(item.getAttribute('aria-disabled')).toBe('true')
+    expect(within(item).getByText('The matrix is not exported yet')).toBeTruthy()
+  })
+
+  it('builds no grid store: the grid view of the same model is not drawn', async () => {
+    render(<App />)
+    await screen.findByRole('grid', { name: 'Bezetting' })
+
+    expect(document.querySelector('[data-column="title"]')).toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
+  })
+
+  it('writes a typed status to the join model, says Saved and offers the undo', async () => {
+    api.create.mockResolvedValue({ id: 99, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } })
+    const leeg = { id: 2, title: 'Leeg', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
+    api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'bezetting' ? [montage, leeg] : [], total: 2 }))
+    render(<App />)
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    const cell = screen.getByRole('row', { name: /Leeg/ }).querySelector<HTMLElement>('[data-column="record:5"]')!
+
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'x' })
+
+    expect(api.create).toHaveBeenCalledWith('assignment', { activity: [2], person: [5], status: 'confirmed' })
+    expect(await screen.findByText('Saved')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeTruthy()
+  })
+
+  it('keeps a written cell and its undo through Save on a saved matrix view', async () => {
+    const empty = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
+    const mine: SavedView = { ...bezetting, key: '42', id: 42, label: 'Calais techniek', starting: false, arrangement: empty,
+      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true }
+    window.location.hash = '#view=42&from=2026-05-18&to=2026-05-24'
+    window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['name:lieve'], order: [], widths: {}, sort: [], filters: [], group: null }))
+    api.savedViews.mockResolvedValue([mine])
+    api.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['name:lieve'] } })
+    api.create.mockResolvedValue({ id: 99, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } })
+    api.remove.mockResolvedValue({ deleted: true })
+    const leeg = { id: 2, title: 'Leeg', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
+    api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'bezetting' ? [montage, leeg] : [], total: 2 }))
+    render(<App />)
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    const cell = () => screen.getByRole('row', { name: /Leeg/ }).querySelector<HTMLElement>('[data-column="record:5"]')!
+    fireEvent.click(cell())
+    fireEvent.keyDown(cell(), { key: 'x' })
+    await screen.findByRole('button', { name: 'Undo' })
+
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBeNull())
+
+    expect(api.updateView).toHaveBeenCalled()
+    expect(cell().textContent).toBe('✓')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith('assignment', 99))
+    expect(api.rows.mock.calls.filter(([v]) => (v as { table: string }).table === 'bezetting')).toHaveLength(1)
+  })
+
+  it('fetches the matrix rows again after a refused write, and shows what another tab stored under the message', async () => {
+    api.create.mockRejectedValue({ code: 'duplicate_assignment', message: 'Already on it.' })
+    const leeg = { id: 2, title: 'Leeg', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
+    const taken = { ...leeg, rollups: { cells: [{ id: 77, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } }] } }
+    let calls = 0
+    api.rows.mockImplementation((v: { table: string }) => {
+      if (v.table !== 'bezetting') return Promise.resolve({ rows: [], total: 0 })
+      calls++
+      return Promise.resolve({ rows: [montage, calls === 1 ? leeg : taken], total: 2 })
+    })
+    render(<App />)
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    const cell = () => screen.getByRole('row', { name: /Leeg/ }).querySelector<HTMLElement>('[data-column="record:5"]')!
+
+    fireEvent.click(cell())
+    fireEvent.keyDown(cell(), { key: 'x' })
+
+    await waitFor(() => expect(calls).toBe(2))
+    await waitFor(() => expect(cell().textContent).toBe('✓Already on it.'))
+  })
+
+  it('reads the join model\'s writer, not the row model\'s: no writer, no write', async () => {
+    api.schema.mockResolvedValue({ ...matrixSchema, writable: { activity: true, assignment: false } })
+    render(<App />)
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    const cell = screen.getByRole('row', { name: /Montage/ }).querySelector<HTMLElement>('[data-column="record:5"]')!
+
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Delete' })
+
+    expect(api.remove).not.toHaveBeenCalled()
+    expect(screen.getByRole('grid', { name: 'Bezetting' }).getAttribute('aria-readonly')).toBe('true')
+  })
+
+  it('asks for a week when the window is not set, in the site\'s words', async () => {
+    api.rows.mockRejectedValue({ code: 'views_window_required', message: 'A window is required' })
+    api.schema.mockResolvedValue({ ...matrixSchema, strings: { 'error.views_window_required': 'Kies eerst een week' } })
+    render(<App />)
+
+    expect(await screen.findByText('Kies eerst een week')).toBeTruthy()
+  })
+})
+
+describe('a matrix view with the table\'s filters', () => {
+  const join = {
+    model: 'assignment', row_field: 'activity', column_field: 'person', name_field: 'name', cell_field: 'status',
+    keys: { x: 'confirmed' }, marks: { confirmed: '✓' }, count: 'confirmed',
+  }
+  const bezetting = {
+    key: 'bezetting', label: 'Bezetting', table: 'bezetting', model: 'activity', type: 'matrix' as const, date_field: 'date', space: 'global' as const,
+    filters: ['location'], join,
+  }
+  const tables = [{ key: 'bezetting', label: 'Bezetting', model: 'activity', types: ['grid' as const, 'matrix' as const] }]
+  const schemaWith: Schema = {
+    models: {
+      activity: {
+        key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false,
+        fields: {
+          date: { type: 'date', label: 'Datum', required: true, fact: true },
+          location: { type: 'relation', label: 'Locatie', required: false, fact: true, relation: { model: 'location', multiple: false } },
+        },
+      },
+      assignment: {
+        key: 'assignment', label: 'Toewijzing', title_label: 'Titel', title_readonly: false,
+        fields: { person: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false } } },
+      },
+    },
+    tables,
+    views: [bezetting],
+    writable: { activity: true, assignment: true },
+  }
+  const at = (id: number, title: string, place: number, name: string) => ({
+    id, title, status: 'publish', fields: { date: '2026-05-18', location: [place] },
+    lookups: { location: { id: place, title: place === 3 ? 'Zaal' : 'Tuin', status: 'publish', fields: {} } },
+    rollups: { cells: [{ id: id * 10, title: 'j', status: 'publish', fields: { name, status: 'confirmed', person: [] } }] },
+  })
+
+  beforeEach(() => {
+    window.location.hash = '#view=bezetting&from=2026-05-18&to=2026-05-24'
+    api.schema.mockResolvedValue(schemaWith)
+    api.rows.mockResolvedValue({ rows: [at(1, 'Montage', 3, 'Lieve'), at(2, 'Repetitie', 4, 'Lieve')], total: 2 })
+    api.records.mockResolvedValue({ rows: [], total: 0 })
+  })
+  afterEach(() => window.localStorage.clear())
+
+  const bar = () => document.querySelector<HTMLElement>('.nv-bar')!
+
+  it('offers the table\'s filter fields on the matrix in the bar after + Column, not in the toolbar', async () => {
+    render(<App />)
+
+    await screen.findByRole('button', { name: '+ Filter' })
+    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['+ Column', '+ Filter'])
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: '+ Filter' })).toBeNull()
+  })
+
+  it('keeps the bar and its chip when the filter leaves no row, so the chip can be taken off', async () => {
+    window.localStorage.setItem('ntdst-views/layout/v1/bezetting', JSON.stringify({
+      hidden: [], order: [], widths: {}, sort: [], filters: [{ field: 'location', value: '9' }], group: null,
+    }))
+    render(<App />)
+
+    expect(await screen.findByText('No rows match the search or filters')).toBeTruthy()
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Remove filter Locatie' }))
+
+    expect(await screen.findByRole('row', { name: /Repetitie/ })).toBeTruthy()
+  })
+
+  it('names a relation filter\'s record on a window with no rows, from the related model\'s records', async () => {
+    window.localStorage.setItem('ntdst-views/layout/v1/bezetting', JSON.stringify({
+      hidden: [], order: [], widths: {}, sort: [], filters: [{ field: 'location', value: '9' }], group: null,
+    }))
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+    let answer: (value: unknown) => void = () => undefined
+    api.records.mockImplementation((model: string) => model === 'location'
+      ? new Promise((resolve) => { answer = resolve })
+      : Promise.resolve({ rows: [], total: 0 }))
+    render(<App />)
+
+    await waitFor(() => expect(api.records).toHaveBeenCalledWith('location', ''))
+    expect(bar().querySelector('.nv-chip--filter'), 'no chip reading the id while the name is asked').toBeNull()
+    await act(async () => answer({ rows: [{ id: 9, title: 'Zaal Calais', status: 'publish', fields: {} }], total: 1 }))
+
+    expect(bar().querySelector('.nv-chip--filter')?.textContent).toContain('Zaal Calais')
+  })
+
+  it('names a relation filter by its id when its record cannot be found', async () => {
+    window.localStorage.setItem('ntdst-views/layout/v1/bezetting', JSON.stringify({
+      hidden: [], order: [], widths: {}, sort: [], filters: [{ field: 'location', value: '9' }], group: null,
+    }))
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+    api.records.mockImplementation((model: string) => (model === 'location' ? Promise.reject(new Error('offline')) : Promise.resolve({ rows: [], total: 0 })))
+    render(<App />)
+
+    await waitFor(() => expect(bar().querySelector('.nv-chip--filter')?.textContent).toContain('9'))
+  })
+
+  it('keeps the rows of a filtered location, and their counts', async () => {
+    window.localStorage.setItem('ntdst-views/layout/v1/bezetting', JSON.stringify({
+      hidden: [], order: [], widths: {}, sort: [], filters: [{ field: 'location', value: '3' }], group: null,
+    }))
+    render(<App />)
+
+    await screen.findByRole('row', { name: /Montage/ })
+
+    expect(screen.queryByRole('row', { name: /Repetitie/ })).toBeNull()
+    expect(within(screen.getByTestId('total')).getAllByTestId('column-count').map((c) => c.textContent)).toEqual(['1'])
+  })
+})
+
+describe('a table with two views', () => {
+  const join = {
+    model: 'assignment', row_field: 'activity', column_field: 'person', name_field: 'name', cell_field: 'status', note_field: 'note',
+    keys: { x: 'confirmed' }, marks: { confirmed: '✓' }, count: 'confirmed',
+  }
+  const tabel = { key: 'planning', label: 'Tabel', model: 'activity', date_field: 'date', space: 'scoped' as const, table: 'planning', table_label: 'Planning' }
+  const matrix = {
+    key: 'bezetting', label: 'Matrix', model: 'activity', type: 'matrix' as const, date_field: 'date', space: 'scoped' as const, table: 'planning', table_label: 'Planning',
+    join, away: { table: 'afwezigheden', column_field: 'person', label_field: 'reason', model: 'absence', date_field: 'from', end_field: 'to' },
+  }
+  const absences = { key: 'afwezigheden', label: 'Tabel', model: 'absence', date_field: 'from', end_field: 'to', space: 'global' as const, table: 'afwezigheden', table_label: 'Afwezigheden' }
+  const tables = [
+    { key: 'planning', label: 'Planning', model: 'activity', space: 'scoped' as const, types: ['grid' as const, 'matrix' as const] },
+    { key: 'afwezigheden', label: 'Afwezigheden', model: 'absence', space: 'global' as const, types: ['grid' as const] },
+  ]
+  const schema: Schema = {
+    models: {
+      ...served.models,
+      production: { key: 'production', label: 'Productie', title_label: 'Titel', title_readonly: false, fields: {} },
+      assignment: {
+        key: 'assignment', label: 'Toewijzing', title_label: 'Titel', title_readonly: false,
+        fields: { person: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false } } },
+      },
+    },
+    tables,
+    views: [tabel, matrix, absences],
+    space: { field: 'production', model: 'production' },
+    writable: { activity: true, assignment: true, absence: false },
+  }
+  const montage = { id: 1, title: 'Montage', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
+  const week = { from: '2026-05-18', to: '2026-05-24' }
+  const types = () => within(rail()).getByRole('group', { name: 'View type' })
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    window.location.hash = '#from=2026-05-18&to=2026-05-24'
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'afwezigheden' ? [] : [montage], total: 1 }))
+    api.records.mockImplementation((model: string) => Promise.resolve(model === 'production'
+      ? { rows: [{ id: 7, title: 'Glimworm', status: 'publish', fields: {} }, { id: 9, title: 'Wat de uil zag', status: 'publish', fields: {} }], total: 2 }
+      : { rows: [], total: 0 }))
+  })
+
+  it("titles the toolbar, the grid and the matrix with the table's label", async () => {
+    render(<App />)
+    expect(await screen.findByRole('grid', { name: 'Planning' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+
+    fireEvent.click(within(types()).getByRole('button', { name: 'Matrix' }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    await waitFor(() => expect(document.querySelector('table.nv-mx[aria-label="Planning"]')).toBeTruthy())
+  })
+
+  it("keeps the week and the production when switching the table's view", async () => {
+    await shell()
+    fireEvent.click(await within(rail()).findByRole('button', { name: 'Glimworm' }))
+    fireEvent.click(await within(rail()).findByRole('option', { name: 'Wat de uil zag' }))
+    await screen.findByRole('grid', { name: 'Planning' })
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(tabel, week, { field: 'production', id: 9 }, expect.any(Object)))
+
+    fireEvent.click(within(types()).getByRole('button', { name: 'Matrix' }))
+
+    const hash = () => new URLSearchParams(window.location.hash.slice(1))
+    await waitFor(() => expect(api.rows).toHaveBeenCalledWith(matrix, week, { field: 'production', id: 9 }, expect.any(Object)))
+    expect([hash().get('view'), hash().get('from'), hash().get('to')]).toEqual(['bezetting', '2026-05-18', '2026-05-24'])
+    expect(within(rail()).getByRole('heading', { level: 2, name: 'Wat de uil zag' })).toBeTruthy()
+
+    fireEvent.click(within(types()).getByRole('button', { name: 'Tabel' }))
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(tabel, week, { field: 'production', id: 9 }, expect.any(Object)))
+    expect(hash().get('view')).toBe('planning')
+  })
+  describe('the view a table opens on (V21)', () => {
+    const view = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
+    const entry = (name: string) => within(rail()).getAllByRole('button', { name }).find((b) => !types().contains(b))!
+    const render2 = () => render(<App />)
+
+    it('opens the view last used there on a click on the table, and keeps it in the prefs', async () => {
+      render2()
+      await screen.findByRole('grid', { name: 'Planning' })
+
+      fireEvent.click(within(types()).getByRole('button', { name: 'Matrix' }))
+      fireEvent.click(await within(rail()).findByRole('button', { name: 'Afwezigheden' }))
+      expect(view()).toBe('afwezigheden')
+      fireEvent.click(entry('Planning'))
+
+      expect(view()).toBe('bezetting')
+      await waitFor(() => expect(api.savePrefs).toHaveBeenCalled())
+      expect(api.savePrefs).toHaveBeenCalledOnce()
+      expect(api.savePrefs).toHaveBeenLastCalledWith({ order: {}, last: { planning: 'bezetting', afwezigheden: 'afwezigheden' } })
+    })
+
+    it('opens the stored last view on a click, or the first in the user\'s order once that view is gone', async () => {
+      window.location.hash = '#view=afwezigheden&from=2026-05-18&to=2026-05-24'
+      api.prefs.mockResolvedValue({ order: { planning: ['bezetting', 'planning'] }, last: { planning: 'planning' } })
+      render2()
+      await screen.findByText('No rows in this window')
+
+      fireEvent.click(entry('Planning'))
+      expect(view()).toBe('planning')
+
+      cleanup()
+      window.location.hash = '#view=afwezigheden&from=2026-05-18&to=2026-05-24'
+      api.prefs.mockResolvedValue({ order: { planning: ['bezetting', 'planning'] }, last: { planning: '99' } })
+      render2()
+      await screen.findByText('No rows in this window')
+
+      fireEvent.click(entry('Planning'))
+      expect(view()).toBe('bezetting')
+    })
+
+    it('lands on the first table\'s first view in the user\'s order without a view in the hash, never the last, and stores nothing', async () => {
+      api.prefs.mockResolvedValue({ order: { planning: ['bezetting', 'planning'] }, last: { planning: 'planning' } })
+      render2()
+
+      await waitFor(() => expect(document.querySelector('table.nv-mx[aria-label="Planning"]')).toBeTruthy())
+      expect(within(types()).getByRole('button', { name: 'Matrix' }).getAttribute('aria-current')).toBe('page')
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      expect(api.savePrefs).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('saved views', () => {
+  const empty = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
+  const calais: SavedView = {
+    key: '42', id: 42, label: 'Calais techniek', table: 'planning', table_label: 'Planning', model: 'activity', date_field: 'date', type: 'grid',
+    starting: false, arrangement: empty, shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
+  }
+  const types = () => within(rail()).getByRole('group', { name: 'View type' })
+  const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
+  const local = (key: string) => window.localStorage.getItem(`ntdst-views/layout/v1/${key}`)
+  const changeLocally = (key: string) => window.localStorage.setItem(`ntdst-views/layout/v1/${key}`, JSON.stringify({
+    hidden: ['place'], order: [], widths: {}, sort: [], filters: [], group: null,
+  }))
+  const toolbar = () => document.querySelector<HTMLElement>('.nv-toolbar')!
+  const more = () => {
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'More actions' }))
+    return screen.getByRole('menu', { name: 'More actions' })
+  }
+
+  beforeEach(() => window.localStorage.clear())
+  afterEach(() => window.localStorage.clear())
+
+  it("lists the table's saved views after its starting one, and opens one the hash names by id", async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    await shell()
+
+    expect(await within(types()).findByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
+    expect(within(types()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Planning', 'Calais techniek', 'Calendarsoon'])
+    await screen.findByText('No rows in this window')
+    expect(within(types()).getByRole('button', { name: /^Calais techniek/ }).getAttribute('aria-current')).toBe('page')
+    expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
+  })
+
+  it('falls back to the first view when the hash names an id that is no saved view', async () => {
+    window.location.hash = '#view=999'
+    api.savedViews.mockResolvedValue([calais])
+    render(<App />)
+
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
+    expect(api.rows).not.toHaveBeenCalledWith(calais, expect.any(Object), null, expect.any(Object))
+  })
+
+  it("creates a view from + View: personal, from the table's starting view of that type, opened and in the hash", async () => {
+    api.schema.mockResolvedValue({ ...served, views: [{ ...served.views[0], sort: ['-date'], group: 'date', hidden: ['place'] }, served.views[1]] })
+    api.createView.mockResolvedValue(calais)
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(rail()).getByRole('button', { name: '+ View' }))
+    const panel = screen.getByRole('complementary', { name: '+ View' })
+    fireEvent.change(within(panel).getByRole('textbox', { name: 'Name' }), { target: { value: 'Calais techniek' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
+
+    expect(api.createView).toHaveBeenCalledWith({
+      name: 'Calais techniek', table: 'planning', type: 'grid', field: null, shared: false,
+      arrangement: { ...empty, sort: [{ id: 'date', desc: true }], group: 'date', hidden: ['place'] },
+    })
+    await waitFor(() => expect(hash()).toBe('42'))
+    expect(within(types()).getByRole('button', { name: /^Calais techniek/ }).getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('complementary', { name: '+ View' })).toBeNull()
+  })
+
+  it('shows an own changed view as modified: Save, and Save as new view and Revert under More actions', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    expect(within(toolbar()).getByText('· modified')).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Save' }).title).toBe('')
+    expect(within(toolbar()).queryByRole('button', { name: 'Save as new view' })).toBeNull()
+    expect(within(more()).getAllByRole('menuitem').map((item) => item.textContent).slice(0, 2)).toEqual(['Save as new view', 'Revert'])
+  })
+
+  it('saves a changed starting view only as a new one: its one Save asks a name', async () => {
+    changeLocally('planning')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    expect(within(toolbar()).getByText('· modified')).toBeTruthy()
+    expect(within(toolbar()).queryByRole('button', { name: 'Save as new view' })).toBeNull()
+    const save = within(toolbar()).getByRole('button', { name: 'Save' })
+    expect(save.title).toBe('Save as new view')
+    fireEvent.click(save)
+    expect(screen.getByRole('complementary', { name: 'Save as new view' })).toBeTruthy()
+  })
+
+  it("offers no Save on another's shared view, to an administrator who may edit it either", async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([{ ...calais, shared: true, mine: false, editable: true, owner: { id: 2, name: 'Jan' } }])
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    expect(within(toolbar()).getByText('· modified')).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Save' }).title).toBe('Save as new view')
+  })
+
+  it('says nothing of a view this browser has not changed', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    expect(within(toolbar()).queryByText('· modified')).toBeNull()
+    expect(within(toolbar()).queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('saves the changed arrangement to the view and clears the local copy', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    api.updateView.mockResolvedValue({ ...calais, arrangement: { ...empty, hidden: ['place'] }, hidden: ['place'] })
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+
+    expect(api.updateView).toHaveBeenCalledWith(42, { arrangement: { ...empty, hidden: ['place'] } })
+    await waitFor(() => expect(local('42')).toBeNull())
+    expect(within(toolbar()).queryByText('· modified')).toBeNull()
+  })
+
+  it('reverts: the local copy is gone and the view is as saved', async () => {
+    changeLocally('planning')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Revert' }))
+
+    expect(local('planning')).toBeNull()
+    expect(within(toolbar()).queryByText('· modified')).toBeNull()
+  })
+
+  it('undoes a revert: the notice says it was reverted, and its Undo brings the change back (R10)', async () => {
+    changeLocally('planning')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Revert' }))
+    expect(screen.getByText('Reverted')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['place'])
+    expect(await within(toolbar()).findByText('· modified')).toBeTruthy()
+  })
+
+  it('saves a changed starting view as a new one: asked a name, its arrangement kept, the new one opened', async () => {
+    api.createView.mockResolvedValue({ ...calais, arrangement: { ...empty, hidden: ['place'] } })
+    changeLocally('planning')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+    const panel = screen.getByRole('complementary', { name: 'Save as new view' })
+    fireEvent.change(within(panel).getByRole('textbox', { name: 'Name' }), { target: { value: 'Calais techniek' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
+
+    expect(api.createView).toHaveBeenCalledWith({
+      name: 'Calais techniek', table: 'planning', type: 'grid', field: null, shared: false,
+      arrangement: { ...empty, hidden: ['place'] },
+    })
+    await waitFor(() => expect(hash()).toBe('42'))
+    expect(local('planning')).toBeNull()
+  })
+
+  it("drops a view another tab deleted, says so, and keeps the change on the table's starting view", async () => {
+    window.location.hash = '#view=42'
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_unknown_saved': 'Deze weergave bestaat niet meer' } })
+    api.savedViews.mockResolvedValue([calais])
+    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Deze weergave bestaat niet meer')).toBeTruthy()
+    await waitFor(() => expect(hash()).toBe('planning'))
+    expect(within(types()).queryByRole('button', { name: /^Calais techniek/ })).toBeNull()
+    expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['place'])
+  })
+
+  it('keeps a deleted view and its change when the table has no starting view of its type', async () => {
+    window.location.hash = '#view=42'
+    api.schema.mockResolvedValue({ ...served, views: [{ ...served.views[0], type: 'matrix' }, served.views[1]] })
+    api.savedViews.mockResolvedValue([calais])
+    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('No such saved view. · Save your change with “Save as new view” before you leave')).toBeTruthy()
+    expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
+    expect(hash()).toBe('42')
+    expect(within(types()).getByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Save' }).title).toBe('Save as new view')
+  })
+
+  it("never overwrites the starting view's own unsaved change with a deleted view's", async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    changeLocally('42')
+    window.localStorage.setItem('ntdst-views/layout/v1/planning', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('No such saved view. · Save your change with “Save as new view” before you leave')).toBeTruthy()
+    expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['kind'])
+    expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
+  })
+  it('keeps a change made while Save was on its way, and sends one request for a double click', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    let answer: (view: SavedView) => void = () => undefined
+    api.updateView.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+    window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['place', 'kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
+    answer({ ...calais, arrangement: { ...empty, hidden: ['place'] } })
+
+    await waitFor(() => expect(api.updateView).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place', 'kind'])
+  })
+})
+
+describe("a saved view's actions", () => {
+  const empty = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
+  const view = (id: number, label: string, extra: Partial<SavedView> = {}): SavedView => ({
+    key: String(id), id, label, table: 'planning', table_label: 'Planning', model: 'activity', date_field: 'date', type: 'grid',
+    starting: false, arrangement: empty, shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, ...extra,
+  })
+  const calais = view(42, 'Calais techniek', { arrangement: { ...empty, hidden: ['place'] } })
+  const montage = view(43, 'Montage')
+  const types = () => within(rail()).getByRole('group', { name: 'View type' })
+  const names = () => within(types()).getAllByRole('button').map((b) => b.textContent)
+  const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
+  const choose = (name: string, action: string) => {
+    fireEvent.click(within(rail()).getByRole('button', { name: `More actions: ${name}` }))
+    fireEvent.click(within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name: action }))
+  }
+  const opened = async () => {
+    render(<App />)
+    await screen.findByText('No rows in this window')
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    api.savedViews.mockResolvedValue([calais, montage])
+  })
+  afterEach(() => window.localStorage.clear())
+
+  it('duplicates a view as a personal copy named after it, with its arrangement, and opens it', async () => {
+    api.schema.mockResolvedValue({ ...served, strings: { copyOf: '{name} (kopie)' } })
+    api.createView.mockResolvedValue(view(50, 'Calais techniek (kopie)', { arrangement: calais.arrangement }))
+    await opened()
+
+    choose('Calais techniek', 'Duplicate')
+
+    expect(api.createView).toHaveBeenCalledWith({
+      name: 'Calais techniek (kopie)', table: 'planning', type: 'grid', field: null, shared: false, arrangement: { ...empty, hidden: ['place'] },
+    })
+    await waitFor(() => expect(hash()).toBe('50'))
+    expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calais techniek (kopie)', 'Calendarsoon'])
+  })
+
+  it('duplicates a starting view too', async () => {
+    api.createView.mockResolvedValue(view(50, 'Planning (copy)'))
+    await opened()
+
+    choose('Planning', 'Duplicate')
+
+    expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ name: 'Planning (copy)', table: 'planning', type: 'grid', shared: false }))
+  })
+
+  it('deletes at once, says so with an undo, and the undo puts it back in its place', async () => {
+    api.deleteView.mockResolvedValue({})
+    api.restoreView.mockResolvedValue(calais)
+    await opened()
+
+    choose('Calais techniek', 'Remove')
+
+    expect(api.deleteView).toHaveBeenCalledWith(42)
+    expect(names()).toEqual(['Planning', 'Montage', 'Calendarsoon'])
+    const notice = await screen.findByRole('status', { name: 'View removed' })
+    fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
+
+    expect(api.restoreView).toHaveBeenCalledWith(42)
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calendarsoon']))
+    expect(screen.queryByRole('status', { name: 'View removed' })).toBeNull()
+  })
+
+  it('offers the undo of the delete clicked last, though the first one answers last', async () => {
+    let answerFirst: (value: unknown) => void = () => undefined
+    api.deleteView.mockReturnValueOnce(new Promise((resolve) => { answerFirst = resolve })).mockResolvedValueOnce({})
+    api.restoreView.mockResolvedValue(montage)
+    await opened()
+
+    choose('Calais techniek', 'Remove')
+    choose('Montage', 'Remove')
+    await screen.findByRole('status', { name: 'View removed' })
+    await act(async () => answerFirst({}))
+    fireEvent.click(within(screen.getByRole('status', { name: 'View removed' })).getByRole('button', { name: 'Undo' }))
+
+    expect(api.restoreView).toHaveBeenCalledWith(43)
+    expect(api.restoreView).not.toHaveBeenCalledWith(42)
+  })
+
+  it('opens the first view when the open one is deleted', async () => {
+    window.location.hash = '#view=42'
+    api.deleteView.mockResolvedValue({})
+    await opened()
+
+    choose('Calais techniek', 'Remove')
+
+    await waitFor(() => expect(hash()).toBe('planning'))
+  })
+
+  it('puts a view back with the refusal when the delete is refused', async () => {
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_not_owner': 'Alleen de eigenaar kan deze weergave wijzigen' } })
+    api.deleteView.mockRejectedValue({ code: 'views_not_owner', message: 'Not yours.' })
+    api.savedViews.mockResolvedValueOnce([calais, montage]).mockResolvedValue([calais, montage])
+    await opened()
+
+    choose('Calais techniek', 'Remove')
+
+    expect(await screen.findByText('Alleen de eigenaar kan deze weergave wijzigen')).toBeTruthy()
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calendarsoon']))
+  })
+
+  it('says why an undo could not restore', async () => {
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_limit': 'Je hebt het maximum van 200 weergaven bereikt' } })
+    api.deleteView.mockResolvedValue({})
+    api.restoreView.mockRejectedValue({ code: 'views_limit', message: 'Limit.' })
+    await opened()
+
+    choose('Calais techniek', 'Remove')
+    fireEvent.click(within(await screen.findByRole('status', { name: 'View removed' })).getByRole('button', { name: 'Undo' }))
+
+    expect(await screen.findByText('Je hebt het maximum van 200 weergaven bereikt')).toBeTruthy()
+    expect(names()).toEqual(['Planning', 'Montage', 'Calendarsoon'])
+  })
+
+  it('shares a view with the team, and takes it back', async () => {
+    api.updateView.mockResolvedValueOnce({ ...calais, shared: true })
+    await opened()
+
+    choose('Calais techniek', 'Share with the team')
+
+    expect(api.updateView).toHaveBeenCalledWith(42, { shared: true })
+    const item = () => within(types()).getByRole('button', { name: /^Calais techniek/ }).parentElement!
+    await waitFor(() => expect(within(item()).getByRole('img', { name: 'Shared with the team' })).toBeTruthy())
+
+    api.updateView.mockResolvedValueOnce(calais)
+    choose('Calais techniek', 'Only for me')
+    expect(api.updateView).toHaveBeenLastCalledWith(42, { shared: false })
+    await waitFor(() => expect(within(item()).getByRole('img', { name: 'Mine' })).toBeTruthy())
+  })
+
+  it('renames in place on a double-click', async () => {
+    api.updateView.mockResolvedValue({ ...calais, label: 'Calais licht' })
+    await opened()
+
+    fireEvent.doubleClick(within(types()).getByRole('button', { name: /^Calais techniek/ }))
+    const name = screen.getByRole('textbox', { name: 'Rename' })
+    fireEvent.change(name, { target: { value: 'Calais licht' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+
+    expect(api.updateView).toHaveBeenCalledWith(42, { name: 'Calais licht' })
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais licht', 'Montage', 'Calendarsoon']))
+  })
+
+  it('drops a view another tab deleted on a rename, in Dutch, and keeps its change on the starting view', async () => {
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_unknown_saved': 'Deze weergave bestaat niet meer' } })
+    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    window.location.hash = '#view=42'
+    window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
+    await opened()
+
+    choose('Calais techniek', 'Share with the team')
+
+    expect(await screen.findByText('Deze weergave bestaat niet meer')).toBeTruthy()
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Montage', 'Calendarsoon']))
+    expect(JSON.parse(window.localStorage.getItem('ntdst-views/layout/v1/planning') ?? '{}').hidden).toEqual(['kind'])
+  })
+
+  it('refreshes the list on a 403, in Dutch, and keeps the local arrangement', async () => {
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_not_owner': 'Alleen de eigenaar kan deze weergave wijzigen' } })
+    api.savedViews.mockResolvedValueOnce([calais, montage]).mockResolvedValue([{ ...calais, mine: false, editable: false, shared: true }, montage])
+    api.updateView.mockRejectedValue({ code: 'views_not_owner', message: 'Not yours.' })
+    window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
+    await opened()
+
+    choose('Calais techniek', 'Share with the team')
+
+    expect(await screen.findByText('Alleen de eigenaar kan deze weergave wijzigen')).toBeTruthy()
+    await waitFor(() => expect(api.savedViews).toHaveBeenCalledTimes(2))
+    fireEvent.click(within(rail()).getByRole('button', { name: 'More actions: Calais techniek' }))
+    await waitFor(() => expect(within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Duplicate']))
+    expect(JSON.parse(window.localStorage.getItem('ntdst-views/layout/v1/42') ?? '{}').hidden).toEqual(['kind'])
+  })
+
+  it('moves a view up and down the list', async () => {
+    await opened()
+
+    choose('Montage', 'Move up')
+    expect(names()).toEqual(['Planning', 'Montage', 'Calais techniek', 'Calendarsoon'])
+    choose('Montage', 'Move down')
+    expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calendarsoon'])
+  })
+
+  it('keeps a dragged order in the prefs, and the list holds it when opened again from them', async () => {
+    const ROW = 28
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = (Number(this.style.gridRow) - 1) * ROW
+      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
+    })
+    await opened()
+
+    fireEvent.pointerDown(within(types()).getByRole('button', { name: /^Montage/ }).parentElement!, { button: 0, clientY: 2 * ROW + 14 })
+    fireEvent.pointerMove(window, { clientY: 10 })
+    fireEvent.pointerUp(window, { clientY: 10 })
+
+    expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek', 'Calendarsoon'])
+    const stored = { order: { planning: ['43', 'planning', '42'] }, last: {} }
+    await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith(stored))
+    cleanup()
+    vi.restoreAllMocks()
+    api.prefs.mockResolvedValue(stored)
+    await opened()
+
+    expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek', 'Calendarsoon'])
+  })
+
+  it('puts an undone view back in its own place, though the list changed while it was gone', async () => {
+    const lights = view(44, 'Licht')
+    api.savedViews.mockResolvedValue([calais, montage, lights])
+    api.deleteView.mockResolvedValue({})
+    api.restoreView.mockResolvedValue(montage)
+    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    await opened()
+
+    choose('Montage', 'Remove')
+    const notice = await screen.findByRole('status', { name: 'View removed' })
+    choose('Calais techniek', 'Share with the team')
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Licht', 'Calendarsoon']))
+    fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Montage', 'Licht', 'Calendarsoon']))
+  })
+
+  it("clears a deleted view's change in this browser once its undo is gone, and keeps it when undone", async () => {
+    const changed = JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null })
+    window.localStorage.setItem('ntdst-views/layout/v1/42', changed)
+    window.localStorage.setItem('ntdst-views/layout/v1/43', changed)
+    api.deleteView.mockResolvedValue({})
+    api.restoreView.mockResolvedValue(montage)
+    await opened()
+
+    choose('Montage', 'Remove')
+    fireEvent.click(within(await screen.findByRole('status', { name: 'View removed' })).getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(names()).toContain('Montage'))
+    expect(window.localStorage.getItem('ntdst-views/layout/v1/43')).toBe(changed)
+
+    vi.useFakeTimers()
+    try {
+      choose('Calais techniek', 'Remove')
+      await act(async () => undefined)
+      expect(screen.getByRole('status', { name: 'View removed' })).toBeTruthy()
+      expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBe(changed)
+      act(() => vi.advanceTimersByTime(6100))
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBeNull()
+    expect(window.localStorage.getItem('ntdst-views/layout/v1/43')).toBe(changed)
+  })
+
+  it('finds a saved view by its name in the search', async () => {
+    await opened()
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), { target: { value: 'montage' } })
+
+    expect(screen.getByRole('button', { name: 'Go to Planning · Montage' })).toBeTruthy()
+  })
+})

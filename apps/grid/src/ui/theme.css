@@ -1,0 +1,110 @@
+/* Sakani's tokens re-themed to wp-admin: its blue, its greys, its system font.
+   Light on :root (Sakani's global focus ring reads these on the admin chrome too);
+   dark on the app's root only, so WordPress's chrome keeps its own scheme. */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-bg-canvas: #f0f0f1;
+  --color-bg-surface: #ffffff;
+  --color-bg-subtle: #f6f7f8;
+  --color-bg-muted: #eef0f2;
+  --color-bg-inverse: #1d2327;
+  --color-fg-default: #1d2327;
+  --color-fg-muted: #50575e;
+  --color-fg-subtle: #8c8f94;
+  --color-fg-on-accent: #ffffff;
+  --color-fg-on-inverse: #f0f0f1;
+  --color-border-subtle: #e3e5e8;
+  --color-border-default: #dcdcde;
+  --color-border-strong: #c9cdd2;
+  --color-border-focus: #2271b1;
+
+  --color-accent-default: #2271b1;
+  --color-accent-hover: #135e96;
+  --color-accent-active: #0a4b78;
+  --color-accent-subtle: #e8f0f8;
+  --color-accent-fg: #ffffff;
+  --color-brand-default: #2271b1;
+  --color-brand-hover: #135e96;
+  --color-brand-subtle: #e8f0f8;
+  --color-brand-fg: #2271b1;
+
+  --color-success-fg: #1e7f44;
+  --color-success-bg: #e4f3ea;
+  --color-warning-fg: #9a6700;
+  --color-warning-bg: #fbf0d8;
+  --color-danger-fg: #b32d2e;
+  --color-danger-bg: #f9e3e3;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  #root:not([data-theme="light"]) {
+    --color-bg-canvas: #16191c;
+    --color-bg-surface: #1d2124;
+    --color-bg-subtle: #22272b;
+    --color-bg-muted: #262b2f;
+    --color-bg-inverse: #e6e8ea;
+    --color-fg-default: #e6e8ea;
+    --color-fg-muted: #aab0b6;
+    --color-fg-subtle: #767c82;
+    --color-fg-on-accent: #101417;
+    --color-fg-on-inverse: #1d2124;
+    --color-border-subtle: #2c3237;
+    --color-border-default: #3b4248;
+    --color-border-strong: #4a5258;
+    --color-border-focus: #5a9fdc;
+    --color-accent-default: #5a9fdc;
+    --color-accent-hover: #72aee3;
+    --color-accent-active: #8bbde8;
+    --color-accent-subtle: #1f2f3f;
+    --color-accent-fg: #101417;
+    --color-brand-default: #5a9fdc;
+    --color-brand-hover: #72aee3;
+    --color-brand-subtle: #1f2f3f;
+    --color-brand-fg: #5a9fdc;
+    --color-success-fg: #5fc27a;
+    --color-success-bg: #1b2e22;
+    --color-warning-fg: #e2b04a;
+    --color-warning-bg: #332a14;
+    --color-danger-fg: #ef7c7c;
+    --color-danger-bg: #3a1f1f;
+    color-scheme: dark;
+  }
+}
+
+#root[data-theme="dark"] {
+  --color-bg-canvas: #16191c;
+  --color-bg-surface: #1d2124;
+  --color-bg-subtle: #22272b;
+  --color-bg-muted: #262b2f;
+  --color-bg-inverse: #e6e8ea;
+  --color-fg-default: #e6e8ea;
+  --color-fg-muted: #aab0b6;
+  --color-fg-subtle: #767c82;
+  --color-fg-on-accent: #101417;
+  --color-fg-on-inverse: #1d2124;
+  --color-border-subtle: #2c3237;
+  --color-border-default: #3b4248;
+  --color-border-strong: #4a5258;
+  --color-border-focus: #5a9fdc;
+  --color-accent-default: #5a9fdc;
+  --color-accent-hover: #72aee3;
+  --color-accent-active: #8bbde8;
+  --color-accent-subtle: #1f2f3f;
+  --color-accent-fg: #101417;
+  --color-brand-default: #5a9fdc;
+  --color-brand-hover: #72aee3;
+  --color-brand-subtle: #1f2f3f;
+  --color-brand-fg: #5a9fdc;
+  --color-success-fg: #5fc27a;
+  --color-success-bg: #1b2e22;
+  --color-warning-fg: #e2b04a;
+  --color-warning-bg: #332a14;
+  --color-danger-fg: #ef7c7c;
+  --color-danger-bg: #3a1f1f;
+  color-scheme: dark;
+}
