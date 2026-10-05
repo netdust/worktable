@@ -1,4 +1,4 @@
-import { and, asc, desc, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, asc, count, desc, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { Domain } from './declare'
@@ -87,7 +87,8 @@ export function readRows(
     .from(table)
     .where(where)
     .orderBy(...orderOf(table, params))
+    .limit(params.limit)
     .all() as Raw[]
-  // No pagination yet, so the total is the rows read; a second count would run the WHERE twice.
-  return { rows: withLookups(db, domain, source, raws), total: raws.length }
+  const counted = db.select({ total: count() }).from(table).where(where).get()
+  return { rows: withLookups(db, domain, source, raws), total: counted?.total ?? 0 }
 }
