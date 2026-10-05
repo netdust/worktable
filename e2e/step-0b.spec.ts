@@ -194,6 +194,7 @@ test.describe('cross-site-refused', () => {
   })
 
   test.afterAll(async () => {
+    server.closeAllConnections()
     await new Promise((done) => server.close(done))
   })
 
@@ -219,11 +220,9 @@ test.describe('cross-site-refused', () => {
       },
       [target, body],
     )
-    console.log(`cross-site response readable: ${seen.readable} status ${seen.status} ${seen.body}`)
-    if (seen.readable) {
-      expect(seen.status).toBe(403)
-      expect(JSON.parse(seen.body).code).toBe('forbidden_site')
-    }
+    expect(seen.readable).toBe(true)
+    expect(seen.status).toBe(403)
+    expect(JSON.parse(seen.body).code).toBe('forbidden_site')
     const after = await activiteit(page, name)
     expect(after.status).toBe(before.status)
     expect(await revisions(page, before.id)).toEqual([])
