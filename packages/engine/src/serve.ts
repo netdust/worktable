@@ -29,9 +29,10 @@ const sqlite = new Database(values.db, { create: true })
 migrate(sqlite, domain)
 if (values.fresh) seedDomain(sqlite, domain)
 
+const port = Number(values.port)
 const server = Bun.serve({
   hostname: '127.0.0.1',
-  port: Number(values.port),
-  fetch: createEngine(sqlite, domain).fetch,
+  port,
+  fetch: createEngine(sqlite, domain, { port }).fetch,
 })
 console.log(`engine listening on http://${server.hostname}:${server.port}`)

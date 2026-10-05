@@ -23,9 +23,24 @@ function readViews(sqlite: Database): SavedViewRow[] {
   }))
 }
 
-export function createEngine(sqlite: Database, domain: Domain): Hono {
+export interface EngineOptions {
+  port: number
+}
+
+export function createEngine(sqlite: Database, domain: Domain, { port }: EngineOptions): Hono {
   const db = drizzle(sqlite)
-  const app = new Hono().basePath('/api')
+  const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
+  const root = new Hono()
+
+  // A page whose name rebinds to 127.0.0.1 still sends its own Host, so only the loopback names pass.
+  root.use(async (c, next) => {
+    c.header('X-Content-Type-Options', 'nosniff')
+    if (!hosts.has(c.req.header('host') ?? ''))
+      return c.json({ code: 'forbidden_host', message: 'Host not allowed' }, 403)
+    await next()
+  })
+
+  const app = root.basePath('/api')
 
   app.get('/schema', (c) => {
     const sources = Object.fromEntries(
@@ -44,11 +59,11 @@ export function createEngine(sqlite: Database, domain: Domain): Hono {
     return c.json(readRows(db, domain, source, parseRowsParams(source, c.req.query())))
   })
 
-  app.onError((err, c) => {
+  root.onError((err, c) => {
     if (err instanceof ApiError) return c.json({ code: err.code, message: err.message }, err.status)
     console.error(err)
     return c.json({ code: 'internal', message: 'Internal error' }, 500)
   })
 
-  return app
+  return root
 }

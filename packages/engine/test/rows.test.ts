@@ -9,7 +9,7 @@ let app: Hono
 
 beforeEach(() => {
   sqlite = freshDb()
-  app = createEngine(sqlite, domain)
+  app = createEngine(sqlite, domain, { port: 4310 })
 })
 
 const counts = (): Record<string, number> => {
@@ -20,7 +20,7 @@ const counts = (): Record<string, number> => {
 }
 
 async function get(path: string) {
-  const res = await app.request(path)
+  const res = await app.request(path, { headers: { host: '127.0.0.1:4310' } })
   // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
   return { status: res.status, body: (await res.json()) as Record<string, any> }
 }
