@@ -3,10 +3,28 @@ import { plandag } from './plandag'
 
 const DAY_LINE_HOUR = 5
 
+const organisaties = [
+  { naam: 'Gezelschap Lantaarn', soort: 'eigen', adres: 'Werfkaai 12, 9000 Gent', parameters: { dag_grens_uur: 5 } },
+  {
+    naam: 'Zaal De Spiegel',
+    soort: 'venue',
+    adres: 'Spiegelstraat 4, 9000 Gent',
+    lat: 51.05,
+    lng: 3.72,
+    toegang: 'Laden via de achterpoort, parking op het plein',
+  },
+  { naam: 'Theater Het Anker', soort: 'venue', adres: 'Ankerdijk 8, 8000 Brugge', contact: 'regie@anker.test' },
+  { naam: 'Repetitiekot De Loods', soort: 'partner', adres: 'Loodsweg 3, 2000 Antwerpen' },
+  { naam: 'Lichtwerk Verhuur', soort: 'leverancier', contact: 'verhuur@lichtwerk.test' },
+]
+
+const OWN = 1
+const VENUE_OF: Record<string, number> = { Gent: 2, Brugge: 3, Antwerpen: 4 }
+
 const producties = [
-  { titel: 'De Kersentuin', seizoen: '2026-2027', status: 'actief' },
-  { titel: 'Nachtwacht', seizoen: '2026-2027', status: 'ontwikkeling' },
-  { titel: 'Zomerstorm', seizoen: '2025-2026', status: 'archief' },
+  { titel: 'De Kersentuin', seizoen: '2026-2027', status: 'actief', organisatie_id: OWN },
+  { titel: 'Nachtwacht', seizoen: '2026-2027', status: 'ontwikkeling', organisatie_id: OWN },
+  { titel: 'Zomerstorm', seizoen: '2025-2026', status: 'archief', organisatie_id: OWN },
 ]
 
 type Slot = [productieId: number, soort: string, startAt: string, endAt: string, status: string, plaats: string]
@@ -48,11 +66,46 @@ const activiteiten = slots.map(([productieId, soort, startAt, endAt, status, pla
   plandag: plandag(startAt, DAY_LINE_HOUR),
   status,
   plaats,
+  locatie_id: VENUE_OF[plaats] ?? null,
 }))
 
+const persoon = (voornaam: string, achternaam: string, rest: Record<string, unknown>) => ({
+  voornaam,
+  achternaam,
+  weergavenaam: `${voornaam} ${achternaam}`,
+  ...rest,
+})
+
+const personen = [
+  persoon('Lotte', 'Verhaegen', { email: 'lotte@lantaarn.test', organisatie_id: OWN, contract_type: 'vast' }),
+  persoon('Bram', 'De Wilde', { email: 'bram@voorbeeld.test', telefoon: '0470 00 00 01', contract_type: 'freelance' }),
+  persoon('Noor', 'Claes', { organisatie_id: OWN, contract_type: 'dagcontract', dietary: 'vegetarisch' }),
+  persoon('Sam', 'Peeters', { organisatie_id: 4, contract_type: 'freelance' }),
+  persoon('Jef', 'Maes', { contract_type: 'freelance', actief: false }),
+]
+
+// Never on activiteit 1: the Activiteit writer tests delete it.
+const toewijzingen = [
+  { activiteit_id: 4, persoon_id: 1, state: 'bevestigd' },
+  { activiteit_id: 4, persoon_id: 2, state: 'uitgenodigd' },
+  { activiteit_id: 4, naam: 'Gastmuzikant', state: 'bevestigd', notitie: 'Brengt eigen instrument' },
+  { activiteit_id: 2, persoon_id: 1, state: 'bevestigd' },
+  { activiteit_id: 13, persoon_id: 4, state: 'uitgenodigd' },
+  { activiteit_id: 8, persoon_id: 3, state: 'bevestigd' },
+]
+
+const beschikbaarheden = [
+  { persoon_id: 3, start_at: '2026-10-14T00:00', eind_at: '2026-10-14T23:59', reden: 'Familiefeest' },
+  { persoon_id: 2, start_at: '2026-10-19T09:00', eind_at: '2026-10-19T13:00', reden: 'Tandarts' },
+]
+
 export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void {
+  insert('organisatie', organisaties)
   insert('productie', producties)
   insert('activiteit', activiteiten)
+  insert('persoon', personen)
+  insert('toewijzing', toewijzingen)
+  insert('beschikbaarheid', beschikbaarheden)
 }
 
 export const views: SavedViewSeed[] = [
@@ -85,5 +138,65 @@ export const views: SavedViewSeed[] = [
     sort: ['start_at'],
     group_by: 'plandag',
     visible_fields: ['productie', 'soort', 'start_at', 'status'],
+  },
+  {
+    name: 'Organisaties',
+    source_type: 'dataset',
+    source: 'organisatie',
+    skin: 'table',
+    filters: {},
+    sort: ['naam'],
+    group_by: null,
+    visible_fields: ['naam', 'soort', 'adres', 'contact'],
+  },
+  {
+    name: 'Personen',
+    source_type: 'dataset',
+    source: 'persoon',
+    skin: 'table',
+    filters: {},
+    sort: ['achternaam'],
+    group_by: null,
+    visible_fields: ['voornaam', 'achternaam', 'email', 'telefoon', 'organisatie_id', 'contract_type', 'actief'],
+  },
+  {
+    name: 'Toewijzingen',
+    source_type: 'dataset',
+    source: 'toewijzing',
+    skin: 'table',
+    filters: {},
+    sort: ['activiteit_id'],
+    group_by: null,
+    visible_fields: ['activiteit_id', 'persoon_id', 'naam', 'state', 'notitie'],
+  },
+  {
+    name: 'Afwezigheden',
+    source_type: 'dataset',
+    source: 'beschikbaarheid',
+    skin: 'table',
+    filters: {},
+    sort: ['start_at'],
+    group_by: null,
+    visible_fields: ['persoon_id', 'start_at', 'eind_at', 'reden'],
+  },
+  {
+    name: 'Voorstellingen',
+    source_type: 'query',
+    source: 'voorstellingen',
+    skin: 'table',
+    filters: {},
+    sort: ['plandag', 'start'],
+    group_by: null,
+    visible_fields: ['productie', 'plandag', 'start', 'venue', 'adres'],
+  },
+  {
+    name: 'Producties',
+    source_type: 'dataset',
+    source: 'productie',
+    skin: 'table',
+    filters: {},
+    sort: ['titel'],
+    group_by: null,
+    visible_fields: ['titel', 'seizoen', 'status', 'organisatie_id'],
   },
 ]

@@ -1,5 +1,32 @@
 import { defineDataset } from '@worktable/engine'
 
+export const organisatie = defineDataset({
+  name: 'organisatie',
+  label: 'Organisaties',
+  title: 'naam',
+  custom: true,
+  columns: {
+    naam: { type: 'text', label: 'Naam' },
+    soort: {
+      type: 'text',
+      label: 'Soort',
+      options: {
+        eigen: 'Eigen',
+        partner: 'Partner',
+        venue: 'Venue',
+        agentschap: 'Agentschap',
+        leverancier: 'Leverancier',
+      },
+    },
+    adres: { type: 'text', label: 'Adres', nullable: true },
+    lat: { type: 'real', label: 'Breedtegraad', nullable: true },
+    lng: { type: 'real', label: 'Lengtegraad', nullable: true },
+    toegang: { type: 'text', label: 'Toegang', nullable: true },
+    contact: { type: 'text', label: 'Contact', nullable: true },
+    parameters: { type: 'json', label: 'Parameters', nullable: true },
+  },
+})
+
 export const productie = defineDataset({
   name: 'productie',
   label: 'Producties',
@@ -14,7 +41,7 @@ export const productie = defineDataset({
       default: 'ontwikkeling',
       options: { ontwikkeling: 'Ontwikkeling', actief: 'Actief', archief: 'Archief' },
     },
-    organisatie_id: { type: 'integer', label: 'Organisatie', nullable: true },
+    organisatie_id: { type: 'integer', label: 'Organisatie', nullable: true, relation: 'organisatie' },
     site_ref: { type: 'text', label: 'Site-referentie', nullable: true },
   },
 })
@@ -47,7 +74,7 @@ export const activiteit = defineDataset({
     start_at: { type: 'datetime', label: 'Start' },
     eind_at: { type: 'datetime', label: 'Einde', nullable: true },
     plandag: { type: 'date', label: 'Plandag', readonly: true },
-    locatie_id: { type: 'integer', label: 'Locatie', nullable: true },
+    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
     plaats: { type: 'text', label: 'Plaats', nullable: true },
     status: {
       type: 'text',
@@ -60,4 +87,66 @@ export const activiteit = defineDataset({
     notities: { type: 'text', label: 'Notities', nullable: true },
   },
   indexes: [['plandag']],
+})
+
+export const persoon = defineDataset({
+  name: 'persoon',
+  label: 'Personen',
+  title: 'weergavenaam',
+  custom: true,
+  columns: {
+    voornaam: { type: 'text', label: 'Voornaam' },
+    achternaam: { type: 'text', label: 'Achternaam' },
+    weergavenaam: { type: 'text', label: 'Naam', readonly: true },
+    email: { type: 'text', label: 'E-mail', nullable: true },
+    telefoon: { type: 'text', label: 'Telefoon', nullable: true },
+    organisatie_id: { type: 'integer', label: 'Organisatie', nullable: true, relation: 'organisatie' },
+    contract_type: {
+      type: 'text',
+      label: 'Contract',
+      nullable: true,
+      options: { vast: 'Vast', freelance: 'Freelance', dagcontract: 'Dagcontract' },
+    },
+    dietary: { type: 'text', label: 'Dieet', nullable: true },
+    actief: { type: 'boolean', label: 'Actief', default: true },
+  },
+})
+
+export const toewijzing = defineDataset({
+  name: 'toewijzing',
+  label: 'Toewijzingen',
+  title: 'naam',
+  custom: true,
+  columns: {
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
+    naam: { type: 'text', label: 'Naam', nullable: true },
+    state: {
+      type: 'text',
+      label: 'Status',
+      default: 'uitgenodigd',
+      options: {
+        open: 'Open',
+        uitgenodigd: 'Uitgenodigd',
+        bevestigd: 'Bevestigd',
+        geweigerd: 'Geweigerd',
+        geannuleerd: 'Geannuleerd',
+      },
+    },
+    notitie: { type: 'text', label: 'Notitie', nullable: true },
+  },
+  indexes: [['persoon_id'], ['activiteit_id']],
+})
+
+export const beschikbaarheid = defineDataset({
+  name: 'beschikbaarheid',
+  label: 'Beschikbaarheden',
+  title: 'reden',
+  custom: true,
+  columns: {
+    persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
+    start_at: { type: 'datetime', label: 'Start' },
+    eind_at: { type: 'datetime', label: 'Einde' },
+    reden: { type: 'text', label: 'Reden', nullable: true },
+  },
 })
