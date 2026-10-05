@@ -69,6 +69,10 @@ const notitie = defineDataset({
     tekst: { type: 'text', label: 'Tekst' },
     lengte: { type: 'integer', label: 'Lengte', readonly: true },
     klaar: { type: 'boolean', label: 'Klaar', default: false },
+    soort: { type: 'text', label: 'Soort', options: { kort: 'Kort', lang: 'Lang' }, default: 'kort' },
+    dag: { type: 'date', label: 'Dag', nullable: true },
+    start_at: { type: 'datetime', label: 'Start', nullable: true },
+    extra: { type: 'json', label: 'Extra', nullable: true },
   },
 })
 
@@ -84,7 +88,7 @@ const notitieLijst = defineQuery({
   },
 })
 
-// Checks no relation itself, so the engine's own relation check is what the tests reach.
+// Checks no relation and no option itself, so the engine's own backstops are what the tests reach.
 function derive(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown> {
   const merged = { ...ctx.current, ...values }
   const project = typeof merged.project_id === 'number' ? ctx.find('project', merged.project_id) : null

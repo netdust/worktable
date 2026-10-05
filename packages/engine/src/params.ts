@@ -34,7 +34,7 @@ const shape = z.object({
   limit: z.string().optional(),
 })
 
-function isRealDate(value: string): boolean {
+export function isRealDate(value: string): boolean {
   const [y, m, d] = value.split('-').map(Number) as [number, number, number]
   const date = new Date(Date.UTC(y, m - 1, d))
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d

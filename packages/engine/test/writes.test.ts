@@ -63,6 +63,13 @@ describe('write denials', () => {
     ['object into a text column', { tekst: { a: 1 } }, 'tekst'],
     ['array into a boolean column', { klaar: [1] }, 'klaar'],
     ['null into a non-nullable column', { tekst: null }, 'tekst'],
+    ['a date that is not YYYY-MM-DD', { dag: '12/10/2026' }, 'dag'],
+    ['a date that is not a calendar date', { dag: '2026-02-30' }, 'dag'],
+    ['a datetime that is not a datetime', { start_at: 'banana' }, 'start_at'],
+    ['a datetime on a day that does not exist', { start_at: '2026-02-30T10:00' }, 'start_at'],
+    ['a datetime at an hour that does not exist', { start_at: '2026-10-12T24:00' }, 'start_at'],
+    ['an option outside the declared options', { soort: 'middel' }, 'soort'],
+    ['an option that is an inherited key', { soort: 'constructor' }, 'soort'],
   ])('%s is 400 bad_value naming the column', (_, body, column) =>
     denied(() => patch('notitie/1', body), 400, 'bad_value', column),
   )
@@ -115,6 +122,14 @@ describe('write denials', () => {
     })
   })
 
+  test('a failing Revision insert rolls the row write back', async () => {
+    sqlite.run("CREATE TRIGGER no_revision BEFORE INSERT ON revision BEGIN SELECT RAISE(ABORT, 'x'); END")
+    const log = console.error
+    console.error = () => {}
+    await denied(() => patch('notitie/1', { tekst: 'nooit' }), 500, 'internal')
+    console.error = log
+  })
+
   test('the served connection reports PRAGMA foreign_keys = 1', () => {
     const own = new Database(':memory:')
     migrate(own, domain)
@@ -146,6 +161,10 @@ describe('writes', () => {
         tekst: 'hallo',
         lengte: 5,
         klaar: true,
+        soort: 'kort',
+        dag: null,
+        start_at: null,
+        extra: null,
         custom: {},
         lookups: { project_id: { id: 1, title: 'Alfa' } },
       },
@@ -155,7 +174,8 @@ describe('writes', () => {
       ['project_id', null, '1'],
       ['tekst', null, '"hallo"'],
       ['lengte', null, '5'],
-      ['klaar', null, '1'],
+      ['klaar', null, 'true'],
+      ['soort', null, '"kort"'],
     ])
     expect(new Set(rows.map((r) => r.batch_id)).size).toBe(1)
   })
@@ -172,6 +192,29 @@ describe('writes', () => {
     expect(rows.map((r) => r.actor_id)).toEqual([0, 0])
     expect(rows[0]?.batch_id).toBe(rows[1]?.batch_id as string)
     expect(rows[0]?.batch_id).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  test('a create revises the columns the database filled with a default, old null', async () => {
+    await post('notitie', { project_id: 1, tekst: 'x' })
+    expect(changes(await revisionsOf('notitie', 2))).toContainEqual(['klaar', null, 'false'])
+    expect(changes(await revisionsOf('notitie', 2))).toContainEqual(['soort', null, '"kort"'])
+  })
+
+  test('valid date, datetime with and without seconds, and option values are stored', async () => {
+    const values = { dag: '2028-02-29', start_at: '2026-10-12T09:30:15', soort: 'lang' }
+    expect((await patch('notitie/1', values)).body).toMatchObject(values)
+    expect((await patch('notitie/1', { start_at: '2026-10-12T23:59' })).status).toBe(200)
+  })
+
+  test('revision old and new are the decoded values: json not double-encoded, booleans true/false', async () => {
+    await patch('notitie/1', { extra: { a: [1, 'b'] }, klaar: true })
+    await patch('notitie/1', { extra: { a: 2 }, klaar: false })
+    expect(changes(await revisionsOf('notitie', 1))).toEqual([
+      ['klaar', 'false', 'true'],
+      ['extra', null, '{"a":[1,"b"]}'],
+      ['klaar', 'true', 'false'],
+      ['extra', '{"a":[1,"b"]}', '{"a":2}'],
+    ])
   })
 
   test('an update that changes nothing writes no revision', async () => {

@@ -4,7 +4,7 @@ import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
 import { DEV_ACTOR } from './dev-actor'
-import { ApiError } from './params'
+import { ApiError, isRealDate } from './params'
 import { sourceOf, writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
@@ -67,7 +67,17 @@ export function cutBody(dataset: DatasetDecl, body: Values): Values {
 
 const isEditable = (column: ColumnDecl | undefined): boolean => column !== undefined && !column.readonly
 
+const DATE = /^\d{4}-\d{2}-\d{2}$/
+const DATETIME = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+
+function isDateTime(value: string): boolean {
+  const [, day = '', hour, minute, second = '0'] = DATETIME.exec(value) ?? []
+  return isRealDate(day) && Number(hour) < 24 && Number(minute) < 60 && Number(second) < 60
+}
+
 function fits(type: ColumnDecl['type'], value: unknown): boolean {
+  if (type === 'date') return typeof value === 'string' && DATE.test(value) && isRealDate(value)
+  if (type === 'datetime') return typeof value === 'string' && DATETIME.test(value) && isDateTime(value)
   if (type === 'integer') return Number.isSafeInteger(value)
   if (type === 'real') return Number.isFinite(value)
   if (type === 'boolean') return typeof value === 'boolean'
@@ -81,6 +91,14 @@ export function checkValues(dataset: DatasetDecl, values: Values): void {
     if (!column) throw badValue(key, 'is not a declared column')
     if (value === null && !column.nullable) throw badValue(key, 'may not be null')
     if (value !== null && !fits(column.type, value)) throw badValue(key, `must be ${column.type}`)
+  }
+}
+
+// A backstop after the writer: a domain writer refuses a bad option first, in its own words.
+function checkOptions(dataset: DatasetDecl, values: Values): void {
+  for (const [key, value] of Object.entries(values)) {
+    const options = columnOf(dataset, key)?.options
+    if (options && value !== null && !Object.hasOwn(options, String(value))) throw badValue(key, 'is not an option')
   }
 }
 
@@ -141,10 +159,10 @@ function finder(store: Store): WriteContext['find'] {
 
 type Change = [field: string, old: string | number | null, value: string | number | null]
 
-function diff(stored: Stored, current: Stored | null): Change[] {
+function diff(stored: Stored, current: Stored): Change[] {
   return Object.entries(stored)
-    .map(([key, value]): Change => [key, current ? (current[key] ?? null) : null, value])
-    .filter(([, old, value]) => (current ? old !== value : value !== null))
+    .map(([key, value]): Change => [key, current[key] ?? null, value])
+    .filter(([, old, value]) => old !== value)
 }
 
 function insert(sqlite: Database, table: string, stored: Stored): number {
@@ -160,21 +178,34 @@ function update(sqlite: Database, table: string, id: number, stored: Stored, now
   sqlite.query(`UPDATE "${table}" SET ${sets.join(', ')} WHERE id = ?`).run(...Object.values(stored), now, id)
 }
 
-function persist(sqlite: Database, table: string, id: number | null, stored: Stored, now: string): number {
-  if (id === null) return insert(sqlite, table, stored)
-  update(sqlite, table, id, stored, now)
+// Read back so the defaults the database filled are revised too.
+function create(sqlite: Database, dataset: DatasetDecl, stored: Stored, now: string): number {
+  const id = insert(sqlite, dataset.name, stored)
+  const row = liveRow(sqlite, dataset.name, id) as Stored
+  const changes = Object.keys(dataset.columns).map((key): Change => [key, null, row[key] ?? null])
+  revise(
+    sqlite,
+    dataset,
+    id,
+    changes.filter(([, , value]) => value !== null),
+    now,
+  )
   return id
 }
 
-const asJson = (value: string | number | null): string | null => (value === null ? null : JSON.stringify(value))
+function asJson(dataset: DatasetDecl, field: string, value: string | number | null): string | null {
+  const column = columnOf(dataset, field)
+  return value === null ? null : JSON.stringify(column ? decode(column, value) : value)
+}
 
-function revise(sqlite: Database, entity: string, id: number, changes: Change[], now: string): void {
+function revise(sqlite: Database, dataset: DatasetDecl, id: number, changes: Change[], now: string): void {
   const batch = crypto.randomUUID()
   const row = sqlite.query(
     'INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   )
   for (const [field, old, value] of changes) {
-    row.run(entity, id, field, asJson(old), asJson(value), DEV_ACTOR.id, now, batch)
+    const [before, after] = [asJson(dataset, field, old), asJson(dataset, field, value)]
+    row.run(dataset.name, id, field, before, after, DEV_ACTOR.id, now, batch)
   }
 }
 
@@ -184,6 +215,7 @@ function valuesOf(store: Store, { dataset, writer }: Writable, op: WriteOp, body
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
   const values = returned ?? {}
   checkValues(dataset, values)
+  checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
   if (op === 'create') checkRequired(dataset, values)
   return values
@@ -205,11 +237,12 @@ export function runWrite(store: Store, target: Writable, op: WriteOp, id: number
     const ctx = { actor: DEV_ACTOR, current: current && decodeAll(target.dataset, current), find: finder(store) }
     const now = new Date().toISOString()
     const stored = storedOf(store, target, op, body, ctx, now)
+    if (id === null || current === null) return create(sqlite, target.dataset, stored, now)
     const changes = diff(stored, current)
-    if (id !== null && changes.length === 0) return id
-    const written = persist(sqlite, table, id, stored, now)
-    revise(sqlite, table, written, changes, now)
-    return written
+    if (changes.length === 0) return id
+    update(sqlite, table, id, stored, now)
+    revise(sqlite, target.dataset, id, changes, now)
+    return id
   })()
 }
 
