@@ -1,5 +1,5 @@
-import { EmptyState } from '@sakaniui/react'
-import { type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Button, EmptyState } from '@sakaniui/react'
+import { type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { RelationContext } from './cells/Relation'
@@ -278,10 +278,30 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridFoot columns={visible} count={total(groups) - drafts.length} sums={sums(shown, visible)} />
           </table>
         </div>
-        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} />}
+        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)}
+          editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>
       )}
     </div>
     </RelationContext.Provider>
+  )
+}
+
+/** Two presses: Verwijderen, then Zeker?. Keyed by its row, so leaving the drawer starts it over. */
+function DeleteRow({ onDelete }: { onDelete: () => Promise<void> }) {
+  const [step, setStep] = useState<'ask' | 'sure' | 'sent'>('ask')
+  const press = (event: MouseEvent) => {
+    if (step === 'ask') return setStep('sure')
+    // A double click's second click is not a confirmation.
+    if (step !== 'sure' || event.detail > 1) return
+    setStep('sent')
+    void onDelete().finally(() => setStep('ask'))
+  }
+  return (
+    <div aria-live="polite">
+      <Button variant="destructive" size="sm" disabled={step === 'sent'} onClick={press}>
+        {t(step === 'ask' ? 'delete' : 'deleteConfirm')}
+      </Button>
+    </div>
   )
 }

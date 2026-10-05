@@ -4,9 +4,10 @@ import type { Source } from './registry'
 
 export class ApiError extends Error {
   constructor(
-    readonly status: 400 | 403 | 404 | 405 | 413 | 415 | 422,
+    readonly status: 400 | 403 | 404 | 405 | 409 | 413 | 415 | 422,
     readonly code: string,
     message: string,
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message)
     this.name = 'ApiError'

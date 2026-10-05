@@ -47,3 +47,19 @@ export const dagplanning = defineQuery({
     status: { type: 'text', label: 'Status', writes: writesActiviteit('status') },
   },
 })
+
+export const voorstellingen = defineQuery({
+  name: 'voorstellingen',
+  label: 'Voorstellingen',
+  title: 'productie',
+  date: 'datum',
+  sql: readFileSync(new URL('./queries/voorstellingen.sql', import.meta.url), 'utf8'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    productie: { type: 'text', label: 'Productie' },
+    datum: { type: 'date', label: 'Datum' },
+    start: { type: 'text', label: 'Aanvang' },
+    venue: { type: 'text', label: 'Venue', nullable: true },
+    adres: { type: 'text', label: 'Adres', nullable: true },
+  },
+})

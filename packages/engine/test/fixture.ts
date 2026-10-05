@@ -88,20 +88,46 @@ const notitieLijst = defineQuery({
   },
 })
 
+// Test-only: a tekst naming a probe makes the writer ask ctx.exists something it must not.
+export const probes: Record<string, [string, Record<string, unknown>]> = {
+  'probe undeclared': ['notitie', { onbekend: 1 }],
+  'probe id': ['notitie', { id: 1 }],
+  'probe null': ['notitie', { dag: null }],
+  'probe undefined': ['notitie', { dag: undefined }],
+  'probe empty': ['notitie', {}],
+  'probe array': ['notitie', { tekst: ['x'] }],
+  'probe revision': ['revision', { entity: 'notitie' }],
+  'probe saved_view': ['saved_view', { name: 'Open' }],
+  'probe query': ['per_project', { naam: 'Alfa' }],
+}
+
+function refuseDuplicate(merged: Record<string, unknown>, ctx: WriteContext): void {
+  const probe = typeof merged.tekst === 'string' && Object.hasOwn(probes, merged.tekst) ? probes[merged.tekst] : null
+  if (probe) ctx.exists(...probe)
+  const match = { project_id: merged.project_id, tekst: merged.tekst }
+  if (typeof match.project_id !== 'number' || typeof match.tekst !== 'string') return
+  if (ctx.exists('notitie', match, ctx.current?.id as number | undefined)) refuse('deze notitie bestaat al')
+}
+
 // Checks no relation and no option itself, so the engine's own backstops are what the tests reach.
 function derive(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown> {
   const merged = { ...ctx.current, ...values }
   const project = typeof merged.project_id === 'number' ? ctx.find('project', merged.project_id) : null
   if (project?.naam === 'Beta') refuse('project Beta is gesloten')
+  refuseDuplicate(merged, ctx)
   return typeof merged.tekst === 'string' ? { ...values, lengte: merged.tekst.length } : values
 }
 
 const notitieWriter: Writer = { create: derive, update: derive, delete: () => {} }
 
+// Delete only, so project stays non-writable in /schema; records each delete that reached it.
+export const projectDeletes: unknown[] = []
+const projectWriter: Writer = { delete: (ctx) => void projectDeletes.push(ctx.current?.id) }
+
 export const domain: Domain = {
   datasets: [project, taak, plat, notitie],
   queries: [perProject, notitieLijst],
-  writers: { notitie: notitieWriter },
+  writers: { project: projectWriter, notitie: notitieWriter },
   seed: (insert) => {
     insert('project', [{ naam: 'Alfa', custom: { kleur: 'rood', labels: ['a', 'b'] } }, { naam: 'Beta' }])
     insert('taak', [

@@ -8,6 +8,7 @@
         "@biomejs/biome": "^2.5.15",
         "@playwright/test": "^1.63.0",
         "@types/bun": "^1.4.2",
+        "@worktable/fiche": "workspace:*",
         "@worktable/theatre": "workspace:*",
         "typescript": "^7.0.2",
       },
@@ -48,6 +49,9 @@
     "packages/fiche": {
       "name": "@worktable/fiche",
       "version": "0.0.0",
+      "dependencies": {
+        "@worktable/engine": "workspace:*",
+      },
     },
     "packages/theatre": {
       "name": "@worktable/theatre",

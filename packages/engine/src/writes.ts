@@ -148,13 +148,61 @@ function decodeAll(dataset: DatasetDecl, raw: Stored): Values {
   return { id: raw.id, ...Object.fromEntries(declared) }
 }
 
+function domainDataset(store: Store, name: string, caller: string): DatasetDecl {
+  const dataset = store.domain.datasets.find((d) => d.name === name)
+  if (!dataset) throw new Error(`${caller}: "${name}" is not a dataset`)
+  return dataset
+}
+
 function finder(store: Store): WriteContext['find'] {
   return (name, id) => {
-    const dataset = store.domain.datasets.find((d) => d.name === name)
-    if (!dataset) throw new Error(`find: "${name}" is not a dataset`)
+    const dataset = domainDataset(store, name, 'find')
     const raw = liveRow(store.sqlite, name, id)
     return raw && decodeAll(dataset, raw)
   }
+}
+
+function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: string | number][] {
+  const entries = Object.entries(match)
+  if (entries.length === 0) throw new Error('exists: a match names no column')
+  return entries.map(([key, value]) => {
+    const column = columnOf(dataset, key)
+    if (!column) throw new Error(`exists: "${key}" is not a declared column of ${dataset.name}`)
+    if (value === null || value === undefined) throw new Error(`exists: "${key}" may not be matched against null`)
+    if (!fits(column.type, value)) throw new Error(`exists: "${key}" must be ${column.type}`)
+    return [`"${key}" = ?`, encode(column, value) as string | number]
+  })
+}
+
+function existence(store: Store): WriteContext['exists'] {
+  return (name, match, exceptId) => {
+    const pairs = matchOf(domainDataset(store, name, 'exists'), match)
+    if (exceptId !== undefined) pairs.push(['id <> ?', exceptId])
+    const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
+    const values = pairs.map(([, value]) => value)
+    return store.sqlite.query(`SELECT 1 FROM "${name}" WHERE ${where} LIMIT 1`).get(...values) !== null
+  }
+}
+
+type Referrer = { label: string; count: number }
+
+function referrers(store: Store, target: DatasetDecl, id: number): Referrer[] {
+  return store.domain.datasets.flatMap((dataset) => {
+    const keys = Object.keys(dataset.columns).filter((key) => dataset.columns[key]?.relation === target.name)
+    if (keys.length === 0) return []
+    const any = keys.map((key) => `"${key}" = ?`).join(' OR ')
+    const sql = `SELECT COUNT(*) AS count FROM "${dataset.name}" WHERE deleted_at IS NULL AND (${any})`
+    const { count } = store.sqlite.query(sql).get(...keys.map(() => id)) as { count: number }
+    return count > 0 ? [{ label: dataset.label, count }] : []
+  })
+}
+
+// Names datasets and counts only, never the referencing rows.
+function inUse(store: Store, target: DatasetDecl, id: number): void {
+  const by = referrers(store, target, id)
+  if (by.length === 0) return
+  const named = by.map(({ label, count }) => `${label} (${count})`).join(', ')
+  throw new ApiError(409, 'in_use', `Still referenced by ${named}`, { by })
 }
 
 type Change = [field: string, old: string | number | null, value: string | number | null]
@@ -223,6 +271,7 @@ function valuesOf(store: Store, { dataset, writer }: Writable, op: WriteOp, body
 
 function storedOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx: WriteContext, now: string): Stored {
   if (op !== 'delete') return encodeAll(target.dataset, valuesOf(store, target, op, body, ctx))
+  inUse(store, target.dataset, ctx.current?.id as number)
   target.writer.delete?.(ctx)
   return { deleted_at: now }
 }
@@ -231,19 +280,26 @@ function storedOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx
 export function runWrite(store: Store, target: Writable, op: WriteOp, id: number | null, body: Values): number {
   const { sqlite } = store
   const table = target.dataset.name
-  return sqlite.transaction(() => {
-    const current = id === null ? null : liveRow(sqlite, table, id)
-    if (id !== null && !current) throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
-    const ctx = { actor: DEV_ACTOR, current: current && decodeAll(target.dataset, current), find: finder(store) }
-    const now = new Date().toISOString()
-    const stored = storedOf(store, target, op, body, ctx, now)
-    if (id === null || current === null) return create(sqlite, target.dataset, stored, now)
-    const changes = diff(stored, current)
-    if (changes.length === 0) return id
-    update(sqlite, table, id, stored, now)
-    revise(sqlite, target.dataset, id, changes, now)
-    return id
-  })()
+  return sqlite
+    .transaction(() => {
+      const current = id === null ? null : liveRow(sqlite, table, id)
+      if (id !== null && !current) throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
+      const ctx = {
+        actor: DEV_ACTOR,
+        current: current && decodeAll(target.dataset, current),
+        find: finder(store),
+        exists: existence(store),
+      }
+      const now = new Date().toISOString()
+      const stored = storedOf(store, target, op, body, ctx, now)
+      if (id === null || current === null) return create(sqlite, target.dataset, stored, now)
+      const changes = diff(stored, current)
+      if (changes.length === 0) return id
+      update(sqlite, table, id, stored, now)
+      revise(sqlite, target.dataset, id, changes, now)
+      return id
+    })
+    .immediate()
 }
 
 export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow {

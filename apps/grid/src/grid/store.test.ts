@@ -359,6 +359,95 @@ describe('a new row', () => {
   })
 })
 
+describe('remove', () => {
+  function removable() {
+    const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>() }
+    const store = createStore({ model: 'activity', rows: calais, api })
+    return { api, store, ids: () => store.getState().rows.map((r) => r.id) }
+  }
+
+  it('drops the row and its undo entries once the engine answers', async () => {
+    const { api, store, ids } = removable()
+    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
+    api.remove.mockResolvedValueOnce({ id: 103 })
+    await store.apply({ id: 101, field: 'kind', value: 'show' })
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+
+    await store.remove(103)
+
+    expect(api.remove).toHaveBeenCalledWith('activity', 103)
+    expect(ids()).not.toContain(103)
+    expect(store.getState()).toMatchObject({ save: 'saved', error: null, canUndo: true })
+    await store.undo()
+    expect(api.update).toHaveBeenLastCalledWith('activity', 101, { kind: 'travel' }, expect.objectContaining({ id: 101 }))
+    expect(store.getState().canUndo).toBe(false)
+  })
+
+  it('waits for a write still in flight on the record before it deletes', async () => {
+    const { api, store } = removable()
+    const answer = deferred<Row>()
+    api.update.mockReturnValueOnce(answer.promise)
+    api.remove.mockResolvedValueOnce({ id: 103 })
+
+    const writing = store.apply({ id: 103, field: 'kind', value: 'show' })
+    const removing = store.remove(103)
+    await Promise.resolve()
+    expect(api.remove).not.toHaveBeenCalled()
+
+    answer.resolve(served(calais[2], { kind: 'show' }))
+    await Promise.all([writing, removing])
+    expect(api.remove).toHaveBeenCalledWith('activity', 103)
+  })
+
+  it('sends no write to a row while its DELETE is in flight, nor after it', async () => {
+    const { api, store, ids } = removable()
+    const answer = deferred<unknown>()
+    api.remove.mockReturnValueOnce(answer.promise)
+
+    const removing = store.remove(103)
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    answer.resolve({ id: 103 })
+    await removing
+    await store.apply({ id: 103, field: 'kind', value: 'build' })
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(ids()).not.toContain(103)
+  })
+
+  it('on a 409 in_use keeps the row and raises the Dutch sentence built from by', async () => {
+    const { api, store, ids } = removable()
+    api.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)', by: [{ label: 'Activiteiten', count: 3 }, { label: 'Personen', count: 1 }] })
+
+    await store.remove(103)
+
+    expect(ids()).toContain(103)
+    expect(store.getState().save).toBe('error')
+    expect(store.getState().error).toMatchObject({ id: 103, code: 'in_use', message: 'Nog in gebruik door Activiteiten (3) en Personen (1).' })
+  })
+
+  it('on a 404 unknown_record drops the row and its undo entries, with no notice', async () => {
+    const { api, store, ids } = removable()
+    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
+    api.remove.mockRejectedValueOnce({ code: 'unknown_record', message: 'unknown record 103' })
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+
+    await store.remove(103)
+
+    expect(ids()).not.toContain(103)
+    expect(store.getState()).toMatchObject({ save: 'saved', error: null, canUndo: false })
+  })
+
+  it("on a 422 keeps the row and raises the writer's message", async () => {
+    const { api, store, ids } = removable()
+    api.remove.mockRejectedValueOnce({ code: 'refused', message: 'Een bevestigde activiteit verwijder je niet.' })
+
+    await store.remove(103)
+
+    expect(ids()).toContain(103)
+    expect(store.getState().error).toMatchObject({ code: 'refused', message: 'Een bevestigde activiteit verwijder je niet.' })
+  })
+})
+
 describe('dismiss', () => {
   it('drops the notice on a cell', async () => {
     const { api, store } = setup()

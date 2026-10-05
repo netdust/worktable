@@ -93,6 +93,10 @@ const strings = {
   moveDown: 'Move down',
   keepAsNew: 'Save your change with “{action}” before you leave',
   dragToOrder: 'Drag to order · Alt+↑/↓',
+  delete: 'Verwijderen',
+  deleteConfirm: 'Zeker?',
+  inUse: 'Nog in gebruik door {by}.',
+  and: 'en',
 }
 
 export type StringKey = keyof typeof strings
@@ -131,6 +135,13 @@ export function locale(): string {
   } catch {
     return 'en'
   }
+}
+
+/** The engine's 409 `by` as one sentence: "Nog in gebruik door Activiteiten (3) en Personen (1)." */
+export function inUse(by: { label: string; count: number }[]): string {
+  const named = by.map(({ label, count }) => `${label} (${count})`)
+  const last = named.pop() ?? ''
+  return t('inUse', { by: named.length === 0 ? last : `${named.join(', ')} ${t('and')} ${last}` })
 }
 
 export function rowCount(n: number): string {

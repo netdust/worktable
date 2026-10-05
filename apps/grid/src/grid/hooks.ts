@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
-import { create, update } from '../api'
+import { create, remove, update } from '../api'
 import type { Row, View } from '../types'
 import { layoutOf, useStoredRevision } from '../ui/views'
 import { type Layout, save, storedRevision } from './layout'
@@ -29,7 +29,7 @@ const never = () => () => undefined
 /** One store per loaded window of one view: a new window starts a new undo history. */
 export function useGridStore(view: View | undefined, rows: Row[] | null): [Store | null, StoreState] {
   const store = useMemo(
-    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create } }) : null),
+    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create, remove } }) : null),
     [view, rows],
   )
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))
