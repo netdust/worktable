@@ -227,7 +227,7 @@ function mergeFilters(chips: Filter[], fixed: Record<string, unknown>): Record<s
 
 /**
  * The arrangement as the engine stores it. `visible_fields` is the title column, then the shown fields in their order:
- * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks, matrix keys, lookups and rollups stay in the browser.
+ * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks and matrix keys stay in the browser; lookup and rollup columns are not stored.
  */
 export function toStoredView(arrangement: StoredArrangement, fixed: Record<string, unknown>, source: EngineSource): EngineArrangement {
   const title = titleColumn(source)

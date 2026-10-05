@@ -62,6 +62,7 @@ afterEach(() => {
   vi.resetAllMocks()
   setStrings(undefined)
   window.location.hash = ''
+  window.localStorage.clear()
 })
 
 describe('App shell', () => {
