@@ -9,6 +9,7 @@ import { tableOf } from './tables'
 
 export interface EngineRow {
   id: number
+  title: string
   custom: Record<string, unknown>
   lookups: Record<string, { id: number; title: string } | null>
   [column: string]: unknown
@@ -43,7 +44,7 @@ function parseCustom(value: unknown): Record<string, unknown> {
 
 function titlesOf(db: BunSQLiteDatabase, domain: Domain, relation: string, ids: number[]): Map<number, string> {
   const target = sourceOf(domain, relation)
-  if (target?.kind !== 'dataset' || ids.length === 0) return new Map()
+  if (target?.kind !== 'dataset' || typeof target.title !== 'string' || ids.length === 0) return new Map()
   const table = tableOf(target)
   const found = db
     .select({ id: columnOf(table, 'id'), title: columnOf(table, target.title) })
@@ -51,6 +52,13 @@ function titlesOf(db: BunSQLiteDatabase, domain: Domain, relation: string, ids: 
     .where(inArray(columnOf(table, 'id'), ids))
     .all() as { id: number; title: unknown }[]
   return new Map(found.map((r) => [r.id, r.title === null ? '' : String(r.title)]))
+}
+
+function titleOf(source: Source, raw: Raw, titles: Map<string, Map<number, string>>): string {
+  const text = (column: string): string => (raw[column] == null ? '' : String(raw[column]))
+  if (typeof source.title === 'string') return text(source.title)
+  const id = raw[source.title.via]
+  return (typeof id === 'number' ? titles.get(source.title.via)?.get(id) : undefined) || text(source.title.else)
 }
 
 export function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Source, raws: Raw[]): EngineRow[] {
@@ -70,7 +78,7 @@ export function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Sourc
       const title = typeof id === 'number' ? titles.get(name)?.get(id) : undefined
       lookups[name] = title === undefined ? null : { id: id as number, title }
     }
-    return { ...row, custom: parseCustom(raw.custom), lookups } as EngineRow
+    return { ...row, title: titleOf(source, raw, titles), custom: parseCustom(raw.custom), lookups } as EngineRow
   })
 }
 
@@ -88,6 +96,7 @@ export function readRows(
     .where(where)
     .orderBy(...orderOf(table, params))
     .limit(params.limit)
+    .offset(params.offset)
     .all() as Raw[]
   const counted = db.select({ total: count() }).from(table).where(where).get()
   return { rows: withLookups(db, domain, source, raws), total: counted?.total ?? 0 }

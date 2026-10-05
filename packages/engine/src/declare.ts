@@ -13,11 +13,13 @@ export interface ColumnDecl {
   writes?: { dataset: string; field: string; key: string }
 }
 
+export type TitleDecl = string | { via: string; else: string }
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
   label: string
-  title: string
+  title: TitleDecl
   date?: string
   columns: Record<string, ColumnDecl>
   indexes?: string[][]

@@ -302,6 +302,7 @@ describe('writes', () => {
         soort: 'kort',
         dag: null,
         start_at: null,
+        title: 'hallo',
         extra: null,
         custom: {},
         lookups: { project_id: { id: 1, title: 'Alfa' } },

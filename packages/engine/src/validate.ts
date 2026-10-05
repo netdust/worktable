@@ -21,6 +21,25 @@ function checkColumn(source: DatasetDecl | QueryDecl, what: string, column: stri
   }
 }
 
+function checkTitle(domain: Domain, source: DatasetDecl | QueryDecl): void {
+  if (typeof source.title === 'string') {
+    checkColumn(source, 'title', source.title)
+    return
+  }
+  const { via, else: fallback } = source.title
+  checkColumn(source, 'title else', fallback)
+  const target = source.columns[via]?.relation
+  if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
+  const hop = domain.datasets.find((d) => d.name === target)
+  if (hop && typeof hop.title !== 'string') {
+    throw new DomainError(
+      source.name,
+      via,
+      `title via "${via}" reaches "${target}", whose title is itself through a relation`,
+    )
+  }
+}
+
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
   const names = new Set(domain.datasets.map((d) => d.name))
   for (const [column, decl] of Object.entries(source.columns)) {
@@ -50,7 +69,7 @@ function checkWrites(
 
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
-    checkColumn(source, 'title', source.title)
+    checkTitle(domain, source)
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
   }

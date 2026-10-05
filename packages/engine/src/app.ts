@@ -92,7 +92,8 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
         {
           kind: s.kind,
           label: s.label,
-          title: s.title,
+          title: typeof s.title === 'string' ? s.title : s.title.else,
+          ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
           date: s.date ?? null,
           columns: s.columns,
           writable: isWritable(domain, s),

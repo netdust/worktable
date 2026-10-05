@@ -21,6 +21,7 @@ export interface RowsParams {
   from: string | null
   to: string | null
   limit: number
+  offset: number
 }
 
 export const MAX_LIMIT = 5000
@@ -33,6 +34,7 @@ const shape = z.object({
   from: day.optional(),
   to: day.optional(),
   limit: z.string().optional(),
+  offset: z.string().optional(),
 })
 
 export function isRealDate(value: string): boolean {
@@ -48,6 +50,14 @@ function parseLimit(raw: string | undefined): number {
     throw new ApiError(400, 'bad_limit', `limit must be an integer from 1 to ${MAX_LIMIT}`)
   }
   return limit
+}
+
+function parseOffset(raw: string | undefined): number {
+  if (raw === undefined) return 0
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    throw new ApiError(400, 'bad_offset', 'offset must be an integer of 0 or more')
+  }
+  return Number(raw)
 }
 
 const hasColumn = (source: Source, key: string): boolean =>
@@ -86,7 +96,7 @@ function parseGroup(raw: string | undefined, source: Source): string | null {
 export function parseRowsParams(source: Source, query: Record<string, string | undefined>): RowsParams {
   const parsed = shape.safeParse(query)
   if (!parsed.success) throw new ApiError(400, 'bad_window', 'from and to must be YYYY-MM-DD')
-  const { filter, sort, group, from, to, limit } = parsed.data
+  const { filter, sort, group, from, to, limit, offset } = parsed.data
   for (const day of [from, to]) {
     if (day && !isRealDate(day)) throw new ApiError(400, 'bad_window', `"${day}" is not a calendar date`)
   }
@@ -98,5 +108,6 @@ export function parseRowsParams(source: Source, query: Record<string, string | u
     from: from ?? null,
     to: to ?? null,
     limit: parseLimit(limit),
+    offset: parseOffset(offset),
   }
 }
