@@ -214,7 +214,7 @@ describe('rows', () => {
   test('schema lists every declared source and the saved views with parsed filters', async () => {
     const { status, body } = await get('/api/schema')
     expect(status).toBe(200)
-    expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'per_project'])
+    expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'notitie', 'per_project', 'notitie_lijst'])
     expect(body.sources.taak).toMatchObject({ kind: 'dataset', label: 'Taken', title: 'omschrijving', date: 'dag' })
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })
     expect(body.sources.project.date).toBeNull()

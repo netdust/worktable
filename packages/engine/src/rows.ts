@@ -53,7 +53,7 @@ function titlesOf(db: BunSQLiteDatabase, domain: Domain, relation: string, ids: 
   return new Map(found.map((r) => [r.id, r.title === null ? '' : String(r.title)]))
 }
 
-function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Source, raws: Raw[]): EngineRow[] {
+export function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Source, raws: Raw[]): EngineRow[] {
   const relations = Object.entries(source.columns).filter(([, c]) => c.relation)
   const titles = new Map(
     relations.map(([name, c]) => {

@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import { datasetDdl, viewDdl } from './ddl'
 import type { Domain } from './declare'
+import { revision } from './revision'
 import { savedView } from './saved-view'
 import { validateDomain } from './validate'
 
@@ -50,7 +51,8 @@ export function migrate(sqlite: Database, domain: Domain): void {
   sqlite.run('PRAGMA foreign_keys = ON')
   sqlite.transaction(() => {
     sqlite.run('CREATE TABLE IF NOT EXISTS _migrations (source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)')
-    for (const dataset of [savedView, ...domain.datasets]) apply(sqlite, dataset.name, datasetDdl(dataset), false)
+    for (const dataset of [savedView, revision, ...domain.datasets])
+      apply(sqlite, dataset.name, datasetDdl(dataset), false)
     for (const query of domain.queries) apply(sqlite, query.name, viewDdl(query), true)
   })()
 }

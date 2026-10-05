@@ -1,5 +1,5 @@
 import type { ColumnDecl, DatasetDecl, Domain, QueryDecl } from './declare'
-import { sourcesOf } from './registry'
+import { sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
   constructor(
@@ -43,6 +43,9 @@ function checkWrites(
     throw at(writes.field, `writes to undeclared field "${writes.field}"`)
   if (target.columns[writes.field]?.readonly) throw at(writes.field, `writes to readonly field "${writes.field}"`)
   if (!declared(query, writes.key)) throw at(writes.key, `has key "${writes.key}", not a column of the query`)
+  if (!writerOf(domain, writes.dataset)?.update) {
+    throw at(writes.dataset, `writes to "${writes.dataset}", which has no writer with update`)
+  }
 }
 
 export function validateDomain(domain: Domain): void {

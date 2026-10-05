@@ -87,8 +87,18 @@ describe('validateDomain', () => {
   bad('to a readonly field', { w: writes() }, [dataset({ columns: { naam: { ...text, readonly: true } } })], 'naam')
   bad('with a key that is not a query column', { w: writes({ key: 'zzz' }) }, undefined, 'zzz')
 
+  const mapped = () => query({ columns: { id: { type: 'integer', label: 'Id' }, naam: text, a_id: text, w: writes() } })
+
   test('a valid writes target validates', () => {
-    const q = query({ columns: { id: { type: 'integer', label: 'Id' }, naam: text, a_id: text, w: writes() } })
-    expect(() => validateDomain(withDomain({ datasets: [dataset()], queries: [q] }))).not.toThrow()
+    const writers = { a: { update: (values: Record<string, unknown>) => values } }
+    expect(() => validateDomain(withDomain({ datasets: [dataset()], queries: [mapped()], writers }))).not.toThrow()
+  })
+
+  test.each([
+    ['no writer', {}],
+    ['a writer without update', { a: { create: (values: Record<string, unknown>) => values } }],
+  ])('validateDomain refuses a writes target whose dataset has %s', (_, writers) => {
+    const e = failure(withDomain({ datasets: [dataset()], queries: [mapped()], writers }))
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'q', bad: 'a' })
   })
 })

@@ -1,5 +1,15 @@
 export { createEngine } from './app'
-export type { ColumnDecl, ColumnType, DatasetDecl, Domain, QueryDecl, SavedViewSeed } from './declare'
+export type {
+  Actor,
+  ColumnDecl,
+  ColumnType,
+  DatasetDecl,
+  Domain,
+  QueryDecl,
+  SavedViewSeed,
+  WriteContext,
+  Writer,
+} from './declare'
 export { defineDataset, defineQuery } from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'
 export { FilterCompileError, filterCompile } from './filter-compile'
@@ -7,3 +17,4 @@ export { MigrationError, migrate, seedDomain } from './migrate'
 export { savedView } from './saved-view'
 export { tableOf } from './tables'
 export { DomainError, validateDomain } from './validate'
+export { refuse, WriteRefused } from './writes'

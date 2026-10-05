@@ -97,7 +97,7 @@ describe('migrate', () => {
       source: string
       hash: string
     }[]
-    expect(rows.map((r) => r.source)).toEqual(['bestelling', 'klant', 'per_klant', 'saved_view'])
+    expect(rows.map((r) => r.source)).toEqual(['bestelling', 'klant', 'per_klant', 'revision', 'saved_view'])
     for (const r of rows) expect(r.hash).toMatch(/^[0-9a-f]{64}$/)
   })
 
