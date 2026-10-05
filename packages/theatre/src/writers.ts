@@ -57,7 +57,7 @@ export const organisatieWriter = writerOf((values, ctx) => {
 export const persoonWriter = writerOf((values, ctx) => {
   const { voornaam, achternaam } = merged(values, ctx)
   if (!filled(voornaam) || !filled(achternaam)) refuse('Voornaam en achternaam zijn verplicht.')
-  if (typeof values.email === 'string' && !values.email.includes('@')) refuse('Ongeldig e-mailadres.')
+  if (filled(values.email) && !String(values.email).includes('@')) refuse('Ongeldig e-mailadres.')
   checkLive(ctx, 'organisatie', values.organisatie_id, 'Organisatie bestaat niet.')
   return { ...values, weergavenaam: `${String(voornaam).trim()} ${String(achternaam).trim()}` }
 })
@@ -66,7 +66,8 @@ export const persoonWriter = writerOf((values, ctx) => {
 function checkAssignee(values: Values, ctx: WriteContext): void {
   const { persoon_id, activiteit_id, naam } = merged(values, ctx)
   const hasPersoon = persoon_id !== null && persoon_id !== undefined
-  if (hasPersoon === filled(naam)) refuse('Kies een persoon of een naam, niet allebei.')
+  if (hasPersoon && filled(naam)) refuse('Kies een persoon of een naam, niet allebei.')
+  if (!hasPersoon && !filled(naam)) refuse('Kies een persoon of een naam.')
   if (!hasPersoon || activiteit_id === null || activiteit_id === undefined) return
   if (ctx.exists('toewijzing', { persoon_id, activiteit_id }, ctx.current?.id as number | undefined)) {
     refuse('Deze persoon is al toegewezen aan deze activiteit.')

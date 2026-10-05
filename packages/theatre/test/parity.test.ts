@@ -60,7 +60,8 @@ describe('the Toewijzing writer refuses', () => {
   test('both a persoon and a naam', () =>
     refused(() => post('toewijzing', { activiteit_id: 5, persoon_id: 3, naam: 'Gast' }), BOTH))
 
-  test('neither a persoon nor a naam', () => refused(() => post('toewijzing', { activiteit_id: 5 }), BOTH))
+  test('neither a persoon nor a naam', () =>
+    refused(() => post('toewijzing', { activiteit_id: 5 }), 'Kies een persoon of een naam.'))
 
   test('a persoon added to a name-only row', () => refused(() => patch('toewijzing', 3, { persoon_id: 3 }), BOTH))
 
@@ -148,6 +149,15 @@ describe('the Toewijzing writer accepts', () => {
   })
 })
 
+describe('Persoon email', () => {
+  test('an empty string or null is accepted', async () => {
+    expect((await patch('persoon', 1, { email: '' })).status).toBe(200)
+    expect(stored('persoon', 1).email).toBe('')
+    expect((await patch('persoon', 1, { email: null })).status).toBe(200)
+    expect(stored('persoon', 1).email).toBeNull()
+  })
+})
+
 describe('Persoon weergavenaam', () => {
   test('is derived on create and update, and a sent value is dropped', async () => {
     const created = await post('persoon', { voornaam: 'Ilse', achternaam: 'Wouters', weergavenaam: 'Baas' })
@@ -190,7 +200,8 @@ describe('voorstellingen', () => {
     const all = await rows()
     expect(all.map((r) => r.id).sort((a, b) => Number(a) - Number(b))).toEqual([4, 8, 9, 22])
     for (const row of all) {
-      const { custom: _custom, lookups: _lookups, ...columns } = row
+      const { custom, lookups, ...columns } = row
+      expect({ custom, lookups }).toEqual({ custom: {}, lookups: {} })
       expect(Object.keys(columns).sort()).toEqual(['adres', 'id', 'plandag', 'productie', 'start', 'venue'])
     }
     expect(all.find((r) => r.id === 9)).toMatchObject({
