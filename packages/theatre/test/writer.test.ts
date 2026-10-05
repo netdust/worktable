@@ -115,4 +115,25 @@ describe('dagplanning', () => {
   test('the theatre domain passes validateDomain with dagplanning writes', () => {
     expect(() => validateDomain(theatre)).not.toThrow()
   })
+
+  const dagRows = async () => {
+    const res = await request('GET', '/api/rows/dagplanning?limit=500')
+    return res.body.rows as { id: number; activiteit_id: number; start_at: string; plandag: string }[]
+  }
+
+  test('a soft-deleted activiteit leaves dagplanning, and every row has id equal to activiteit_id', async () => {
+    const before = await dagRows()
+    expect(before.some((r) => r.id === 1)).toBe(true)
+    await request('DELETE', '/api/rows/activiteit/1')
+    const after = await dagRows()
+    expect(after.length).toBe(before.length - 1)
+    expect(after.some((r) => r.id === 1)).toBe(false)
+    expect(after.every((r) => r.id === r.activiteit_id)).toBe(true)
+  })
+
+  test('a changed start_at shows in dagplanning with the same id and the recomputed plandag', async () => {
+    await patch(1, { eind_at: null, start_at: '2026-10-15T03:30' })
+    const row = (await dagRows()).find((r) => r.id === 1)
+    expect(row).toMatchObject({ start_at: '2026-10-15T03:30', plandag: '2026-10-14' })
+  })
 })
