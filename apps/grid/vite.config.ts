@@ -1,14 +1,12 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
-// The entry is the script itself: WordPress prints the page, the manifest tells AppAssets which file to enqueue.
+// The engine serves `/api` itself, so the proxy passes the path through unchanged.
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  server: { proxy: { '/api': process.env.ENGINE_URL ?? 'http://127.0.0.1:4310' } },
   build: {
     outDir: 'dist',
-    manifest: 'manifest.json',
-    rollupOptions: { input: 'src/main.tsx' },
     // The one chunk past the default is exceljs, fetched only when Export is pressed.
     chunkSizeWarningLimit: 1000,
   },

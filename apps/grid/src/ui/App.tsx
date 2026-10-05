@@ -11,7 +11,7 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { ApiError, Boot, Row, RowsResponse, Schema, Scope, View } from '../types'
+import type { ApiError, Row, RowsResponse, Schema, Scope, View } from '../types'
 import { Filters } from './Filters'
 import { Rail } from './Rail'
 import { readHash, writeHash } from './hash'
@@ -40,10 +40,11 @@ async function titlesOf(view: View, served: Schema | null): Promise<Map<number, 
   return new Map(found.rows.map((row) => [row.id, row.title]))
 }
 
-/** The shell renders from the boot config alone; the served schema, once it answers, takes over. */
-export function App({ boot }: { boot: Boot }) {
+/** The shell waits for the served schema: it declares the tables, the saved views come with it. */
+export function App() {
   const frame = useRef<HTMLDivElement>(null)
   const [served, setServed] = useState<Schema | null>(null)
+  const [unserved, setUnserved] = useState<ApiError | null>(null)
   const [settled, setSettled] = useState(false)
   const [activeKey, setActive] = useState<string | undefined>(() => readHash('view') ?? undefined)
   const [panel, setPanel] = useState<'new' | 'saveAs' | null>(null)
@@ -73,7 +74,7 @@ export function App({ boot }: { boot: Boot }) {
       if (!live) return
       setStrings(s.strings)
       setServed(s)
-    }, () => undefined)
+    }, (error: ApiError) => live && setUnserved(error))
     const mine = savedViews().then((list) => live && load(list), () => undefined)
     const order = prefs().then((stored) => live && loadPrefs(stored), () => undefined)
     Promise.all([served, mine, order]).finally(() => live && setSettled(true))
@@ -82,8 +83,8 @@ export function App({ boot }: { boot: Boot }) {
     }
   }, [])
 
-  const starting = served?.views ?? boot.views
-  const declared = served?.tables ?? boot.tables
+  const starting = served?.views ?? []
+  const declared = served?.tables ?? []
   const current = useRef<string | undefined>(undefined)
   const { load, loadPrefs, tables, busy, create, saveAs, save, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
   const view = tables.flatMap((table) => table.views).find((v) => v.key === activeKey) ?? tables[0]?.views[0] ?? starting[0]
@@ -103,6 +104,11 @@ export function App({ boot }: { boot: Boot }) {
   // undefined: the space is still loading; null: this view is not scoped.
   const scope: Scope | null | undefined = !scoped ? null : space.status === 'ready' ? space.scope : undefined
   const scopeId = scope === undefined ? undefined : scope?.id ?? null
+  const [stored, setLayout] = useLayout(view)
+  const spaceField = scoped && served?.space ? served.space.field : undefined
+  // A chip saved before the view was scoped would filter on what the scope already decides.
+  const layout = stored && spaceField ? { ...stored, filters: stored.filters.filter((f) => f.field !== spaceField) } : stored
+  const asks = layout ? JSON.stringify([layout.filters, layout.sort, layout.group]) : ''
 
   useEffect(() => {
     if (!settled || !view || scope === undefined) return
@@ -111,31 +117,27 @@ export function App({ boot }: { boot: Boot }) {
     setResult({ status: 'loading' })
     const asked = dated ? range : {}
     const away = view.type === 'matrix' ? view.away : undefined
-    Promise.all([rows(view, asked, scope), away ? rows({ model: away.model, table: away.table }, asked, null) : none, titlesOf(view, served)]).then(
+    Promise.all([rows(view, asked, scope, layout), away ? rows({ model: away.model, table: away.table }, asked, null) : none, titlesOf(view, served)]).then(
       ([r, away, titles]) => live && setResult({ status: 'ready', rows: r.rows, away: away.rows, titles }),
       (error: ApiError) => live && setResult({ status: 'error', error }),
     )
     return () => {
       live = false
     }
-    // By key: a saved view's new arrangement is applied in the browser, its rows stay.
-  }, [settled, view?.key, dated, range, scopeId])
+    // By key, and by what the server applies (filters, sort, group): a width or a hidden column stays in the browser.
+  }, [settled, view?.key, dated, range, scopeId, asks])
 
   const model = view ? served?.models[view.model] : undefined
-  const writable = view ? (served?.writable ?? boot.writable)[view.model] === true : false
+  const writable = view ? served?.writable[view.model] === true : false
   const loaded = result.status === 'ready' && model ? result.rows : null
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded)
-  const reload = () => (view ? rows(view, dated ? range : {}, scope ?? null).then((r) => r.rows) : Promise.resolve([]))
+  const reload = () => (view ? rows(view, dated ? range : {}, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload)
-  const joinWritable = view?.join ? (served?.writable ?? boot.writable)[view.join.model] === true : false
+  const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
-  const [stored, setLayout] = useLayout(view)
-  const spaceField = scoped && served?.space ? served.space.field : undefined
-  // A chip saved before the view was scoped would filter on what the scope already decides.
-  const layout = stored && spaceField ? { ...stored, filters: stored.filters.filter((f) => f.field !== spaceField) } : stored
   const fields = useMemo(
     () => (model && loaded ? filterFields(model, loaded, view?.filters).filter((f) => f.field !== spaceField) : []),
     [model, loaded, view?.filters, spaceField],
@@ -174,6 +176,16 @@ export function App({ boot }: { boot: Boot }) {
     } } })
   }
   const types = declared.find((table) => table.key === view?.table)?.types ?? ['grid']
+
+  if (!served) {
+    return (
+      <div className="nv-app" ref={frame}>
+        <div className="nv-center">
+          {unserved ? <EmptyState type="no-data" title={t('noViews')} description={errorText(unserved.code, unserved.message)} /> : <Spinner />}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="nv-app" ref={frame}>

@@ -99,19 +99,19 @@ describe('WindowControl', () => {
 describe('App and the window', () => {
   it('requests rows with the window it shows', async () => {
     const planning = { key: 'planning', label: 'Planning', table: 'planning', model: 'activity', date_field: 'date' }
-    api.schema.mockRejectedValue({ code: 'rest_no_route', message: 'No route.' })
     api.rows.mockResolvedValue({ rows: [], total: 0 })
     const tables = [{ key: 'planning', label: 'Planning', model: 'activity', types: ['grid' as const] }]
-    render(<App boot={{ root: 'https://example.test/wp-json/ntdst-views/v1', tables, views: [planning], writable: {}, capability: 'x' }} />)
+    api.schema.mockResolvedValue({ models: {}, tables, views: [planning], writable: {} })
+    render(<App />)
 
     await screen.findByText('No rows in this window')
     expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
-    expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-18', to: '2026-05-24' }, null)
+    expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-18', to: '2026-05-24' }, null, expect.any(Object))
 
     fireEvent.click(screen.getByRole('button', { name: 'Next week' }))
 
     expect(screen.getByText('Week 25 – 31 mei')).toBeTruthy()
-    await vi.waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-25', to: '2026-05-31' }, null))
+    await vi.waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-25', to: '2026-05-31' }, null, expect.any(Object)))
     await screen.findByText('No rows in this window')
   })
 })

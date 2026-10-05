@@ -1,7 +1,7 @@
 const strings = {
   views: 'Views',
   noViews: 'No views declared',
-  noViewsHint: 'Declare a view on ntdst/baseline/views/config.',
+  noViewsHint: 'Save a view on a source to list it here.',
   noRows: 'No rows',
   noRowsInWindow: 'No rows in this window',
   noRowsMatch: 'No rows match the search or filters',

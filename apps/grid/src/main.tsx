@@ -6,13 +6,12 @@ import './ui/theme.css'
 import './ui/app.css'
 import { App } from './ui/App'
 
-const root = document.getElementById('ntdst-views-root')
-const boot = window.ntdstViews
+const root = document.getElementById('root')
 
-if (root && boot) {
+if (root) {
   createRoot(root).render(
     <StrictMode>
-      <App boot={boot} />
+      <App />
     </StrictMode>,
   )
 }

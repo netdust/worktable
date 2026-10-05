@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Field, Model, View } from './types'
 
-/** `tests/fixtures/views-columns.json`: the column ids and matrix keys `Saved/Arrangement.php` mirrors, asserted on both sides. */
+/** `views-columns.fixture.json`, copied from ntdst-baseline's `tests/fixtures`: the column ids and matrix keys `Saved/Arrangement.php` mirrored there. */
 export interface ColumnsFixture {
   model: string
   fields: Record<string, Field>
@@ -11,7 +11,7 @@ export interface ColumnsFixture {
   matrix: { names: string[]; keys: string[]; refused: string[] }
 }
 
-export const columnsFixture: ColumnsFixture = JSON.parse(readFileSync(resolve(__dirname, '../../../../tests/fixtures/views-columns.json'), 'utf8'))
+export const columnsFixture: ColumnsFixture = JSON.parse(readFileSync(resolve(__dirname, 'views-columns.fixture.json'), 'utf8'))
 
 export const fixtureModel = (fixture: ColumnsFixture): Model => ({
   key: fixture.model, label: fixture.model, title_label: 'Title', title_readonly: false, fields: fixture.fields,

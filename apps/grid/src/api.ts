@@ -1,32 +1,15 @@
-import type { ApiError, ApiFetch, ApiFetchOptions, Boot, DateWindow, NewView, Prefs, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
-
-declare global {
-  interface Window {
-    wp?: { apiFetch: ApiFetch }
-    ntdstViews?: Boot
-  }
-}
+import { type EngineRow, type EngineSchema, rowsQuery, toRow, toSavedViews, toSchema } from './engine'
+import type { Layout } from './grid/layout'
+import type { ApiError, DateWindow, NewView, Prefs, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** The root may be pretty (`/wp-json/ns`) or plain (`?rest_route=/ns`); both take the path. */
+/** Same origin: Vite proxies `/api` to the engine. */
 function endpoint(path: string, query: Query = {}): string {
-  const root = window.ntdstViews?.root
-  if (!root) throw { code: 'unknown', message: 'window.ntdstViews.root is missing.' } satisfies ApiError
-  const url = new URL(root, window.location.href)
-  const route = url.searchParams.get('rest_route')
-  if (route === null) {
-    url.pathname = url.pathname.replace(/\/$/, '') + path
-  } else {
-    url.searchParams.set('rest_route', route.replace(/\/$/, '') + path)
-  }
-  for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined) url.searchParams.set(key, value)
-  }
-  if (route === null) return url.toString()
-  // Plain permalinks: only the route reads better with its slashes; every other value stays encoded.
-  const encoded = encodeURIComponent(url.searchParams.get('rest_route') ?? '')
-  return url.toString().replace(`rest_route=${encoded}`, `rest_route=${encoded.replace(/%2F/g, '/')}`)
+  const params = new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => entry[1] !== undefined))
+  const search = params.toString()
+  return `/api${path}${search === '' ? '' : `?${search}`}`
 }
 
 function toApiError(error: unknown): ApiError {
@@ -36,52 +19,82 @@ function toApiError(error: unknown): ApiError {
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
 
-type Method = ApiFetchOptions['method']
+/** The engine answers a refusal as `{code, message}`; anything else is unknown, with the status as its message. */
+async function refusal(response: Response): Promise<ApiError> {
+  const body: unknown = await response.json().catch(() => null)
+  return toApiError(body ?? `${response.status} ${response.statusText}`.trim())
+}
 
-/** Async from the first line: a bad root or a missing apiFetch rejects, never throws into a render. */
 async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>): Promise<T> {
   try {
-    const apiFetch = window.wp?.apiFetch
-    if (!apiFetch) throw { code: 'unknown', message: 'wp.apiFetch is not loaded.' } satisfies ApiError
-    const options: ApiFetchOptions = { url: endpoint(path, query), method }
-    return (await apiFetch(data === undefined ? options : { ...options, data })) as T
+    const body = data === undefined ? undefined : JSON.stringify(data)
+    const response = await fetch(endpoint(path, query), { method, body, headers: body ? { 'Content-Type': 'application/json' } : undefined })
+    if (!response.ok) throw await refusal(response)
+    return (await response.json()) as T
   } catch (error) {
     throw toApiError(error)
   }
 }
 
+let served: Promise<EngineSchema> | null = null
+
+/** One `/schema` read for the schema and the saved views both; a failed one is asked again. */
+function engineSchema(): Promise<EngineSchema> {
+  served ??= request<EngineSchema>('GET', '/schema').catch((error: unknown) => {
+    served = null
+    throw error
+  })
+  return served
+}
+
+export function forgetSchema(): void {
+  served = null
+}
+
+async function titleOf(source: string): Promise<string> {
+  const title = (await engineSchema()).sources[source]?.title
+  if (!title) throw { code: 'unknown_source', message: `unknown source "${source}"` } satisfies ApiError
+  return title
+}
+
+async function rowsOf(source: string, query: Query): Promise<RowsResponse> {
+  const [title, found] = await Promise.all([titleOf(source), request<{ rows: EngineRow[]; total: number }>('GET', `/rows/${source}`, query)])
+  return { rows: found.rows.map((row) => toRow(row, title)), total: found.total }
+}
+
 export function schema(): Promise<Schema> {
-  return request('GET', '/schema')
+  return engineSchema().then(toSchema)
 }
 
-/** A table's rows, the same for every view of it; a matrix asks for its cells too. With a scope, only the rows related to that space record. */
-export function rows(view: Pick<View, 'model' | 'table' | 'type'>, window: Partial<DateWindow>, scope: Scope | null = null): Promise<RowsResponse> {
-  const filter = scope ? { [`filter[${scope.field}]`]: String(scope.id) } : {}
-  const cells = view.type === 'matrix' ? { cells: '1' } : {}
-  return request('GET', `/rows/${view.model}`, { table: view.table, ...cells, ...window, ...filter })
+/** A source's rows with the layout's filters, sort and group applied by the engine. The scope has no route yet: no space is served. */
+export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field'>, window: Partial<DateWindow>, _scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
+  const title = await titleOf(view.model)
+  return rowsOf(view.model, layout ? rowsQuery(view, layout, window, title) : { ...window })
 }
 
-/** A model's records for a picker: titles holding `search`, at most 50 of `total`; every record without one. */
-export function records(model: string, search: string): Promise<RowsResponse> {
-  return request('GET', `/rows/${model}`, { search: search === '' ? undefined : search })
+/** A model's records for a picker: titles holding `search`, every record without one. The engine has no search: the titles are narrowed here. */
+export async function records(model: string, search: string): Promise<RowsResponse> {
+  const all = await rowsOf(model, {})
+  const wanted = search.toLocaleLowerCase()
+  const found = wanted === '' ? all.rows : all.rows.filter((row) => row.title.toLocaleLowerCase().includes(wanted))
+  return { rows: found, total: found.length }
 }
 
-/** With `table`, the row comes back with that table's lookups and rollups. */
-export function create(model: string, data: Record<string, unknown>, table?: string): Promise<Row> {
-  return request('POST', `/rows/${model}`, { table }, data)
+export function create(model: string, data: Record<string, unknown>): Promise<Row> {
+  return request('POST', `/rows/${model}`, {}, data)
 }
 
-export function update(model: string, id: number, data: Record<string, unknown>, table?: string): Promise<Row> {
-  return request('PATCH', `/rows/${model}/${id}`, { table }, data)
+export function update(model: string, id: number, data: Record<string, unknown>): Promise<Row> {
+  return request('PATCH', `/rows/${model}/${id}`, {}, data)
 }
 
 export function remove(model: string, id: number): Promise<unknown> {
   return request('DELETE', `/rows/${model}/${id}`)
 }
 
-/** The saved views this user may see — their own and the shared — of one table, or of all. */
-export function savedViews(table?: string): Promise<SavedView[]> {
-  return request('GET', '/views', { table })
+/** The saved views the schema serves, merged over their sources' tables. */
+export function savedViews(): Promise<SavedView[]> {
+  return engineSchema().then(toSavedViews)
 }
 
 export function createView(view: NewView): Promise<SavedView> {
@@ -100,9 +113,9 @@ export function restoreView(id: number): Promise<SavedView> {
   return request('POST', `/views/${id}/restore`)
 }
 
-/** This user's prefs; the route names no user. */
+/** No prefs are stored yet: every table opens on its first view. */
 export function prefs(): Promise<Prefs> {
-  return request('GET', '/views/prefs')
+  return Promise.resolve({ order: {}, last: {} })
 }
 
 /** Replaces this user's prefs; the answer is what the server kept. */

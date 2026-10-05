@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { Boot, Model, Row, SavedView, Schema } from '../types'
+import type { Model, Row, SavedView, Schema } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
@@ -427,7 +427,6 @@ describe('the drawer', () => {
 })
 
 describe('the toolbar over the grid', () => {
-  const boot: Boot = { root: 'https://example.test/wp-json/ntdst-views/v1', tables: schema.tables, views: schema.views, writable: schema.writable, capability: 'edit_others_posts' }
   const toolbar = () => screen.getByRole('banner')
   const bar = () => document.querySelector<HTMLElement>('.nv-bar')!
   const visibleText = (el: Element) => {
@@ -455,10 +454,12 @@ describe('the toolbar over the grid', () => {
   })
 
   it('labels every toolbar and bar control with a visible word, a filter chip included', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
     fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
+    // A chip asks the server again: the grid comes back once the rows do.
+    await screen.findByRole('grid')
     expect(within(bar()).getByRole('button', { name: 'Remove filter Status' })).toBeTruthy()
     for (const control of within(bar()).getAllByRole('button')) {
       expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
@@ -481,7 +482,7 @@ describe('the toolbar over the grid', () => {
   it('says a refusal in the site\'s words when it has them, as text', async () => {
     remote.schema.mockResolvedValue({ ...schema, strings: { 'error.title_required': 'Een activiteit heeft een <b>naam</b> nodig' } })
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.doubleClick(cell('Montage', 'title'))
@@ -496,7 +497,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it('a click away from an empty new title sends nothing', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
@@ -512,7 +513,7 @@ describe('the toolbar over the grid', () => {
   it('keeps a refusal whole in the DOM however narrow the toolbar', async () => {
     const long = 'Deze persoon staat al op deze activiteit en kan er geen tweede keer op'
     remote.update.mockRejectedValueOnce({ code: 'duplicate_assignment', message: long })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
@@ -526,7 +527,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it('is one row of title, week, search and + New, with no theme or undo in it; the chips sit in the bar beneath (Stefan, 2026-10-03)', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
@@ -541,7 +542,7 @@ describe('the toolbar over the grid', () => {
 
   it('offers undo in a toast after a change', async () => {
     remote.update.mockResolvedValueOnce({ ...calais[1], fields: { ...calais[1].fields, place: '' } })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
@@ -567,7 +568,7 @@ describe('the toolbar over the grid', () => {
     remote.savedViews.mockResolvedValue([mine])
     remote.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['kind'], group: 'date' } })
     remote.update.mockResolvedValueOnce({ ...calais[1], fields: { ...calais[1].fields, place: '' } })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
@@ -590,23 +591,27 @@ describe('the toolbar over the grid', () => {
   })
 
   it('adds a filter chip from + Filter and removes it with its ×', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
+    await screen.findByRole('grid')
 
+    expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [{ field: 'status', value: 'option' }] }))
     expect(within(bar()).getByText('Optie', { selector: 'b' })).toBeTruthy()
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)).toEqual(['Présentation interne'])
 
     fireEvent.click(within(bar()).getByRole('button', { name: 'Remove filter Status' }))
+    await screen.findByRole('grid')
+    expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [] }))
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title)).toHaveLength(6)
   })
 
   it('shows Saving, then Saved; Not saved with the message on a refusal; and Undo with a word', async () => {
     let answer!: (row: Row) => void
     remote.update.mockReturnValueOnce(new Promise<Row>((resolve) => (answer = resolve)))
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
@@ -632,7 +637,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it("+ New opens a row at the top of today's group with its title in edit", async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
@@ -644,7 +649,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it('keeps focus in the search while the rows it filters move under the active cell', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(cell('Lunch bistrot', 'kind'))
@@ -659,7 +664,7 @@ describe('the toolbar over the grid', () => {
 
   it('commits an open editor when focus leaves for the search, and leaves focus there', async () => {
     remote.update.mockResolvedValue({ ...calais[2], fields: { ...calais[2].fields, place: 'x' } })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.click(cell('Lunch bistrot', 'place'))
@@ -674,7 +679,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it('jumps to a view from the search', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Maandag 18 mei')
 
     fireEvent.change(within(toolbar()).getByRole('searchbox', { name: 'Search' }), { target: { value: 'afwez' } })
@@ -697,8 +702,7 @@ describe('a new row the writer refuses', () => {
   // A view keyed apart from its table: a write names the table, never the view.
   const toewijzingen = { key: 'tabel', label: 'Tabel', table: 'toewijzingen', model: 'assignment', columns: ['title', 'activity', 'status'], lookups: { person: ['title'] } }
   const tables = [{ key: 'toewijzingen', label: 'Toewijzingen', model: 'assignment', types: ['grid' as const] }]
-  const served: Schema = { models: { assignment, person, activity }, tables, views: [toewijzingen], writable: { assignment: true }, capability: 'edit_others_posts' }
-  const boot: Boot = { root: 'https://example.test/wp-json/ntdst-views/v1', tables, views: served.views, writable: served.writable, capability: 'edit_others_posts' }
+  const served: Schema = { models: { assignment, person, activity }, tables, views: [toewijzingen], writable: { assignment: true } }
   const montage: Row = { id: 102, title: 'Montage', status: 'publish', fields: {} }
   const ann: Row = { id: 5, title: 'Ann', status: 'publish', fields: {} }
   const held: Row = { id: 3, title: 'Bert op Lunch', status: 'publish', fields: { activity: [103], person: [6], status: 'confirmed' }, lookups: {} }
@@ -716,7 +720,7 @@ describe('a new row the writer refuses', () => {
 
   async function refusedOnce() {
     remote.create.mockRejectedValueOnce({ code: 'person_or_name', message: 'A person or a name is required.' })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Bert op Lunch')
     fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
     const montage = await screen.findByRole('option', { name: 'Montage' })
@@ -748,7 +752,7 @@ describe('a new row the writer refuses', () => {
   })
 
   it('+ Nieuwe on a draft nothing was written to starts it again', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Bert op Lunch')
     fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
     fireEvent.blur(screen.getByRole('combobox', { name: 'Activiteit' }))
@@ -773,7 +777,7 @@ describe('a new row the writer refuses', () => {
   it('a new row refused for a missing person offers the Persoon picker and saves on the pick', async () => {
     remote.create.mockRejectedValueOnce({ code: 'person_or_name', message: 'A person or a name is required.' })
     remote.create.mockResolvedValueOnce({ id: 50, title: 'Ann op Montage', status: 'publish', fields: { activity: [102], person: [5], status: 'requested' }, lookups: { person: ann } })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Bert op Lunch')
 
     fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
@@ -809,8 +813,7 @@ describe('a new record with a required relation', () => {
   const person: Model = { key: 'person', label: 'Persoon', title_label: 'Naam', title_readonly: false, fields: {} }
   const absences = { key: 'absences', label: 'Afwezigheden', table: 'absences', model: 'absence', date_field: 'from', columns: ['title', 'person', 'from', 'to'], lookups: { person: ['title'] } }
   const tables = [{ key: 'absences', label: 'Afwezigheden', model: 'absence', types: ['grid' as const] }]
-  const served: Schema = { models: { absence, person }, tables, views: [absences], writable: { absence: true }, capability: 'edit_others_posts' }
-  const boot: Boot = { root: 'https://example.test/wp-json/ntdst-views/v1', tables, views: served.views, writable: served.writable, capability: 'edit_others_posts' }
+  const served: Schema = { models: { absence, person }, tables, views: [absences], writable: { absence: true } }
   const ann: Row = { id: 5, title: 'Ann', status: 'publish', fields: {} }
   const held: Row = { id: 3, title: 'Bert', status: 'publish', fields: { person: [6], from: '2026-05-18', to: '2026-05-19' }, lookups: { person: { ...ann, id: 6, title: 'Bert' } } }
 
@@ -830,7 +833,7 @@ describe('a new record with a required relation', () => {
 
   it('opens the picker on the person and creates the absence once one is picked', async () => {
     remote.create.mockResolvedValue({ id: 40, title: 'Ann 19/05', status: 'publish', fields: { person: [5], from: '2026-05-19', to: '2026-05-19' }, lookups: { person: ann } })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findAllByText('Bert')
 
     fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
@@ -847,7 +850,7 @@ describe('a new record with a required relation', () => {
   it('shows the column a draft needs when the view does not, and saves the pick', async () => {
     remote.schema.mockResolvedValue({ ...served, views: [{ ...absences, columns: ['title', 'from', 'to'], lookups: {} }] })
     remote.create.mockResolvedValue({ id: 41, title: 'Ann 19/05', status: 'publish', fields: { person: [5], from: '2026-05-19', to: '2026-05-19' }, lookups: {} })
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findByText('Bert')
     expect(screen.queryByRole('columnheader', { name: /Persoon/ })).toBeNull()
 
@@ -860,7 +863,7 @@ describe('a new record with a required relation', () => {
   })
 
   it('keeps the draft when focus leaves its picker, and drops it on Escape', async () => {
-    render(<App boot={boot} />)
+    render(<App />)
     await screen.findAllByText('Bert')
 
     fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))

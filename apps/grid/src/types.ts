@@ -155,7 +155,6 @@ export interface Schema {
   tables: TableDef[]
   views: View[]
   writable: Record<string, boolean>
-  capability: string
   /** The relation that scopes a view, and the model it points at; null when the site configured none. */
   space?: Space | null
   /** The site's words for the app's own strings, by `i18n.ts` key. */
@@ -194,27 +193,10 @@ export interface RowsResponse {
   total: number
 }
 
-/** `window.ntdstViews`, as AdminApp::config() inlines it. */
-export interface Boot {
-  root: string
-  tables: TableDef[]
-  views: View[]
-  writable: Record<string, boolean>
-  capability: string
-}
-
 export interface ApiError {
   code: string
   message: string
 }
-
-export interface ApiFetchOptions {
-  url: string
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  data?: Record<string, unknown>
-}
-
-export type ApiFetch = (options: ApiFetchOptions) => Promise<unknown>
 
 /** The inclusive window a dated view shows, as local `YYYY-MM-DD` days. */
 export interface DateWindow {

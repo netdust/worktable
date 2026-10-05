@@ -42,7 +42,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  #ntdst-views-root:not([data-theme="light"]) {
+  #root:not([data-theme="light"]) {
     --color-bg-canvas: #16191c;
     --color-bg-surface: #1d2124;
     --color-bg-subtle: #22272b;
@@ -76,7 +76,7 @@
   }
 }
 
-#ntdst-views-root[data-theme="dark"] {
+#root[data-theme="dark"] {
   --color-bg-canvas: #16191c;
   --color-bg-surface: #1d2124;
   --color-bg-subtle: #22272b;

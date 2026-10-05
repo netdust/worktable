@@ -72,5 +72,4 @@ export const schema: Schema = {
   ],
   views: [planning, { key: 'absences', label: 'Afwezigheden', model: 'absence', table: 'absences' }],
   writable: { activity: true },
-  capability: 'edit_others_posts',
 }

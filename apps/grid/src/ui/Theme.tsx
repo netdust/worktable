@@ -22,7 +22,7 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(stored)
 
   useEffect(() => {
-    const root = document.getElementById('ntdst-views-root')
+    const root = document.getElementById('root')
     if (theme === 'auto') root?.removeAttribute('data-theme')
     else root?.setAttribute('data-theme', theme)
     try {

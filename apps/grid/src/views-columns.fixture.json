@@ -1,0 +1,107 @@
+{
+  "_about": "One fixture for both sides of the column-id mirror: Saved/Arrangement.php ids()/isHidden() and app grid/columns.ts columnsFor() + matrix/columns.ts buildColumns(). ArrangementTest and the two columns.test.ts assert it.",
+  "model": "book",
+  "fields": {
+    "published": {
+      "type": "date",
+      "label": "Published",
+      "required": false,
+      "fact": true
+    },
+    "author": {
+      "type": "relation",
+      "label": "Author",
+      "required": false,
+      "fact": true,
+      "relation": {
+        "model": "writer",
+        "multiple": false
+      }
+    },
+    "shop": {
+      "type": "relation",
+      "label": "Shop",
+      "required": false,
+      "fact": true,
+      "relation": {
+        "model": "shop",
+        "multiple": false
+      }
+    },
+    "genre": {
+      "type": "select",
+      "label": "Genre",
+      "required": false,
+      "fact": true,
+      "options": {
+        "novel": "Novel"
+      }
+    },
+    "notes": {
+      "type": "textarea",
+      "label": "Notes",
+      "required": false,
+      "fact": false
+    }
+  },
+  "table": {
+    "key": "shelf",
+    "label": "Shelf",
+    "model": "book",
+    "columns": [
+      "title",
+      "published",
+      "author",
+      "genre",
+      "ghost"
+    ],
+    "lookups": {
+      "author": [
+        "title",
+        "email"
+      ],
+      "shop": [
+        "title"
+      ]
+    },
+    "rollups": {
+      "reviews": {
+        "model": "review",
+        "field": "book",
+        "count": true
+      }
+    },
+    "types": [
+      "grid",
+      "matrix"
+    ]
+  },
+  "ids": [
+    "title",
+    "published",
+    "author",
+    "genre",
+    "lookups.author.email",
+    "lookups.shop.title",
+    "rollups.reviews"
+  ],
+  "matrix": {
+    "names": [
+      "  Ann  ",
+      "BOB",
+      "  Bartholomew Bartholomew Bartholomew Bartholomew Bartholomew Bartholomew Bartholomew Bartholomew Bartholomew   "
+    ],
+    "keys": [
+      "name:ann",
+      "name:bob",
+      "name:bartholomew bartholomew bartholomew bartholomew bartholomew bartholomew bartholo"
+    ],
+    "refused": [
+      "name:",
+      "record:0",
+      "record:x",
+      "writer:3",
+      "name:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ]
+  }
+}

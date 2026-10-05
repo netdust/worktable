@@ -25,7 +25,7 @@ const entry = (name: string) => tableButtons().find((b) => b.textContent === nam
 
 afterEach(() => {
   cleanup()
-  document.getElementById('ntdst-views-root')?.remove()
+  document.getElementById('root')?.remove()
 })
 
 describe('the rail', () => {
@@ -98,7 +98,7 @@ describe('the rail', () => {
   })
 
   it('carries the keyboard hints and the theme in its foot', () => {
-    const root = Object.assign(document.createElement('div'), { id: 'ntdst-views-root' })
+    const root = Object.assign(document.createElement('div'), { id: 'root' })
     document.body.append(root)
     render(<Rail tables={groupTables(plainTables, plain)} active="planning" onSelect={() => undefined} />)
     const foot = within(rail()).getByRole('contentinfo')
