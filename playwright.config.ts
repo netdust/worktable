@@ -17,5 +17,16 @@ export default defineConfig({
       wait: { stdout: /127\.0\.0\.1:5174/ },
       reuseExistingServer: false,
     },
+    {
+      command: 'bun packages/engine/src/serve.ts --domain @worktable/fiche --db e2e/.tmp/fiche.db --port 4312 --fresh',
+      wait: { stdout: /engine listening/ },
+      reuseExistingServer: false,
+    },
+    {
+      command: 'cd apps/grid && bunx vite --port 5175 --strictPort --host 127.0.0.1',
+      env: { ENGINE_URL: 'http://127.0.0.1:4312' },
+      wait: { stdout: /127\.0\.0\.1:5175/ },
+      reuseExistingServer: false,
+    },
   ],
 })
