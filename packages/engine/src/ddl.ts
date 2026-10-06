@@ -1,4 +1,4 @@
-import type { ColumnDecl, DatasetDecl, QueryDecl } from './declare'
+import type { DatasetDecl, QueryDecl } from './declare'
 
 const SQL_TYPE = {
   text: 'TEXT',
@@ -16,27 +16,62 @@ function literal(value: string | number | boolean | null): string {
   return typeof value === 'number' ? String(value) : `'${value.replaceAll("'", "''")}'`
 }
 
-function columnDdl(name: string, c: ColumnDecl): string {
-  const parts = [name, SQL_TYPE[c.type]]
-  if (!c.nullable) parts.push('NOT NULL')
-  if (c.default !== undefined) parts.push(`DEFAULT ${literal(c.default)}`)
+export interface ColumnSpec {
+  name: string
+  type: string
+  notnull: boolean
+  dflt: string | null
+  relation: string | null
+}
+
+const STAMP = "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+
+// The stored shape of every column a dataset's table holds, in table order; compared with PRAGMA table_info.
+export function columnSpecs(d: DatasetDecl): ColumnSpec[] {
+  const spec = (name: string, type: string, notnull: boolean, dflt: string | null): ColumnSpec => ({
+    name,
+    type,
+    notnull,
+    dflt,
+    relation: null,
+  })
+  return [
+    spec('id', 'INTEGER', false, null),
+    ...Object.entries(d.columns).map(([name, c]) => ({
+      name,
+      type: SQL_TYPE[c.type],
+      notnull: !c.nullable,
+      dflt: c.default === undefined ? null : literal(c.default),
+      relation: c.relation ?? null,
+    })),
+    ...(d.custom ? [spec('custom', 'TEXT', true, "'{}'")] : []),
+    spec('created_at', 'TEXT', true, STAMP),
+    spec('updated_at', 'TEXT', true, STAMP),
+    spec('deleted_at', 'TEXT', false, null),
+  ]
+}
+
+export function columnDefinition(c: ColumnSpec): string {
+  if (c.name === 'id') return 'id INTEGER PRIMARY KEY AUTOINCREMENT'
+  const parts = [c.name, c.type]
+  if (c.notnull) parts.push('NOT NULL')
+  if (c.dflt !== null) parts.push(`DEFAULT ${c.dflt}`)
   if (c.relation) parts.push(`REFERENCES ${c.relation}(id)`)
   return parts.join(' ')
 }
 
+export function indexDdl(d: DatasetDecl): string[] {
+  return (d.indexes ?? []).map((cols) => `CREATE INDEX ${indexName(d.name, cols)} ON ${d.name} (${cols.join(', ')})`)
+}
+
+export const indexName = (table: string, cols: string[]): string => `${table}_${cols.join('_')}_idx`
+
+export function tableDdl(d: DatasetDecl, table = d.name): string {
+  return `CREATE TABLE ${table} (\n  ${columnSpecs(d).map(columnDefinition).join(',\n  ')}\n)`
+}
+
 export function datasetDdl(d: DatasetDecl): string[] {
-  const columns = [
-    'id INTEGER PRIMARY KEY AUTOINCREMENT',
-    ...Object.entries(d.columns).map(([name, c]) => columnDdl(name, c)),
-    ...(d.custom ? ["custom TEXT NOT NULL DEFAULT '{}'"] : []),
-    "created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
-    "updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
-    'deleted_at TEXT',
-  ]
-  const indexes = (d.indexes ?? []).map(
-    (cols) => `CREATE INDEX ${d.name}_${cols.join('_')}_idx ON ${d.name} (${cols.join(', ')})`,
-  )
-  return [`CREATE TABLE ${d.name} (\n  ${columns.join(',\n  ')}\n)`, ...indexes]
+  return [tableDdl(d), ...indexDdl(d)]
 }
 
 export function viewDdl(q: QueryDecl): string[] {
