@@ -22,6 +22,13 @@ function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: E
   // A required column never clears, as Delete never does (keys.ts).
   const valid = (editing.draft === '' && !column.required) || shape.test(editing.draft)
 
+  const take = (node: HTMLInputElement) => {
+    // Half-typed segments read as '' with badInput: they stay on screen but commit as the stored value.
+    if (node.value === '' && node.validity.badInput) return onDraft(column.edit(row))
+    if (node.value === '' && column.required) node.value = column.edit(row)
+    onDraft(node.value)
+  }
+
   useEffect(() => {
     if (!valid) onDraft(column.edit(row))
     input.current?.focus()
@@ -35,13 +42,9 @@ function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: E
       data-editor
       aria-label={column.label}
       defaultValue={valid ? editing.draft : column.edit(row)}
-      onChange={(event) => {
-        const node = event.currentTarget
-        // Half-typed segments read as '' with badInput: they stay on screen but commit as the stored value.
-        if (node.value === '' && node.validity.badInput) return onDraft(column.edit(row))
-        if (node.value === '' && column.required) node.value = column.edit(row)
-        onDraft(node.value)
-      }}
+      onChange={(event) => take(event.currentTarget)}
+      // Chromium fires no input once the value is '': clearing the last segments shows only as a key.
+      onKeyUp={(event) => take(event.currentTarget)}
       onBlur={onLeave}
     />
   )
