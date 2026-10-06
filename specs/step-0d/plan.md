@@ -52,7 +52,13 @@ First working version: Task 1a — `GET /api/rows/<fixture>?offset=2` and a fixt
 
 **Mitigations — where they live.** `ownedView()`, `viewBody()` and the routes in `packages/engine/src/views.ts` (1–4, 7); `cellsOf()` in `packages/engine/src/rows.ts` (5, 6).
 
-**Deferrals.** No real actors: the dev actor owns everything until auth, so attack 1 is enforced and tested with a directly inserted foreign view but not exercised by a second human. Prefs are not stored. `share_token`/`public` untouched.
+**Deferrals.** No real actors: the dev actor owns everything until auth, so attack 1 is enforced and tested with a directly inserted foreign view but not exercised by a second human. Prefs are not stored. `share_token`/`public` untouched. Recorded at the final review:
+- **Auth.** Every view made before auth is owned by actor 0 and needs a reassignment migration; no real actor may get id 0. The seeded views are shared but owned by 0, so no real user can edit them until that migration runs.
+- **A database seeded before 0d** keeps views with no owner, which are unreachable. Rebuild it with `--fresh`; there is no backfill.
+- **Browser layout keys** are not namespaced per database: after `--fresh`, a stale layout can attach to a reused view id. The worst case is a 400 until the viewer reverts.
+- **The e2e flows are not idempotent.** They mutate seeded rows in file order, on one worker, with `--fresh` only at start. Running a flow twice fails by design.
+- **Datetime grouping** (`GridBar` `GROUPABLE`, `group.ts`) is not offered; it isn't needed yet.
+- **The away end column** must be a date or datetime column. It is validated as declared, not by type.
 
 ## Test map
 
@@ -83,14 +89,16 @@ E2E flows: **matrix-cell-persists** — open "Toewijzingen per activiteit" (it o
 
 | Task | Start | End |
 |---|---|---|
-| 1a | | |
-| 1b | | |
-| 2 | | |
-| 3 | | |
+| 1a | 10-05 23:21 | 23:29 |
+| 1b | 23:30 | 23:31 |
+| 2 | 23:32 | 23:49 |
+| 3 | 23:51 | 10-06 00:05 |
 | 4 | 00:06 | 00:20 |
-| 5 | 00:23 | 00:48 |
-| 6 | | |
-| 7 | | |
+| 5 | 00:23 | 00:52 |
+| 6 | 00:53 | 01:03 |
+| 7 | 01:07 | 09:34 (overnight pause; its first commit 08:25) |
+
+Final review and security audit 09:35–09:40; final fix wave 09:40–09:53. Agent wall-clock, not human days.
 
 ---
 
