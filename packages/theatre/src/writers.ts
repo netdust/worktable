@@ -187,7 +187,9 @@ function maxDagen(ctx: WriteContext, productieId: unknown): number {
   return Math.min(max, MAX_DAGEN_CEILING)
 }
 
+// Only a write that moves the span or its producer checks it, so a lowered cap never blocks a rename.
 function checkSpan(values: Values, ctx: WriteContext): void {
+  if (!['start_datum', 'eind_datum', 'productie_id'].some((k) => Object.hasOwn(values, k))) return
   const { start_datum, eind_datum, productie_id } = merged(values, ctx)
   if (typeof start_datum !== 'string' || typeof eind_datum !== 'string') return
   if (eind_datum < start_datum) refuse('Einde ligt voor de start.')

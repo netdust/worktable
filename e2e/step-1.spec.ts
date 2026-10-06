@@ -161,7 +161,9 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
   await locatie.click()
   await locatie.press('Enter')
   await page.getByRole('combobox', { name: 'Locatie' }).fill('Spiegel')
+  const located = patchOf(page, 'speelreeks')
   await page.getByRole('option', { name: VENUE }).click()
+  expect((await located).status()).toBe(200)
   await expect(locatie).toHaveText(VENUE)
 
   // Einde first: the default days are today's, and an end before the start is refused.

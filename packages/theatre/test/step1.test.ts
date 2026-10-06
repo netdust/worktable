@@ -125,6 +125,26 @@ describe('the Speelreeks writer refuses', () => {
   })
 })
 
+describe('a Speelreeks longer than a lowered cap', () => {
+  test('is renamed, and the rename undone, without a span check', async () => {
+    const id = await reeks({ start_datum: '2026-11-01', eind_datum: '2026-11-20' })
+    sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":10}' WHERE id = 1`)
+    const renamed = await editor('PATCH', `/api/rows/speelreeks/${id}`, { naam: 'Tournee Oost' })
+    expect(renamed.status).toBe(200)
+    const batch = (renamed.body.revision as Body).batch_id
+    expect((await editor('POST', `/api/batches/${batch}/undo`, {})).status).toBe(200)
+  })
+
+  test('still refuses a moved end', async () => {
+    const id = await reeks({ start_datum: '2026-11-01', eind_datum: '2026-11-20' })
+    sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":10}' WHERE id = 1`)
+    await refused(
+      editor('PATCH', `/api/rows/speelreeks/${id}`, { eind_datum: '2026-11-19' }),
+      'Een speelreeks duurt hoogstens 10 dagen.',
+    )
+  })
+})
+
 describe('the Speelreeks ceiling', () => {
   test('a reeks of 367 days is refused whatever the parameter says', () => {
     sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":100000}' WHERE id = 1`)

@@ -43,14 +43,14 @@
    - Lives in: `actions.ts` `runAction`.
    - Tested by: Task 3, where an owner gets 404 on an unseen source and 403 on a refused create, and nothing is written; and Task 4, where an owner gets 404 on `sjabloon_toepassen`.
 2. **Undoing someone else's batch.** The batch's `actor_id` must equal the caller's; otherwise 403 `forbidden`.
-   - Lives in: `batches.ts` `undoBatch`.
+   - Lives in: `writes.ts` `undoBatch`.
    - Tested by: an editor undoing another editor's batch gets 403.
 3. **Undoing the import, or an old batch, wipes data.** Only `kind` ∈ {write, action, undo} can be undone. The import's batch has kind `import`, and a batch with no `batch` row predates the table; both answer 422 `not_undoable`.
    - Lives in: `undoBatch`.
    - Tested by: an import batch and a bare revision batch are both refused, and the row count is unchanged.
-4. **Undo overwrites a later change.** Each column must still hold the batch's `new` value; otherwise 409 `changed_since`, with nothing written. The check runs inside the same `.immediate()` transaction as the writes.
+4. **Undo overwrites a later change.** Each column must still hold the batch's `new` value, and a created record's other columns must still be empty; otherwise 409 `changed_since`, with nothing written. The check runs inside the same `.immediate()` transaction as the writes.
    - Lives in: `undoBatch`.
-   - Tested by: B edits after A's write, A's undo gets 409 naming the column, and B's value stays.
+   - Tested by: B edits after A's write, A's undo gets 409 naming the column, and B's value stays; B fills a column A's create left empty, and A's undo of the create gets 409 naming it.
 5. **Double undo, or a replayed redo.** `undone_by` is set inside the transaction; a second undo gets 409 `already_undone`.
    - Lives in: `undoBatch`.
 6. **Undo bypasses writer rules.** Restores go through `writer.update` and removals through `writer.delete` and `inUse`, all through `valuesOf`.
@@ -63,7 +63,7 @@
 
 **Deferrals:**
 - Undoing a delete: refused, not built.
-- An action's run time is unbounded, but it is bounded by the declared Speelreeks length. The theatre writer refuses a Speelreeks longer than 31 days (invented, approval pending).
+- An action's run time is bounded by the Speelreeks length and the Sjabloon size. The theatre writer refuses a Speelreeks longer than the own organisation's `max_speelreeks_dagen` (default 31, invented, approval pending) and never longer than 366 days; `organisatie.parameters` is writable by administrators only; a Sjabloon holds at most 50 items, each with `offset_dag` at most 366.
 
 ## Test map
 | Unit | Seam | Tests: tier · file · command | E2E flows |

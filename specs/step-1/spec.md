@@ -162,6 +162,7 @@ Source: "Out: slots and open Toewijzingen, kandidaten, a template editor, Taak, 
 - **Revision row and Writer row:** the batch table, the write reply, undo by batch, and actions, as R7.
 - **Package layout paragraph:** after the vocabulary check: "A third check fails any term from the export's name list, kept on the owner's machine outside the repo, in the staged diff; without the list it is skipped."
 - **Undo:** one undo history per browser tab, of batch ids, undone on the server.
+- **Revisions:** `GET /revisions` lists an `id` marker row for each record a batch created: `old` empty, `new` the record's id. Undoing that create refuses `changed_since` once any column the create left empty holds a value.
 
 ## Open, for Stefan
 - **Seeds into an existing database.** Rol and Sjabloon are seeded only into a fresh database, so the migrated copy has them empty. Two options:
