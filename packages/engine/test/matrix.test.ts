@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import {
   type ColumnDecl,
-  createEngine,
   type DatasetDecl,
   type Domain,
   DomainError,
@@ -12,6 +11,7 @@ import {
   seedDomain,
   validateDomain,
 } from '../src'
+import { signIn, testEngine } from './sign-in'
 
 const text: ColumnDecl = { type: 'text', label: 'T', nullable: true }
 const rel = (relation: string): ColumnDecl => ({ type: 'integer', label: 'R', relation, nullable: true })
@@ -133,17 +133,19 @@ describe('validateDomain: matrix', () => {
 describe('GET /rows/<down>?cells=1', () => {
   let app: Hono
   let sqlite: Database
+  let cookie: string
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new Database(':memory:')
     const d = full()
     migrate(sqlite, d)
     seedDomain(sqlite, d)
-    app = createEngine(sqlite, d, { port: 4310 })
+    app = testEngine(sqlite, d)
+    cookie = await signIn(app)
   })
 
   async function get(path: string) {
-    const res = await app.request(path, { headers: { host: '127.0.0.1:4310' } })
+    const res = await app.request(path, { headers: { host: '127.0.0.1:4310', cookie } })
     // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
     return { status: res.status, body: (await res.json()) as Record<string, any> }
   }

@@ -3,8 +3,9 @@ import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createEngine, type Domain, defineDataset, migrate } from '../src'
+import { type Domain, defineDataset, migrate } from '../src'
 import { send } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
 const parent = defineDataset({
   name: 'parent',
@@ -43,7 +44,8 @@ test('a populated database survives a rebuild with every row, revision and id', 
   const file = join(mkdtempSync(join(tmpdir(), 'wt-rebuild-')), 'db.sqlite')
   const sqlite = new Database(file, { create: true })
   migrate(sqlite, domainOf())
-  const call = send(createEngine(sqlite, domainOf(), { port: 4310 }))
+  const first = testEngine(sqlite, domainOf())
+  const call = send(first, await signIn(first))
   const body = (v: object) => ({ body: JSON.stringify(v) })
 
   for (const name of ['Ann', 'Bo', 'Cy'])
@@ -77,7 +79,8 @@ test('a populated database survives a rebuild with every row, revision and id', 
   expect(sqlite.query('PRAGMA foreign_key_check').all()).toEqual([])
   expect(sqlite.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
 
-  const again = send(createEngine(sqlite, next, { port: 4310 }))
+  const rebuilt = testEngine(sqlite, next)
+  const again = send(rebuilt, await signIn(rebuilt))
   const created = await again('POST', '/api/rows/child', body({ label: 'e', parent_id: 1 }))
   expect(created.status).toBe(201)
   expect(created.body.id).toBe(5)

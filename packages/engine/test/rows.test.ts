@@ -1,15 +1,18 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { createEngine, type Domain, defineDataset, migrate, seedDomain } from '../src'
+import { type Domain, defineDataset, migrate, seedDomain } from '../src'
 import { domain, freshDb } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
 let sqlite: Database
 let app: Hono
+let cookie: string
 
-beforeEach(() => {
+beforeEach(async () => {
   sqlite = freshDb()
-  app = createEngine(sqlite, domain, { port: 4310 })
+  app = testEngine(sqlite, domain)
+  cookie = await signIn(app)
 })
 
 const counts = (): Record<string, number> => {
@@ -20,7 +23,7 @@ const counts = (): Record<string, number> => {
 }
 
 async function get(path: string) {
-  const res = await app.request(path, { headers: { host: '127.0.0.1:4310' } })
+  const res = await app.request(path, { headers: { host: '127.0.0.1:4310', cookie } })
   // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
   return { status: res.status, body: (await res.json()) as Record<string, any> }
 }
@@ -170,7 +173,8 @@ describe('rows', () => {
     sqlite = new Database(':memory:')
     migrate(sqlite, nullTitle)
     seedDomain(sqlite, nullTitle)
-    app = createEngine(sqlite, nullTitle, { port: 4310 })
+    app = testEngine(sqlite, nullTitle)
+    cookie = await signIn(app)
     const { body } = await rows('lid')
     expect(body.rows[0].lookups).toEqual({ groep_id: { id: 1, title: '' } })
   })
@@ -317,11 +321,12 @@ describe('title through a relation', () => {
     views: [],
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new Database(':memory:')
     migrate(sqlite, via)
     seedDomain(sqlite, via)
-    app = createEngine(sqlite, via, { port: 4310 })
+    app = testEngine(sqlite, via)
+    cookie = await signIn(app)
   })
 
   test('resolves to the target title, else the fallback column, else empty', async () => {
@@ -339,7 +344,7 @@ describe('title through a relation', () => {
   test('a write reply carries the title', async () => {
     const res = await app.request('/api/rows/regel', {
       method: 'POST',
-      headers: { host: '127.0.0.1:4310', 'content-type': 'application/json' },
+      headers: { host: '127.0.0.1:4310', 'content-type': 'application/json', cookie },
       body: JSON.stringify({ groep_id: 2 }),
     })
     expect(res.status).toBe(201)

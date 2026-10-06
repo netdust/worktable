@@ -6,3 +6,4 @@ site # Sec-Fetch-Site in the write guard
 start # generic, as in a window's start
 state # generic English
 parameters # TypeScript's Parameters<> and the English word
+email # the account's address; fiche declares an email column

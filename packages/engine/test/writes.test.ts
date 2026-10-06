@@ -2,14 +2,19 @@ import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createEngine, defineQuery, migrate, seedDomain } from '../src'
 import { contents, domain, freshDb, probes, projectDeletes, send } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
 let sqlite: Database
 let request: ReturnType<typeof send>
 
-beforeEach(() => {
+// The editor signed in for each test is the first account.
+const ME = 1
+
+beforeEach(async () => {
   projectDeletes.length = 0
   sqlite = freshDb()
-  request = send(createEngine(sqlite, domain, { port: 4310 }))
+  const app = testEngine(sqlite, domain)
+  request = send(app, await signIn(app))
 })
 
 const json = (value: unknown) => JSON.stringify(value)
@@ -239,7 +244,8 @@ describe('in use', () => {
     sqlite = new Database(':memory:')
     migrate(sqlite, withQuery)
     seedDomain(sqlite, withQuery)
-    request = send(createEngine(sqlite, withQuery, { port: 4310 }))
+    const app = testEngine(sqlite, withQuery)
+    request = send(app, await signIn(app))
     sqlite.run("INSERT INTO project (name) VALUES ('Gamma'), ('Delta')")
     expect((await request('GET', '/api/rows/vast')).body.total).toBe(1)
     expect(await remove('project/3')).toEqual({ status: 200, body: { id: 3 } })
@@ -319,7 +325,7 @@ describe('writes', () => {
     expect(new Set(rows.map((r) => r.batch_id)).size).toBe(1)
   })
 
-  test('update writes one revision per changed field only, sharing a batch_id, with actor_id 0', async () => {
+  test('update writes one revision per changed field only, sharing a batch_id, with the signed-in account as actor', async () => {
     const res = await patch('note/1', { project_id: 1, tekst: 'ander' })
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ id: 1, tekst: 'ander', lengte: 5 })
@@ -328,7 +334,7 @@ describe('writes', () => {
       ['tekst', 'eerste', 'ander'],
       ['lengte', 6, 5],
     ])
-    expect(rows.map((r) => r.actor_id)).toEqual([0, 0])
+    expect(rows.map((r) => r.actor_id)).toEqual([ME, ME])
     expect(rows[0]?.batch_id).toBe(rows[1]?.batch_id as string)
     expect(rows[0]?.batch_id).toMatch(/^[0-9a-f-]{36}$/)
   })
@@ -406,7 +412,7 @@ describe('writes', () => {
   test('a body naming actor_id and batch_id does not forge the audit; POST /api/rows/revision is 404', async () => {
     await patch('note/1', { tekst: 'ander', actor_id: 99, batch_id: 'x' })
     const rows = await revisionsOf('note', 1)
-    expect(rows.map((r) => r.actor_id)).toEqual([0, 0])
+    expect(rows.map((r) => r.actor_id)).toEqual([ME, ME])
     expect(rows.every((r) => /^[0-9a-f-]{36}$/.test(r.batch_id))).toBe(true)
     await denied(
       () => post('revision', { entity: 'note', record_id: 1, field: 'tekst', actor_id: 99 }),

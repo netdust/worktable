@@ -193,18 +193,23 @@ export interface Sent {
   site?: string
   host?: string
   origin?: string
+  cookie?: string
 }
 
-export function send(app: { request: (path: string, init: RequestInit) => Response | Promise<Response> }) {
+export function send(
+  app: { request: (path: string, init: RequestInit) => Response | Promise<Response> },
+  signedIn?: string,
+) {
   return async (
     method: string,
     path: string,
-    { body, type = 'application/json', site, host = '127.0.0.1:4310', origin }: Sent = {},
+    { body, type = 'application/json', site, host = '127.0.0.1:4310', origin, cookie = signedIn }: Sent = {},
   ) => {
     const headers: Record<string, string> = { host }
     if (type) headers['content-type'] = type
     if (site) headers['sec-fetch-site'] = site
     if (origin) headers.origin = origin
+    if (cookie) headers.cookie = cookie
     const res = await app.request(path, { method, headers, body })
     // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
     return { status: res.status, body: (await res.json()) as Record<string, any> }

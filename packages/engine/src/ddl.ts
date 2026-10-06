@@ -67,7 +67,8 @@ export function indexDdl(d: DatasetDecl): string[] {
 export const indexName = (table: string, cols: string[]): string => `${table}_${cols.join('_')}_idx`
 
 export function tableDdl(d: DatasetDecl, table = d.name): string {
-  return `CREATE TABLE ${table} (\n  ${columnSpecs(d).map(columnDefinition).join(',\n  ')}\n)`
+  const parts = [...columnSpecs(d).map(columnDefinition), ...(d.checks ?? [])]
+  return `CREATE TABLE ${table} (\n  ${parts.join(',\n  ')}\n)`
 }
 
 export function datasetDdl(d: DatasetDecl): string[] {

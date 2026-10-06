@@ -1,6 +1,8 @@
 import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
+import { getConnInfo } from 'hono/bun'
+import { type AuthEnv, authRoutes } from './auth'
 import type { Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
@@ -14,25 +16,24 @@ function isWritable(domain: Domain, source: Source): boolean {
   return Object.values(source.columns).some((c) => c.writes)
 }
 
-function writeRoutes(app: Hono, store: Store): void {
+function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
-  app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
 
   app.post('/rows/:dataset', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'create')
-    const id = runWrite(store, target, 'create', null, await bodyOf(c))
+    const id = runWrite(store, target, 'create', null, await bodyOf(c), c.get('actor'))
     return c.json(rowOf(store, target.dataset, id), 201)
   })
 
   app.patch('/rows/:dataset/:id', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'update')
-    const id = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c))
+    const id = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c), c.get('actor'))
     return c.json(rowOf(store, target.dataset, id))
   })
 
   app.delete('/rows/:dataset/:id', (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'delete')
-    return c.json({ id: runWrite(store, target, 'delete', parseId(c.req.param('id')), {}) })
+    return c.json({ id: runWrite(store, target, 'delete', parseId(c.req.param('id')), {}, c.get('actor')) })
   })
 
   app.get('/revisions/:dataset/:id', (c) =>
@@ -42,13 +43,25 @@ function writeRoutes(app: Hono, store: Store): void {
 
 export interface EngineOptions {
   port: number
+  appUrl?: string
+  outbox?: string
+  cookieName?: string
+  clientIp?: (req: Request) => string
 }
 
-export function createEngine(sqlite: Database, domain: Domain, { port }: EngineOptions): Hono {
+// Bun's own peer address; proxy headers are never read.
+function peerAddress(c: Context): string {
+  const address = getConnInfo(c).remote.address
+  if (!address) throw new Error('no client address')
+  return address
+}
+
+export function createEngine(sqlite: Database, domain: Domain, options: EngineOptions): Hono<AuthEnv> {
+  const { port, appUrl = 'http://127.0.0.1:5173', outbox, cookieName = 'wt_session', clientIp } = options
   sqlite.run('PRAGMA foreign_keys = ON')
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
-  const root = new Hono()
+  const root = new Hono<AuthEnv>()
 
   // A page whose name rebinds to 127.0.0.1 still sends its own Host, so only the loopback names pass.
   root.use(async (c, next) => {
@@ -59,6 +72,13 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
   })
 
   const app = root.basePath('/api')
+  app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
+  authRoutes(app, sqlite, {
+    appUrl,
+    outbox,
+    cookieName,
+    clientIp: clientIp ? (c) => clientIp(c.req.raw) : peerAddress,
+  })
 
   app.get('/schema', (c) => {
     const sources = Object.fromEntries(

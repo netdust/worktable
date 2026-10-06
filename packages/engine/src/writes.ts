@@ -3,8 +3,7 @@ import { eq } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
-import type { ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
-import { DEV_ACTOR } from './dev-actor'
+import type { Actor, ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
 import { ApiError, isRealDate } from './params'
 import { sourceOf, writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
@@ -295,7 +294,14 @@ function storedOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx
 }
 
 // One transaction: a refusal or a failed Revision insert leaves the table and revision untouched.
-export function runWrite(store: Store, target: Writable, op: WriteOp, id: number | null, body: Values): number {
+export function runWrite(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  id: number | null,
+  body: Values,
+  actor: Actor,
+): number {
   const { sqlite } = store
   const table = target.dataset.name
   return sqlite
@@ -303,7 +309,7 @@ export function runWrite(store: Store, target: Writable, op: WriteOp, id: number
       const current = id === null ? null : liveRow(sqlite, table, id)
       if (id !== null && !current) throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
       const ctx = {
-        actor: DEV_ACTOR,
+        actor,
         current: current && decodeAll(target.dataset, current),
         find: finder(store),
         exists: existence(store),

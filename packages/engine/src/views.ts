@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import type { Hono } from 'hono'
+import type { AuthEnv } from './auth'
 import type { Actor, Domain, SavedViewSeed } from './declare'
-import { DEV_ACTOR } from './dev-actor'
 import { filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
 import { ApiError, keysProblem } from './params'
@@ -187,36 +187,41 @@ function listViews(sqlite: Database, actor: Actor): ViewOut[] {
   return (sqlite.query(sql).all(actor.id) as Raw[]).map((raw) => outOf(raw, actor))
 }
 
-export function viewRoutes(app: Hono, { sqlite, domain }: Store, actor: Actor = DEV_ACTOR): void {
+export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
   const write = <T>(work: () => T): T => sqlite.transaction(work).immediate()
-  const outById = (id: number): ViewOut => outOf(ownedView(sqlite, id, actor), actor)
+  const outById = (id: number, actor: Actor): ViewOut => outOf(ownedView(sqlite, id, actor), actor)
 
-  app.get('/views', (c) => c.json({ views: listViews(sqlite, actor) }))
+  app.get('/views', (c) => c.json({ views: listViews(sqlite, c.get('actor')) }))
 
   app.post('/views', async (c) => {
+    const actor = c.get('actor')
     const fields = viewBody(await bodyOf(c), domain, true)
-    return c.json(outById(write(() => create(sqlite, fields, actor))), 201)
+    const id = write(() => create(sqlite, fields, actor))
+    return c.json(outById(id, actor), 201)
   })
 
   app.patch('/views/:id', async (c) => {
+    const actor = c.get('actor')
     const id = viewId(c.req.param('id'))
     const patch = patchOf(await bodyOf(c))
     write(() => {
       const current = ownedView(sqlite, id, actor)
       save(sqlite, actor, id, stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false)), current)
     })
-    return c.json(outById(id))
+    return c.json(outById(id, actor))
   })
 
   app.delete('/views/:id', (c) => {
+    const actor = c.get('actor')
     const id = viewId(c.req.param('id'))
     write(() => save(sqlite, actor, id, { deleted_at: new Date().toISOString() }, ownedView(sqlite, id, actor)))
     return c.json({ id })
   })
 
   app.post('/views/:id/restore', (c) => {
+    const actor = c.get('actor')
     const id = viewId(c.req.param('id'))
     write(() => save(sqlite, actor, id, { deleted_at: null }, ownedView(sqlite, id, actor, true)))
-    return c.json(outById(id))
+    return c.json(outById(id, actor))
   })
 }

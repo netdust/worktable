@@ -1,4 +1,5 @@
-export { createEngine } from './app'
+export { createEngine, type EngineOptions } from './app'
+export { createAccount } from './auth'
 export type {
   Actor,
   ColumnDecl,

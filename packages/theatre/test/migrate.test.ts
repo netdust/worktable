@@ -3,7 +3,8 @@ import { expect, test } from 'bun:test'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createEngine, type Domain, defineDataset, migrate, seedDomain } from '@worktable/engine'
+import { type Domain, defineDataset, migrate, seedDomain } from '@worktable/engine'
+import { signIn, testEngine } from '@worktable/engine/test/sign-in'
 import theatre from '../src'
 
 const legacy = { legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true } } as const
@@ -22,10 +23,10 @@ test('a seeded theatre database takes legacy_post_id by ALTER, keeping every row
   migrate(sqlite, theatre)
   seedDomain(sqlite, theatre)
   const before = tables(sqlite)
+  const app = testEngine(sqlite, theatre)
+  const cookie = await signIn(app)
   const read = async () => {
-    const res = await createEngine(sqlite, theatre, { port: 4310 }).request('/api/rows/voorstellingen', {
-      headers: { host: '127.0.0.1:4310' },
-    })
+    const res = await app.request('/api/rows/voorstellingen', { headers: { host: '127.0.0.1:4310', cookie } })
     return res.json()
   }
   const shows = await read()

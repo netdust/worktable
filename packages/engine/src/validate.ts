@@ -132,6 +132,7 @@ export function validateDomain(domain: Domain): void {
   }
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
+    if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }

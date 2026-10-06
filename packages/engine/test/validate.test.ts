@@ -36,6 +36,11 @@ const writes = (over: Partial<NonNullable<ColumnDecl['writes']>> = {}): ColumnDe
 })
 
 describe('validateDomain', () => {
+  test('a domain dataset declaring checks is refused: they are for engine tables', () => {
+    const e = failure(withDomain({ datasets: [dataset({ checks: ['CHECK (id > 0)'] })], queries: [] }))
+    expect([e.declaration, e.bad]).toEqual(['a', 'checks'])
+  })
+
   const viaOf = (over: Partial<Parameters<typeof defineDataset>[0]>) =>
     withDomain({
       datasets: [...domain.datasets, dataset(), defineDataset({ name: 'b', label: 'B', custom: false, ...over })],

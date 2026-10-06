@@ -1,8 +1,8 @@
 import type { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
+import { authTables } from './auth-tables'
 import { datasetDdl, viewDdl } from './ddl'
 import type { DatasetDecl, Domain, QueryDecl } from './declare'
-import { DEV_ACTOR } from './dev-actor'
 import { MigrationError } from './migration-error'
 import { revision } from './revision'
 import { savedView } from './saved-view'
@@ -90,7 +90,7 @@ function applySteps(sqlite: Database, steps: Step[], queries: QueryDecl[]): void
 export function migrate(sqlite: Database, domain: Domain): void {
   validateDomain(domain)
   sqlite.run('CREATE TABLE IF NOT EXISTS _migrations (source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)')
-  const steps = planSteps(sqlite, [savedView, revision, ...domain.datasets])
+  const steps = planSteps(sqlite, [savedView, revision, ...authTables, ...domain.datasets])
   if (steps.some((s) => s.change !== 'create' && s.change.kind === 'rebuild')) backUp(sqlite)
   // SQLite ignores this pragma inside a transaction, so it brackets the whole migration.
   sqlite.run('PRAGMA foreign_keys = OFF')
@@ -113,13 +113,16 @@ function insertRows(sqlite: Database, table: string, rows: Record<string, unknow
   }
 }
 
+// No account has this id (account ids start at 1), so a seeded view belongs to no one.
+const SEED_OWNER = 0
+
 export function seedDomain(sqlite: Database, domain: Domain): void {
   sqlite.transaction(() => {
     domain.seed((dataset, rows) => insertRows(sqlite, dataset, rows))
     insertRows(
       sqlite,
       'saved_view',
-      domain.views.map((v) => ({ ...v, owner_id: DEV_ACTOR.id, shared: true })),
+      domain.views.map((v) => ({ ...v, owner_id: SEED_OWNER, shared: true })),
     )
   })()
 }

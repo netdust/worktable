@@ -37,6 +37,8 @@ export interface DatasetDecl {
   indexes?: string[][]
   custom: boolean
   matrix?: MatrixDecl
+  /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
+  checks?: string[]
 }
 
 export interface QueryDecl {
@@ -70,7 +72,8 @@ export interface Domain {
 
 export interface Actor {
   id: number
-  role: string
+  role: 'administrator' | 'editor' | 'owner'
+  subject: { dataset: string; id: number } | null
 }
 
 export interface WriteContext {
