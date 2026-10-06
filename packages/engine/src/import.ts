@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite'
+import { readFileSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { forbid } from './access'
 import type { Actor, DatasetDecl, Domain, Writer } from './declare'
@@ -167,6 +168,16 @@ function importAll(run: Run, plans: Plan[]): Omit<ImportResult, 'committed'> {
     counts[plan.dataset.name] = made.size
   }
   return { counts, refused }
+}
+
+// The parser's own message may quote the file, so it is not passed on.
+export function readExportFile(file: string): unknown {
+  const text = readFileSync(file, 'utf8')
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`${file} is not valid JSON`)
+  }
 }
 
 class Rollback extends Error {

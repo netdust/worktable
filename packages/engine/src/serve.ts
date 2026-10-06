@@ -1,11 +1,11 @@
 import { Database } from 'bun:sqlite'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
 import { createAccount, disableAccount, findAccount } from './auth'
 import type { Actor, Domain } from './declare'
-import { importExport } from './import'
+import { importExport, readExportFile } from './import'
 import { migrate, seedDomain } from './migrate'
 import { MigrationError } from './migration-error'
 
@@ -113,20 +113,10 @@ function administrator(email: string | undefined): Actor {
   return { id: account.id, role: account.role, subject: null }
 }
 
-// The parser's own message may quote the file, so it is not passed on.
-function parsedFile(file: string): unknown {
-  const text = readFileSync(file, 'utf8')
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error(`${file} is not valid JSON`)
-  }
-}
-
 // Stdout gets counts only; the report, outside the repo by default, gets legacy ids and messages.
 function runImport(file: string): number {
   const actor = administrator(values.as)
-  const data = parsedFile(file)
+  const data = readExportFile(file)
   const result = importExport(sqlite, domain, data, actor, { acceptReport: values['accept-report'] })
   const report = values.report ?? `${file}.report.json`
   writeFileSync(report, `${JSON.stringify({ committed: result.committed, refused: result.refused }, null, 2)}\n`, {

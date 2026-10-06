@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parseArgs } from 'node:util'
-import { createAccount, createEngine, type Domain, importExport, migrate } from '../packages/engine/src'
+import { createAccount, createEngine, type Domain, importExport, migrate, readExportFile } from '../packages/engine/src'
 
 const PORT = 4310
 const HOST = `127.0.0.1:${PORT}`
@@ -22,9 +22,11 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
 })
 
+class ParityFailure extends Error {}
+
+// Thrown, never exited on the spot, so run()'s finally removes the temp directory holding imported data.
 function fail(message: string): never {
-  console.error(message)
-  process.exit(1)
+  throw new ParityFailure(message)
 }
 
 // Calendar date to ISO week: the Thursday of its week decides the year.
@@ -107,6 +109,7 @@ function flatten(value: unknown): Counts {
 
 interface Outcome {
   name: string
+  missing: boolean
   pass: boolean
   compared: number
   mismatched: number
@@ -117,8 +120,8 @@ function compare(name: string, expected: unknown, actual: unknown): Outcome {
   const got = flatten(actual)
   const keys = new Set([...Object.keys(want), ...Object.keys(got)])
   const mismatched = [...keys].filter((k) => (want[k] ?? 0) !== (got[k] ?? 0)).length
-  const present = expected !== undefined
-  return { name, pass: present && mismatched === 0, compared: keys.size, mismatched }
+  const missing = expected === undefined
+  return { name, missing, pass: !missing && mismatched === 0, compared: keys.size, mismatched }
 }
 
 async function measure(read: ReturnType<typeof reader>, domain: Domain) {
@@ -149,8 +152,10 @@ async function measure(read: ReturnType<typeof reader>, domain: Domain) {
 
 async function viewCounts(read: ReturnType<typeof reader>, domain: Domain): Promise<Counts> {
   const result: Counts = {}
-  for (const view of domain.views.filter((v) => VIEWS.includes(v.name))) {
-    result[view.name] = (await read(view.source, view.filters)).total
+  for (const name of VIEWS) {
+    const view = domain.views.find((v) => v.name === name)
+    if (!view) fail(`the view ${name} is missing from the domain`)
+    result[name] = (await read(view.source, view.filters)).total
   }
   return result
 }
@@ -158,8 +163,10 @@ async function viewCounts(read: ReturnType<typeof reader>, domain: Domain): Prom
 function markdown(outcomes: Outcome[], measured: Awaited<ReturnType<typeof measure>>, views: Counts): string {
   const plural = (n: number) => `${n} mismatched key${n === 1 ? '' : 's'}`
   const lines = ['# Parity', '', '## Checks', '']
-  for (const o of outcomes)
-    lines.push(`- ${o.name}: ${o.pass ? 'pass' : 'fail'}, ${o.compared} compared, ${plural(o.mismatched)}`)
+  for (const o of outcomes) {
+    const detail = o.missing ? 'missing from the export' : `${o.compared} compared, ${plural(o.mismatched)}`
+    lines.push(`- ${o.name}: ${o.pass ? 'pass' : 'fail'}, ${detail}`)
+  }
   lines.push('', '## Counts per dataset', '')
   for (const [name, n] of Object.entries(measured.counts)) lines.push(`- ${name}: ${n}`)
   lines.push('', '## Views', '')
@@ -175,7 +182,7 @@ function markdown(outcomes: Outcome[], measured: Awaited<ReturnType<typeof measu
 }
 
 async function run(file: string): Promise<number> {
-  const data = JSON.parse(readFileSync(file, 'utf8')) as { checks?: Checks }
+  const data = readExportFile(file) as { checks?: Checks }
   const domain = (await import(Bun.resolveSync(values.domain as string, process.cwd()))).default as Domain
   const dir = mkdtempSync(join(tmpdir(), 'wt-parity-'))
   const sqlite = new Database(join(dir, 'parity.db'), { create: true })
@@ -216,7 +223,16 @@ async function run(file: string): Promise<number> {
   }
 }
 
-const file = positionals[0]
-if (!file)
-  fail('usage: bun scripts/parity.ts <export.json> [--out specs/step-0e/parity.md] [--domain @worktable/theatre]')
-process.exit(await run(file))
+async function main(): Promise<number> {
+  try {
+    const file = positionals[0]
+    if (!file)
+      fail('usage: bun scripts/parity.ts <export.json> [--out specs/step-0e/parity.md] [--domain @worktable/theatre]')
+    return await run(file)
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    return 1
+  }
+}
+
+process.exit(await main())
