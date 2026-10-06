@@ -323,6 +323,16 @@ describe('account rules', () => {
     expect(contents(sqlite, 'account')).toEqual([])
   })
 
+  test('a subject row that is missing or deleted is refused', () => {
+    sqlite.run("UPDATE project SET deleted_at = '2026-10-01T00:00:00Z' WHERE id = 2")
+    for (const id of [2, 99]) {
+      expect(() => createAccount(sqlite, domain, 'o@example.test', 'owner', { dataset: 'project', id })).toThrow(
+        `project ${id}`,
+      )
+    }
+    expect(contents(sqlite, 'account')).toEqual([])
+  })
+
   test('a subject on a role other than owner is refused', () => {
     expect(() => createAccount(sqlite, domain, 'e@example.test', 'editor', { dataset: 'project', id: 1 })).toThrow()
     expect(contents(sqlite, 'account')).toEqual([])
@@ -459,6 +469,7 @@ describe('serve.ts', () => {
     ['no role', []],
     ['a subject naming an undeclared dataset', ['--role', 'owner', '--subject', 'nope:1']],
     ['a malformed subject', ['--role', 'owner', '--subject', 'project']],
+    ['a subject row that does not exist', ['--role', 'owner', '--subject', 'project:99']],
   ])(
     '--create-account refuses %s',
     async (_, args) => {

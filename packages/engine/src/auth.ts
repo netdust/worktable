@@ -57,7 +57,7 @@ function accountOut(row: AccountRow) {
   return { id: row.id, email: row.email, role, subject }
 }
 
-function checkSubject(domain: Domain, role: Actor['role'], subject: Actor['subject']): void {
+function checkSubject(sqlite: Database, domain: Domain, role: Actor['role'], subject: Actor['subject']): void {
   if (!Object.hasOwn(ROLES, role)) throw new Error(`unknown role "${role}"`)
   if (!subject) return
   if (role !== 'owner') throw new Error('only an owner account has a subject')
@@ -65,6 +65,9 @@ function checkSubject(domain: Domain, role: Actor['role'], subject: Actor['subje
     throw new Error(`subject dataset "${subject.dataset}" is not declared`)
   }
   if (!Number.isSafeInteger(subject.id) || subject.id < 1) throw new Error('a subject id is a positive integer')
+  // The dataset name was checked against the declared ones above, so it is safe to quote into the SQL.
+  const sql = `SELECT 1 FROM "${subject.dataset}" WHERE id = ? AND deleted_at IS NULL`
+  if (!sqlite.query(sql).get(subject.id)) throw new Error(`subject ${subject.dataset} ${subject.id} does not exist`)
 }
 
 export function createAccount(
@@ -75,7 +78,7 @@ export function createAccount(
   subject: Actor['subject'] = null,
 ): number {
   const address = emailOf(email)
-  checkSubject(domain, role, subject)
+  checkSubject(sqlite, domain, role, subject)
   const sql = 'INSERT INTO account (email, role, subject_dataset, subject_id) VALUES (?, ?, ?, ?) RETURNING id'
   const row = sqlite.query(sql).get(address, role, subject?.dataset ?? null, subject?.id ?? null) as { id: number }
   return row.id
