@@ -63,6 +63,18 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
     body: {},
     status: { none: 401, owner: 403, editor: 403, administrator: 403 },
   },
+  {
+    method: 'POST',
+    path: '/api/actions/copy_notes',
+    body: { id: 1, input: { source: 1 } },
+    status: { none: 401, owner: 201, editor: 201, administrator: 201 },
+  },
+  {
+    method: 'POST',
+    path: '/api/actions/nope',
+    body: { id: 1, input: {} },
+    status: { none: 401, owner: 404, editor: 404, administrator: 404 },
+  },
   { method: 'GET', path: '/api/views', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   {
     method: 'POST',

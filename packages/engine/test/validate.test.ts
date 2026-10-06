@@ -18,7 +18,7 @@ const query = (over: Partial<Parameters<typeof defineQuery>[0]> = {}) =>
     ...over,
   })
 
-const withDomain = (over: Partial<Domain>): Domain => ({ ...domain, ...over })
+const withDomain = (over: Partial<Domain>): Domain => ({ ...domain, actions: {}, ...over })
 
 function failure(d: Domain): DomainError {
   try {

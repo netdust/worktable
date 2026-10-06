@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
+import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
 import type { DatasetDecl, Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
@@ -51,6 +52,10 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     const target = writableOf(domain, c.req.param('dataset'), 'delete', c.get('actor'))
     return c.json({ id: runWrite(store, target, 'delete', parseId(c.req.param('id')), {}, c.get('actor')).id })
   })
+
+  app.post('/actions/:name', async (c) =>
+    c.json(runAction(store, c.req.param('name'), await bodyOf(c), c.get('actor')), 201),
+  )
 
   app.post('/batches/:id/undo', (c) => c.json(undoBatch(store, c.req.param('id'), c.get('actor'))))
 
@@ -118,6 +123,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             columns: s.columns,
             writable: isWritable(domain, s),
             deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
+            actions: actionsOn(domain, s.name),
           },
         ]),
     )

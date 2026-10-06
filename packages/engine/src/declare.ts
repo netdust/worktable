@@ -73,6 +73,7 @@ export interface Domain {
   seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void
   views: SavedViewSeed[]
   writers?: Record<string, Writer>
+  actions?: Record<string, ActionDecl>
 }
 
 export interface Actor {
@@ -86,6 +87,16 @@ export interface WriteContext {
   current: Record<string, unknown> | null
   find(dataset: string, id: number): Record<string, unknown> | null
   exists(dataset: string, match: Record<string, unknown>, exceptId?: number): boolean
+}
+
+type Values = Record<string, unknown>
+
+/** Runs as the caller: `run` answers the creates, and each goes through its dataset's writer. */
+export interface ActionDecl {
+  label: string
+  on: string
+  input: Record<string, { relation: string; label: string }>
+  run(record: Values, input: Record<string, Values>, ctx: WriteContext): { dataset: string; values: Values }[]
 }
 
 export interface Writer {

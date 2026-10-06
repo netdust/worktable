@@ -139,6 +139,21 @@ function checkAway(
   }
 }
 
+const ACTION_NAME = /^[a-z][a-z0-9_]*$/
+
+function checkActions(domain: Domain): void {
+  const datasets = new Set(domain.datasets.map((d) => d.name))
+  for (const [name, action] of Object.entries(domain.actions ?? {})) {
+    if (!ACTION_NAME.test(name)) throw new DomainError(name, name, `action name must match ${ACTION_NAME}`)
+    if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
+      throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
+    }
+    for (const [key, { relation }] of Object.entries(action.input)) {
+      if (!datasets.has(relation)) throw new DomainError(name, key, `input ${key} relates to undeclared "${relation}"`)
+    }
+  }
+}
+
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
     if (reservedNames.has(source.name)) {
@@ -160,4 +175,5 @@ export function validateDomain(domain: Domain): void {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }
   }
+  checkActions(domain)
 }
