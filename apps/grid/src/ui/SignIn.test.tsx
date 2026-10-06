@@ -96,6 +96,26 @@ describe('the link', () => {
     expect(pushed).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['the sign-in form', () => api.me.mockRejectedValue({ code: 'unauthenticated', message: 'Sign in first' }), 'Stuur me een link'],
+    ['the grid', () => api.me.mockResolvedValue(account), 'Next week'],
+  ])('a link pasted into a tab already showing %s opens the confirm screen', async (_, session, shown) => {
+    session()
+    api.consumeLink.mockResolvedValue(account)
+    render(<App />)
+    await screen.findByRole('button', { name: shown })
+
+    act(() => {
+      window.history.pushState(null, '', `/#/auth/${TOKEN}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Aanmelden' }))
+    expect(api.consumeLink).toHaveBeenCalledWith(TOKEN)
+    expect(await screen.findByRole('navigation', { name: 'Views' })).toBeTruthy()
+    expect(window.location.href).not.toContain(TOKEN)
+  })
+
   it('a dead link says so and offers the form', async () => {
     window.history.replaceState(null, '', `/#/auth/${TOKEN}`)
     api.consumeLink.mockRejectedValue({ code: 'bad_token', message: 'This link is not valid any more' })

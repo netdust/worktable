@@ -67,6 +67,16 @@ export function App() {
     if (session.status === 'checking') me().then(signedIn, () => setSession({ status: 'out' }))
   }, [session.status])
 
+  // A link pasted into a tab where the app is already open changes only the hash, so nothing reloads.
+  useEffect(() => {
+    const follow = () => {
+      const token = LINK.exec(window.location.hash)?.[1]
+      if (token) setSession({ status: 'link', token })
+    }
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
+
   // Signed in again in another tab: back here, the same account carries on and another one starts afresh.
   useEffect(() => {
     if (session.status !== 'in' || !session.lapsed) return
