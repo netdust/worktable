@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -8,6 +8,16 @@ const script = join(import.meta.dir, 'check-staged-export.ts')
 function git(cwd: string, ...args: string[]) {
   const r = Bun.spawnSync(['git', ...args], { cwd })
   if (r.exitCode !== 0) throw new Error(r.stderr.toString())
+}
+
+const ROOT = join(import.meta.dir, '..')
+const FIXTURE = readFileSync(join(ROOT, 'packages/theatre/test/fixtures/invented-export.json'), 'utf8')
+const INVENTED = '{"worktable_export":1,"source":"invented test","contact":"a@example.test"}'
+
+async function check(cwd: string) {
+  const proc = Bun.spawn(['bun', script], { cwd, stdout: 'pipe', stderr: 'pipe' })
+  const code = await proc.exited
+  return { code, out: (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text()) }
 }
 
 async function runWith(staged: Record<string, string>, after?: (cwd: string) => void) {
@@ -19,10 +29,11 @@ async function runWith(staged: Record<string, string>, after?: (cwd: string) => 
     git(cwd, 'add', '-f', name)
   }
   after?.(cwd)
-  const proc = Bun.spawn(['bun', script], { cwd, stdout: 'pipe', stderr: 'pipe' })
-  const code = await proc.exited
-  return { code, out: (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text()) }
+  return check(cwd)
 }
+
+const committed = (files: Record<string, string>) =>
+  runWith(files, (cwd) => git(cwd, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-qm', 'x'))
 
 describe('check-staged-export', () => {
   test('a staged laika-planning-export.json fails', async () => {
@@ -50,8 +61,49 @@ describe('check-staged-export', () => {
   })
 
   test('an invented fixture under test/fixtures passes', async () => {
-    const { code } = await runWith({ 'packages/x/test/fixtures/invented-export.json': '{"worktable_export":1}' })
+    const { code } = await runWith({ 'packages/x/test/fixtures/invented-export.json': INVENTED })
     expect(code).toBe(0)
+  })
+
+  test('the repository fixture passes where it lives', async () => {
+    expect((await committed({ 'packages/theatre/test/fixtures/invented-export.json': FIXTURE })).code).toBe(0)
+  })
+
+  test('a real-looking export at the fixture path fails: the exemption is by content', async () => {
+    const path = 'packages/x/test/fixtures/invented-export.json'
+    const laika = '{"worktable_export":1,"source":"laika","contact":"a@example.test"}'
+    const realMail = '{"worktable_export":1,"source":"invented","contact":"someone@gmail.com"}'
+    expect((await committed({ [path]: laika })).code).toBe(1)
+    expect((await committed({ [path]: realMail })).code).toBe(1)
+    expect((await committed({ [path]: '{"worktable_export":1}' })).code).toBe(1)
+  })
+
+  test('a committed, not staged, export fails', async () => {
+    expect((await committed({ 'notes.json': '{"worktable_export":1}' })).code).toBe(1)
+    expect((await committed({ 'Export.JSON': '{"worktable_export":1}' })).code).toBe(1)
+  })
+
+  test('a committed non-json file holding an export fails', async () => {
+    const { code, out } = await committed({ 'data.txt': '{"worktable_export": 1, "datasets": {}}' })
+    expect(code).toBe(1)
+    expect(out).toContain('data.txt')
+  })
+
+  test('docs and source that mention the key pass', async () => {
+    const files = { 'specs/a/plan.md': 'the "worktable_export" key', 'x.tsx': 'const k = "worktable_export"' }
+    expect((await committed(files)).code).toBe(0)
+  })
+
+  test('the refusal says "cannot be read as JSON" only for a file that failed to parse', async () => {
+    const named = await committed({ 'laika-planning-export.json': '{}' })
+    expect(named.code).toBe(1)
+    expect(named.out).not.toContain('cannot be read as JSON')
+    const broken = await committed({ 'broken.json': '{not json' })
+    expect(broken.out).toContain('cannot be read as JSON')
+  })
+
+  test("this repository's tracked tree passes", async () => {
+    expect((await check(ROOT)).code).toBe(0)
   })
 
   test('nothing staged passes', async () => {
@@ -87,7 +139,7 @@ describe('check-staged-export', () => {
     expect(out).toContain('broken.json')
   })
 
-  test('an unparsable invented fixture is still exempt', async () => {
-    expect((await runWith({ 'a/test/fixtures/invented-x.json': '{not json' })).code).toBe(0)
+  test('an unparsable invented fixture is not exempt', async () => {
+    expect((await runWith({ 'a/test/fixtures/invented-x.json': '{not json' })).code).toBe(1)
   })
 })
