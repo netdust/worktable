@@ -102,7 +102,9 @@ describe('an owner writes only its own Beschikbaarheid', () => {
   test('its own Persoon row is forbidden', async () => {
     const res = await denied(owner('PATCH', '/api/rows/persoon/1', { telefoon: '0470 99' }), 403, 'forbidden')
     expect(res.body.message).toBe('Alleen de planning wijzigt personen.')
-    await denied(owner('DELETE', '/api/rows/persoon/1'), 403, 'forbidden')
+    // Lotte is referenced by Toewijzingen and an absence: the refusal must not leak the in-use counts.
+    const deleted = await denied(owner('DELETE', '/api/rows/persoon/1'), 403, 'forbidden')
+    expect(deleted.body.by).toBeUndefined()
   })
 
   test('an Activiteit is not there to write', async () => {

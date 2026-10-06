@@ -42,8 +42,16 @@ export function createAccount(at: Instance, email: string, role: string, subject
     '--role',
     role,
   ]
-  const run = spawnSync('bun', subject ? [...args, '--subject', subject] : args, { encoding: 'utf8' })
-  if (run.status !== 0) throw new Error(`--create-account ${email}: ${run.stderr}`)
+  const run = spawnSync('bun', subject ? [...args, '--subject', subject] : args, {
+    encoding: 'utf8',
+    timeout: 20_000,
+    killSignal: 'SIGKILL',
+  })
+  // A hung CLI must fail the setup, not hang the gate.
+  if (run.error || run.signal) {
+    throw new Error(`--create-account ${email} did not finish: ${run.error?.message ?? `killed by ${run.signal}`}`)
+  }
+  if (run.status !== 0) throw new Error(`--create-account ${email} exited ${run.status}: ${run.stderr}`)
 }
 
 async function linkFor(outbox: string, email: string, before: string[]): Promise<string> {
