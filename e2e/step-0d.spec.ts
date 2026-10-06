@@ -45,6 +45,15 @@ async function spot(page: Page, title: string, person: string): Promise<Locator>
     .nth((await columnIndex(page, person)) - 1)
 }
 
+/** The first column of the first row, read straight from the e2e database. */
+function readDb(sql: string): unknown {
+  const script = `import { Database } from 'bun:sqlite'
+    const row = new Database('e2e/.tmp/e2e.db', { readonly: true }).query(${JSON.stringify(sql)}).get()
+    console.log(JSON.stringify(row ? Object.values(row)[0] : undefined))`
+  const out = execFileSync('bun', ['-e', script]).toString().trim()
+  return out === 'undefined' || out === '' ? undefined : JSON.parse(out)
+}
+
 async function rows<T>(page: Page, dataset: string): Promise<T[]> {
   const response = await page.request.get(`/api/rows/${dataset}?limit=500`)
   expect(response.status()).toBe(200)
@@ -136,11 +145,14 @@ test('matrix-two-activities-undo', async ({ page }) => {
   await pressKey(await spot(page, second, person), 'u')
   await expect.poll(async () => (await held(two))?.state).toBe('uitgenodigd')
 
+  await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveText('?')
+  const secondId = (await held(two))?.id as number
   await page.keyboard.press('ControlOrMeta+z')
   await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveCount(0)
   await expect((await spot(page, first, person)).locator('.nv-mx__mark')).toHaveText('✓')
   await expect.poll(async () => await held(two)).toBeUndefined()
   expect((await held(one))?.state).toBe('bevestigd')
+  expect(readDb(`SELECT deleted_at FROM toewijzing WHERE id = ${secondId}`)).not.toBeNull()
 
   await page.reload()
   await page.getByText(MATRIX, { exact: true }).first().click()
@@ -191,9 +203,11 @@ test('view-delete-undo', async ({ page }) => {
   expect(made?.mine).toBe(true)
 
   await page.getByRole('button', { name: `More actions: ${copy}` }).click()
+  const deleted = page.waitForResponse(
+    (res) => res.request().method() === 'DELETE' && res.url().endsWith(`/api/views/${made?.id}`),
+  )
   await page.getByRole('menuitem', { name: 'Remove' }).click()
-  await expect(page.getByText(copy, { exact: true })).toHaveCount(0)
-  expect((await views(page)).map((v) => v.name)).not.toContain(copy)
+  expect((await deleted).status()).toBe(200)
 
   const restored = page.waitForResponse((res) => res.url().endsWith(`/api/views/${made?.id}/restore`))
   await page.getByRole('status', { name: 'View removed' }).getByRole('button', { name: 'Undo' }).click()
@@ -286,12 +300,14 @@ test.describe('foreign-view-hidden', () => {
        const db = new Database('e2e/.tmp/e2e.db')
        db.query("INSERT INTO saved_view (name, source_type, source, skin, owner_id, shared) VALUES (?, 'dataset', 'activiteit', 'table', 7, 0)").run(${JSON.stringify(name)})`,
     ])
+    expect(readDb(`SELECT count(*) FROM saved_view WHERE name = '${name}' AND owner_id = 7 AND shared = 0`)).toBe(1)
   })
 
   test('never listed, never in the rail', async ({ page }) => {
     expect((await views(page)).map((v) => v.name)).not.toContain(name)
     await page.goto(WEEK)
     await expect(page.getByText('Planning', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Dagplanning', { exact: true }).first()).toBeVisible()
     await expect(page.getByText(name)).toHaveCount(0)
   })
 })
