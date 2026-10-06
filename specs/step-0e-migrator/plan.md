@@ -59,6 +59,11 @@ Not a security surface: no new route or input. The asset is data integrity, cove
 
 | Task | Start | End |
 |---|---|---|
+| 1 | 10-06 13:57 | 14:01 |
+| 2 | 14:01 | 14:03 |
+| 3 | 14:03 | 14:06 |
+
+Times are commit stamps (start = the previous commit), so they are agent wall-clock and leave out test runs after the last commit.
 
 ---
 
