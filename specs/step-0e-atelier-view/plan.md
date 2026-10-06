@@ -12,7 +12,7 @@
 - **Where the engine URL comes from.** It is service config (`ntdst/service/worktable/config` → `engine_url`). Laika sets it through its `plugin-config.php` `overrides` from `WORKTABLE_URL` in its `.env`; it is never written in code or in a shortcode attribute.
 - **First working version:** Task 1. The shortcode on a local page, with `pre_http_request` returning a recorded engine response, renders the table.
 
-**Tech Stack:** PHP 8.2, WordPress, ntdst-core 5.4, atelier 0.10, YOOtheme Pro builder, PHPUnit and Brain Monkey (atelier's own suite); Laika's wp-phpunit integration tier for the wiring.
+**Tech Stack:** PHP 8.3, WordPress, ntdst-core 5.4, atelier 0.9.1 (`origin/main`), YOOtheme Pro builder, PHPUnit and Brain Monkey (atelier's own suite); Laika's wp-phpunit integration tier for the wiring.
 
 **Spec:** `specs/step-0e/spec.md` U6 in the worktable repo; the engine contract is `specs/step-0e-auth/plan.md` (the public route). On execution, this plan is copied to the atelier repo's `specs/worktable-view/plan.md` in the first commit.
 
@@ -20,7 +20,7 @@
 - atelier is `git@github.com:netdust/atelier.git`. Work in a new worktree, `/home/ntdst/Sites/worktrees/atelier-worktable-view`, on `feature/worktable-view` from `origin/main`. The checkout installed in Laika (`web/app/mu-plugins/atelier`, on `feature/card`) is not switched.
 - One Laika line (`WORKTABLE_URL` in `config/application.php` and `.env.example`, plus the `plugin-config.php` entries) goes on a Laika branch made with `make feature name=worktable-view`. Load `netdust-devops:devops` first. `make feature` switches the main Laika checkout (`/home/ntdst/Sites/laika`, now on `feature/card`) to a main-based branch, and the next `ddev composer install` moves its atelier install too (plan review round 2 N-f). So the task:
   - starts only on a clean tree;
-  - runs no DDEV command while the planning worktree is driving the shared `laika` DDEV project;
+  - runs no DDEV command while another agent drives the `laika` DDEV project;
   - ends by switching back to `feature/card` with `ddev composer install`, and quotes `git branch --show-current`.
 
 **Simplest design:**
@@ -154,9 +154,9 @@ Then this plan's own:
 ### Task 3: Laika's configuration
 **Repository:** Laika, `make feature name=worktable-view` (devops loaded first).
 
-**Files:** Modify `config/application.php` (`Config::define('WORKTABLE_URL', env('WORKTABLE_URL') ?: '')`), `.env.example` (`WORKTABLE_URL=`), `web/app/mu-plugins/laika-core/plugin-config.php`: `\Atelier\Worktable\WorktableService::class` joins the `core` list, and an `overrides` key `'worktable' => ['engine_url' => WORKTABLE_URL]` reaches the service through `ntdst/service/worktable/config`, the house pattern (plan review S15). Create `tests/Integration/Atelier/WorktableConfigTest.php`.
+**Files:** Modify `config/application.php` (`Config::define('WORKTABLE_URL', env('WORKTABLE_URL') ?: '')`), `.env.example` (`WORKTABLE_URL=`), `web/app/mu-plugins/laika-core/plugin-config.php`: `\Atelier\Worktable\WorktableService::class` joins the `core` list, and an `overrides` key `'worktable' => ['engine_url' => defined('WORKTABLE_URL') ? WORKTABLE_URL : '']`. The integration tier never loads `config/application.php` (`tests/wp-tests-config.php`), so a bare constant would be a fatal error in every integration test (plan review round 3 SF-B) reaches the service through `ntdst/service/worktable/config`, the house pattern (plan review S15). Create `tests/Integration/Atelier/WorktableConfigTest.php`.
 
-- [ ] **Step 1: Test.** `WorktableConfigTest` requires `plugin-config.php` and asserts `services.core` contains `'Atelier\Worktable\WorktableService'` and `overrides['worktable']['engine_url'] === WORKTABLE_URL`. It does not load the class, because the atelier worktree is not mounted in the DDEV container (plan review round 2 SF5). The empty-URL behaviour (empty state, no request) is atelier's, so it is tested in `WorktableViewTest` (Task 1).
+- [ ] **Step 1: Test.** `WorktableConfigTest` requires `plugin-config.php` and asserts `services.core` contains `'Atelier\Worktable\WorktableService'` and that `overrides['worktable']['engine_url']` is `''` in the integration tier, where `WORKTABLE_URL` is undefined. It also asserts it equals the constant when the test defines `WORKTABLE_URL` first, in a separate process. It does not load the class, because the atelier worktree is not mounted in the DDEV container (plan review round 2 SF5). The empty-URL behaviour (empty state, no request) is atelier's, so it is tested in `WorktableViewTest` (Task 1).
 - [ ] **Step 2: Implement, then run** `make gate` and quote the tiers. A `core` entry whose class is not installed is skipped by ntdst-core with `_doing_it_wrong`. On this branch atelier does not ship the class yet, so the integration tier must not fail on that notice: assert it, or name the deviation.
 - [ ] **Step 3: Commit.** `feat: WORKTABLE_URL configures atelier's worktable view`.
 

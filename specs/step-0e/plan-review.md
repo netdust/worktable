@@ -1,11 +1,114 @@
-# Plan review: step-0e, second round (seven plans, one parent spec)
+# Plan review: step-0e, third round (scoped to four changed plans)
 Reviewed-plan: 04304c900b6b737f90da37366e2ccfd27af81f8b specs/step-0e-migrator/plan.md
 Reviewed-plan: aa553287f7c950a15a7ffa8992bc96e8501040ed specs/step-0e-vocabulary/plan.md
-Reviewed-plan: 7689b1fb404280eb02cd4d1fd9e83956380f3578 specs/step-0e-auth/plan.md
-Reviewed-plan: de1ebba2db204aa08d40e318bdab73af80415d75 specs/step-0e-import/plan.md
-Reviewed-plan: 973ce7a3654378702ec9f1eb86ee94c645415438 specs/step-0e-laika-export/plan.md
-Reviewed-plan: ef77a3cdc7f2739feaf4bb45576b07b4ed7ffc15 specs/step-0e-atelier-view/plan.md
+Reviewed-plan: ad6f772eb6318225db20c019a23ba94606022f29 specs/step-0e-auth/plan.md
+Reviewed-plan: a9055c088c77e4c45f56f6bba100eb80d119cc7f specs/step-0e-import/plan.md
+Reviewed-plan: 630a54113eb639aec3fc688df2214c49cfb6f282 specs/step-0e-laika-export/plan.md
+Reviewed-plan: ee435c8a08524c29813b77ce6e47a31bb2e1d170 specs/step-0e-atelier-view/plan.md
 Reviewed-plan: b55faccb273a1f9a0b64877ebeef783a0d145d71 specs/step-0e-baseline-release/plan.md
+Verdict: ready with fixes
+
+All seven blob shas match HEAD 0940a42. NB1 is resolved: the planning worktree has everything the exporter needs. Two Should-fix items are left, and neither stops a task from running as written.
+
+## Blocking
+None.
+
+## Should fix
+
+**SF-A. The two Laika checkouts do not share one DDEV project or database.** (laika-export l.5 and l.26; atelier-view l.23. The spec's "After the plan review" paragraph says the same.)
+- **What the plans say:**
+  - laika-export l.5: the seed goes "into the `laika` DDEV database that both checkouts share".
+  - laika-export l.26: "Both checkouts drive the one `laika` DDEV project, so only one of them may run DDEV commands at a time (that worktree's own memory note)."
+  - atelier-view l.23: "runs no DDEV command while the planning worktree is driving the shared `laika` DDEV project".
+- **What the source says:**
+  - `/home/ntdst/Sites/laika-planning-model/.ddev/config.local.yaml` contains `name: laika-planning`. The file is gitignored by `.ddev/.gitignore:17`.
+  - `ddev list` shows two running projects, `laika` (~/Sites/laika) and `laika-planning`.
+  - The worktree's own `memory/lessons.md` entry of 2026-10-01 says a worktree needs "its own `name:`" and "a database import".
+  - a5b779c, the note the plan cites, is about two agents driving the *same* site. It does not say the two checkouts share one.
+- **Why this is not Blocking:** every exporter command (seed, `ddev restart`, dry run, export, `make gate`) runs in the worktree. So it reads the `laika-planning` database the seed wrote, and the owner's decision ("seed locally in that worktree, export from it") still holds.
+- **What it gets wrong:**
+  - The concurrency rule in both plans is wrong.
+  - It could send an executor to seed from `/home/ntdst/Sites/laika`.
+- **Smallest change:**
+  - laika-export: say the worktree is its own DDEV project, `laika-planning`, with its own database. The seed and the export must both run there, never in the main checkout.
+  - atelier-view l.23: drop that bullet, or reword it to "not while another agent drives the `laika` project".
+  - Tell Stefan the spec sentence is factually off. His decision does not change.
+
+**SF-B. Atelier-view Task 3: `WORKTABLE_URL` is not defined in Laika's integration tier.** (atelier-view Task 3, Files l.157 and Step 1 l.159)
+- **What the plan says:** `plugin-config.php` gets `'worktable' => ['engine_url' => WORKTABLE_URL]`, defined in `config/application.php`. The test asserts `=== WORKTABLE_URL`.
+- **What the source says:**
+  - `tests/bootstrap-integration.php` loads only `tests/wp-tests-config.php`. That file defines its own constants (l.31–52) and never requires `config/application.php`.
+  - laika-core boots in that tier: `LaikaBootTest`, and `laika-core.php` requires `plugin-config.php` at `plugins_loaded`.
+- **Consequence:** an undefined constant is a fatal `Error` in PHP 8. Every integration test dies in bootstrap, not only the new one.
+- **Smallest change:** in `plugin-config.php`, use `defined('WORKTABLE_URL') ? WORKTABLE_URL : ''`, or define it in `wp-tests-config.php`. Then make the test assert against that.
+
+## Note
+
+- **N-1. laika-export l.22 and l.31: `LAIKA_SOURCE_LANGUAGE` is defined in `wording.php:15`, not `languages.php`.** `languages.php` holds the `pll_get_post_types` filter (l.20). Both files exist on the base and both are required by `laika-core.php`, so the premise holds. Only the file name is wrong.
+- **N-2. laika-export Task 3 Step 5 understates what a push would publish.** It says the base "holds a commit origin lacks (a5b779c)". In fact `git log origin/feature/views-saved..feature/views-saved` lists 16 commits, and `ls-remote` confirms origin is at 47a5760. The "do not push" ruling is right; the reason should say 16 commits.
+- **N-3. laika-export: the language filter on enumeration.** Polylang filters queries by language. The seed passes `'lang' => ''` explicitly (glimworm.php l.32). Under WP-CLI there is no current language, so the exporter's `ntdst_data()->get(...)` enumeration should pass `lang => LAIKA_SOURCE_LANGUAGE` explicitly for the translatable types. Without that, the "only source language" rule depends on Polylang's CLI default. The translated-person integration test will catch it, but naming it saves a cycle.
+- **N-4. laika-export Decisions l.66: the compose file mounts "the host's `~/laika-export`".** Compose does not expand `~`. The file needs `${HOME}/laika-export` or an absolute path.
+- **N-5. laika-export Repository l.18: no `make feature`.** It uses a raw `git switch -c`, while the spec's Plans table says `make feature`. The plan names this as a Ruling that follows Stefan's seed decision. Stefan should see it, not relitigate it.
+- **N-6. import Task 3: the parity session door.** `POST /auth/request` writes the token and the outbox file in `setTimeout(…, 0)` after the response (auth l.66). The parity script must yield a tick before it reads the outbox. The request also needs the write guard's headers (`write-guard.ts:20`, `Sec-Fetch-Site`) even in-process.
+- **N-7. auth Task 1: the account CLI has no test that refuses bad flag combinations.** The spec says `subject` is "both null, or both set and only for role owner". Task 1 tests an undeclared `--subject` dataset and an idempotent `--create-admin`. It does not test `--subject` with `--role editor`, an unknown `--role`, or `--disable-account` itself (only its effect, a 401). Add one line to Step 1.
+- **N-8. atelier-view Tech Stack says "atelier 0.10".** The branch is cut from atelier `origin/main`, which is abf246b = v0.9.1. The 0.10.0 alias is Laika's `feature/card` constraint. The label is wrong; nothing depends on it.
+- **N-h (carried).** Atelier-view Task 4 still expects a stop. Tell Stefan at handover that the U6 browser gate will most likely move to the cutover.
+
+## Prior findings
+
+- **NB1: resolved.** The worktree is on `feature/views-saved` at a5b779c with a clean tree. It has:
+  - `composer.json:63-66`: ntdst-core `^5.4.1`, atelier `^0.9.1`, polylang `^3.8`, and the lock holds v0.9.1 / v5.4.1 / 3.8.10;
+  - `plugin-config.php` booting `PlanningService`;
+  - `languages.php` and `LAIKA_SOURCE_LANGUAGE` (in `wording.php`);
+  - `bin/seed/glimworm.{php,json}`, with `remove` and `_laika_seed`.
+
+  The "line for line" sentence is gone. Residuals: SF-A, N-1, N-2.
+- **SF1: resolved.** The accounts ruling is CLI only (auth l.73). Out-list l.81 and attack 8 l.101 now say "no account route", and the CLI flags are in Task 1's Files. Residual: N-7.
+- **SF2: resolved.** Task 1 Step 4 says "Tasks 1–4 are the exception … Task 5 closes it".
+- **SF3: resolved.** `cookieName` is in `EngineOptions` (l.164) and `--cookie-name` in `serve.ts`'s Files (l.155), tested in Step 1. `--rate-limit-scale` is removed: no mention remains.
+- **SF4: resolved.** The Test map row reads "from `EXPECTED` in the test file plus `app.routes`" (l.128).
+- **SF5: resolved as asked, with a new defect.** The test reads only `plugin-config.php`, and the empty-URL case moved to atelier's `WorktableViewTest` (Task 1 Step 1). The constant is undefined in that tier (SF-B).
+- **SF6: resolved.** `--own=<organisation id>` is in the Task 2 interface (l.187). Denial tests cover a missing `--own` and a non-organisation id (l.189).
+- **N-a: resolved.** No scale flag (auth l.293). The engines run `--fresh` (`playwright.config.ts:10,23`), so about six sign-ins stay under the limits.
+- **N-b: resolved.**
+  - Session door: the parity script requests and consumes through the outbox (import l.162); see N-6.
+  - Paging: by `offset` until `total`, with `MAX_LIMIT` = 5000 confirmed at `params.ts:28`.
+  - Legacy id 0: compared with `===`/`has()`, with a test (l.127).
+- **N-c: resolved.** 2027-01-04 (2027-W01) is added (import l.95).
+- **N-d: resolved.** The levels of `Checks::of` are pinned in the interface, including `"naam"` (laika l.178).
+- **N-e: resolved.** `require_once` in `laika-core.php` plus `WP_CLI::add_command` under the guard (laika l.115). `LAIKA_CORE_PATH` exists (`laika-core.php:15`).
+- **N-f: resolved.** The exporter moved to the worktree. Atelier-view l.21–24 says the main checkout is switched and how it is restored. The DDEV wording behind the restore is wrong (SF-A).
+- **N-g: resolved.** `views.test.ts:378` `planner` → `editor` is named in Task 1 (l.180).
+- **N-h: carried.** The expected stop is stated; tell Stefan at handover.
+- **N-i: resolved.** `mkdir -p ~/laika-export` comes before `ddev restart` (laika l.211–212, and Decisions l.66).
+
+## Premises checked
+- Worktree on `feature/views-saved` at a5b779c, clean → `git rev-parse`, `git status` → holds
+- atelier `^0.9.1`, ntdst-core `^5.4.1`, Polylang `^3.8` → laika-planning-model `composer.json:63-66`, `composer.lock` → holds
+- PlanningService booted → laika-planning-model `plugin-config.php` `core` list → holds
+- `LAIKA_SOURCE_LANGUAGE` in `languages.php` → defined at `wording.php:15`, filter at `languages.php:20` → holds in laika-core, wrong file named (N-1)
+- `bin/seed/glimworm.{php,json}`, `remove`, `_laika_seed` → `glimworm.php:7-8, 26, 39` → holds
+- Both checkouts share the `laika` DDEV database → `.ddev/config.local.yaml` `name: laika-planning`, `ddev list` → does not hold (SF-A)
+- Only a5b779c is missing from origin → 16 commits ahead of origin (47a5760) → partly (N-2)
+- Person and Organisation repositories exist, enumerated via `ntdst_data()` → atelier `shared/models/{Person,Organisation}Repository.php`, `ActivityRepository.php:76` → holds
+- Person `dietary`; activity `location`/`place`/`notes`; assignment statuses include `maybe` → `PersonModel.php:37`, `ActivityModel.php`, `AssignmentModel.php:19` → holds
+- Laika `make gate` / `composer gate` tiers, host-invoked → `Makefile.netdust:455`, `bin/gate.sh` → holds
+- Laika integration tier defines `WORKTABLE_URL` from `config/application.php` → `tests/wp-tests-config.php`, `tests/bootstrap-integration.php` → does not hold (SF-B)
+- ntdst-core skips an unloaded `core` class with `_doing_it_wrong` → ntdst-core `specs/core-trim/plan.md:144` (T01 contract) → holds
+- Atelier `origin/main` has the YOOtheme guard in PerformanceService and a classmap for `services/` → atelier `PerformanceService.php:61-67`, `composer.json:28-31` → holds
+- Main Laika checkout on `feature/card`, clean, with atelier on `feature/card` → `git branch` → holds
+- `/rows` caps at 5000 rows and pages by `offset` → `params.ts:28, 40, 64` → holds
+- `createEngine(sqlite, domain, opts)` exists → `app.ts:47` → holds
+- e2e engines start `--fresh` with `reuseExistingServer: false` → `playwright.config.ts:10-32` → holds
+- Vocabulary allowlist takes `email`, `legacy`, `post` → vocabulary plan l.27 → holds; no contradiction with auth or import
+
+## After the third round (controller)
+SF-A, SF-B and every note were fixed in the plans after this review (commit following 0940a42). By the policy, there is no re-review for Should-fix items. The plans' final blobs are listed in the hand-off message.
+
+---
+
+# Round 2 (kept for the record)
+
 Verdict: not ready
 
 **Why:** one Blocking finding remains, in the Laika exporter. Two of its fixes clash:

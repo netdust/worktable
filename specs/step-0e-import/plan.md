@@ -159,7 +159,7 @@
 **Interfaces:**
 - Produces: `bun run parity <export.json> [--out specs/step-0e/parity.md]` → exit 0 when every check passes. It:
   - imports into a temporary file database;
-  - creates a temporary administrator with `createAccount`, and signs it in through the engine's own door: `POST /api/auth/request` with an `--outbox` in the temp dir, then the token from the outbox to `POST /api/auth/consume`, and that cookie on every read (plan review round 2 N-b). No test-only session helper is exported from the engine;
+  - creates a temporary administrator with `createAccount`, and signs it in through the engine's own door: `POST /api/auth/request` with an `--outbox` in the temp dir, then the token from the outbox to `POST /api/auth/consume`, and that cookie on every read (plan review round 2 N-b). The request carries the write guard's headers (`Content-Type: application/json`, `Sec-Fetch-Site: same-origin`, the engine's Host), and the script yields a tick before reading the outbox, because delivery runs in `setTimeout(…, 0)` after the response (round 3 N-6). No test-only session helper is exported from the engine;
   - pages every read by `offset` until `total`, since `/rows` caps at 5000 rows per page;
   - reads through `createEngine` as that administrator: `/rows/activiteit`, `/rows/toewijzing` and `/rows/beschikbaarheid`, live rows only, grouped in the script by the contract's keys (calendar week and status; persoon legacy id or `naam` and state; persoon legacy id). It also checks that the theatre views "Planning", "Toewijzingen" and "Afwezigheden" open on the imported data, and records their row counts;
   - compares with `checks`;

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Where the data is (Stefan, 2026-10-06).** No server runs atelier's PlanningService: not `main`, not `staging`. The real planning data is the Glimworm seed (`bin/seed/glimworm.php` + `.json`), which exists only on the planning branches (worktree `/home/ntdst/Sites/laika-planning-model`, `feature/views-saved`). Stefan runs it locally, into the `laika` DDEV database that both checkouts share. The exporter then exports all six datasets from it, and the mapping is also proven on invented posts in the tests.
+**Where the data is (Stefan, 2026-10-06).** No server runs atelier's PlanningService: not `main`, not `staging`. The real planning data is the Glimworm seed (`bin/seed/glimworm.php` + `.json`), which exists only on the planning branches (worktree `/home/ntdst/Sites/laika-planning-model`, `feature/views-saved`). Stefan runs it locally in that worktree, which is its own DDEV project, `laika-planning`, with its own database (`.ddev/config.local.yaml`). The seed and every export command run there, never in the main checkout. The exporter then exports all six datasets from it, and the mapping is also proven on invented posts in the tests.
 
 **Goal:** `wp laika export-planning --out=<path> --own=<id> [--dry-run]` writes Laika's planning as the engine's import JSON, cleaned and with its own `checks` block. A report lists every cleaning decision. The file can never be committed.
 
@@ -19,17 +19,17 @@
 - **Why this base** (plan review rounds 1 B1 and 2 NB1; Ruling, following Stefan's "seed locally"). `feature/views-saved` is the only branch that has everything the exporter needs:
   - atelier `^0.9.1` with PlanningService booted in `plugin-config.php`;
   - ntdst-core `^5.4.1`;
-  - Polylang `^3.8` and laika-core `languages.php` (`LAIKA_SOURCE_LANGUAGE`);
+  - Polylang `^3.8`, laika-core `languages.php` (the translatable post types) and `wording.php` (`LAIKA_SOURCE_LANGUAGE`, l.15);
   - the Glimworm seed.
 
   `origin/main` has none of these. The cost if wrong is a rebase onto another base; the exporter's own files do not depend on the views code.
-- **Working there leaves the main Laika checkout alone** (on `feature/card`, with its atelier install). The worktree is clean (verified 2026-10-06). Both checkouts drive the one `laika` DDEV project, so only one of them may run DDEV commands at a time (that worktree's own memory note).
+- **Working there leaves the main Laika checkout alone** (on `feature/card`, with its atelier install). The worktree is clean (verified 2026-10-06). The worktree is a separate DDEV project (`laika-planning`), so its database is not the main checkout's `laika` database. Every DDEV command in this plan runs from the worktree (plan review round 3 SF-A).
 
 **Simplest design:** A one-off PHP script run with `wp eval-file` is simplest. It is rejected because the mapping needs unit tests (Stefan's dry-run review depends on the report being right), and the gitignore check needs a known file name. A WP-CLI command in laika-core costs one class over the script.
 
 ## Decisions (Stefan, 2026-10-06, unless marked)
-- **Only the source language.** Productions, persons and organisations are translatable (`laika-core/languages.php`). Only records in `LAIKA_SOURCE_LANGUAGE` are exported, and relations that point at a translation are mapped to its source-language record through Polylang (`pll_get_post`). The integration test includes one translated person (plan review S2).
-- **How records are enumerated.** Person, Organisation and Production repositories have no list method, so the exporter enumerates through `ntdst_data()->get(<post type>)`, the door the repositories use themselves (`ActivityRepository::between`), never raw SQL (plan review S4).
+- **Only the source language.** Productions, persons and organisations are translatable (`laika-core/languages.php`; the constant is in `wording.php`). Only records in `LAIKA_SOURCE_LANGUAGE` are exported, and relations that point at a translation are mapped to its source-language record through Polylang (`pll_get_post`). The integration test includes one translated person (plan review S2).
+- **How records are enumerated.** Person, Organisation and Production repositories have no list method, so the exporter enumerates through `ntdst_data()->get(<post type>)`, the door the repositories use themselves (`ActivityRepository::between`), never raw SQL (plan review S4). For the translatable types it passes `lang => LAIKA_SOURCE_LANGUAGE` explicitly: under WP-CLI there is no current language, so Polylang's default filter is not relied on (plan review round 3 N-3).
 - **Status:** `requested`→`uitgenodigd`, `confirmed`→`bevestigd`, `declined`→`geweigerd`, `maybe`→`uitgenodigd`. A `maybe` row's `notitie` (from atelier's assignment `note`) gets `Laika: maybe`, appended on a new line to any existing note. The report counts the `maybe` rows and lists their legacy ids for the planner's skim.
 - **Activity:**
   - status: `option`→`optie`, `confirmed`→`bevestigd`, `cancelled`→`geannuleerd`;
@@ -63,7 +63,7 @@
   - `--out` is required unless `--dry-run`, and must resolve outside the Laika repo root (else `WP_CLI::error`).
   - The file name must match `laika-planning-export*.json`.
   - The file carries `"worktable_export": 1`.
-- **Getting the file out of the container.** `ddev wp` runs inside the web container, which mounts only the project. A new `.ddev/docker-compose.worktable-export.yaml` mounts the host's `~/laika-export` at `/mnt/laika-export`, and `--out`/`--report` must resolve under `/mnt/laika-export` (else `WP_CLI::error`). Ruling: this is the only way to write outside the repo from DDEV without a host-side WP-CLI. The cost if wrong is one compose file. Stefan creates `~/laika-export` himself before the first `ddev restart`; otherwise Docker creates it owned by root.
+- **Getting the file out of the container.** `ddev wp` runs inside the web container, which mounts only the project. A new `.ddev/docker-compose.worktable-export.yaml` mounts `${HOME}/laika-export` (compose does not expand `~`) at `/mnt/laika-export`, and `--out`/`--report` must resolve under `/mnt/laika-export` (else `WP_CLI::error`). Ruling: this is the only way to write outside the repo from DDEV without a host-side WP-CLI. The cost if wrong is one compose file. Stefan creates `~/laika-export` himself before the first `ddev restart`; otherwise Docker creates it owned by root.
 - **Personal data in git** (Stefan, 2026-10-06):
   - `.gitignore` gains `laika-planning-export*.json` and `*.report.json`;
   - `bin/gate.sh` gains a first tier `check:export`, a composer script running `bin/check-staged-export.sh`, which fails on a staged file of those names or a staged `*.json` file whose top-level object has a `worktable_export` key, so `ExportCommand.php` mentioning the key never trips it (plan review S7);
@@ -206,7 +206,7 @@ Then this plan's own:
 - [ ] **Step 3: Cross-repo check.** In worktable (on a branch that has the import plan merged), import Task 2's invented export into a temp database and quote the counts.
 - [ ] **Step 4: Commit.** `feat: refuse a staged planning export in the gate`.
 - [ ] **Step 5: Stop.**
-  - Do not push. The branch stacks on local `feature/views-saved`, which holds a commit origin lacks (a5b779c), and pushing would publish it. Stefan decides.
+  - Do not push. The branch stacks on local `feature/views-saved`, which is 16 commits ahead of `origin/feature/views-saved` (47a5760), and pushing would publish all of them. Stefan decides.
   - Hand Stefan the seed, run from the planning worktree: `cd /home/ntdst/Sites/laika-planning-model && ddev wp eval-file bin/seed/glimworm.php`. Then hand him the dry run from the same worktree, on the exporter branch:
     - `mkdir -p ~/laika-export` (before the restart);
     - `ddev restart` (for the mount);

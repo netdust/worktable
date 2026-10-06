@@ -184,6 +184,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - a request without a cookie, with a garbage cookie, with an expired session, or with a disabled account → 401;
   - `--subject` naming an undeclared dataset is refused;
   - the cookie is named `wt_session` by default and `--cookie-name` changes it.
+  - the account CLI refuses `--subject` with any role but owner, an owner without `--subject`, and an unknown `--role`; `--disable-account` sets `disabled_at`, and that account's next request is 401 (round 3 N-7).
 
   Run → FAIL.
 - [ ] **Step 2: Behaviour tests.**

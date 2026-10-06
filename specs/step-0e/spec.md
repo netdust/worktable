@@ -158,7 +158,7 @@ Then stop and report.
 
 ## After the plan review (Stefan, 2026-10-06)
 - **Where the data lives.** No server runs atelier's PlanningService (not Laika's `main`, not `staging`). Laika's real planning data is the Glimworm workbook, transcribed into a seed. The seed is `bin/seed/glimworm.php` with `glimworm.json`, which exist only on the planning branches (`feature/views-saved`, worktree `/home/ntdst/Sites/laika-planning-model`). It holds the production, the people with their dietary needs, the venues, every activity with who is on it, and the absences.
-  - **How it is loaded:** locally. Stefan runs the seed in that worktree; both checkouts share the one `laika` DDEV database. The exporter then reads that database, and the parity gate covers all six datasets. Afterwards `… glimworm.php remove` takes exactly the seeded records out (each carries `_laika_seed = glimworm`). No deploy, no pull. Source: Stefan, 2026-10-06 ("there a seed script user real Laika data"; "it was a worktree planning model").
+  - **How it is loaded:** locally. Stefan runs the seed in that worktree, which is its own DDEV project (`laika-planning`) with its own database. The exporter runs in the same worktree and reads that database, and the parity gate covers all six datasets. Afterwards `… glimworm.php remove` takes exactly the seeded records out (each carries `_laika_seed = glimworm`). No deploy, no pull. Source: Stefan, 2026-10-06 ("there a seed script user real Laika data"; "it was a worktree planning model").
   - **What parity proves here:** the export → import → engine path on real names and assignments. What WordPress shows is what the seed wrote.
 - **An activity with no start** gets the day-line hour, `T05:00`, so its plandag is its own date, flagged `custom.laika_geen_start`.
 - **An activity with no production** goes under one placeholder Productie, `(zonder productie)`.
@@ -180,7 +180,7 @@ One plan per unit, each `specs/<feature>/plan.md` in this repo with its `**Spec:
 | `specs/step-0e-vocabulary/plan.md` | worktable · `feature/step-0e-vocabulary` |
 | `specs/step-0e-auth/plan.md` | worktable · `feature/step-0e-auth` |
 | `specs/step-0e-import/plan.md` | worktable · `feature/step-0e-import` |
-| `specs/step-0e-laika-export/plan.md` | laika · `feature/worktable-export` (`make feature`) |
+| `specs/step-0e-laika-export/plan.md` | laika, planning worktree `laika-planning-model` · `feature/worktable-export` from `feature/views-saved` |
 | `specs/step-0e-atelier-view/plan.md` | atelier · `feature/worktable-view` |
 | `specs/step-0e-baseline-release/plan.md` | ntdst-baseline · `feature/drop-views` |
 
