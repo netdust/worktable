@@ -147,7 +147,7 @@ function decode(column: ColumnDecl, raw: string | number | null): unknown {
   return raw
 }
 
-function encodeAll(dataset: DatasetDecl, values: Values): Stored {
+export function encodeAll(dataset: DatasetDecl, values: Values): Stored {
   const declared = Object.entries(dataset.columns).filter(([key]) => Object.hasOwn(values, key))
   return Object.fromEntries(declared.map(([key, column]) => [key, encode(column, values[key])]))
 }
@@ -193,6 +193,13 @@ function existence(store: Store): WriteContext['exists'] {
   }
 }
 
+export const contextOf = (store: Store, actor: Actor, current: Values | null): WriteContext => ({
+  actor,
+  current,
+  find: finder(store),
+  exists: existence(store),
+})
+
 type Referrer = { label: string; count: number }
 
 function referrers(store: Store, target: DatasetDecl, id: number): Referrer[] {
@@ -236,7 +243,14 @@ function update(sqlite: Database, table: string, id: number, stored: Stored, now
 }
 
 // Read back so the defaults the database filled are revised too.
-function create(sqlite: Database, dataset: DatasetDecl, stored: Stored, now: string, actorId: number): number {
+export function create(
+  sqlite: Database,
+  dataset: DatasetDecl,
+  stored: Stored,
+  now: string,
+  actorId: number,
+  batch?: string,
+): number {
   const id = insert(sqlite, dataset.name, stored)
   const row = liveRow(sqlite, dataset.name, id) as Stored
   const changes = Object.keys(dataset.columns).map((key): Change => [key, null, row[key] ?? null])
@@ -247,6 +261,7 @@ function create(sqlite: Database, dataset: DatasetDecl, stored: Stored, now: str
     changes.filter(([, , value]) => value !== null),
     now,
     actorId,
+    batch,
   )
   return id
 }
@@ -263,8 +278,8 @@ export function revise(
   changes: Change[],
   now: string,
   actorId: number,
+  batch: string = crypto.randomUUID(),
 ): void {
-  const batch = crypto.randomUUID()
   const row = sqlite.query(
     'INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   )
@@ -289,7 +304,14 @@ function forcedOwner(scope: Scope, cut: Values): Values {
   return { ...cut, [scope.column]: scope.id }
 }
 
-function valuesOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx: WriteContext, scope: Scope): Values {
+export function valuesOf(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  body: Values,
+  ctx: WriteContext,
+  scope: Scope,
+): Values {
   const { dataset, writer } = target
   const given = cutBody(dataset, body)
   checkOwner(scope, given)
@@ -344,12 +366,7 @@ export function runWrite(
   return sqlite
     .transaction(() => {
       const current = currentOf(sqlite, target, id, scope)
-      const ctx = {
-        actor,
-        current: current && decodeAll(target.dataset, current),
-        find: finder(store),
-        exists: existence(store),
-      }
+      const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current))
       const now = new Date().toISOString()
       const stored = storedOf(store, target, op, body, ctx, scope, now)
       if (id === null || current === null) return create(sqlite, target.dataset, stored, now, ctx.actor.id)

@@ -17,6 +17,7 @@ export type {
 export { defineDataset, defineQuery } from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'
 export { FilterCompileError, filterCompile } from './filter-compile'
+export { type ImportResult, importExport, type Refusal, readExportFile } from './import'
 export { migrate, seedDomain } from './migrate'
 export { MigrationError } from './migration-error'
 export { savedView } from './saved-view'

@@ -4,7 +4,7 @@ import { type FilterAST, FilterCompileError, type FilterInput, filterCompile, ty
 import { ApiError } from './params'
 import type { Source } from './registry'
 
-const CUSTOM_KEY = /^[A-Za-z0-9_]+$/
+export const CUSTOM_KEY = /^[A-Za-z0-9_]+$/
 
 type Lhs = { expr: SQL | SQLiteColumn; custom: string | null }
 

@@ -24,6 +24,7 @@ export const organisatie = defineDataset({
     toegang: { type: 'text', label: 'Toegang', nullable: true },
     contact: { type: 'text', label: 'Contact', nullable: true },
     parameters: { type: 'json', label: 'Parameters', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
 
@@ -43,6 +44,7 @@ export const productie = defineDataset({
     },
     organisatie_id: { type: 'integer', label: 'Organisatie', nullable: true, relation: 'organisatie' },
     site_ref: { type: 'text', label: 'Site-referentie', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
 
@@ -85,6 +87,7 @@ export const activiteit = defineDataset({
     verrekening_default: { type: 'text', label: 'Verrekening', nullable: true },
     bron: { type: 'text', label: 'Bron', default: 'plan', options: { plan: 'Plan', registratie: 'Registratie' } },
     notities: { type: 'text', label: 'Notities', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
   indexes: [['plandag']],
 })
@@ -110,6 +113,7 @@ export const persoon = defineDataset({
     },
     dietary: { type: 'text', label: 'Dieet', nullable: true },
     actief: { type: 'boolean', label: 'Actief', default: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
 
@@ -147,6 +151,7 @@ export const toewijzing = defineDataset({
       },
     },
     notitie: { type: 'text', label: 'Notitie', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
   indexes: [['persoon_id'], ['activiteit_id']],
 })
@@ -163,5 +168,6 @@ export const beschikbaarheid = defineDataset({
     start_at: { type: 'datetime', label: 'Start' },
     eind_at: { type: 'datetime', label: 'Einde' },
     reden: { type: 'text', label: 'Reden', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })

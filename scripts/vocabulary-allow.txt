@@ -7,3 +7,5 @@ start # generic, as in a window's start
 state # generic English
 parameters # TypeScript's Parameters<> and the English word
 email # the account's address; fiche declares an email column
+post # the HTTP method; theatre declares legacy_post_id
+legacy # generic English; theatre declares legacy_post_id
