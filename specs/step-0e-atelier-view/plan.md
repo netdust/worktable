@@ -9,7 +9,7 @@
   - `WorktableService` registers the shortcode and the element;
   - `WorktableClient` fetches `GET <engine_url>/api/public/views/<token>?from&to` with `wp_remote_get`, a 3-second timeout and a transient cache;
   - a template renders a table from the rows' keys, in the order the engine sends them.
-- **Where the engine URL comes from.** It is service config (`ntdst/service/worktable/config` → `engine_url`). Laika sets it from `WORKTABLE_URL` in its `.env`; it is never written in code or in a shortcode attribute.
+- **Where the engine URL comes from.** It is service config (`ntdst/service/worktable/config` → `engine_url`). Laika sets it through its `plugin-config.php` `overrides` from `WORKTABLE_URL` in its `.env`; it is never written in code or in a shortcode attribute.
 - **First working version:** Task 1. The shortcode on a local page, with `pre_http_request` returning a recorded engine response, renders the table.
 
 **Tech Stack:** PHP 8.2, WordPress, ntdst-core 5.4, atelier 0.10, YOOtheme Pro builder, PHPUnit and Brain Monkey (atelier's own suite); Laika's wp-phpunit integration tier for the wiring.
@@ -116,7 +116,7 @@ Then this plan's own:
 
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
-| Client and render | `do_shortcode('[worktable_view …]')` with `pre_http_request` stubbed | unit · atelier `tests/Unit/Worktable/WorktableViewTest.php` (denials first: attacks 1–5) · `composer test` in the atelier worktree | none |
+| Client and render | `WorktableService::render($atts)` with Brain Monkey stubs for `wp_remote_get`, `wp_remote_retrieve_body`, `wp_remote_retrieve_response_code`, `get_transient`, `set_transient`, `esc_html`, `sanitize_text_field` (atelier's unit bootstrap has no WordPress, plan review S14) | unit · atelier `tests/Unit/Worktable/WorktableViewTest.php` (denials first: attacks 1–5) · `composer test` in the atelier worktree | none |
 | Attribute parsing | `WorktableService::attributes()` | unit · same file | none |
 | YOOtheme element | the element's `template.php` rendering through the same function | unit · `tests/Unit/Worktable/ElementTest.php`: the template includes the render output for given props | worktable-element-in-builder (shake-out, manual by Stefan) |
 | Laika wiring | `WORKTABLE_URL` → the service config | integration · Laika `tests/Integration/Atelier/WorktableConfigTest.php` · `ddev composer test:int` | none |
@@ -132,7 +132,7 @@ Then this plan's own:
 ---
 
 ### Task 1: Client, shortcode and template
-**Files:** Create `services/worktable/{WorktableService.php,WorktableClient.php,templates/worktable-view.php}`, `tests/Unit/Worktable/WorktableViewTest.php`. Modify `atelier.php` or the service registry, following how `PerformanceService` is registered.
+**Files:** Create `services/worktable/{WorktableService.php,WorktableClient.php,templates/worktable-view.php}`, `tests/Unit/Worktable/WorktableViewTest.php`. Atelier has no service registry: a site boots a service by listing it in its `plugin-config.php` `core` list (Task 3), and the class is found by atelier's composer autoload (`services/` is in its classmap; run `composer dump-autoload`).
 
 **Interfaces:**
 - Produces: `WorktableService::render(array $atts): string` and `WorktableClient::fetch(string $token, ?string $from, ?string $to): ?array`. The fetch returns null on any failure.
@@ -151,13 +151,14 @@ Then this plan's own:
 ### Task 3: Laika's configuration
 **Repository:** Laika, `make feature name=worktable-view` (devops loaded first).
 
-**Files:** Modify `config/application.php` (`Config::define('WORKTABLE_URL', env('WORKTABLE_URL') ?: '')`), `.env.example` (`WORKTABLE_URL=`), laika-core (the `ntdst/service/worktable/config` filter sets `engine_url` from the constant). Create `tests/Integration/Atelier/WorktableConfigTest.php`.
+**Files:** Modify `config/application.php` (`Config::define('WORKTABLE_URL', env('WORKTABLE_URL') ?: '')`), `.env.example` (`WORKTABLE_URL=`), `web/app/mu-plugins/laika-core/plugin-config.php`: `\Atelier\Worktable\WorktableService::class` joins the `core` list, and an `overrides` key `'worktable' => ['engine_url' => WORKTABLE_URL]` reaches the service through `ntdst/service/worktable/config`, the house pattern (plan review S15). Create `tests/Integration/Atelier/WorktableConfigTest.php`.
 
 - [ ] **Step 1: Test.** The constant flows into the service config, and an empty constant means the shortcode renders the empty state with no request.
 - [ ] **Step 2: Implement, then run** `make gate` and quote the tiers. Composer still resolves atelier from its installed branch; this test covers only the wiring, with the service class loaded from the worktree through a test bootstrap path. Ruling: this avoids switching Laika's atelier to an unmerged branch. The cost if wrong: the wiring is re-run once atelier is released.
 - [ ] **Step 3: Commit.** `feat: WORKTABLE_URL configures atelier's worktable view`.
 
 ### Task 4: Live check against a local engine (stop point)
+- [ ] **Expected outcome (plan review N1):** a stop. The engine binds `127.0.0.1` and allows only loopback `Host` values, so the DDEV container almost certainly cannot reach it, and the U6 browser gate moves to the cutover. The step is still run, so the stop rests on evidence.
 - [ ] **Step 1: Find the route from the DDEV web container to an engine on the WSL host.** For example, try `ddev exec curl -sS http://host.docker.internal:4310/api/public/views/x`.
   - The engine binds `127.0.0.1` and allows only loopback `Host` values (U2 keeps the 0a Host check).
   - If no route works without changing the engine's bind address or Host allowlist, **stop and report** it as a spec finding. That change is the cutover's Host allowlist, out of 0e.

@@ -6,7 +6,7 @@
 
 **Architecture:**
 - **Where it lives:** a new `scripts/check-vocabulary.ts`, run by `bun run check` after the boundary check.
-- **The word list:** built at run time from the domain packages' declarations, so it grows with every dataset a domain adds. It covers dataset and query names, column names, option keys and saved-view names, each split on `_`. Words of two letters or fewer are dropped, and so is every word in a committed allowlist of generic English words that a domain also happens to use (`status`, `type`, `start`, `default`, …).
+- **The word list:** built at run time from the domain packages' declarations, so it grows with every dataset a domain adds. It covers what the spec names (dataset, query and column names), each split on `_`, plus a fixed list. Option keys and saved-view names are left out: they would add words like `plan` and `open` and gain nothing the column names miss (plan review S5). Words of two letters or fewer are dropped, and so is every word in a committed allowlist of generic English words that a domain also happens to use (`status`, `type`, `start`, `default`, …).
 - **How a file is read:** each file in `packages/engine` is split into words on non-letters and camelCase boundaries, case-insensitively. Each hit is reported with its file and line.
 - **The test fixtures:** the engine's own tests use Dutch fixture words today (`naam`, `omschrijving`, `dag`, `persoon`, `notitie`…). They are renamed to English first.
 - **First working version:** Task 1. `bun scripts/check-vocabulary.ts` lists today's hits.
@@ -24,11 +24,11 @@
 ## Decisions
 - **Scope.** It covers every file under `packages/engine` except `node_modules`: source, tests and `package.json`. That includes comments (spec U3: "Comments and tests are checked too").
 - **The fixed list** adds the spec's domain nouns the declarations might not yet carry: `activiteit`, `toewijzing`, `beschikbaarheid`, `productie`, `persoon`, `organisatie`, `voorstelling`, `fiche`, `speelreeks`, `sjabloon`.
-- **The allowlist** is `scripts/vocabulary-allow.txt`, one word per line, each with a reason after `#`. Adding a word to it is a reviewed change.
-- **Engine test fixtures become English:** `project`/`task` with `name`, `description`, `day`, `note`; the matrix fixture becomes `person`→`member`, `reason`, …. The renaming is mechanical, and every assertion keeps its meaning.
+- **The allowlist** is `scripts/vocabulary-allow.txt`, one word per line, each with a reason after `#`. Adding a word to it is a reviewed change. The later 0e plans each add their own words with reasons: `email` (auth: the account's address; fiche declares an `email` column) and `legacy`, `post` (import: `legacy_post_id`; `app.post(` is Hono's).
+- **Engine test fixtures become English:** `project`/`task` with `name`, `description`, `day`, `note`; the matrix fixture becomes `person`→`member`, `reason`, …. The renaming is mechanical, and every assertion keeps its meaning. Test-side hits that are generic English (`open`, `state`, `start`, `parameters`, `per`) are allowlisted with a reason where they are used as English, and renamed where they are a domain word (plan review N4).
 
 ## Global Constraints
-- No behaviour change in `packages/engine/src`. Its words are already clean apart from allowlisted generic English (verified 2026-10-06: the hits in `src` are `default`, `site`, `status`, `type`).
+- No behaviour change in `packages/engine/src`. Its words are already clean apart from allowlisted generic English: the hits in `src` were `default`, `site`, `status`, `type` and `per` on 2026-10-06, and the migrator plan adds `plan` (in `planChange`), which only appears in option keys, so the spec-scoped list does not include it.
 - The fiche and theatre packages are not touched.
 - `docs/SPEC.md` is never committed; the rule's wording goes into `specs/step-0e/spec-diff.md`.
 - Each task logs its start and end time in the Time log.
@@ -60,7 +60,7 @@ Not a security surface.
 
 **Files:**
 - Create: `scripts/check-vocabulary.ts`, `scripts/vocabulary-allow.txt`, `scripts/check-vocabulary.test.ts`.
-- Modify: `package.json` (`check` runs it after `check-boundaries.ts`; `test` becomes `bun test packages scripts`).
+- Modify: `package.json` (`check` runs it after `check-boundaries.ts`; `test` and `gate` both become `bun test packages scripts`, since `gate` calls `bun test packages` directly, plan review S6).
 
 **Interfaces:**
 - Produces: `bun scripts/check-vocabulary.ts [--root <dir>] [--domain <module>…]`.

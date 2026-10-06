@@ -14,6 +14,7 @@
 - **First working version:** Task 2.
 
   ```
+  bun packages/engine/src/serve.ts --domain @worktable/theatre --db /tmp/x.db --create-admin admin@example.test
   bun packages/engine/src/serve.ts --domain @worktable/theatre --db /tmp/x.db --import packages/theatre/test/fixtures/invented-export.json --as admin@example.test
   ```
 
@@ -35,23 +36,25 @@
     "source": "<free text, e.g. laika>",
     "datasets": { "<dataset>": [ { "legacy_id": 12, "<column>": "…", "<relation column>": <legacy id of target>, "custom": { } } ] },
     "checks": { "counts": { "<dataset>": 0 },
-                "activities_per_week": { "2026-W41": 0 },
-                "assignments_per_person": { "<persoon legacy id>": { "<state>": 0 } },
+                "activities_per_week": { "2026-W41": { "<status>": 0 } },
+                "assignments_per_person": { "<persoon legacy id> | \"naam\"": { "<state>": 0 } },
                 "absences_per_person": { "<persoon legacy id>": 0 } } }
   ```
 
-  - Weeks are ISO weeks of the Activiteit's `start_at` calendar date.
+  - Weeks are ISO weeks of the calendar date WordPress shows an activity on, which is atelier's `date` and the first ten characters of the exported `start_at`. They are counted per mapped status, so the comparison does not depend on any one view's filter. The parity script counts the same way on the engine side, by `substr(start_at, 1, 10)` and `status` over live rows, and separately reports how many activities the engine's day line (`plandag`) moves to the previous day. That move is a known, intended difference, never a failure (plan review S1).
+  - Name-only assignments, with no persoon, count under the key `"naam"`.
   - An absence counts once per row, not per day.
   - Every dataset present must be a declared dataset, and every key a declared, non-readonly column, `legacy_id` or `custom`. Anything else is 400-style refused with its path.
 - **`legacy_post_id`.** Theatre's six datasets each gain `legacy_post_id` (integer, nullable, readonly), migrated by U1's ALTER path, per the spec's "kept for one release". The engine knows only the generic column name `legacy_post_id` as an import target. It is a column the domain declares; the importer writes it when it is declared.
 - **Readonly columns.** A readonly column other than `legacy_post_id` in the export is refused: derived values come from the writer.
 - **Refusing a non-empty database.** The import refuses unless every dataset it would write is empty: `import_needs_empty_database`. That makes it safe to run twice.
 - **The report** goes to `--report <path>` (default: the import file's path plus `.report.json`, which sits outside the repo beside the export). It holds legacy ids and messages, never column values. Stdout prints counts only.
+- **Vocabulary.** `legacy` and `post` join `scripts/vocabulary-allow.txt` with their reasons (`legacy_post_id` is a generic import column; `post` is also Hono's `app.post`), plan review S5.
 - **Revision.** One `batch_id` for the whole import, actor = the `--as` account, which must be an administrator. `revise()` gains an optional `batch` argument.
 - **The parity output.** `specs/step-0e/parity.md` gets, per check, `pass`/`fail`, the total compared, and the number of mismatched keys. No ids, names or values.
 - **Personal data in git** (Stefan, 2026-10-06):
   - `.gitignore` gains `laika-planning-export*.json` and `*.report.json`.
-  - A new `scripts/check-staged-export.ts` in `bun run check` fails if a staged file matches those names, or if its staged content holds `"worktable_export"`.
+  - A new `scripts/check-staged-export.ts` in `bun run check` fails if a staged file matches those names, or if a staged `*.json` file parses to an object with a top-level `worktable_export` key. Source files that only mention the key never trip it (plan review S7).
   - Exempt: files named `invented-*.json` under a `test/fixtures/` directory.
 
 ## Global Constraints
@@ -108,7 +111,8 @@
 
 - [ ] **Step 1: Tests.** Each case uses a temporary git repo:
   - a staged `laika-planning-export.json` → exit 1;
-  - a staged `notes.json` holding `"worktable_export"` → exit 1;
+  - a staged `notes.json` whose top-level object holds `worktable_export` → exit 1;
+  - a staged `import.ts` that mentions `"worktable_export"` in a string → exit 0;
   - a staged `packages/x/test/fixtures/invented-export.json` → exit 0;
   - nothing staged → exit 0.
 
@@ -155,7 +159,7 @@
 - Produces: `bun run parity <export.json> [--out specs/step-0e/parity.md]` → exit 0 when every check passes. It:
   - imports into a temporary file database;
   - creates a temporary administrator;
-  - reads through `createEngine` (`/rows/activiteit` per week, `/rows/toewijzing`, `/rows/beschikbaarheid`, with the filters of the theatre views "Planning", "Toewijzingen" and "Afwezigheden");
+  - reads through `createEngine` as that administrator: `/rows/activiteit`, `/rows/toewijzing` and `/rows/beschikbaarheid`, live rows only, grouped in the script by the contract's keys (calendar week and status; persoon legacy id or `naam` and state; persoon legacy id). It also checks that the theatre views "Planning", "Toewijzingen" and "Afwezigheden" open on the imported data, and records their row counts;
   - compares with `checks`;
   - writes the counts-only markdown.
 

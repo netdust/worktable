@@ -16,7 +16,7 @@
 
 **Branch:** `feature/step-0e-migrator`, from `main`. It merges before the other 0e worktable plans branch: Stefan's entry condition.
 
-**Simplest design:** Always rebuild on any change, with no ALTER path. It is one code path and is correct for every case, but it copies the whole table for the commonest change (adding a nullable column, which the import plan does to six datasets). The ALTER path costs one branch in `planChange()`, so the plan keeps both. A per-version migration file system (Drizzle Kit, numbered SQL) is rejected: datasets are declarations and the DDL is generated from them, so the diff is computed, never hand-written.
+**Simplest design:** Always rebuild on any change, with no ALTER path. It is one code path and is correct for every case, but the spec mandates both ("ALTER and SQLite's table rebuild"), and ALTER spares a full copy for the commonest change (adding a nullable column, which the import plan does to six datasets). The ALTER path costs one branch in `planChange()`. A per-version migration file system (Drizzle Kit, numbered SQL) is rejected: datasets are declarations and the DDL is generated from them, so the diff is computed, never hand-written.
 
 ## Decisions
 - **Refused before anything is touched** (each a `MigrationError` naming dataset and column), per the spec:
@@ -26,7 +26,9 @@
 - **Dropping a column** is a rebuild, not a refusal (the spec: "a dropped or retyped column" is rebuilt). A declaration is code and its removal is deliberate.
 - **`sqlite_sequence` is carried across a rebuild**, so ids never repeat.
 - **The Revision table is never rebuilt by a domain change.** A change to an engine table (`saved_view`, `revision`) goes through the same planner.
-- **The ledger hash stays the trigger.** A source whose hash is unchanged is never inspected.
+- **The ledger hash stays the trigger.** A source whose hash is unchanged is never inspected. Storage-class retypes (`text`↔`date`, `boolean`↔`integer`) produce identical DDL, so they never reach the planner, which is harmless.
+- **Views are recreated whatever their hash says.** Once any dataset changes, every query view is dropped before the change and recreated after it, and the early return on an equal hash in `apply()` does not apply to them (plan review N2).
+- **Foreign keys back ON in a `finally`,** so a refusal or a thrown error never leaves the connection with foreign keys off (plan review N2).
 
 ## Global Constraints
 - `packages/engine` holds no domain word and imports no domain package (`bun run check`).
@@ -109,7 +111,7 @@ Not a security surface: no new route or input. The asset is data integrity, cove
 - Consumes: `migrate`, `createEngine`, `send` from `packages/engine/test/fixture.ts`.
 
 - [ ] **Step 1: Write `rebuild.test.ts`.**
-  - **Setup:** migrate and seed the engine fixture domain into a temp file. Then, through `createEngine` and `send`, create, update and soft-delete rows in at least two datasets, so Revision holds rows from several batches.
+  - **Setup:** a test-local domain of two writable datasets, a parent and a child with a nullable relation, each with a writer allowing create, update and delete. The shared engine fixture writes only `notitie`, and its `project` delete answers 409 (plan review N2). Migrate and seed it into a temp file. Then, through `createEngine` and `send`, create, update and soft-delete rows in both datasets, so Revision holds rows from several batches. (Once auth lands, `send` carries a session; this test predates it.)
   - **Snapshot:** take every table's `SELECT * ORDER BY id`, the `revision` table, and `sqlite_sequence`.
   - **Migrate:** use a declaration where one dataset gains a relation on an existing column, which forces a rebuild, and one dataset gains a nullable column, which takes the ALTER path.
   - **Assert:**

@@ -55,6 +55,7 @@ Not a security surface.
 ---
 
 ### Task 1: The note, the tags, and the stop
+- [ ] **Step 0: Check the views worktrees for unsaved work** (plan review N6). `feature/views-saved` (7efef97, 16 commits past v2.14.0) has never been pushed, so pushing `archive/views-saved` publishes it for the first time. Run `git -C /home/ntdst/Sites/worktrees/ntdst-baseline-saved status --short` and the same for `-views`; quote both. Uncommitted work is a stop: tell Stefan, touch nothing.
 - [ ] **Step 1: Verify the premises.**
   - `git fetch`;
   - `git merge-base --is-ancestor origin/main v2.15.1`;
@@ -66,7 +67,7 @@ Not a security surface.
 - [ ] **Step 4: Create locally:**
   - the tag `v2.15.2` on that commit;
   - `archive/views*` tags on the three branch tips;
-  - a local `main` fast-forwarded to `feature/drop-views`, made inside the worktree with `git branch -f main feature/drop-views`. That is safe because `main` is not checked out anywhere; verify with `git worktree list` first.
+  - a local `main` moved to `feature/drop-views` with `git branch -f main feature/drop-views`. Local `main` sits at 51788ac (2.6.0), far behind `origin/main`, so the check that matters is that `origin/main` is an ancestor of the new `main`; quote it. `main` is not checked out anywhere; verify with `git worktree list` first.
 - [ ] **Step 5: Stop.** Show Stefan:
   - `git log --oneline origin/main..main`;
   - the four new tags;

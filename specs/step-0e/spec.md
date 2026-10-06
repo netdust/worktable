@@ -156,6 +156,16 @@ Then stop and report.
 - **Publication (step 4),** apart from the single public read route above.
 - **Mail delivery,** beyond the console in development.
 
+## After the plan review (Stefan, 2026-10-06)
+- **Where the data lives: nowhere yet, for planning.** No environment runs atelier's PlanningService (not Laika's `main`, not `staging`), and the local database holds no activities. The real export carries people, organisations and productions from staging. The planning datasets come out empty, and their mapping is proven on invented posts. The parity gate on real data therefore compares those three datasets plus empty planning counts.
+- **An activity with no start** gets the day-line hour, `T05:00`, so its plandag is its own date, flagged `custom.laika_geen_start`.
+- **An activity with no production** goes under one placeholder Productie, `(zonder productie)`.
+- **Corrections to this spec's U5, from the plan review:**
+  - Activity `location`, `place` and `notes` do have columns (`locatie_id`, `plaats`, `notities`) and are exported. The title maps to `omschrijving`.
+  - Persoon has `dietary`.
+  - The own company is named with `--own`, because atelier's profile holds no link to it.
+  - Only source-language records are exported.
+
 ## Settled (Stefan, 2026-10-06)
 All six open questions were answered and are written into the units above: the public route with its four constraints, maybe, role order, the name split, activity kinds, and the account link with the role named owner. Two additions came with them, also written in: the export's personal data is gitignored with a staged-file gate check, and sign-in answers identically with a rate limit.
 

@@ -44,10 +44,11 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   | `PUT/DELETE /views/:id/share-token` | 401 | 403 | 403 | ✓ (query views only) |
   | `GET/POST/PATCH /accounts…` | 401 | 403 | 403 | ✓ |
   | `GET /public/views/:token` | ✓ | ✓ | ✓ | ✓ |
-- **Owner scope.** An owner whose account has no subject sees nothing: every scoped read is empty and every scoped write is a 404.
+- **Owner scope.** An owner whose account has no subject sees nothing: every scoped read is empty and every scoped write is a 404. On create and on update, an owner column given any value other than the subject is 403 `forbidden`, so a row cannot be moved out of scope by PATCH (plan review S8).
+- **Every request re-reads the account.** The session middleware joins `account` on every request, so a changed role or a disabled account takes effect at once. Consume refuses an account disabled after its link was sent.
 - **System owner** `-1`. No account id is ever ≤ 0 (AUTOINCREMENT from 1). On a view owned by `-1`, PATCH, DELETE and restore answer 403 `read_only_view`. "Save as new" is a plain `POST /views`.
 - **Migration of old views.** A view owned by `0` whose `(name, source)` matches a domain seed moves to `-1`. Any other view owned by `0` moves to the lowest administrator id at startup if one exists; if none does, it stays and startup logs the count. Each move is revised with actor `-1`.
-- **The order on delete** (the 0e requirement). The engine's scope check runs first, then `writer.delete(ctx)`, which may refuse by role, then the in-use check. `storedOf()` today runs `inUse` before `writer.delete`, and that order is swapped.
+- **The order on delete** (the 0e requirement). The engine's scope check runs first, then `writer.delete(ctx)`, which may refuse by role, then the in-use check. `storedOf()` today runs `inUse` before `writer.delete`, and that order is swapped. The swap inverts `packages/engine/test/writes.test.ts:169` ("on a 409 the referenced dataset's writer delete did not run"): that test is rewritten to assert the new order, which is safe because the writer's delete runs inside the same transaction and a 409 rolls it back. It also changes the `docs/SPEC.md` Writer row ("checked before the writer's own delete"), which goes into the spec diff (plan review S13).
 - **Refusing by role.** A new engine helper `forbid(message)` throws 403 `forbidden`. `refuse()` stays 422 for domain rules.
 - **The link.** It is `<app-url>/#/auth/<token>`, with the token in the fragment so it never reaches a server log or a scanner's GET. The grid's confirm screen shows one button, which POSTs `{ token }`.
 - **The engine's new flags:** `--app-url` (default `http://127.0.0.1:5173`) and `--outbox <dir>`. In development the link is written to the outbox as one file per message and printed to the console; there is no mail provider in 0e.
@@ -63,11 +64,13 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - over the limit is 429 `rate_limited` whatever the email.
 
   The client address is Bun's `requestIP` (`getConnInfo`). Proxy headers are never trusted; a proxy is the cutover's question.
-- **Identical answers.** `POST /auth/request` answers `200 { ok: true }` for a known, unknown or disabled email. The delivery runs after the response (`queueMicrotask`), so its time is not in the response. An email that is not shaped like one (over 254 characters or no `@`) is 400 `bad_email`, which reveals nothing about accounts.
+- **Identical answers.** `POST /auth/request` answers `200 { ok: true }` for a known, unknown or disabled email. The request path does no database write and no file write for any email beyond the rate-limit counter: the token insert and the outbox write run in `setTimeout(…, 0)`, after the response is returned (a microtask would still run before Hono writes the response, plan review S10). An email that is not shaped like one (over 254 characters or no `@`) is 400 `bad_email`, which reveals nothing about accounts.
 - **The public route** (Stefan, 2026-10-06):
   - `PUT /views/:id/share-token` (administrator only, query-sourced views only, else 400 `not_query`) sets `public = 1`, stores sha256 of a new 32-byte token in `share_token`, and returns `{ token }` once. A second PUT rotates it.
   - `DELETE` clears both.
-  - `GET /public/views/:token` takes only `from` and `to` (any other parameter is 400). It applies the stored filters and sort, and projects each row to `visible_fields` (no `id` unless listed, no `lookups`, `custom` or `title`). It compares with `timingSafeEqual`, rate-limits, and sets no `Access-Control-*` header.
+  - `GET /public/views/:token` takes only `from` and `to` (any other parameter is 400). It applies the stored filters and sort, and projects each row to `visible_fields` (no `id` unless listed, no `lookups`, `custom` or `title`). It compares with `timingSafeEqual`, rate-limits, and sets no `Access-Control-*` header. A deleted view's token answers 404.
+  - **No owner id, in either sense** (spec constraint 4, plan review S16): `PUT share-token` is refused with 400 `owner_column_visible` when `visible_fields` holds a column the source declares as an owner column, and the projection never serves `owner_id`.
+  - **A public view is administrator-only to change** (plan review S9): while `public = 1`, PATCH, DELETE and restore by anyone but an administrator answer 403 `public_view`, so an editor cannot widen what a token serves.
 - **Accounts have no grid UI in 0e.** Administrators use `--create-admin`, `--create-account <email> --role <r> [--subject <dataset>:<id>]` and the `/accounts` routes. Ruling — the spec lists account management only as a capability — a grid screen is a later step, and the cost if wrong is a small UI task.
 
 ## Global Constraints
@@ -133,7 +136,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 1. The denied actor through the whole chain, not the route function (edge 2): an owner reaching another person's row through lookups, `?cells=1`, `/revisions` or a query → `access.test.ts`.
 2. Byte-identical link-request answers for a known, unknown and disabled account (attack 1) → `auth.test.ts`.
 3. Double consume, or two tabs (edge 4) → `auth.test.ts`: concurrent consumes give one session.
-4. A 401 mid-flow, when the session expires while editing → the grid test: the edit is kept as a draft (the existing draft mechanism) and the sign-in screen shows; the e2e flow session-less-401.
+4. A 401 mid-flow, when the session expires while editing → the grid test: an unsaved new row is kept as a draft (the grid's only draft mechanism) and the sign-in screen shows; the e2e flow session-less-401.
 5. The public route never widens (attack 10) → `public.test.ts`: the projection and parameter refusals.
 6. An empty subject (edge 1) → `access.test.ts`: an owner without a subject sees zero rows and writes nothing.
 
@@ -152,6 +155,8 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - `packages/engine/src/auth.ts`, `packages/engine/src/rate-limit.ts`, `packages/engine/test/auth.test.ts`.
 - Modify: `migrate.ts`, `app.ts` (mount `/auth/*`; session middleware on `/api/*` except the open routes; options `appUrl`, `outbox`, `clientIp`), `serve.ts` (`--create-admin`, `--create-account`, `--role`, `--subject`, `--app-url`, `--outbox`; `getConnInfo` passed in), `declare.ts` (`Actor`), `packages/engine/test/fixture.ts` (`signIn(app, role, subject?)` returns a cookie; `send()` takes `cookie`).
 - Delete: `packages/engine/src/dev-actor.ts`.
+
+**Notes from the plan review (N7):** `ApiError`'s status union in `params.ts` gains 401 and 429. "Concurrent consumes" are tested on two `Database` connections to one file, because a single bun:sqlite connection serialises them. `email` joins `scripts/vocabulary-allow.txt` with its reason (plan review S5).
 
 **Interfaces:**
 - Produces:
@@ -210,14 +215,16 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   function scopeOf(actor: Actor, source: Source): { column: string; id: number } | 'all' | 'none'
   export function forbid(message: string): never                       // ApiError(403, 'forbidden')
   ```
-  `ROUTE_TABLE: { method, path, allowed: Record<'none'|'owner'|'editor'|'administrator', number> }[]` is exported from `access.ts` for the matrix test. Each entry is the expected status for that role, for a request built by the matrix test's fixture.
+  The expected statuses are not exported from `access.ts`: the matrix test holds its own table, `EXPECTED: { method, path, status: Record<'none'|'owner'|'editor'|'administrator', number> }[]`, written from the Decisions table by hand, so a wrong cell in `may()` cannot pass both sides (plan review S11).
 
 - [ ] **Step 1: Denial tests first**:
   - attacks 6, 7 and 9 on the fixture domain: another subject's row by id, by filter, by `?cells=1`, by `/revisions`, and through a query with an owner column;
   - an unscoped source → 404;
   - a create with a foreign owner value → 403;
   - an owner without a subject;
-  - a delete of a referenced row by an actor whose writer forbids it → 403 with no `by`.
+  - a PATCH of an owner's own row that sets the owner column to another subject → 403, tables unchanged;
+  - a delete of a referenced row by an actor whose writer forbids it → 403 with no `by`;
+  - the rewritten `writes.test.ts:169` case: on a 409, the writer's delete ran but nothing it wrote survives the rollback.
 
   Each case asserts the tables are unchanged. Run → FAIL.
 - [ ] **Step 2: Implement.**
@@ -241,6 +248,9 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - [ ] **Step 1: Denial tests first**:
   - attacks 8 and 10;
   - PATCH, DELETE and restore on a system view → 403 `read_only_view`, unchanged;
+  - an editor's PATCH, DELETE or restore of their own view while it is public → 403 `public_view`, unchanged;
+  - a share token on a view whose `visible_fields` holds an owner column → 400 `owner_column_visible`;
+  - a deleted public view's token → 404;
   - an editor's share-token → 403;
   - a dataset view → 400 `not_query`;
   - `?filter=` on the public route → 400;
@@ -260,9 +270,9 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - Create: `packages/engine/test/route-matrix.test.ts`.
 
 - [ ] **Step 1: Write the test.**
-  - For each entry of `ROUTE_TABLE` and each role, build the request: a fixture row id in the actor's scope, a valid JSON body for writes, and the required headers. Assert the status.
-  - A second test lists every route Hono registered under `/api` (`app.routes`, method + path) and fails, naming the route, if `ROUTE_TABLE` has no entry for it.
-- [ ] **Step 2: Run.** Every mismatch is a bug in `access.ts` or in the table: fix it at its source, never by editing the expected status to match.
+  - For each entry of `EXPECTED` (in the test file) and each role, build the request: a fixture row id in the actor's scope, a valid JSON body for writes, and the required headers. Assert the status.
+  - A second test lists every route Hono registered under `/api` (`app.routes`, method + path, with middleware entries such as `ALL /*` and the write guard filtered out) and fails, naming the route, if `EXPECTED` has no entry for it.
+- [ ] **Step 2: Run.** A mismatch is a bug in `access.ts` or a wrong cell in `EXPECTED`: fix it where the Decisions table says the truth is, never by copying the observed status into the test.
 - [ ] **Step 3: Commit.** `test(engine): every route against every role, generated`.
 
 ### Task 5: Theatre owners and writers; the grid signs in
@@ -275,7 +285,12 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - Grid:
   - Create: `apps/grid/src/ui/SignIn.tsx`, `apps/grid/src/ui/Confirm.tsx`.
   - Modify: `api.ts` (401 → `onUnauthenticated` callback), `ui/App.tsx` (routes `#/signin` and `#/auth/<token>`; the signed-in account in the rail foot, with sign out), `i18n.ts` (Dutch strings), the view menu (Save disabled on `editable: false`; "Opslaan als nieuw" stays).
-- e2e: `playwright.config.ts` (engine flags `--outbox e2e/.tmp/outbox --app-url http://127.0.0.1:5174`; a global setup that runs `--create-account` for an editor and an owner linked to a seeded Persoon, signs each in through the confirm screen, and saves `storageState` per role); every earlier spec uses the editor state.
+- e2e: `playwright.config.ts`:
+  - Both engines get `--outbox` (`e2e/.tmp/outbox`, `e2e/.tmp/outbox-fiche`) and `--app-url` (5174, 5175).
+  - A global setup runs `--create-account` for a theatre administrator, a theatre editor, an owner linked to a seeded Persoon, and a fiche editor. It signs each in through the confirm screen and saves `storageState` per role.
+  - Every earlier spec uses the editor state, and `step-0c.spec.ts` uses the fiche editor's.
+  - Cookies ignore the port, so the cookie name is per instance: `--cookie-name` (default `wt_session`, fiche e2e `wt_session_fiche`). Ruling (plan review S12): a flag is cheaper than moving fiche to `localhost`, and the cost if wrong is one option.
+  - Every client address behind the Vite proxy is 127.0.0.1, so the e2e engines run with `--rate-limit-scale 10`, a test-only multiplier on every limit, set in the e2e config only.
 - Create: `packages/theatre/test/access.test.ts`, `apps/grid/src/ui/SignIn.test.tsx`, `e2e/step-0e.spec.ts`.
 
 - [ ] **Step 1: Theatre denial tests first.**
@@ -285,7 +300,8 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - [ ] **Step 2: Grid unit tests.**
   - The sign-in form posts the email and shows the same "check your mail" text for any answer.
   - Confirm posts the token from the fragment only when the button is pressed.
-  - A 401 on any request shows sign-in and keeps the open drawer's draft.
+  - A 401 on any request shows sign-in and keeps an unsaved new row's draft (the grid's only draft mechanism).
+  - After consume, the token is removed from the location and from history (`history.replaceState`) before the grid's hash state is written, since `ui/hash.ts` rewrites the hash on mount.
   - A system view's Save is disabled.
 - [ ] **Step 3: Write `e2e/step-0e.spec.ts`:**
   1. **sign-in-by-link:** request a link, read it from the outbox file, open it, press the button, and see the grid.
@@ -303,6 +319,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - `(subject_dataset, subject_id)`;
   - the system owner;
   - the public route's four constraints;
-  - the link in the fragment with a POST consume.
+  - the link in the fragment with a POST consume;
+  - the Writer row: the permission check, including the writer's own delete, runs before the in-use check.
 
   Commit `docs(step-0e): proposed spec lines for accounts and access`.
