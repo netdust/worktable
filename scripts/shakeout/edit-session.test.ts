@@ -52,6 +52,14 @@ describe('revision problems', () => {
     ).toEqual([])
   })
 
+  it('expects the id marker on a create, with the new id', () => {
+    const created = { ...expectFor(['naam']), before: undefined, after: { id: 7, naam: 'b' } }
+    expect(revisionProblems([rev('id', null, 7), rev('naam', null, 'b')], created)).toEqual([])
+    expect(revisionProblems([rev('naam', null, 'b')], created)).toEqual([
+      'revised fields differ from the changed fields',
+    ])
+  })
+
   it('names a missing field and a wrong old value', () => {
     expect(revisionProblems([rev('naam', 'z', 'b')], expectFor(['naam', 'actief']))).toEqual([
       'revised fields differ from the changed fields',

@@ -4,13 +4,23 @@ import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
 import { type AuthEnv, authRoutes } from './auth'
-import type { Domain } from './declare'
+import type { DatasetDecl, Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
-import { bodyOf, parseId, readRevisions, rowOf, runWrite, type Store, writableOf } from './writes'
+import {
+  bodyOf,
+  parseId,
+  readRevisions,
+  rowOf,
+  runWrite,
+  type Store,
+  undoBatch,
+  type Written,
+  writableOf,
+} from './writes'
 
 function isWritable(domain: Domain, source: Source): boolean {
   if (source.kind === 'dataset') return Boolean(writerOf(domain, source.name)?.update)
@@ -20,22 +30,29 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
+  const reply = (dataset: DatasetDecl, { id, batch_id, changed }: Written) => ({
+    ...rowOf(store, dataset, id),
+    revision: { batch_id, changed },
+  })
+
   app.post('/rows/:dataset', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'create', c.get('actor'))
-    const id = runWrite(store, target, 'create', null, await bodyOf(c), c.get('actor'))
-    return c.json(rowOf(store, target.dataset, id), 201)
+    const written = runWrite(store, target, 'create', null, await bodyOf(c), c.get('actor'))
+    return c.json(reply(target.dataset, written), 201)
   })
 
   app.patch('/rows/:dataset/:id', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'update', c.get('actor'))
-    const id = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c), c.get('actor'))
-    return c.json(rowOf(store, target.dataset, id))
+    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c), c.get('actor'))
+    return c.json(reply(target.dataset, written))
   })
 
   app.delete('/rows/:dataset/:id', (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'delete', c.get('actor'))
-    return c.json({ id: runWrite(store, target, 'delete', parseId(c.req.param('id')), {}, c.get('actor')) })
+    return c.json({ id: runWrite(store, target, 'delete', parseId(c.req.param('id')), {}, c.get('actor')).id })
   })
+
+  app.post('/batches/:id/undo', (c) => c.json(undoBatch(store, c.req.param('id'), c.get('actor'))))
 
   app.get('/revisions/:dataset/:id', (c) =>
     c.json({ revisions: readRevisions(store, c.req.param('dataset'), parseId(c.req.param('id')), c.get('actor')) }),

@@ -102,7 +102,9 @@ export function revisionProblems(
     problems.push('a revision names another record')
   if (revisions.some((r) => r.actor_id !== expect.actor)) problems.push('a revision names another actor')
   const fields = revisions.map((r) => r.field).sort()
-  if (!Bun.deepEquals(fields, [...expect.fields].sort())) problems.push('revised fields differ from the changed fields')
+  // A create carries the engine's marker row: field id, old null, new the record's id.
+  const expected = expect.before === undefined ? [...expect.fields, 'id'] : expect.fields
+  if (!Bun.deepEquals(fields, [...expected].sort())) problems.push('revised fields differ from the changed fields')
   for (const r of revisions) {
     const column = expect.columns[r.field]
     const old = r.old === null ? null : JSON.parse(r.old)

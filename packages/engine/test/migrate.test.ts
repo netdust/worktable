@@ -103,6 +103,7 @@ describe('migrate', () => {
     expect(rows.map((r) => r.source)).toEqual([
       'account',
       'auth_session',
+      'batch',
       'bestelling',
       'klant',
       'magic_link',

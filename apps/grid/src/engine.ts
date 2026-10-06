@@ -78,6 +78,8 @@ export interface EngineRow {
   title?: string
   /** With `cells=1`: the matrix's live join rows. */
   cells?: EngineRow[]
+  /** On a write reply: the write's batch and the columns it changed. */
+  revision?: { batch_id: string | null; changed: string[] }
   [column: string]: unknown
 }
 
@@ -279,7 +281,7 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
 
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, ...fields } = r
   return {
     id,
     title: title ?? '',

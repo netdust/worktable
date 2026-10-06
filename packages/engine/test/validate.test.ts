@@ -114,7 +114,16 @@ describe('validateDomain', () => {
   })
   test('the fixture domain validates', () => expect(() => validateDomain(domain)).not.toThrow())
 
-  const ENGINE_TABLES = ['saved_view', 'revision', '_migrations', 'account', 'magic_link', 'auth_session', 'rate_limit']
+  const ENGINE_TABLES = [
+    'saved_view',
+    'revision',
+    'batch',
+    '_migrations',
+    'account',
+    'magic_link',
+    'auth_session',
+    'rate_limit',
+  ]
 
   test.each(ENGINE_TABLES)('a domain dataset or query named %s is refused at migrate, nothing created', (name) => {
     // Spread past define*, whose name pattern would already stop _migrations.

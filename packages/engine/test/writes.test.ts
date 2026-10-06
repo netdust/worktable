@@ -297,7 +297,7 @@ const revisionsOf = async (dataset: string, id: number) => (await revisions(data
 const changes = (rows: Revision[]) => rows.map((r) => [r.field, r.old, r.new])
 
 describe('writes', () => {
-  test('create returns 201 with the stored row and writes one revision per stored field with old null', async () => {
+  test('create returns 201 with the stored row, marks the create and writes one revision per stored field with old null', async () => {
     const res = await post('note', { project_id: 1, tekst: 'hallo', klaar: true })
     expect(res).toEqual({
       status: 201,
@@ -314,10 +314,15 @@ describe('writes', () => {
         extra: null,
         custom: {},
         lookups: { project_id: { id: 1, title: 'Alfa' } },
+        revision: {
+          batch_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+          changed: ['project_id', 'tekst', 'lengte', 'klaar', 'kind'],
+        },
       },
     })
     const rows = await revisionsOf('note', 2)
     expect(changes(rows)).toEqual([
+      ['id', null, 2],
       ['project_id', null, 1],
       ['tekst', null, 'hallo'],
       ['lengte', null, 5],

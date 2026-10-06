@@ -39,9 +39,17 @@ function checkOwners(source: DatasetDecl | QueryDecl): void {
   throw new DomainError(source.name, column, `owner column "${column}" is not id or a relation column`)
 }
 
+// Keys the engine adds to every row it answers.
+const OVERWRITTEN = [
+  ['title', 'the computed row title'],
+  ['revision', 'the write reply'],
+] as const
+
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
-  if (Object.hasOwn(source.columns, 'title')) {
-    throw new DomainError(source.name, 'title', 'a column named "title" would be overwritten by the computed row title')
+  for (const [column, by] of OVERWRITTEN) {
+    if (Object.hasOwn(source.columns, column)) {
+      throw new DomainError(source.name, column, `a column named "${column}" would be overwritten by ${by}`)
+    }
   }
   const names = new Set(domain.datasets.map((d) => d.name))
   for (const [column, decl] of Object.entries(source.columns)) {

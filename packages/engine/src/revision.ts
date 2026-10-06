@@ -15,5 +15,5 @@ export const revision = defineDataset({
     at: { type: 'datetime', label: 'At' },
     batch_id: { type: 'text', label: 'Batch' },
   },
-  indexes: [['entity', 'record_id']],
+  indexes: [['entity', 'record_id'], ['batch_id']],
 })
