@@ -67,7 +67,7 @@ Laika's core team become editors. An owner account with no subject sees nothing.
               "absences_per_person": { "<persoon legacy id>": 0 } } }
 ```
 
-- Weeks are ISO weeks of the calendar date WordPress shows an activity on: the first ten characters of the exported `start_at`. They are counted per mapped status, so the comparison depends on no view's filter. The engine side counts the same way, by `substr(start_at, 1, 10)` and `status` over live rows, and separately reports how many activities the day line (`plandag`) moves to the previous day. That move is a known, intended difference, never a failure.
+- Weeks are ISO weeks of the calendar date WordPress shows an activity on: its exported `datum`, which an activity without a time also has. They are counted per mapped status, so the comparison depends on no view's filter. The engine side counts the same way, by `datum` and `status` over live rows, and separately reports how many activities with a time the day line (`plandag`) moves to the previous day; an activity without a time is on its own `datum` and never counts as moved. That move is a known, intended difference, never a failure.
 - Name-only assignments, with no persoon, count under the key `"naam"`. An absence counts once per row, not per day.
 - Every dataset present must be a declared dataset, and every key a declared, non-readonly column, `legacy_id` or `custom`. Anything else is refused with its path.
 - The exporter always emits `status`, so no row relies on a default.
