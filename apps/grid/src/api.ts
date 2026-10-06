@@ -134,13 +134,21 @@ export async function update(model: string, id: number, data: Record<string, unk
 
 /** The write lands on the target record; the row is then read again as the query now computes it. */
 async function updateThrough(model: string, source: EngineSource, id: number, sent: Record<string, unknown>, row?: Row): Promise<Row> {
-  const [[column, value] = ['', undefined]] = Object.entries(sent)
+  const [[column] = ['']] = Object.entries(sent)
   const writes = source.columns[column]?.writes
   if (!writes || !row) throw { code: 'read_only', message: `"${column}" of "${model}" is not written` } satisfies ApiError
   const target = writes.key === 'id' ? row.id : row.fields[writes.key]
   if (target === null || target === undefined) throw { code: 'read_only', message: `"${column}" of "${model}" has no ${writes.key}` } satisfies ApiError
-  await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
-  const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
+  // The first column is the edited one; the others an undo restores with it land only on the same record.
+  const same = Object.entries(sent).filter(([name]) => {
+    const also = source.columns[name]?.writes
+    return also?.dataset === writes.dataset && also.key === writes.key
+  })
+  await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, Object.fromEntries(same.map(([name, value]) => [source.columns[name]?.writes?.field, value])))
+  const written = same.reduce<Row>(
+    (next, [name, value]) => (name === source.title ? { ...next, title: String(value ?? '') } : { ...next, fields: { ...next.fields, [name]: value } }),
+    row,
+  )
   // An edit can move the row out of the query; the write still landed.
   const found = await request<{ rows: EngineRow[] }>('GET', `/rows/${model}`, { filter: JSON.stringify({ id }) }).catch(() => null)
   return found?.rows[0] ? toRow(found.rows[0]) : written

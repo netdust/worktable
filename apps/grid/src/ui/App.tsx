@@ -201,7 +201,7 @@ function Workspace({ signed }: { signed: Signed }) {
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
-  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded)
+  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, model)
   const reload = () => (view ? rows(view, dated ? range : {}, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload)
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false

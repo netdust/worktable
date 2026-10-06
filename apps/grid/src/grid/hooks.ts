@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { create, remove, update } from '../api'
-import type { Row, View } from '../types'
+import type { Model, Row, View } from '../types'
 import { layoutOf, storeLayout, useStoredRevision } from '../ui/views'
 import { type Layout, storedRevision } from './layout'
 import { createStore, type Store, type StoreState } from './store'
@@ -27,11 +27,12 @@ const idle: StoreState = { rows: [], save: 'saved', error: null, errors: {}, can
 const never = () => () => undefined
 
 /** One store per loaded window of one view: a new window starts a new undo history. */
-export function useGridStore(view: View | undefined, rows: Row[] | null): [Store | null, StoreState] {
-  const store = useMemo(
-    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create, remove } }) : null),
-    [view, rows],
-  )
+export function useGridStore(view: View | undefined, rows: Row[] | null, model?: Model): [Store | null, StoreState] {
+  const store = useMemo(() => {
+    if (!view || !rows) return null
+    const editable = (field: string) => (field === 'title' ? model?.title_readonly === false : Boolean(model?.fields[field] && !model.fields[field].readonly))
+    return createStore({ model: view.model, rows, api: { update, create, remove }, editable })
+  }, [view, rows, model])
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))
   return [store, state]
 }

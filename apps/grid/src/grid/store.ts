@@ -60,13 +60,27 @@ interface Options {
   model: string
   rows: Row[]
   api: StoreApi
+  /** The columns an undo may write back besides the edited one: the model's writable fields. */
+  editable?: (field: string) => boolean
 }
 
+type Values = Record<string, unknown>
+type Lookups = Record<string, Lookup | null | undefined>
+
+/** One edit and every column the writer changed with it, as the server answered. */
 interface Entry {
   id: number
   field: string
-  before: unknown
-  after: unknown
+  before: Values
+  after: Values
+  lookups: { before: Lookups; after: Lookups }
+}
+
+interface Written {
+  /** Read when the write is sent: an undo pressed early sends what the edit's answer added. */
+  data?: () => Values
+  lookups?: Lookups
+  saved?: (base: Row | undefined, saved: Row) => void
 }
 
 export const DRAFT = -1
@@ -100,7 +114,7 @@ function toError(change: Change, error: unknown): CellError {
   return { id: change.id, field: change.field, code: known, message: errorText(known, said) }
 }
 
-export function createStore({ model, rows, api }: Options): Store {
+export function createStore({ model, rows, api, editable = () => true }: Options): Store {
   let state: StoreState = { rows, save: 'saved', error: null, errors: {}, canUndo: false, canRedo: false, needs: [], asked: 0 }
   const listeners = new Set<() => void>()
   const undoStack: Entry[] = []
@@ -143,9 +157,9 @@ export function createStore({ model, rows, api }: Options): Store {
   }
 
   /** One write in flight per record: two connections could otherwise land an undo before the write it undoes. */
-  function queued(change: Change, row: Row): Promise<Row> {
+  function queued(change: Change, row: Row, data: () => Values): Promise<Row> {
     const previous = queues.get(change.id)
-    const next = previous ? previous.catch(() => undefined).then(() => send(change, row)) : send(change, row)
+    const next = previous ? previous.catch(() => undefined).then(() => send(change, row, data())) : send(change, row, data())
     queues.set(change.id, next)
     const done = () => {
       if (queues.get(change.id) === next) queues.delete(change.id)
@@ -154,18 +168,19 @@ export function createStore({ model, rows, api }: Options): Store {
     return next
   }
 
-  function send(change: Change, row: Row): Promise<Row> {
-    const data = { [change.field]: change.value }
+  function send(change: Change, row: Row, data: Values): Promise<Row> {
     if (change.id !== DRAFT) return api.update(model, change.id, data, row)
     const { title, ...fields } = { ...row.fields, title: row.title, ...data }
     return api.create(model, { ...fields, title })
   }
 
   /** True when the server took it; the stacks are the caller's. */
-  async function commit(change: Change): Promise<boolean> {
+  async function commit(change: Change, written: Written = {}): Promise<boolean> {
     const row = state.rows.find((r) => r.id === change.id)
     if (!row || removed.has(change.id)) return false
-    const before = read(row, change.field)
+    const data = written.data ?? (() => ({ [change.field]: change.value }))
+    const painted = data()
+    const lookupOf = (field: string) => (field === change.field ? change.lookup : (written.lookups?.[field] ?? undefined))
     const key = cellKey(change.id, change.field)
     // A draft carries one refusal at a time: each retry clears the last.
     const errors = change.id === DRAFT ? withoutDraftErrors() : { ...state.errors }
@@ -174,10 +189,12 @@ export function createStore({ model, rows, api }: Options): Store {
     const mine = ++ticket
     latest.set(change.id, mine)
     track(change.id, 1)
-    set({ rows: patch(change.id, (r) => write(r, change.field, change.value, change.lookup)), errors, error: null, save: 'saving' })
+    const paint = (r: Row) => Object.entries(painted).reduce((next, [field, value]) => write(next, field, value, lookupOf(field)), r)
+    set({ rows: patch(change.id, paint), errors, error: null, save: 'saving' })
 
     try {
-      const saved = await queued(change, row)
+      const saved = await queued(change, row, data)
+      written.saved?.(confirmed.get(saved.id), saved)
       confirmed.set(saved.id, saved)
       track(change.id, -1)
       // Answers come in order; one with a later write still queued would repaint over that write's paint.
@@ -201,21 +218,41 @@ export function createStore({ model, rows, api }: Options): Store {
         return false
       }
       const server = confirmed.get(change.id)
-      const back = server ? read(server, change.field) : before
-      const reverted = patch(change.id, (r) => (same(read(r, change.field), change.value) ? write(r, change.field, back) : r))
+      const revert = (r: Row) =>
+        Object.entries(painted).reduce((next, [field, value]) => {
+          if (!same(read(next, field), value)) return next
+          return write(next, field, server ? read(server, field) : read(row, field), server?.lookups?.[field])
+        }, r)
+      const reverted = patch(change.id, revert)
       set({ rows: reverted, errors: { ...state.errors, [key]: raised }, error: raised })
       set({ save: settle() })
       return false
     }
   }
 
+  /** Every column the server changed beside the edited one, as it was and as it became. */
+  function widen(entry: Entry, base: Row | undefined, saved: Row): void {
+    if (!base) return
+    const fields = new Set(['title', ...Object.keys(base.fields), ...Object.keys(saved.fields)])
+    for (const field of fields) {
+      if (field === entry.field || !editable(field) || same(read(base, field), read(saved, field))) continue
+      entry.before[field] = read(base, field)
+      entry.after[field] = read(saved, field)
+      entry.lookups.before[field] = base.lookups?.[field]
+      entry.lookups.after[field] = saved.lookups?.[field]
+    }
+  }
+
   /** The entry crosses at the press, so the next press sees it there; a refusal walks it back. */
-  async function step(from: Entry[], to: Entry[], value: (entry: Entry) => unknown): Promise<void> {
+  async function step(from: Entry[], to: Entry[], side: 'before' | 'after'): Promise<void> {
     const entry = from.pop()
     if (!entry) return
     to.push(entry)
     set({})
-    if (await commit({ id: entry.id, field: entry.field, value: value(entry) })) return
+    const values = entry[side]
+    const lookups = entry.lookups[side]
+    const change = { id: entry.id, field: entry.field, value: values[entry.field], lookup: lookups[entry.field] }
+    if (await commit(change, { data: () => ({ ...values }), lookups })) return
     // A later press may already have carried it back; walking it back twice would duplicate it.
     if (!to.includes(entry)) return
     to.splice(to.indexOf(entry), 1)
@@ -246,15 +283,21 @@ export function createStore({ model, rows, api }: Options): Store {
       }
       if (same(read(row, change.field), change.value)) return
       // On the stack at paint, so an undo pressed before the server answers undoes this change.
-      const entry: Entry = { id: change.id, field: change.field, before: read(row, change.field), after: change.value }
+      const entry: Entry = {
+        id: change.id,
+        field: change.field,
+        before: { [change.field]: read(row, change.field) },
+        after: { [change.field]: change.value },
+        lookups: { before: { [change.field]: row.lookups?.[change.field] }, after: { [change.field]: change.lookup } },
+      }
       undoStack.push(entry)
       redoStack.length = 0
-      if (await commit(change)) return
+      if (await commit(change, { saved: (base, saved) => widen(entry, base, saved) })) return
       for (const stack of [undoStack, redoStack]) if (stack.includes(entry)) stack.splice(stack.indexOf(entry), 1)
       set({})
     },
-    undo: () => step(undoStack, redoStack, (entry) => entry.before),
-    redo: () => step(redoStack, undoStack, (entry) => entry.after),
+    undo: () => step(undoStack, redoStack, 'before'),
+    redo: () => step(redoStack, undoStack, 'after'),
     draft(fields, needs = ['title'], offered = []) {
       const open = state.rows.some((r) => r.id === DRAFT)
       if (open && touched) return set({ asked: state.asked + 1 })
