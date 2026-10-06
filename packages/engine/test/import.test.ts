@@ -35,7 +35,7 @@ const exportOf = (datasets: Rows, extra: Record<string, unknown> = {}) => ({
 const VALID: Rows = {
   project: [
     { legacy_id: 0, name: 'Zonder project' },
-    { legacy_id: 7, name: 'Alfa', custom: { kleur: 'rood' } },
+    { legacy_id: 7, name: 'Alfa', custom: { colour: 'rood' } },
   ],
   note: [
     { legacy_id: 30, project_id: 7, tekst: 'eerste' },
@@ -232,7 +232,7 @@ describe('import behaviour', () => {
     run(exportOf(VALID))
     expect(sqlite.query('SELECT custom FROM project ORDER BY id').all()).toEqual([
       { custom: '{}' },
-      { custom: '{"kleur":"rood"}' },
+      { custom: '{"colour":"rood"}' },
     ])
     expect(sqlite.query('SELECT custom FROM note ORDER BY id').all()).toEqual([
       { custom: '{}' },

@@ -56,7 +56,7 @@ export const activiteit = defineDataset({
   custom: true,
   columns: {
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
-    speelreeks_id: { type: 'integer', label: 'Speelreeks', nullable: true },
+    speelreeks_id: { type: 'integer', label: 'Speelreeks', nullable: true, relation: 'speelreeks' },
     soort: {
       type: 'text',
       label: 'Soort',
@@ -170,5 +170,55 @@ export const beschikbaarheid = defineDataset({
     eind_at: { type: 'datetime', label: 'Einde' },
     reden: { type: 'text', label: 'Reden', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
+  },
+})
+
+export const rol = defineDataset({
+  name: 'rol',
+  label: 'Rollen',
+  title: 'naam',
+  custom: true,
+  columns: {
+    naam: { type: 'text', label: 'Naam' },
+    categorie: {
+      type: 'text',
+      label: 'Categorie',
+      options: { artistiek: 'Artistiek', techniek: 'Techniek', productie: 'Productie', logistiek: 'Logistiek' },
+    },
+    standaard_verrekening: { type: 'text', label: 'Standaard verrekening', nullable: true },
+    dagtarief: { type: 'real', label: 'Dagtarief', nullable: true },
+    uurtarief: { type: 'real', label: 'Uurtarief', nullable: true },
+    kleur: { type: 'text', label: 'Kleur', nullable: true },
+  },
+})
+
+export const speelreeks = defineDataset({
+  name: 'speelreeks',
+  label: 'Speelreeksen',
+  title: 'naam',
+  custom: true,
+  columns: {
+    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+    naam: { type: 'text', label: 'Naam' },
+    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
+    start_datum: { type: 'date', label: 'Start' },
+    eind_datum: { type: 'date', label: 'Einde' },
+    status: {
+      type: 'text',
+      label: 'Status',
+      default: 'optie',
+      options: { optie: 'Optie', bevestigd: 'Bevestigd', geannuleerd: 'Geannuleerd' },
+    },
+  },
+})
+
+export const sjabloon = defineDataset({
+  name: 'sjabloon',
+  label: 'Sjablonen',
+  title: 'naam',
+  custom: true,
+  columns: {
+    naam: { type: 'text', label: 'Naam' },
+    items: { type: 'json', label: 'Items' },
   },
 })

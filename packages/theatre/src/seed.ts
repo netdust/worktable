@@ -115,6 +115,45 @@ const beschikbaarheden = [
   { persoon_id: 1, start_at: '2026-10-09T09:00', eind_at: '2026-10-12T12:00', reden: 'Studiedag' },
 ]
 
+const rollen = [
+  { naam: 'Speler', categorie: 'artistiek', standaard_verrekening: 'dagcontract', dagtarief: 210, kleur: '#b03a2e' },
+  {
+    naam: 'Lichttechnicus',
+    categorie: 'techniek',
+    standaard_verrekening: 'factuur',
+    dagtarief: 280,
+    uurtarief: 38,
+    kleur: '#1f6fb2',
+  },
+  { naam: 'Productieleider', categorie: 'productie', kleur: '#7d3c98' },
+  { naam: 'Chauffeur', categorie: 'logistiek', standaard_verrekening: 'factuur', uurtarief: 24, kleur: '#239b56' },
+]
+
+type Item = [soort: string, omschrijving: string, startTijd?: string, duur?: number]
+
+const speeldag: Item[] = [
+  ['maaltijd', 'Lunch', '13:00', 60],
+  ['repetitie', 'Voorbereiding', '14:00', 210],
+  ['maaltijd', 'Diner', '17:30', 60],
+  ['repetitie', 'Voorbereiding avond', '18:30', 90],
+  ['voorstelling', 'Voorstelling', '20:00', 75],
+  ['andere', 'Afwas', '21:15', 60],
+  ['overnachting', 'Overnachting'],
+]
+
+const sjablonen = [
+  {
+    naam: 'speeldag op locatie',
+    items: speeldag.map(([soort, omschrijving, start_tijd, duur]) => ({
+      soort,
+      omschrijving,
+      offset_dag: 0,
+      ...(start_tijd ? { start_tijd, duur } : {}),
+      locatie_regel: 'speelreeks',
+    })),
+  },
+]
+
 export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void {
   insert('organisatie', organisaties)
   insert('productie', producties)
@@ -122,6 +161,8 @@ export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) 
   insert('persoon', personen)
   insert('toewijzing', toewijzingen)
   insert('beschikbaarheid', beschikbaarheden)
+  insert('rol', rollen)
+  insert('sjabloon', sjablonen)
 }
 
 export const views: SavedViewSeed[] = [
@@ -234,5 +275,35 @@ export const views: SavedViewSeed[] = [
     sort: ['titel'],
     group_by: null,
     visible_fields: ['titel', 'seizoen', 'status', 'organisatie_id'],
+  },
+  {
+    name: 'Speelreeksen',
+    source_type: 'dataset',
+    source: 'speelreeks',
+    skin: 'table',
+    filters: {},
+    sort: ['start_datum'],
+    group_by: null,
+    visible_fields: ['productie_id', 'naam', 'locatie_id', 'start_datum', 'eind_datum', 'status'],
+  },
+  {
+    name: 'Rollen',
+    source_type: 'dataset',
+    source: 'rol',
+    skin: 'table',
+    filters: {},
+    sort: ['naam'],
+    group_by: null,
+    visible_fields: ['naam', 'categorie', 'standaard_verrekening', 'dagtarief', 'uurtarief', 'kleur'],
+  },
+  {
+    name: 'Sjablonen',
+    source_type: 'dataset',
+    source: 'sjabloon',
+    skin: 'table',
+    filters: {},
+    sort: ['naam'],
+    group_by: null,
+    visible_fields: ['naam', 'items'],
   },
 ]
