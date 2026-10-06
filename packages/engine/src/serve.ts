@@ -99,7 +99,6 @@ function runAccountCommand(): number | null {
 }
 
 const code = runAccountCommand()
-// Exiting with the database still open sometimes left the process spinning, so it is closed first.
 if (code !== null) {
   sqlite.close()
   process.exit(code)
