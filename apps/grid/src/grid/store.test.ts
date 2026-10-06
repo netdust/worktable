@@ -159,7 +159,7 @@ describe('undo and redo, by batch on the server', () => {
     expect(store.getState().error?.message).toBe('Dit is al ongedaan gemaakt.')
   })
 
-  it("changed_since keeps the entry, shows the Dutch message naming the column's label, and the row keeps the server's value", async () => {
+  it("changed_since drops the entry, shows the Dutch message naming the column's label, and the row keeps the server's value", async () => {
     const { api, store, row } = setup()
     api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
     api.undo.mockRejectedValueOnce({ code: 'changed_since', message: '"kind" changed since', column: 'kind', label: 'Soort' })
@@ -169,7 +169,7 @@ describe('undo and redo, by batch on the server', () => {
 
     expect(row(103).fields.kind).toBe('show')
     expect(api.read).not.toHaveBeenCalled()
-    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false, save: 'error' })
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false, save: 'error' })
     expect(store.getState().error?.message).toBe('Soort is intussen gewijzigd; ongedaan maken kan niet.')
   })
 

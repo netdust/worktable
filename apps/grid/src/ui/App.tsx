@@ -250,13 +250,17 @@ function Workspace({ signed }: { signed: Signed }) {
       setResets((n) => n + 1)
     } } })
   }
-  // One undo entry for everything the action made; the notice's Undo is the toolbar's.
+  // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
   const act = async (row: Row, action: ModelAction, input: Record<string, number>) => {
     if (!view) return
     const { batch } = await runAction(action.name, row.id, input)
-    history.push({ batch: Promise.resolve(batch), model: view.model, id: null })
+    const entry = { batch: Promise.resolve(batch), model: view.model, id: null }
+    history.push(entry)
     reloadView()
-    notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: () => void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined)) } })
+    const undo = () => {
+      if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
+    }
+    notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
   const types = declared.find((table) => table.key === view?.table)?.types ?? ['grid']
 

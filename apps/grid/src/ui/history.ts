@@ -12,6 +12,8 @@ export interface History {
   subscribe: (listener: () => void) => () => void
   canUndo: () => boolean
   canRedo: () => boolean
+  /** The step the next undo would take. */
+  last: () => Entry | undefined
   /** A new step: the redo stack empties. */
   push: (entry: Entry) => void
   drop: (entry: Entry) => void
@@ -22,8 +24,8 @@ export interface History {
   redo: () => Promise<Entry | null>
 }
 
-/** The refusals after which the step can never be undone: it leaves the history. */
-const GONE = new Set(['not_undoable', 'already_undone', 'unknown_record'])
+/** The one refusal the planner can resolve; after any other the step leaves the history. */
+const RESOLVABLE = 'in_use'
 
 /** One per browser tab, of batch ids: `send` undoes a batch on the server and answers the undo's own batch, which a redo undoes. */
 export function createHistory(send: (batch: string) => Promise<string>): History {
@@ -60,7 +62,7 @@ export function createHistory(send: (batch: string) => Promise<string>): History
       answered(await send(batch))
       return entry
     } catch (error) {
-      refused(!GONE.has((error as Partial<ApiError> | null)?.code ?? ''))
+      refused((error as Partial<ApiError> | null)?.code === RESOLVABLE)
       throw error
     }
   }
@@ -72,6 +74,7 @@ export function createHistory(send: (batch: string) => Promise<string>): History
     },
     canUndo: () => undos.length > 0,
     canRedo: () => redos.length > 0,
+    last: () => undos.at(-1),
     push(entry) {
       undos.push(entry)
       redos.length = 0

@@ -1367,6 +1367,30 @@ describe("a dataset's action and the tab's undo history", () => {
     await waitFor(() => expect(reads('speelreeks')).toBe(3))
   })
 
+  it("the notice's Undo does nothing once its action is no longer the last step", async () => {
+    api.runAction.mockResolvedValueOnce({ batch: 'a-1', created: [] }).mockResolvedValueOnce({ batch: 'a-2', created: [] })
+    await shell()
+    await grid('Speelreeksen')
+    await applyTemplate()
+    await waitFor(() => expect(reads('speelreeks')).toBe(2))
+    await grid('Speelreeksen')
+    await applyTemplate()
+    await waitFor(() => expect(reads('speelreeks')).toBe(3))
+    const notice = await screen.findByRole('status', { name: 'Sjabloon toepassen: gedaan.' })
+    const cell = (await grid('Speelreeksen')).querySelector<HTMLElement>('td[data-cell]')!
+    fireEvent.click(cell)
+    await act(async () => {
+      fireEvent.keyDown(cell, { key: 'z', ctrlKey: true })
+    })
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('a-2')
+
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
+    })
+
+    expect(api.undoBatch).toHaveBeenCalledOnce()
+  })
+
   it('the entry survives the reload and Speelreeksen → Dagplanning → Speelreeksen, and Ctrl+Z there undoes the apply', async () => {
     await shell()
     await grid('Speelreeksen')

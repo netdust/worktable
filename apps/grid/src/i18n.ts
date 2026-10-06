@@ -1,3 +1,5 @@
+import type { ApiError } from './types'
+
 const strings = {
   views: 'Views',
   noViews: 'No views declared',
@@ -153,10 +155,11 @@ export function locale(): string {
 }
 
 /** Why an undo or redo was refused, in Dutch; a removed record names `deleted_at`, under its dataset's label. */
-export function undoText(error: { code?: string; message?: string; column?: string; label?: string }): string {
+export function undoText(error: Partial<ApiError>): string {
   const code = error.code ?? 'unknown'
   const label = error.label ?? ''
-  const said = code === 'changed_since' ? t(error.column === 'deleted_at' ? 'deletedSince' : 'changedSince', { label })
+  const said = code === 'in_use' && error.by?.length ? inUse(error.by)
+    : code === 'changed_since' ? t(error.column === 'deleted_at' ? 'deletedSince' : 'changedSince', { label })
     : code === 'already_undone' ? t('alreadyUndone')
     : code === 'not_undoable' ? t('notUndoable')
     : String(error.message ?? code)

@@ -37,17 +37,30 @@ describe('the undo history', () => {
     expect([history.canUndo(), history.canRedo()]).toEqual([false, false])
   })
 
-  it('keeps a step the server refused for now, and drops one it can never undo', async () => {
+  it('keeps a step refused in_use, the planner can resolve it, and drops one it can never undo', async () => {
     const send = vi.fn<(batch: string) => Promise<string>>()
-      .mockRejectedValueOnce({ code: 'changed_since', message: 'changed' })
+      .mockRejectedValueOnce({ code: 'in_use', message: 'in use' })
       .mockRejectedValueOnce({ code: 'unknown_record', message: 'gone' })
     const history = createHistory(send)
     history.push(step('b1'))
 
-    await expect(history.undo()).rejects.toMatchObject({ code: 'changed_since' })
+    await expect(history.undo()).rejects.toMatchObject({ code: 'in_use' })
     expect([history.canUndo(), history.canRedo()]).toEqual([true, false])
     await expect(history.undo()).rejects.toMatchObject({ code: 'unknown_record' })
     expect([history.canUndo(), history.canRedo()]).toEqual([false, false])
+  })
+
+  it.each(['changed_since', 'forbidden', 'unknown_source'])('drops a step refused %s, so the next undo reaches the older step', async (code) => {
+    const send = vi.fn<(batch: string) => Promise<string>>().mockRejectedValueOnce({ code, message: 'no' }).mockResolvedValueOnce('u1')
+    const history = createHistory(send)
+    history.push(step('b1'))
+    history.push(step('b2'))
+
+    await expect(history.undo()).rejects.toMatchObject({ code })
+    await history.undo()
+
+    expect(send.mock.calls).toEqual([['b2'], ['b1']])
+    expect([history.canUndo(), history.canRedo()]).toEqual([false, true])
   })
 
   it("forgets a deleted row's steps, and tells its listeners", () => {
