@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { type Actor, type DatasetDecl, type Domain, defineDataset, migrate, seedDomain } from '../src'
+import { type Actor, type DatasetDecl, type Domain, defineDataset, migrate, seedDomain, type Writer } from '../src'
 import { contents, domain, freshDb, projectDeleteHook, projectDeletes, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
@@ -151,6 +151,34 @@ describe('an owner writes only its own subject', () => {
   test('an owner may not write views', async () => {
     const body = json({ name: 'Mine', source: 'taak' })
     await unchanged(owner('POST', '/api/views', { body }), 403, 'forbidden')
+  })
+})
+
+describe('the stored owner column is the subject, whatever the writer returns', () => {
+  // Returns a fresh object: the owner column only when the description asks for a foreign one.
+  const fresh: Writer = {
+    create: (values) => ({
+      description: values.description,
+      status: 'open',
+      start_at: '2026-10-20T09:00',
+      day: '2026-10-20',
+      ...(values.description === 'foreign' ? { project_id: 2 } : {}),
+    }),
+  }
+  let scoped: Request
+
+  beforeEach(async () => {
+    const app = testEngine(sqlite, { ...domain, writers: { ...domain.writers, taak: fresh } })
+    scoped = send(app, await signIn(app, 'owner', OWN))
+  })
+
+  test('a writer that drops the owner column still stores the subject', async () => {
+    const res = await scoped('POST', '/api/rows/taak', { body: json({ description: 'dropped' }) })
+    expect(res).toMatchObject({ status: 201, body: { project_id: 1, description: 'dropped' } })
+  })
+
+  test('a writer that returns a foreign owner value is 403, tables unchanged', async () => {
+    await unchanged(scoped('POST', '/api/rows/taak', { body: json({ description: 'foreign' }) }), 403, 'forbidden')
   })
 })
 

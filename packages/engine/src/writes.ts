@@ -296,8 +296,9 @@ function valuesOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx
   const cut = op === 'create' ? forcedOwner(scope, given) : given
   checkValues(dataset, cut)
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
-  const values = returned ?? {}
-  checkOwner(scope, values)
+  checkOwner(scope, returned ?? {})
+  // Forced again on what is stored: a writer may return a fresh object without the owner column.
+  const values = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
   checkValues(dataset, values)
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
