@@ -109,7 +109,7 @@ Not a security surface: no route, auth or input-parsing change beyond the writer
 
 **Files:** `ActivityMap.php` (returns `datum`, `start_at` nullable; `NO_START` and `geen_start` removed), `Export.php` (emits `datum`; `zonder_tijd` note; no `laika_geen_start`), `Checks.php` (weeks from `datum`), and the tests. Regenerate the invented fixture (`WORKTABLE_EXPORT_FIXTURE=1`) and import it into a temporary worktable database built from Task 1's theatre.
 
-- [ ] **Step 1: Tests first** (ActivityMap: no start gives `start_at` null and `datum` set; with a start, `datum` is the date). Then implement. Run `ddev composer test:unit` and `test:int`, and quote them. `make gate` stops at the old `audit:deps` advisory; quote the later tiers on their own.
+- [ ] **Step 1: Tests first** (ActivityMap: no start gives `start_at` null and `datum` set; with a start, `datum` is the date; no start but an end gives both null and an `eind_zonder_start` note with the original end; ExportCommandTest's "Nachtrit" expectations change to that; the report's `zonder_tijd` and `eind_zonder_start` counts). Then implement. Run `ddev composer test:unit` and `test:int`, and quote them. `make gate` stops at the old `audit:deps` advisory; quote the later tiers on their own.
 - [ ] **Step 2: Commit.** `fix(laika-core): an activity without a time exports without one`.
 
 ### Task 4: Rebuild the local engine (operator steps; reads Laika's database only)

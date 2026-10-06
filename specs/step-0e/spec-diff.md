@@ -90,4 +90,4 @@ Laika's core team become editors. An owner account with no subject sees nothing.
 
 **Shows for the website:** "the calendar date (not `plandag` …)" becomes "the calendar date (`datum`, not `plandag` …)", and "time" becomes "time (empty when the show has none)".
 
-**`specs/step-0e/spec.md`, "After the plan review":** the T05:00 rule and the `custom.laika_geen_start` flag are replaced by "An activity with no start exports with `start_at` empty and its `datum`."
+**`specs/step-0e/spec.md`, "After the plan review":** the T05:00 rule and the `custom.laika_geen_start` flag are replaced by "An activity with no start exports with `start_at` empty and its `datum`. One with an end but no start drops the end and is listed in the export report under `eind_zonder_start` (Stefan, 2026-10-06)."
