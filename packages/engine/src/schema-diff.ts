@@ -61,7 +61,8 @@ function checkRefusals(sqlite: Database, d: DatasetDecl, stored: Map<string, Col
       continue
     }
     if (filled && !lossless(was.type, next.type)) refuse(d, next.name, `${was.type} to ${next.type} would lose data`)
-    if (next.notnull && !was.notnull && next.dflt === null) {
+    // A default never replaces a NULL the rebuild copies explicitly, so it is no way out.
+    if (next.notnull && !was.notnull) {
       const hasNull = sqlite.query(`SELECT 1 FROM ${d.name} WHERE ${next.name} IS NULL LIMIT 1`).get()
       if (hasNull) refuse(d, next.name, 'NOT NULL while a stored row holds NULL')
     }

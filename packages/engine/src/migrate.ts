@@ -51,9 +51,24 @@ function backUp(sqlite: Database): void {
   console.log(`migrate: copied the database to ${copy} before rebuilding`)
 }
 
+const violations = (sqlite: Database): Set<string> =>
+  new Set(
+    sqlite
+      .query('PRAGMA foreign_key_check')
+      .all()
+      .map((row) => JSON.stringify(row)),
+  )
+
+// Every view goes, declared or left over: a rename re-reads them all, and one on a missing table fails it.
+function dropViews(sqlite: Database): void {
+  const views = sqlite.query("SELECT name FROM sqlite_master WHERE type = 'view'").all() as { name: string }[]
+  for (const { name } of views) sqlite.run(`DROP VIEW "${name}"`)
+}
+
 function applySteps(sqlite: Database, steps: Step[], queries: QueryDecl[]): void {
   const changed = steps.some((s) => s.change !== 'create')
-  if (changed) for (const q of queries) sqlite.run(`DROP VIEW IF EXISTS ${q.name}`)
+  const before = changed ? violations(sqlite) : null
+  if (changed) dropViews(sqlite)
   for (const { dataset, hash, change } of steps) {
     if (change === 'create') for (const statement of datasetDdl(dataset)) sqlite.run(statement)
     else applyChange(sqlite, dataset, change)
@@ -66,9 +81,10 @@ function applySteps(sqlite: Database, steps: Step[], queries: QueryDecl[]): void
     for (const statement of statements) sqlite.run(statement)
     record(sqlite, q.name, hash)
   }
-  const broken = sqlite.query('PRAGMA foreign_key_check').all()
+  if (!before) return
+  const broken = [...violations(sqlite)].filter((v) => !before.has(v))
   if (broken.length > 0)
-    throw new MigrationError('foreign_key_check', `foreign keys broken by the migration: ${JSON.stringify(broken)}`)
+    throw new MigrationError('foreign_key_check', `foreign keys broken by the migration: ${broken.join(', ')}`)
 }
 
 export function migrate(sqlite: Database, domain: Domain): void {

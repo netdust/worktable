@@ -300,6 +300,33 @@ describe('migrate a changed dataset', () => {
     refused(order({ ...orderCols, qty: { type: 'integer', label: 'Qty' } }), 'qty')
   })
 
+  test('nullable to NOT NULL with a default while a NULL is stored is refused untouched', () => {
+    refused(order({ ...orderCols, qty: { type: 'integer', label: 'Qty', default: 0 } }), 'qty')
+  })
+
+  test('a view left from a removed query does not break a later rebuild, and is dropped', () => {
+    const { sqlite } = seeded()
+    const stale = defineQuery({ ...byClient, name: 'stale_view', sql: 'SELECT id, label FROM orders' })
+    migrate(sqlite, { ...domainOf(), queries: [byClient, stale] })
+    migrate(sqlite, domainOf(order({ ...orderCols, client_id: { ...orderCols.client_id, relation: 'client' } })))
+    expect(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name").all()).toEqual([
+      { name: 'by_client' },
+    ])
+  })
+
+  test('an orphan already stored neither stops a no-op start nor a rebuild', () => {
+    const { sqlite } = seeded()
+    const related = { ...orderCols, client_id: { ...orderCols.client_id, relation: 'client' } }
+    migrate(sqlite, domainOf(order(related)))
+    sqlite.run('PRAGMA foreign_keys = OFF')
+    sqlite.run("INSERT INTO orders (label, client_id) VALUES ('orphan', 99)")
+    sqlite.run('PRAGMA foreign_keys = ON')
+    expect(() => migrate(sqlite, domainOf(order(related)))).not.toThrow()
+    const { qty: _qty, ...rest } = related
+    expect(() => migrate(sqlite, domainOf(order(rest)))).not.toThrow()
+    expect(sqlite.query("SELECT COUNT(*) AS n FROM orders WHERE label = 'orphan'").get()).toEqual({ n: 1 })
+  })
+
   test('a new NOT NULL column without a default is fine on an empty table', () => {
     const { sqlite } = seeded(false)
     migrate(sqlite, domainOf(order({ ...orderCols, code: { type: 'text', label: 'Code' } })))
