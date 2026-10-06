@@ -225,3 +225,11 @@ export interface DateWindow {
   from: string
   to: string
 }
+
+/** The signed-in account, as `/auth/me` serves it. */
+export interface Account {
+  id: number
+  email: string
+  role: 'administrator' | 'editor' | 'owner'
+  subject: { dataset: string; id: number } | null
+}

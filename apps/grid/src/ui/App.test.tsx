@@ -7,6 +7,7 @@ import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 const api = vi.hoisted(() => ({
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
+  me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -48,6 +49,8 @@ const tableEntry = (name: string) => {
 }
 
 beforeEach(() => {
+  api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'editor', subject: null })
+  api.onUnauthenticated.mockReturnValue(() => undefined)
   api.schema.mockResolvedValue(served)
   api.rows.mockResolvedValue({ rows: [], total: 0 })
   api.awayRows.mockResolvedValue([])
@@ -807,6 +810,18 @@ describe('saved views', () => {
 
     expect(within(toolbar()).getByText('· modified')).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Save' }).title).toBe('Save as new view')
+  })
+
+  it('disables Save on a system view, and keeps Save as new view under More actions', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([{ ...calais, mine: false, editable: false, owner: { id: -1, name: '' } }])
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    expect((within(toolbar()).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Save as new view' }))
+    expect(screen.getByRole('complementary', { name: 'Save as new view' })).toBeTruthy()
   })
 
   it('says nothing of a view this browser has not changed', async () => {

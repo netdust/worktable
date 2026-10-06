@@ -38,6 +38,8 @@ export interface Modified {
   onSave?: () => void
   onSaveAs: () => void
   onRevert: () => void
+  /** A view nobody saves over, such as a seeded one: Save is off, Save as new stays. */
+  readOnly?: boolean
   /** A save is on its way: Save waits. */
   busy?: boolean
 }
@@ -48,7 +50,7 @@ function ModifiedState({ modified }: { modified: Modified }) {
   return (
     <div className="nv-modified">
       <span className="nv-modified__word">· {t('modified')}</span>
-      <Button variant="secondary" size="sm" disabled={Boolean(own && modified.busy)} title={own ? undefined : t('saveAsNew')}
+      <Button variant="secondary" size="sm" disabled={modified.readOnly || Boolean(own && modified.busy)} title={own ? undefined : t('saveAsNew')}
         onClick={own ?? modified.onSaveAs}>{t('save')}</Button>
     </div>
   )

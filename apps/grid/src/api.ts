@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -31,10 +31,21 @@ async function refusal(response: Response): Promise<ApiError> {
   return toApiError(body ?? `${response.status} ${response.statusText}`.trim())
 }
 
+let unauthenticated = () => {}
+
+/** Called on every 401: the session is gone. Answers a function that stops it. */
+export function onUnauthenticated(callback: () => void): () => void {
+  unauthenticated = callback
+  return () => {
+    if (unauthenticated === callback) unauthenticated = () => {}
+  }
+}
+
 async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>): Promise<T> {
   try {
     const body = data === undefined ? undefined : JSON.stringify(data)
     const response = await fetch(endpoint(path, query), { method, body, headers: body ? { 'Content-Type': 'application/json' } : undefined })
+    if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     return (await response.json()) as T
   } catch (error) {
@@ -182,4 +193,22 @@ export function prefs(): Promise<Prefs> {
 /** Prefs are not stored yet: the change holds for this visit. */
 export function savePrefs(data: Prefs): Promise<Prefs> {
   return Promise.resolve(data)
+}
+
+/** The engine answers the same for any address, so the caller can say nothing more than "look in your mail". */
+export function requestLink(email: string): Promise<unknown> {
+  return request('POST', '/auth/request', {}, { email })
+}
+
+export async function consumeLink(token: string): Promise<Account> {
+  return (await request<{ account: Account }>('POST', '/auth/consume', {}, { token })).account
+}
+
+export function me(): Promise<Account> {
+  return request<Account>('GET', '/auth/me')
+}
+
+export function signOut(): Promise<unknown> {
+  forgetSchema()
+  return request('POST', '/auth/signout', {}, {})
 }

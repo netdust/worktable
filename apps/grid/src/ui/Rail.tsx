@@ -2,7 +2,7 @@ import { SidebarItem } from '@sakaniui/react'
 import { Rows3 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { t } from '../i18n'
-import { RailFoot } from './RailFoot'
+import { RailFoot, type Signed } from './RailFoot'
 import { type Table, tableOf } from './tables'
 import { type ViewActions, ViewList } from './ViewList'
 
@@ -19,6 +19,8 @@ interface Props {
   onNewView?: () => void
   /** Each view's ⋯ and its rename in place. */
   actions?: ViewActions
+  /** The signed-in account in the foot, with sign out. */
+  signed?: Signed
 }
 
 function TableList({ tables, current, onTable }: { tables: Table[]; current: Table | undefined; onTable: (table: Table) => void }) {
@@ -38,7 +40,7 @@ function TableList({ tables, current, onTable }: { tables: Table[]; current: Tab
   )
 }
 
-export function Rail({ tables, active, onSelect, onTable = (table) => onSelect(table.views[0].key), space, onNewView, actions }: Props) {
+export function Rail({ tables, active, onSelect, onTable = (table) => onSelect(table.views[0].key), space, onNewView, actions, signed }: Props) {
   const current = tableOf(tables, active)
   const views = <ViewList table={current} active={active} onSelect={onSelect} onNew={onNewView} actions={actions} />
   if (!space) {
@@ -47,7 +49,7 @@ export function Rail({ tables, active, onSelect, onTable = (table) => onSelect(t
         <h2 className="nv-rail__label">{t('views')}</h2>
         <TableList tables={tables} current={current} onTable={onTable} />
         {views}
-        <RailFoot />
+        <RailFoot signed={signed} />
       </nav>
     )
   }
@@ -64,7 +66,7 @@ export function Rail({ tables, active, onSelect, onTable = (table) => onSelect(t
         </div>
       )}
       {views}
-      <RailFoot />
+      <RailFoot signed={signed} />
     </nav>
   )
 }
