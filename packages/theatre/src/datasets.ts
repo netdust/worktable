@@ -94,6 +94,7 @@ export const persoon = defineDataset({
   label: 'Personen',
   title: 'weergavenaam',
   custom: true,
+  owners: { owner: 'id' },
   columns: {
     voornaam: { type: 'text', label: 'Voornaam' },
     achternaam: { type: 'text', label: 'Achternaam' },
@@ -117,6 +118,7 @@ export const toewijzing = defineDataset({
   label: 'Toewijzingen',
   title: { via: 'persoon_id', else: 'naam' },
   custom: true,
+  owners: { owner: 'persoon_id' },
   matrix: {
     down: 'activiteit_id',
     across: 'persoon_id',
@@ -155,6 +157,7 @@ export const beschikbaarheid = defineDataset({
   title: { via: 'persoon_id', else: 'reden' },
   date: 'start_at',
   custom: true,
+  owners: { owner: 'persoon_id' },
   columns: {
     persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
     start_at: { type: 'datetime', label: 'Start' },
