@@ -157,7 +157,9 @@ Then stop and report.
 - **Mail delivery,** beyond the console in development.
 
 ## After the plan review (Stefan, 2026-10-06)
-- **Where the data lives: nowhere yet, for planning.** No environment runs atelier's PlanningService (not Laika's `main`, not `staging`), and the local database holds no activities. The real export carries people, organisations and productions from staging. The planning datasets come out empty, and their mapping is proven on invented posts. The parity gate on real data therefore compares those three datasets plus empty planning counts.
+- **Where the data lives.** No server runs atelier's PlanningService (not Laika's `main`, not `staging`). Laika's real planning data is the Glimworm workbook, transcribed into a seed. The seed is `bin/seed/glimworm.php` with `glimworm.json`, which exist only on the planning branches (`feature/views-saved`, worktree `/home/ntdst/Sites/laika-planning-model`). It holds the production, the people with their dietary needs, the venues, every activity with who is on it, and the absences.
+  - **How it is loaded:** locally. Stefan runs the seed in that worktree; both checkouts share the one `laika` DDEV database. The exporter then reads that database, and the parity gate covers all six datasets. Afterwards `… glimworm.php remove` takes exactly the seeded records out (each carries `_laika_seed = glimworm`). No deploy, no pull. Source: Stefan, 2026-10-06 ("there a seed script user real Laika data"; "it was a worktree planning model").
+  - **What parity proves here:** the export → import → engine path on real names and assignments. What WordPress shows is what the seed wrote.
 - **An activity with no start** gets the day-line hour, `T05:00`, so its plandag is its own date, flagged `custom.laika_geen_start`.
 - **An activity with no production** goes under one placeholder Productie, `(zonder productie)`.
 - **Corrections to this spec's U5, from the plan review:**

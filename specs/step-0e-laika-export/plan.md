@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Where the data is (Stefan, 2026-10-06: "Nowhere yet").** No environment runs atelier's PlanningService: not `main`, not `staging`, and the shared local DDEV database holds 0 activities. Real data today is people, organisations and productions, on staging. The exporter exports all six datasets. The three planning ones are empty on real data, and their mapping is built and proven on invented posts.
+**Where the data is (Stefan, 2026-10-06).** No server runs atelier's PlanningService: not `main`, not `staging`. The real planning data is the Glimworm seed (`bin/seed/glimworm.php` + `.json`), which exists only on the planning branches (worktree `/home/ntdst/Sites/laika-planning-model`, `feature/views-saved`). Stefan runs it locally, into the `laika` DDEV database that both checkouts share. The exporter then exports all six datasets from it, and the mapping is also proven on invented posts in the tests.
 
 **Goal:** `wp laika export-planning --out=<path> --own=<id> [--dry-run]` writes Laika's planning as the engine's import JSON, cleaned and with its own `checks` block. A report lists every cleaning decision. The file can never be committed.
 
@@ -113,7 +113,8 @@ Then this plan's own:
   - escape: n/a, because nothing is rendered to a browser;
   - authorize: only WP-CLI can reach it (the command registers only when `WP_CLI` is defined), and the shell user is the authority. There is no capability check because there is no web entry point; the denial test asserts no hook or route registers outside WP-CLI.
 - **No real data in the repo or in a test:** fixtures are invented posts.
-- **No deploy, pull or refresh by an agent.** Stefan pulls the data himself, from staging: `site.yml` declares no production server (plan review N5).
+- **No deploy, pull, refresh or seed by an agent.** Stefan runs the Glimworm seed locally. If he ever pulls instead, it is from staging: `site.yml` declares no production server (plan review N5).
+- **The seed's records are reused, not special-cased.** The exporter does not read `_laika_seed`; it exports whatever source-language records exist. Afterwards, `ddev wp eval-file bin/seed/glimworm.php remove` restores the local database.
 - **laika-core has no autoloader** (`tests/bootstrap-unit.php`: mu-plugins have none), so the new classes are loaded with `require_once` from the service's entry file, and the unit bootstrap requires them the same way. `WP_CLI::error`/`success`/`log` are stubbed in the integration test (plan review N5).
 - Each task logs its start and end time in a Time log in the copied plan.
 
@@ -194,5 +195,5 @@ Then this plan's own:
 - [ ] **Step 4: Commit.** `feat: refuse a staged planning export in the gate`.
 - [ ] **Step 5: Stop.**
   - Push the branch (`make audit` shows nothing unpushed).
-  - Hand Stefan the dry run on the data he pulls from staging (people, organisations, productions; the planning datasets come out empty): `ddev restart` (for the mount), then `ddev wp laika export-planning --dry-run --report=/mnt/laika-export/dry-run.report.json`.
+  - Hand Stefan the seed, run from the planning worktree: `cd /home/ntdst/Sites/laika-planning-model && ddev wp eval-file bin/seed/glimworm.php`. Then hand him the dry run from the exporter branch: `ddev restart` (for the mount), then `ddev wp laika export-planning --dry-run --report=/mnt/laika-export/dry-run.report.json`.
   - Then the real run: `--out=/mnt/laika-export/laika-planning-export.json`, which lands in `~/laika-export/` on the host.
