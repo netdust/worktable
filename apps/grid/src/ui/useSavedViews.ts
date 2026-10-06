@@ -2,9 +2,9 @@ import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'rea
 import { createView, deleteView, restoreView, savePrefs, savedViews, updateView } from '../api'
 import { errorText, t } from '../i18n'
 import type { ApiError, Prefs, SavedView, TableDef, View, ViewType } from '../types'
-import { type Table, groupTables } from './tables'
+import { byFirstView, type Table, groupTables } from './tables'
 import type { Notice } from './Toast'
-import { arrangementOf, blank, clearIfSent, clearLocal, currentOf, isSaved, keepLocal, lastIn, listFor, localOf, toStored } from './views'
+import { arrangementOf, blank, clearIfSent, copyKept, currentOf, forget, isSaved, keepLocal, lastIn, listFor, localOf, toStored } from './views'
 
 const NAME_MAX = 80
 
@@ -21,6 +21,9 @@ interface Options {
   note: (text: string | null) => void
   notify: (notice: Notice) => void
 }
+
+/** A view's saved filters no chip shows travel with a copy of it. */
+const fixedOf = (view: View) => (view.fixed ? { fixed: view.fixed } : {})
 
 /** "{name} (copy)", the name cut so the whole stays within what a name may be. */
 function copyName(label: string): string {
@@ -46,7 +49,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   }, [prefs])
 
   const tables: Table[] = useMemo(
-    () => groupTables(declared, [...starting, ...saved]).map((table) => ({ ...table, views: listFor(table, saved, prefs.order[table.key] ?? []) })),
+    () => groupTables(byFirstView(declared, [...starting, ...saved]), [...starting, ...saved]).map((table) => ({ ...table, views: listFor(table, saved, prefs.order[table.key] ?? []) })),
     [declared, starting, saved, prefs.order],
   )
 
@@ -96,7 +99,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
       return note(`${reason} · ${t('keepAsNew', { action: t('saveAsNew') })}`)
     }
     if (change && home) keepLocal(home, change)
-    clearLocal(from)
+    forget(from)
     drop(from.id)
     leave(from, home)
     note(reason)
@@ -104,13 +107,13 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
 
   const refused = (from: SavedView, error: ApiError) => {
     const reason = errorText(error.code, error.message)
-    if (error.code === 'views_unknown_saved') return vanished(from, reason)
-    if (error.code === 'views_not_owner') void refresh()
+    if (error.code === 'unknown_view') return vanished(from, reason)
+    if (error.code === 'not_owner') void refresh()
     note(reason)
   }
 
   const write = (from: SavedView, data: Parameters<typeof updateView>[1]) =>
-    updateView(from.id, data).then((fresh) => {
+    updateView(from, data).then((fresh) => {
       replace(fresh)
       note(null)
       return fresh
@@ -127,7 +130,8 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
 
   const saveAs = (from: View, name: string, type: ViewType) => {
     const sent = currentOf(from)
-    return createView({ name, table: from.table, type, field: null, shared: false, arrangement: toStored(sent) }).then((created) => {
+    return createView({ name, table: from.table, type, field: null, shared: false, arrangement: toStored(sent), ...fixedOf(from) }).then((created) => {
+      copyKept(from, created)
       clearIfSent(from, sent)
       added(created)
     })
@@ -146,7 +150,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
 
   const duplicate = (from: View) => {
     const arrangement = toStored(arrangementOf(from))
-    createView({ name: copyName(from.label), table: from.table, type: from.type ?? 'grid', field: null, shared: false, arrangement })
+    createView({ name: copyName(from.label), table: from.table, type: from.type ?? 'grid', field: null, shared: false, arrangement, ...fixedOf(from) })
       .then(added, (error: ApiError) => note(errorText(error.code, error.message)))
   }
 
@@ -168,11 +172,11 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     leave(view)
     deleteView(view.id).then(
       () => turn === removals.current
-        ? notify({ message: t('viewRemoved'), action: { label: t('undo'), run: () => restore(view, wasOpen) }, expired: () => clearLocal(view) })
-        : clearLocal(view),
+        ? notify({ message: t('viewRemoved'), action: { label: t('undo'), run: () => restore(view, wasOpen) }, expired: () => forget(view) })
+        : forget(view),
       (error: ApiError) => {
-        if (error.code !== 'views_unknown_saved') putBack(view)
-        if (error.code === 'views_not_owner') void refresh()
+        if (error.code !== 'unknown_view') putBack(view)
+        if (error.code === 'not_owner') void refresh()
         note(errorText(error.code, error.message))
       },
     )

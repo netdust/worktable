@@ -20,6 +20,15 @@ export function groupTables(tables: TableDef[], views: View[]): Table[] {
     .filter((table) => table.views.length > 0)
 }
 
+/** The tables in the order their first view comes, the rest as declared after them: the engine declares every source, the saved views say which the rail starts with. */
+export function byFirstView(tables: TableDef[], views: View[]): TableDef[] {
+  const first = (table: TableDef) => {
+    const at = views.findIndex((view) => view.table === table.key)
+    return at < 0 ? views.length : at
+  }
+  return [...tables].sort((a, b) => first(a) - first(b))
+}
+
 export function tableOf(tables: Table[], viewKey: string | undefined): Table | undefined {
   return tables.find((table) => table.views.some((view) => view.key === viewKey))
 }

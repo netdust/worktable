@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import { datasetDdl, viewDdl } from './ddl'
 import type { Domain } from './declare'
+import { DEV_ACTOR } from './dev-actor'
 import { revision } from './revision'
 import { savedView } from './saved-view'
 import { validateDomain } from './validate'
@@ -75,7 +76,7 @@ export function seedDomain(sqlite: Database, domain: Domain): void {
     insertRows(
       sqlite,
       'saved_view',
-      domain.views.map((v) => ({ ...v })),
+      domain.views.map((v) => ({ ...v, owner_id: DEV_ACTOR.id, shared: true })),
     )
   })()
 }

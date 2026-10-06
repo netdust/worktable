@@ -151,6 +151,15 @@ describe('the sheet', () => {
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)[0]).toBe('Auto Pavel + Sien')
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)[1]).toBe('Diner door Rosalie')
   })
+
+  it('sorts datetimes by when they are, not by their weekday text', () => {
+    const when = { ...activity, fields: { ...activity.fields, date: { type: 'datetime' as const, label: 'Moment', required: true, fact: false } } }
+    const monday = { ...calais[0], fields: { ...calais[0].fields, date: '2026-10-19T09:00' } }
+    const friday = { ...calais[1], fields: { ...calais[1].fields, date: '2026-10-16T09:00' } }
+    renderGrid([monday, friday], { model: when, layout: { ...defaults(planning), group: null, sort: [{ id: 'date', desc: false }] } })
+
+    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)).toEqual([friday.title, monday.title])
+  })
 })
 
 describe('editing', () => {

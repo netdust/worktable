@@ -1,10 +1,8 @@
 import { firstId } from '../grid/columns'
-import { readStored, removeStored, writeStored } from '../grid/layout'
+import { saveKept, storedKept } from '../grid/layout'
 import type { MatrixCell, MatrixColumn, Row, SavedView, View } from '../types'
 
-const PICKED = 'ntdst-views/matrix-columns/v1/'
-
-/** The longest name key the server keeps (`Arrangement::isMatrixKey()`), in characters, not UTF-16 units. */
+/** The longest name key, in characters, not UTF-16 units: the grid's own cap, as name keys stay in the browser. */
 const MAX_NAME = 80
 
 export const normalise = (name: string): string => Array.from(name.trim().toLocaleLowerCase()).slice(0, MAX_NAME).join('')
@@ -75,11 +73,9 @@ export function markFor(view: View, status: string): string {
   return view.join?.marks[status] ?? status
 }
 
-const ids = (raw: unknown): number[] | null => (Array.isArray(raw) ? raw.filter((id): id is number => typeof id === 'number') : null)
-
 /** The columns this browser picked for the view; null when it keeps none. */
 export function storedPicked(view: View): number[] | null {
-  return readStored(PICKED, view, ids)
+  return storedKept(view)?.picked ?? null
 }
 
 /** This browser's pick, else the saved view's. */
@@ -87,10 +83,7 @@ export function loadPicked(view: View): number[] {
   return storedPicked(view) ?? (view as Partial<SavedView>).arrangement?.picked ?? []
 }
 
-export function clearPicked(view: View): void {
-  removeStored(PICKED, view)
-}
-
+/** Kept past a Save or a revert, with the view's widths. */
 export function savePicked(view: View, picked: number[]): void {
-  writeStored(PICKED, view, picked)
+  saveKept(view, { ...storedKept(view), picked })
 }

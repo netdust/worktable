@@ -36,6 +36,62 @@ const writes = (over: Partial<NonNullable<ColumnDecl['writes']>> = {}): ColumnDe
 })
 
 describe('validateDomain', () => {
+  const viaOf = (over: Partial<Parameters<typeof defineDataset>[0]>) =>
+    withDomain({
+      datasets: [...domain.datasets, dataset(), defineDataset({ name: 'b', label: 'B', custom: false, ...over })],
+    })
+  const rel = { type: 'integer', label: 'P', relation: 'a' } as ColumnDecl
+  const viaA = { a_id: rel, naam: text }
+
+  test('a via title through a relation validates', () =>
+    expect(() => validateDomain(viaOf({ title: { via: 'a_id', else: 'naam' }, columns: viaA }))).not.toThrow())
+
+  test('via on a non-relation column is refused', () =>
+    expect(failure(viaOf({ title: { via: 'naam', else: 'naam' }, columns: viaA })).bad).toBe('naam'))
+
+  test('else on an undeclared column is refused', () =>
+    expect(failure(viaOf({ title: { via: 'a_id', else: 'nope' }, columns: viaA })).bad).toBe('nope'))
+
+  test('a plain relation to a dataset with a via title is refused', () => {
+    const b = defineDataset({
+      name: 'b',
+      label: 'B',
+      custom: false,
+      title: { via: 'a_id', else: 'naam' },
+      columns: viaA,
+    })
+    const c = defineDataset({
+      name: 'c',
+      label: 'C',
+      custom: false,
+      title: 'naam',
+      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, naam: text },
+    })
+    expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
+  })
+
+  test('a column named title is refused', () =>
+    expect(
+      failure(withDomain({ datasets: [...domain.datasets, dataset({ columns: { naam: text, title: text } })] })).bad,
+    ).toBe('title'))
+
+  test('a relation to a dataset with a via title is refused', () => {
+    const b = defineDataset({
+      name: 'b',
+      label: 'B',
+      custom: false,
+      title: { via: 'a_id', else: 'naam' },
+      columns: viaA,
+    })
+    const c = defineDataset({
+      name: 'c',
+      label: 'C',
+      custom: false,
+      title: { via: 'b_id', else: 'naam' },
+      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, naam: text },
+    })
+    expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
+  })
   test('the fixture domain validates', () => expect(() => validateDomain(domain)).not.toThrow())
 
   test('the error keeps its own name', () => {

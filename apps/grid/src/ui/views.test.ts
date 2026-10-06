@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SavedView, View } from '../types'
-import { arrangementOf, changed, clearLocal, lastIn, layoutOf, listFor, localOf, moved, stepped, toStored } from './views'
+import { savePicked, storedPicked } from '../matrix/columns'
+import { arrangementOf, changed, clearIfSent, clearLocal, copyKept, forget, lastIn, layoutOf, listFor, localOf, moved, stepped, storeLayout, toStored } from './views'
 import type { Table } from './tables'
 
 const tabel: View = { key: 'planning', label: 'Tabel', model: 'activity', table: 'planning', sort: ['date', '-start'], group: 'date', starting: true }
@@ -13,7 +14,7 @@ const calais: SavedView = {
   arrangement: stored, shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
 }
 const local = (key: string, value: unknown) => window.localStorage.setItem(`ntdst-views/layout/v1/${key}`, JSON.stringify(value))
-const picked = (key: string, value: number[]) => window.localStorage.setItem(`ntdst-views/matrix-columns/v1/${key}`, JSON.stringify(value))
+const picked = (key: string, value: number[]) => savePicked({ ...calais, key }, value)
 
 afterEach(() => window.localStorage.clear())
 
@@ -46,19 +47,18 @@ describe('the local copy', () => {
     expect(changed(tabel)).toBe(true)
   })
 
-  it('is changed once a matrix hides another person, and not when it hides the same ones in another order', () => {
+  it('is not changed when a matrix hides the same ones in another order', () => {
     local('42', { ...arrangementOf(calais), hidden: ['name:lieve', 'record:5'] })
     expect(changed(calais)).toBe(false)
-
-    local('42', { ...arrangementOf(calais), hidden: ['name:lieve', 'record:5', 'record:7'] })
-    expect(changed(calais)).toBe(true)
   })
 
-  it('counts a picked column on its own', () => {
+  it('keeps a width, a matrix column hidden and a picked column in this browser: none is a change to save', () => {
+    const { picked: _, ...layout } = arrangementOf(calais)
+    storeLayout(calais, { ...layout, widths: { title: 220, place: 90 }, hidden: [...layout.hidden, 'record:7'] })
     picked('42', [9, 11])
 
-    expect(localOf(calais)).toEqual({ ...arrangementOf(calais), picked: [9, 11] })
-    expect(changed(calais)).toBe(true)
+    expect(localOf(calais)).toMatchObject({ widths: { title: 220, place: 90 }, picked: [9, 11] })
+    expect(changed(calais)).toBe(false)
   })
 
   it('is not changed when it equals the saved arrangement', () => {
@@ -78,6 +78,44 @@ describe('the local copy', () => {
     expect(localOf(calais)).toBeNull()
     expect(layoutOf(calais).group).toBeNull()
     expect(layoutOf(calais).widths).toEqual({ title: 220 })
+    expect(arrangementOf(calais).picked).toEqual([9, 11])
+  })
+})
+
+describe('what stays in this browser', () => {
+  const served: SavedView = { ...calais, arrangement: { ...stored, hidden: [], widths: [], picked: [] } }
+  const layout = () => {
+    const { picked: _, ...rest } = arrangementOf(served)
+    return rest
+  }
+
+  it('is still there after a Save and a re-read: widths, picks and hidden matrix columns, none of them sent', () => {
+    storeLayout(served, { ...layout(), widths: { place: 90 }, hidden: ['record:7'], group: 'date' })
+    picked('42', [9])
+    const sent = localOf(served)!
+    expect(changed(served)).toBe(true)
+
+    clearIfSent(served, sent)
+    const reread: SavedView = { ...served, arrangement: { ...served.arrangement, group: 'date' } }
+
+    expect(localOf(reread)).toBeNull()
+    expect(changed(reread)).toBe(false)
+    expect(layoutOf(reread)).toMatchObject({ widths: { place: 90 }, hidden: ['record:7'], group: 'date' })
+    expect(arrangementOf(reread).picked).toEqual([9])
+  })
+
+  it('is copied to a view saved as new, and gone with a view deleted for good', () => {
+    const created: SavedView = { ...served, key: '50', id: 50 }
+    storeLayout(served, { ...layout(), widths: { place: 90 } })
+    picked('42', [9])
+
+    copyKept(served, created)
+    forget(served)
+
+    expect(layoutOf(created).widths).toEqual({ place: 90 })
+    expect(storedPicked(created)).toEqual([9])
+    expect(layoutOf(served).widths).toEqual({})
+    expect(storedPicked(served)).toBeNull()
   })
 })
 

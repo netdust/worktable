@@ -1,42 +1,17 @@
 import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { type Context, Hono } from 'hono'
-import type { Domain, SavedViewSeed } from './declare'
+import { Hono } from 'hono'
+import type { Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { readRows } from './rows'
+import { cellsOf, matrixOf, readRows } from './rows'
+import { viewRoutes } from './views'
 import { writeGuard } from './write-guard'
-import { parseBody, parseId, readRevisions, rowOf, runWrite, type Store, writableOf } from './writes'
-
-type SavedViewRow = SavedViewSeed & { id: number }
-
-function readViews(sqlite: Database): SavedViewRow[] {
-  const raws = sqlite.query('SELECT * FROM saved_view ORDER BY id').all() as Record<string, string | number | null>[]
-  return raws.map((r) => ({
-    id: r.id as number,
-    name: r.name as string,
-    source_type: r.source_type as SavedViewRow['source_type'],
-    source: r.source as string,
-    skin: r.skin as SavedViewRow['skin'],
-    filters: JSON.parse(r.filters as string),
-    sort: JSON.parse(r.sort as string),
-    group_by: r.group_by as string | null,
-    visible_fields: JSON.parse(r.visible_fields as string),
-  }))
-}
+import { bodyOf, parseId, readRevisions, rowOf, runWrite, type Store, writableOf } from './writes'
 
 function isWritable(domain: Domain, source: Source): boolean {
   if (source.kind === 'dataset') return Boolean(writerOf(domain, source.name)?.update)
   return Object.values(source.columns).some((c) => c.writes)
-}
-
-async function bodyOf(c: Context): Promise<Record<string, unknown>> {
-  try {
-    return parseBody(await c.req.json())
-  } catch (err) {
-    if (err instanceof ApiError) throw err
-    throw new ApiError(400, 'bad_body', 'body is not valid JSON')
-  }
 }
 
 function writeRoutes(app: Hono, store: Store): void {
@@ -92,25 +67,40 @@ export function createEngine(sqlite: Database, domain: Domain, { port }: EngineO
         {
           kind: s.kind,
           label: s.label,
-          title: s.title,
+          title: typeof s.title === 'string' ? s.title : s.title.else,
+          ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
           date: s.date ?? null,
+          ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
+          ...(matrixOf(domain, s) ? { matrix_join: matrixOf(domain, s)?.join.name } : {}),
           columns: s.columns,
           writable: isWritable(domain, s),
           deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
         },
       ]),
     )
-    return c.json({ sources, views: readViews(sqlite) })
+    return c.json({ sources })
   })
 
   app.get('/rows/:source', (c) => {
     const name = c.req.param('source')
     const source = sourceOf(domain, name)
     if (!source) throw new ApiError(404, 'unknown_source', `unknown source "${name}"`)
-    return c.json(readRows(db, domain, source, parseRowsParams(source, c.req.query())))
+    const params = parseRowsParams(source, c.req.query())
+    const found = params.cells ? matrixOf(domain, source) : null
+    if (params.cells && !found) throw new ApiError(400, 'no_matrix', `"${name}" is not the down source of a matrix`)
+    const read = readRows(db, domain, source, params)
+    if (!found) return c.json(read)
+    const cells = cellsOf(
+      db,
+      domain,
+      found,
+      read.rows.map((r) => r.id),
+    )
+    return c.json({ ...read, rows: read.rows.map((r) => ({ ...r, cells: cells.get(r.id) })) })
   })
 
   writeRoutes(app, { sqlite, db, domain })
+  viewRoutes(app, { sqlite, db, domain })
 
   root.onError((err, c) => {
     if (err instanceof ApiError) return c.json({ ...err.details, code: err.code, message: err.message }, err.status)

@@ -65,6 +65,19 @@ describe('the toolbar', () => {
   })
 })
 
+describe('a view with fixed filters', () => {
+  it('says how many saved filters have no chip, in the singular and the plural', () => {
+    const { rerender } = render(<Toolbar {...base} fixed={1} />)
+    expect(screen.getByText('+ 1 vaste filter')).toBeTruthy()
+
+    rerender(<Toolbar {...base} fixed={2} />)
+    expect(screen.getByText('+ 2 vaste filters')).toBeTruthy()
+
+    rerender(<Toolbar {...base} fixed={0} />)
+    expect(screen.queryByText(/vaste filter/)).toBeNull()
+  })
+})
+
 describe('a modified view in the toolbar', () => {
   const actions = () => ({ onSave: vi.fn(), onSaveAs: vi.fn(), onRevert: vi.fn() })
   const more = () => screen.getByRole('button', { name: 'More actions' })

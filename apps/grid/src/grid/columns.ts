@@ -2,7 +2,7 @@ import { locale, t } from '../i18n'
 import type { Field, Model, Row, View } from '../types'
 
 export type CellKind =
-  | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'time' | 'relation' | 'bool' | 'number'
+  | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'datetime' | 'time' | 'relation' | 'bool' | 'number'
   | 'lookup' | 'rollup' | 'other'
 
 export interface Column {
@@ -13,6 +13,8 @@ export interface Column {
   label: string
   kind: CellKind
   editable: boolean
+  /** False for a title the server computes from a relation. */
+  sortable?: boolean
   required: boolean
   align: 'start' | 'end'
   width: number
@@ -31,7 +33,7 @@ export interface Column {
 }
 
 const WIDTH: Record<CellKind, number> = {
-  title: 240, text: 160, longtext: 220, select: 130, date: 108, time: 76, relation: 170,
+  title: 240, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 170,
   bool: 80, number: 90, lookup: 170, rollup: 90, other: 140,
 }
 
@@ -58,6 +60,24 @@ export function formatDay(iso: string): string {
   return new Intl.DateTimeFormat(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(y, m - 1, d))
 }
 
+const MOMENT = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/
+
+/** `di 14/10 20:30`: the locale's short weekday, then day/month and the time; a value that is not a moment shows as stored. */
+export function formatMoment(stored: string): string {
+  const match = MOMENT.exec(stored)
+  if (!match) return stored
+  const [, y, m, d, hh, mm] = match
+  const parts = new Intl.DateTimeFormat(locale(), { weekday: 'short' }).formatToParts(new Date(Number(y), Number(m) - 1, Number(d)))
+  const weekday = parts.find((part) => part.type === 'weekday')?.value ?? ''
+  return `${weekday} ${d}/${m} ${hh}:${mm}`
+}
+
+/** What a datetime-local input holds and a write sends: `YYYY-MM-DDTHH:mm`. */
+function momentOf(text: string): string {
+  const match = MOMENT.exec(text.trim())
+  return match ? `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}` : text.trim()
+}
+
 export function humanise(key: string): string {
   const words = key.replace(/[_-]+/g, ' ').trim()
   return words.charAt(0).toUpperCase() + words.slice(1)
@@ -75,6 +95,7 @@ function kindOf(field: Field): CellKind {
       return 'longtext'
     case 'select':
     case 'date':
+    case 'datetime':
     case 'relation':
     case 'bool':
       return field.type
@@ -86,7 +107,7 @@ function kindOf(field: Field): CellKind {
   }
 }
 
-const EDITABLE: CellKind[] = ['title', 'text', 'longtext', 'select', 'date', 'time', 'bool', 'number']
+const EDITABLE: CellKind[] = ['title', 'text', 'longtext', 'select', 'date', 'datetime', 'time', 'bool', 'number']
 
 function base(id: string, kind: CellKind, label: string, value: (row: Row) => unknown): Column {
   return {
@@ -134,6 +155,11 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
     column.text = (row) => (scalar(row.fields[key]) === '' ? '' : formatDay(scalar(row.fields[key])))
     column.fromText = dayFromText
   }
+  if (kind === 'datetime') {
+    column.text = (row) => formatMoment(scalar(row.fields[key]))
+    column.edit = (row) => momentOf(scalar(row.fields[key]))
+    column.parse = column.fromText = momentOf
+  }
   if (kind === 'time') column.parse = column.fromText = parseTime
   if (kind === 'bool') {
     column.text = (row) => (row.fields[key] ? t('yes') : t('no'))
@@ -155,6 +181,7 @@ function titleColumn(model: Model, writable: boolean): Column {
   column.field = 'title'
   column.required = true
   column.editable = writable && !model.title_readonly
+  if (model.title_derived) column.sortable = false
   return column
 }
 

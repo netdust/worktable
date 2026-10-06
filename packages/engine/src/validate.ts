@@ -21,11 +21,33 @@ function checkColumn(source: DatasetDecl | QueryDecl, what: string, column: stri
   }
 }
 
+function checkTitle(source: DatasetDecl | QueryDecl): void {
+  if (typeof source.title === 'string') {
+    checkColumn(source, 'title', source.title)
+    return
+  }
+  const { via, else: fallback } = source.title
+  checkColumn(source, 'title else', fallback)
+  const target = source.columns[via]?.relation
+  if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
+}
+
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
+  if (Object.hasOwn(source.columns, 'title')) {
+    throw new DomainError(source.name, 'title', 'a column named "title" would be overwritten by the computed row title')
+  }
   const names = new Set(domain.datasets.map((d) => d.name))
   for (const [column, decl] of Object.entries(source.columns)) {
     if (decl.relation && !names.has(decl.relation)) {
       throw new DomainError(source.name, decl.relation, `${column} relates to undeclared dataset "${decl.relation}"`)
+    }
+    const target = domain.datasets.find((d) => d.name === decl.relation)
+    if (target && typeof target.title !== 'string') {
+      throw new DomainError(
+        source.name,
+        column,
+        `${column} relates to "${target.name}", whose title is through a relation`,
+      )
     }
   }
 }
@@ -48,13 +70,69 @@ function checkWrites(
   }
 }
 
+function checkMatrix(domain: Domain, join: DatasetDecl, downs: Set<string>): void {
+  const m = join.matrix
+  if (!m) return
+  const at = (bad: string, message: string): DomainError => new DomainError(join.name, bad, `matrix ${message}`)
+  const relation = (what: string, column: string): string => {
+    const target = join.columns[column]?.relation
+    if (!target) throw at(column, `${what} "${column}" is not a relation column of "${join.name}"`)
+    return target
+  }
+  const downTarget = relation('down', m.down)
+  relation('across', m.across)
+  for (const [what, column] of [
+    ['label', m.label],
+    ['note', m.note],
+  ] as const) {
+    if (column !== undefined && join.columns[column]?.type !== 'text') {
+      throw at(column, `${what} "${column}" is not a text column`)
+    }
+  }
+  const options = join.columns[m.cell]?.options
+  if (!options) throw at(m.cell, `cell "${m.cell}" is not an options column`)
+  const option = (what: string, key: string): void => {
+    if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${m.cell}"`)
+  }
+  for (const key of Object.values(m.keys)) option('key', key)
+  for (const key of Object.keys(m.marks)) option('mark', key)
+  option('count', m.count)
+  if (downs.has(downTarget)) throw at(m.down, `down source "${downTarget}" already has a matrix`)
+  downs.add(downTarget)
+  if (m.away) checkAway(domain, join, m, m.away, at)
+}
+
+function checkAway(
+  domain: Domain,
+  join: DatasetDecl,
+  m: NonNullable<DatasetDecl['matrix']>,
+  away: NonNullable<NonNullable<DatasetDecl['matrix']>['away']>,
+  at: (bad: string, message: string) => DomainError,
+): void {
+  const target = domain.datasets.find((d) => d.name === away.dataset)
+  if (!target) throw at(away.dataset, `away dataset "${away.dataset}" is not declared`)
+  if (!target.date) throw at(away.dataset, `away dataset "${away.dataset}" declares no date`)
+  const across = join.columns[m.across]?.relation
+  if (target.columns[away.across]?.relation !== across) {
+    throw at(away.across, `away across "${away.across}" is not a relation to "${across}"`)
+  }
+  for (const [what, column] of [
+    ['label', away.label],
+    ['end', away.end],
+  ] as const) {
+    if (!Object.hasOwn(target.columns, column)) throw at(column, `away ${what} "${column}" is not a declared column`)
+  }
+}
+
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
-    checkColumn(source, 'title', source.title)
+    checkTitle(source)
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
   }
+  const downs = new Set<string>()
   for (const dataset of domain.datasets) {
+    checkMatrix(domain, dataset, downs)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {

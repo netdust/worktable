@@ -21,9 +21,13 @@ export interface RowsParams {
   from: string | null
   to: string | null
   limit: number
+  offset: number
+  cells: boolean
 }
 
 export const MAX_LIMIT = 5000
+export const MAX_KEYS = 16
+const MAX_CELL_DAYS = 92
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const shape = z.object({
@@ -33,6 +37,8 @@ const shape = z.object({
   from: day.optional(),
   to: day.optional(),
   limit: z.string().optional(),
+  offset: z.string().optional(),
+  cells: z.string().optional(),
 })
 
 export function isRealDate(value: string): boolean {
@@ -41,6 +47,8 @@ export function isRealDate(value: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
 }
 
+const daysIn = (from: string, to: string): number => (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1
+
 function parseLimit(raw: string | undefined): number {
   if (raw === undefined) return MAX_LIMIT
   const limit = /^\d+$/.test(raw) ? Number(raw) : Number.NaN
@@ -48,6 +56,14 @@ function parseLimit(raw: string | undefined): number {
     throw new ApiError(400, 'bad_limit', `limit must be an integer from 1 to ${MAX_LIMIT}`)
   }
   return limit
+}
+
+function parseOffset(raw: string | undefined): number {
+  if (raw === undefined) return 0
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    throw new ApiError(400, 'bad_offset', 'offset must be an integer of 0 or more')
+  }
+  return Number(raw)
 }
 
 const hasColumn = (source: Source, key: string): boolean =>
@@ -67,8 +83,20 @@ function parseFilter(raw: string | undefined): FilterInput | null {
   return parsed as FilterInput
 }
 
+/** M1: a key list is short and names each column once. */
+export function keysProblem(what: string, columns: string[]): string | null {
+  if (columns.length > MAX_KEYS) return `${what} takes at most ${MAX_KEYS} keys`
+  const twice = columns.find((column, i) => columns.indexOf(column) !== i)
+  return twice === undefined ? null : `${what} names "${twice}" twice`
+}
+
 function parseSort(raw: string | undefined, source: Source): RowsParams['sort'] {
   const keys = (raw ?? '').split(',').filter(Boolean)
+  const problem = keysProblem(
+    'sort',
+    keys.map((key) => key.replace(/^-/, '')),
+  )
+  if (problem) throw new ApiError(400, 'bad_sort', problem)
   return keys.map((key) => {
     const desc = key.startsWith('-')
     const column = desc ? key.slice(1) : key
@@ -86,11 +114,17 @@ function parseGroup(raw: string | undefined, source: Source): string | null {
 export function parseRowsParams(source: Source, query: Record<string, string | undefined>): RowsParams {
   const parsed = shape.safeParse(query)
   if (!parsed.success) throw new ApiError(400, 'bad_window', 'from and to must be YYYY-MM-DD')
-  const { filter, sort, group, from, to, limit } = parsed.data
+  const { filter, sort, group, from, to, limit, offset, cells } = parsed.data
   for (const day of [from, to]) {
     if (day && !isRealDate(day)) throw new ApiError(400, 'bad_window', `"${day}" is not a calendar date`)
   }
   if ((from || to) && !source.date) throw new ApiError(400, 'no_date_column', `"${source.name}" has no date column`)
+  if (cells === '1' && !(from && to)) {
+    throw new ApiError(400, 'window_required', 'cells need both from and to')
+  }
+  if (cells === '1' && from && to && daysIn(from, to) > MAX_CELL_DAYS) {
+    throw new ApiError(400, 'window_too_wide', `cells take a window of at most ${MAX_CELL_DAYS} days`)
+  }
   return {
     filter: parseFilter(filter),
     sort: parseSort(sort, source),
@@ -98,5 +132,7 @@ export function parseRowsParams(source: Source, query: Record<string, string | u
     from: from ?? null,
     to: to ?? null,
     limit: parseLimit(limit),
+    offset: parseOffset(offset),
+    cells: cells === '1',
   }
 }

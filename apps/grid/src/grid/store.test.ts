@@ -488,7 +488,6 @@ describe('writes through the engine', () => {
           },
         },
       },
-      views: [],
     }
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
     const fetcher = vi.fn<typeof fetch>(async (input) => {

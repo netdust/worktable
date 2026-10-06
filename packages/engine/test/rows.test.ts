@@ -59,6 +59,18 @@ describe('denials', () => {
   test('sort on an undeclared key is 400 bad_sort', () =>
     denied('/api/rows/taak?sort=titel;DROP TABLE x', 400, 'bad_sort'))
   test('sort on custom.key is 400 bad_sort', () => denied('/api/rows/taak?sort=custom.kleur', 400, 'bad_sort'))
+  test('2001 sort keys is 400 bad_sort, not a 500', () =>
+    denied(`/api/rows/taak?sort=${Array(2001).fill('id').join(',')}`, 400, 'bad_sort'))
+  test('17 sort keys is 400 bad_sort for their number', async () => {
+    const { status, body } = await rows('taak', `sort=${Array(17).fill('id').join(',')}`)
+    expect({ status, code: body.code, message: body.message }).toEqual({
+      status: 400,
+      code: 'bad_sort',
+      message: 'sort takes at most 16 keys',
+    })
+  })
+  test('a sort key named twice, either way, is 400 bad_sort', () =>
+    denied('/api/rows/taak?sort=id,-id', 400, 'bad_sort'))
   test('group on an undeclared key is 400 bad_group', () => denied('/api/rows/taak?group=nope', 400, 'bad_group'))
 
   test.each(['_migrations', 'sqlite_master', 'saved_view', 'nope'])('source %s is 404 unknown_source', (source) =>
@@ -113,6 +125,7 @@ describe('rows', () => {
       start_at: '2026-10-12T09:00',
       dag: '2026-10-12',
       afgerond: false,
+      title: 'een',
       custom: { kleur: 'rood', labels: ['a', 'b'] },
       lookups: { project_id: { id: 1, title: 'Alfa' } },
     })
@@ -171,6 +184,7 @@ describe('rows', () => {
       naam: 'Alfa',
       dag: '2026-10-12',
       aantal: 2,
+      title: 'Alfa',
       custom: {},
       lookups: { project_id: { id: 1, title: 'Alfa' } },
     })
@@ -211,7 +225,7 @@ describe('rows', () => {
     expect((await rows('taak', 'search=een')).body.total).toBe(4)
   })
 
-  test('schema lists every declared source and the saved views with parsed filters', async () => {
+  test('schema lists every declared source and no saved views: GET /api/views serves those', async () => {
     const { status, body } = await get('/api/schema')
     expect(status).toBe(200)
     expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'notitie', 'per_project', 'notitie_lijst'])
@@ -219,19 +233,7 @@ describe('rows', () => {
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })
     expect(body.sources.project.date).toBeNull()
     expect(body.sources.per_project.kind).toBe('query')
-    expect(body.views).toEqual([
-      {
-        id: 1,
-        name: 'Open',
-        source_type: 'dataset',
-        source: 'taak',
-        skin: 'table',
-        filters: { status: 'open' },
-        sort: ['start_at'],
-        group_by: 'dag',
-        visible_fields: ['omschrijving'],
-      },
-    ])
+    expect(Object.keys(body)).toEqual(['sources'])
   })
 
   test('an unexpected failure is 500 internal without SQL', async () => {
@@ -284,4 +286,90 @@ describe('cost', () => {
     expect({ status, total: body.total, rows: body.rows.length }).toEqual({ status: 200, total: 20, rows: 20 })
     expect(took).toBeLessThan(2600)
   })
+})
+
+describe('title through a relation', () => {
+  const groep = defineDataset({
+    name: 'groep',
+    label: 'Groepen',
+    title: 'naam',
+    custom: false,
+    columns: { naam: { type: 'text', label: 'Naam' } },
+  })
+  const regel = defineDataset({
+    name: 'regel',
+    label: 'Regels',
+    title: { via: 'groep_id', else: 'reden' },
+    custom: false,
+    columns: {
+      groep_id: { type: 'integer', label: 'Groep', relation: 'groep', nullable: true },
+      reden: { type: 'text', label: 'Reden', nullable: true },
+    },
+  })
+  const via: Domain = {
+    datasets: [groep, regel],
+    queries: [],
+    writers: { regel: { create: (v) => v } },
+    seed: (insert) => {
+      insert('groep', [{ naam: 'Alfa' }, { naam: 'Beta' }])
+      insert('regel', [{ groep_id: 1 }, { groep_id: null, reden: 'ziek' }, { groep_id: 2, reden: 'x' }])
+    },
+    views: [],
+  }
+
+  beforeEach(() => {
+    sqlite = new Database(':memory:')
+    migrate(sqlite, via)
+    seedDomain(sqlite, via)
+    app = createEngine(sqlite, via, { port: 4310 })
+  })
+
+  test('resolves to the target title, else the fallback column, else empty', async () => {
+    const { body } = await rows('regel', 'sort=id')
+    expect(body.rows.map((r: { title: string }) => r.title)).toEqual(['Alfa', 'ziek', 'Beta'])
+    sqlite.run('INSERT INTO regel (groep_id, reden) VALUES (NULL, NULL)')
+    expect((await rows('regel', 'sort=-id&limit=1')).body.rows[0].title).toBe('')
+  })
+
+  test('renaming the target changes the title on the next read', async () => {
+    sqlite.run("UPDATE groep SET naam = 'Gamma' WHERE id = 1")
+    expect((await rows('regel', 'sort=id')).body.rows[0].title).toBe('Gamma')
+  })
+
+  test('a write reply carries the title', async () => {
+    const res = await app.request('/api/rows/regel', {
+      method: 'POST',
+      headers: { host: '127.0.0.1:4310', 'content-type': 'application/json' },
+      body: JSON.stringify({ groep_id: 2 }),
+    })
+    expect(res.status).toBe(201)
+    expect(((await res.json()) as { title: string }).title).toBe('Beta')
+  })
+
+  test('/schema keeps title as the else column and names the relation', async () => {
+    const { body } = await get('/api/schema')
+    expect(body.sources.regel).toMatchObject({ title: 'reden', title_via: 'groep_id' })
+    expect(body.sources.groep.title_via).toBeUndefined()
+  })
+})
+
+test('a column title is carried as title on every row', async () => {
+  expect((await rows('plat')).body.rows[0].title).toBe('x')
+})
+
+describe('offset', () => {
+  test('offset=2&limit=2 pages with an exact total', async () => {
+    const all = (await rows('taak', 'sort=id')).body.rows.map((r: { id: number }) => r.id)
+    const { body } = await rows('taak', 'sort=id&offset=2&limit=2')
+    expect(body.rows.map((r: { id: number }) => r.id)).toEqual(all.slice(2, 4))
+    expect(body.total).toBe(all.length)
+  })
+
+  test('offset defaults to 0', async () => {
+    expect((await rows('taak', 'sort=id&limit=1')).body.rows[0].id).toBe(1)
+  })
+
+  test.each(['-1', 'abc', '1.5', ''])('offset=%s is 400 bad_offset', (v) =>
+    denied(`/api/rows/taak?offset=${v}`, 400, 'bad_offset'),
+  )
 })

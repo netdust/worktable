@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TableDef, View } from '../types'
-import { groupTables, tableOf } from './tables'
+import { byFirstView, groupTables, tableOf } from './tables'
 
 const table = (key: string, extra: Partial<TableDef> = {}): TableDef => ({ key, label: key.toUpperCase(), model: 'record', types: ['grid'], ...extra })
 const view = (key: string, of: string, extra: Partial<View> = {}): View => ({ key, label: key.toUpperCase(), model: 'record', table: of, ...extra })
@@ -36,6 +36,12 @@ describe('the tables', () => {
     const tables = groupTables([table('one', { label: 'Same' }), table('two', { label: 'Same' })], [view('a', 'one'), view('b', 'two')])
 
     expect(tables.map((t) => [t.key, t.label])).toEqual([['one', 'Same'], ['two', 'Same']])
+  })
+
+  it('puts the tables in the order their first view comes, the rest as declared after them', () => {
+    const tables = byFirstView([table('one'), table('two'), table('three'), table('four')], [view('a', 'three'), view('b', 'one'), view('c', 'three')])
+
+    expect(tables.map((t) => t.key)).toEqual(['three', 'one', 'two', 'four'])
   })
 
   it('finds the table a view belongs to', () => {

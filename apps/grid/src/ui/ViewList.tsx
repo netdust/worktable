@@ -41,7 +41,7 @@ function Mark({ view }: { view: View }) {
 
 const editable = (view: View): view is SavedView => isSaved(view) && view.editable
 
-/** Rename, duplicate, share, move and delete on one's own; rename and delete on a shared one an administrator holds; duplicate on any. */
+/** Rename, duplicate, share, move and delete on one's own: the engine makes only the owner's views editable; duplicate on any. */
 function choices(view: View, at: number, count: number, actions: ViewActions, rename: () => void, move: (step: -1 | 1) => void): Action[] {
   const own = editable(view) && view.mine ? view : null
   return [

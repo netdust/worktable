@@ -74,13 +74,28 @@ function checkAssignee(values: Values, ctx: WriteContext): void {
   }
 }
 
-export const toewijzingWriter = writerOf((values, ctx) => {
+function switchAssignee(values: Values): void {
+  const sets = (k: string) => Object.hasOwn(values, k)
+  if (sets('persoon_id') && values.persoon_id != null && !sets('naam')) values.naam = null
+  if (sets('naam') && filled(values.naam) && !sets('persoon_id')) values.persoon_id = null
+}
+
+export const toewijzingWriter = {
+  create: (values, ctx) => toewijzingAccept(values, ctx),
+  update(values, ctx) {
+    switchAssignee(values)
+    return toewijzingAccept(values, ctx)
+  },
+  delete() {},
+} satisfies Writer
+
+function toewijzingAccept(values: Values, ctx: WriteContext): Values {
   checkOption(toewijzing, 'state', values, 'Ongeldige status.')
   checkLive(ctx, 'activiteit', values.activiteit_id, 'Activiteit bestaat niet.')
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
   checkAssignee(values, ctx)
   return values
-})
+}
 
 export const beschikbaarheidWriter = writerOf((values, ctx) => {
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')

@@ -63,7 +63,8 @@ describe('the Toewijzing writer refuses', () => {
   test('neither a persoon nor a naam', () =>
     refused(() => post('toewijzing', { activiteit_id: 5 }), 'Kies een persoon of een naam.'))
 
-  test('a persoon added to a name-only row', () => refused(() => patch('toewijzing', 3, { persoon_id: 3 }), BOTH))
+  test('a persoon and a naam in one update', () =>
+    refused(() => patch('toewijzing', 3, { persoon_id: 3, naam: 'Gast' }), BOTH))
 
   test('a duplicate persoon on create', () =>
     refused(() => post('toewijzing', { activiteit_id: 4, persoon_id: 1 }), DUPLICATE))
@@ -202,7 +203,7 @@ describe('voorstellingen', () => {
     for (const row of all) {
       const { custom, lookups, ...columns } = row
       expect({ custom, lookups }).toEqual({ custom: {}, lookups: {} })
-      expect(Object.keys(columns).sort()).toEqual(['adres', 'datum', 'id', 'productie', 'start', 'venue'])
+      expect(Object.keys(columns).sort()).toEqual(['adres', 'datum', 'id', 'productie', 'start', 'title', 'venue'])
     }
     expect(all.find((r) => r.id === 9)).toMatchObject({
       productie: 'De Kersentuin',

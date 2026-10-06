@@ -65,4 +65,18 @@ describe('newRow', () => {
     }
     expect(newRow(strict, planning, week, new Date(2026, 4, 20))).toEqual({ missing: ['Affiche'] })
   })
+
+  it('asks for the title only when it is required and writable, so a nullable title is skipped and a datetime is asked', () => {
+    const when: Model = {
+      ...activity,
+      title_required: false,
+      fields: {
+        production: { type: 'relation', label: 'Productie', required: true, fact: false, relation: { model: 'production', multiple: false } },
+        at: { type: 'datetime', label: 'Start', required: true, fact: false },
+      },
+    }
+
+    expect(newRow(when, planning, week, new Date(2026, 4, 20))).toMatchObject({ needs: ['production', 'at'] })
+    expect(newRow({ ...when, title_required: true }, planning, week, new Date(2026, 4, 20))).toMatchObject({ needs: ['title', 'production', 'at'] })
+  })
 })

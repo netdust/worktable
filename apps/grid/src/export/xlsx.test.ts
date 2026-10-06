@@ -75,6 +75,16 @@ describe('buildWorkbook', () => {
     expect(values(sheet, 4)).toEqual(['Totaal · 2 rijen', null, 120, null, null, 6, null])
   })
 
+  it('a datetime exports as its moment, year and all, not the weekday text', () => {
+    const when = { ...activity, fields: { ...activity.fields, at: { type: 'datetime' as const, label: 'Start', required: true, fact: false } } }
+    const at = columnsFor(when, { ...planning, columns: ['at'] }).find((c) => c.id === 'at')!
+    const row = withFields(calais[0], { at: '2026-10-16T20:30' })
+    const sheet = buildWorkbook(planning, [all.title, at], groupRows([row], undefined), week).worksheets[0]
+
+    expect(values(sheet, 2)[1]).toEqual(new Date(Date.UTC(2026, 9, 16, 20, 30)))
+    expect(sheet.getCell('B2').numFmt).toBe('dd/mm/yyyy hh:mm')
+  })
+
   it('formula-leading values are quoted', () => {
     const hostile = ['=HYPERLINK("http://x.test","klik")', '+1+1', '-2+3', '@SUM(A1)'].map((title, i) => ({ ...calais[i], title }))
     const label = { ...all.place, label: '=cmd' }

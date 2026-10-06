@@ -13,15 +13,30 @@ export interface ColumnDecl {
   writes?: { dataset: string; field: string; key: string }
 }
 
+export type TitleDecl = string | { via: string; else: string }
+
+export interface MatrixDecl {
+  down: string
+  across: string
+  label?: string
+  cell: string
+  note?: string
+  keys: Record<string, string>
+  marks: Record<string, string>
+  count: string
+  away?: { dataset: string; across: string; label: string; end: string }
+}
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
   label: string
-  title: string
+  title: TitleDecl
   date?: string
   columns: Record<string, ColumnDecl>
   indexes?: string[][]
   custom: boolean
+  matrix?: MatrixDecl
 }
 
 export interface QueryDecl {
@@ -38,7 +53,7 @@ export interface SavedViewSeed {
   name: string
   source_type: 'dataset' | 'query'
   source: string
-  skin: 'table'
+  skin: 'table' | 'matrix'
   filters: FilterInput
   sort: string[]
   group_by: string | null

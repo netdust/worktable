@@ -39,6 +39,20 @@ describe('columnsFor', () => {
     expect(date.edit(lunch)).toBe('2026-05-18')
   })
 
+  it('shows a datetime as the short weekday, day/month and time, edited as datetime-local, sent as typed', () => {
+    const when = { ...activity, fields: { ...activity.fields, at: { type: 'datetime' as const, label: 'Start', required: true, fact: false } } }
+    const column = columnsFor(when, { ...planning, columns: ['at'] }).find((c) => c.id === 'at')!
+    const row = { ...lunch, fields: { ...lunch.fields, at: '2026-10-13T20:30' } }
+
+    expect(column.kind).toBe('datetime')
+    expect(column.editable).toBe(true)
+    expect(column.text(row)).toBe('di 13/10 20:30')
+    expect(column.text({ ...row, fields: { at: '2026-10-13T20:30:00' } })).toBe('di 13/10 20:30')
+    expect(column.edit(row)).toBe('2026-10-13T20:30')
+    expect(column.parse('2026-10-13T21:00')).toBe('2026-10-13T21:00')
+    expect(column.text({ ...row, fields: { at: null } })).toBe('')
+  })
+
   it('makes a text field described HH:MM a time cell that reads what a hand types', () => {
     const start = byId().start
     expect(start.kind).toBe('time')

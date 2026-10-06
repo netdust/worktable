@@ -5,6 +5,7 @@ import { rowCount, t } from '../i18n'
 import type { DateWindow, Row, View } from '../types'
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/
+const MOMENT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
 const FORMULA = /^[=+\-@\t\r]/
 const NOT_IN_A_SHEET_NAME = /[[\]:*?/\\]/g
 
@@ -35,8 +36,15 @@ function day(iso: string): Date | null {
   return match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null
 }
 
+/** A datetime keeps its wall-clock time: no zone, counted from UTC like a day. */
+function moment(stored: string): Date | null {
+  const match = MOMENT.exec(stored)
+  return match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]))) : null
+}
+
 function cellValue(column: Column, row: Row): ExcelJS.CellValue {
   if (column.kind === 'date') return day(column.edit(row)) ?? text(column.text(row))
+  if (column.kind === 'datetime') return moment(column.edit(row)) ?? text(column.text(row))
   if (column.kind === 'number' || column.kind === 'rollup') {
     const raw = column.value(row)
     const number = raw === '' || raw === null || raw === undefined ? NaN : Number(raw)
@@ -60,6 +68,7 @@ export function buildWorkbook(view: View, columns: Column[], groups: Group[], wi
   columns.forEach((column, i) => {
     sheet.getColumn(i + 1).width = Math.round(column.width / 7)
     if (column.kind === 'date') sheet.getColumn(i + 1).numFmt = 'dd/mm/yyyy'
+    if (column.kind === 'datetime') sheet.getColumn(i + 1).numFmt = 'dd/mm/yyyy hh:mm'
   })
 
   for (const group of groups) {

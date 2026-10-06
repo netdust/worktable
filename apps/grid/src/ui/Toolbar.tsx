@@ -2,7 +2,7 @@ import { Button } from '@sakaniui/react'
 import { Plus } from 'lucide-react'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { ReactNode } from 'react'
-import { t } from '../i18n'
+import { fixedCount, t } from '../i18n'
 import type { StoreState } from '../grid/store'
 import type { DateWindow } from '../types'
 import { WindowControl } from './Window'
@@ -29,6 +29,8 @@ interface Props {
   modified?: Modified | null
   /** Why the last write to the view itself was refused; null when it was not. */
   viewNote?: string | null
+  /** How many saved filters the view holds that no chip shows. */
+  fixed?: number
 }
 
 export interface Modified {
@@ -63,7 +65,7 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, window, onWindow, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, modified, viewNote }: Props) {
+export function Toolbar({ title, window, onWindow, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, modified, viewNote, fixed = 0 }: Props) {
   const more: Action[] = [
     ...(modified ? [{ label: t('saveAsNew'), run: modified.onSaveAs }, { label: t('revert'), run: modified.onRevert }] : []),
     ...(onExport || exportBlocked ? [{ label: t('export'), run: () => onExport?.(), blocked: exportBlocked }] : []),
@@ -74,6 +76,7 @@ export function Toolbar({ title, window, onWindow, search, saving, addLabel, add
       <h1 className="nv-toolbar__title">{title}</h1>
       {modified && <ModifiedState modified={modified} />}
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
+      {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}
       {window && <WindowControl value={window} onChange={onWindow} />}
       <div className="nv-toolbar__end">
         {search}

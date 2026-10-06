@@ -1,7 +1,7 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
 
 export type FieldType =
-  | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date'
+  | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date' | 'datetime'
   | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
 
 export interface Field {
@@ -23,6 +23,10 @@ export interface Model {
   label: string
   title_label: string
   title_readonly: boolean
+  /** The title column is not nullable: absent means required. */
+  title_required?: boolean
+  /** The title comes through a relation: never written, sorted, grouped or filtered on. */
+  title_derived?: boolean
   /** A query's rows: joined, never created. */
   query?: boolean
   /** Its writer deletes: the drawer offers Verwijderen. */
@@ -70,12 +74,14 @@ export interface View extends Omit<TableDef, 'types'> {
   hidden?: string[]
   /** A site's starting view: shared, never written. */
   starting?: boolean
+  /** The saved filters no chip shows (`$in`, a range, `custom.<key>`), by column; kept on every Save. */
+  fixed?: Record<string, unknown>
 }
 
 /** A view's arrangement in the app: the grid's layout, plus the columns a matrix picked. */
 export type Arrangement = Layout & { picked: number[] }
 
-/** An arrangement as the server stores it (`Arrangement::clean()`): widths are a list. */
+/** A saved view's arrangement as the grid holds it: widths are a list. The engine stores filters, sort, group and the visible columns of it. */
 export interface StoredArrangement {
   hidden: string[]
   order: string[]
@@ -93,7 +99,7 @@ export interface SavedView extends View {
   shared: boolean
   owner: { id: number; name: string }
   mine: boolean
-  /** Its owner, or an administrator on a shared one, may write it. */
+  /** Only its owner may write it. */
   editable: boolean
 }
 
@@ -105,6 +111,7 @@ export interface NewView {
   field: null
   shared: boolean
   arrangement: StoredArrangement
+  fixed?: Record<string, unknown>
 }
 
 /** A user's own order of each table's views and the view last used there, by table key. */

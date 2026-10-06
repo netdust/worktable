@@ -116,3 +116,13 @@ describe('the fiche domain', () => {
     expect(() => validateDomain(fiche)).not.toThrow()
   })
 })
+
+test('the seeded views are shared, owned by the dev actor, and pass the saved-view rules', async () => {
+  const views = (await request('GET', '/api/views')).body.views as Body[]
+  expect(views.length).toBe(fiche.views.length)
+  expect(views.every((v) => v.shared === true && v.owner_id === 0 && v.mine === true)).toBe(true)
+  for (const v of views) {
+    const res = await request('PATCH', `/api/views/${v.id}`, { name: v.name })
+    expect({ name: v.name, status: res.status }).toEqual({ name: v.name, status: 200 })
+  }
+})

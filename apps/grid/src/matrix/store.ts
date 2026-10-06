@@ -230,7 +230,7 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
     land((cells) => cells.map((cell) => (cell.id === saved.id ? saved : cell)))
   }
 
-  /** One write in flight per cell: PHP workers could otherwise land an undo before the write it undoes. */
+  /** One write in flight per cell: two connections could otherwise land an undo before the write it undoes. */
   function queued(op: Op): Promise<void> {
     const key = keyOf(op.row, op.column)
     const previous = queues.get(key)

@@ -5,7 +5,7 @@ import type { SavedView, Schema } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 
 const api = vi.hoisted(() => ({
-  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
+  schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
 }))
 vi.mock('../api', () => api)
@@ -50,6 +50,7 @@ const tableEntry = (name: string) => {
 beforeEach(() => {
   api.schema.mockResolvedValue(served)
   api.rows.mockResolvedValue({ rows: [], total: 0 })
+  api.awayRows.mockResolvedValue([])
   api.records.mockResolvedValue({ rows: [], total: 0 })
   api.savedViews.mockResolvedValue([])
   api.prefs.mockResolvedValue({ order: {}, last: {} })
@@ -61,6 +62,7 @@ afterEach(() => {
   vi.resetAllMocks()
   setStrings(undefined)
   window.location.hash = ''
+  window.localStorage.clear()
 })
 
 describe('App shell', () => {
@@ -356,7 +358,7 @@ describe('a matrix view', () => {
     await screen.findByRole('columnheader', { name: 'Sien' })
     const window = { from: '2026-05-18', to: '2026-05-24' }
     expect(api.rows).toHaveBeenCalledWith(matrixSchema.views[0], window, null, expect.any(Object))
-    expect(api.rows).toHaveBeenCalledWith({ model: 'absence', table: 'afwezigheden' }, window, null)
+    expect(api.awayRows).toHaveBeenCalledWith(bezetting.away, window)
     expect(api.records).toHaveBeenCalledWith('person', '')
   })
 
@@ -730,6 +732,16 @@ describe('saved views', () => {
     expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
   })
 
+  it('lands on the first saved view when the engine declares its table after others', async () => {
+    api.schema.mockResolvedValue({ ...served, tables: [served.tables[1], served.tables[0]], views: [] })
+    api.savedViews.mockResolvedValue([calais, { ...calais, key: '43', id: 43, label: 'Ziek', table: 'absences', model: 'absence', date_field: undefined }])
+    await shell()
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
+  })
+
   it('falls back to the first view when the hash names an id that is no saved view', async () => {
     window.location.hash = '#view=999'
     api.savedViews.mockResolvedValue([calais])
@@ -817,7 +829,7 @@ describe('saved views', () => {
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
 
-    expect(api.updateView).toHaveBeenCalledWith(42, { arrangement: { ...empty, hidden: ['place'] } })
+    expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { arrangement: { ...empty, hidden: ['place'] } })
     await waitFor(() => expect(local('42')).toBeNull())
     expect(within(toolbar()).queryByText('· modified')).toBeNull()
   })
@@ -865,11 +877,32 @@ describe('saved views', () => {
     expect(local('planning')).toBeNull()
   })
 
+  it('"Save as new" on a saved view sends its fixed filters, opens the new view, and carries the widths and picks over to it', async () => {
+    window.location.hash = '#view=42'
+    const fixed = { status: { $in: ['optie', 'bevestigd'] } }
+    api.savedViews.mockResolvedValue([{ ...calais, fixed }])
+    api.createView.mockResolvedValue({ ...calais, key: '50', id: 50, label: 'Mijn planning', fixed, arrangement: { ...empty, hidden: ['place'] } })
+    changeLocally('42')
+    window.localStorage.setItem('ntdst-views/kept/v1/42', JSON.stringify({ widths: { place: 90 }, picked: [9], hidden: [] }))
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Save as new view' }))
+    const panel = screen.getByRole('complementary', { name: 'Save as new view' })
+    fireEvent.change(within(panel).getByRole('textbox', { name: 'Name' }), { target: { value: 'Mijn planning' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(hash()).toBe('50'))
+    expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mijn planning', table: 'planning', fixed }))
+    expect(JSON.parse(window.localStorage.getItem('ntdst-views/kept/v1/50') ?? '{}')).toEqual({ widths: { place: 90 }, picked: [9], hidden: [] })
+    expect(within(types()).getByRole('button', { name: /^Mijn planning/ }).getAttribute('aria-current')).toBe('page')
+  })
+
   it("drops a view another tab deleted, says so, and keeps the change on the table's starting view", async () => {
     window.location.hash = '#view=42'
-    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_unknown_saved': 'Deze weergave bestaat niet meer' } })
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.unknown_view': 'Deze weergave bestaat niet meer' } })
     api.savedViews.mockResolvedValue([calais])
-    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     render(<App />)
     await screen.findByText('No rows in this window')
@@ -886,14 +919,14 @@ describe('saved views', () => {
     window.location.hash = '#view=42'
     api.schema.mockResolvedValue({ ...served, views: [{ ...served.views[0], type: 'matrix' }, served.views[1]] })
     api.savedViews.mockResolvedValue([calais])
-    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     render(<App />)
     await screen.findByText('No rows in this window')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
 
-    expect(await screen.findByText('No such saved view. · Save your change with “Save as new view” before you leave')).toBeTruthy()
+    expect(await screen.findByText('unknown view 42 · Save your change with “Save as new view” before you leave')).toBeTruthy()
     expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
     expect(hash()).toBe('42')
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
@@ -903,7 +936,7 @@ describe('saved views', () => {
   it("never overwrites the starting view's own unsaved change with a deleted view's", async () => {
     window.location.hash = '#view=42'
     api.savedViews.mockResolvedValue([calais])
-    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     window.localStorage.setItem('ntdst-views/layout/v1/planning', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     render(<App />)
@@ -911,7 +944,7 @@ describe('saved views', () => {
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
 
-    expect(await screen.findByText('No such saved view. · Save your change with “Save as new view” before you leave')).toBeTruthy()
+    expect(await screen.findByText('unknown view 42 · Save your change with “Save as new view” before you leave')).toBeTruthy()
     expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['kind'])
     expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
   })
@@ -1028,8 +1061,8 @@ describe("a saved view's actions", () => {
   })
 
   it('puts a view back with the refusal when the delete is refused', async () => {
-    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_not_owner': 'Alleen de eigenaar kan deze weergave wijzigen' } })
-    api.deleteView.mockRejectedValue({ code: 'views_not_owner', message: 'Not yours.' })
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.not_owner': 'Alleen de eigenaar kan deze weergave wijzigen' } })
+    api.deleteView.mockRejectedValue({ code: 'not_owner', message: 'only the owner may change this view' })
     api.savedViews.mockResolvedValueOnce([calais, montage]).mockResolvedValue([calais, montage])
     await opened()
 
@@ -1058,13 +1091,13 @@ describe("a saved view's actions", () => {
 
     choose('Calais techniek', 'Share with the team')
 
-    expect(api.updateView).toHaveBeenCalledWith(42, { shared: true })
+    expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { shared: true })
     const item = () => within(types()).getByRole('button', { name: /^Calais techniek/ }).parentElement!
     await waitFor(() => expect(within(item()).getByRole('img', { name: 'Shared with the team' })).toBeTruthy())
 
     api.updateView.mockResolvedValueOnce(calais)
     choose('Calais techniek', 'Only for me')
-    expect(api.updateView).toHaveBeenLastCalledWith(42, { shared: false })
+    expect(api.updateView).toHaveBeenLastCalledWith(expect.objectContaining({ id: 42 }), { shared: false })
     await waitFor(() => expect(within(item()).getByRole('img', { name: 'Mine' })).toBeTruthy())
   })
 
@@ -1077,13 +1110,13 @@ describe("a saved view's actions", () => {
     fireEvent.change(name, { target: { value: 'Calais licht' } })
     fireEvent.keyDown(name, { key: 'Enter' })
 
-    expect(api.updateView).toHaveBeenCalledWith(42, { name: 'Calais licht' })
+    expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { name: 'Calais licht' })
     await waitFor(() => expect(names()).toEqual(['Planning', 'Calais licht', 'Montage', 'Calendarsoon']))
   })
 
   it('drops a view another tab deleted on a rename, in Dutch, and keeps its change on the starting view', async () => {
-    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_unknown_saved': 'Deze weergave bestaat niet meer' } })
-    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.unknown_view': 'Deze weergave bestaat niet meer' } })
+    api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     window.location.hash = '#view=42'
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     await opened()
@@ -1096,9 +1129,9 @@ describe("a saved view's actions", () => {
   })
 
   it('refreshes the list on a 403, in Dutch, and keeps the local arrangement', async () => {
-    api.schema.mockResolvedValue({ ...served, strings: { 'error.views_not_owner': 'Alleen de eigenaar kan deze weergave wijzigen' } })
+    api.schema.mockResolvedValue({ ...served, strings: { 'error.not_owner': 'Alleen de eigenaar kan deze weergave wijzigen' } })
     api.savedViews.mockResolvedValueOnce([calais, montage]).mockResolvedValue([{ ...calais, mine: false, editable: false, shared: true }, montage])
-    api.updateView.mockRejectedValue({ code: 'views_not_owner', message: 'Not yours.' })
+    api.updateView.mockRejectedValue({ code: 'not_owner', message: 'only the owner may change this view' })
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     await opened()
 
@@ -1148,7 +1181,7 @@ describe("a saved view's actions", () => {
     api.savedViews.mockResolvedValue([calais, montage, lights])
     api.deleteView.mockResolvedValue({})
     api.restoreView.mockResolvedValue(montage)
-    api.updateView.mockRejectedValue({ code: 'views_unknown_saved', message: 'No such saved view.' })
+    api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     await opened()
 
     choose('Montage', 'Remove')

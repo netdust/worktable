@@ -12,6 +12,7 @@ function sortValue(column: Column, row: Row): string | number {
     case 'rollup':
       return Number(column.value(row)) || 0
     case 'date':
+    case 'datetime':
     case 'time':
       return column.edit(row)
     default:
@@ -30,6 +31,7 @@ export function useGridTable(columns: Column[], rows: Row[], layout: Layout, onL
       minSize: 48,
       sortingFn: column.kind === 'number' || column.kind === 'rollup' ? 'basic' : 'text',
       enableHiding: column.id !== 'title',
+      enableSorting: column.sortable !== false,
     })),
     [columns],
   )

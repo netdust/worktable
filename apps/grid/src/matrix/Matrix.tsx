@@ -23,7 +23,7 @@ export interface MatrixProps {
   rows: Row[]
   /** The away view's rows for the same window. */
   away: Row[]
-  /** The column model's published records, by id. */
+  /** The column model's live records, by id. */
   titles: Map<number, string>
   emptyTitle: string
   emptyHint?: string

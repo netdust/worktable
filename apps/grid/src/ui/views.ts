@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { clearLayout, defaults, type Layout, save, storedLayout, storedRevision, subscribeStored } from '../grid/layout'
-import { clearPicked, savePicked, storedPicked } from '../matrix/columns'
+import { clearKept, clearLayout, defaults, type Layout, save, saveKept, storedKept, storedLayout, storedRevision, subscribeStored } from '../grid/layout'
+import { savePicked } from '../matrix/columns'
 import type { Arrangement, SavedView, StoredArrangement, View } from '../types'
 import type { Table } from './tables'
 
@@ -35,9 +35,13 @@ export function isSaved(view: View): view is SavedView {
   return typeof (view as Partial<SavedView>).id === 'number' && typeof (view as Partial<SavedView>).arrangement === 'object'
 }
 
-/** The arrangement a view is saved with: a starting view's declared one, a saved view's stored one. */
+const isMatrixKey = (id: string): boolean => id.startsWith('record:') || id.startsWith('name:')
+
+/** The arrangement a view is saved with: a starting view's declared one, a saved view's stored one; with what this browser keeps of it. */
 export function arrangementOf(view: View): Arrangement {
-  return isSaved(view) ? fromStored(view.arrangement) : { ...defaults(view), picked: [] }
+  const saved = isSaved(view) ? fromStored(view.arrangement) : { ...defaults(view), picked: [] }
+  const { widths = saved.widths, picked = saved.picked, hidden } = storedKept(view) ?? {}
+  return { ...saved, widths, picked, hidden: hidden ? [...saved.hidden.filter((id) => !isMatrixKey(id)), ...hidden] : saved.hidden }
 }
 
 const layoutPart = ({ picked: _, ...layout }: Arrangement): Layout => layout
@@ -50,10 +54,13 @@ export function layoutOf(view: View): Layout {
 /** The browser's unsaved copy; null when it keeps none. */
 export function localOf(view: View): Arrangement | null {
   const layout = storedLayout(view)
-  const picked = storedPicked(view)
-  if (layout === null && picked === null) return null
-  const saved = arrangementOf(view)
-  return { ...(layout ? { ...layoutPart(saved), ...layout } : layoutPart(saved)), picked: picked ?? saved.picked }
+  return layout === null ? null : { ...layout, picked: arrangementOf(view).picked }
+}
+
+/** The browser's copy of the layout; its widths and hidden matrix columns are also kept past a Save or a revert. */
+export function storeLayout(view: View, layout: Layout): void {
+  save(view, layout)
+  saveKept(view, { ...storedKept(view), widths: layout.widths, hidden: layout.hidden.filter(isMatrixKey) })
 }
 
 /** Compared as sets where the order means nothing: hidden columns and picked ones. */
@@ -69,9 +76,21 @@ export function changed(view: View): boolean {
   return local !== null && comparable(local) !== comparable(arrangementOf(view))
 }
 
+/** Drops the unsaved copy; what is kept past a Save stays. */
 export function clearLocal(view: View): void {
   clearLayout(view)
-  clearPicked(view)
+}
+
+/** A view gone for good: nothing of it stays in this browser. */
+export function forget(view: View): void {
+  clearLayout(view)
+  clearKept(view)
+}
+
+/** "Save as new": the new view keeps what this browser kept of the one it came from. */
+export function copyKept(from: View, to: View): void {
+  const kept = storedKept(from)
+  if (kept) saveKept(to, kept)
 }
 
 /** Clears the local copy only while it is what was sent: a change made since stays. */
@@ -82,7 +101,7 @@ export function clearIfSent(view: View, sent: Arrangement): void {
 
 /** Keeps an arrangement as this browser's unsaved copy of another view. */
 export function keepLocal(view: View, arrangement: Arrangement): void {
-  save(view, layoutPart(arrangement))
+  storeLayout(view, layoutPart(arrangement))
   if (view.type === 'matrix') savePicked(view, arrangement.picked)
 }
 
