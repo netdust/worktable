@@ -114,6 +114,7 @@ describe('the Activiteit writer', () => {
 const FOLLOWS_START = 'Datum volgt de start. Wijzig Start om de dag te verplaatsen.'
 const END_NEEDS_START = 'Een einde heeft een start nodig.'
 const CLEAR_END_FIRST = 'Wis eerst Einde: een einde heeft een start nodig.'
+const DATUM_REQUIRED = 'Datum is verplicht.'
 const UNTIMED = { productie_id: 1, soort: 'maaltijd', datum: '2026-10-20' }
 
 describe('an activity without a time', () => {
@@ -134,16 +135,22 @@ describe('an activity without a time', () => {
     expect(stored(res.body.id as number)).toMatchObject({ datum: '2026-10-21', plandag: '2026-10-20' })
   })
 
-  test('a body with neither datum nor start_at is refused for its missing datum', async () => {
-    const res = await post({ productie_id: 1, soort: 'maaltijd', start_at: null })
-    expect({ status: res.status, message: res.body.message }).toEqual({
-      status: 400,
-      message: expect.stringContaining('"datum"'),
-    })
+  test('a body with neither datum nor start_at is refused in Dutch', () =>
+    refused(() => post({ productie_id: 1, soort: 'maaltijd', start_at: null }), DATUM_REQUIRED))
+
+  test('a null datum without start_at is refused in Dutch on create', () =>
+    refused(() => post({ ...UNTIMED, datum: null }), DATUM_REQUIRED))
+
+  test('a PATCH clearing datum on an untimed row is refused in Dutch', async () => {
+    const { body } = await post(UNTIMED)
+    return refused(() => patch(body.id as number, { datum: null }), DATUM_REQUIRED)
   })
 
-  test('a datum that disagrees with start_at is refused', () =>
-    refused(() => post({ ...NEW, datum: '2026-10-22' }), FOLLOWS_START))
+  test('on create a set start_at decides datum over a disagreeing one', async () => {
+    const res = await post({ ...NEW, datum: '2026-10-19', start_at: '2026-10-21T20:00', eind_at: null })
+    expect(res.status).toBe(201)
+    expect(stored(res.body.id as number)).toMatchObject({ datum: '2026-10-21', plandag: '2026-10-21' })
+  })
 
   test('an eind_at without start_at is refused', () =>
     refused(() => post({ ...UNTIMED, eind_at: '2026-10-20T12:00' }), END_NEEDS_START))
@@ -185,7 +192,7 @@ describe('an activity without a time', () => {
 
   test('a time set on an untimed row on another day moves datum to it', async () => {
     const { body } = await post(UNTIMED)
-    await patch(body.id as number, { start_at: '2026-10-23T03:00' })
+    expect((await patch(body.id as number, { start_at: '2026-10-23T03:00' })).status).toBe(200)
     expect(stored(body.id as number)).toMatchObject({ datum: '2026-10-23', plandag: '2026-10-22' })
   })
 

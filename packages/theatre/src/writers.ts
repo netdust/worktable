@@ -30,21 +30,25 @@ function checkOrder(values: Values, ctx: WriteContext): void {
 }
 
 // With a time, datum is the day of start_at and plandag follows the day line; without one, both are datum.
+// On a create a set start_at decides datum; only an update refuses a datum that disagrees with it.
 function withDay(values: Values, ctx: WriteContext): Values {
   const { start_at, eind_at, datum } = merged(values, ctx)
   if (typeof start_at === 'string') {
     const day = start_at.slice(0, 10)
-    if (Object.hasOwn(values, 'datum') && values.datum !== day)
-      refuse('Datum volgt de start. Wijzig Start om de dag te verplaatsen.')
-    if (!Object.hasOwn(values, 'start_at')) return values
+    if (ctx.current) {
+      if (Object.hasOwn(values, 'datum') && values.datum !== day)
+        refuse('Datum volgt de start. Wijzig Start om de dag te verplaatsen.')
+      if (!Object.hasOwn(values, 'start_at')) return values
+    }
     return { ...values, datum: day, plandag: plandag(start_at, DAY_LINE_HOUR) }
   }
   if (eind_at != null) {
     const clearsStart = Object.hasOwn(values, 'start_at') && ctx.current?.start_at != null
     refuse(clearsStart ? 'Wis eerst Einde: een einde heeft een start nodig.' : 'Een einde heeft een start nodig.')
   }
+  if (datum == null) refuse('Datum is verplicht.')
   const touched = Object.hasOwn(values, 'datum') || Object.hasOwn(values, 'start_at')
-  return touched && datum !== undefined ? { ...values, plandag: datum } : values
+  return touched ? { ...values, plandag: datum } : values
 }
 
 const writerOf = (accept: Accept): Required<Writer> => ({ create: accept, update: accept, delete() {} })
