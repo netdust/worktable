@@ -46,3 +46,9 @@ The design matches the approved spec lines, and the engine needs no change. Two 
 # Round 2
 Reviewed-plan: 50c6dac6a73192f46d1eb23e6cc5e51c804805db specs/step-0e-datum/plan.md
 Verdict: not ready (B1: the e2e names a non-existent view "Activiteiten" — clicking the table opens Planning; use "Optie of bevestigd"). Should fix: S1 the e2e day depends on the run date (newRow uses today inside the window); S2 Task 3 omits ExportCommand.php (count of removed keys → TypeError) and ChecksTest.php; S3 the approved U4 spec-diff line still defines weeks by start_at; S4 Task 1 must run the full gate; S5 Task 4 renames the old export after overwriting it. Notes: datum edits on timed rows and clearing Start with an end are refused — make the messages say what to do; name the test files; give the cross-repo import command; atelier renders a null start (outside this plan). Prior B1, B2, S1–S5, N1–N3, N5–N7 resolved; S6 and N4 partly.
+
+---
+
+# Round 3
+Reviewed-plan: ef5a8187f9f57a0d421bf1dcb76dcee2d402e0b1 specs/step-0e-datum/plan.md
+Verdict: ready. All six round-2 findings resolved; nothing new introduced. Notes: Planning keeps sort start_at with group plandag (untimed first in its group, covered by group.test.ts); the two seeded views' new sort and datum column are covered indirectly by the e2e; newRow fills datum and plandag, the writer derives plandag.
