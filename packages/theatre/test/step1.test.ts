@@ -309,3 +309,8 @@ describe('the inherited locatie', () => {
     })
   })
 })
+
+test('the seeded Dagplanning view shows the resolved locatie and where it comes from', () => {
+  const view = theatre.views.find((v) => v.name === 'Dagplanning')
+  expect(view?.visible_fields).toEqual(expect.arrayContaining(['locatie_id', 'locatie_bron']))
+})
