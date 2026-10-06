@@ -157,6 +157,30 @@ describe('views denials: forged ownership and audit (attack 2)', () => {
   )
 })
 
+function insertAs(owner: number, extra: { public?: number; deleted?: boolean } = {}): number {
+  const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, public, deleted_at)
+               VALUES ('Systeem', 'dataset', 'taak', ?, 1, ?, ?)`
+  const deleted = extra.deleted ? '2026-10-01T00:00:00Z' : null
+  return Number(sqlite.query(sql).run(owner, extra.public ?? 0, deleted).lastInsertRowid)
+}
+
+describe('views denials: system views and public views (attack 8)', () => {
+  test('PATCH, DELETE and restore of a system view are 403 read_only_view', async () => {
+    const id = insertAs(-1)
+    await denied('PATCH', `/api/views/${id}`, body({ name: 'x' }), 403, 'read_only_view')
+    await denied('DELETE', `/api/views/${id}`, { type: null }, 403, 'read_only_view')
+    await denied('POST', `/api/views/${insertAs(-1, { deleted: true })}/restore`, body({}), 403, 'read_only_view')
+  })
+
+  test("an editor's PATCH, DELETE and restore of their own public view are 403 public_view", async () => {
+    const id = insertAs(ME, { public: 1 })
+    await denied('PATCH', `/api/views/${id}`, body({ visible_fields: ['name', 'status'] }), 403, 'public_view')
+    await denied('DELETE', `/api/views/${id}`, { type: null }, 403, 'public_view')
+    const gone = insertAs(ME, { public: 1, deleted: true })
+    await denied('POST', `/api/views/${gone}/restore`, body({}), 403, 'public_view')
+  })
+})
+
 const hostile: [string, Record<string, unknown>][] = [
   ['an unknown filter key', { filters: { nope: 1 } }],
   ['a quoted filter key', { filters: { 'name" OR 1=1 --': 1 } }],
@@ -277,7 +301,7 @@ describe('views', () => {
     expect(body.views[1]).toMatchObject({ name: 'Van Zeven gedeeld', owner_id: 7, mine: false, editable: false })
   })
 
-  test('a seeded view is owned by no account, shared, and neither mine nor editable', async () => {
+  test('a seeded view is owned by the system owner, shared, and neither mine nor editable', async () => {
     const fresh = seeded()
     const app = testEngine(fresh, domain)
     const { body } = await send(app, await signIn(app))('GET', '/api/views')
@@ -293,7 +317,8 @@ describe('views', () => {
         group_by: null,
         visible_fields: ['name'],
         shared: true,
-        owner_id: 0,
+        public: false,
+        owner_id: -1,
         mine: false,
         editable: false,
       },
@@ -314,6 +339,7 @@ describe('views', () => {
       group_by: null,
       visible_fields: [],
       shared: false,
+      public: false,
       owner_id: ME,
       mine: true,
       editable: true,
@@ -386,6 +412,70 @@ describe('views', () => {
     expect(res.status).toBe(200)
     expect(res.body.views).toBeUndefined()
     expect(JSON.stringify(res.body)).not.toContain('Van Zeven')
+  })
+})
+
+describe('system views', () => {
+  test('"save as new" from a system view is a plain POST, owned by the caller', async () => {
+    const system = (await view(insertAs(-1))) as Record<string, unknown>
+    expect(system).toMatchObject({ owner_id: -1, mine: false, editable: false })
+    const { id, owner_id, mine, editable, shared, public: _, source_type, ...copy } = system
+    const res = await request('POST', '/api/views', body({ ...copy, name: 'Mijn kopie' }))
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ name: 'Mijn kopie', owner_id: ME, mine: true, editable: true })
+  })
+})
+
+describe('the owner-0 migration', () => {
+  const owners = (db: Database) =>
+    db.query('SELECT name, owner_id FROM saved_view ORDER BY id').all() as { name: string; owner_id: number }[]
+  const legacy = (db: Database, name: string, source: string) =>
+    db
+      .query(`INSERT INTO saved_view (name, source_type, source, owner_id, shared) VALUES (?, 'dataset', ?, 0, 1)`)
+      .run(name, source)
+
+  function oldDatabase(): Database {
+    const db = new Database(':memory:')
+    migrate(db, domain)
+    legacy(db, 'Alles', 'taak')
+    legacy(db, 'Alles', 'member')
+    legacy(db, 'Eigen', 'taak')
+    return db
+  }
+
+  test('a seed match moves to -1, any other to the lowest administrator, each revised by -1', () => {
+    const db = oldDatabase()
+    db.run("INSERT INTO account (email, role) VALUES ('ed@example.test', 'editor')")
+    db.run("INSERT INTO account (email, role) VALUES ('a2@example.test', 'administrator')")
+    db.run("INSERT INTO account (email, role) VALUES ('a3@example.test', 'administrator')")
+    migrate(db, domain)
+    expect(owners(db)).toEqual([
+      { name: 'Alles', owner_id: -1 },
+      { name: 'Alles', owner_id: 2 },
+      { name: 'Eigen', owner_id: 2 },
+    ])
+    const audit = db
+      .query("SELECT record_id, field, old, new, actor_id FROM revision WHERE entity = 'saved_view'")
+      .all()
+    expect(audit).toEqual([
+      { record_id: 1, field: 'owner_id', old: '0', new: '-1', actor_id: -1 },
+      { record_id: 2, field: 'owner_id', old: '0', new: '2', actor_id: -1 },
+      { record_id: 3, field: 'owner_id', old: '0', new: '2', actor_id: -1 },
+    ])
+  })
+
+  test('with no administrator the others stay at 0 and startup logs their count', () => {
+    const db = oldDatabase()
+    const logged: string[] = []
+    const log = console.log
+    console.log = (line: string) => logged.push(line)
+    try {
+      migrate(db, domain)
+    } finally {
+      console.log = log
+    }
+    expect(owners(db).map((v) => v.owner_id)).toEqual([-1, 0, 0])
+    expect(logged.some((line) => line.includes('2 views'))).toBe(true)
   })
 })
 

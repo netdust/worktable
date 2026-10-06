@@ -259,6 +259,9 @@ describe('?cells=1 filters the join to scope', () => {
 
 type Role = 'none' | Actor['role']
 
+const PUBLIC_TOKEN = 'matrix-token'
+const PUBLIC_HASH = new Bun.CryptoHasher('sha256').update(PUBLIC_TOKEN).digest('hex')
+
 // Written by hand from the Decisions table, never derived from may(), so a wrong cell cannot pass both sides.
 const EXPECTED: { method: string; path: string; body?: unknown; status: Record<Role, number> }[] = [
   {
@@ -312,6 +315,22 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
     body: {},
     status: { none: 401, owner: 403, editor: 200, administrator: 200 },
   },
+  {
+    method: 'PUT',
+    path: '/api/views/3/share-token',
+    body: {},
+    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/views/3/share-token',
+    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+  },
+  {
+    method: 'GET',
+    path: `/api/public/views/${PUBLIC_TOKEN}`,
+    status: { none: 200, owner: 200, editor: 200, administrator: 200 },
+  },
 ]
 
 describe('the permissions matrix', () => {
@@ -322,10 +341,12 @@ describe('the permissions matrix', () => {
         const own = freshDb()
         const app = testEngine(own, domain)
         const cookie = role === 'none' ? undefined : await signIn(app, role, role === 'owner' ? OWN : null)
-        // View 2 belongs to whoever signed in (account 1), so only the role decides.
+        // Views 2 and 3 belong to whoever signed in (account 1), so only the role decides; 4 is public.
         own.run(
-          `INSERT INTO saved_view (name, source_type, source, owner_id, created_at, updated_at)
-           VALUES ('Own', 'dataset', 'taak', 1, '2026-10-01', '2026-10-01')`,
+          `INSERT INTO saved_view (name, source_type, source, owner_id, visible_fields, public, share_token)
+           VALUES ('Own', 'dataset', 'taak', 1, '[]', 0, NULL),
+                  ('Query', 'query', 'per_project', 1, '["name"]', 0, NULL),
+                  ('Public', 'query', 'per_project', 1, '["name"]', 1, '${PUBLIC_HASH}')`,
         )
         const res = await send(app, cookie)(method, path, body === undefined ? { type: null } : { body: json(body) })
         expect(res.status).toBe(status[role])

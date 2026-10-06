@@ -31,7 +31,7 @@ test('the seeded views are shared, owned by no account, and pass the saved-view 
     views: Record<string, unknown>[]
   }
   expect(views.length).toBe(theatre.views.length)
-  expect(views.every((v) => v.shared === true && v.owner_id === 0 && v.mine === false)).toBe(true)
+  expect(views.every((v) => v.shared === true && v.owner_id === -1 && v.mine === false)).toBe(true)
   for (const v of views) {
     const res = await app.request('/api/views', { method: 'POST', headers, body: JSON.stringify(v) })
     expect({ name: v.name, status: res.status }).toEqual({ name: v.name, status: 201 })

@@ -36,8 +36,8 @@ export type AuthEnv = { Variables: { actor: Actor; account: AccountRow; session:
 const ACCOUNT = 'a.id, a.email, a.role, a.subject_dataset, a.subject_id'
 
 const iso = (ms: number): string => new Date(ms).toISOString()
-const sha256 = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex')
-const secret = (): string => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
+export const sha256 = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex')
+export const secret = (): string => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 const badToken = (): ApiError => new ApiError(400, 'bad_token', 'This link is not valid any more')
 
 function emailOf(value: unknown): string {

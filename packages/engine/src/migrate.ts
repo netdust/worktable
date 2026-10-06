@@ -8,6 +8,8 @@ import { revision } from './revision'
 import { savedView } from './saved-view'
 import { applyChange, type Change, planChange } from './schema-diff'
 import { validateDomain } from './validate'
+import { SYSTEM_OWNER } from './views'
+import { revise } from './writes'
 
 const hashOf = (statements: string[]): string =>
   new Bun.CryptoHasher('sha256').update(statements.join(';\n')).digest('hex')
@@ -99,6 +101,30 @@ export function migrate(sqlite: Database, domain: Domain): void {
   } finally {
     sqlite.run('PRAGMA foreign_keys = ON')
   }
+  sqlite.transaction(() => adoptUnowned(sqlite, domain))()
+}
+
+function moveView(sqlite: Database, id: number, owner: number, now: string): void {
+  sqlite.query('UPDATE saved_view SET owner_id = ?, updated_at = ? WHERE id = ?').run(owner, now, id)
+  revise(sqlite, savedView, id, [['owner_id', 0, owner]], now, SYSTEM_OWNER)
+}
+
+// Views from before accounts were stored with owner 0: a seed goes to the system owner, any other to an administrator.
+function adoptUnowned(sqlite: Database, domain: Domain): void {
+  type Orphan = { id: number; name: string; source: string }
+  const orphans = sqlite.query('SELECT id, name, source FROM saved_view WHERE owner_id = 0').all() as Orphan[]
+  if (orphans.length === 0) return
+  const sql = "SELECT MIN(id) AS id FROM account WHERE role = 'administrator'"
+  const admin = (sqlite.query(sql).get() as { id: number | null }).id
+  const isSeed = (v: Orphan) => domain.views.some((seed) => seed.name === v.name && seed.source === v.source)
+  const now = new Date().toISOString()
+  let left = 0
+  for (const view of orphans) {
+    const owner = isSeed(view) ? SYSTEM_OWNER : admin
+    if (owner === null) left++
+    else moveView(sqlite, view.id, owner, now)
+  }
+  if (left > 0) console.log(`migrate: ${left} views have no owner; the first administrator gets them once one exists`)
 }
 
 function insertRows(sqlite: Database, table: string, rows: Record<string, unknown>[]): void {
@@ -113,16 +139,13 @@ function insertRows(sqlite: Database, table: string, rows: Record<string, unknow
   }
 }
 
-// No account has this id (account ids start at 1), so a seeded view belongs to no one.
-const SEED_OWNER = 0
-
 export function seedDomain(sqlite: Database, domain: Domain): void {
   sqlite.transaction(() => {
     domain.seed((dataset, rows) => insertRows(sqlite, dataset, rows))
     insertRows(
       sqlite,
       'saved_view',
-      domain.views.map((v) => ({ ...v, owner_id: SEED_OWNER, shared: true })),
+      domain.views.map((v) => ({ ...v, owner_id: SYSTEM_OWNER, shared: true })),
     )
   })()
 }

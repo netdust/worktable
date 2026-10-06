@@ -123,7 +123,7 @@ describe('the fiche domain', () => {
 test('the seeded views are shared, owned by no account, and pass the saved-view rules', async () => {
   const views = (await request('GET', '/api/views')).body.views as Body[]
   expect(views.length).toBe(fiche.views.length)
-  expect(views.every((v) => v.shared === true && v.owner_id === 0 && v.mine === false)).toBe(true)
+  expect(views.every((v) => v.shared === true && v.owner_id === -1 && v.mine === false)).toBe(true)
   for (const v of views) {
     const res = await request('POST', '/api/views', v)
     expect({ name: v.name, status: res.status }).toEqual({ name: v.name, status: 201 })

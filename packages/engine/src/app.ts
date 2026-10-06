@@ -8,7 +8,7 @@ import type { Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
-import { viewRoutes } from './views'
+import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import { bodyOf, parseId, readRevisions, rowOf, runWrite, type Store, writableOf } from './writes'
 
@@ -73,13 +73,11 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   })
 
   const app = root.basePath('/api')
+  const store: Store = { sqlite, db, domain }
+  const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
-  authRoutes(app, sqlite, {
-    appUrl,
-    outbox,
-    cookieName,
-    clientIp: clientIp ? (c) => clientIp(c.req.raw) : peerAddress,
-  })
+  publicRoutes(app, store, ipOf)
+  authRoutes(app, sqlite, { appUrl, outbox, cookieName, clientIp: ipOf })
 
   app.get('/schema', (c) => {
     const actor = c.get('actor')
@@ -128,8 +126,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     return c.json({ ...read, rows: read.rows.map((r) => ({ ...r, cells: cells.get(r.id) })) })
   })
 
-  writeRoutes(app, { sqlite, db, domain })
-  viewRoutes(app, { sqlite, db, domain })
+  writeRoutes(app, store)
+  viewRoutes(app, store)
+  shareRoutes(app, store)
 
   root.onError((err, c) => {
     if (err instanceof ApiError) return c.json({ ...err.details, code: err.code, message: err.message }, err.status)
