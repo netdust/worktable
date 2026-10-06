@@ -1,4 +1,5 @@
 import type { Domain } from '@worktable/engine'
+import { sjabloonToepassen } from './actions'
 import {
   activiteit,
   beschikbaarheid,
@@ -40,6 +41,7 @@ const theatre: Domain = {
     speelreeks: speelreeksWriter,
     sjabloon: sjabloonWriter,
   },
+  actions: { sjabloon_toepassen: sjabloonToepassen },
   seed,
   views,
 }
