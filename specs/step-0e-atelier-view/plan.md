@@ -8,7 +8,7 @@
 - **The service.** A new atelier service `services/worktable/`, shaped like `services/performance/`:
   - `WorktableService` registers the shortcode and the element;
   - `WorktableClient` fetches `GET <engine_url>/api/public/views/<token>?from&to` with `wp_remote_get`, a 3-second timeout and a transient cache;
-  - a template renders a table from the rows' keys, in the order the engine sends them.
+  - a template renders a table whose headers are the response's `columns` labels, in their order, and whose cells are each row's values for those keys (Stefan, 2026-10-06, at plan approval).
 - **Where the engine URL comes from.** It is service config (`ntdst/service/worktable/config` → `engine_url`). Laika sets it through its `plugin-config.php` `overrides` from `WORKTABLE_URL` in its `.env`; it is never written in code or in a shortcode attribute.
 - **First working version:** Task 1. The shortcode on a local page, with `pre_http_request` returning a recorded engine response, renders the table.
 
@@ -36,7 +36,7 @@
 - **The cache.**
   - The transient key is `worktable_view_` + `md5(token|from|to)`, and it lives 5 minutes.
   - A failed fetch (timeout, non-200, invalid JSON) is never cached as data. It renders the empty state, and is cached 60 seconds as a failure, so a down engine is not hammered.
-- **Escaping.** Column headers are the row keys turned into labels (`ucfirst`, `_`→space) through `esc_html`. Cells go through `esc_html`. There is no HTML from the engine, ever.
+- **Escaping.** Column headers are the `columns` labels the engine returns, through `esc_html`; a key missing from a row renders an empty cell. Cells go through `esc_html`. There is no HTML from the engine, ever.
 - **The empty state** is a filterable string, `ntdst/service/worktable/empty`, empty by default. The output says nothing about why it is empty.
 - **The YOOtheme element.**
   - It lives at `services/worktable/builder/worktable_view/element.json` plus `template.php`, with fields `token`, `from` and `to`. Its template calls the same render function as the shortcode.
@@ -140,7 +140,7 @@ Then this plan's own:
 **Interfaces:**
 - Produces: `WorktableService::render(array $atts): string` and `WorktableClient::fetch(string $token, ?string $from, ?string $to): ?array`. The fetch returns null on any failure.
 
-- [ ] **Step 1: Denial tests first,** for attacks 1–5, and an empty `engine_url` → the empty state with no request. Then behaviour: rows render in key order; the cache hit makes no request.
+- [ ] **Step 1: Denial tests first,** for attacks 1–5, and an empty `engine_url` → the empty state with no request. Then behaviour: headers come from `columns` labels in order, and cells follow `columns`, not the row's key order; rows render in order; the cache hit makes no request.
 - [ ] **Step 2: Implement, then run** `composer gate` in the worktree.
 - [ ] **Step 3: Commit.** `feat(worktable): a public engine view as a shortcode, fetched server-side`.
 

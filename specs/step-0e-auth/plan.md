@@ -50,7 +50,9 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - **The order on delete** (the 0e requirement). The engine's scope check runs first, then `writer.delete(ctx)`, which may refuse by role, then the in-use check. `storedOf()` today runs `inUse` before `writer.delete`, and that order is swapped. The swap inverts `packages/engine/test/writes.test.ts:169` ("on a 409 the referenced dataset's writer delete did not run"): that test is rewritten to assert the new order, which is safe because the writer's delete runs inside the same transaction and a 409 rolls it back. It also changes the `docs/SPEC.md` Writer row ("checked before the writer's own delete"), which goes into the spec diff (plan review S13).
 - **Refusing by role.** A new engine helper `forbid(message)` throws 403 `forbidden`. `refuse()` stays 422 for domain rules.
 - **The link.** It is `<app-url>/#/auth/<token>`, with the token in the fragment so it never reaches a server log or a scanner's GET. The grid's confirm screen shows one button, which POSTs `{ token }`.
-- **The engine's new flags:** `--app-url` (default `http://127.0.0.1:5173`) and `--outbox <dir>`. In development the link is written to the outbox as one file per message and printed to the console; there is no mail provider in 0e.
+- **The engine's new flags:** `--app-url` (default `http://127.0.0.1:5173`), `--outbox <dir>` and `--hostname` (default `127.0.0.1`).
+  - With `--outbox`, the link is written there as one file per message and printed to the console. Without `--outbox`, a link is printed nowhere: there is no mail provider in 0e (Stefan, 2026-10-06, at plan approval).
+  - A non-loopback `--hostname` without a mailer exits 1 with a message naming the reason. In 0e no mailer exists, so the engine binds loopback only (Stefan, 2026-10-06, at plan approval).
 - **Lifetimes:**
   - a token is 32 random bytes (base64url), lives 15 minutes and is single-use, claimed by `UPDATE … SET used_at … WHERE used_at IS NULL AND expires_at > now RETURNING`;
   - a session is a new 32-byte id on every sign-in, stored as sha256 and valid for 30 days;
@@ -150,7 +152,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 
 **Files:**
 - Create:
-  - `packages/engine/src/auth-tables.ts` (`account`, `magic_link`, `auth_session`, `rate_limit` declared with `defineDataset`; `migrate()` includes them beside `savedView` and `revision`);
+  - `packages/engine/src/auth-tables.ts` (`account`, `magic_link`, `auth_session`, `rate_limit` declared with `defineDataset`; `account`'s DDL carries `CHECK (id > 0)` (Stefan, 2026-10-06, at plan approval), through an engine-internal `checks` list that `validateDomain` refuses on any domain dataset; `migrate()` includes them beside `savedView` and `revision`);
   - `packages/engine/src/auth.ts`, `packages/engine/src/rate-limit.ts`, `packages/engine/test/auth.test.ts`.
 - Modify: `migrate.ts`, `app.ts` (mount `/auth/*`; session middleware on `/api/*` except the open routes; options `appUrl`, `outbox`, `cookieName`, `clientIp`), `serve.ts` (`--create-admin`, `--create-account`, `--disable-account`, `--role`, `--subject`, `--app-url`, `--outbox`, `--cookie-name`; `getConnInfo` passed in), `declare.ts` (`Actor`), `packages/engine/test/fixture.ts` (`signIn(app, role, subject?)` returns a cookie; `send()` takes `cookie`).
 - Delete: `packages/engine/src/dev-actor.ts`.
@@ -183,7 +185,10 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - attacks 1–5 and 11;
   - a request without a cookie, with a garbage cookie, with an expired session, or with a disabled account → 401;
   - `--subject` naming an undeclared dataset is refused;
-  - the cookie is named `wt_session` by default and `--cookie-name` changes it.
+  - the cookie is named `wt_session` by default and `--cookie-name` changes it;
+  - a raw insert of an account with id 0 or −1 fails on the CHECK;
+  - a link request without `--outbox` prints nothing and writes no file, yet answers the same 200;
+  - `serve.ts --hostname 0.0.0.0` exits 1 naming the missing mailer, and `--hostname 127.0.0.1` starts.
   - the account CLI refuses `--subject` with any role but owner, an owner without `--subject`, and an unknown `--role`; `--disable-account` sets `disabled_at`, and that account's next request is 401 (round 3 N-7).
 
   Run → FAIL.
@@ -242,7 +247,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - Produces:
   - `PUT /api/views/:id/share-token` → `{ token }`;
   - `DELETE /api/views/:id/share-token` → `{ id }`;
-  - `GET /api/public/views/:token?from&to` → `{ rows: Record<string, unknown>[], total }`;
+  - `GET /api/public/views/:token?from&to` → `{ columns: { key: string; label: string; type: ColumnType }[], rows: Record<string, unknown>[], total }`. `columns` is `visible_fields` in order, with each column's declared label and type, so a reader renders headers without guessing (Stefan, 2026-10-06, at plan approval);
   - `ViewOut.editable` is false for owner `-1`;
   - `ViewOut` gains `public: boolean` and never the token or its hash.
 
@@ -262,7 +267,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - [ ] **Step 2: Behaviour tests.**
   - "Save as new" from a system view creates a view the caller owns.
   - The owner-0 migration moves seeded views to `-1` and others to the first administrator.
-  - The public response equals the view's rows projected to `visible_fields` (assert exact keys).
+  - The public response equals the view's rows projected to `visible_fields` (assert exact keys). `columns` lists the same keys in the same order, with the source's declared labels and types.
 - [ ] **Step 3: Implement, run, commit.** `feat(engine): seeded views read-only under a system owner; the public view route`.
 
 ### Task 4: The route × role matrix

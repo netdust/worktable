@@ -151,7 +151,7 @@ Source: "removing the views module from baseline" · form: Stefan's decision abo
 Then stop and report.
 
 ## Out
-- **The cutover,** a separate slice: HTTPS, the Host allowlist for a real domain, Secure session flags, backups and a restore drill, the independent review, and Laika's composer constraint.
+- **The cutover,** a separate slice: HTTPS, the Host allowlist for a real domain, Secure session flags, real mail delivery, a trusted-proxy setting, backups and a restore drill, the independent review, and Laika's composer constraint (mail and proxy added by Stefan, 2026-10-06).
 - **Signed person links and record tokens** (step 2).
 - **Publication (step 4),** apart from the single public read route above.
 - **Mail delivery,** beyond the console in development.
@@ -173,6 +173,8 @@ All six open questions were answered and are written into the units above: the p
 
 ## Plans
 One plan per unit, each `specs/<feature>/plan.md` in this repo with its `**Spec:**` naming this file. The plans for other repositories name their repository and branch. They live here so the set is reviewed as one. The worktable plans run in the order listed, each merged before the next branches: the migrator is Stefan's entry condition, the vocabulary plan renames the engine's test fixtures before auth rewrites every test, and the import runs as an administrator. The four plans in other repositories are independent of each other.
+
+**Approved** by Stefan on 2026-10-06, after three review rounds, with six changes applied without a further review round. The execution order is U1, U3, U2, U4 in worktable, then U5, U6 and U7 once the engine routes exist. U7 proceeds without a Laika pin.
 
 | Plan | Repository · branch |
 |---|---|

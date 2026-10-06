@@ -42,7 +42,7 @@
   - `performance` is not exported (the engine has no Performance; the website keeps the link) and is counted in the report.
 - **Organisation:** `soort` by rank: own company→`eigen`, `venue`→`venue`, `coproducer`→`partner`, `presenter`→`partner`, `funder`→`agentschap`, none→`partner`. The role slugs are kept in `custom.laika_rollen`.
   - The own company is named on the command line: `--own=<organisation post id>`, required, and the command refuses without it. Atelier's profile holds no link to an organisation (plan review B2). The report names the chosen organisation.
-- **Person name:** lowercase particles attach to the last name. The particle list is `van, van den, van der, van de, de, den, der, ter, ten, te, 't, von, vom, zu, du, le, la, d'`, matched as whole lowercase tokens, longest first.
+- **Person name:** particles attach to the last name. The particle list is `van, van den, van der, van de, de, den, der, ter, ten, te, 't, von, vom, zu, du, le, la, d'`, matched case-insensitively as whole tokens, longest first, and only after the first token. The first token is always voornaam, so "Els De Smet" becomes Els / De Smet and "Piet Van Damme" becomes Piet / Van Damme. The last name keeps its capitals as written (Stefan, 2026-10-06, at plan approval).
   - A single token becomes voornaam = token and achternaam = `(onbekend)`.
   - Every particle split and every single token is listed in the report.
   - `wp_user` is not exported.
@@ -53,7 +53,8 @@
 
   Both are listed in the report by legacy id.
 - **Absence:** whole days → `start_at` `T00:00`, `eind_at` `T23:59` on the last day. `reden` comes from the absence's reason field.
-- **Checks:** the exporter computes `checks` through atelier's repositories after cleaning, in the shape fixed by the import plan:
+- **Reconciliation, per dataset** (Stefan, 2026-10-06, at plan approval). For each of the six datasets, the source rows read through the repositories must equal exported + dropped (cleaning) + not exported (translations, the reasons listed). A mismatch fails the command (`WP_CLI::error`, exit 1) and writes no export, naming the dataset and the four numbers. The report carries the four numbers for every dataset.
+- **Checks:** the exporter computes `checks` from the cleaned rows it read through atelier's repositories, never by reading back the JSON it writes, so the export cannot vouch for itself (Stefan, 2026-10-06, at plan approval). The shape is the one fixed by the import plan:
   - per-dataset counts;
   - activities per ISO week of their date;
   - assignments per person legacy id and per mapped state;
@@ -147,7 +148,8 @@ Then this plan's own:
 
 ## Review Focus
 0. The no-start (`T05:00`, flag set) and no-production (placeholder, legacy id 0) rules → `ActivityMapTest` and the integration test.
-1. Names with particles and single tokens: "Jan van der Berg", "Els De Smet" (capital "De" stays in the last name as written, and is not split as a particle), "Madonna", "Jean-Luc d'Hondt" → `NameSplitTest`.
+1. Names with particles and single tokens: "Jan van der Berg" (Jan / van der Berg), "Els De Smet" (Els / De Smet), "Piet Van Damme" (Piet / Van Damme), "Van Damme" (a single first token is never a particle: Van / Damme), "Madonna" (Madonna / (onbekend)), "Jean-Luc d'Hondt" → `NameSplitTest`.
+1b. Reconciliation: a source row that is neither exported, dropped nor counted as not exported fails the command → the integration test removes one row from the exported set by a test seam and asserts exit 1 and no file. `Checks` is computed from the repository rows: the test changes the written JSON afterwards and asserts `checks` did not follow.
 2. A whole-day absence ending on a DST change: `eind_at` is the last day's `T23:59` local → the integration test with an absence over the last weekend of October.
 3. A duplicate pair where both rows carry different states: the oldest wins, and the report names the dropped one → `CleanerTest`.
 4. An organisation with funder and presenter becomes `partner` → `RoleRankTest`.

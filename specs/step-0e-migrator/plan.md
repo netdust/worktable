@@ -19,6 +19,7 @@
 **Simplest design:** Always rebuild on any change, with no ALTER path. It is one code path and is correct for every case, but the spec mandates both ("ALTER and SQLite's table rebuild"), and ALTER spares a full copy for the commonest change (adding a nullable column, which the import plan does to six datasets). The ALTER path costs one branch in `planChange()`. A per-version migration file system (Drizzle Kit, numbered SQL) is rejected: datasets are declarations and the DDL is generated from them, so the diff is computed, never hand-written.
 
 ## Decisions
+- **A copy before any rebuild** (Stefan, 2026-10-06, at plan approval). Before `migrate()` applies a rebuild to a file database, it writes a consistent copy to `<db>.pre-migrate` with `VACUUM INTO`, which is safe under WAL. An existing copy is replaced, so the file always holds the state just before the latest rebuild. An in-memory database is not copied. A refusal is decided before the copy, so a refused migration writes none. The startup log names the copy.
 - **Refused before anything is touched** (each a `MigrationError` naming dataset and column), per the spec:
   - a new NOT NULL column without a default on a non-empty table;
   - a type change on a non-empty table that is not lossless. Lossless means `integer`→`real`, any type→`text`, or between types that share a SQLite storage class (`date`/`datetime`/`json`/`text`; `boolean`/`integer`);
@@ -95,7 +96,8 @@ Not a security surface: no new route or input. The asset is data integrity, cove
   - a dropped column → rebuilt without it;
   - `integer`→`text` → rebuilt, and values read back as text;
   - each refusal named in Decisions → `MigrationError` naming the dataset and column, with the file's bytes identical before and after;
-  - a query reading the rebuilt table returns the same rows.
+  - a query reading the rebuilt table returns the same rows;
+  - **the backup:** a rebuild leaves `<db>.pre-migrate`, which opens with the old schema and every old row; an ALTER-only change and a refusal leave none; a second rebuild replaces the copy with the state just before it.
 
   Run `bun test packages/engine/test/migrate.test.ts` → FAIL.
 - [ ] **Step 2: Implement** `planChange`/`applyChange` and the `migrate()` changes.
