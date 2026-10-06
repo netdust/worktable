@@ -23,7 +23,7 @@ export function refuse(message: string): never {
 
 export type WriteOp = 'create' | 'update' | 'delete'
 type Values = Record<string, unknown>
-export type Stored = Record<string, string | number | null>
+type Stored = Record<string, string | number | null>
 
 export interface Store {
   sqlite: Database
