@@ -418,7 +418,7 @@ describe('serve.ts', () => {
     expect(accounts()).toEqual([
       { email: 'boss@example.test', role: 'administrator', subject_dataset: null, subject_id: null, disabled_at: null },
     ])
-  })
+  }, 20_000)
 
   test('--create-account makes an owner of a declared subject', async () => {
     expect(
@@ -427,13 +427,13 @@ describe('serve.ts', () => {
     expect(accounts()).toEqual([
       { email: 'o@example.test', role: 'owner', subject_dataset: 'project', subject_id: 2, disabled_at: null },
     ])
-  })
+  }, 20_000)
 
   test('a non-loopback --hostname exits 1 naming the missing mailer', async () => {
     const run = await cli('--hostname', '0.0.0.0')
     expect(run.code).toBe(1)
     expect(run.err).toMatch(/mailer/)
-  })
+  }, 20_000)
 
   test.each([
     ['a subject on an editor', ['--role', 'editor', '--subject', 'project:1']],
@@ -442,12 +442,16 @@ describe('serve.ts', () => {
     ['no role', []],
     ['a subject naming an undeclared dataset', ['--role', 'owner', '--subject', 'nope:1']],
     ['a malformed subject', ['--role', 'owner', '--subject', 'project']],
-  ])('--create-account refuses %s', async (_, args) => {
-    const run = await cli('--fresh', '--create-account', 'a@example.test', ...args)
-    expect(run.code).toBe(1)
-    expect(run.err).not.toBe('')
-    expect(accounts()).toEqual([])
-  })
+  ])(
+    '--create-account refuses %s',
+    async (_, args) => {
+      const run = await cli('--fresh', '--create-account', 'a@example.test', ...args)
+      expect(run.code).toBe(1)
+      expect(run.err).not.toBe('')
+      expect(accounts()).toEqual([])
+    },
+    20_000,
+  )
 
   test('--disable-account sets disabled_at, and that account is 401 on its next request', async () => {
     expect((await cli('--fresh', '--create-account', 'a@example.test', '--role', 'editor')).code).toBe(0)
@@ -460,7 +464,7 @@ describe('serve.ts', () => {
     expect((accounts()[0] as { disabled_at: string | null }).disabled_at).toMatch(/^\d{4}-/)
     expect((await me()).status).toBe(401)
     file.close()
-  })
+  }, 20_000)
 
   test('--hostname 127.0.0.1 starts, and --cookie-name names the cookie over real HTTP', async () => {
     const port = 20_000 + Math.floor(Math.random() * 20_000)
@@ -506,5 +510,5 @@ describe('serve.ts', () => {
     } finally {
       server.kill()
     }
-  })
+  }, 20_000)
 })

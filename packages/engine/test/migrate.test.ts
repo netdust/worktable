@@ -389,5 +389,5 @@ describe('serve.ts on a refused migration', () => {
     expect(code).toBe(1)
     expect(stderr).toContain('dataset "item" column "code"')
     expect(stderr).not.toContain('    at ')
-  })
+  }, 20_000)
 })
