@@ -19,7 +19,8 @@ export function DateTimeEditor(props: EditorProps) {
 
 function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: EditorProps & { type: 'date' | 'datetime-local'; shape: RegExp }) {
   const input = useRef<HTMLInputElement>(null)
-  const valid = editing.draft === '' || shape.test(editing.draft)
+  // A required column never clears, as Delete never does (keys.ts).
+  const valid = (editing.draft === '' && !column.required) || shape.test(editing.draft)
 
   useEffect(() => {
     if (!valid) onDraft(column.edit(row))
@@ -34,7 +35,7 @@ function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: E
       data-editor
       aria-label={column.label}
       value={valid ? editing.draft : column.edit(row)}
-      onChange={(event) => onDraft(event.target.value)}
+      onChange={(event) => onDraft(event.target.value === '' && column.required ? column.edit(row) : event.target.value)}
       onBlur={onLeave}
     />
   )

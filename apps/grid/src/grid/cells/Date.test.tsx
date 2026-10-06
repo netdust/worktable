@@ -4,7 +4,7 @@ import type { Row } from '../../types'
 import { activity, calais, planning } from '../calais.test.data'
 import { columnsFor } from '../columns'
 import type { Editing } from '../keys'
-import { DateTimeEditor } from './Date'
+import { DateEditor, DateTimeEditor } from './Date'
 
 const when = { ...activity, fields: { ...activity.fields, at: { type: 'datetime' as const, label: 'Start', required: false, fact: false } } }
 const column = columnsFor(when, { ...planning, columns: ['at'] }).find((c) => c.id === 'at')!
@@ -38,5 +38,22 @@ describe('the datetime picker editor', () => {
 
     expect(onDraft).toHaveBeenCalledWith('2026-10-13T20:30')
     expect(input.value).toBe('2026-10-13T20:30')
+  })
+
+  it('keeps the stored day when a required date is cleared, so nothing empty is ever committed', () => {
+    const datum = columnsFor(activity, planning).find((c) => c.id === 'date')!
+    const onDraft = vi.fn()
+    const onCommit = vi.fn()
+    const props = { column: datum, row: calais[0], onDraft, onCommit, onLeave: noop, onPick: noop, onCancel: noop, onClose: noop }
+    const view = render(<DateEditor {...props} editing={{ draft: '2026-05-18', mode: 'edit' }} />)
+    const input = view.container.querySelector('input') as HTMLInputElement
+
+    expect(datum.required).toBe(true)
+    fireEvent.change(input, { target: { value: '' } })
+    expect(onDraft).not.toHaveBeenCalledWith('')
+    expect(onDraft).toHaveBeenLastCalledWith('2026-05-18')
+    view.rerender(<DateEditor {...props} editing={{ draft: '2026-05-18', mode: 'edit' }} />)
+    expect(input.value).toBe('2026-05-18')
+    expect(onCommit).not.toHaveBeenCalled()
   })
 })

@@ -243,7 +243,12 @@ test('untimed-activity', async ({ page }) => {
   const patched = page.waitForRequest(
     (req) => req.method() === 'PATCH' && new URL(req.url()).pathname.startsWith('/api/rows/activiteit/'),
   )
-  await typeInto(await cellOf(named('vroeg e2e'), 'Start'), '')
+  const clearing = await cellOf(named('vroeg e2e'), 'Start')
+  await clearing.click()
+  await clearing.press('Enter')
+  await clearing.locator('input').fill('')
+  await expect(clearing.locator('input')).toHaveValue('')
+  await clearing.locator('input').press('Enter')
   expect((await patched).postDataJSON()).toEqual({ start_at: null })
   await expect(await cellOf(named('vroeg e2e'), 'Start')).toHaveText('')
   await page.reload()
