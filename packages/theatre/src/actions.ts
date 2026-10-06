@@ -1,4 +1,5 @@
 import { type ActionDecl, refuse } from '@worktable/engine'
+import { validateItems } from './writers'
 
 type Values = Record<string, unknown>
 
@@ -50,7 +51,8 @@ export const sjabloonToepassen: ActionDecl = {
         'Deze speelreeks heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.',
       )
     }
-    const items = (sjabloon_id?.items ?? []) as Item[]
+    validateItems(sjabloon_id?.items)
+    const items = sjabloon_id?.items as Item[]
     return days(String(reeks.start_datum), String(reeks.eind_datum)).flatMap((day) =>
       items.map((item) => ({ dataset: 'activiteit', values: activiteitOf(reeks, day, item) })),
     )

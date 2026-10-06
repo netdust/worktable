@@ -158,6 +158,20 @@ describe('sjabloon_toepassen', () => {
     expect(last).toMatchObject({ datum: '2026-11-05', start_at: '2026-11-05T09:00', eind_at: '2026-11-05T11:00' })
   })
 
+  test('a Sjabloon written around its writer is refused in Dutch before any create', async () => {
+    const item = { soort: 'repetitie', omschrijving: 'Doorloop', offset_dag: 0, locatie_regel: 'eigen' }
+    sqlite.run('INSERT INTO sjabloon (naam, items) VALUES (?, ?)', ['buiten de writer', JSON.stringify([item])])
+    const sjabloon = (sqlite.query('SELECT MAX(id) AS id FROM sjabloon').get() as { id: number }).id
+    const id = await reeks()
+    const res = await apply(id, sjabloon)
+    expect({ status: res.status, code: res.body.code, message: res.body.message }).toEqual({
+      status: 422,
+      code: 'refused',
+      message: 'Item 1: ongeldige locatieregel.',
+    })
+    expect(live(id)).toHaveLength(0)
+  })
+
   test('an owner is refused: speelreeks declares no owners', async () => {
     const id = await reeks()
     const res = await apply(id, SPEELDAG, owner)
@@ -181,23 +195,29 @@ describe('undo by batch through the domain writers', () => {
   const row = (table: string, id: number, columns: string) =>
     sqlite.query(`SELECT ${columns} FROM ${table} WHERE id = ?`).get(id) as Body
 
-  test('a day-line move restores start_at, datum and plandag', async () => {
-    const made = await editor('POST', '/api/rows/activiteit', {
-      productie_id: 1,
-      soort: 'repetitie',
-      start_at: '2026-11-10T23:30',
+  const MOVES = [
+    { to: '2026-11-11T01:30', moved: { datum: '2026-11-11', plandag: '2026-11-10' } },
+    { to: '2026-11-11T06:30', moved: { datum: '2026-11-11', plandag: '2026-11-11' } },
+  ]
+
+  for (const { to, moved } of MOVES) {
+    test(`a day-line move to ${to} undoes to start_at, datum and plandag of before`, async () => {
+      const made = await editor('POST', '/api/rows/activiteit', {
+        productie_id: 1,
+        soort: 'repetitie',
+        start_at: '2026-11-10T23:30',
+      })
+      const id = made.body.id as number
+      const before = row('activiteit', id, 'start_at, datum, plandag')
+      expect(before).toEqual({ start_at: '2026-11-10T23:30', datum: '2026-11-10', plandag: '2026-11-10' })
+      const res = await editor('PATCH', `/api/rows/activiteit/${id}`, { start_at: to })
+      expect(res.status).toBe(200)
+      expect(row('activiteit', id, 'start_at, datum, plandag')).toEqual({ start_at: to, ...moved })
+      const undo = await editor('POST', `/api/batches/${(res.body.revision as Body).batch_id}/undo`, {})
+      expect(undo.status).toBe(200)
+      expect(row('activiteit', id, 'start_at, datum, plandag')).toEqual(before)
     })
-    const id = made.body.id as number
-    const before = row('activiteit', id, 'start_at, datum, plandag')
-    expect(before).toEqual({ start_at: '2026-11-10T23:30', datum: '2026-11-10', plandag: '2026-11-10' })
-    const moved = await editor('PATCH', `/api/rows/activiteit/${id}`, { start_at: '2026-11-11T01:30' })
-    expect(moved.status).toBe(200)
-    expect(row('activiteit', id, 'datum')).toEqual({ datum: '2026-11-11' })
-    const batch = (moved.body.revision as Body).batch_id
-    const undo = await editor('POST', `/api/batches/${batch}/undo`, {})
-    expect(undo.status).toBe(200)
-    expect(row('activiteit', id, 'start_at, datum, plandag')).toEqual(before)
-  })
+  }
 
   test('a person-to-name switch on a Toewijzing restores the person and clears the name', async () => {
     const switched = await editor('PATCH', '/api/rows/toewijzing/1', { persoon_id: null, naam: 'Invaller' })
