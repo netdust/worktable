@@ -1,5 +1,6 @@
-import { errorText, inUse } from '../i18n'
-import type { ApiError, Lookup, Row } from '../types'
+import { errorText, inUse, undoText } from '../i18n'
+import type { ApiError, Lookup, Row, Saved } from '../types'
+import { createHistory, type Entry, type History } from '../ui/history'
 
 export type SaveState = 'saved' | 'saving' | 'error'
 
@@ -21,9 +22,13 @@ export interface CellError {
 
 export interface StoreApi {
   /** `row` as it was before the write: a query routes the write by its key. */
-  update: (model: string, id: number, data: Record<string, unknown>, row: Row) => Promise<Row>
-  create: (model: string, data: Record<string, unknown>) => Promise<Row>
+  update: (model: string, id: number, data: Record<string, unknown>, row: Row) => Promise<Saved>
+  create: (model: string, data: Record<string, unknown>) => Promise<Saved>
   remove?: (model: string, id: number) => Promise<unknown>
+  /** One row as the source computes it now; null once it left the source. */
+  read?: (model: string, id: number) => Promise<Row | null>
+  /** Undoes a batch; answers the undo's own batch. Only for a store holding its own history. */
+  undo?: (batch: string) => Promise<string>
 }
 
 export interface StoreState {
@@ -47,6 +52,8 @@ export interface Store {
   apply: (change: Change) => Promise<void>
   undo: () => Promise<void>
   redo: () => Promise<void>
+  /** The row as the server now holds it, painted over what this store had. */
+  replace: (row: Row) => void
   /** `offers`: the fields to ask for once the writer refused the create, when the schema could not say they were needed. */
   draft: (fields: Record<string, unknown>, needs?: string[], offers?: string[]) => void
   discard: () => void
@@ -60,30 +67,17 @@ interface Options {
   model: string
   rows: Row[]
   api: StoreApi
-  /** The columns an undo may write back besides the edited one: the model's writable fields. */
-  editable?: (field: string) => boolean
-}
-
-type Values = Record<string, unknown>
-type Lookups = Record<string, Lookup | null | undefined>
-
-/** One edit and every column the writer changed with it, as the server answered. */
-interface Entry {
-  id: number
-  field: string
-  before: Values
-  after: Values
-  lookups: { before: Lookups; after: Lookups }
-}
-
-interface Written {
-  /** Read when the write is sent: an undo pressed early sends what the edit's answer added. */
-  data?: () => Values
-  lookups?: Lookups
-  saved?: (base: Row | undefined, saved: Row) => void
+  /** The tab's undo history, shared by every view; the store's own without one. */
+  history?: History
+  /** Reads the view again: after an undo of a step this store cannot repaint by its row. */
+  reload?: () => void
 }
 
 export const DRAFT = -1
+/** The pending count an undo or redo in flight holds, beside the records' own. */
+const UNDOING = -2
+
+const noUndo = () => Promise.reject({ code: 'not_undoable', message: 'no undo here' } satisfies ApiError)
 
 export function cellKey(id: number, field: string): string {
   return `${id}:${field}`
@@ -114,11 +108,10 @@ function toError(change: Change, error: unknown): CellError {
   return { id: change.id, field: change.field, code: known, message: errorText(known, said) }
 }
 
-export function createStore({ model, rows, api, editable = () => true }: Options): Store {
-  let state: StoreState = { rows, save: 'saved', error: null, errors: {}, canUndo: false, canRedo: false, needs: [], asked: 0 }
+export function createStore({ model, rows, api, history = createHistory(api.undo ?? noUndo), reload = () => undefined }: Options): Store {
+  let state: StoreState = { rows, save: 'saved', error: null, errors: {}, canUndo: history.canUndo(), canRedo: history.canRedo(), needs: [], asked: 0 }
   const listeners = new Set<() => void>()
-  const undoStack: Entry[] = []
-  const redoStack: Entry[] = []
+  let unwatch = () => {}
   const pending = new Map<number, number>()
   const latest = new Map<number, number>()
   const queues = new Map<number, Promise<unknown>>()
@@ -137,7 +130,7 @@ export function createStore({ model, rows, api, editable = () => true }: Options
   }
 
   function set(next: Partial<StoreState>): void {
-    state = { ...state, ...next, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 }
+    state = { ...state, ...next, canUndo: history.canUndo(), canRedo: history.canRedo() }
     listeners.forEach((listener) => listener())
   }
 
@@ -157,9 +150,9 @@ export function createStore({ model, rows, api, editable = () => true }: Options
   }
 
   /** One write in flight per record: two connections could otherwise land an undo before the write it undoes. */
-  function queued(change: Change, row: Row, data: () => Values): Promise<Row> {
+  function queued(change: Change, row: Row): Promise<Saved> {
     const previous = queues.get(change.id)
-    const next = previous ? previous.catch(() => undefined).then(() => send(change, row, data())) : send(change, row, data())
+    const next = previous ? previous.catch(() => undefined).then(() => send(change, row)) : send(change, row)
     queues.set(change.id, next)
     const done = () => {
       if (queues.get(change.id) === next) queues.delete(change.id)
@@ -168,19 +161,17 @@ export function createStore({ model, rows, api, editable = () => true }: Options
     return next
   }
 
-  function send(change: Change, row: Row, data: Values): Promise<Row> {
+  function send(change: Change, row: Row): Promise<Saved> {
+    const data = { [change.field]: change.value }
     if (change.id !== DRAFT) return api.update(model, change.id, data, row)
     const { title, ...fields } = { ...row.fields, title: row.title, ...data }
     return api.create(model, { ...fields, title })
   }
 
-  /** True when the server took it; the stacks are the caller's. */
-  async function commit(change: Change, written: Written = {}): Promise<boolean> {
+  /** The batch the server recorded it under once it took it; undefined when it refused. */
+  async function commit(change: Change): Promise<string | null | undefined> {
     const row = state.rows.find((r) => r.id === change.id)
-    if (!row || removed.has(change.id)) return false
-    const data = written.data ?? (() => ({ [change.field]: change.value }))
-    const painted = data()
-    const lookupOf = (field: string) => (field === change.field ? change.lookup : (written.lookups?.[field] ?? undefined))
+    if (!row || removed.has(change.id)) return undefined
     const key = cellKey(change.id, change.field)
     // A draft carries one refusal at a time: each retry clears the last.
     const errors = change.id === DRAFT ? withoutDraftErrors() : { ...state.errors }
@@ -189,12 +180,10 @@ export function createStore({ model, rows, api, editable = () => true }: Options
     const mine = ++ticket
     latest.set(change.id, mine)
     track(change.id, 1)
-    const paint = (r: Row) => Object.entries(painted).reduce((next, [field, value]) => write(next, field, value, lookupOf(field)), r)
-    set({ rows: patch(change.id, paint), errors, error: null, save: 'saving' })
+    set({ rows: patch(change.id, (r) => write(r, change.field, change.value, change.lookup)), errors, error: null, save: 'saving' })
 
     try {
-      const saved = await queued(change, row, data)
-      written.saved?.(confirmed.get(saved.id), saved)
+      const { row: saved, batch } = await queued(change, row)
       confirmed.set(saved.id, saved)
       track(change.id, -1)
       // Answers come in order; one with a later write still queued would repaint over that write's paint.
@@ -203,7 +192,7 @@ export function createStore({ model, rows, api, editable = () => true }: Options
         set({ rows: patch(DRAFT, () => saved), needs: [], errors: withoutDraftErrors() })
       } else if (latest.get(change.id) === mine) set({ rows: patch(change.id, () => saved) })
       set({ save: settle() })
-      return true
+      return batch
     } catch (error) {
       track(change.id, -1)
       const raised = toError(change, error)
@@ -215,56 +204,60 @@ export function createStore({ model, rows, api, editable = () => true }: Options
         const needs = draft ? [...again, ...offers.filter((field) => field !== change.field && empty(read(draft, field)))] : again
         set({ errors: { ...state.errors, [key]: raised }, error: raised, needs })
         set({ save: settle() })
-        return false
+        return undefined
       }
       const server = confirmed.get(change.id)
-      const revert = (r: Row) =>
-        Object.entries(painted).reduce((next, [field, value]) => {
-          if (!same(read(next, field), value)) return next
-          return write(next, field, server ? read(server, field) : read(row, field), server?.lookups?.[field])
-        }, r)
-      const reverted = patch(change.id, revert)
-      set({ rows: reverted, errors: { ...state.errors, [key]: raised }, error: raised })
+      const revert = (r: Row) => {
+        if (!same(read(r, change.field), change.value)) return r
+        return write(r, change.field, server ? read(server, change.field) : read(row, change.field), server?.lookups?.[change.field])
+      }
+      set({ rows: patch(change.id, revert), errors: { ...state.errors, [key]: raised }, error: raised })
       set({ save: settle() })
-      return false
+      return undefined
     }
   }
 
-  /** Every column the server changed beside the edited one, as it was and as it became. */
-  function widen(entry: Entry, base: Row | undefined, saved: Row): void {
-    if (!base) return
-    const fields = new Set(['title', ...Object.keys(base.fields), ...Object.keys(saved.fields)])
-    for (const field of fields) {
-      if (field === entry.field || !editable(field) || same(read(base, field), read(saved, field))) continue
-      entry.before[field] = read(base, field)
-      entry.after[field] = read(saved, field)
-      entry.lookups.before[field] = base.lookups?.[field]
-      entry.lookups.after[field] = saved.lookups?.[field]
-    }
+  function replace(row: Row): void {
+    confirmed.set(row.id, row)
+    set({ rows: patch(row.id, () => row) })
   }
 
-  /** The entry crosses at the press, so the next press sees it there; a refusal walks it back. */
-  async function step(from: Entry[], to: Entry[], side: 'before' | 'after'): Promise<void> {
-    const entry = from.pop()
-    if (!entry) return
-    to.push(entry)
-    set({})
-    const values = entry[side]
-    const lookups = entry.lookups[side]
-    const change = { id: entry.id, field: entry.field, value: values[entry.field], lookup: lookups[entry.field] }
-    if (await commit(change, { data: () => ({ ...values }), lookups })) return
-    // A later press may already have carried it back; walking it back twice would duplicate it.
-    if (!to.includes(entry)) return
-    to.splice(to.indexOf(entry), 1)
-    from.push(entry)
-    set({})
+  /** Repaints the undone step's row as the server now has it; a step on another view's rows, or an action, reloads. */
+  async function repaint(entry: Entry): Promise<void> {
+    const found = entry.model === model && entry.id !== null && api.read ? await api.read(model, entry.id).catch(() => null) : null
+    if (found) replace(found)
+    else reload()
+  }
+
+  async function travel(step: () => Promise<Entry | null>): Promise<void> {
+    track(UNDOING, 1)
+    set({ save: 'saving', error: null })
+    try {
+      const entry = await step()
+      if (entry) await repaint(entry)
+    } catch (error) {
+      const refused = (error ?? {}) as Partial<ApiError>
+      set({ error: { id: 0, field: '', code: String(refused.code ?? 'unknown'), message: undoText(refused) } })
+    }
+    track(UNDOING, -1)
+    set({ save: settle() })
+  }
+
+  /** The history is the tab's: another store, or an action, may have changed it since. */
+  function current(): StoreState {
+    if (state.canUndo !== history.canUndo() || state.canRedo !== history.canRedo()) state = { ...state, canUndo: history.canUndo(), canRedo: history.canRedo() }
+    return state
   }
 
   return {
-    getState: () => state,
+    getState: current,
     subscribe(listener) {
+      if (listeners.size === 0) unwatch = history.subscribe(() => set({}))
       listeners.add(listener)
-      return () => listeners.delete(listener)
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0) unwatch()
+      }
     },
     async apply(change) {
       const row = state.rows.find((r) => r.id === change.id)
@@ -282,22 +275,17 @@ export function createStore({ model, rows, api, editable = () => true }: Options
         return
       }
       if (same(read(row, change.field), change.value)) return
-      // On the stack at paint, so an undo pressed before the server answers undoes this change.
-      const entry: Entry = {
-        id: change.id,
-        field: change.field,
-        before: { [change.field]: read(row, change.field) },
-        after: { [change.field]: change.value },
-        lookups: { before: { [change.field]: row.lookups?.[change.field] }, after: { [change.field]: change.lookup } },
-      }
-      undoStack.push(entry)
-      redoStack.length = 0
-      if (await commit(change, { saved: (base, saved) => widen(entry, base, saved) })) return
-      for (const stack of [undoStack, redoStack]) if (stack.includes(entry)) stack.splice(stack.indexOf(entry), 1)
-      set({})
+      // In the history at paint, so an undo pressed before the server answers waits for this change's batch.
+      let answered: (batch: string | null) => void = () => undefined
+      const entry: Entry = { batch: new Promise((resolve) => (answered = resolve)), model, id: change.id }
+      history.push(entry)
+      const batch = await commit(change)
+      answered(batch ?? null)
+      if (!batch) history.drop(entry)
     },
-    undo: () => step(undoStack, redoStack, 'before'),
-    redo: () => step(redoStack, undoStack, 'after'),
+    undo: () => travel(history.undo),
+    redo: () => travel(history.redo),
+    replace,
     draft(fields, needs = ['title'], offered = []) {
       const open = state.rows.some((r) => r.id === DRAFT)
       if (open && touched) return set({ asked: state.asked + 1 })
@@ -315,7 +303,7 @@ export function createStore({ model, rows, api, editable = () => true }: Options
     async create(fields) {
       set({ save: 'saving', error: null })
       try {
-        const row = await api.create(model, fields)
+        const { row } = await api.create(model, fields)
         confirmed.set(row.id, row)
         set({ rows: [row, ...state.rows] })
       } catch (error) {
@@ -339,8 +327,8 @@ export function createStore({ model, rows, api, editable = () => true }: Options
           if ((error as Partial<ApiError> | null)?.code !== 'unknown_record') throw error
         })
         track(id, -1)
-        // An undo would PATCH a soft-deleted record.
-        for (const stack of [undoStack, redoStack]) stack.splice(0, stack.length, ...stack.filter((entry) => entry.id !== id))
+        // An undo of an edit to a deleted record would only be refused.
+        history.forget(model, id)
         confirmed.delete(id)
         const errors = Object.fromEntries(Object.entries(state.errors).filter(([, error]) => error.id !== id))
         set({ rows: state.rows.filter((r) => r.id !== id), errors })

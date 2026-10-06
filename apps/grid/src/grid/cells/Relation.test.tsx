@@ -47,7 +47,7 @@ afterEach(() => {
 describe('the relation picker', () => {
   it('opens on Enter with the field\'s word, and picks with the arrows and Enter as a list of one id', async () => {
     renderGrid()
-    api.update.mockResolvedValue({ ...calais[2], fields: { ...calais[2].fields, location: [15] }, lookups: { location: org(15, 'Vooruit') } })
+    api.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, location: [15] }, lookups: { location: org(15, 'Vooruit') } }, batch: 'b1' })
 
     fireEvent.click(cell('Lunch bistrot', 'location'))
     fireEvent.keyDown(cell('Lunch bistrot', 'location'), { key: 'Enter' })
@@ -113,7 +113,7 @@ describe('the relation picker', () => {
       ? new Promise((resolve) => (answer = resolve))
       : Promise.resolve({ rows: [org(14, 'Bijloke'), org(15, 'Vooruit')], total: 2 }))
     renderGrid()
-    api.update.mockResolvedValue({ ...calais[2], fields: { ...calais[2].fields, location: [16] }, lookups: { location: org(16, 'Beektheater') } })
+    api.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, location: [16] }, lookups: { location: org(16, 'Beektheater') } }, batch: 'b1' })
 
     fireEvent.click(cell('Lunch bistrot', 'location'))
     fireEvent.keyDown(cell('Lunch bistrot', 'location'), { key: 'Enter' })
@@ -141,7 +141,7 @@ describe('the relation picker', () => {
 
   it('empties an optional relation on Delete', async () => {
     renderGrid()
-    api.update.mockResolvedValue({ ...calais[2], fields: { ...calais[2].fields, location: [] }, lookups: { location: null } })
+    api.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, location: [] }, lookups: { location: null } }, batch: 'b1' })
 
     fireEvent.click(cell('Lunch bistrot', 'location'))
     fireEvent.keyDown(cell('Lunch bistrot', 'location'), { key: 'Enter' })

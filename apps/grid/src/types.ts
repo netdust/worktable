@@ -31,7 +31,16 @@ export interface Model {
   query?: boolean
   /** Its writer deletes: the drawer offers Verwijderen. */
   deletable?: boolean
+  /** What the drawer offers to run on one of its records. */
+  actions?: ModelAction[]
   fields: Record<string, Field>
+}
+
+/** A declared action: each input is a record of `relation`, picked before it runs. */
+export interface ModelAction {
+  name: string
+  label: string
+  input: Record<string, { relation: string; label: string }>
 }
 
 export type ViewType = 'grid' | 'matrix'
@@ -218,6 +227,15 @@ export interface ApiError {
   code: string
   message: string
   by?: Referrer[]
+  /** On a 409 `changed_since`: the column that changed, and its label. */
+  column?: string
+  label?: string
+}
+
+/** A write's answer: the row, and the batch an undo names it by; none when nothing changed. */
+export interface Saved {
+  row: Row
+  batch: string | null
 }
 
 /** The inclusive window a dated view shows, as local `YYYY-MM-DD` days. */

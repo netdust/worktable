@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -386,7 +387,7 @@ describe('a matrix view', () => {
   })
 
   it('writes a typed status to the join model, says Saved and offers the undo', async () => {
-    api.create.mockResolvedValue({ id: 99, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } })
+    api.create.mockResolvedValue({ row: { id: 99, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } }, batch: 'b1' })
     const leeg = { id: 2, title: 'Leeg', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
     api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'bezetting' ? [montage, leeg] : [], total: 2 }))
     render(<App />)
@@ -409,7 +410,7 @@ describe('a matrix view', () => {
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['name:lieve'], order: [], widths: {}, sort: [], filters: [], group: null }))
     api.savedViews.mockResolvedValue([mine])
     api.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['name:lieve'] } })
-    api.create.mockResolvedValue({ id: 99, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } })
+    api.create.mockResolvedValue({ row: { id: 99, title: 'j', status: 'publish', fields: { activity: [2], person: [5], status: 'confirmed' } }, batch: 'b1' })
     api.remove.mockResolvedValue({ deleted: true })
     const leeg = { id: 2, title: 'Leeg', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
     api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'bezetting' ? [montage, leeg] : [], total: 2 }))
@@ -1291,5 +1292,99 @@ describe('writes on the engine', () => {
     await screen.findByText('opbouw Gent')
 
     expect((screen.getByRole('button', { name: 'New Dagplanning' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe("a dataset's action and the tab's undo history", () => {
+  const apply = { name: 'sjabloon_toepassen', label: 'Sjabloon toepassen', input: { sjabloon_id: { relation: 'sjabloon', label: 'Sjabloon' } } }
+  const theatre: Schema = {
+    models: {
+      speelreeks: { key: 'speelreeks', label: 'Speelreeks', title_label: 'Titel', title_readonly: false, actions: [apply], fields: {} },
+      dagplanning: { key: 'dagplanning', label: 'Dagplanning', title_label: 'Titel', title_readonly: true, query: true, fields: {} },
+    },
+    tables: [
+      { key: 'speelreeksen', label: 'Speelreeksen', model: 'speelreeks', types: ['grid'] },
+      { key: 'dagplanningen', label: 'Dagplanning', model: 'dagplanning', types: ['grid'] },
+    ],
+    views: [
+      { key: 'speelreeksen', label: 'Speelreeksen', table: 'speelreeksen', model: 'speelreeks' },
+      { key: 'dagplanningen', label: 'Dagplanning', table: 'dagplanningen', model: 'dagplanning' },
+    ],
+    writable: { speelreeks: true, dagplanning: true },
+  }
+  const calaisReeks = { id: 3, title: 'Calais', status: '', fields: {} }
+  const reads = (model: string) => api.rows.mock.calls.filter(([v]) => (v as { model: string }).model === model).length
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(theatre)
+    api.rows.mockImplementation((v: { model: string }) =>
+      Promise.resolve(v.model === 'speelreeks' ? { rows: [calaisReeks], total: 1 } : { rows: [{ id: 9, title: 'repetitie', status: '', fields: {} }], total: 1 }))
+    api.records.mockResolvedValue({ rows: [{ id: 4, title: 'speeldag op locatie', status: '', fields: {} }], total: 1 })
+    api.runAction.mockResolvedValue({ batch: 'a-1', created: [{ dataset: 'activiteit', id: 20 }] })
+    api.undoBatch.mockResolvedValue('u-1')
+  })
+
+  async function applyTemplate() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sjabloon: —' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'speeldag op locatie' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sjabloon toepassen' }))
+    })
+  }
+  const grid = async (name: string) => {
+    const sheet = await screen.findByRole('grid', { name })
+    await within(sheet).findAllByRole('gridcell')
+    return sheet
+  }
+
+  it('shows the action on a Speelreeks row only', async () => {
+    await shell()
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }))
+    expect(screen.getByRole('group', { name: 'Sjabloon toepassen' })).toBeTruthy()
+
+    fireEvent.click(tableEntry('Dagplanning'))
+    await grid('Dagplanning')
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }))
+    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+  })
+
+  it('an applied action becomes one undo entry, and the view reloads; its notice undoes it on the server', async () => {
+    await shell()
+    await grid('Speelreeksen')
+
+    await applyTemplate()
+
+    expect(api.runAction).toHaveBeenCalledExactlyOnceWith('sjabloon_toepassen', 3, { sjabloon_id: 4 })
+    await waitFor(() => expect(reads('speelreeks')).toBe(2))
+    const notice = await screen.findByRole('status', { name: 'Sjabloon toepassen: gedaan.' })
+    await grid('Speelreeksen')
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
+    })
+
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('a-1')
+    await waitFor(() => expect(reads('speelreeks')).toBe(3))
+  })
+
+  it('the entry survives the reload and Speelreeksen → Dagplanning → Speelreeksen, and Ctrl+Z there undoes the apply', async () => {
+    await shell()
+    await grid('Speelreeksen')
+    await applyTemplate()
+    await waitFor(() => expect(reads('speelreeks')).toBe(2))
+
+    fireEvent.click(tableEntry('Dagplanning'))
+    await grid('Dagplanning')
+    fireEvent.click(tableEntry('Speelreeksen'))
+    const sheet = await grid('Speelreeksen')
+    const cell = sheet.querySelector<HTMLElement>('td[data-cell]')!
+    fireEvent.click(cell)
+    await act(async () => {
+      fireEvent.keyDown(cell, { key: 'z', ctrlKey: true })
+    })
+
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('a-1')
+    await waitFor(() => expect(reads('speelreeks')).toBe(4))
+    expect(api.rowOf).not.toHaveBeenCalled()
   })
 })

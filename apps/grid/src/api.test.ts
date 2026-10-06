@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, savePrefs, savedViews, schema, signOut, update, updateView } from './api'
+import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
 import { createMatrixStore } from './matrix/store'
-import type { MatrixAway, MatrixColumn, Row, View } from './types'
+import type { MatrixAway, MatrixColumn, Row, Saved, View } from './types'
 
 const toRowShape = (row: EngineRow): Row => toRow(row)
 
@@ -305,8 +305,8 @@ describe('writes', () => {
     const changed = await update('activiteit', 7, { status: 'optie' })
     await remove('activiteit', 7)
 
-    expect(made).toMatchObject({ id: 7, title: 'opbouw Gent', fields: { status: 'optie' } })
-    expect(changed.title).toBe('opbouw Gent')
+    expect(made).toEqual({ row: expect.objectContaining({ id: 7, title: 'opbouw Gent', fields: expect.objectContaining({ status: 'optie' }) }), batch: null })
+    expect(changed.row.title).toBe('opbouw Gent')
     expect(sent()).toEqual([
       ['/api/rows/activiteit', 'POST', JSON.stringify({ omschrijving: 'opbouw Gent' })],
       ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ status: 'optie' })],
@@ -318,16 +318,17 @@ describe('writes', () => {
     const reread = { id: 40, activiteit_id: 7, omschrijving: 'opbouw Gent', title: 'opbouw Gent', status: 'bevestigd', custom: {}, lookups: {} }
     fetcher.mockImplementation(async (input, init) => {
       if (String(input) === '/api/schema') return json(engine)
-      return init?.method === 'PATCH' ? json({ ...stored, status: 'bevestigd' }) : json({ rows: [reread], total: 1 })
+      return init?.method === 'PATCH' ? json({ ...stored, status: 'bevestigd', revision: { batch_id: 'b-7', changed: ['status'] } }) : json({ rows: [reread], total: 1 })
     })
 
-    const row = await update('dagplanning', 40, { status: 'bevestigd' }, planned)
+    const { row, batch } = await update('dagplanning', 40, { status: 'bevestigd' }, planned)
 
     expect(sent()).toEqual([
       ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ status: 'bevestigd' })],
       ['/api/rows/dagplanning?filter={"id":40}', 'GET', undefined],
     ])
     expect(row).toMatchObject({ id: 40, title: 'opbouw Gent', fields: { activiteit_id: 7, status: 'bevestigd' } })
+    expect(batch).toBe('b-7')
   })
 
   it('a re-read that finds no row, or fails, returns the patched row', async () => {
@@ -343,8 +344,8 @@ describe('writes', () => {
     })
     const failed = await update('dagplanning', 40, { status: 'bevestigd' }, planned)
 
-    expect(gone).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'geannuleerd' } })
-    expect(failed).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'bevestigd' } })
+    expect(gone.row).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'geannuleerd' } })
+    expect(failed.row).toEqual({ ...planned, fields: { activiteit_id: 7, status: 'bevestigd' } })
   })
 
   describe('the wire format follows the engine column types', () => {
@@ -425,6 +426,33 @@ describe('writes', () => {
     expect(store.getState()).toMatchObject({ save: 'error', error: { code: 'in_use', message: 'Nog in gebruik door Activiteiten (3) en Leveranciers (2).' } })
   })
 
+  it("hands back a write's batch, and never lands the revision in the row's fields", async () => {
+    fetcher.mockImplementation(async (input) => (String(input) === '/api/schema' ? json(engine) : json({ ...stored, revision: { batch_id: 'b-1', changed: ['status'] } })))
+
+    const { row, batch } = await update('activiteit', 7, { status: 'optie' })
+
+    expect(batch).toBe('b-1')
+    expect(row.fields).not.toHaveProperty('revision')
+  })
+
+  it('undoes a batch with an empty JSON body and answers the undo batch; a changed_since keeps its column and label', async () => {
+    fetcher.mockImplementationOnce(async () => json({ batch_id: 'u-1', affected: [{ dataset: 'activiteit', id: 7 }] }))
+    expect(await undoBatch('b-1')).toBe('u-1')
+    expect(fetcher.mock.calls[0][0]).toBe('/api/batches/b-1/undo')
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } })
+
+    fetcher.mockImplementationOnce(async () => json({ code: 'changed_since', message: '"status" changed since', dataset: 'activiteit', id: 7, column: 'status', label: 'Status' }, 409))
+    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status' })
+  })
+
+  it('runs an action on a record with its input, and answers its batch', async () => {
+    fetcher.mockImplementationOnce(async () => json({ batch_id: 'a-1', created: [{ dataset: 'activiteit', id: 9 }] }, 201))
+
+    expect(await runAction('sjabloon_toepassen', 3, { sjabloon_id: 2 })).toEqual({ batch: 'a-1', created: [{ dataset: 'activiteit', id: 9 }] })
+    expect(fetcher.mock.calls[0][0]).toBe('/api/actions/sjabloon_toepassen')
+    expect(fetcher.mock.calls[0][1]?.body).toBe(JSON.stringify({ id: 3, input: { sjabloon_id: 2 } }))
+  })
+
   it('reject with the not-found the engine answers', async () => {
     fetcher.mockImplementation(async () => new Response('404 Not Found', { status: 404, statusText: 'Not Found' }))
 
@@ -456,6 +484,8 @@ describe('the matrix on the engine', () => {
   const cell: EngineRow = { id: 4, activiteit_id: 2, persoon_id: 1, naam: null, state: 'bevestigd', title: 'Lotte Verhaegen', custom: {}, lookups: {} }
   const activiteit = (cells: EngineRow[]): EngineRow => ({ id: 2, omschrijving: 'repetitie Gent', plandag: '2026-10-12', title: 'repetitie Gent', custom: {}, lookups: {}, cells })
   const sent = () => fetcher.mock.calls.filter(([input]) => String(input) !== '/api/schema').map(([input, init]) => [decodeURIComponent(String(input)), init?.method ?? 'GET', init?.body])
+  // The matrix takes the row a write returns, as its hooks hand it.
+  const unwrapped = <A extends unknown[]>(write: (...args: A) => Promise<Saved>) => (...args: A) => write(...args).then((saved) => saved.row)
   const on = (reply: (path: string, init?: RequestInit) => Response) =>
     fetcher.mockImplementation(async (input, init) => (String(input) === '/api/schema' ? json(matrixEngine) : reply(String(input), init)))
 
@@ -483,7 +513,7 @@ describe('the matrix on the engine', () => {
 
   it('a cell create sends one id per relation; clearing it sends DELETE', async () => {
     on((_path, init) => (init?.method === 'DELETE' ? json({ id: 9 }) : json({ ...cell, id: 9, activiteit_id: 2 })))
-    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create, update, remove } })
+    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create: unwrapped(create), update: unwrapped(update), remove } })
 
     expect(await store.set(2, lotte, 'bevestigd')).toBe(true)
     expect(await store.set(2, lotte, null)).toBe(true)
@@ -496,7 +526,7 @@ describe('the matrix on the engine', () => {
 
   it("a 422 reverts the cell with the writer's message", async () => {
     on(() => json({ code: 'refused', message: 'Deze persoon staat al op deze activiteit.' }, 422))
-    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create, update, remove } })
+    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create: unwrapped(create), update: unwrapped(update), remove } })
 
     expect(await store.set(2, lotte, 'bevestigd')).toBe(false)
 

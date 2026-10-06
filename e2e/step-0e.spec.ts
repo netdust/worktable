@@ -232,6 +232,12 @@ const patchOf = (page: Page, dataset: string) =>
     (req) => req.method() === 'PATCH' && new URL(req.url()).pathname.startsWith(`/api/rows/${dataset}/`),
   )
 
+/** An undo is one POST of the edit's batch; the grid then reads the row back. */
+const undoOf = (page: Page) =>
+  page.waitForResponse(
+    (res) => res.request().method() === 'POST' && /^\/api\/batches\/[^/]+\/undo$/.test(new URL(res.url()).pathname),
+  )
+
 test('untimed-activity', async ({ page }) => {
   await page.goto(WEEK)
   await pick(page, 'Optie of bevestigd')
@@ -304,9 +310,9 @@ test.describe('undo restores what the writer changed with the edit', () => {
     await typeInto(await cellOf(page, row(), 'Start'), `${later}T20:00`)
     await expect(await cellOf(page, row(), 'Datum')).toHaveText(await shown(page, later))
 
-    const undone = patchOf(page, 'activiteit')
+    const undone = undoOf(page)
     await page.keyboard.press('ControlOrMeta+z')
-    expect((await undone).postDataJSON()).toEqual({ start_at: null, datum })
+    expect((await undone).status()).toBe(200)
     await expect(await cellOf(page, row(), 'Start')).toHaveText('')
     await expect(await cellOf(page, row(), 'Datum')).toHaveText(await shown(page, datum))
 
@@ -326,10 +332,11 @@ test.describe('undo restores what the writer changed with the edit', () => {
     await typeInto(await cellOf(page, row(), 'Start'), `${plusDays(datum, 1)}T01:30`)
     await expect(await cellOf(page, row(), 'Datum')).toHaveText(await shown(page, plusDays(datum, 1)))
 
-    const undone = patchOf(page, 'activiteit')
+    const undone = undoOf(page)
     await page.keyboard.press('ControlOrMeta+z')
-    expect((await undone).postDataJSON()).toEqual({ start_at: `${datum}T23:30`, datum })
+    expect((await undone).status()).toBe(200)
     await expect(await cellOf(page, row(), 'Start')).toHaveText(/ 23:30$/)
+    await expect(await cellOf(page, row(), 'Datum')).toHaveText(await shown(page, datum))
 
     await reopen(page)
     await expect(await cellOf(page, row(), 'Start')).toHaveText(/ 23:30$/)
@@ -348,11 +355,9 @@ test.describe('undo restores what the writer changed with the edit', () => {
     await expect(named(page, 'Gast e2e')).toHaveCount(1)
     await expect(await cellOf(page, named(page, 'Gast e2e'), 'Persoon')).toHaveText('')
 
-    const undone = patchOf(page, 'toewijzing')
+    const undone = undoOf(page)
     await page.keyboard.press('ControlOrMeta+z')
-    const sent = (await undone).postDataJSON() as Record<string, unknown>
-    expect(sent.naam).toBeNull()
-    expect(typeof sent.persoon_id).toBe('number')
+    expect((await undone).status()).toBe(200)
     await expect(named(page, 'Gast e2e')).toHaveCount(0)
     await expect(named(page, person)).toHaveCount(held)
 
@@ -415,9 +420,9 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   await (await moved).response()
   await expect.poll(datumOf).toBe('2026-10-15')
 
-  const undone = patchOf(page, 'activiteit')
+  const undone = undoOf(page)
   await page.keyboard.press('ControlOrMeta+z')
-  await (await undone).response()
+  expect((await undone).status()).toBe(200)
   await expect.poll(datumOf).toBe('2026-10-13')
   await expect(await cellOf(page, row(), 'Start')).toHaveText('')
 

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { forgetSchema, update } from '../api'
+import { create, forgetSchema, rowOf, undoBatch, update } from '../api'
 import type { EngineSchema } from '../engine'
-import type { Row } from '../types'
+import type { Row, Saved } from '../types'
+import { createHistory } from '../ui/history'
 import { calais } from './calais.test.data'
 import { createStore, type StoreApi } from './store'
 
@@ -16,18 +17,24 @@ function deferred<T>() {
 }
 
 function setup(rows: Row[] = calais) {
-  const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-  const store = createStore({ model: 'activity', rows, api })
+  const api = {
+    update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(),
+    read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
+  }
+  const history = createHistory(api.undo)
+  const reload = vi.fn()
+  const store = createStore({ model: 'activity', rows, api, history, reload })
   const row = (id: number) => store.getState().rows.find((r) => r.id === id)!
-  return { api, store, row }
+  return { api, store, row, history, reload }
 }
 
-const served = (row: Row, fields: Record<string, unknown>, extra: Partial<Row> = {}): Row => ({ ...row, fields: { ...row.fields, ...fields }, ...extra })
+const ok = (row: Row, batch: string | null = 'b1'): Saved => ({ row, batch })
+const served = (row: Row, fields: Record<string, unknown>, extra: Partial<Row> = {}): Saved => ok({ ...row, fields: { ...row.fields, ...fields }, ...extra })
 
 describe('apply', () => {
   it('paints the change before the server answers, then takes the row the server returns', async () => {
     const { api, store, row } = setup()
-    const answer = deferred<Row>()
+    const answer = deferred<Saved>()
     api.update.mockReturnValueOnce(answer.promise)
 
     const done = store.apply({ id: 103, field: 'kind', value: 'show' })
@@ -45,7 +52,7 @@ describe('apply', () => {
 
   it('writes the title as the title', async () => {
     const { api, store, row } = setup()
-    api.update.mockResolvedValueOnce({ ...calais[0], title: 'Auto Pavel' })
+    api.update.mockResolvedValueOnce(ok({ ...calais[0], title: 'Auto Pavel' }))
 
     await store.apply({ id: 101, field: 'title', value: 'Auto Pavel' })
 
@@ -88,100 +95,190 @@ describe('apply', () => {
   })
 })
 
-describe('undo and redo', () => {
-  it('undo issues the inverse write, and redo writes the change again', async () => {
+describe('undo and redo, by batch on the server', () => {
+  const meal = calais[2]
+  const show = { ...meal, fields: { ...meal.fields, kind: 'show' } }
+
+  it('undo calls POST /batches/<batch of the edit>/undo and repaints by re-reading the affected row', async () => {
     const { api, store, row } = setup()
-    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    api.undo.mockResolvedValueOnce('b-undo')
+    api.read.mockResolvedValueOnce({ ...meal, rollups: { confirmed: 2 } })
 
     await store.apply({ id: 103, field: 'kind', value: 'show' })
     expect(store.getState().canUndo).toBe(true)
-
     await store.undo()
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'meal' }, expect.objectContaining({ id: 103 }))
-    expect(row(103).fields.kind).toBe('meal')
+
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-edit')
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.read).toHaveBeenCalledWith('activity', 103)
+    expect(row(103)).toMatchObject({ fields: { kind: 'meal' }, rollups: { confirmed: 2 } })
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true, save: 'saved' })
+  })
+
+  it('redo undoes the undo batch', async () => {
+    const { api, store, row } = setup()
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    api.undo.mockResolvedValueOnce('b-undo').mockResolvedValueOnce('b-redo')
+    api.read.mockResolvedValueOnce(meal).mockResolvedValueOnce(show)
+
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    await store.undo()
+    await store.redo()
+
+    expect(api.undo).toHaveBeenLastCalledWith('b-undo')
+    expect(row(103).fields.kind).toBe('show')
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false })
+    await store.undo()
+    expect(api.undo).toHaveBeenLastCalledWith('b-redo')
+  })
+
+  it('a redo answered not_undoable drops the redo entry and shows the localised message', async () => {
+    const { api, store } = setup()
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    api.undo.mockResolvedValueOnce('b-undo').mockRejectedValueOnce({ code: 'not_undoable', message: 'a batch holding a delete cannot be undone' })
+    api.read.mockResolvedValue(meal)
+
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    await store.undo()
+    await store.redo()
+
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false, save: 'error' })
+    expect(store.getState().error).toMatchObject({ code: 'not_undoable', message: 'Dit kan niet ongedaan gemaakt worden.' })
+  })
+
+  it('already_undone drops the entry and says so in Dutch', async () => {
+    const { api, store } = setup()
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    api.undo.mockRejectedValueOnce({ code: 'already_undone', message: 'this batch is already undone' })
+
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    await store.undo()
+
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false })
+    expect(store.getState().error?.message).toBe('Dit is al ongedaan gemaakt.')
+  })
+
+  it("changed_since keeps the entry, shows the Dutch message naming the column's label, and the row keeps the server's value", async () => {
+    const { api, store, row } = setup()
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    api.undo.mockRejectedValueOnce({ code: 'changed_since', message: '"kind" changed since', column: 'kind', label: 'Soort' })
+
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    await store.undo()
+
+    expect(row(103).fields.kind).toBe('show')
+    expect(api.read).not.toHaveBeenCalled()
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false, save: 'error' })
+    expect(store.getState().error?.message).toBe('Soort is intussen gewijzigd; ongedaan maken kan niet.')
+  })
+
+  it('a record removed since is named by its dataset label', async () => {
+    const { api, store } = setup()
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    api.undo.mockRejectedValueOnce({ code: 'changed_since', message: '"deleted_at" changed since', column: 'deleted_at', label: 'Activiteiten' })
+
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    await store.undo()
+
+    expect(store.getState().error?.message).toBe('Activiteiten: dit record is intussen verwijderd; ongedaan maken kan niet.')
+  })
+
+  it("an undo pressed before the edit's answer waits for its batch id", async () => {
+    const { api, store, row } = setup()
+    const answer = deferred<Saved>()
+    api.update.mockReturnValueOnce(answer.promise)
+    api.undo.mockResolvedValueOnce('b-undo')
+    api.read.mockResolvedValueOnce(meal)
+
+    const typed = store.apply({ id: 103, field: 'kind', value: 'show' })
+    const undone = store.undo()
+    await Promise.resolve()
+    expect(api.undo).not.toHaveBeenCalled()
     expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true })
 
-    await store.redo()
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
-    expect(row(103).fields.kind).toBe('show')
+    answer.resolve(ok(show, 'b-late'))
+    await Promise.all([typed, undone])
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-late')
+    expect(row(103).fields.kind).toBe('meal')
+  })
+
+  it('a quick redo waits for the undo batch it undoes', async () => {
+    const { api, store } = setup()
+    api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
+    const undoing = deferred<string>()
+    api.undo.mockReturnValueOnce(undoing.promise).mockResolvedValueOnce('b-redo')
+    api.read.mockResolvedValue(meal)
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+
+    const undone = store.undo()
+    const redone = store.redo()
+    undoing.resolve('b-undo')
+    await Promise.all([undone, redone])
+
+    expect(api.undo.mock.calls).toEqual([['b-edit'], ['b-undo']])
     expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false })
   })
 
-  it('undoes the change just typed even before its write returns', async () => {
-    const { api, store, row } = setup()
-    const first = deferred<Row>()
-    api.update.mockReturnValueOnce(first.promise).mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
+  it('a refused edit leaves no entry, and an undo pressed before the refusal sends nothing', async () => {
+    const { api, store } = setup()
+    const answer = deferred<Saved>()
+    api.update.mockReturnValueOnce(answer.promise)
 
     const typed = store.apply({ id: 103, field: 'kind', value: 'show' })
-    expect(store.getState().canUndo).toBe(true)
     const undone = store.undo()
-    expect(row(103).fields.kind).toBe('meal')
-
-    first.resolve(served(calais[2], { kind: 'show' }))
+    answer.reject({ code: 'refused', message: 'No.' })
     await Promise.all([typed, undone])
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { kind: 'meal' }, expect.objectContaining({ id: 103 }))
-    expect(row(103).fields.kind).toBe('meal')
-    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true })
+
+    expect(api.undo).not.toHaveBeenCalled()
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false })
   })
 
-  it('moves the entry between the stacks at the press, so a quick redo then undo undoes the redone change', async () => {
+  it('an edit the server answers with no batch, as it changed nothing, leaves no entry', async () => {
     const { api, store } = setup()
-    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
-    await store.apply({ id: 101, field: 'start', value: '08:00' })
-    await store.apply({ id: 102, field: 'start', value: '11:00' })
+    api.update.mockResolvedValueOnce(ok(show, null))
+
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+
+    expect(store.getState().canUndo).toBe(false)
+  })
+
+  it("an undo of another view's step, or of an action, reloads the view instead of re-reading a row", async () => {
+    const { api, store, history, reload } = setup()
+    api.undo.mockResolvedValue('b-undo')
+    history.push({ batch: Promise.resolve('b-action'), model: 'activity', id: null })
+    history.push({ batch: Promise.resolve('b-other'), model: 'speelreeks', id: 7 })
+
+    await store.undo()
     await store.undo()
 
-    const redoAnswer = deferred<Row>()
-    api.update.mockReturnValueOnce(redoAnswer.promise)
-    const redone = store.redo()
-    const undone = store.undo()
-    redoAnswer.resolve(served(calais[1], { start: '11:00' }))
-    await Promise.all([redone, undone])
-
-    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { start: '10:00' }, expect.objectContaining({ id: 102 }))
-    expect(api.update).not.toHaveBeenCalledWith('activity', 101, { start: '07:30' }, expect.objectContaining({ id: 101 }))
+    expect(api.undo.mock.calls).toEqual([['b-other'], ['b-action']])
+    expect(api.read).not.toHaveBeenCalled()
+    expect(reload).toHaveBeenCalledTimes(2)
   })
 
-  it('ends at the original after type, undo, redo, undo, undo pressed inside one round-trip', async () => {
-    const { api, store, row } = setup()
-    const sent: Record<string, unknown>[] = []
-    const answers: ReturnType<typeof deferred<Row>>[] = []
-    api.update.mockImplementation((_m, _id, data) => {
-      sent.push(data)
-      const answer = deferred<Row>()
-      answers.push(answer)
-      return answer.promise
-    })
+  it('follows the history another store pushed to', async () => {
+    const { store, history } = setup()
+    const listener = vi.fn()
+    store.subscribe(listener)
 
-    const presses = [store.apply({ id: 102, field: 'start', value: '15:00' }), store.undo(), store.redo(), store.undo(), store.undo()]
-    for (let i = 0; i < 6; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      answers[i]?.resolve(served(calais[1], sent[i]))
-    }
-    await Promise.all(presses)
+    history.push({ batch: Promise.resolve('b-action'), model: 'speelreeks', id: null })
 
-    expect(row(102).fields.start).toBe('10:00')
-    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true })
+    expect(listener).toHaveBeenCalled()
+    expect(store.getState().canUndo).toBe(true)
   })
 
-  it('leaves one entry when an undo is refused after a quick redo took it back', async () => {
+  it('a fresh change empties the redo stack', async () => {
     const { api, store } = setup()
     api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
-    await store.apply({ id: 102, field: 'start', value: '11:00' })
-    const refused = deferred<Row>()
-    api.update.mockReturnValueOnce(refused.promise)
+    api.undo.mockResolvedValue('b-undo')
+    api.read.mockResolvedValue(meal)
 
-    const undone = store.undo()
-    const redone = store.redo()
-    refused.reject({ code: 'x', message: 'No.' })
-    await Promise.all([undone, redone])
+    await store.apply({ id: 103, field: 'kind', value: 'show' })
+    await store.undo()
+    await store.apply({ id: 104, field: 'start', value: '11:00' })
 
-    let presses = 0
-    while (store.getState().canUndo && presses < 5) {
-      await store.undo()
-      presses++
-    }
-    expect(presses).toBe(1)
+    expect(store.getState().canRedo).toBe(false)
   })
 
   it('reverts two refused writes to one field to the value the server last confirmed', async () => {
@@ -198,8 +295,8 @@ describe('undo and redo', () => {
 
   it('sends one write at a time per record and paints the last answer', async () => {
     const { api, store, row } = setup()
-    const one = deferred<Row>()
-    const two = deferred<Row>()
+    const one = deferred<Saved>()
+    const two = deferred<Saved>()
     api.update.mockReturnValueOnce(one.promise).mockReturnValueOnce(two.promise)
 
     const first = store.apply({ id: 102, field: 'start', value: '11:00' })
@@ -216,35 +313,14 @@ describe('undo and redo', () => {
     expect(row(102).fields.place).toBe('Zaal 2 (server)')
   })
 
-  it('a fresh change empties the redo stack', async () => {
-    const { api, store } = setup()
-    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
-
-    await store.apply({ id: 103, field: 'kind', value: 'show' })
-    await store.undo()
-    await store.apply({ id: 104, field: 'start', value: '11:00' })
-
-    expect(store.getState().canRedo).toBe(false)
-  })
-
-  it('keeps the change undoable when the undo write is refused', async () => {
-    const { api, store, row } = setup()
-    api.update.mockResolvedValueOnce(served(calais[2], { kind: 'show' })).mockRejectedValueOnce({ code: 'x', message: 'No.' })
-
-    await store.apply({ id: 103, field: 'kind', value: 'show' })
-    await store.undo()
-
-    expect(row(103).fields.kind).toBe('show')
-    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false, save: 'error' })
-  })
-
-  it('does nothing with an empty stack', async () => {
+  it('does nothing with an empty history', async () => {
     const { api, store } = setup()
 
     await store.undo()
     await store.redo()
 
-    expect(api.update).not.toHaveBeenCalled()
+    expect(api.undo).not.toHaveBeenCalled()
+    expect(store.getState().save).toBe('saved')
   })
 })
 
@@ -277,7 +353,7 @@ describe('a new row', () => {
   it('a refused draft create is retried with the next field', async () => {
     const { api, store } = setup()
     api.create.mockRejectedValueOnce({ code: 'person_or_name', message: 'A person or a name is required.' })
-    api.create.mockResolvedValueOnce({ id: 300, title: 'Ann op Montage', status: 'publish', fields: { activity: [102], person: [5] } })
+    api.create.mockResolvedValueOnce(ok({ id: 300, title: 'Ann op Montage', status: 'publish', fields: { activity: [102], person: [5] } }))
 
     store.draft({ status: 'requested' }, ['activity'], ['activity', 'person', 'venue'])
     await store.apply({ id: -1, field: 'activity', value: [102] })
@@ -298,7 +374,7 @@ describe('a new row', () => {
 
   it('sits on top as a draft and becomes a record when its title is written', async () => {
     const { api, store } = setup()
-    api.create.mockResolvedValueOnce({ ...calais[0], id: 200, title: 'Soundcheck', fields: { date: '2026-05-18', kind: 'travel', status: 'confirmed' } })
+    api.create.mockResolvedValueOnce(ok({ ...calais[0], id: 200, title: 'Soundcheck', fields: { date: '2026-05-18', kind: 'travel', status: 'confirmed' } }))
 
     store.draft({ date: '2026-05-18', kind: 'travel', status: 'confirmed' })
     expect(store.getState().rows[0]).toMatchObject({ id: -1, title: '' })
@@ -324,13 +400,13 @@ describe('a new row', () => {
 
   it('a second title commit during the create does not create twice', async () => {
     const { api, store } = setup()
-    const answer = deferred<Row>()
+    const answer = deferred<Saved>()
     api.create.mockReturnValueOnce(answer.promise)
 
     store.draft({ date: '2026-05-18' })
     const first = store.apply({ id: -1, field: 'title', value: 'Soundcheck' })
     const second = store.apply({ id: -1, field: 'title', value: 'Soundcheck 2' })
-    answer.resolve({ ...calais[0], id: 200, title: 'Soundcheck', fields: { date: '2026-05-18' } })
+    answer.resolve(ok({ ...calais[0], id: 200, title: 'Soundcheck', fields: { date: '2026-05-18' } }))
     await Promise.all([first, second])
 
     expect(api.create).toHaveBeenCalledTimes(1)
@@ -350,7 +426,7 @@ describe('a new row', () => {
 
   it('creates a record at once for a model that composes its own title', async () => {
     const { api, store } = setup()
-    api.create.mockResolvedValueOnce({ ...calais[0], id: 300, title: 'Composed' })
+    api.create.mockResolvedValueOnce(ok({ ...calais[0], id: 300, title: 'Composed' }))
 
     await store.create({ date: '2026-05-18' })
 
@@ -361,15 +437,20 @@ describe('a new row', () => {
 
 describe('remove', () => {
   function removable() {
-    const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>() }
+    const api = {
+      update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
+      read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
+    }
     const store = createStore({ model: 'activity', rows: calais, api })
     return { api, store, ids: () => store.getState().rows.map((r) => r.id) }
   }
 
   it('drops the row and its undo entries once the engine answers', async () => {
     const { api, store, ids } = removable()
-    api.update.mockImplementation(async (_m, id, data) => served(calais.find((r) => r.id === id)!, data))
+    api.update.mockImplementation(async (_m, id, data) => ok({ ...calais.find((r) => r.id === id)!, fields: data }, `b${id}`))
     api.remove.mockResolvedValueOnce({ id: 103 })
+    api.undo.mockResolvedValue('u1')
+    api.read.mockResolvedValue(calais[0])
     await store.apply({ id: 101, field: 'kind', value: 'show' })
     await store.apply({ id: 103, field: 'kind', value: 'show' })
 
@@ -379,13 +460,13 @@ describe('remove', () => {
     expect(ids()).not.toContain(103)
     expect(store.getState()).toMatchObject({ save: 'saved', error: null, canUndo: true })
     await store.undo()
-    expect(api.update).toHaveBeenLastCalledWith('activity', 101, { kind: 'travel' }, expect.objectContaining({ id: 101 }))
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b101')
     expect(store.getState().canUndo).toBe(false)
   })
 
   it('waits for a write still in flight on the record before it deletes', async () => {
     const { api, store } = removable()
-    const answer = deferred<Row>()
+    const answer = deferred<Saved>()
     api.update.mockReturnValueOnce(answer.promise)
     api.remove.mockResolvedValueOnce({ id: 103 })
 
@@ -476,7 +557,7 @@ describe('writes through the engine', () => {
     expect(store.getState().errors['105:status']).toEqual({ id: 105, field: 'status', code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
   })
 
-  it('undo of a dagplanning edit PATCHes /rows/activiteit/<row[key]> with the old value', async () => {
+  it("a query-row edit's batch comes from the PATCH reply, and its undo re-reads the query row", async () => {
     const engine: EngineSchema = {
       sources: {
         dagplanning: {
@@ -490,139 +571,28 @@ describe('writes through the engine', () => {
       },
     }
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, status: 'optie' }, lookups: {} }
+    const reread = (status: string) => ({ rows: [{ id: 40, activiteit_id: 7, status, title: 'opbouw Gent', custom: {}, lookups: {} }], total: 1 })
+    let now = 'optie'
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const path = String(input).split('?')[0]
       if (path === '/api/schema') return json(engine)
-      return path === '/api/rows/dagplanning' ? json({ rows: [], total: 0 }) : json({ id: 7, custom: {}, lookups: {} })
+      if (path === '/api/rows/dagplanning') return json(reread(now))
+      now = path === '/api/batches/b-7/undo' ? 'optie' : 'bevestigd'
+      if (now === 'optie') return json({ batch_id: 'b-undo', affected: [{ dataset: 'activiteit', id: 7 }] })
+      return json({ id: 7, status: now, custom: {}, lookups: {}, revision: { batch_id: 'b-7', changed: ['status'] } })
     })
     vi.stubGlobal('fetch', fetcher)
-    const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, status: 'optie' }, lookups: {} }
-    const store = createStore({ model: 'dagplanning', rows: [planned], api: { update, create: vi.fn() } })
+    const store = createStore({ model: 'dagplanning', rows: [planned], api: { update, create, read: rowOf }, history: createHistory(undoBatch) })
 
     await store.apply({ id: 40, field: 'status', value: 'bevestigd' })
     await store.undo()
 
-    const patches = fetcher.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([input, init]) => [String(input), init?.body])
-    expect(patches).toEqual([
-      ['/api/rows/activiteit/7', JSON.stringify({ status: 'bevestigd' })],
-      ['/api/rows/activiteit/7', JSON.stringify({ status: 'optie' })],
+    const writes = fetcher.mock.calls.filter(([, init]) => init?.method === 'PATCH' || init?.method === 'POST').map(([input, init]) => [String(input), init?.method, init?.body])
+    expect(writes).toEqual([
+      ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ status: 'bevestigd' })],
+      ['/api/batches/b-7/undo', 'POST', '{}'],
     ])
     expect(store.getState().rows[0]).toMatchObject({ id: 40, fields: { status: 'optie' } })
-  })
-})
-
-describe('a query row written in one PATCH', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    forgetSchema()
-  })
-
-  it('sends every column that writes to the same record in one PATCH, and drops a column no writer takes', async () => {
-    const engine: EngineSchema = {
-      sources: {
-        dagplanning: {
-          kind: 'query', label: 'Dagplanning', title: 'omschrijving', date: 'plandag', writable: true,
-          columns: {
-            activiteit_id: { type: 'integer', label: 'Activiteit' },
-            omschrijving: { type: 'text', label: 'Omschrijving' },
-            start_at: { type: 'datetime', label: 'Start', writes: { dataset: 'activiteit', field: 'start_at', key: 'activiteit_id' } },
-            datum: { type: 'date', label: 'Datum', writes: { dataset: 'activiteit', field: 'datum', key: 'activiteit_id' } },
-            plandag: { type: 'date', label: 'Plandag' },
-          },
-        },
-      },
-    }
-    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    const fetcher = vi.fn<typeof fetch>(async (input) => {
-      const path = String(input).split('?')[0]
-      if (path === '/api/schema') return json(engine)
-      return path === '/api/rows/dagplanning' ? json({ rows: [], total: 0 }) : json({ id: 7, custom: {}, lookups: {} })
-    })
-    vi.stubGlobal('fetch', fetcher)
-    const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, start_at: '2026-10-14T20:00', datum: '2026-10-14' }, lookups: {} }
-
-    await update('dagplanning', 40, { start_at: null, datum: '2026-10-12', plandag: '2026-10-12' }, planned)
-
-    const patches = fetcher.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([input, init]) => [String(input), init?.body])
-    expect(patches).toEqual([['/api/rows/activiteit/7', JSON.stringify({ start_at: null, datum: '2026-10-12' })]])
-  })
-})
-
-describe('undo restores every column the edit changed', () => {
-  const untimed: Row = { id: 201, title: 'Repetitie', status: '', fields: { start_at: null, datum: '2026-10-12', plandag: '2026-10-12' }, lookups: {} }
-  const assigned: Row = {
-    id: 301, title: 'Ada', status: '', fields: { persoon_id: 5, naam: null, state: 'bevestigd' },
-    lookups: { persoon_id: { id: 5, title: 'Ada', status: '', fields: {} } },
-  }
-  const editable = (field: string) => field !== 'plandag' && field !== 'title'
-
-  function widening(rows: Row[]) {
-    const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-    const store = createStore({ model: 'activiteit', rows, api, editable })
-    const row = (id: number) => store.getState().rows.find((r) => r.id === id)!
-    return { api, store, row }
-  }
-
-  it('a time set on an untimed row on another day: undo puts the day back with it, in one write', async () => {
-    const { api, store, row } = widening([untimed])
-    api.update
-      .mockResolvedValueOnce(served(untimed, { start_at: '2026-10-14T20:00', datum: '2026-10-14', plandag: '2026-10-14' }))
-      .mockResolvedValueOnce(untimed)
-
-    await store.apply({ id: 201, field: 'start_at', value: '2026-10-14T20:00' })
-    await store.undo()
-
-    expect(api.update).toHaveBeenCalledTimes(2)
-    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { start_at: null, datum: '2026-10-12' }, expect.objectContaining({ id: 201 }))
-    expect(row(201).fields).toMatchObject({ start_at: null, datum: '2026-10-12', plandag: '2026-10-12' })
-  })
-
-  it('redo writes the day the server derived, with the time', async () => {
-    const { api, store } = widening([untimed])
-    const timed = served(untimed, { start_at: '2026-10-14T20:00', datum: '2026-10-14', plandag: '2026-10-14' })
-    api.update.mockResolvedValueOnce(timed).mockResolvedValueOnce(untimed).mockResolvedValueOnce(timed)
-
-    await store.apply({ id: 201, field: 'start_at', value: '2026-10-14T20:00' })
-    await store.undo()
-    await store.redo()
-
-    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { start_at: '2026-10-14T20:00', datum: '2026-10-14' }, expect.objectContaining({ id: 201 }))
-  })
-
-  it('an undo pressed before the answer still sends the whole before-image', async () => {
-    const { api, store } = widening([untimed])
-    const answer = deferred<Row>()
-    api.update.mockReturnValueOnce(answer.promise).mockResolvedValueOnce(untimed)
-
-    const typed = store.apply({ id: 201, field: 'start_at', value: '2026-10-14T20:00' })
-    const undone = store.undo()
-    answer.resolve(served(untimed, { start_at: '2026-10-14T20:00', datum: '2026-10-14', plandag: '2026-10-14' }))
-    await Promise.all([typed, undone])
-
-    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { start_at: null, datum: '2026-10-12' }, expect.objectContaining({ id: 201 }))
-  })
-
-  it('a person switched to a free name: undo writes the person and clears the name, and shows the person again', async () => {
-    const { api, store, row } = widening([assigned])
-    api.update
-      .mockResolvedValueOnce({ ...served(assigned, { persoon_id: null, naam: 'Gastspeler' }), title: 'Gastspeler', lookups: { persoon_id: null } })
-      .mockImplementationOnce(() => new Promise(() => undefined))
-
-    await store.apply({ id: 301, field: 'naam', value: 'Gastspeler' })
-    void store.undo()
-
-    expect(api.update).toHaveBeenLastCalledWith('activiteit', 301, { naam: null, persoon_id: 5 }, expect.objectContaining({ id: 301 }))
-    expect(row(301).fields).toMatchObject({ naam: null, persoon_id: 5 })
-    expect(row(301).lookups?.persoon_id).toEqual({ id: 5, title: 'Ada', status: '', fields: {} })
-  })
-
-  it('never writes back a column the model does not let the grid edit', async () => {
-    const { api, store } = widening([untimed])
-    api.update.mockResolvedValueOnce({ ...served(untimed, { datum: '2026-10-13', plandag: '2026-10-13' }), title: 'Anders' }).mockResolvedValueOnce(untimed)
-
-    await store.apply({ id: 201, field: 'datum', value: '2026-10-13' })
-    await store.undo()
-
-    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { datum: '2026-10-12' }, expect.objectContaining({ id: 201 }))
   })
 })

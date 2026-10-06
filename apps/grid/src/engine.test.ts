@@ -82,6 +82,14 @@ describe('toSchema', () => {
     expect(schema.views).toEqual([])
     expect(schema.writable).toEqual({ productie: false, activiteit: false, productie_dag: false })
   })
+
+  it("carries a dataset's actions to its model, and none where it declares none", () => {
+    const apply = { name: 'sjabloon_toepassen', label: 'Sjabloon toepassen', input: { sjabloon_id: { relation: 'sjabloon', label: 'Sjabloon' } } }
+    const schema = toSchema({ sources: { ...engine.sources, productie: { ...engine.sources.productie, actions: [apply] }, activiteit: { ...engine.sources.activiteit, actions: [] } } })
+
+    expect(schema.models.productie.actions).toEqual([apply])
+    expect(schema.models.activiteit).not.toHaveProperty('actions')
+  })
 })
 
 describe('writes', () => {

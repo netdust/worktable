@@ -1,5 +1,5 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
-import type { DateWindow, Field, FieldType, Lookup, MatrixAway, MatrixJoin, Model, Row, SavedView, Schema, StoredArrangement, TableDef, View } from './types'
+import type { DateWindow, Field, FieldType, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, StoredArrangement, TableDef, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -43,6 +43,7 @@ export interface EngineSource {
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
+  actions?: ModelAction[]
   columns: Record<string, EngineColumn>
 }
 
@@ -137,6 +138,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.title_via ? { title_derived: true } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.deletable ? { deletable: true } : {}),
+    ...(source.actions?.length ? { actions: source.actions } : {}),
     fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
   }
 }
