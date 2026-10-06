@@ -58,7 +58,7 @@ Not a security surface: no route, auth or input-parsing change beyond the writer
 |---|---|---|---|
 | Theatre Activiteit writer and declaration | `POST/PATCH /api/rows/activiteit`, `/rows/voorstellingen` | integration · `packages/theatre/test/writer.test.ts`, `theatre.test.ts` · `bun test packages/theatre` | untimed-activity |
 | Grid empty datetime | `DateCell`, `useTable` sort, newRow | unit · `apps/grid/src/grid/*.test.ts(x)` · `bun run --filter @worktable/grid test` | untimed-activity |
-| Laika exporter | `wp laika export-planning` | unit and integration · `tests/Unit/WorktableExport/ActivityMapTest.php`, `tests/Integration/WorktableExport/ExportCommandTest.php` · `ddev composer test:unit`, `test:int` | none |
+| Laika exporter | `wp laika export-planning` | unit and integration · `tests/Unit/WorktableExport/ActivityMapTest.php`, `ChecksTest.php`, `tests/Integration/WorktableExport/ExportCommandTest.php` · `ddev composer test:unit`, `test:int` | none |
 | Rebuild of the local engine | the import CLI, parity | manual · Task 4 | none |
 
 ## Review Focus
@@ -76,28 +76,29 @@ Not a security surface: no route, auth or input-parsing change beyond the writer
 ---
 
 ### Task 1: Theatre — datum, optional start, the writer
-**Files:** `packages/theatre/src/datasets.ts` (Activiteit `datum`; `start_at`/`eind_at` nullable), `writers.ts`, `queries/voorstellingen.sql`, `queries.ts` (`voorstellingen.start` and `dagplanning.start_at` nullable; voorstellingen `datum` from `a.datum`), `seed.ts` (seed activities carry `datum`, since the seed bypasses the writer; add one untimed activity; the two views' sort and `datum` column per Decisions), `scripts/parity.ts` and `scripts/parity.test.ts` (weeks from `datum`; shifted counts timed rows only), `specs/step-0e/spec.md` (apply the approved "After the plan review" line: no T05:00; an activity with no start exports untimed; one with an end but no start drops the end and is reported), `packages/theatre/test/writer.test.ts`, `theatre.test.ts`, the invented import fixture `packages/theatre/test/fixtures/invented-export.json` (activities gain `datum`; one becomes untimed; its `checks` are recomputed by hand from the rows).
+**Files:** `packages/theatre/src/datasets.ts` (Activiteit `datum`; `start_at`/`eind_at` nullable), `writers.ts`, `queries/voorstellingen.sql`, `queries.ts` (`voorstellingen.start` and `dagplanning.start_at` nullable; voorstellingen `datum` from `a.datum`), `seed.ts` (seed activities carry `datum`, since the seed bypasses the writer; add one untimed activity; the two views' sort and `datum` column per Decisions), `scripts/parity.ts` and `scripts/parity.test.ts` (weeks from `datum`; shifted counts timed rows only), `specs/step-0e/spec-diff.md` (amend the U4 section: weeks are ISO weeks of `datum`, the engine counts by `datum`, and the plandag shift counts only activities with a time), `specs/step-0e/spec.md` (apply the approved "After the plan review" line: no T05:00; an activity with no start exports untimed; one with an end but no start drops the end and is reported), `packages/theatre/test/writer.test.ts`, `theatre.test.ts`, the invented import fixture `packages/theatre/test/fixtures/invented-export.json` (activities gain `datum`; one becomes untimed; its `checks` are recomputed by hand from the rows).
 
 - [ ] **Step 1: Tests first,** each through the routes:
   - an activity with only `datum` is created with `plandag = datum` and no `start_at`;
   - with `start_at` set, `datum` follows it;
   - a body whose `datum` disagrees with `start_at` is refused;
   - `eind_at` without `start_at` is refused;
-  - clearing `start_at` (and `eind_at` with it, since an end needs a start) keeps `datum`; clearing only `start_at` on a row with an end is refused in Dutch;
+  - clearing `start_at` (and `eind_at` with it, since an end needs a start) keeps `datum`; clearing only `start_at` on a row with an end is refused in Dutch, and the message says to clear Einde first;
+  - editing `datum` alone on a timed row is refused, and the message says to change Start instead;
   - a PATCH of `datum` alone on an untimed row moves `plandag`;
   - a 05:00 start stays a time;
   - voorstellingen shows `datum` and an empty `start` for an untimed show;
   - a 00:30 show keeps its calendar `datum`.
 
   Run → FAIL.
-- [ ] **Step 2: Implement.** Run `bun test packages scripts` and `bun run check` → PASS. Parity tests must stay green on the updated fixture.
+- [ ] **Step 2: Implement.** Run `bun test packages scripts`, `bun run check`, and `rm -rf e2e/.tmp && bun run gate` → PASS (the seed changes reach the Playwright tier). Parity tests must stay green on the updated fixture.
 - [ ] **Step 3: Commit.** `feat(theatre): an activity can have no time — datum required, start optional`.
 
 ### Task 2: Grid — an empty time is just the day
-**Files:** `apps/grid/src/grid/cells/Date.tsx` (the picker editor accepts clearing to empty; plan review N1: rendering empty and sorting first already hold, so those get tests that are expected to pass on arrival, said so in the report), `newRow.test.ts` (`needs` is `['productie_id']` and `fields.datum` is the window's day; no `newRow.ts` change), a cell or columns unit test that a 05:00 start renders as 05:00 (S5), and `e2e/step-0e.spec.ts`, flow **untimed-activity**:
-- open the dataset view "Activiteiten" (not Planning, which filters `bevestigd`);
+**Files:** `apps/grid/src/grid/cells/Date.tsx` (the picker editor accepts clearing to empty; plan review N1: rendering empty and sorting first already hold, so those get tests that are expected to pass on arrival, said so in the report), `newRow.test.ts` (`needs` is `['productie_id']` and `fields.datum` is the window's day; no `newRow.ts` change), `apps/grid/src/grid/columns.test.ts` (an empty datetime renders `''`; a 05:00 start renders as 05:00), `apps/grid/src/grid/group.test.ts` (an untimed row sorts first within its plandag group, never in the previous day), and `e2e/step-0e.spec.ts`, flow **untimed-activity**:
+- open the seeded view "Optie of bevestigd" (a table on `activiteit`, `status` in optie/bevestigd, and it shows `datum` after Task 1). Clicking the "Activiteiten" table would open Planning, which filters `bevestigd`, and the new `optie` row would vanish;
 - press "+ New", pick a production;
-- the row lands on the window's first day with no time;
+- the row lands on the day `newRow` picks (today when today is in the window, else the window's first day) with no time; the test asserts against the `datum` in the POST body, never a fixed date;
 - after a reload it still shows that day with an empty Start;
 - a second row with Start 05:00 shows 05:00.
 
@@ -107,15 +108,18 @@ Not a security surface: no route, auth or input-parsing change beyond the writer
 ### Task 3: Laika exporter — send datum, no more 05:00
 **Repository:** `/home/ntdst/Sites/laika-planning-model`, branch `feature/worktable-export`.
 
-**Files:** `ActivityMap.php` (returns `datum`, `start_at` nullable; `NO_START` and `geen_start` removed), `Export.php` (emits `datum`; `zonder_tijd` note; no `laika_geen_start`), `Checks.php` (weeks from `datum`), and the tests. Regenerate the invented fixture (`WORKTABLE_EXPORT_FIXTURE=1`) and import it into a temporary worktable database built from Task 1's theatre.
+**Files:** `ActivityMap.php` (returns `datum`, `start_at` nullable; `NO_START` and `geen_start` removed), `Export.php` (emits `datum`; `zonder_tijd` and `eind_zonder_start` notes; no `laika_geen_start`), `ExportCommand.php` (the summary line counts `zonder_tijd` and `eind_zonder_start`, never the removed keys), `Checks.php` (weeks from `datum`), and the tests, including `tests/Unit/WorktableExport/ChecksTest.php` (rows carry `datum`). Regenerate Laika's own invented fixture (`tests/Integration/WorktableExport/fixtures/invented-export.json`, via `WORKTABLE_EXPORT_FIXTURE=1`; a different file from worktable's hand-made fixture) and import it into a temporary worktable database from the `feature/step-0e-datum` checkout:
+- `bun packages/engine/src/serve.ts --domain @worktable/theatre --db <tmp>/x.db --create-admin admin@example.test`;
+- `… --import <laika fixture> --as admin@example.test --report <tmp>/r.report.json`;
+- quote the counts.
 
 - [ ] **Step 1: Tests first** (ActivityMap: no start gives `start_at` null and `datum` set; with a start, `datum` is the date; no start but an end gives both null and an `eind_zonder_start` note with the original end; ExportCommandTest's "Nachtrit" expectations change to that; the report's `zonder_tijd` and `eind_zonder_start` counts). Then implement. Run `ddev composer test:unit` and `test:int`, and quote them. `make gate` stops at the old `audit:deps` advisory; quote the later tiers on their own.
 - [ ] **Step 2: Commit.** `fix(laika-core): an activity without a time exports without one`.
 
 ### Task 4: Rebuild the local engine (operator steps; reads Laika's database only)
 - [ ] Stop the running engine and grid.
-- [ ] Re-export: `ddev wp laika export-planning --own=76437 --out=/mnt/laika-export/laika-planning-export.json --report=/mnt/laika-export/export.report.json`.
-- [ ] Before re-exporting, rename the current `laika-planning-export.json` and `export.report.json` to `*.pre-datum` (N4).
+- [ ] First, rename the current `laika-planning-export.json` and `export.report.json` to `*.pre-datum` (N4).
+- [ ] Then re-export: `ddev wp laika export-planning --own=76437 --out=/mnt/laika-export/laika-planning-export.json --report=/mnt/laika-export/export.report.json`.
 - [ ] Move `~/laika-export/engine.db` to `engine.db.pre-datum`. Then:
   - `bun packages/engine/src/serve.ts --domain @worktable/theatre --db ~/laika-export/engine.db --create-admin stefan@netdust.be`;
   - `… --import ~/laika-export/laika-planning-export.json --as stefan@netdust.be --report ~/laika-export/import.report.json`;

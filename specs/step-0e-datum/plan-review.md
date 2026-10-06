@@ -40,3 +40,9 @@ The design matches the approved spec lines, and the engine needs no change. Two 
 - **N6. The simplest-design paragraph holds,** and the engine needs no change.
 - **N7. The migrator refusal is as stated.**
 - **N8. 114 untimed activities** match the real export.
+
+---
+
+# Round 2
+Reviewed-plan: 50c6dac6a73192f46d1eb23e6cc5e51c804805db specs/step-0e-datum/plan.md
+Verdict: not ready (B1: the e2e names a non-existent view "Activiteiten" — clicking the table opens Planning; use "Optie of bevestigd"). Should fix: S1 the e2e day depends on the run date (newRow uses today inside the window); S2 Task 3 omits ExportCommand.php (count of removed keys → TypeError) and ChecksTest.php; S3 the approved U4 spec-diff line still defines weeks by start_at; S4 Task 1 must run the full gate; S5 Task 4 renames the old export after overwriting it. Notes: datum edits on timed rows and clearing Start with an end are refused — make the messages say what to do; name the test files; give the cross-repo import command; atelier renders a null start (outside this plan). Prior B1, B2, S1–S5, N1–N3, N5–N7 resolved; S6 and N4 partly.
