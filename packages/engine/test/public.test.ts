@@ -14,12 +14,13 @@ let anyone: Request
 const json = (value: unknown) => JSON.stringify(value)
 const state = () => ({ saved_view: contents(sqlite, 'saved_view'), revision: contents(sqlite, 'revision') })
 
-function insertView(source: string, visible: string[], over: { owner_id?: number; shared?: number } = {}): number {
+type Over = { owner_id?: number; shared?: number; filters?: unknown }
+
+function insertView(source: string, visible: string[], over: Over = {}): number {
   const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, filters, sort, visible_fields)
                VALUES ('Publiek', ?, ?, ?, ?, ?, '["-day"]', ?)`
   const kind = source === 'taak' ? 'dataset' : 'query'
-  const filters = json({ aantal: { $gte: 1 } })
-  const args = [kind, source, over.owner_id ?? 1, over.shared ?? 1, source === 'per_project' ? filters : '{}']
+  const args = [kind, source, over.owner_id ?? 1, over.shared ?? 1, json(over.filters ?? {})]
   return Number(sqlite.query(sql).run(...args, json(visible)).lastInsertRowid)
 }
 
@@ -147,7 +148,8 @@ describe('public route denials (attack 10)', () => {
 describe('the public route', () => {
   test('serves the view rows projected to visible_fields, with columns in their order', async () => {
     const visible = ['day', 'name', 'aantal']
-    const { token } = (await share(insertView('per_project', visible))).body
+    // Project 1's row counts 2, so this stored filter leaves out one fixture row.
+    const { token } = (await share(insertView('per_project', visible, { filters: { aantal: 1 } }))).body
     const res = await read(token)
     expect(res.status).toBe(200)
     expect(res.body.columns).toEqual([
@@ -155,14 +157,14 @@ describe('the public route', () => {
       { key: 'name', label: 'Name', type: 'text' },
       { key: 'aantal', label: 'Aantal', type: 'integer' },
     ])
-    const filter = encodeURIComponent(json({ aantal: { $gte: 1 } }))
-    const full = await admin('GET', `/api/rows/per_project?filter=${filter}&sort=-day`, { type: null })
-    const projected = full.body.rows.map((r: Record<string, unknown>) =>
-      Object.fromEntries(visible.map((key) => [key, r[key]])),
-    )
+    const all = await admin('GET', '/api/rows/per_project?sort=-day', { type: null })
+    const projected = all.body.rows
+      .filter((r: Record<string, unknown>) => r.aantal === 1)
+      .map((r: Record<string, unknown>) => Object.fromEntries(visible.map((key) => [key, r[key]])))
+    expect(projected.length).toBeGreaterThan(1)
+    expect(projected.length).toBeLessThan(all.body.rows.length)
     expect(res.body.rows).toEqual(projected)
-    expect(res.body.rows.length).toBeGreaterThan(1)
-    expect(res.body.total).toBe(full.body.total)
+    expect(res.body.total).toBe(projected.length)
     for (const row of res.body.rows) expect(Object.keys(row)).toEqual(visible)
     expect(JSON.stringify(res.body)).not.toContain('owner_id')
   })
