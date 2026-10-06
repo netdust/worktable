@@ -62,8 +62,28 @@ describe('parity', () => {
     expect(md).toMatch(/assignments_per_person: pass, 5 compared, 0 mismatched keys/)
     expect(md).toMatch(/absences_per_person: pass, 2 compared, 0 mismatched keys/)
     expect(md).toMatch(/plandag shifted: 1/)
-    for (const view of ['Planning', 'Toewijzingen', 'Afwezigheden'])
-      expect(md).toMatch(new RegExp(`${view}: \\d+ rows`))
+    expect(md).toMatch(/Planning: pass, 2 rows, expected 2 \(activiteit where status = bevestigd\)/)
+    expect(md).toMatch(/Toewijzingen: pass, 7 rows, expected 7 \(toewijzing, no filter\)/)
+    expect(md).toMatch(/Afwezigheden: pass, 2 rows, expected 2 \(beschikbaarheid, no filter\)/)
+  }, 20_000)
+
+  test("a view whose rows differ from the export's own count fails, naming its filter", async () => {
+    const { code, md } = await parity((c) => {
+      const week = c.activities_per_week as Record<string, Record<string, number>>
+      week['2026-W53'] = { ...week['2026-W53'], bevestigd: 3 }
+    })
+    expect(code).toBe(1)
+    expect(md).toMatch(/Planning: fail, 2 rows, expected 3 \(activiteit where status = bevestigd\)/)
+  }, 20_000)
+
+  test("a view filter the export's checks cannot count fails as not comparable", async () => {
+    const { code, md } = await parity({
+      views: "theatre.views.map((v) => v.name === 'Planning' ? { ...v, filters: { soort: 'voorstelling' } } : v)",
+    })
+    expect(code).toBe(1)
+    expect(md).toMatch(
+      /Planning: fail, \d+ rows, filter not comparable with the export's checks \(activiteit where soort = voorstelling\)/,
+    )
   }, 20_000)
 
   test('a missing check block fails as missing from the export, not as 0 compared', async () => {

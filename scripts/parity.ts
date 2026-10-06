@@ -150,17 +150,69 @@ async function measure(read: ReturnType<typeof reader>, domain: Domain) {
   return { counts, activities, assignments, absences, shifted }
 }
 
-async function viewCounts(read: ReturnType<typeof reader>, domain: Domain): Promise<Counts> {
-  const result: Counts = {}
+interface ViewOutcome {
+  name: string
+  rows: number
+  expected: number | null
+  filter: string
+}
+
+// Per source: the check block that counts it, and the one column a view may filter on for it to be comparable.
+const COUNTED: Record<string, { check: string; column?: string }> = {
+  activiteit: { check: 'activities_per_week', column: 'status' },
+  toewijzing: { check: 'assignments_per_person', column: 'state' },
+  beschikbaarheid: { check: 'absences_per_person' },
+}
+
+function kept(filters: Record<string, unknown>, column: string | undefined): string[] | 'all' | null {
+  const keys = Object.keys(filters)
+  if (keys.length === 0) return 'all'
+  if (keys.length > 1 || keys[0] !== column) return null
+  const value = filters[column]
+  if (typeof value === 'string') return [value]
+  const listed = (value as { $in?: unknown } | null)?.$in
+  return Array.isArray(listed) && listed.every((v) => typeof v === 'string') ? listed : null
+}
+
+function describeFilter(source: string, filters: Record<string, unknown>): string {
+  const parts = Object.entries(filters).map(([k, v]) =>
+    typeof v === 'string' ? `${k} = ${v}` : `${k} ${JSON.stringify(v)}`,
+  )
+  return parts.length === 0 ? `${source}, no filter` : `${source} where ${parts.join(' and ')}`
+}
+
+// The count the export's own checks predict for a view, or null when its filter is not one they can count.
+function predicted(checks: Checks, source: string, filters: Record<string, unknown>): number | null {
+  const counted = COUNTED[source]
+  if (!counted) return null
+  const keep = kept(filters, counted.column)
+  if (keep === null) return null
+  const flat = flatten(checks[counted.check])
+  return Object.entries(flat)
+    .filter(([path]) => keep === 'all' || keep.includes(path.split('/').at(-1) as string))
+    .reduce((sum, [, n]) => sum + n, 0)
+}
+
+async function viewOutcomes(read: ReturnType<typeof reader>, domain: Domain, checks: Checks): Promise<ViewOutcome[]> {
+  const result: ViewOutcome[] = []
   for (const name of VIEWS) {
     const view = domain.views.find((v) => v.name === name)
     if (!view) fail(`the view ${name} is missing from the domain`)
-    result[name] = (await read(view.source, view.filters)).total
+    const filters = (view.filters ?? {}) as Record<string, unknown>
+    const rows = (await read(view.source, view.filters)).total
+    result.push({
+      name,
+      rows,
+      expected: predicted(checks, view.source, filters),
+      filter: describeFilter(view.source, filters),
+    })
   }
   return result
 }
 
-function markdown(outcomes: Outcome[], measured: Awaited<ReturnType<typeof measure>>, views: Counts): string {
+const viewPasses = (v: ViewOutcome) => v.expected !== null && v.expected === v.rows
+
+function markdown(outcomes: Outcome[], measured: Awaited<ReturnType<typeof measure>>, views: ViewOutcome[]): string {
   const plural = (n: number) => `${n} mismatched key${n === 1 ? '' : 's'}`
   const lines = ['# Parity', '', '## Checks', '']
   for (const o of outcomes) {
@@ -170,7 +222,10 @@ function markdown(outcomes: Outcome[], measured: Awaited<ReturnType<typeof measu
   lines.push('', '## Counts per dataset', '')
   for (const [name, n] of Object.entries(measured.counts)) lines.push(`- ${name}: ${n}`)
   lines.push('', '## Views', '')
-  for (const [name, n] of Object.entries(views)) lines.push(`- ${name}: ${n} rows`)
+  for (const v of views) {
+    const against = v.expected === null ? "filter not comparable with the export's checks" : `expected ${v.expected}`
+    lines.push(`- ${v.name}: ${viewPasses(v) ? 'pass' : 'fail'}, ${v.rows} rows, ${against} (${v.filter})`)
+  }
   lines.push(
     '',
     '## Informational',
@@ -212,11 +267,12 @@ async function run(file: string): Promise<number> {
       compare('assignments_per_person', checks.assignments_per_person, measured.assignments),
       compare('absences_per_person', checks.absences_per_person, measured.absences),
     ]
-    const report = markdown(outcomes, measured, await viewCounts(read, domain))
+    const views = await viewOutcomes(read, domain, checks)
+    const report = markdown(outcomes, measured, views)
     mkdirSync(dirname(values.out as string), { recursive: true })
     writeFileSync(values.out as string, report)
     console.log(report)
-    return outcomes.every((o) => o.pass) ? 0 : 1
+    return outcomes.every((o) => o.pass) && views.every(viewPasses) ? 0 : 1
   } finally {
     sqlite.close()
     rmSync(dir, { recursive: true, force: true })
