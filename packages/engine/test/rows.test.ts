@@ -59,6 +59,18 @@ describe('denials', () => {
   test('sort on an undeclared key is 400 bad_sort', () =>
     denied('/api/rows/taak?sort=titel;DROP TABLE x', 400, 'bad_sort'))
   test('sort on custom.key is 400 bad_sort', () => denied('/api/rows/taak?sort=custom.kleur', 400, 'bad_sort'))
+  test('2001 sort keys is 400 bad_sort, not a 500', () =>
+    denied(`/api/rows/taak?sort=${Array(2001).fill('id').join(',')}`, 400, 'bad_sort'))
+  test('17 sort keys is 400 bad_sort for their number', async () => {
+    const { status, body } = await rows('taak', `sort=${Array(17).fill('id').join(',')}`)
+    expect({ status, code: body.code, message: body.message }).toEqual({
+      status: 400,
+      code: 'bad_sort',
+      message: 'sort takes at most 16 keys',
+    })
+  })
+  test('a sort key named twice, either way, is 400 bad_sort', () =>
+    denied('/api/rows/taak?sort=id,-id', 400, 'bad_sort'))
   test('group on an undeclared key is 400 bad_group', () => denied('/api/rows/taak?group=nope', 400, 'bad_group'))
 
   test.each(['_migrations', 'sqlite_master', 'saved_view', 'nope'])('source %s is 404 unknown_source', (source) =>

@@ -26,6 +26,8 @@ export interface RowsParams {
 }
 
 export const MAX_LIMIT = 5000
+export const MAX_KEYS = 16
+const MAX_CELL_DAYS = 92
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const shape = z.object({
@@ -44,6 +46,8 @@ export function isRealDate(value: string): boolean {
   const date = new Date(Date.UTC(y, m - 1, d))
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d
 }
+
+const daysIn = (from: string, to: string): number => (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1
 
 function parseLimit(raw: string | undefined): number {
   if (raw === undefined) return MAX_LIMIT
@@ -79,8 +83,20 @@ function parseFilter(raw: string | undefined): FilterInput | null {
   return parsed as FilterInput
 }
 
+/** M1: a key list is short and names each column once. */
+export function keysProblem(what: string, columns: string[]): string | null {
+  if (columns.length > MAX_KEYS) return `${what} takes at most ${MAX_KEYS} keys`
+  const twice = columns.find((column, i) => columns.indexOf(column) !== i)
+  return twice === undefined ? null : `${what} names "${twice}" twice`
+}
+
 function parseSort(raw: string | undefined, source: Source): RowsParams['sort'] {
   const keys = (raw ?? '').split(',').filter(Boolean)
+  const problem = keysProblem(
+    'sort',
+    keys.map((key) => key.replace(/^-/, '')),
+  )
+  if (problem) throw new ApiError(400, 'bad_sort', problem)
   return keys.map((key) => {
     const desc = key.startsWith('-')
     const column = desc ? key.slice(1) : key
@@ -105,6 +121,9 @@ export function parseRowsParams(source: Source, query: Record<string, string | u
   if ((from || to) && !source.date) throw new ApiError(400, 'no_date_column', `"${source.name}" has no date column`)
   if (cells === '1' && !(from && to)) {
     throw new ApiError(400, 'window_required', 'cells need both from and to')
+  }
+  if (cells === '1' && from && to && daysIn(from, to) > MAX_CELL_DAYS) {
+    throw new ApiError(400, 'window_too_wide', `cells take a window of at most ${MAX_CELL_DAYS} days`)
   }
   return {
     filter: parseFilter(filter),

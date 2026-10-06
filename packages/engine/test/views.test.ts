@@ -108,8 +108,9 @@ describe('views denials: another owner (attack 1)', () => {
   }
   test('restore of an unshared deleted foreign view is 404 unknown_view', () =>
     denied('POST', `/api/views/${UNSHARED_DELETED}/restore`, body({}), 404, 'unknown_view'))
-  test('restore of a shared deleted foreign view is 403 not_owner', () =>
-    denied('POST', `/api/views/${SHARED_DELETED}/restore`, body({}), 403, 'not_owner'))
+  // A deleted view is gone from every list, so its existence is not told to another actor, shared or not.
+  test('restore of a shared deleted foreign view is 404 unknown_view', () =>
+    denied('POST', `/api/views/${SHARED_DELETED}/restore`, body({}), 404, 'unknown_view'))
   test('restore of an unknown view is 404 unknown_view', () =>
     denied('POST', '/api/views/999/restore', body({}), 404, 'unknown_view'))
   test('a deleted view of my own is 404 unknown_view to PATCH and DELETE', async () => {
@@ -168,6 +169,12 @@ const hostile: [string, Record<string, unknown>][] = [
   ['a blank name', { name: '   ' }],
   ['a name of 81 characters', { name: 'a'.repeat(81) }],
   ['a name that is a number', { name: 5 }],
+  ['a sort of 17 keys', { sort: Array(17).fill('naam') }],
+  ['a sort naming a key twice', { sort: ['naam', '-naam'] }],
+  ['visible fields of 17 keys', { visible_fields: Array(17).fill('naam') }],
+  ['visible fields naming a key twice', { visible_fields: ['naam', 'naam'] }],
+  ['a name holding a NUL', { name: 'Mijn\u0000taken' }],
+  ['a name holding a bidi override', { name: 'Mijn \u202Etaken' }],
 ]
 
 describe('views denials: hostile filters, sorts, columns and names (attacks 3, 4)', () => {
@@ -196,6 +203,21 @@ describe('views denials: hostile filters, sorts, columns and names (attacks 3, 4
   test('a PATCH that grows a view past 16 kB is 400 view_too_large', () => {
     const big = Array.from({ length: 20 }, (_, i) => `${i}${'x'.repeat(1000)}`)
     return denied('PATCH', `/api/views/${SEEDED}`, body({ filters: { naam: { $in: big } } }), 400, 'view_too_large')
+  })
+
+  // JSON.stringify cannot carry 1e999, so the body is written by hand; JSON.parse reads it as Infinity.
+  test('a filter number that is not finite is 400 bad_view, on POST and PATCH', async () => {
+    const filters = '{"custom.prio":{"$gte":1e999}}'
+    await denied('POST', '/api/views', { body: `{"name":"x","source":"taak","filters":${filters}}` }, 400, 'bad_view')
+    await denied('PATCH', `/api/views/${SEEDED}`, { body: `{"filters":${filters}}` }, 400, 'bad_view')
+  })
+
+  test('a sort of 17 keys is refused for their number', async () => {
+    const res = await request('POST', '/api/views', body({ ...NEW, sort: Array(17).fill('naam') }))
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 400,
+      message: 'sort takes at most 16 keys',
+    })
   })
 
   test('a body over 64 kB is 413 body_too_large', () =>

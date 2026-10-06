@@ -180,6 +180,12 @@ describe('GET /rows/<down>?cells=1', () => {
     }
   })
 
+  test('cells over a window of 93 days is 400 window_too_wide; 92 days is served', async () => {
+    const wide = await get('/api/rows/taak?cells=1&from=2026-10-01&to=2027-01-01')
+    expect({ status: wide.status, code: wide.body.code }).toEqual({ status: 400, code: 'window_too_wide' })
+    expect((await get('/api/rows/taak?cells=1&from=2026-10-01&to=2026-12-31')).status).toBe(200)
+  })
+
   test('cells on a source that is no matrix down is 400 no_matrix', async () => {
     const { status, body } = await get('/api/rows/verlof?cells=1&from=2026-10-01&to=2026-10-31')
     expect({ status, code: body.code }).toEqual({ status: 400, code: 'no_matrix' })

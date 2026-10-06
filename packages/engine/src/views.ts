@@ -4,7 +4,7 @@ import type { Actor, Domain, SavedViewSeed } from './declare'
 import { DEV_ACTOR } from './dev-actor'
 import { filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
-import { ApiError } from './params'
+import { ApiError, keysProblem } from './params'
 import { type Source, sourceOf } from './registry'
 import { matrixOf } from './rows'
 import { savedView } from './saved-view'
@@ -50,6 +50,7 @@ function outOf(raw: Raw, actor: Actor): ViewOut {
 function nameOf(value: unknown): string {
   const name = typeof value === 'string' ? value.trim() : ''
   if (name.length < 1 || name.length > MAX_NAME) throw bad(`name must be 1 to ${MAX_NAME} characters`)
+  if (/[\p{Cc}\p{Cf}]/u.test(name)) throw bad('name must not hold control or format characters')
   return name
 }
 
@@ -67,6 +68,7 @@ function skinOf(domain: Domain, source: Source, value: unknown): 'table' | 'matr
 
 function filtersOf(source: Source, value: unknown): FilterInput {
   if (!isObject(value)) throw bad('filters must be an object')
+  if (!Bun.deepEquals(JSON.parse(JSON.stringify(value)), value)) throw bad('filters must hold only finite numbers')
   try {
     filterWhere(value as FilterInput, source, tableOf(source))
   } catch (err) {
@@ -78,6 +80,8 @@ function filtersOf(source: Source, value: unknown): FilterInput {
 
 function columnsOf(source: Source, what: string, value: unknown, strip = (key: string) => key): string[] {
   if (!Array.isArray(value) || !value.every((key) => typeof key === 'string')) throw bad(`${what} must be a list`)
+  const problem = keysProblem(what, value.map(strip))
+  if (problem) throw bad(problem)
   for (const key of value) if (!hasColumn(source, strip(key))) throw bad(`${what}: "${key}" is not a column`)
   return value
 }
@@ -122,7 +126,8 @@ export function ownedView(sqlite: Database, id: number, actor: Actor, includeDel
   const live = includeDeleted ? '' : ' AND deleted_at IS NULL'
   const raw = sqlite.query(`SELECT * FROM saved_view WHERE id = ?${live}`).get(id) as Raw | null
   if (raw && raw.owner_id === actor.id) return raw
-  if (raw?.shared === 1) throw new ApiError(403, 'not_owner', `view ${id} belongs to someone else`)
+  if (raw?.shared === 1 && raw.deleted_at === null)
+    throw new ApiError(403, 'not_owner', `view ${id} belongs to someone else`)
   throw new ApiError(404, 'unknown_view', `unknown view ${id}`)
 }
 
