@@ -260,7 +260,9 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
   app.delete('/views/:id', (c) => {
     const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
-    write(() => save(sqlite, actor, id, { deleted_at: new Date().toISOString() }, ownedView(sqlite, id, actor)))
+    // A delete also revokes the share token, so a restore never brings an old link back.
+    const gone = { deleted_at: new Date().toISOString(), public: 0, share_token: null }
+    write(() => save(sqlite, actor, id, gone, ownedView(sqlite, id, actor)))
     return c.json({ id })
   })
 

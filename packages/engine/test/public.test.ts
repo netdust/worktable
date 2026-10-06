@@ -99,6 +99,20 @@ describe('public route denials (attack 10)', () => {
     await denied(read(token), 404, 'unknown_view')
   })
 
+  test('deleting a public view revokes it: restored, its old token is 404 and it is no longer public', async () => {
+    const id = insertView('per_project', ['name'])
+    const { token } = (await share(id)).body
+    expect((await read(token)).status).toBe(200)
+    expect((await admin('DELETE', `/api/views/${id}`, { type: null })).status).toBe(200)
+    const restored = await admin('POST', `/api/views/${id}/restore`, { body: '{}' })
+    expect(restored).toMatchObject({ status: 200, body: { id, public: false } })
+    await denied(read(token), 404, 'unknown_view')
+    expect(sqlite.query('SELECT public, share_token FROM saved_view WHERE id = ?').get(id)).toEqual({
+      public: 0,
+      share_token: null,
+    })
+  })
+
   test('a parameter other than from and to is 400, filter included', async () => {
     const { token } = (await share(insertView('per_project', ['name']))).body
     for (const query of ['?filter={}', '?sort=name', '?limit=1', '?from=2026-10-01&cells=1']) {
