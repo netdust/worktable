@@ -53,7 +53,7 @@ test('derived columns, relations, legacy ids and custom land as the writers make
   expect(one('SELECT productie_id FROM activiteit WHERE legacy_post_id = 304').productie_id).toBe(placeholder.id)
   expect(one('SELECT weergavenaam FROM persoon WHERE legacy_post_id = 401').weergavenaam).toBe('Ada Voorbeeld')
 
-  const days = sqlite.query('SELECT substr(start_at, 1, 10) AS day FROM activiteit ORDER BY start_at').all()
+  const days = sqlite.query('SELECT datum AS day FROM activiteit ORDER BY datum, start_at').all()
   expect(days.map((d) => (d as Row).day)).toEqual([
     '2026-12-31',
     '2027-01-01',
@@ -61,6 +61,10 @@ test('derived columns, relations, legacy ids and custom land as the writers make
     '2027-01-04',
     '2027-01-04',
   ])
+  expect(one('SELECT start_at, plandag FROM activiteit WHERE legacy_post_id = 305')).toEqual({
+    start_at: null,
+    plandag: '2027-01-04',
+  })
 })
 
 test('a plandag in the export is refused: derived values come from the writer', () => {

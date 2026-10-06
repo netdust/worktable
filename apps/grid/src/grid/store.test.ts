@@ -510,3 +510,119 @@ describe('writes through the engine', () => {
     expect(store.getState().rows[0]).toMatchObject({ id: 40, fields: { status: 'optie' } })
   })
 })
+
+describe('a query row written in one PATCH', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    forgetSchema()
+  })
+
+  it('sends every column that writes to the same record in one PATCH, and drops a column no writer takes', async () => {
+    const engine: EngineSchema = {
+      sources: {
+        dagplanning: {
+          kind: 'query', label: 'Dagplanning', title: 'omschrijving', date: 'plandag', writable: true,
+          columns: {
+            activiteit_id: { type: 'integer', label: 'Activiteit' },
+            omschrijving: { type: 'text', label: 'Omschrijving' },
+            start_at: { type: 'datetime', label: 'Start', writes: { dataset: 'activiteit', field: 'start_at', key: 'activiteit_id' } },
+            datum: { type: 'date', label: 'Datum', writes: { dataset: 'activiteit', field: 'datum', key: 'activiteit_id' } },
+            plandag: { type: 'date', label: 'Plandag' },
+          },
+        },
+      },
+    }
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const path = String(input).split('?')[0]
+      if (path === '/api/schema') return json(engine)
+      return path === '/api/rows/dagplanning' ? json({ rows: [], total: 0 }) : json({ id: 7, custom: {}, lookups: {} })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const planned: Row = { id: 40, title: 'opbouw Gent', status: '', fields: { activiteit_id: 7, start_at: '2026-10-14T20:00', datum: '2026-10-14' }, lookups: {} }
+
+    await update('dagplanning', 40, { start_at: null, datum: '2026-10-12', plandag: '2026-10-12' }, planned)
+
+    const patches = fetcher.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([input, init]) => [String(input), init?.body])
+    expect(patches).toEqual([['/api/rows/activiteit/7', JSON.stringify({ start_at: null, datum: '2026-10-12' })]])
+  })
+})
+
+describe('undo restores every column the edit changed', () => {
+  const untimed: Row = { id: 201, title: 'Repetitie', status: '', fields: { start_at: null, datum: '2026-10-12', plandag: '2026-10-12' }, lookups: {} }
+  const assigned: Row = {
+    id: 301, title: 'Ada', status: '', fields: { persoon_id: 5, naam: null, state: 'bevestigd' },
+    lookups: { persoon_id: { id: 5, title: 'Ada', status: '', fields: {} } },
+  }
+  const editable = (field: string) => field !== 'plandag' && field !== 'title'
+
+  function widening(rows: Row[]) {
+    const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
+    const store = createStore({ model: 'activiteit', rows, api, editable })
+    const row = (id: number) => store.getState().rows.find((r) => r.id === id)!
+    return { api, store, row }
+  }
+
+  it('a time set on an untimed row on another day: undo puts the day back with it, in one write', async () => {
+    const { api, store, row } = widening([untimed])
+    api.update
+      .mockResolvedValueOnce(served(untimed, { start_at: '2026-10-14T20:00', datum: '2026-10-14', plandag: '2026-10-14' }))
+      .mockResolvedValueOnce(untimed)
+
+    await store.apply({ id: 201, field: 'start_at', value: '2026-10-14T20:00' })
+    await store.undo()
+
+    expect(api.update).toHaveBeenCalledTimes(2)
+    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { start_at: null, datum: '2026-10-12' }, expect.objectContaining({ id: 201 }))
+    expect(row(201).fields).toMatchObject({ start_at: null, datum: '2026-10-12', plandag: '2026-10-12' })
+  })
+
+  it('redo writes the day the server derived, with the time', async () => {
+    const { api, store } = widening([untimed])
+    const timed = served(untimed, { start_at: '2026-10-14T20:00', datum: '2026-10-14', plandag: '2026-10-14' })
+    api.update.mockResolvedValueOnce(timed).mockResolvedValueOnce(untimed).mockResolvedValueOnce(timed)
+
+    await store.apply({ id: 201, field: 'start_at', value: '2026-10-14T20:00' })
+    await store.undo()
+    await store.redo()
+
+    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { start_at: '2026-10-14T20:00', datum: '2026-10-14' }, expect.objectContaining({ id: 201 }))
+  })
+
+  it('an undo pressed before the answer still sends the whole before-image', async () => {
+    const { api, store } = widening([untimed])
+    const answer = deferred<Row>()
+    api.update.mockReturnValueOnce(answer.promise).mockResolvedValueOnce(untimed)
+
+    const typed = store.apply({ id: 201, field: 'start_at', value: '2026-10-14T20:00' })
+    const undone = store.undo()
+    answer.resolve(served(untimed, { start_at: '2026-10-14T20:00', datum: '2026-10-14', plandag: '2026-10-14' }))
+    await Promise.all([typed, undone])
+
+    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { start_at: null, datum: '2026-10-12' }, expect.objectContaining({ id: 201 }))
+  })
+
+  it('a person switched to a free name: undo writes the person and clears the name, and shows the person again', async () => {
+    const { api, store, row } = widening([assigned])
+    api.update
+      .mockResolvedValueOnce({ ...served(assigned, { persoon_id: null, naam: 'Gastspeler' }), title: 'Gastspeler', lookups: { persoon_id: null } })
+      .mockImplementationOnce(() => new Promise(() => undefined))
+
+    await store.apply({ id: 301, field: 'naam', value: 'Gastspeler' })
+    void store.undo()
+
+    expect(api.update).toHaveBeenLastCalledWith('activiteit', 301, { naam: null, persoon_id: 5 }, expect.objectContaining({ id: 301 }))
+    expect(row(301).fields).toMatchObject({ naam: null, persoon_id: 5 })
+    expect(row(301).lookups?.persoon_id).toEqual({ id: 5, title: 'Ada', status: '', fields: {} })
+  })
+
+  it('never writes back a column the model does not let the grid edit', async () => {
+    const { api, store } = widening([untimed])
+    api.update.mockResolvedValueOnce({ ...served(untimed, { datum: '2026-10-13', plandag: '2026-10-13' }), title: 'Anders' }).mockResolvedValueOnce(untimed)
+
+    await store.apply({ id: 201, field: 'datum', value: '2026-10-13' })
+    await store.undo()
+
+    expect(api.update).toHaveBeenLastCalledWith('activiteit', 201, { datum: '2026-10-12' }, expect.objectContaining({ id: 201 }))
+  })
+})

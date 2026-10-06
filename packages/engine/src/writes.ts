@@ -94,11 +94,12 @@ function fits(type: ColumnDecl['type'], value: unknown): boolean {
   return typeof value === 'string'
 }
 
-export function checkValues(dataset: DatasetDecl, values: Values): void {
+// Before the writer, nulls wait: a domain writer refuses a missing value first, in its own words.
+export function checkValues(dataset: DatasetDecl, values: Values, nulls = true): void {
   for (const [key, value] of Object.entries(values)) {
     const column = columnOf(dataset, key)
     if (!column) throw badValue(key, 'is not a declared column')
-    if (value === null && !column.nullable) throw badValue(key, 'may not be null')
+    if (nulls && value === null && !column.nullable) throw badValue(key, 'may not be null')
     if (value !== null && !fits(column.type, value)) throw badValue(key, `must be ${column.type}`)
   }
 }
@@ -316,7 +317,7 @@ export function valuesOf(
   const given = cutBody(dataset, body)
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
-  checkValues(dataset, cut)
+  checkValues(dataset, cut, false)
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
   checkOwner(scope, returned ?? {})
   // Forced again on what is stored: a writer may return a fresh object without the owner column.

@@ -18,9 +18,9 @@
 
 ## Views
 
-- Planning: 227 rows
-- Toewijzingen: 508 rows
-- Afwezigheden: 12 rows
+- Planning: pass, 227 rows, expected 227 (activiteit where status = bevestigd)
+- Toewijzingen: pass, 508 rows, expected 508 (toewijzing, no filter)
+- Afwezigheden: pass, 12 rows, expected 12 (beschikbaarheid, no filter)
 
 ## Informational
 

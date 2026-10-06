@@ -135,7 +135,7 @@ async function measure(read: ReturnType<typeof reader>, domain: Domain) {
   const legacyOf = new Map((rowsOf.persoon ?? []).map((p) => [p.id, p.legacy_post_id]))
   const activities: Record<string, Counts> = {}
   for (const row of rowsOf.activiteit ?? []) {
-    bump(activities, isoWeek(String(row.start_at).slice(0, 10)), String(row.status))
+    bump(activities, isoWeek(String(row.datum)), String(row.status))
   }
   const assignments: Record<string, Counts> = {}
   for (const row of rowsOf.toewijzing ?? []) {
@@ -146,7 +146,7 @@ async function measure(read: ReturnType<typeof reader>, domain: Domain) {
     const key = String(legacyOf.get(row.persoon_id) ?? '?')
     absences[key] = (absences[key] ?? 0) + 1
   }
-  const shifted = (rowsOf.activiteit ?? []).filter((r) => r.plandag !== String(r.start_at).slice(0, 10)).length
+  const shifted = (rowsOf.activiteit ?? []).filter((r) => r.start_at != null && r.plandag !== r.datum).length
   return { counts, activities, assignments, absences, shifted }
 }
 

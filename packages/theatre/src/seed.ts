@@ -57,10 +57,11 @@ const slots: Slot[] = [
   [3, 'afbouw', '2026-10-19T09:00', '2026-10-19T12:00', 'bevestigd', 'Mechelen'],
 ]
 
-const activiteiten = slots.map(([productieId, soort, startAt, endAt, status, plaats]) => ({
+const timed = slots.map(([productieId, soort, startAt, endAt, status, plaats]) => ({
   productie_id: productieId,
   soort,
   omschrijving: `${soort} ${plaats}`,
+  datum: startAt.slice(0, 10),
   start_at: startAt,
   eind_at: endAt,
   plandag: plandag(startAt, DAY_LINE_HOUR),
@@ -68,6 +69,20 @@ const activiteiten = slots.map(([productieId, soort, startAt, endAt, status, pla
   plaats,
   locatie_id: VENUE_OF[plaats] ?? null,
 }))
+
+// Last, so the ids the toewijzingen name stay put; an activity without a time is on its own datum.
+const untimed = {
+  productie_id: 2,
+  soort: 'overnachting',
+  omschrijving: 'overnachting Antwerpen',
+  datum: '2026-10-15',
+  plandag: '2026-10-15',
+  status: 'bevestigd',
+  plaats: 'Antwerpen',
+  locatie_id: VENUE_OF.Antwerpen,
+}
+
+const activiteiten = [...timed, untimed]
 
 const persoon = (voornaam: string, achternaam: string, rest: Record<string, unknown>) => ({
   voornaam,
@@ -146,9 +161,9 @@ export const views: SavedViewSeed[] = [
     source: 'activiteit',
     skin: 'matrix',
     filters: {},
-    sort: ['start_at'],
+    sort: ['plandag', 'start_at'],
     group_by: null,
-    visible_fields: ['productie_id', 'soort', 'start_at', 'status'],
+    visible_fields: ['productie_id', 'soort', 'datum', 'start_at', 'status'],
   },
   {
     name: 'Optie of bevestigd',
@@ -156,9 +171,9 @@ export const views: SavedViewSeed[] = [
     source: 'activiteit',
     skin: 'table',
     filters: { status: { $in: ['optie', 'bevestigd'] } },
-    sort: ['start_at'],
+    sort: ['plandag', 'start_at'],
     group_by: null,
-    visible_fields: ['productie_id', 'soort', 'start_at', 'eind_at', 'status', 'plaats'],
+    visible_fields: ['productie_id', 'soort', 'datum', 'start_at', 'eind_at', 'status', 'plaats'],
   },
   {
     name: 'Organisaties',

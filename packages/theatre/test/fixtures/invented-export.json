@@ -34,6 +34,7 @@
         "productie_id": 201,
         "soort": "voorstelling",
         "omschrijving": "Oudejaarsvoorstelling",
+        "datum": "2026-12-31",
         "start_at": "2026-12-31T20:00",
         "eind_at": "2026-12-31T22:00",
         "locatie_id": 102,
@@ -44,6 +45,7 @@
         "productie_id": 201,
         "soort": "opbouw",
         "omschrijving": "Nachtelijke opbouw",
+        "datum": "2027-01-01",
         "start_at": "2027-01-01T02:00",
         "eind_at": "2027-01-01T04:00",
         "locatie_id": 102,
@@ -54,6 +56,7 @@
         "productie_id": 201,
         "soort": "voorstelling",
         "omschrijving": "Nieuwjaarsvoorstelling",
+        "datum": "2027-01-01",
         "start_at": "2027-01-01T20:00",
         "locatie_id": 102,
         "status": "optie"
@@ -63,6 +66,7 @@
         "productie_id": 0,
         "soort": "vergadering",
         "omschrijving": "Teamoverleg",
+        "datum": "2027-01-04",
         "start_at": "2027-01-04T10:00",
         "eind_at": "2027-01-04T11:00",
         "plaats": "Kantoor"
@@ -71,7 +75,7 @@
         "legacy_id": 305,
         "productie_id": 202,
         "soort": "repetitie",
-        "start_at": "2027-01-04T14:00",
+        "datum": "2027-01-04",
         "status": "geannuleerd",
         "notities": "Verplaatst"
       }

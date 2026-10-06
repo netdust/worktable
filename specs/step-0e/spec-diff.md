@@ -67,7 +67,7 @@ Laika's core team become editors. An owner account with no subject sees nothing.
               "absences_per_person": { "<persoon legacy id>": 0 } } }
 ```
 
-- Weeks are ISO weeks of the calendar date WordPress shows an activity on: the first ten characters of the exported `start_at`. They are counted per mapped status, so the comparison depends on no view's filter. The engine side counts the same way, by `substr(start_at, 1, 10)` and `status` over live rows, and separately reports how many activities the day line (`plandag`) moves to the previous day. That move is a known, intended difference, never a failure.
+- Weeks are ISO weeks of the calendar date WordPress shows an activity on: its exported `datum`, which an activity without a time also has. They are counted per mapped status, so the comparison depends on no view's filter. The engine side counts the same way, by `datum` and `status` over live rows, and separately reports how many activities with a time the day line (`plandag`) moves to the previous day; an activity without a time is on its own `datum` and never counts as moved. That move is a known, intended difference, never a failure.
 - Name-only assignments, with no persoon, count under the key `"naam"`. An absence counts once per row, not per day.
 - Every dataset present must be a declared dataset, and every key a declared, non-readonly column, `legacy_id` or `custom`. Anything else is refused with its path.
 - The exporter always emits `status`, so no row relies on a default.
@@ -79,3 +79,19 @@ Laika's core team become editors. An owner account with no subject sees nothing.
 ## U6, the WordPress view shortcode (Stefan, 2026-10-06, after the security audit)
 
 **"WordPress afterwards" row and the package layout paragraph:** "one block that renders a view by its token" becomes "one shortcode and YOOtheme element that render a public view by a site-side name: `[worktable_view view="<name>"]`. The site's configuration maps each name to the view's share token, so a token never reaches post content, revisions or WordPress's REST API, where YOOtheme's stored layout would publish it. The fetch is server-side, cached five minutes per engine, token and window, and stops for a minute when the engine is down or rate-limited."
+
+## Activities without a time (approved by Stefan, 2026-10-06)
+
+**Activiteit row:** the columns become "… omschrijving, datum, start_at (nullable), eind_at (nullable), plandag, …", and the note gains: "`datum` is the calendar day the activity is on; `start_at` empty means it has no time (a meal, a hotel night, a whole day) and the grid shows the day without a time. When `start_at` is set, the writer keeps `datum` equal to its date; an `eind_at` needs a `start_at`."
+
+**Derived columns row:** "`plandag` … computed by the writer from `start_at` and the organisation's day-line hour" becomes "… computed by the writer: from `start_at` and the organisation's day-line hour when the activity has a time, and equal to `datum` when it has none".
+
+**Day line paragraph:** gains "; an activity without a time is on its own `datum`" after the day-line sentence.
+
+**Shows for the website:** "the calendar date (not `plandag` …)" becomes "the calendar date (`datum`, not `plandag` …)", and "time" becomes "time (empty when the show has none)".
+
+**`specs/step-0e/spec.md`, "After the plan review":** the T05:00 rule and the `custom.laika_geen_start` flag are replaced by "An activity with no start exports with `start_at` empty and its `datum`. One with an end but no start drops the end and is listed in the export report under `eind_zonder_start` (Stefan, 2026-10-06)."
+
+On a create, a set `start_at` decides `datum`; a disagreeing `datum` is refused only on an update (Stefan, 2026-10-06).
+
+An activity needs a `datum` or a `start_at`; missing both is refused in Dutch.
