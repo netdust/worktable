@@ -240,6 +240,16 @@ describe('import behaviour', () => {
     ])
   })
 
+  test('a custom with a bad key or a nested value refuses its row, reported without the value', () => {
+    const customs = ['{"__proto__":"x"}', '{"a.b":"x"}', '{"diep":{"geheim":"x"}}', '{"lijst":[{"geheim":"x"}]}']
+    const rows = customs.map((custom, i) => ({ legacy_id: 10 + i, name: 'P', custom: JSON.parse(custom) }))
+    rows.push({ legacy_id: 20, name: 'P', custom: { ok_1: 'x', vlag: true, n: 2, leeg: null, tags: ['a', 1] } })
+    const result = run(exportOf({ project: rows }), true)
+    expect(result.refused.map((r) => r.legacy_id)).toEqual([10, 11, 12, 13])
+    expect(JSON.stringify(result.refused)).not.toContain('geheim')
+    expect(result.counts.project).toBe(1)
+  })
+
   test('legacy_post_id is written only where the dataset declares it', () => {
     run(exportOf(VALID))
     const columns = sqlite.query("SELECT name FROM pragma_table_info('note')").all() as { name: string }[]

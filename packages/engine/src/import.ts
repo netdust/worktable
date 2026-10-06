@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { forbid } from './access'
 import type { Actor, DatasetDecl, Domain, Writer } from './declare'
+import { CUSTOM_KEY } from './filter'
 import { ApiError } from './params'
 import { writerOf } from './registry'
 import { contextOf, create, encodeAll, type Store, valuesOf, WriteRefused } from './writes'
@@ -141,8 +142,23 @@ function bodyOf(run: Run, dataset: DatasetDecl, row: Row): Row {
   return body
 }
 
+// The filter pattern admits __proto__, so the names an object assignment treats specially are refused too.
+const PROTOTYPE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const isPrimitive = (value: unknown) => value === null || ['string', 'number', 'boolean'].includes(typeof value)
+
+// Keys a filter can address, and flat values; the message names neither, since both may carry data.
+function checkCustom(custom: Row): void {
+  for (const [key, value] of Object.entries(custom)) {
+    if (!CUSTOM_KEY.test(key) || PROTOTYPE_KEYS.has(key))
+      throw new WriteRefused('a custom key may hold only letters, digits and _')
+    const flat = isPrimitive(value) || (Array.isArray(value) && value.every(isPrimitive))
+    if (!flat) throw new WriteRefused('a custom value must be text, a number, true/false, null or a flat list')
+  }
+}
+
 function importRow(run: Run, plan: Plan, row: Row): number {
   const { store, actor } = run
+  if (row.custom !== undefined) checkCustom(row.custom as Row)
   const values = valuesOf(store, plan, 'create', bodyOf(run, plan.dataset, row), contextOf(store, actor, null), 'all')
   const stored = encodeAll(plan.dataset, values)
   if (Object.hasOwn(plan.dataset.columns, LEGACY_COLUMN)) stored[LEGACY_COLUMN] = row.legacy_id as number
