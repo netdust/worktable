@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import invented from './fixtures/invented-export.json'
@@ -64,9 +64,58 @@ test('a refusing import leaks no fixture name, email or note into the report, st
     '--accept-report',
   )
 
-  expect(result.text).toMatch(/refused/)
+  expect(result.text).toMatch(/\b2 refused\b/)
+  const refused = JSON.parse(readFileSync(report, 'utf8')).refused as { legacy_id: number }[]
+  expect(refused.map((r) => r.legacy_id).sort()).toEqual([590, 592])
   const output = `${result.text}\n${readFileSync(report, 'utf8')}`
   const leaks = [...personalValues(data), 'Dubbel Verzonnen', 'Tweede notitie'].filter((v) => output.includes(v))
   expect(leaks).toEqual([])
   expect(output).not.toContain('example.test')
+}, 20_000)
+
+async function importInto(dir: string, report: string) {
+  const file = join(dir, 'export.json')
+  await Bun.write(file, JSON.stringify(invented))
+  const db = join(dir, 'engine.db')
+  await cli('--db', db, '--create-admin', 'boss@example.test')
+  return cli('--db', db, '--import', file, '--as', 'boss@example.test', '--report', report)
+}
+
+test('the report is 0600 even when it overwrites a wider file', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wt-cli-'))
+  const report = join(dir, 'report.json')
+  writeFileSync(report, '{}')
+  chmodSync(report, 0o644)
+  expect((await importInto(dir, report)).code).toBe(0)
+  expect(statSync(report).mode & 0o777).toBe(0o600)
+}, 20_000)
+
+test('a refused import replaces an earlier report instead of leaving it as current', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wt-cli-'))
+  const report = join(dir, 'report.json')
+  expect((await importInto(dir, report)).code).toBe(0)
+  expect(JSON.parse(readFileSync(report, 'utf8')).committed).toBe(true)
+  const again = await importInto(dir, report)
+  expect(again.code).toBe(1)
+  expect(JSON.parse(readFileSync(report, 'utf8'))).toEqual({
+    committed: false,
+    error: 'import_needs_empty_database',
+  })
+  expect(statSync(report).mode & 0o777).toBe(0o600)
+}, 20_000)
+
+test('--import with an account flag is refused, not silently skipped', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wt-cli-'))
+  const file = join(dir, 'export.json')
+  await Bun.write(file, JSON.stringify(invented))
+  const db = join(dir, 'engine.db')
+  for (const flag of [
+    ['--create-admin', 'boss@example.test'],
+    ['--create-account', 'x@example.test', '--role', 'editor'],
+    ['--disable-account', 'x@example.test'],
+  ]) {
+    const result = await cli('--db', db, ...flag, '--import', file, '--as', 'boss@example.test')
+    expect(result.code).toBe(1)
+    expect(result.text).toContain('--import cannot be combined')
+  }
 }, 20_000)

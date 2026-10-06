@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
@@ -8,6 +8,7 @@ import type { Actor, Domain } from './declare'
 import { importExport, readExportFile } from './import'
 import { migrate, seedDomain } from './migrate'
 import { MigrationError } from './migration-error'
+import { ApiError } from './params'
 
 const { values } = parseArgs({
   options: {
@@ -44,6 +45,9 @@ if (!values.domain || !values.db) {
       '   | --disable-account <email>]\n' +
       '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]',
   )
+}
+if (values.import && (values['create-admin'] || values['create-account'] || values['disable-account'])) {
+  fail('--import cannot be combined with --create-admin, --create-account or --disable-account: run them one at a time')
 }
 // The Host allowlist names these two; any other address would need a mailer, and 0e has none.
 if (!['127.0.0.1', 'localhost'].includes(values.hostname)) {
@@ -113,15 +117,28 @@ function administrator(email: string | undefined): Actor {
   return { id: account.id, role: account.role, subject: null }
 }
 
+// mode applies only to a new file, so an overwritten one is narrowed after.
+function writeReport(report: string, body: unknown): void {
+  writeFileSync(report, `${JSON.stringify(body, null, 2)}\n`, { mode: 0o600 })
+  chmodSync(report, 0o600)
+}
+
+// A refused import overwrites an earlier run's report, so that one is never read as current.
+function importOrReport(file: string, report: string): ReturnType<typeof importExport> {
+  try {
+    const data = readExportFile(file)
+    return importExport(sqlite, domain, data, administrator(values.as), { acceptReport: values['accept-report'] })
+  } catch (err) {
+    writeReport(report, { committed: false, error: err instanceof ApiError ? err.code : 'import_failed' })
+    throw err
+  }
+}
+
 // Stdout gets counts only; the report, outside the repo by default, gets legacy ids and messages.
 function runImport(file: string): number {
-  const actor = administrator(values.as)
-  const data = readExportFile(file)
-  const result = importExport(sqlite, domain, data, actor, { acceptReport: values['accept-report'] })
   const report = values.report ?? `${file}.report.json`
-  writeFileSync(report, `${JSON.stringify({ committed: result.committed, refused: result.refused }, null, 2)}\n`, {
-    mode: 0o600,
-  })
+  const result = importOrReport(file, report)
+  writeReport(report, { committed: result.committed, refused: result.refused })
   for (const [dataset, count] of Object.entries(result.counts)) console.log(`${dataset} ${count}`)
   const refused = result.refused.length
   if (refused > 0) console.log(`${refused} refused, see ${report}`)
