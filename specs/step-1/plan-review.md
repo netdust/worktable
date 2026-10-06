@@ -58,3 +58,21 @@ Verdict: not ready (1 Blocking, 6 Should fix). Every finding was applied, and th
 - Task 4 names the label "Sjabloon toepassen".
 - The seed sentence is fixed.
 - There is a refusal test for the `kleur` format.
+
+# Plan review: step 1 (round 3)
+Reviewed-plan: b938880127b2cf453e63a54dc1829029db57ef75
+Verdict: **ready**. Nothing is Blocking. The four Should-fix edits to Task 5 are applied, with no re-review, as the reviewer called the plan ready.
+
+## Should fix (applied)
+- **S-A.** `Grid.test.tsx` asserts the inverse-write undo at :262, :664 and :683. It is now in Task 5's tests and expects `POST /batches/<id>/undo`.
+- **S-B.** `store.undo` and `store.redo` delegate to the history, and `canUndo` and `canRedo` read its length, so the keyboard effect and the Toast don't change. After an action, a notice offers undo.
+- **S-C.** There is one entry shape, `{ batch: Promise<string | null>; model; id }`, pushed at paint. It is dropped on a refusal, on a null batch and on `unknown_record`. A re-read happens only when the entry's model is the open view's, through a new `replace(row)` that also updates `confirmed`. Otherwise the view reloads through a reload counter.
+- **S-D.** `ui/history.ts` and `history.test.ts` are created, `App.test.tsx` tests the reload and the navigation, and Test map row 6 lists them.
+
+## Notes (applied)
+- The header now says R1–R9.
+- The e2e clicks a cell before pressing Ctrl+Z.
+- Reloading after an action uses a reload counter.
+- An entry is dropped on `unknown_record`.
+- The step-0e undo flows assert restored cells instead of PATCH bodies.
+- Task 7's script change gets a code-only commit.

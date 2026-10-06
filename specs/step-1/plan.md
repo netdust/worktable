@@ -15,7 +15,7 @@
 
 **Tech Stack:** Bun 1.4, Hono 4, bun:sqlite, TypeScript, React 19 grid (Vitest), Playwright e2e.
 
-**Spec:** `specs/step-1/spec.md` (R1–R8). The parent is `docs/SPEC.md`. Carry-over: `specs/step-1/carry-over.md`.
+**Spec:** `specs/step-1/spec.md` (R1–R9). The parent is `docs/SPEC.md`. Carry-over: `specs/step-1/carry-over.md`.
 
 ## Global Constraints
 - `packages/engine` never names a domain word. `bun run check` runs the boundary, vocabulary and staged-export checks, Biome and typecheck, and, from Task 0, the export-terms check. New engine words must be English and generic: `batch`, `action`, `undo`, `input`, `changed`.
@@ -73,7 +73,7 @@
 | Batch table, write reply, undo by batch | `POST /api/batches/:id/undo`, write replies | integration · `packages/engine/test/batches.test.ts` · `bun test packages/engine` | undo-changed-since |
 | Actions | `POST /api/actions/:name`, `/api/schema` | integration · `packages/engine/test/actions.test.ts` · `bun test packages/engine` | apply-template |
 | Theatre action `sjabloon_toepassen` | `POST /api/actions/sjabloon_toepassen` | integration · `packages/theatre/test/apply.test.ts` · `bun test packages/theatre` | apply-template, apply-twice |
-| Grid: batch undo, action button | store and drawer | unit · `apps/grid/src/grid/store.test.ts`, `apps/grid/src/grid/Drawer.test.tsx` · `cd apps/grid && bunx vitest run` | apply-template, undo-changed-since |
+| Grid: batch undo, action button | store, history, drawer, App | unit · `apps/grid/src/grid/store.test.ts`, `apps/grid/src/ui/history.test.ts`, `apps/grid/src/grid/Drawer.test.tsx`, `apps/grid/src/grid/Grid.test.tsx`, `apps/grid/src/ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | apply-template, undo-changed-since |
 | Migration on a copy and value parity | operator command | none, proven by command output in the report | none |
 
 ## Review Focus
@@ -225,18 +225,19 @@ Steps:
 
 ### Task 5: The grid, batch undo and the action button
 **Files:**
-- Modify: `apps/grid/src/grid/store.ts`, `apps/grid/src/grid/hooks.ts`, `apps/grid/src/api.ts`, `apps/grid/src/engine.ts`, `apps/grid/src/i18n.ts`, `apps/grid/src/grid/Drawer.tsx`, `apps/grid/src/grid/Grid.tsx`, `apps/grid/src/ui/App.tsx`, `apps/grid/src/types.ts`, `apps/grid/src/matrix/store.ts` and `apps/grid/src/matrix/hooks.ts` (they unwrap `.row` from the new `{ row, batch }` return), `e2e/step-0e.spec.ts` (its undo flows wait for `POST /batches/:id/undo` instead of a PATCH, so the gate stays green in this task)
-- Tests: `apps/grid/src/grid/store.test.ts`, `apps/grid/src/grid/Drawer.test.tsx`
+- Modify: `apps/grid/src/grid/store.ts`, `apps/grid/src/grid/hooks.ts`, `apps/grid/src/api.ts`, `apps/grid/src/engine.ts`, `apps/grid/src/i18n.ts`, `apps/grid/src/grid/Drawer.tsx`, `apps/grid/src/grid/Grid.tsx`, `apps/grid/src/ui/App.tsx`, `apps/grid/src/types.ts`, `apps/grid/src/matrix/store.ts` and `apps/grid/src/matrix/hooks.ts` (they unwrap `.row` from the new `{ row, batch }` return), `e2e/step-0e.spec.ts` (its undo flows wait for `POST /batches/:id/undo` instead of a PATCH, and `undo-time-on-untimed` and `undo-day-line-move` assert the restored cells and the reload instead of a body, so the gate stays green in this task)
+- Create: `apps/grid/src/ui/history.ts`, `apps/grid/src/ui/history.test.ts`
+- Tests: `apps/grid/src/grid/store.test.ts`, `apps/grid/src/grid/Drawer.test.tsx`, `apps/grid/src/grid/Grid.test.tsx` (its undo tests at :262, :664, :683 expect `POST /batches/<id>/undo` instead of the inverse write), `apps/grid/src/ui/App.test.tsx` (the history survives a reload and a navigation)
 
 **Interfaces:**
 - Consumes: write replies `revision`, `POST /batches/:id/undo`, `/schema` `actions`.
 - Produces:
   - `toRow` destructures `revision` out of a row reply, so it never lands in `row.fields`;
   - `api.update` and `api.create` return `{ row: Row; batch: string | null }`; `updateThrough` keeps the PATCH reply's `revision.batch_id`;
-  - one undo history per browser tab, held at app level (`apps/grid/src/ui/history.ts`), not in a view's store: its entries are `{ batch: string; model: string; id: number | null }`, so it survives a view's reload and navigation between views. The table grid's stores push into it. The matrix keeps its own (ruling above).
-  - `undo()` and `redo()` call `POST /batches/:id/undo`. Afterwards the open view re-reads the entry's own row by its id in its model (`GET /rows/<model>?filter={"id":…}`), or reloads when the entry has no row (an action);
+  - one undo history per browser tab, held at app level (`apps/grid/src/ui/history.ts`), not in a view's store, so it survives a view's reload and navigation between views. Its entries are `{ batch: Promise<string | null>; model: string; id: number | null }`. An entry is pushed at paint, so an undo pressed before the answer waits for the batch. It is dropped when the edit is refused, when the reply's `batch_id` is null, and when the server answers `unknown_record` for the entry's row. The matrix keeps its own (ruling above).
+  - `store.undo()` and `store.redo()` delegate to the history, and `StoreState.canUndo` and `canRedo` read its length, so Grid's keyboard effect (`Grid.tsx:127-128`) and the Toast need no change. After an applied action, the Toast offers undo through a notice (`notify` with an action, as `App.tsx:241` does).
+  - `undo()` and `redo()` call `POST /batches/:id/undo`. Afterwards, when `entry.model` is the open view's model, the view re-reads the entry's row (`GET /rows/<model>?filter={"id":…}`) and hands it to a new store method `replace(row)`, which repaints it and updates `confirmed` (`store.ts:126`). Otherwise, or for an action (no row), the open view reloads through a reload counter in App's load effect deps (`App.tsx:181-196`);
   - `api.runAction(name, id, input)`;
-  - an undo entry `{ id, batch: string }`;
   - Dutch errors: `changed_since` → "{label} is intussen gewijzigd; ongedaan maken kan niet." and `already_undone` → "Dit is al ongedaan gemaakt.".
 
 Steps:
@@ -258,7 +259,7 @@ Steps:
 - Create: `e2e/step-1.spec.ts`
 
 Flows, all on invented fixtures:
-- **apply-template:** create a Speelreeks Mon–Thu at the invented venue, apply "speeldag op locatie" from the drawer, then in Dagplanning check that 28 rows appear on the 4 days, at the pattern's times, with Overnachting untimed and `locatie_bron` speelreeks. In Dagplanning, one Ctrl+Z (the tab's undo history holds the apply) removes all 28. Reload, and none are back. The Revision rows of the 28 share one batch (read through `GET /api/revisions`).
+- **apply-template:** create a Speelreeks Mon–Thu at the invented venue, apply "speeldag op locatie" from the drawer, then in Dagplanning check that 28 rows appear on the 4 days, at the pattern's times, with Overnachting untimed and `locatie_bron` speelreeks. In Dagplanning, click a cell so the grid has focus, then one Ctrl+Z (the tab's undo history holds the apply) removes all 28. Reload, and none are back. The Revision rows of the 28 share one batch (read through `GET /api/revisions`).
 - **apply-twice:** the second apply shows the R6 message.
 - **speelreeks-delete-in-use:** delete in the drawer gets the in-use message.
 - **speelreeks-end-before-start:** the Dutch refusal on the cell.
@@ -273,6 +274,7 @@ Steps:
 - [ ] Before that run, `scripts/shakeout/edit-session.ts` changes in two ways, with a test in `edit-session.test.ts`:
   - a dataset with no rows is reported as "skipped: no rows", not as a problem;
   - its undo step uses `POST /batches/:id/undo` instead of replaying PATCHes.
+  Commit the script change (code only): `test(shakeout): the edit session skips empty datasets and undoes by batch`.
 - [ ] Report the migration result and the four reports, by severity, counts only, to Stefan. No commit with names. The report also carries:
   - R4's finding: a greyed inherited display needs a declared engine hint;
   - the proposed `docs/SPEC.md` diff from the spec, shown before any commit.
