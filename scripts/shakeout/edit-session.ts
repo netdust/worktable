@@ -47,9 +47,12 @@ if (!args.db || !args.outbox)
   refuseToRun('usage: edit-session.ts --db <copy.db> --outbox <dir> [--port 4320] [--out <dir>]')
 const DB = resolve(args.db)
 const OUTBOX = resolve(args.outbox)
-const OUT = resolve(args.out ?? dirname(DB))
+const OUT = resolve(args.out ?? join(homedir(), 'laika-export', 'shakeout'))
 const PORT = Number(args.port)
 if (DB === LIVE_DB) refuseToRun('refusing to write to the live engine.db: pass a copy')
+// The detail file holds row values: it never lands in the checkout.
+for (const path of [OUT, OUTBOX])
+  if (`${path}/`.startsWith(`${REPO}/`)) refuseToRun(`refusing to write inside the repository: ${path}`)
 if (TAKEN_PORTS.has(PORT)) refuseToRun(`port ${PORT} belongs to the running engine or grid`)
 const BASE = `http://127.0.0.1:${PORT}`
 

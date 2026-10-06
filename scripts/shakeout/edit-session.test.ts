@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it, test } from 'bun:test'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { addDays, addMinutes, expectedPlandag, type Revision, revisionProblems, scalarEdit } from './edit-session.lib'
 
 describe('the shakeout clock', () => {
@@ -56,4 +58,23 @@ describe('revision problems', () => {
       'revision old of naam is not the value before',
     ])
   })
+})
+
+test('refuses to write its detail inside the repository', async () => {
+  const repo = join(import.meta.dir, '..', '..')
+  const proc = Bun.spawn(
+    [
+      'bun',
+      join(import.meta.dir, 'edit-session.ts'),
+      '--db',
+      join(tmpdir(), 'copy.db'),
+      '--outbox',
+      join(tmpdir(), 'outbox'),
+      '--out',
+      join(repo, 'scratch'),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  )
+  expect(await proc.exited).toBe(2)
+  expect(await new Response(proc.stderr).text()).toContain('refusing to write inside the repository')
 })
