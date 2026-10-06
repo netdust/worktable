@@ -1,12 +1,13 @@
 import { Database } from 'bun:sqlite'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import type { Subprocess } from 'bun'
 import {
   addDays,
   addMinutes,
+  batchOf,
   type Column,
   changedColumns,
   decode,
@@ -16,6 +17,8 @@ import {
   revisionProblems,
   rowDiff,
   scalarEdit,
+  skipReason,
+  undoOrder,
 } from './edit-session.lib'
 
 // Run on a copy only: bun scripts/shakeout/edit-session.ts --db <copy> --outbox <dir> [--port 4320]
@@ -84,6 +87,7 @@ interface Done {
   before: Row | undefined
   after: Row
   changed: string[]
+  batch: string | null
 }
 
 type Expect =
@@ -342,6 +346,7 @@ async function attempt(
     before: was,
     after: now,
     changed: columns,
+    batch: batchOf(res.body),
   }
 }
 
@@ -446,6 +451,11 @@ const editable = (source: Source): [string, Column][] =>
 async function stepColumns(): Promise<void> {
   const step = '1 columns'
   for (const [dataset, source] of Object.entries(datasets)) {
+    const skipped = skipReason(live(snapshot(), dataset).length)
+    if (skipped) {
+      record(step, `${dataset} ${skipped}`, [], {})
+      continue
+    }
     for (const [column, decl] of editable(source)) {
       const label = `${dataset}.${column} edit`
       const plan = planEdit(snapshot(), dataset, column, decl)
@@ -653,34 +663,34 @@ async function stepDeletes(): Promise<void> {
 
 // ---- step 5: undo ---------------------------------------------------------------------------------
 
-function restoreBody(edit: Done, keys: string[]): Row {
-  const columns = (datasets[edit.dataset] as Source).columns
-  return Object.fromEntries(keys.map((key) => [key, decode(columns[key], edit.before?.[key])]))
+function restoredProblems(edit: Done, now: Row): string[] {
+  if (edit.kind === 'create') return now.deleted_at === null ? ['the created row is still live'] : []
+  return rowDiff(edit.before ?? {}, now, ['updated_at']).map((k) => `${k} is not back to its value before`)
 }
 
+// The grid's undo: the write's batch undone on the server, which restores derived columns too.
 async function undoOne(step: string, edit: Done): Promise<void> {
-  const source = datasets[edit.dataset] as Source
-  if (edit.kind === 'create') {
-    const op = { method: 'DELETE' as const, dataset: edit.dataset, id: edit.id }
-    await attempt(step, `undo ${edit.label}`, op, { accept: true, gone: true })
-    return
-  }
-  const fields = restoreBody(edit, edit.changed)
-  const expect: Expect = { accept: true, derived: edit.changed, fields }
-  const body = restoreBody(edit, Object.keys(edit.sent))
-  const op = { method: 'PATCH' as const, dataset: edit.dataset, id: edit.id, body }
-  await attempt(step, `undo ${edit.label} (as the grid: the edited field back)`, op, expect)
-  const now = snapshot().get(`${edit.dataset}:${edit.id}`) ?? {}
-  const still = rowDiff(edit.before ?? {}, now, ['updated_at'])
-  if (still.length === 0) return
-  const back = still.filter((key) => editable(source).some(([column]) => column === key))
-  const full = { ...op, body: restoreBody(edit, back) }
-  await attempt(step, `undo ${edit.label} (fallback: every column still changed back)`, full, expect)
+  const label = `undo ${edit.label}`
+  const before = snapshot()
+  const since = lastRevision()
+  const res = await http('POST', `/batches/${edit.batch}/undo`, {})
+  const after = snapshot()
+  const revisions = revisionsSince(since)
+  const key = `${edit.dataset}:${edit.id}`
+  const now = after.get(key) ?? {}
+  const changed = snapshotDiff(before, after)
+  const problems = [
+    ...(res.status === 200 ? [] : [`answered ${res.status} ${String(res.body.code)}`]),
+    ...(changed.length === 1 && changed[0] === key ? [] : [`${changed.length} rows changed, expected only the target`]),
+    ...(revisions.every((r) => r.batch_id === res.body.batch_id) ? [] : ['the undo spans more than one batch']),
+    ...restoredProblems(edit, now),
+  ]
+  record(step, label, problems, { batch: edit.batch, status: res.status, response: res.body, revisions })
 }
 
 async function stepUndo(): Promise<void> {
   const step = '5 undo'
-  for (const edit of [...done].reverse()) await undoOne(step, edit)
+  for (const edit of undoOrder(done)) await undoOne(step, edit)
 }
 
 // ---- step 6: reload and compare -------------------------------------------------------------------
@@ -785,7 +795,7 @@ function report(): number {
 }
 
 async function main(): Promise<number> {
-  notes.push('the engine has no undo route: undo is done as the grid does it, by writing the value before back')
+  notes.push('undo is done as the grid does it: the batch of each write, newest first, through POST /batches/:id/undo')
   notes.push('clearing a Start segment by segment is a grid concern and is not driven here')
   createAdmin()
   adminId = (ro.query('SELECT id FROM account WHERE email = ? COLLATE NOCASE').get(EMAIL) as { id: number }).id

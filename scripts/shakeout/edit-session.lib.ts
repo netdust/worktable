@@ -116,3 +116,19 @@ export function revisionProblems(
   }
   return problems
 }
+
+/** Why a dataset's column edits are not driven: with no rows there is nothing to edit, which is no problem. */
+export function skipReason(rows: number): string | null {
+  return rows === 0 ? 'skipped: no rows' : null
+}
+
+/** The batch a write's reply names; null when it changed nothing or was refused. */
+export function batchOf(reply: Row): string | null {
+  const batch = (reply.revision as Row | undefined)?.batch_id
+  return typeof batch === 'string' ? batch : null
+}
+
+/** Newest first, as the grid's history undoes them; a write without a batch has nothing to undo. */
+export function undoOrder<T extends { batch: string | null }>(done: T[]): T[] {
+  return done.filter((d) => d.batch !== null).reverse()
+}

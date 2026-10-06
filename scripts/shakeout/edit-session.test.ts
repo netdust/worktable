@@ -1,7 +1,17 @@
 import { describe, expect, it, test } from 'bun:test'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addDays, addMinutes, expectedPlandag, type Revision, revisionProblems, scalarEdit } from './edit-session.lib'
+import {
+  addDays,
+  addMinutes,
+  batchOf,
+  expectedPlandag,
+  type Revision,
+  revisionProblems,
+  scalarEdit,
+  skipReason,
+  undoOrder,
+} from './edit-session.lib'
 
 describe('the shakeout clock', () => {
   it('crosses a month and a year', () => {
@@ -65,6 +75,30 @@ describe('revision problems', () => {
       'revised fields differ from the changed fields',
       'revision old of naam is not the value before',
     ])
+  })
+})
+
+describe('a dataset with no rows', () => {
+  it('is skipped, not a problem', () => {
+    expect(skipReason(0)).toBe('skipped: no rows')
+    expect(skipReason(3)).toBeNull()
+  })
+})
+
+describe('the undo by batch', () => {
+  it("reads the batch from a write's reply, and none from a reply that changed nothing", () => {
+    expect(batchOf({ id: 7, revision: { batch_id: 'b1', changed: ['naam'] } })).toBe('b1')
+    expect(batchOf({ id: 7, revision: { batch_id: null, changed: [] } })).toBeNull()
+    expect(batchOf({ code: 'refused' })).toBeNull()
+  })
+
+  it('undoes the newest batch first and skips a write without one', () => {
+    const done = [
+      { label: 'a', batch: 'b1' },
+      { label: 'b', batch: null },
+      { label: 'c', batch: 'b3' },
+    ]
+    expect(undoOrder(done).map((d) => d.label)).toEqual(['c', 'a'])
   })
 })
 
