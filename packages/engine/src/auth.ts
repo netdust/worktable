@@ -103,7 +103,8 @@ function deliver(sqlite: Database, { outbox, appUrl }: AuthOptions, email: strin
       .query('INSERT INTO magic_link (account_id, token_hash, expires_at) VALUES (?, ?, ?)')
       .run(account.id, sha256(token), iso(Date.now() + LINK_LIFE))
     const link = `${appUrl.replace(/\/+$/, '')}/#/auth/${token}`
-    writeFileSync(join(outbox, `${Date.now()}-${secret().slice(0, 8)}.txt`), `To: ${account.email}\n\n${link}\n`)
+    const file = join(outbox, `${Date.now()}-${secret().slice(0, 8)}.txt`)
+    writeFileSync(file, `To: ${account.email}\n\n${link}\n`, { mode: 0o600 })
     console.log(`sign-in link for ${account.email}: ${link}`)
   } catch (err) {
     console.error(err)

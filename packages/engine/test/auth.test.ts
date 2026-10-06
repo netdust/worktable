@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAccount, createEngine, migrate, seedDomain } from '../src'
@@ -483,8 +483,9 @@ describe('serve.ts', () => {
     file.close()
   }, 20_000)
 
-  test('--hostname 127.0.0.1 starts, and --cookie-name names the cookie over real HTTP', async () => {
+  test('--hostname 127.0.0.1 starts, --cookie-name names the cookie over real HTTP, and --outbox is owner-only', async () => {
     const port = 20_000 + Math.floor(Math.random() * 20_000)
+    const box = join(outbox, 'new')
     expect((await cli('--fresh', '--create-account', 'a@example.test', '--role', 'editor')).code).toBe(0)
     const server = Bun.spawn(
       [
@@ -501,7 +502,7 @@ describe('serve.ts', () => {
         '--cookie-name',
         'wt_cli',
         '--outbox',
-        outbox,
+        box,
       ],
       { stdout: 'pipe', stderr: 'pipe' },
     )
@@ -521,9 +522,11 @@ describe('serve.ts', () => {
           body: JSON.stringify(body),
         })
       expect((await post('/api/auth/request', { email: 'a@example.test' })).status).toBe(200)
-      const res = await post('/api/auth/consume', { token: await linkFor(outbox, 'a@example.test') })
+      const res = await post('/api/auth/consume', { token: await linkFor(box, 'a@example.test') })
       expect(res.status).toBe(200)
       expect(res.headers.get('set-cookie')).toMatch(/^wt_cli=/)
+      const modes = [box, ...readdirSync(box).map((f) => join(box, f))].map((p) => statSync(p).mode & 0o077)
+      expect(modes).toEqual([0, 0])
     } finally {
       server.kill()
     }

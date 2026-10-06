@@ -103,7 +103,7 @@ if (code !== null) {
   sqlite.close()
   process.exit(code)
 }
-if (values.outbox) mkdirSync(values.outbox, { recursive: true })
+if (values.outbox) mkdirSync(values.outbox, { recursive: true, mode: 0o700 })
 
 const port = Number(values.port)
 const server = Bun.serve({
