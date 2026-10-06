@@ -18,7 +18,10 @@
 
 **Repository and branch:**
 - atelier is `git@github.com:netdust/atelier.git`. Work in a new worktree, `/home/ntdst/Sites/worktrees/atelier-worktable-view`, on `feature/worktable-view` from `origin/main`. The checkout installed in Laika (`web/app/mu-plugins/atelier`, on `feature/card`) is not switched.
-- One Laika line (`WORKTABLE_URL` in `config/application.php` and `.env.example`, plus the service's config filter in laika-core) goes on a Laika branch made with `make feature name=worktable-view`. Load `netdust-devops:devops` first.
+- One Laika line (`WORKTABLE_URL` in `config/application.php` and `.env.example`, plus the `plugin-config.php` entries) goes on a Laika branch made with `make feature name=worktable-view`. Load `netdust-devops:devops` first. `make feature` switches the main Laika checkout (`/home/ntdst/Sites/laika`, now on `feature/card`) to a main-based branch, and the next `ddev composer install` moves its atelier install too (plan review round 2 N-f). So the task:
+  - starts only on a clean tree;
+  - runs no DDEV command while the planning worktree is driving the shared `laika` DDEV project;
+  - ends by switching back to `feature/card` with `ddev composer install`, and quotes `git branch --show-current`.
 
 **Simplest design:**
 - **Client-side.** A browser `fetch` from the page to the engine, with CORS, is simplest. Stefan's constraint rules it out: no CORS, and the shortcode fetches server-side.
@@ -137,7 +140,7 @@ Then this plan's own:
 **Interfaces:**
 - Produces: `WorktableService::render(array $atts): string` and `WorktableClient::fetch(string $token, ?string $from, ?string $to): ?array`. The fetch returns null on any failure.
 
-- [ ] **Step 1: Denial tests first,** for attacks 1–5. Then behaviour: rows render in key order; the cache hit makes no request.
+- [ ] **Step 1: Denial tests first,** for attacks 1–5, and an empty `engine_url` → the empty state with no request. Then behaviour: rows render in key order; the cache hit makes no request.
 - [ ] **Step 2: Implement, then run** `composer gate` in the worktree.
 - [ ] **Step 3: Commit.** `feat(worktable): a public engine view as a shortcode, fetched server-side`.
 
@@ -153,8 +156,8 @@ Then this plan's own:
 
 **Files:** Modify `config/application.php` (`Config::define('WORKTABLE_URL', env('WORKTABLE_URL') ?: '')`), `.env.example` (`WORKTABLE_URL=`), `web/app/mu-plugins/laika-core/plugin-config.php`: `\Atelier\Worktable\WorktableService::class` joins the `core` list, and an `overrides` key `'worktable' => ['engine_url' => WORKTABLE_URL]` reaches the service through `ntdst/service/worktable/config`, the house pattern (plan review S15). Create `tests/Integration/Atelier/WorktableConfigTest.php`.
 
-- [ ] **Step 1: Test.** The constant flows into the service config, and an empty constant means the shortcode renders the empty state with no request.
-- [ ] **Step 2: Implement, then run** `make gate` and quote the tiers. Composer still resolves atelier from its installed branch; this test covers only the wiring, with the service class loaded from the worktree through a test bootstrap path. Ruling: this avoids switching Laika's atelier to an unmerged branch. The cost if wrong: the wiring is re-run once atelier is released.
+- [ ] **Step 1: Test.** `WorktableConfigTest` requires `plugin-config.php` and asserts `services.core` contains `'Atelier\Worktable\WorktableService'` and `overrides['worktable']['engine_url'] === WORKTABLE_URL`. It does not load the class, because the atelier worktree is not mounted in the DDEV container (plan review round 2 SF5). The empty-URL behaviour (empty state, no request) is atelier's, so it is tested in `WorktableViewTest` (Task 1).
+- [ ] **Step 2: Implement, then run** `make gate` and quote the tiers. A `core` entry whose class is not installed is skipped by ntdst-core with `_doing_it_wrong`. On this branch atelier does not ship the class yet, so the integration tier must not fail on that notice: assert it, or name the deviation.
 - [ ] **Step 3: Commit.** `feat: WORKTABLE_URL configures atelier's worktable view`.
 
 ### Task 4: Live check against a local engine (stop point)

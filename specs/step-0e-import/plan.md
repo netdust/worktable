@@ -92,7 +92,7 @@
 ## Review Focus
 1. Mid-flow failure rolls back on a file database (edge 6): the refused-row test reopens the file and counts rows.
 2. Relation order and missing targets: a Toewijzing whose persoon legacy id is absent from the export is reported, not imported with a null.
-3. The ISO week at a year boundary: the invented export has an activity on 2026-12-31 and on 2027-01-01, so the `checks` block and the engine agree on W53/W01.
+3. The ISO week at a year boundary: the invented export has activities on 2026-12-31 and 2027-01-01 (both 2026-W53, the ISO-year trap) and on 2027-01-04 (2027-W01). The `checks` block and the engine agree on both weeks (plan review round 2 N-c).
 4. The `maybe` mapping arrives as `uitgenodigd` with its note intact: theatre import test.
 5. No real or report data staged (attack 1): the planted-file test.
 
@@ -123,7 +123,8 @@
 ### Task 2: The importer
 
 **Files:**
-- Create: `packages/engine/src/import.ts`, `packages/engine/test/import.test.ts`, `packages/theatre/test/fixtures/invented-export.json` (every dataset; includes a `maybe` origin note, a both-person-and-name row and a duplicate pair already cleaned by "the exporter", one refused row variant built in-test, and the W53/W01 pair).
+- Create: `packages/engine/src/import.ts`, `packages/engine/test/import.test.ts`, `packages/theatre/test/fixtures/invented-export.json` (every dataset; includes a `maybe` origin note, a both-person-and-name row and a duplicate pair already cleaned by "the exporter", one refused row variant built in-test, and the 2026-12-31 / 2027-01-01 / 2027-01-04 activities).
+- **Legacy id 0** (the exporter's placeholder Productie) is a real id: relation resolution compares with `=== undefined`/`has()`, never truthiness, and a test imports a row whose relation points at legacy id 0 (plan review round 2 N-b).
 - Create: `packages/theatre/test/import.test.ts`.
 - Modify: `writes.ts` (export `valuesOf`; `revise` takes an optional batch), `serve.ts` (`--import`, `--as`, `--report`, `--accept-report`; exits non-zero on refusal).
 
@@ -158,7 +159,8 @@
 **Interfaces:**
 - Produces: `bun run parity <export.json> [--out specs/step-0e/parity.md]` → exit 0 when every check passes. It:
   - imports into a temporary file database;
-  - creates a temporary administrator;
+  - creates a temporary administrator with `createAccount`, and signs it in through the engine's own door: `POST /api/auth/request` with an `--outbox` in the temp dir, then the token from the outbox to `POST /api/auth/consume`, and that cookie on every read (plan review round 2 N-b). No test-only session helper is exported from the engine;
+  - pages every read by `offset` until `total`, since `/rows` caps at 5000 rows per page;
   - reads through `createEngine` as that administrator: `/rows/activiteit`, `/rows/toewijzing` and `/rows/beschikbaarheid`, live rows only, grouped in the script by the contract's keys (calendar week and status; persoon legacy id or `naam` and state; persoon legacy id). It also checks that the theatre views "Planning", "Toewijzingen" and "Afwezigheden" open on the imported data, and records their row counts;
   - compares with `checks`;
   - writes the counts-only markdown.

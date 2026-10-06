@@ -1,12 +1,186 @@
-# Plan review — step-0e (seven plans, one parent spec)
+# Plan review: step-0e, second round (seven plans, one parent spec)
+Reviewed-plan: 04304c900b6b737f90da37366e2ccfd27af81f8b specs/step-0e-migrator/plan.md
+Reviewed-plan: aa553287f7c950a15a7ffa8992bc96e8501040ed specs/step-0e-vocabulary/plan.md
+Reviewed-plan: 7689b1fb404280eb02cd4d1fd9e83956380f3578 specs/step-0e-auth/plan.md
+Reviewed-plan: de1ebba2db204aa08d40e318bdab73af80415d75 specs/step-0e-import/plan.md
+Reviewed-plan: 973ce7a3654378702ec9f1eb86ee94c645415438 specs/step-0e-laika-export/plan.md
+Reviewed-plan: ef77a3cdc7f2739feaf4bb45576b07b4ed7ffc15 specs/step-0e-atelier-view/plan.md
+Reviewed-plan: b55faccb273a1f9a0b64877ebeef783a0d145d71 specs/step-0e-baseline-release/plan.md
+Verdict: not ready
 
-Reviewed-plan: a6dec0c2abe13d73e995c33f1189e6a1f9262b57 specs/step-0e-migrator/plan.md
-Reviewed-plan: 0bf4c58177313db0e6026dbe8d322ca32c0bcd38 specs/step-0e-vocabulary/plan.md
-Reviewed-plan: ae5268a1cbdad8d8211f84de78b71ba42c65113b specs/step-0e-auth/plan.md
-Reviewed-plan: 15ab163437de58f6e192cff658ac4cba87d28579 specs/step-0e-import/plan.md
-Reviewed-plan: 32fa8964bc0651a718bcc8e87987f72903ba72ab specs/step-0e-laika-export/plan.md
-Reviewed-plan: a5806ce60101830dee41bbef0f802922cbf418e7 specs/step-0e-atelier-view/plan.md
-Reviewed-plan: 9923f7936d4032ec7ee730c51afda30b08d02c0b specs/step-0e-baseline-release/plan.md
+**Why:** one Blocking finding remains, in the Laika exporter. Two of its fixes clash:
+- the B1 fix chose `origin/main` plus atelier `^0.9.1` as the base;
+- the S2 fix relies on Polylang and `LAIKA_SOURCE_LANGUAGE`, and neither exists on `origin/main`.
+
+The rest of the set:
+- **Ready:** migrator, vocabulary, baseline.
+- **Ready once the small Should-fix items are in:** auth, import, atelier-view.
+
+## Blocking
+
+**NB1. The exporter's base has no Polylang, so "only the source language" cannot run.** (laika-export, "Repository and branch" l.19 and Decisions l.25)
+- **What the plan says:**
+  - The branch comes from origin's `main`, plus "the same `composer.json` change staging carries from `feature/company-profile` (9d15e46): atelier `^0.9.1` and ntdst-baseline `^2.13`, line for line".
+  - "Only records in `LAIKA_SOURCE_LANGUAGE` are exported … through Polylang (`pll_get_post`)."
+- **What the source says:**
+  - On `origin/main`, `web/app/mu-plugins/laika-core/` holds only `labels.php`, `laika-core.php`, `plugin-config.php` and `timezone.php`. There is no `languages.php`, so `LAIKA_SOURCE_LANGUAGE` and the `pll_get_post_types` filter are not defined.
+  - `git grep "LAIKA_SOURCE_LANGUAGE\|pll_" origin/main -- web/app/mu-plugins/laika-core` returns nothing.
+  - `origin/main:composer.json` has no `wpackagist-plugin/polylang`. Staging adds it at l.66, with `languages.php` from 3b6c8a2 (feature/polylang-paths).
+- **Consequences:**
+  - Stefan's staging data, pulled into a DDEV running this branch, holds translated persons, organisations and productions, but Polylang's code is absent. Every language copy would be exported as a separate row, which is exactly S2.
+  - The integration test's "one translated person" cannot be created either.
+- **The "line for line, promote without conflict" claim also fails:**
+  - 9d15e46's diff is from `^2.12`/`^0.6`, not from main's `dev-feature/select-labels as 2.8.0` / `dev-feature/performances as 0.3.0`.
+  - Staging's hunk also changes `ntdst-core` (`^5.3`→`^5.4.1`) and adds the Polylang lines next to it. The two edits overlap without being identical, so a merge conflicts, and `composer.lock` certainly will.
+  - atelier v0.9.1 requires `netdust/ntdst-core ^5.4` (its composer.json), so Task 0's "update both packages" also has to move ntdst-core.
+- **Smallest change:** Stefan rules the base. One option: build the exporter on `origin/feature/company-profile`. It already holds atelier `^0.9.1`, ntdst-core `^5.4.1`, Polylang, `languages.php` and a matching lock. Another option: Task 0 merges that branch in, and the plan names that the exporter is stacked on it. Either way, drop the "line for line … without a conflict" sentence.
+
+## Should fix
+
+**SF1. Auth: the `/accounts` routes have no task.** (auth Decisions table l.45, l.74; attack 8 l.102)
+- The permissions table, the accounts ruling and attack 8's mitigation all rely on `GET/POST/PATCH /accounts…`.
+- No task lists them in Files or Interfaces, and no task tests them. Task 1's routes are only `/auth/request|consume|me|signout`.
+- Task 4's `EXPECTED` would then name routes that do not exist.
+- Smallest change, either of:
+  - drop `/accounts` from the table, the ruling and attack 8 (the CLI is the 0e door);
+  - or add them to Task 1's Interfaces, with denial tests: an editor gets 403, and a role or subject taken from a non-administrator body is refused.
+
+**SF2. Auth: the e2e exception covers Task 1, but Tasks 2–4 are red too.** (auth Global Constraints l.81; Task 1 Step 4 l.195)
+- The grid signs in only in Task 5, so the commits of Tasks 2, 3 and 4 also leave `bun run e2e` red.
+- Smallest change: "Tasks 1–4 are the exception; Task 5 closes it."
+
+**SF3. Auth: two new engine flags have no home.** (auth Task 5 l.292–293)
+- `--cookie-name` and `--rate-limit-scale` appear only in the e2e bullet list.
+- Task 5's Files do not touch `serve.ts`, `app.ts`, `auth.ts` or `rate-limit.ts`, and Task 1's `EngineOptions` (l.165) has neither option.
+- Smallest change: add both to `EngineOptions` and to the Files of the task that builds them, with a test that the defaults are `wt_session` and 1. See N-a for dropping the scale flag altogether.
+
+**SF4. Auth: the Test map row contradicts the S11 fix.** (auth Test map l.129)
+- The row says "generated from `access.ts`'s table plus `app.routes`".
+- Task 2 l.218 now says `EXPECTED` lives in the test, independently of `access.ts`.
+- Smallest change: reword the row to "`EXPECTED` in the test file plus `app.routes`".
+
+**SF5. Atelier-view: Laika's wiring test cannot load the class from the worktree.** (atelier-view Task 3 Step 2 l.157)
+- `ddev composer test:int` runs inside the web container, which mounts only `/home/ntdst/Sites/laika`.
+- `/home/ntdst/Sites/worktrees/atelier-worktable-view` is not visible there. The exporter plan needs a compose mount for the same reason (laika-export l.60).
+- The test's second assertion ("an empty constant means … the empty state with no request") is also atelier behaviour, not Laika wiring.
+- Smallest change:
+  - Laika's test requires `plugin-config.php` and asserts `services.core` names `'Atelier\Worktable\WorktableService'` and `overrides['worktable']['engine_url'] === WORKTABLE_URL`, with no class loaded;
+  - the empty-URL case moves to atelier's `WorktableViewTest`.
+
+**SF6. Laika export: `--own` is missing from the command's interface.** (laika-export Task 2 Interfaces l.174)
+- Goal l.7 and Decisions l.38 make `--own=<id>` required and refused when missing.
+- Task 2's interface is `wp laika export-planning [--out] [--report] [--dry-run]`, and no test covers the refusal.
+- Smallest change: add `--own=<id>` to the interface, and a denial test (missing `--own`, and an id that is not an organisation) to Task 2 Step 1.
+
+## Note
+
+- **N-a. Auth: a simpler e2e design without `--rate-limit-scale`.**
+  - The e2e engines run `--fresh`, so the `rate_limit` table is empty on every run.
+  - The e2e signs in at most about six times (four roles in global setup, plus the sign-in flow), under 20 per 15 minutes. The other specs reuse `storageState`.
+  - A flag that multiplies every limit is a weakening of a security control that production can reach, and it is not in the threat model. Dropping it removes both the flag and the threat-model gap.
+- **N-b. Import: three execution-time points for the parity script.**
+  - **Session door.** Task 3 has the script read `/rows` "as that administrator". The only session helper is the test fixture's `signIn()`. Name the door: an exported engine helper that mints a session, or request and consume through the outbox.
+  - **Paging.** `/rows` caps at `MAX_LIMIT = 5000` (`params.ts`), so the script must page by `total`.
+  - **Legacy id 0.** The placeholder Productie's legacy id `0` must not be treated as falsy when relations are resolved.
+- **N-c. Import: the year-boundary pair never produces W01.** (Review Focus 3)
+  - 2026-12-31 (Thursday) and 2027-01-01 (Friday) are both in 2026-W53.
+  - The pair does test the ISO-year trap. To also exercise W01, add 2027-01-04.
+- **N-d. Laika export: the checks wording is looser than the contract.** Decisions l.52–53 say "activities per ISO week" and "per person … per mapped state". The import contract is per week per status, with name-only assignments under `"naam"`. Repeat both in `Checks` so the unit test pins them.
+- **N-e. Laika export: where the command is registered.** Golden path l.109 says "registered through `plugin-config.php` like the site's other services". laika-core registers no service of its own: `plugin-config.php` lists only atelier classes, and there is no autoloader. Name it: `require_once` in `laika-core.php` and `WP_CLI::add_command` under the `WP_CLI` guard.
+- **N-f. Both Laika plans `make feature` in the one Laika checkout.**
+  - That checkout is on `feature/card`, and its atelier install is on `feature/card` too.
+  - `make feature` switches it to a main-based branch, and `composer install` then moves the atelier install.
+  - This contradicts atelier-view l.20 ("the checkout installed in Laika … is not switched"). The two Laika branches also cannot be worked on at once.
+  - Say this, or use a Laika worktree.
+- **N-g. Auth: the planner rename in code.** `packages/engine/test/views.test.ts:378` passes `role: 'planner'`. The `Actor['role']` union will force the rename. Name it in Task 1 so the spec's "planner disappears from code" has a line.
+- **N-h. Atelier-view: the stop is still likely.** Task 4 now states the expected stop honestly (N1). The U6 browser gate will most likely move to the cutover. Tell Stefan when the plans are handed over.
+- **N-i. Laika export: the bind mount.** If `~/laika-export` does not exist at `ddev restart`, Docker creates it owned by root. The plan's "Stefan creates it himself" should come before the restart in Task 3 Step 5.
+
+## Prior findings
+
+- **B1 — partly.** The base is now named (main plus atelier `^0.9.1`, planning models registered inside the command), and atelier v0.9.1 holds `services/planning/*`. The chosen base lacks what the S2 fix needs (NB1).
+- **B2 — resolved.** `--own=<id>`, required, at Decisions l.38. Its interface entry is missing (SF6).
+- **B3 — resolved.** dietary → Persoon `dietary` (l.43); `datasets.ts:110` declares it.
+- **S1 — resolved.** Calendar date from `substr(start_at,1,10)`, per mapped status, plandag shifts reported but not failed, no-start at `T05:00`, and the `"naam"` key (import l.44–45; laika l.32).
+- **S2 — not resolved in effect.** The rule is written (laika l.25), but it depends on Polylang and `LAIKA_SOURCE_LANGUAGE`, which are absent on `origin/main` (NB1).
+- **S3 — resolved.** Placeholder `(zonder productie)`, title→`omschrijving`, location/place/notes→`locatie_id`/`plaats`/`notities`, `settled_by`→custom; the spec is corrected at l.163–167.
+- **S4 — resolved.** `ntdst_data()->get(<post type>)` (l.26), the door `ActivityRepository` itself uses.
+- **S5 — resolved.** The list is spec-scoped (vocabulary l.9); `email` is allowlisted in auth l.159, `legacy`/`post` in import l.52. The derived list I computed from theatre and fiche has no `plan` or `per`.
+- **S6 — resolved.** `test` and `gate` both run `bun test packages scripts` (vocabulary l.63).
+- **S7 — resolved.** Only `*.json` files are checked, by top-level key, in both repos (import l.57, laika l.63), with a test that a staged `import.ts` passes.
+- **S8 — resolved.** An owner column changed on update is 403, tested with tables unchanged (auth l.47, Task 2 l.225).
+- **S9 — resolved.** `public_view`: only an administrator may PATCH, DELETE or restore a public view (auth l.73, Task 3 l.251).
+- **S10 — resolved.** `setTimeout(…, 0)`, with no write on the request path (auth l.67).
+- **S11 — partly.** `EXPECTED` now lives in the test (l.218), but the Test map row still says it comes from `access.ts` (SF4).
+- **S12 — resolved.** A fiche editor in global setup, `step-0c` uses it, and the cookie name is per instance (l.290–292). Its flag has no Files entry (SF3).
+- **S13 — resolved.** The inversion of `writes.test.ts:169` is named (l.51, Task 2 l.227), and the Writer row is in the Task 6 list.
+- **S14 — resolved.** Brain Monkey stubs on `render()` (atelier-view Test map l.119).
+- **S15 — resolved.** The `core` list entry and the `overrides` key are in Task 3 (l.154). The test seam breaks inside DDEV (SF5).
+- **S16 — resolved.** `owner_column_visible` on `PUT share-token`, and `owner_id` is never served (auth l.72, Task 3 l.252).
+- **N1 — resolved.** Task 4 states the expected stop.
+- **N2 — resolved.** Views are recreated whatever their hash says, foreign keys go back on in a `finally`, and the rebuild test has its own two-dataset domain (migrator l.30–31, l.114).
+- **N3 — resolved.** The Simplest design cites the spec's ALTER mandate; storage-class retypes are noted (l.19, l.29).
+- **N4 — resolved.** The test-side words are allowlisted or renamed (vocabulary l.28).
+- **N5 — resolved.** `require_once`, a staging-only pull, WP_CLI stubs, PHP 8.3 (laika l.14, l.116–117). Where the command is registered is still vague (N-e).
+- **N6 — resolved.** Step 0 checks the worktrees and states that pushing `archive/views-saved` publishes that branch for the first time; local `main` is handled with `branch -f`.
+- **N7 — resolved.**
+  - 401 and 429 are in `ApiError`.
+  - The token is cleared with `replaceState` before the hash is written.
+  - The proxy's shared address is addressed (by a flag; see N-a).
+  - Concurrent consumes are tested on two connections.
+  - A disabled account cannot consume.
+  - The account is re-read on every request.
+  - The draft mechanism is worded.
+  - An administrator is in global setup.
+  - A deleted view's token answers 404.
+- **N8 — resolved.** `--create-admin` runs before `--import` (import l.17–18).
+
+## Premises checked
+
+- `migrate()` takes the per-source hash ledger and refuses a changed dataset; query views are `DROP VIEW IF EXISTS` + `CREATE VIEW` → `packages/engine/src/migrate.ts:36-48`, `ddl.ts` `viewDdl` → holds
+- `datasetDdl` adds `id`, `custom`, `created_at`, `updated_at`, `deleted_at`, so the account table gets `created_at` → `ddl.ts:27-35` → holds
+- Theatre has six datasets, all `custom: true`; `dietary`, `locatie_id`, `plaats`, `notities` exist; `productie_id` is NOT NULL; `plandag` and `weergavenaam` are readonly → `packages/theatre/src/datasets.ts` → holds
+- No word in the derived list (dataset, query and column names split on `_`) is `plan` or `per`; it holds `email`, `start`, `state`, `site`, `status`, `type`, `default`, `parameters` → computed from theatre and fiche → holds
+- Engine `src` hits are `default`, `site`, `status`, `type` → computed scan → holds (`per` is no longer a derived word, so harmless)
+- `gate` runs `bun test packages` directly → `package.json` → holds (the plan now changes both scripts)
+- `valuesOf` cuts readonly and undeclared keys before the writer; `revise()` makes a new batch per call; `storedOf` runs `inUse` before `writer.delete` → `packages/engine/src/writes.ts` → holds
+- `writes.test.ts:169` asserts the writer's delete did not run on a 409 → `packages/engine/test/writes.test.ts:168-171` → holds
+- `/rows` caps at 5000 per page; `from`/`to` filter on `substr(date,1,10)` → `params.ts` `MAX_LIMIT`; `rows.ts` `whereOf` → holds
+- The theatre writer computes plandag at `DAY_LINE_HOUR = 5`; Toewijzing refuses both a person and a name, and a duplicate pair → `packages/theatre/src/writers.ts` → holds
+- Seeded Toewijzingen and Afwezigheden are dataset table views; Planning filters `bevestigd` → `packages/theatre/src/seed.ts:114-198` → holds
+- "planner" survives in code → `packages/engine/test/views.test.ts:378` → holds (N-g)
+- Playwright runs fiche on 4312/5175 → `playwright.config.ts` → holds
+- `docs/SPEC.md` Writer row says "checked before the writer's own delete"; Storage has `legacy_post_id` and the migrator → `docs/SPEC.md:45,111` → holds
+- Laika `make feature` branches from `origin/main` → `Makefile.netdust:161` → holds
+- 9d15e46 carries atelier `^0.9.1` / baseline `^2.13` and is on `feature/company-profile` and `staging` → `git show 9d15e46` → holds
+- "Same change, line for line, no conflict on promote" → 9d15e46's diff is from `^2.12`/`^0.6`, main has `dev-feature/*` and ntdst-core `^5.3`, and staging also edits the adjacent lines → does not hold
+- Staging's lock has atelier v0.9.1 and baseline v2.14.0 → `origin/staging:composer.lock` → holds
+- atelier v0.9.1 has `services/planning/{Activity,Assignment,Absence}{Model,Repository}`, `PlanningService` calling `*Model::register()`, and `shared/models/{Person,Organisation}Repository` → atelier `git ls-tree v0.9.1` → holds
+- atelier v0.9.1 requires `netdust/ntdst-core ^5.4` → `v0.9.1:composer.json` → holds (main has `^5.3`)
+- `LAIKA_SOURCE_LANGUAGE` / Polylang on the exporter's base → `origin/main` laika-core has no `languages.php`, composer.json has no Polylang → does not hold
+- Activity fields date, start, end, kind, status, production, performance, location, place, settled_by, notes; assignment fields person, name, status, note; absence fields person, from, to, reason → `ActivityModel.php:41-51`, `AssignmentModel.php:36-40`, `AbsenceModel.php:32-35` (v0.9.1) → holds
+- A missing service class in plugin-config gives `_doing_it_wrong` and is skipped → ntdst-core `specs/core-trim/plan.md:144` → holds
+- atelier `origin/main` is v0.9.1; `services/` is in its classmap; Brain Monkey is a dev dependency; the unit bootstrap has no WordPress → atelier `composer.json`, `tests/bootstrap.php` → holds
+- PerformanceService's YOOtheme guard is at `after_setup_theme` → `PerformanceService.php` ~l.61-68 → holds
+- Laika has `config/application.php` and `.env.example` on main → `git ls-tree origin/main` → holds
+- DDEV mounts only the project, so the atelier worktree is not visible to `test:int` → `.ddev/config.yaml`; worktree path outside the project → holds (SF5)
+- Baseline: `origin/main` 3ced762 is an ancestor of v2.15.1, 10 commits back; no `services/views`; `feature/views` 5439c70, `-saved` 7efef97 (not on origin), `-matrix` d884568; local `main` is 51788ac; worktrees `-views` and `-saved` exist; `composer gate` exists → git in `/home/ntdst/Sites/ntdst-baseline` → holds
+
+## The cut
+
+- `step-0e-migrator` → one feature
+- `step-0e-vocabulary` → one feature
+- `step-0e-auth` → one feature. It is large, but everything shares the actor and session boundary.
+- `step-0e-import` → one feature, carrying worktable's half of the staged-export guard.
+- `step-0e-laika-export` → one feature. If Stefan rules NB1 by building on `feature/company-profile`, the plan should say it is stacked on that branch. That is a base, not a dependency between plans.
+- `step-0e-atelier-view` → one feature across two branches in two repos (atelier plus a Laika wiring branch). Acceptable once the wiring test stands on its own (SF5).
+- `step-0e-baseline-release` → one feature
+- No spec requirement is unowned, and none is owned twice.
+
+---
+
+# Round 1 (kept for the record)
+
 Verdict: not ready
 
 Why: all three Blocking findings are in the Laika exporter plan. Migrator and baseline are ready. Vocabulary, auth, import and atelier-view are ready once their fixes are in.

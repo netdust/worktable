@@ -9,15 +9,21 @@
 **Architecture:**
 - **Where it lives.** A small service in `laika-core` (site-specific, tracked in the Laika repo): `services/worktable-export/`. It reads through atelier's repositories (`ActivityRepository`, `AssignmentRepository`, the absence repository, `PersonRepository`, `OrganisationRepository`, `ProductionRepository`), never raw SQL.
 - **The units.** Pure mapping classes, unit-tested with Brain Monkey: `NameSplit`, `StatusMap`, `KindMap`, `ActivityMap`, `RoleRank`, `Cleaner` and `Checks`. `ExportCommand` wires them to WP-CLI and gets one integration test on invented posts.
-- **First working version:** Task 2. `ddev wp laika export-planning --dry-run` prints the report's counts on the local DDEV database. Locally that database holds 0 activities, 2 persons and 2 organisations, plus whatever Stefan pulls.
+- **First working version:** Task 2. `ddev wp laika export-planning --own=<id> --dry-run --report=/mnt/laika-export/dry-run.report.json` prints the report's counts on the local DDEV database, which holds the Glimworm seed once Stefan has run it.
 
-**Tech Stack:** PHP 8.3, WordPress (Bedrock) on ntdst-core 5.4, atelier 0.10, WP-CLI, PHPUnit with Brain Monkey (unit) and wp-phpunit through DDEV (integration).
+**Tech Stack:** PHP 8.3, WordPress (Bedrock) on ntdst-core 5.4.1, atelier 0.9.1, Polylang 3.8, WP-CLI, PHPUnit with Brain Monkey (unit) and wp-phpunit through DDEV (integration).
 
-**Spec:** `specs/step-0e/spec.md` U5 in the worktable repo, and the import format in `specs/step-0e-import/plan.md` Decisions. This plan lives in worktable so the set is reviewed as one. On execution, the executor copies it to `laika/specs/worktable-export/plan.md` in the first commit.
+**Spec:** `specs/step-0e/spec.md` U5 in the worktable repo, and the import format in `specs/step-0e-import/plan.md` Decisions. This plan lives in worktable so the set is reviewed as one. On execution, the executor copies it to `specs/worktable-export/plan.md` in the worktree's first commit.
 
-**Repository and branch:** `/home/ntdst/Sites/laika`. Load `netdust-devops:devops` first, then `make feature name=worktable-export`; it branches from origin's `main`. No deploy, promote or ship. The export is a local tool; Stefan decides whether this branch is ever promoted.
-- **The atelier base** (plan review B1). `origin/main` pins atelier `dev-feature/performances as 0.3.0`, which has no person, organisation or planning models. The branch's first commit makes the same `composer.json` change staging carries from `feature/company-profile` (9d15e46): atelier `^0.9.1` and ntdst-baseline `^2.13`, line for line, so the two promote together without a conflict. atelier v0.9.1 contains `services/planning` (verified 2026-10-06). Ruling; the cost if wrong is one rebase.
-- **Planning models inside the command only.** PlanningService stays out of the site's `plugin-config.php`, so no environment gains planning post types. The command registers atelier's planning models (Activity, Assignment, Absence, through the same `register()` calls PlanningService makes) when it runs, if they are not already registered. The integration test does the same before creating invented planning posts.
+**Repository and branch:** the Laika planning worktree, `/home/ntdst/Sites/laika-planning-model`. A new branch `feature/worktable-export` is cut there from local `feature/views-saved` (a5b779c). Load `netdust-devops:devops` first. `make feature` is not used, because it branches from `origin/main`. This is a raw `git switch -c` on a feature branch, never on a rung. No deploy, promote or ship: the export is a local tool, and the branch is never promoted. It sits on the views line, which the engine replaces.
+- **Why this base** (plan review rounds 1 B1 and 2 NB1; Ruling, following Stefan's "seed locally"). `feature/views-saved` is the only branch that has everything the exporter needs:
+  - atelier `^0.9.1` with PlanningService booted in `plugin-config.php`;
+  - ntdst-core `^5.4.1`;
+  - Polylang `^3.8` and laika-core `languages.php` (`LAIKA_SOURCE_LANGUAGE`);
+  - the Glimworm seed.
+
+  `origin/main` has none of these. The cost if wrong is a rebase onto another base; the exporter's own files do not depend on the views code.
+- **Working there leaves the main Laika checkout alone** (on `feature/card`, with its atelier install). The worktree is clean (verified 2026-10-06). Both checkouts drive the one `laika` DDEV project, so only one of them may run DDEV commands at a time (that worktree's own memory note).
 
 **Simplest design:** A one-off PHP script run with `wp eval-file` is simplest. It is rejected because the mapping needs unit tests (Stefan's dry-run review depends on the report being right), and the gitignore check needs a known file name. A WP-CLI command in laika-core costs one class over the script.
 
@@ -57,7 +63,7 @@
   - `--out` is required unless `--dry-run`, and must resolve outside the Laika repo root (else `WP_CLI::error`).
   - The file name must match `laika-planning-export*.json`.
   - The file carries `"worktable_export": 1`.
-- **Getting the file out of the container.** `ddev wp` runs inside the web container, which mounts only the project. A new `.ddev/docker-compose.worktable-export.yaml` mounts the host's `~/laika-export` at `/mnt/laika-export`, and `--out`/`--report` must resolve under `/mnt/laika-export` (else `WP_CLI::error`). Ruling: this is the only way to write outside the repo from DDEV without a host-side WP-CLI. The cost if wrong is one compose file, and Stefan creates `~/laika-export` himself.
+- **Getting the file out of the container.** `ddev wp` runs inside the web container, which mounts only the project. A new `.ddev/docker-compose.worktable-export.yaml` mounts the host's `~/laika-export` at `/mnt/laika-export`, and `--out`/`--report` must resolve under `/mnt/laika-export` (else `WP_CLI::error`). Ruling: this is the only way to write outside the repo from DDEV without a host-side WP-CLI. The cost if wrong is one compose file. Stefan creates `~/laika-export` himself before the first `ddev restart`; otherwise Docker creates it owned by root.
 - **Personal data in git** (Stefan, 2026-10-06):
   - `.gitignore` gains `laika-planning-export*.json` and `*.report.json`;
   - `bin/gate.sh` gains a first tier `check:export`, a composer script running `bin/check-staged-export.sh`, which fails on a staged file of those names or a staged `*.json` file whose top-level object has a `worktable_export` key, so `ExportCommand.php` mentioning the key never trips it (plan review S7);
@@ -106,7 +112,7 @@
 | "Just rsync this one file" | A hand-deploy is drift nobody sees. The Makefile, or nothing. |
 
 Then this plan's own:
-- **Golden path:** none of `admin-settings-page`, `content-type-feature`, `form-data-flow` or `yootheme-integration` fits a read-only WP-CLI export. The departure is named here: a laika-core service registered through `plugin-config.php` like the site's other services, reading only through atelier repositories, with no CPT, field, route or screen.
+- **Golden path:** none of `admin-settings-page`, `content-type-feature`, `form-data-flow` or `yootheme-integration` fits a read-only WP-CLI export. The departure is named here: laika-core has no services of its own and no autoloader, so `laika-core.php` does `require_once LAIKA_CORE_PATH . '/services/worktable-export/export.php'`, which requires the classes and calls `WP_CLI::add_command('laika export-planning', …)` inside `if (defined('WP_CLI') && WP_CLI)`. It reads only through atelier repositories and `ntdst_data()`, with no CPT, field, route or screen (plan review N-e).
 - **Data flows and their pillars.** There is one data flow, the WP-CLI command:
   - validate: `--out` must be outside the repo and match the name pattern; flags are known;
   - sanitize: the output is JSON-encoded with `wp_json_encode` (`JSON_UNESCAPED_UNICODE`); there is no HTML;
@@ -149,8 +155,14 @@ Then this plan's own:
 
 ---
 
-### Task 0: The atelier base
-- [ ] **Step 1:** On the new branch, make 9d15e46's `composer.json` change (atelier `^0.9.1`, ntdst-baseline `^2.13`) and update so both packages resolve to the versions staging's `composer.lock` holds (`git show origin/staging:composer.lock`), never to the newest that `^2.13` allows: 2.15.x drops the views module (spec U7's trap). Quote `composer show netdust/atelier netdust/ntdst-baseline` next to staging's lock entries, then run `make gate` and quote it. Commit: `build(worktable-export): atelier ^0.9.1 as on staging`. Then copy this plan to `specs/worktable-export/plan.md` in the same commit.
+### Task 0: The branch
+- [ ] **Step 1:** In `/home/ntdst/Sites/laika-planning-model`:
+  - check that `git status --short` is empty;
+  - run `git switch -c feature/worktable-export feature/views-saved`;
+  - run `ddev composer install` (the lock is unchanged);
+  - run `make gate`.
+
+  Quote all of it. Copy this plan to `specs/worktable-export/plan.md` and commit it: `docs(worktable-export): the plan`.
 
 ### Task 1: The pure mapping rules
 **Files:** Create `web/app/mu-plugins/laika-core/services/worktable-export/{NameSplit,StatusMap,KindMap,ActivityMap,RoleRank,Cleaner,Checks}.php`, `tests/Unit/WorktableExport/*Test.php`.
@@ -163,18 +175,18 @@ Then this plan's own:
   - `ActivityMap::times(string $date, ?string $start, ?string $end): array{start_at: string, eind_at: ?string, geen_start: bool}`. A missing start becomes `T05:00`.
   - `RoleRank::soort(string[] $slugs, bool $isOwnCompany): string`.
   - `Cleaner::assignments(array $rows): array{rows: array, dropped: array}`.
-  - `Checks::of(array $datasets): array`.
+  - `Checks::of(array $datasets): array`. It returns the import contract's exact shape: `counts`; `activities_per_week` keyed by ISO week of the activity's date, then by mapped status; `assignments_per_person` keyed by persoon legacy id, or `"naam"` for name-only rows, then by mapped state; and `absences_per_person`. The unit test pins every level (plan review N-d).
 
 - [ ] **Step 1: Tests first,** with the Decisions' exact values and Review Focus 1, 3, 4, 5. Run `ddev composer test:unit` → FAIL.
 - [ ] **Step 2: Implement, run, commit.** `feat(laika-core): worktable export mapping rules`.
 
 ### Task 2: The command, the guard and the dry run
-**Files:** Create `.ddev/docker-compose.worktable-export.yaml`, `services/worktable-export/ExportCommand.php`, `tests/Integration/WorktableExport/ExportCommandTest.php`. Modify `plugin-config.php` or `laika-core.php`, whichever registers laika-core's services (follow the existing pattern).
+**Files:** Create `.ddev/docker-compose.worktable-export.yaml`, `services/worktable-export/ExportCommand.php`, `tests/Integration/WorktableExport/ExportCommandTest.php`. Create `services/worktable-export/export.php`; modify `laika-core.php` (one `require_once`, see the golden-path line).
 
 **Interfaces:**
-- Produces: `wp laika export-planning [--out=<path>] [--report=<path>] [--dry-run]`. It writes `{worktable_export: 1, source: "laika", datasets: {productie, organisatie, persoon, activiteit, toewijzing, beschikbaarheid}, checks}`.
+- Produces: `wp laika export-planning --own=<organisation id> [--out=<path>] [--report=<path>] [--dry-run]`. It writes `{worktable_export: 1, source: "laika", datasets: {productie, organisatie, persoon, activiteit, toewijzing, beschikbaarheid}, checks}`.
 
-- [ ] **Step 1: Denial tests first:** attacks 2 and 3.
+- [ ] **Step 1: Denial tests first:** attacks 2 and 3; a missing `--own`; an `--own` id that is not a source-language organisation (plan review SF6).
 - [ ] **Step 2: Behaviour test.** The output directory is a constructor argument so the test can point it at a temp dir; production wires `/mnt/laika-export`.
   - Create invented posts through atelier's repositories: two productions; three organisations (own, venue+funder, funder+presenter); four persons (a particle name, a single token, a capital "De"); activities across W53/W01 and a DST weekend; assignments including `maybe`, a both-person-and-name row and a duplicate pair; and absences.
   - Run the command to that temp dir.
@@ -194,6 +206,9 @@ Then this plan's own:
 - [ ] **Step 3: Cross-repo check.** In worktable (on a branch that has the import plan merged), import Task 2's invented export into a temp database and quote the counts.
 - [ ] **Step 4: Commit.** `feat: refuse a staged planning export in the gate`.
 - [ ] **Step 5: Stop.**
-  - Push the branch (`make audit` shows nothing unpushed).
-  - Hand Stefan the seed, run from the planning worktree: `cd /home/ntdst/Sites/laika-planning-model && ddev wp eval-file bin/seed/glimworm.php`. Then hand him the dry run from the exporter branch: `ddev restart` (for the mount), then `ddev wp laika export-planning --dry-run --report=/mnt/laika-export/dry-run.report.json`.
+  - Do not push. The branch stacks on local `feature/views-saved`, which holds a commit origin lacks (a5b779c), and pushing would publish it. Stefan decides.
+  - Hand Stefan the seed, run from the planning worktree: `cd /home/ntdst/Sites/laika-planning-model && ddev wp eval-file bin/seed/glimworm.php`. Then hand him the dry run from the same worktree, on the exporter branch:
+    - `mkdir -p ~/laika-export` (before the restart);
+    - `ddev restart` (for the mount);
+    - `ddev wp laika export-planning --own=<id> --dry-run --report=/mnt/laika-export/dry-run.report.json`.
   - Then the real run: `--out=/mnt/laika-export/laika-planning-export.json`, which lands in `~/laika-export/` on the host.

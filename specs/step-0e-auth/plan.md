@@ -42,7 +42,6 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   | `GET /views` | 401 | shared views on readable sources | own + shared | own + shared |
   | `POST/PATCH/DELETE /views…`, restore | 401 | 403 `forbidden` | own only | own only |
   | `PUT/DELETE /views/:id/share-token` | 401 | 403 | 403 | ✓ (query views only) |
-  | `GET/POST/PATCH /accounts…` | 401 | 403 | 403 | ✓ |
   | `GET /public/views/:token` | ✓ | ✓ | ✓ | ✓ |
 - **Owner scope.** An owner whose account has no subject sees nothing: every scoped read is empty and every scoped write is a 404. On create and on update, an owner column given any value other than the subject is 403 `forbidden`, so a row cannot be moved out of scope by PATCH (plan review S8).
 - **Every request re-reads the account.** The session middleware joins `account` on every request, so a changed role or a disabled account takes effect at once. Consume refuses an account disabled after its link was sent.
@@ -71,7 +70,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - `GET /public/views/:token` takes only `from` and `to` (any other parameter is 400). It applies the stored filters and sort, and projects each row to `visible_fields` (no `id` unless listed, no `lookups`, `custom` or `title`). It compares with `timingSafeEqual`, rate-limits, and sets no `Access-Control-*` header. A deleted view's token answers 404.
   - **No owner id, in either sense** (spec constraint 4, plan review S16): `PUT share-token` is refused with 400 `owner_column_visible` when `visible_fields` holds a column the source declares as an owner column, and the projection never serves `owner_id`.
   - **A public view is administrator-only to change** (plan review S9): while `public = 1`, PATCH, DELETE and restore by anyone but an administrator answer 403 `public_view`, so an editor cannot widen what a token serves.
-- **Accounts have no grid UI in 0e.** Administrators use `--create-admin`, `--create-account <email> --role <r> [--subject <dataset>:<id>]` and the `/accounts` routes. Ruling — the spec lists account management only as a capability — a grid screen is a later step, and the cost if wrong is a small UI task.
+- **Accounts are managed by the CLI only in 0e:** `--create-admin`, `--create-account <email> --role <r> [--subject <dataset>:<id>]`, and `--disable-account <email>`. There are no `/accounts` routes and no grid screen. Ruling (plan review round 2 SF1): the shell is the administrator's door until a later step needs a screen. The cost if wrong is a small routes-and-UI task.
 
 ## Global Constraints
 - `packages/engine` holds no domain word and imports no domain package (`bun run check`, plus U3's vocabulary check once merged).
@@ -79,7 +78,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - Domain rules, including who may write which theatre dataset, live in theatre writers. The engine knows roles only as the table above.
 - The fiche package keeps running, with its tests signed in as an editor.
 - No commit leaves the grid unable to boot or an earlier e2e flow red: each grid or engine task ends with `rm -rf e2e/.tmp && bun run e2e`.
-- Out: signed person links, record tokens, lifecycle, mail delivery, `Secure` cookies, HTTPS, proxy trust, and an accounts UI.
+- Out: signed person links, record tokens, lifecycle, mail delivery, `Secure` cookies, HTTPS, proxy trust, and account routes or UI.
 - `docs/SPEC.md` is never committed by this plan; its lines go into `specs/step-0e/spec-diff.md`.
 - Each task logs its start and end time in the Time log.
 
@@ -99,7 +98,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 5. **Login CSRF.** A cross-site page POSTs the attacker's token to consume. → **The write guard refuses `Sec-Fetch-Site: cross-site/same-site` and an `Origin` without fetch metadata, and the cookie is SameSite=Lax. Test: a cross-site consume is 403.**
 6. **An owner reads or writes another person's rows** through `/rows`, `/revisions`, `?cells=1`, lookups or a query. → **`scopeOf(actor, source)` in `access.ts` is applied in `whereOf` (reads), in `runWrite` (the current row must be in scope, else 404), on create (the owner column is forced to the subject; any other value is 403), in `readRevisions` (the row must be in scope), and in `cellsOf` (the join is filtered too). Tests per path, the denial asserted with tables unchanged.**
 7. **An owner learns what exists through `/schema`** or through status codes. → **`/schema` lists only readable sources. An unscoped source and an out-of-scope id both answer 404 `unknown_source`/`unknown_record`, never 403.**
-8. **Privilege escalation:** an editor creates or promotes an account, makes a view public, or edits a system view. → **`/accounts` and share-token routes are administrator-only (`may()`). System views answer 403 `read_only_view`. A role or subject is never taken from a non-administrator's body.**
+8. **Privilege escalation:** an editor creates or promotes an account, makes a view public, or edits a system view. → **There is no account route (CLI only). Share-token routes are administrator-only (`may()`). System views answer 403 `read_only_view`. No route takes a role or subject from a body.**
 9. **The in-use check leaking counts to an actor who may not delete.** → **The order is scope, then writer, then in-use, in `storedOf()`. Test: an owner deleting a referenced Persoon gets 403 with no `by`.**
 10. **Public token guessing or misuse.** → **A 256-bit token stored hashed and compared in constant time, 60/min per address, served only for `public = 1` query views, with only `from`/`to` accepted and rows projected to `visible_fields`. Test: the response holds no `owner_id`, no `id` unless listed, and no column outside `visible_fields`; a dataset view cannot be made public; a rotated token is 404.**
 11. **The rate-limit table as a lever.** Many addresses or emails fill it. → **The sweep deletes expired windows on every write to it. An error in the limiter fails closed for consume and the public route, and open for link requests (Folio's behaviour, kept so a broken limiter never blocks sign-in). A test asserts each.**
@@ -126,7 +125,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 |---|---|---|---|
 | Sign-in and sessions | `/api/auth/*`, the session middleware, CLI flags | integration · `packages/engine/test/auth.test.ts` (denials first: attacks 1–5, 11) · `bun test packages/engine` | sign-in-by-link |
 | Access and owner scope | `/rows`, `/revisions`, `?cells=1`, `/schema`, writes | integration · `packages/engine/test/access.test.ts` (attacks 6, 7, 9) | owner-sees-own |
-| Route × role matrix | every registered route | integration · `packages/engine/test/route-matrix.test.ts`, generated from `access.ts`'s table plus `app.routes` | none |
+| Route × role matrix | every registered route | integration · `packages/engine/test/route-matrix.test.ts`, from `EXPECTED` in the test file plus `app.routes` | none |
 | Views: system owner, public route | `/api/views*`, `/api/public/views/:token` | integration · `packages/engine/test/views.test.ts`, `public.test.ts` (attacks 8, 10) | seeded-view-read-only, public-view-by-token |
 | Theatre owners and writers | theatre through the routes | integration · `packages/theatre/test/access.test.ts` | owner-sees-own |
 | Grid sign-in, 401, read-only views | `App`, `SignIn`, `Confirm`, `api.ts` | unit · `apps/grid/src/ui/SignIn.test.tsx`, `api.test.ts` · `bun run --filter @worktable/grid test` | sign-in-by-link, seeded-view-read-only |
@@ -153,7 +152,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - Create:
   - `packages/engine/src/auth-tables.ts` (`account`, `magic_link`, `auth_session`, `rate_limit` declared with `defineDataset`; `migrate()` includes them beside `savedView` and `revision`);
   - `packages/engine/src/auth.ts`, `packages/engine/src/rate-limit.ts`, `packages/engine/test/auth.test.ts`.
-- Modify: `migrate.ts`, `app.ts` (mount `/auth/*`; session middleware on `/api/*` except the open routes; options `appUrl`, `outbox`, `clientIp`), `serve.ts` (`--create-admin`, `--create-account`, `--role`, `--subject`, `--app-url`, `--outbox`; `getConnInfo` passed in), `declare.ts` (`Actor`), `packages/engine/test/fixture.ts` (`signIn(app, role, subject?)` returns a cookie; `send()` takes `cookie`).
+- Modify: `migrate.ts`, `app.ts` (mount `/auth/*`; session middleware on `/api/*` except the open routes; options `appUrl`, `outbox`, `cookieName`, `clientIp`), `serve.ts` (`--create-admin`, `--create-account`, `--disable-account`, `--role`, `--subject`, `--app-url`, `--outbox`, `--cookie-name`; `getConnInfo` passed in), `declare.ts` (`Actor`), `packages/engine/test/fixture.ts` (`signIn(app, role, subject?)` returns a cookie; `send()` takes `cookie`).
 - Delete: `packages/engine/src/dev-actor.ts`.
 
 **Notes from the plan review (N7):** `ApiError`'s status union in `params.ts` gains 401 and 429. "Concurrent consumes" are tested on two `Database` connections to one file, because a single bun:sqlite connection serialises them. `email` joins `scripts/vocabulary-allow.txt` with its reason (plan review S5).
@@ -162,7 +161,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 - Produces:
   ```ts
   interface Actor { id: number; role: 'administrator' | 'editor' | 'owner'; subject: { dataset: string; id: number } | null }
-  interface EngineOptions { port: number; appUrl?: string; outbox?: string; clientIp?: (req: Request) => string }
+  interface EngineOptions { port: number; appUrl?: string; outbox?: string; cookieName?: string; clientIp?: (req: Request) => string }  // cookieName defaults to 'wt_session'
   function createAccount(sqlite: Database, domain: Domain, email: string, role: Actor['role'], subject?: Actor['subject']): number
   ```
   Table columns:
@@ -178,12 +177,13 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - `POST /api/auth/signout` → 200, deletes the session row.
 
   Everything else under `/api` without a valid session is 401 `unauthenticated`.
-- **Engine fixtures:** every existing engine test signs in as an editor through `signIn()` (fixture accounts are created with `createAccount`). Revisions written in tests carry that account's id.
+- **Engine fixtures:** every existing engine test signs in as an editor through `signIn()` (fixture accounts are created with `createAccount`). Revisions written in tests carry that account's id. The last `planner` in code (`packages/engine/test/views.test.ts:378`, `role: 'planner'`) becomes `editor`; the `Actor['role']` union forces it (plan review round 2 N-g).
 
 - [ ] **Step 1: Denial tests first**:
   - attacks 1–5 and 11;
   - a request without a cookie, with a garbage cookie, with an expired session, or with a disabled account → 401;
-  - `--subject` naming an undeclared dataset is refused.
+  - `--subject` naming an undeclared dataset is refused;
+  - the cookie is named `wt_session` by default and `--cookie-name` changes it.
 
   Run → FAIL.
 - [ ] **Step 2: Behaviour tests.**
@@ -192,7 +192,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - The sweep removes expired rows.
   - `--create-admin` is idempotent on the same email.
 - [ ] **Step 3: Implement.** Move every existing test to `signIn()`.
-- [ ] **Step 4: Run** `bun test packages`, `bun run check` → PASS. The grid is not yet signed in, so `bun run e2e` is expected red here. This task's commit is the only exception to the e2e rule, and Task 5 closes it.
+- [ ] **Step 4: Run** `bun test packages`, `bun run check` → PASS. The grid is not yet signed in, so `bun run e2e` is expected red from here until Task 5. Tasks 1–4 are the exception to the e2e rule, and Task 5 closes it (plan review round 2 SF2).
 - [ ] **Step 5: Commit.** `feat(engine): accounts, magic links and sessions replace the dev actor`.
 
 ### Task 2: Access, owner scope, and the delete order
@@ -290,7 +290,7 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
   - A global setup runs `--create-account` for a theatre administrator, a theatre editor, an owner linked to a seeded Persoon, and a fiche editor. It signs each in through the confirm screen and saves `storageState` per role.
   - Every earlier spec uses the editor state, and `step-0c.spec.ts` uses the fiche editor's.
   - Cookies ignore the port, so the cookie name is per instance: `--cookie-name` (default `wt_session`, fiche e2e `wt_session_fiche`). Ruling (plan review S12): a flag is cheaper than moving fiche to `localhost`, and the cost if wrong is one option.
-  - Every client address behind the Vite proxy is 127.0.0.1, so the e2e engines run with `--rate-limit-scale 10`, a test-only multiplier on every limit, set in the e2e config only.
+  - No rate-limit flag. Every client address behind the Vite proxy is 127.0.0.1, but the e2e engines start `--fresh` and sign in about six times per run (four roles in setup plus the sign-in flow), under 20 per 15 minutes. The other specs reuse `storageState` (plan review round 2 N-a).
 - Create: `packages/theatre/test/access.test.ts`, `apps/grid/src/ui/SignIn.test.tsx`, `e2e/step-0e.spec.ts`.
 
 - [ ] **Step 1: Theatre denial tests first.**
