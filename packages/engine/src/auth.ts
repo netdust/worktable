@@ -131,7 +131,12 @@ function sweep(sqlite: Database, now: string): void {
   sqlite.query('DELETE FROM auth_session WHERE expires_at <= ?').run(now)
 }
 
-function claim(sqlite: Database, token: string, now: number): { session: string; account: AccountRow } {
+function claim(
+  sqlite: Database,
+  token: string,
+  previous: string | undefined,
+  now: number,
+): { session: string; account: AccountRow } {
   const link = sqlite
     .query(
       'UPDATE magic_link SET used_at = ?1 WHERE token_hash = ?2 AND used_at IS NULL AND expires_at > ?1 RETURNING account_id',
@@ -140,6 +145,7 @@ function claim(sqlite: Database, token: string, now: number): { session: string;
   const sql = `SELECT ${ACCOUNT} FROM account a WHERE a.id = ? AND a.disabled_at IS NULL`
   const account = link && (sqlite.query(sql).get(link.account_id) as AccountRow | null)
   if (!account) throw badToken()
+  if (previous) sqlite.query('DELETE FROM auth_session WHERE id_hash = ?').run(sha256(previous))
   const session = secret()
   sqlite
     .query('INSERT INTO auth_session (account_id, id_hash, expires_at) VALUES (?, ?, ?)')
@@ -153,7 +159,8 @@ async function consumeLink(c: Context, sqlite: Database, options: AuthOptions): 
   if (typeof token !== 'string' || token.length > MAX_TOKEN) throw badToken()
   const now = Date.now()
   sweep(sqlite, iso(now))
-  const { session, account } = sqlite.transaction(() => claim(sqlite, token, now)).immediate()
+  const previous = getCookie(c, options.cookieName)
+  const { session, account } = sqlite.transaction(() => claim(sqlite, token, previous, now)).immediate()
   setCookie(c, options.cookieName, session, {
     httpOnly: true,
     sameSite: 'Lax',

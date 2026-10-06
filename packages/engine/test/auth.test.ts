@@ -171,6 +171,19 @@ describe('auth denials: session fixation (attack 4)', () => {
     expect(cookies[0]).not.toEqual(cookies[1])
   })
 
+  test('signing in again with a session cookie present ends that session', async () => {
+    createAccount(sqlite, domain, 'known@example.test', 'editor')
+    const old = await signInAs(app, 'known@example.test')
+    clearOutbox()
+    await settle()
+    const res = await consume(await tokenFor('known@example.test'), { headers: { cookie: old } })
+    const fresh = res.headers.get('set-cookie')?.split(';')[0] as string
+    expect(res.status).toBe(200)
+    expect((await send(app, old)('GET', '/api/auth/me')).status).toBe(401)
+    expect((await send(app, fresh)('GET', '/api/auth/me')).status).toBe(200)
+    expect(contents(sqlite, 'auth_session').length).toBe(1)
+  })
+
   test('a session id given as a parameter or a header other than Cookie is not accepted', async () => {
     const cookie = await signIn(app)
     const value = cookie.split('=')[1] as string
