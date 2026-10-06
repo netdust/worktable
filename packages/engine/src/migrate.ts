@@ -1,10 +1,9 @@
 import type { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
-import { authTables } from './auth-tables'
 import { datasetDdl, viewDdl } from './ddl'
 import type { DatasetDecl, Domain, QueryDecl } from './declare'
+import { engineTables, MIGRATIONS } from './engine-tables'
 import { MigrationError } from './migration-error'
-import { revision } from './revision'
 import { savedView } from './saved-view'
 import { applyChange, type Change, planChange } from './schema-diff'
 import { validateDomain } from './validate'
@@ -15,14 +14,14 @@ const hashOf = (statements: string[]): string =>
   new Bun.CryptoHasher('sha256').update(statements.join(';\n')).digest('hex')
 
 function appliedHash(sqlite: Database, source: string): string | undefined {
-  const row = sqlite.query('SELECT hash FROM _migrations WHERE source = ?').get(source) as { hash: string } | null
+  const row = sqlite.query(`SELECT hash FROM ${MIGRATIONS} WHERE source = ?`).get(source) as { hash: string } | null
   return row?.hash
 }
 
 function record(sqlite: Database, source: string, hash: string): void {
   sqlite
     .query(
-      `INSERT INTO _migrations (source, hash, applied_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      `INSERT INTO ${MIGRATIONS} (source, hash, applied_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
        ON CONFLICT(source) DO UPDATE SET hash = excluded.hash, applied_at = excluded.applied_at`,
     )
     .run(source, hash)
@@ -91,8 +90,8 @@ function applySteps(sqlite: Database, steps: Step[], queries: QueryDecl[]): void
 
 export function migrate(sqlite: Database, domain: Domain): void {
   validateDomain(domain)
-  sqlite.run('CREATE TABLE IF NOT EXISTS _migrations (source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)')
-  const steps = planSteps(sqlite, [savedView, revision, ...authTables, ...domain.datasets])
+  sqlite.run(`CREATE TABLE IF NOT EXISTS ${MIGRATIONS} (source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)`)
+  const steps = planSteps(sqlite, [...engineTables, ...domain.datasets])
   if (steps.some((s) => s.change !== 'create' && s.change.kind === 'rebuild')) backUp(sqlite)
   // SQLite ignores this pragma inside a transaction, so it brackets the whole migration.
   sqlite.run('PRAGMA foreign_keys = OFF')

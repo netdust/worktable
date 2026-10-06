@@ -1,4 +1,5 @@
 import type { ColumnDecl, DatasetDecl, Domain, QueryDecl } from './declare'
+import { reservedNames } from './engine-tables'
 import { sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
@@ -132,6 +133,9 @@ function checkAway(
 
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
+    if (reservedNames.has(source.name)) {
+      throw new DomainError(source.name, source.name, `"${source.name}" is an engine table name`)
+    }
     checkTitle(source)
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
