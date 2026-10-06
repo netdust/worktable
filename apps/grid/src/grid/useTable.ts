@@ -12,6 +12,7 @@ function sortValue(column: Column, row: Row): string | number {
     case 'rollup':
       return Number(column.value(row)) || 0
     case 'date':
+    case 'datetime':
     case 'time':
       return column.edit(row)
     default:

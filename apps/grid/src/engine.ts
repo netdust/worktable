@@ -118,12 +118,12 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
   }
 }
 
-/** The row's own id is the grid's `id`, never a field. */
 function titleLabel(source: EngineSource): string {
   const label = (column: string) => source.columns[column]?.label ?? column
   return source.title_via ? `${label(source.title_via)} / ${label(source.title)}` : label(source.title)
 }
 
+/** The row's own id is the grid's `id`, never a field. */
 function modelOf(name: string, source: EngineSource, sources: Sources): Model {
   const fields = Object.entries(source.columns).filter(([key]) => key !== titleColumn(source) && key !== 'id')
   return {
@@ -228,7 +228,8 @@ function mergeFilters(chips: Filter[], fixed: Record<string, unknown>): Record<s
 
 /**
  * The arrangement as the engine stores it. `visible_fields` is the title column, then the shown fields in their order:
- * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks and matrix keys stay in the browser; lookup and rollup columns are not stored.
+ * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks and matrix keys stay in the browser; lookup, rollup and custom (`custom` JSON) columns are not stored,
+ * so hiding or reordering one is lost on save. Custom fields come with Field, step 5.
  */
 export function toStoredView(arrangement: StoredArrangement, fixed: Record<string, unknown>, source: EngineSource): EngineArrangement {
   const title = titleColumn(source)
