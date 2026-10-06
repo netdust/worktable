@@ -42,15 +42,15 @@ First working version: Task 1a — `GET /api/rows/<fixture>?offset=2` and a fixt
 **Assets.** Saved views (another planner's work), the planning rows a matrix cell writes, the host process.
 
 **Attacks.**
-1. **Writing someone else's view** — `PATCH/DELETE /api/views/<id>`, `POST …/restore` on a view the caller does not own → **`ownedView()` in `views.ts`: unshared → 404 `unknown_view`, shared → 403 `not_owner`; nothing written.**
+1. **Writing someone else's view** — `PATCH/DELETE /api/views/<id>`, `POST …/restore` on a view the caller does not own → **`ownedView()` in `views.ts`: unshared → 404 `unknown_view`, a live shared view → 403 `not_owner`, a deleted view that is not the caller's → 404 whatever its sharing (final fix wave, so restore reveals no deleted ids); nothing written.**
 2. **Forging ownership or audit** — a body with `owner_id`, `id`, `deleted_at`, `share_token`, `public`, `scope` → **`viewBody()` keeps only `name`, `source`, `skin`, `filters`, `sort`, `group_by`, `visible_fields`, `shared`; the owner is the actor.**
-3. **Injecting through a saved filter, sort or column list** — replayed on every rows request → **`viewBody()` validates `filters` with the exported `filterWhere(input, source, tableOf(source))` (the same compile and key resolution as `/rows`), and `sort`, `group_by`, `visible_fields` against declared columns; 400 `bad_view`; nothing stored.**
-4. **Oversized or hostile names** — **64 kB body cap (0b), 16 kB stored-view cap (400 `view_too_large`), name 1–80 characters after trim; names rendered as React text only.**
+3. **Injecting through a saved filter, sort or column list** — replayed on every rows request → **`viewBody()` validates `filters` with the exported `filterWhere(input, source, tableOf(source))` (the same compile and key resolution as `/rows`), refuses a filter that changes on a JSON round trip (non-finite numbers), and checks `sort`, `group_by`, `visible_fields` against declared columns, at most 16 keys and no duplicates (the same cap in `parseSort` for `/rows`); 400 `bad_view` / `bad_sort`; nothing stored.**
+4. **Oversized or hostile names** — **64 kB body cap (0b), 16 kB stored-view cap (400 `view_too_large`), name 1–80 characters after trim, no control or format characters (`\p{Cc}`, `\p{Cf}`); names rendered as React text only.**
 5. **Matrix cells as a bypass** — **no new write route: cells write through `/api/rows/<join>` and its writer.**
-6. **Unbounded cell reads** — **`?cells=1` without a window → 400 `window_required`; the `/rows` limit applies to the down rows.**
+6. **Unbounded cell reads** — **`?cells=1` without a window → 400 `window_required`, a window over 92 days → 400 `window_too_wide` (`params.ts`); the `/rows` limit applies to the down rows.**
 7. **Cross-site view writes** — **the 0b `writeGuard()` is mounted on every `/api` write (`app.ts:46`); the views routes are mounted on the same app; a test asserts it.**
 
-**Mitigations — where they live.** `ownedView()`, `viewBody()` and the routes in `packages/engine/src/views.ts` (1–4, 7); `cellsOf()` in `packages/engine/src/rows.ts` (5, 6).
+**Mitigations — where they live.** `ownedView()`, `viewBody()` and the routes in `packages/engine/src/views.ts` (1–4, 7); `cellsOf()` in `packages/engine/src/rows.ts` and the window and key caps in `params.ts` (3, 5, 6).
 
 **Deferrals.** No real actors: the dev actor owns everything until auth, so attack 1 is enforced and tested with a directly inserted foreign view but not exercised by a second human. Prefs are not stored. `share_token`/`public` untouched. Recorded at the final review:
 - **Auth.** Every view made before auth is owned by actor 0 and needs a reassignment migration; no real actor may get id 0. The seeded views are shared but owned by 0, so no real user can edit them until that migration runs.
