@@ -1,10 +1,11 @@
 import { Database } from 'bun:sqlite'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
 import { createAccount, disableAccount, findAccount } from './auth'
 import type { Actor, Domain } from './declare'
+import { importExport } from './import'
 import { migrate, seedDomain } from './migrate'
 import { MigrationError } from './migration-error'
 
@@ -23,6 +24,10 @@ const { values } = parseArgs({
     'disable-account': { type: 'string' },
     role: { type: 'string' },
     subject: { type: 'string' },
+    import: { type: 'string' },
+    as: { type: 'string' },
+    report: { type: 'string' },
+    'accept-report': { type: 'boolean', default: false },
   },
 })
 
@@ -36,7 +41,8 @@ if (!values.domain || !values.db) {
     'usage: serve.ts --domain <module> --db <file> [--port 4310] [--hostname 127.0.0.1] [--fresh]\n' +
       '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
-      '   | --disable-account <email>]',
+      '   | --disable-account <email>]\n' +
+      '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]',
   )
 }
 // The Host allowlist names these two; any other address would need a mailer, and 0e has none.
@@ -98,7 +104,52 @@ function runAccountCommand(): number | null {
   }
 }
 
-const code = runAccountCommand()
+function administrator(email: string | undefined): Actor {
+  if (!email) throw new Error('--import needs --as <administrator email>')
+  const account = findAccount(sqlite, email)
+  if (!account || account.disabled_at !== null || account.role !== 'administrator') {
+    throw new Error(`--as must name an enabled administrator account, and ${email} is not one`)
+  }
+  return { id: account.id, role: account.role, subject: null }
+}
+
+// The parser's own message may quote the file, so it is not passed on.
+function parsedFile(file: string): unknown {
+  const text = readFileSync(file, 'utf8')
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`${file} is not valid JSON`)
+  }
+}
+
+// Stdout gets counts only; the report, outside the repo by default, gets legacy ids and messages.
+function runImport(file: string): number {
+  const actor = administrator(values.as)
+  const data = parsedFile(file)
+  const result = importExport(sqlite, domain, data, actor, { acceptReport: values['accept-report'] })
+  const report = values.report ?? `${file}.report.json`
+  writeFileSync(report, `${JSON.stringify({ committed: result.committed, refused: result.refused }, null, 2)}\n`, {
+    mode: 0o600,
+  })
+  for (const [dataset, count] of Object.entries(result.counts)) console.log(`${dataset} ${count}`)
+  const refused = result.refused.length
+  if (refused > 0) console.log(`${refused} refused, see ${report}`)
+  console.log(result.committed ? 'committed' : 'nothing committed')
+  return result.committed ? 0 : 1
+}
+
+function runImportCommand(): number | null {
+  if (!values.import) return null
+  try {
+    return runImport(values.import)
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err))
+    return 1
+  }
+}
+
+const code = runAccountCommand() ?? runImportCommand()
 if (code !== null) {
   sqlite.close()
   process.exit(code)
