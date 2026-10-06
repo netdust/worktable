@@ -100,6 +100,11 @@
 
 | Task | Start | End |
 |---|---|---|
+| 1 | 10-06 16:12 | 16:20 (fix round included) |
+| 2 | 16:20 | 16:27 |
+| 3 | 16:27 | 16:33 |
+
+Final review and audit 16:33–16:38; fix wave 16:38–16:46. Commit stamps; agent wall-clock.
 
 ---
 
