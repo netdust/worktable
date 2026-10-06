@@ -34,8 +34,14 @@ function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: E
       className="nv-editor"
       data-editor
       aria-label={column.label}
-      value={valid ? editing.draft : column.edit(row)}
-      onChange={(event) => onDraft(event.target.value === '' && column.required ? column.edit(row) : event.target.value)}
+      defaultValue={valid ? editing.draft : column.edit(row)}
+      onChange={(event) => {
+        const node = event.currentTarget
+        // Half-typed segments read as '' with badInput: they stay on screen but commit as the stored value.
+        if (node.value === '' && node.validity.badInput) return onDraft(column.edit(row))
+        if (node.value === '' && column.required) node.value = column.edit(row)
+        onDraft(node.value)
+      }}
       onBlur={onLeave}
     />
   )

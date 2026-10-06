@@ -239,6 +239,16 @@ test('untimed-activity', async ({ page }) => {
   await expect(await cellOf(named('vroeg e2e'), 'Start')).toHaveText(/ 05:00$/)
   await expect(await cellOf(named('vroeg e2e'), 'Datum')).toHaveText(day)
 
+  // One segment cleared reads as '' in Chromium (badInput); Enter keeps the stored time.
+  const halfTyped = await cellOf(named('vroeg e2e'), 'Start')
+  await halfTyped.click()
+  await halfTyped.press('Enter')
+  await halfTyped.locator('input').press('Backspace')
+  await expect(halfTyped.locator('input')).toHaveValue('')
+  expect(await halfTyped.locator('input').evaluate((input: HTMLInputElement) => input.validity.badInput)).toBe(true)
+  await halfTyped.locator('input').press('Enter')
+  await expect(await cellOf(named('vroeg e2e'), 'Start')).toHaveText(/ 05:00$/)
+
   // Cleared again, Start goes on the wire as null and the row stays on its day.
   const patched = page.waitForRequest(
     (req) => req.method() === 'PATCH' && new URL(req.url()).pathname.startsWith('/api/rows/activiteit/'),

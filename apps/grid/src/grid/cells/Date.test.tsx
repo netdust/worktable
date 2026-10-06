@@ -33,6 +33,16 @@ describe('the datetime picker editor', () => {
     expect(input.value).toBe('')
   })
 
+  // Chromium reports '' with validity.badInput while some segments are cleared and others not.
+  it('reverts a half-typed value to the stored moment instead of drafting no time', () => {
+    const { input, onDraft } = editor({ draft: '2026-10-14T09:00', mode: 'edit' })
+
+    Object.defineProperty(input, 'validity', { value: { badInput: true }, configurable: true })
+    fireEvent.change(input, { target: { value: '' } })
+    expect(onDraft).not.toHaveBeenCalledWith('')
+    expect(onDraft).toHaveBeenLastCalledWith('2026-10-13T20:30')
+  })
+
   it('opens on the stored moment when a typed character started it', () => {
     const { input, onDraft } = editor({ draft: 'a', mode: 'enter' })
 
