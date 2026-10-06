@@ -173,3 +173,81 @@ test('session-less-401', async ({ page, context }) => {
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('textbox', { name: 'E-mailadres' })).toBeVisible()
 })
+
+test('untimed-activity', async ({ page }) => {
+  const cellOf = async (tr: ReturnType<Page['locator']>, label: string) => {
+    const index = await page
+      .locator('thead th')
+      .evaluateAll(
+        (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
+        label,
+      )
+    expect(index, `column ${label}`).toBeGreaterThanOrEqual(0)
+    return tr.locator('td').nth(index)
+  }
+  const typeInto = async (target: ReturnType<Page['locator']>, value: string) => {
+    await target.click()
+    await target.press('Enter')
+    await target.locator('input').fill(value)
+    await target.locator('input').press('Enter')
+  }
+  const named = (title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
+
+  /** + New, the production picked: the row is created at once, on top, untitled; it is named so it can be found again. */
+  async function create(title: string): Promise<Record<string, unknown>> {
+    const posted = page.waitForRequest(
+      (req) => req.method() === 'POST' && new URL(req.url()).pathname === '/api/rows/activiteit',
+    )
+    await page.getByRole('button', { name: 'New Activiteiten' }).click()
+    await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
+    await page.getByRole('option', { name: 'Nachtwacht' }).click()
+    const body = (await posted).postDataJSON() as Record<string, unknown>
+    await expect(page.locator('tbody tr.nv-tr--draft')).toHaveCount(0)
+    await typeInto(await cellOf(page.locator('tbody tr.nv-tr').first(), 'Omschrijving'), title)
+    await expect(named(title)).toBeVisible()
+    return body
+  }
+
+  await page.goto(WEEK)
+  await pick(page, 'Optie of bevestigd')
+  await expect(gridRows(page).first()).toBeVisible()
+
+  const body = await create('zonder tijd e2e')
+  const datum = body.datum as string
+  expect(datum).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  expect(body.start_at ?? null).toBeNull()
+  const day = await page.evaluate((iso) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    const lang = document.documentElement.lang || 'en'
+    return new Intl.DateTimeFormat(lang, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
+      new Date(y, m - 1, d),
+    )
+  }, datum)
+
+  await page.reload()
+  await pick(page, 'Optie of bevestigd')
+  await expect(named('zonder tijd e2e')).toBeVisible()
+  await expect(await cellOf(named('zonder tijd e2e'), 'Datum')).toHaveText(day)
+  await expect(await cellOf(named('zonder tijd e2e'), 'Start')).toHaveText('')
+
+  await create('vroeg e2e')
+  const start = await cellOf(named('vroeg e2e'), 'Start')
+  await typeInto(start, `${datum}T05:00`)
+  await expect(start).toHaveText(/ 05:00$/)
+  await page.reload()
+  await pick(page, 'Optie of bevestigd')
+  await expect(await cellOf(named('vroeg e2e'), 'Start')).toHaveText(/ 05:00$/)
+  await expect(await cellOf(named('vroeg e2e'), 'Datum')).toHaveText(day)
+
+  // Cleared again, Start goes on the wire as null and the row stays on its day.
+  const patched = page.waitForRequest(
+    (req) => req.method() === 'PATCH' && new URL(req.url()).pathname.startsWith('/api/rows/activiteit/'),
+  )
+  await typeInto(await cellOf(named('vroeg e2e'), 'Start'), '')
+  expect((await patched).postDataJSON()).toEqual({ start_at: null })
+  await expect(await cellOf(named('vroeg e2e'), 'Start')).toHaveText('')
+  await page.reload()
+  await pick(page, 'Optie of bevestigd')
+  await expect(await cellOf(named('vroeg e2e'), 'Start')).toHaveText('')
+  await expect(await cellOf(named('vroeg e2e'), 'Datum')).toHaveText(day)
+})

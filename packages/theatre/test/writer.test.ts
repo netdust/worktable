@@ -189,6 +189,16 @@ describe('an activity without a time', () => {
     expect(stored(body.id as number)).toMatchObject({ datum: '2026-10-23', plandag: '2026-10-22' })
   })
 
+  test("an empty string for start_at is refused by the engine before the writer, so datum never becomes ''", async () => {
+    const before = [all('activiteit'), all('revision')]
+    const res = await patch(1, { start_at: '' })
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 400,
+      message: expect.stringContaining('"start_at"'),
+    })
+    expect([all('activiteit'), all('revision')]).toEqual(before)
+  })
+
   test('a 05:00 start stays a time', async () => {
     const res = await post({ ...NEW, start_at: '2026-10-20T05:00', eind_at: null })
     expect(res.status).toBe(201)

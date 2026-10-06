@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Model } from '../types'
 import { activity, planning } from './calais.test.data'
+import { toSchema } from '../engine'
 import { newRow } from './newRow'
 
 const week = { from: '2026-05-18', to: '2026-05-24' }
@@ -78,5 +79,29 @@ describe('newRow', () => {
 
     expect(newRow(when, planning, week, new Date(2026, 4, 20))).toMatchObject({ needs: ['production', 'at'] })
     expect(newRow({ ...when, title_required: true }, planning, week, new Date(2026, 4, 20))).toMatchObject({ needs: ['title', 'production', 'at'] })
+  })
+
+  it("asks only for the production on Activiteit, its required datum filled with the day the row lands on", () => {
+    const { models } = toSchema({
+      sources: {
+        activiteit: {
+          kind: 'dataset', label: 'Activiteiten', title: 'omschrijving', date: 'plandag',
+          columns: {
+            productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+            soort: { type: 'text', label: 'Soort', options: { repetitie: 'Repetitie', maaltijd: 'Maaltijd' } },
+            omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
+            datum: { type: 'date', label: 'Datum' },
+            start_at: { type: 'datetime', label: 'Start', nullable: true },
+            eind_at: { type: 'datetime', label: 'Einde', nullable: true },
+            plandag: { type: 'date', label: 'Plandag', readonly: true },
+            status: { type: 'text', label: 'Status', default: 'optie', options: { optie: 'Optie', bevestigd: 'Bevestigd' } },
+          },
+        },
+      },
+    })
+    const view = { ...planning, model: 'activiteit', date_field: 'plandag', columns: undefined }
+
+    expect(newRow(models.activiteit, view, week, new Date(2026, 4, 20))).toMatchObject({ fields: { datum: '2026-05-20' }, needs: ['productie_id'] })
+    expect(newRow(models.activiteit, view, week, new Date(2026, 6, 1))).toMatchObject({ fields: { datum: '2026-05-18' }, needs: ['productie_id'] })
   })
 })

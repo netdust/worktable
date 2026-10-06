@@ -1,8 +1,11 @@
+import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Row } from '../types'
+import type { Model, Row } from '../types'
 import { activity, calais, planning } from './calais.test.data'
 import { columnsFor } from './columns'
 import { groupRows, sums, total } from './group'
+import { defaults } from './layout'
+import { useGridTable } from './useTable'
 
 const columns = Object.fromEntries(columnsFor(activity, planning).map((c) => [c.id, c]))
 const titles = (rows: Row[]) => rows.map((r) => r.title)
@@ -58,6 +61,37 @@ describe('groupRows', () => {
 
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({ label: '', count: 6 })
+  })
+})
+
+describe('an activity without a time', () => {
+  const timed: Model = {
+    ...activity,
+    fields: {
+      plandag: { type: 'date', label: 'Plandag', required: true, fact: true },
+      start_at: { type: 'datetime', label: 'Start', required: false, fact: true },
+    },
+  }
+  const view = { ...planning, columns: ['title', 'plandag', 'start_at'], lookups: {}, rollups: {}, sort: ['plandag', 'start_at'], group: 'plandag', date_field: 'plandag' }
+  const at = (id: number, title: string, plandag: string, start_at: string | null): Row =>
+    ({ id, title, status: 'publish', fields: { plandag, start_at } })
+
+  it('sorts first in its own plandag section, never under the day before', () => {
+    const rows = [
+      at(1, 'Ophalen', '2026-10-14', '2026-10-14T05:00'),
+      at(2, 'Nachtvoorstelling', '2026-10-13', '2026-10-14T00:30'),
+      at(3, 'Hotel', '2026-10-14', null),
+      at(4, 'Voorstelling', '2026-10-13', '2026-10-13T20:00'),
+    ]
+    const cols = columnsFor(timed, view)
+    const { result } = renderHook(() => useGridTable(cols, rows, defaults(view), () => {}))
+    const sorted = result.current.getRowModel().rows.map((r) => r.original)
+    const groups = groupRows(sorted, cols.find((c) => c.id === 'plandag'))
+
+    expect(groups.map((g) => [g.key, titles(g.rows)])).toEqual([
+      ['2026-10-13', ['Voorstelling', 'Nachtvoorstelling']],
+      ['2026-10-14', ['Hotel', 'Ophalen']],
+    ])
   })
 })
 

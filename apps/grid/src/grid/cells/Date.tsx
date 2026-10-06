@@ -19,7 +19,7 @@ export function DateTimeEditor(props: EditorProps) {
 
 function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: EditorProps & { type: 'date' | 'datetime-local'; shape: RegExp }) {
   const input = useRef<HTMLInputElement>(null)
-  const valid = shape.test(editing.draft)
+  const valid = editing.draft === '' || shape.test(editing.draft)
 
   useEffect(() => {
     if (!valid) onDraft(column.edit(row))

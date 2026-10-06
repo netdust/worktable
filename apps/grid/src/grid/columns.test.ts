@@ -53,6 +53,19 @@ describe('columnsFor', () => {
     expect(column.text({ ...row, fields: { at: null } })).toBe('')
   })
 
+  it('shows an empty datetime as nothing and clears it to null on the wire, while 05:00 is still a time', () => {
+    const when = { ...activity, fields: { ...activity.fields, at: { type: 'datetime' as const, label: 'Start', required: false, fact: false } } }
+    const column = columnsFor(when, { ...planning, columns: ['at'] }).find((c) => c.id === 'at')!
+    const at = (value: unknown) => ({ ...lunch, fields: { ...lunch.fields, at: value } })
+
+    expect(column.text(at(null))).toBe('')
+    expect(column.text(at(''))).toBe('')
+    expect(column.edit(at(null))).toBe('')
+    expect(column.parse('')).toBe('')
+    expect(column.text(at('2026-10-13T05:00'))).toBe('di 13/10 05:00')
+    expect(column.edit(at('2026-10-13T05:00'))).toBe('2026-10-13T05:00')
+  })
+
   it('makes a text field described HH:MM a time cell that reads what a hand types', () => {
     const start = byId().start
     expect(start.kind).toBe('time')
