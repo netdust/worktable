@@ -8,3 +8,5 @@ dist/
 e2e/.tmp/
 test-results/
 playwright-report/
+laika-planning-export*.json
+*.report.json
