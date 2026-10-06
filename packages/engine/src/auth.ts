@@ -113,8 +113,8 @@ function deliver(sqlite: Database, { outbox, appUrl }: AuthOptions, email: strin
 async function requestLink(c: Context, sqlite: Database, options: AuthOptions): Promise<Response> {
   const email = emailOf((await bodyOf(c)).email)
   const limits = () => [
-    { key: `link:email:${email.toLowerCase()}`, max: 5, windowMs: LINK_LIFE },
     { key: `link:ip:${options.clientIp(c)}`, max: 20, windowMs: LINK_LIFE },
+    { key: `link:email:${email.toLowerCase()}`, max: 5, windowMs: LINK_LIFE },
   ]
   checkLimits(sqlite, limits, true)
   // A timer, not a microtask: the lookup and every write happen after the response is out, for every email alike.

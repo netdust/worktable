@@ -237,6 +237,23 @@ describe('auth denials: the rate-limit table as a lever (attack 11)', () => {
     }
   })
 
+  test('requests refused by the address limit write no further per-email rows', async () => {
+    for (let i = 0; i < 20; i++) expect((await askLink(`n${i}@example.test`)).status).toBe(200)
+    const emailRows = () => sqlite.query("SELECT key FROM rate_limit WHERE key LIKE 'link:email:%'").all().length
+    expect(emailRows()).toBe(20)
+    for (let i = 20; i < 30; i++) expect((await askLink(`n${i}@example.test`)).status).toBe(429)
+    expect(emailRows()).toBe(20)
+  })
+
+  test('rate_limit carries an index on window_start, added to an existing database by migrate', () => {
+    const indexes = () => (sqlite.query('PRAGMA index_list(rate_limit)').all() as { name: string }[]).map((i) => i.name)
+    expect(indexes()).toContain('rate_limit_window_start_idx')
+    sqlite.run('DROP INDEX rate_limit_window_start_idx')
+    sqlite.run("UPDATE _migrations SET hash = 'before' WHERE source = 'rate_limit'")
+    migrate(sqlite, domain)
+    expect(indexes()).toContain('rate_limit_window_start_idx')
+  })
+
   test('the 21st consume from one address in 15 minutes is 429 rate_limited', async () => {
     for (let i = 0; i < 20; i++) expect((await consume('x'.repeat(43))).status).toBe(400)
     expect((await consume('x'.repeat(43))).status).toBe(429)

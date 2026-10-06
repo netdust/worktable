@@ -25,9 +25,8 @@ function isOver(sqlite: Database, limits: () => Limit[], now: number): boolean {
   return sqlite
     .transaction(() => {
       sqlite.query('DELETE FROM rate_limit WHERE window_start < ?').run(now - LONGEST_WINDOW)
-      return limits()
-        .map((limit) => hit(sqlite, limit, now) > limit.max)
-        .some(Boolean)
+      // some() stops at the first limit that is over, so a refused request writes no further rows.
+      return limits().some((limit) => hit(sqlite, limit, now) > limit.max)
     })
     .immediate()
 }

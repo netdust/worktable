@@ -61,6 +61,7 @@ export const rateLimit = defineDataset({
     count: { type: 'integer', label: 'Count' },
   },
   checks: ['UNIQUE (key, window_start)'],
+  indexes: [['window_start']],
 })
 
 export const authTables = [account, magicLink, authSession, rateLimit]
