@@ -1,3 +1,4 @@
+export { forbid } from './access'
 export { createEngine, type EngineOptions } from './app'
 export { createAccount } from './auth'
 export type {
@@ -7,6 +8,7 @@ export type {
   DatasetDecl,
   Domain,
   MatrixDecl,
+  Owners,
   QueryDecl,
   SavedViewSeed,
   WriteContext,

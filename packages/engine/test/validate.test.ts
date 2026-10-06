@@ -36,6 +36,20 @@ const writes = (over: Partial<NonNullable<ColumnDecl['writes']>> = {}): ColumnDe
 })
 
 describe('validateDomain', () => {
+  test('an owner column is id or a relation column', () => {
+    const rel = { type: 'integer', label: 'P', relation: 'project' } as ColumnDecl
+    const ok = (owner: string) =>
+      validateDomain(
+        withDomain({
+          datasets: [...domain.datasets, dataset({ columns: { name: text, p_id: rel }, owners: { owner } })],
+        }),
+      )
+    expect(() => ok('id')).not.toThrow()
+    expect(() => ok('p_id')).not.toThrow()
+    const e = failure(withDomain({ datasets: [...domain.datasets, dataset({ owners: { owner: 'name' } })] }))
+    expect([e.declaration, e.bad]).toEqual(['a', 'name'])
+  })
+
   test('a domain dataset declaring checks is refused: they are for engine tables', () => {
     const e = failure(withDomain({ datasets: [dataset({ checks: ['CHECK (id > 0)'] })], queries: [] }))
     expect([e.declaration, e.bad]).toEqual(['a', 'checks'])

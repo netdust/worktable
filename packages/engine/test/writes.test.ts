@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createEngine, defineQuery, migrate, seedDomain } from '../src'
-import { contents, domain, freshDb, probes, projectDeletes, send } from './fixture'
+import { contents, domain, freshDb, probes, projectDeleteHook, projectDeletes, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
 let sqlite: Database
@@ -12,6 +12,7 @@ const ME = 1
 
 beforeEach(async () => {
   projectDeletes.length = 0
+  projectDeleteHook.run = () => {}
   sqlite = freshDb()
   const app = testEngine(sqlite, domain)
   request = send(app, await signIn(app))
@@ -171,9 +172,10 @@ describe('in-use denials', () => {
     })
   })
 
-  test("on a 409 the referenced dataset's writer delete did not run", async () => {
+  test("on a 409 the writer's delete ran first, and what it wrote is rolled back", async () => {
+    projectDeleteHook.run = (id) => sqlite.run(`UPDATE project SET name = 'written' WHERE id = ${id}`)
     await denied(() => remove('project/1'), 409, 'in_use')
-    expect(projectDeletes).toEqual([])
+    expect(projectDeletes).toEqual([1])
   })
 
   const thrown: Record<keyof typeof probes, string> = {

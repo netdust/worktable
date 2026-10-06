@@ -32,6 +32,12 @@ function checkTitle(source: DatasetDecl | QueryDecl): void {
   if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
 }
 
+function checkOwners(source: DatasetDecl | QueryDecl): void {
+  const column = source.owners?.owner
+  if (column === undefined || column === 'id' || source.columns[column]?.relation) return
+  throw new DomainError(source.name, column, `owner column "${column}" is not id or a relation column`)
+}
+
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
   if (Object.hasOwn(source.columns, 'title')) {
     throw new DomainError(source.name, 'title', 'a column named "title" would be overwritten by the computed row title')
@@ -129,6 +135,7 @@ export function validateDomain(domain: Domain): void {
     checkTitle(source)
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
+    checkOwners(source)
   }
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {

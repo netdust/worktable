@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import type { Hono } from 'hono'
+import { forbid, may, readable } from './access'
 import type { AuthEnv } from './auth'
 import type { Actor, Domain, SavedViewSeed } from './declare'
 import { filterWhere } from './filter'
@@ -182,26 +183,35 @@ function patchOf(body: Record<string, unknown>): Record<string, unknown> {
   return body
 }
 
-function listViews(sqlite: Database, actor: Actor): ViewOut[] {
+function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
   const sql = 'SELECT * FROM saved_view WHERE deleted_at IS NULL AND (owner_id = ? OR shared = 1) ORDER BY id'
-  return (sqlite.query(sql).all(actor.id) as Raw[]).map((raw) => outOf(raw, actor))
+  const onReadable = (raw: Raw): boolean => {
+    const source = sourceOf(domain, raw.source as string)
+    return source !== null && readable(actor, source)
+  }
+  return (sqlite.query(sql).all(actor.id) as Raw[]).filter(onReadable).map((raw) => outOf(raw, actor))
+}
+
+function changing(actor: Actor): Actor {
+  if (!may(actor, 'views.write')) forbid('this account may not change views')
+  return actor
 }
 
 export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
   const write = <T>(work: () => T): T => sqlite.transaction(work).immediate()
   const outById = (id: number, actor: Actor): ViewOut => outOf(ownedView(sqlite, id, actor), actor)
 
-  app.get('/views', (c) => c.json({ views: listViews(sqlite, c.get('actor')) }))
+  app.get('/views', (c) => c.json({ views: listViews(sqlite, domain, c.get('actor')) }))
 
   app.post('/views', async (c) => {
-    const actor = c.get('actor')
+    const actor = changing(c.get('actor'))
     const fields = viewBody(await bodyOf(c), domain, true)
     const id = write(() => create(sqlite, fields, actor))
     return c.json(outById(id, actor), 201)
   })
 
   app.patch('/views/:id', async (c) => {
-    const actor = c.get('actor')
+    const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
     const patch = patchOf(await bodyOf(c))
     write(() => {
@@ -212,14 +222,14 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
   })
 
   app.delete('/views/:id', (c) => {
-    const actor = c.get('actor')
+    const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
     write(() => save(sqlite, actor, id, { deleted_at: new Date().toISOString() }, ownedView(sqlite, id, actor)))
     return c.json({ id })
   })
 
   app.post('/views/:id/restore', (c) => {
-    const actor = c.get('actor')
+    const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
     write(() => save(sqlite, actor, id, { deleted_at: null }, ownedView(sqlite, id, actor, true)))
     return c.json(outById(id, actor))

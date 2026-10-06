@@ -2,10 +2,11 @@ import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
+import { readable, scopeOf, visibleSource } from './access'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
-import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
+import { type Source, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
 import { viewRoutes } from './views'
 import { writeGuard } from './write-guard'
@@ -20,24 +21,24 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
   app.post('/rows/:dataset', async (c) => {
-    const target = writableOf(domain, c.req.param('dataset'), 'create')
+    const target = writableOf(domain, c.req.param('dataset'), 'create', c.get('actor'))
     const id = runWrite(store, target, 'create', null, await bodyOf(c), c.get('actor'))
     return c.json(rowOf(store, target.dataset, id), 201)
   })
 
   app.patch('/rows/:dataset/:id', async (c) => {
-    const target = writableOf(domain, c.req.param('dataset'), 'update')
+    const target = writableOf(domain, c.req.param('dataset'), 'update', c.get('actor'))
     const id = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c), c.get('actor'))
     return c.json(rowOf(store, target.dataset, id))
   })
 
   app.delete('/rows/:dataset/:id', (c) => {
-    const target = writableOf(domain, c.req.param('dataset'), 'delete')
+    const target = writableOf(domain, c.req.param('dataset'), 'delete', c.get('actor'))
     return c.json({ id: runWrite(store, target, 'delete', parseId(c.req.param('id')), {}, c.get('actor')) })
   })
 
   app.get('/revisions/:dataset/:id', (c) =>
-    c.json({ revisions: readRevisions(store, c.req.param('dataset'), parseId(c.req.param('id'))) }),
+    c.json({ revisions: readRevisions(store, c.req.param('dataset'), parseId(c.req.param('id')), c.get('actor')) }),
   )
 }
 
@@ -81,40 +82,48 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   })
 
   app.get('/schema', (c) => {
+    const actor = c.get('actor')
+    const joinOf = (s: Source): string | undefined => {
+      const join = matrixOf(domain, s)?.join
+      return join && readable(actor, join) ? join.name : undefined
+    }
     const sources = Object.fromEntries(
-      sourcesOf(domain).map((s) => [
-        s.name,
-        {
-          kind: s.kind,
-          label: s.label,
-          title: typeof s.title === 'string' ? s.title : s.title.else,
-          ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
-          date: s.date ?? null,
-          ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
-          ...(matrixOf(domain, s) ? { matrix_join: matrixOf(domain, s)?.join.name } : {}),
-          columns: s.columns,
-          writable: isWritable(domain, s),
-          deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
-        },
-      ]),
+      sourcesOf(domain)
+        .filter((s) => readable(actor, s))
+        .map((s) => [
+          s.name,
+          {
+            kind: s.kind,
+            label: s.label,
+            title: typeof s.title === 'string' ? s.title : s.title.else,
+            ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
+            date: s.date ?? null,
+            ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
+            ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
+            columns: s.columns,
+            writable: isWritable(domain, s),
+            deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
+          },
+        ]),
     )
     return c.json({ sources })
   })
 
   app.get('/rows/:source', (c) => {
     const name = c.req.param('source')
-    const source = sourceOf(domain, name)
-    if (!source) throw new ApiError(404, 'unknown_source', `unknown source "${name}"`)
+    const actor = c.get('actor')
+    const source = visibleSource(domain, name, actor)
     const params = parseRowsParams(source, c.req.query())
     const found = params.cells ? matrixOf(domain, source) : null
     if (params.cells && !found) throw new ApiError(400, 'no_matrix', `"${name}" is not the down source of a matrix`)
-    const read = readRows(db, domain, source, params)
+    const read = readRows(db, domain, source, params, scopeOf(actor, source))
     if (!found) return c.json(read)
     const cells = cellsOf(
       db,
       domain,
       found,
       read.rows.map((r) => r.id),
+      scopeOf(actor, found.join),
     )
     return c.json({ ...read, rows: read.rows.map((r) => ({ ...r, cells: cells.get(r.id) })) })
   })
