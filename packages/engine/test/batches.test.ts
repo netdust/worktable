@@ -145,6 +145,14 @@ describe('undo denials', () => {
     await denied(() => undo(asA, key), 404, 'unknown_source')
   })
 
+  test('an owner undoing its own batch on a record now out of its scope is 404 unknown_record', async () => {
+    sqlite.run(`UPDATE account SET role = 'owner', subject_dataset = 'project', subject_id = 1 WHERE id = ${A}`)
+    const key = await edit(asA, 'note/1', { tekst: 'eigen' })
+    sqlite.run(`UPDATE account SET subject_id = 2 WHERE id = ${A}`)
+    await denied(() => undo(asA, key), 404, 'unknown_record')
+    expect(row('note', 1).tekst).toBe('eigen')
+  })
+
   test('undo of a create on a dataset whose writer has no delete is 405 read_only', async () => {
     await engineFor(flat)
     const created = await post(asA, 'plat', { name: 'nieuw' })
@@ -164,6 +172,14 @@ describe('undo denials', () => {
     expect((await asB('DELETE', `/api/rows/note/${created.body.id}`, { type: null })).status).toBe(200)
     const res = await denied(() => undo(asA, created.body.revision.batch_id), 409, 'changed_since')
     expect(res.body).toMatchObject({ dataset: 'note', id: created.body.id, column: 'deleted_at' })
+  })
+
+  test('a created record whose empty column B filled since is 409 changed_since naming it, and B keeps it', async () => {
+    const created = await post(asA, 'note', { project_id: 1, tekst: 'nieuw' })
+    await edit(asB, `note/${created.body.id}`, { day: '2026-10-12' })
+    const res = await denied(() => undo(asA, created.body.revision.batch_id), 409, 'changed_since')
+    expect(res.body).toMatchObject({ dataset: 'note', id: created.body.id, column: 'day', label: 'Day' })
+    expect(row('note', created.body.id)).toMatchObject({ day: '2026-10-12', deleted_at: null })
   })
 
   test('undo of a create that a live row now references is 409 in_use', async () => {
@@ -204,6 +220,14 @@ describe('undo', () => {
     const created = await post(asA, 'note', { project_id: 1, tekst: 'nieuw' })
     const res = await undo(asA, created.body.revision.batch_id)
     expect(res.body.affected).toEqual([{ dataset: 'note', id: created.body.id }])
+    expect(row('note', created.body.id).deleted_at).toMatch(/^\d{4}-/)
+  })
+
+  test('a create whose later edit was undone again is undone', async () => {
+    const created = await post(asA, 'note', { project_id: 1, tekst: 'nieuw' })
+    const key = await edit(asA, `note/${created.body.id}`, { day: '2026-10-12' })
+    expect((await undo(asA, key)).status).toBe(200)
+    expect((await undo(asA, created.body.revision.batch_id)).status).toBe(200)
     expect(row('note', created.body.id).deleted_at).toMatch(/^\d{4}-/)
   })
 

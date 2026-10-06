@@ -10,6 +10,11 @@ beforeEach(async () => {
   sqlite = freshDb()
   const app = testEngine(sqlite, domain)
   request = send(app, await signIn(app))
+  sqlite.run(`INSERT INTO batch (key, actor_id, kind, at) VALUES ('guarded', 1, 'write', 'x')`)
+  sqlite.run(
+    `INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id)
+     VALUES ('note', 1, 'tekst', '"oud"', '"eerste"', 1, 'x', 'guarded')`,
+  )
 })
 
 const state = () => ({ note: contents(sqlite, 'note'), revision: contents(sqlite, 'revision') })
@@ -19,6 +24,7 @@ const writes: [string, string, Sent][] = [
   ['POST', '/api/rows/note', { body: json({ project_id: 1, tekst: 'nieuw' }) }],
   ['PATCH', '/api/rows/note/1', { body: json({ tekst: 'anders' }) }],
   ['DELETE', '/api/rows/note/1', { type: null }],
+  ['POST', '/api/batches/guarded/undo', { body: json({}) }],
 ]
 
 async function denied(method: string, path: string, sent: Sent, status: number, code: string) {
