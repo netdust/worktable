@@ -52,3 +52,23 @@ Laika's core team become editors. An owner account with no subject sees nothing.
 ## U2, the theatre domain
 
 **Theatre writers gain:** "An owner account writes only its own Beschikbaarheid (its Persoon is the owner column); every other write by an owner is refused with 403 `forbidden`, and a refused Persoon delete by an owner carries no in-use counts."
+
+## U4, the import format and the parity rule
+
+**Import format** (the contract with the Laika exporter):
+
+```json
+{ "worktable_export": 1,
+  "source": "<free text, e.g. laika>",
+  "datasets": { "<dataset>": [ { "legacy_id": 12, "<column>": "…", "<relation column>": <legacy id of target>, "custom": { } } ] },
+  "checks": { "counts": { "<dataset>": 0 },
+              "activities_per_week": { "2026-W41": { "<status>": 0 } },
+              "assignments_per_person": { "<persoon legacy id> | \"naam\"": { "<state>": 0 } },
+              "absences_per_person": { "<persoon legacy id>": 0 } } }
+```
+
+- Weeks are ISO weeks of the calendar date WordPress shows an activity on: the first ten characters of the exported `start_at`. They are counted per mapped status, so the comparison depends on no view's filter. The engine side counts the same way, by `substr(start_at, 1, 10)` and `status` over live rows, and separately reports how many activities the day line (`plandag`) moves to the previous day. That move is a known, intended difference, never a failure.
+- Name-only assignments, with no persoon, count under the key `"naam"`. An absence counts once per row, not per day.
+- Every dataset present must be a declared dataset, and every key a declared, non-readonly column, `legacy_id` or `custom`. Anything else is refused with its path.
+
+**Parity rule:** `bun run parity <export.json>` imports into a temporary database, signs an administrator in through the engine's own link flow, reads the engine's REST, and compares with `checks`. Its output (`specs/step-0e/parity.md`) holds, per check, pass or fail, the total compared and the number of mismatched keys, plus counts per dataset and the plandag shift: no ids, names or values. The parity gate runs only on the owner's machine and commits counts only.

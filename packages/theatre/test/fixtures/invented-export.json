@@ -123,6 +123,24 @@
     ]
   },
   "checks": {
-    "counts": { "organisatie": 2, "productie": 3, "activiteit": 5, "persoon": 3, "toewijzing": 7, "beschikbaarheid": 2 }
+    "counts": {
+      "organisatie": 2,
+      "productie": 3,
+      "activiteit": 5,
+      "persoon": 3,
+      "toewijzing": 7,
+      "beschikbaarheid": 2
+    },
+    "activities_per_week": {
+      "2026-W53": { "bevestigd": 2, "optie": 1 },
+      "2027-W01": { "optie": 1, "geannuleerd": 1 }
+    },
+    "assignments_per_person": {
+      "401": { "bevestigd": 3 },
+      "402": { "uitgenodigd": 1, "bevestigd": 1 },
+      "403": { "geweigerd": 1 },
+      "naam": { "bevestigd": 1 }
+    },
+    "absences_per_person": { "401": 1, "403": 1 }
   }
 }

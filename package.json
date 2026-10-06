@@ -13,6 +13,7 @@
     "test": "bun test packages scripts",
     "check": "bun scripts/check-boundaries.ts && bun scripts/check-vocabulary.ts && bun scripts/check-staged-export.ts && biome check . && bun run --filter '*' typecheck",
     "e2e": "playwright test",
+    "parity": "bun scripts/parity.ts",
     "gate": "bun run check && bun test packages scripts && bun run --filter @worktable/grid test && bun run e2e"
   },
   "devDependencies": {
