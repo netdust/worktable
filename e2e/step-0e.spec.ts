@@ -391,3 +391,38 @@ test.describe('undo restores what the writer changed with the edit', () => {
     await expect(await cellOf(page, row(), 'Datum')).toHaveText(await shown(page, datum))
   })
 })
+
+test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
+  await page.goto(WEEK)
+  const productie = (
+    (await (await page.request.get('/api/rows/productie?limit=50')).json()) as { rows: { id: number }[] }
+  ).rows[0].id
+  const created = await page.request.post('/api/rows/activiteit', {
+    data: { productie_id: productie, soort: 'repetitie', datum: '2026-10-13', omschrijving: 'dagplanning undo e2e' },
+  })
+  expect(created.status()).toBe(201)
+  const id = ((await created.json()) as { id: number }).id
+  const datumOf = async () => {
+    const found = await page.request.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)
+    return ((await found.json()) as { rows: { datum: string }[] }).rows[0].datum
+  }
+
+  await land(page, WEEK)
+  await pick(page, 'Dagplanning')
+  const row = () => named(page, 'dagplanning undo e2e')
+  const moved = patchOf(page, 'activiteit')
+  await typeInto(await cellOf(page, row(), 'Start'), '2026-10-15T20:00')
+  await (await moved).response()
+  await expect.poll(datumOf).toBe('2026-10-15')
+
+  const undone = patchOf(page, 'activiteit')
+  await page.keyboard.press('ControlOrMeta+z')
+  await (await undone).response()
+  await expect.poll(datumOf).toBe('2026-10-13')
+  await expect(await cellOf(page, row(), 'Start')).toHaveText('')
+
+  await page.reload()
+  await pick(page, 'Dagplanning')
+  await expect(await cellOf(page, row(), 'Start')).toHaveText('')
+  expect(await datumOf()).toBe('2026-10-13')
+})
