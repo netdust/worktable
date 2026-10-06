@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { createEngine, migrate, seedDomain, validateDomain } from '@worktable/engine'
+import { migrate, seedDomain, validateDomain } from '@worktable/engine'
+import { signIn, testEngine } from '@worktable/engine/test/sign-in'
 import fiche from '../src'
 
 type Body = Record<string, unknown>
@@ -8,13 +9,14 @@ type Body = Record<string, unknown>
 let sqlite: Database
 let request: (method: string, path: string, body?: unknown) => Promise<{ status: number; body: Body }>
 
-beforeEach(() => {
+beforeEach(async () => {
   sqlite = new Database(':memory:')
   migrate(sqlite, fiche)
   seedDomain(sqlite, fiche)
-  const app = createEngine(sqlite, fiche, { port: 4310 })
+  const app = testEngine(sqlite, fiche)
+  const cookie = await signIn(app)
   request = async (method, path, body) => {
-    const headers: Record<string, string> = { host: '127.0.0.1:4310' }
+    const headers: Record<string, string> = { host: '127.0.0.1:4310', cookie }
     if (body !== undefined) headers['content-type'] = 'application/json'
     const res = await app.request(path, {
       method,
@@ -117,12 +119,13 @@ describe('the fiche domain', () => {
   })
 })
 
-test('the seeded views are shared, owned by the dev actor, and pass the saved-view rules', async () => {
+// A seeded view belongs to no account; saving each as a new view runs it through the saved-view rules.
+test('the seeded views are shared, owned by no account, and pass the saved-view rules', async () => {
   const views = (await request('GET', '/api/views')).body.views as Body[]
   expect(views.length).toBe(fiche.views.length)
-  expect(views.every((v) => v.shared === true && v.owner_id === 0 && v.mine === true)).toBe(true)
+  expect(views.every((v) => v.shared === true && v.owner_id === -1 && v.mine === false)).toBe(true)
   for (const v of views) {
-    const res = await request('PATCH', `/api/views/${v.id}`, { name: v.name })
-    expect({ name: v.name, status: res.status }).toEqual({ name: v.name, status: 200 })
+    const res = await request('POST', '/api/views', v)
+    expect({ name: v.name, status: res.status }).toEqual({ name: v.name, status: 201 })
   }
 })

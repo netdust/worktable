@@ -1,4 +1,4 @@
-import { type DatasetDecl, refuse, type WriteContext, type Writer } from '@worktable/engine'
+import { type DatasetDecl, forbid, refuse, type WriteContext, type Writer } from '@worktable/engine'
 import { activiteit, organisatie, productie, toewijzing } from './datasets'
 import { plandag } from './plandag'
 
@@ -29,38 +29,71 @@ function checkOrder(values: Values, ctx: WriteContext): void {
   }
 }
 
-const writerOf = (accept: Accept): Writer => ({ create: accept, update: accept, delete() {} })
+const writerOf = (accept: Accept): Required<Writer> => ({ create: accept, update: accept, delete() {} })
 
-export const activiteitWriter = writerOf((values, ctx) => {
-  checkOption(activiteit, 'status', values, 'Ongeldige status.')
-  checkOption(activiteit, 'soort', values, 'Ongeldige soort.')
-  checkLive(ctx, 'productie', values.productie_id, 'Productie bestaat niet.')
-  checkLive(ctx, 'organisatie', values.locatie_id, 'Organisatie bestaat niet.')
-  checkOrder(values, ctx)
-  const start = values.start_at
-  return typeof start === 'string' ? { ...values, plandag: plandag(start, DAY_LINE_HOUR) } : values
-})
+// An owner plans nothing but its own absences; the engine has already scoped the row to it.
+function forPlanners(writer: Required<Writer>, what: string): Required<Writer> {
+  const check = (ctx: WriteContext) => {
+    if (ctx.actor.role === 'owner') forbid(`Alleen de planning wijzigt ${what}.`)
+  }
+  return {
+    create(values, ctx) {
+      check(ctx)
+      return writer.create(values, ctx)
+    },
+    update(values, ctx) {
+      check(ctx)
+      return writer.update(values, ctx)
+    },
+    delete(ctx) {
+      check(ctx)
+      writer.delete(ctx)
+    },
+  }
+}
 
-export const productieWriter = writerOf((values, ctx) => {
-  if (!filled(merged(values, ctx).titel)) refuse('Titel is verplicht.')
-  checkOption(productie, 'status', values, 'Ongeldige status.')
-  checkLive(ctx, 'organisatie', values.organisatie_id, 'Organisatie bestaat niet.')
-  return values
-})
+export const activiteitWriter = forPlanners(
+  writerOf((values, ctx) => {
+    checkOption(activiteit, 'status', values, 'Ongeldige status.')
+    checkOption(activiteit, 'soort', values, 'Ongeldige soort.')
+    checkLive(ctx, 'productie', values.productie_id, 'Productie bestaat niet.')
+    checkLive(ctx, 'organisatie', values.locatie_id, 'Organisatie bestaat niet.')
+    checkOrder(values, ctx)
+    const start = values.start_at
+    return typeof start === 'string' ? { ...values, plandag: plandag(start, DAY_LINE_HOUR) } : values
+  }),
+  'activiteiten',
+)
 
-export const organisatieWriter = writerOf((values, ctx) => {
-  if (!filled(merged(values, ctx).naam)) refuse('Naam is verplicht.')
-  checkOption(organisatie, 'soort', values, 'Ongeldige soort.')
-  return values
-})
+export const productieWriter = forPlanners(
+  writerOf((values, ctx) => {
+    if (!filled(merged(values, ctx).titel)) refuse('Titel is verplicht.')
+    checkOption(productie, 'status', values, 'Ongeldige status.')
+    checkLive(ctx, 'organisatie', values.organisatie_id, 'Organisatie bestaat niet.')
+    return values
+  }),
+  'producties',
+)
 
-export const persoonWriter = writerOf((values, ctx) => {
-  const { voornaam, achternaam } = merged(values, ctx)
-  if (!filled(voornaam) || !filled(achternaam)) refuse('Voornaam en achternaam zijn verplicht.')
-  if (filled(values.email) && !String(values.email).includes('@')) refuse('Ongeldig e-mailadres.')
-  checkLive(ctx, 'organisatie', values.organisatie_id, 'Organisatie bestaat niet.')
-  return { ...values, weergavenaam: `${String(voornaam).trim()} ${String(achternaam).trim()}` }
-})
+export const organisatieWriter = forPlanners(
+  writerOf((values, ctx) => {
+    if (!filled(merged(values, ctx).naam)) refuse('Naam is verplicht.')
+    checkOption(organisatie, 'soort', values, 'Ongeldige soort.')
+    return values
+  }),
+  'organisaties',
+)
+
+export const persoonWriter = forPlanners(
+  writerOf((values, ctx) => {
+    const { voornaam, achternaam } = merged(values, ctx)
+    if (!filled(voornaam) || !filled(achternaam)) refuse('Voornaam en achternaam zijn verplicht.')
+    if (filled(values.email) && !String(values.email).includes('@')) refuse('Ongeldig e-mailadres.')
+    checkLive(ctx, 'organisatie', values.organisatie_id, 'Organisatie bestaat niet.')
+    return { ...values, weergavenaam: `${String(voornaam).trim()} ${String(achternaam).trim()}` }
+  }),
+  'personen',
+)
 
 // Name-only rows are exempt from the duplicate rule: an external name is not a record to count.
 function checkAssignee(values: Values, ctx: WriteContext): void {
@@ -80,14 +113,17 @@ function switchAssignee(values: Values): void {
   if (sets('naam') && filled(values.naam) && !sets('persoon_id')) values.persoon_id = null
 }
 
-export const toewijzingWriter = {
-  create: (values, ctx) => toewijzingAccept(values, ctx),
-  update(values, ctx) {
-    switchAssignee(values)
-    return toewijzingAccept(values, ctx)
+export const toewijzingWriter = forPlanners(
+  {
+    create: (values, ctx) => toewijzingAccept(values, ctx),
+    update(values, ctx) {
+      switchAssignee(values)
+      return toewijzingAccept(values, ctx)
+    },
+    delete() {},
   },
-  delete() {},
-} satisfies Writer
+  'toewijzingen',
+)
 
 function toewijzingAccept(values: Values, ctx: WriteContext): Values {
   checkOption(toewijzing, 'state', values, 'Ongeldige status.')

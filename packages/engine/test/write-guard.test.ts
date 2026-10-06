@@ -1,14 +1,15 @@
 import type { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { createEngine } from '../src'
 import { contents, domain, freshDb, type Sent, send } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
 let sqlite: Database
 let request: ReturnType<typeof send>
 
-beforeEach(() => {
+beforeEach(async () => {
   sqlite = freshDb()
-  request = send(createEngine(sqlite, domain, { port: 4310 }))
+  const app = testEngine(sqlite, domain)
+  request = send(app, await signIn(app))
 })
 
 const state = () => ({ note: contents(sqlite, 'note'), revision: contents(sqlite, 'revision') })

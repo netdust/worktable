@@ -2,25 +2,26 @@ import type { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
 import { datasetDdl, viewDdl } from './ddl'
 import type { DatasetDecl, Domain, QueryDecl } from './declare'
-import { DEV_ACTOR } from './dev-actor'
+import { engineTables, MIGRATIONS } from './engine-tables'
 import { MigrationError } from './migration-error'
-import { revision } from './revision'
 import { savedView } from './saved-view'
 import { applyChange, type Change, planChange } from './schema-diff'
 import { validateDomain } from './validate'
+import { SYSTEM_OWNER } from './views'
+import { revise } from './writes'
 
 const hashOf = (statements: string[]): string =>
   new Bun.CryptoHasher('sha256').update(statements.join(';\n')).digest('hex')
 
 function appliedHash(sqlite: Database, source: string): string | undefined {
-  const row = sqlite.query('SELECT hash FROM _migrations WHERE source = ?').get(source) as { hash: string } | null
+  const row = sqlite.query(`SELECT hash FROM ${MIGRATIONS} WHERE source = ?`).get(source) as { hash: string } | null
   return row?.hash
 }
 
 function record(sqlite: Database, source: string, hash: string): void {
   sqlite
     .query(
-      `INSERT INTO _migrations (source, hash, applied_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      `INSERT INTO ${MIGRATIONS} (source, hash, applied_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
        ON CONFLICT(source) DO UPDATE SET hash = excluded.hash, applied_at = excluded.applied_at`,
     )
     .run(source, hash)
@@ -89,8 +90,8 @@ function applySteps(sqlite: Database, steps: Step[], queries: QueryDecl[]): void
 
 export function migrate(sqlite: Database, domain: Domain): void {
   validateDomain(domain)
-  sqlite.run('CREATE TABLE IF NOT EXISTS _migrations (source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)')
-  const steps = planSteps(sqlite, [savedView, revision, ...domain.datasets])
+  sqlite.run(`CREATE TABLE IF NOT EXISTS ${MIGRATIONS} (source TEXT PRIMARY KEY, hash TEXT, applied_at TEXT)`)
+  const steps = planSteps(sqlite, [...engineTables, ...domain.datasets])
   if (steps.some((s) => s.change !== 'create' && s.change.kind === 'rebuild')) backUp(sqlite)
   // SQLite ignores this pragma inside a transaction, so it brackets the whole migration.
   sqlite.run('PRAGMA foreign_keys = OFF')
@@ -99,6 +100,30 @@ export function migrate(sqlite: Database, domain: Domain): void {
   } finally {
     sqlite.run('PRAGMA foreign_keys = ON')
   }
+  sqlite.transaction(() => adoptUnowned(sqlite, domain))()
+}
+
+function moveView(sqlite: Database, id: number, owner: number, now: string): void {
+  sqlite.query('UPDATE saved_view SET owner_id = ?, updated_at = ? WHERE id = ?').run(owner, now, id)
+  revise(sqlite, savedView, id, [['owner_id', 0, owner]], now, SYSTEM_OWNER)
+}
+
+// Views from before accounts were stored with owner 0: a seed goes to the system owner, any other to an administrator.
+function adoptUnowned(sqlite: Database, domain: Domain): void {
+  type Orphan = { id: number; name: string; source: string }
+  const orphans = sqlite.query('SELECT id, name, source FROM saved_view WHERE owner_id = 0').all() as Orphan[]
+  if (orphans.length === 0) return
+  const sql = "SELECT MIN(id) AS id FROM account WHERE role = 'administrator'"
+  const admin = (sqlite.query(sql).get() as { id: number | null }).id
+  const isSeed = (v: Orphan) => domain.views.some((seed) => seed.name === v.name && seed.source === v.source)
+  const now = new Date().toISOString()
+  let left = 0
+  for (const view of orphans) {
+    const owner = isSeed(view) ? SYSTEM_OWNER : admin
+    if (owner === null) left++
+    else moveView(sqlite, view.id, owner, now)
+  }
+  if (left > 0) console.log(`migrate: ${left} views have no owner; the first administrator gets them once one exists`)
 }
 
 function insertRows(sqlite: Database, table: string, rows: Record<string, unknown>[]): void {
@@ -119,7 +144,7 @@ export function seedDomain(sqlite: Database, domain: Domain): void {
     insertRows(
       sqlite,
       'saved_view',
-      domain.views.map((v) => ({ ...v, owner_id: DEV_ACTOR.id, shared: true })),
+      domain.views.map((v) => ({ ...v, owner_id: SYSTEM_OWNER, shared: true })),
     )
   })()
 }

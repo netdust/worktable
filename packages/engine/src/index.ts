@@ -1,4 +1,6 @@
-export { createEngine } from './app'
+export { forbid } from './access'
+export { createEngine, type EngineOptions } from './app'
+export { createAccount } from './auth'
 export type {
   Actor,
   ColumnDecl,
@@ -6,6 +8,7 @@ export type {
   DatasetDecl,
   Domain,
   MatrixDecl,
+  Owners,
   QueryDecl,
   SavedViewSeed,
   WriteContext,

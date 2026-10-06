@@ -145,6 +145,14 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 
 | Task | Start | End |
 |---|---|---|
+| 1 | 10-06 14:18 | 14:50 |
+| 2 | 14:50 | 15:04 (fix round to 15:04) |
+| 3 | 15:04 | 15:13 |
+| 4 | 15:13 | 15:18 |
+| 5 | 15:18 | 15:55 (incl. the Bun 1.3.8 root cause, d85c171) |
+| 6 | 15:55 | 15:58 |
+
+Final review and security audit 15:58–16:00; fix wave 16:00–16:08. Commit stamps; agent wall-clock.
 
 ---
 

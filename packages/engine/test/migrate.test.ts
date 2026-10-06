@@ -100,7 +100,17 @@ describe('migrate', () => {
       source: string
       hash: string
     }[]
-    expect(rows.map((r) => r.source)).toEqual(['bestelling', 'klant', 'per_klant', 'revision', 'saved_view'])
+    expect(rows.map((r) => r.source)).toEqual([
+      'account',
+      'auth_session',
+      'bestelling',
+      'klant',
+      'magic_link',
+      'per_klant',
+      'rate_limit',
+      'revision',
+      'saved_view',
+    ])
     for (const r of rows) expect(r.hash).toMatch(/^[0-9a-f]{64}$/)
   })
 
@@ -379,5 +389,5 @@ describe('serve.ts on a refused migration', () => {
     expect(code).toBe(1)
     expect(stderr).toContain('dataset "item" column "code"')
     expect(stderr).not.toContain('    at ')
-  })
+  }, 20_000)
 })

@@ -1,6 +1,9 @@
 {
   "name": "worktable",
   "private": true,
+  "engines": {
+    "bun": ">=1.3.9"
+  },
   "type": "module",
   "workspaces": [
     "packages/*",

@@ -1,4 +1,5 @@
 import type { ColumnDecl, DatasetDecl, Domain, QueryDecl } from './declare'
+import { reservedNames } from './engine-tables'
 import { sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
@@ -30,6 +31,12 @@ function checkTitle(source: DatasetDecl | QueryDecl): void {
   checkColumn(source, 'title else', fallback)
   const target = source.columns[via]?.relation
   if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
+}
+
+function checkOwners(source: DatasetDecl | QueryDecl): void {
+  const column = source.owners?.owner
+  if (column === undefined || column === 'id' || source.columns[column]?.relation) return
+  throw new DomainError(source.name, column, `owner column "${column}" is not id or a relation column`)
 }
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -126,12 +133,17 @@ function checkAway(
 
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
+    if (reservedNames.has(source.name)) {
+      throw new DomainError(source.name, source.name, `"${source.name}" is an engine table name`)
+    }
     checkTitle(source)
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
+    checkOwners(source)
   }
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
+    if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }

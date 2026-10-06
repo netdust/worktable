@@ -1,5 +1,6 @@
+import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
-import { type ColumnDecl, type Domain, DomainError, defineDataset, defineQuery, validateDomain } from '../src'
+import { type ColumnDecl, type Domain, DomainError, defineDataset, defineQuery, migrate, validateDomain } from '../src'
 import { domain } from './fixture'
 
 const text: ColumnDecl = { type: 'text', label: 'T' }
@@ -36,6 +37,25 @@ const writes = (over: Partial<NonNullable<ColumnDecl['writes']>> = {}): ColumnDe
 })
 
 describe('validateDomain', () => {
+  test('an owner column is id or a relation column', () => {
+    const rel = { type: 'integer', label: 'P', relation: 'project' } as ColumnDecl
+    const ok = (owner: string) =>
+      validateDomain(
+        withDomain({
+          datasets: [...domain.datasets, dataset({ columns: { name: text, p_id: rel }, owners: { owner } })],
+        }),
+      )
+    expect(() => ok('id')).not.toThrow()
+    expect(() => ok('p_id')).not.toThrow()
+    const e = failure(withDomain({ datasets: [...domain.datasets, dataset({ owners: { owner: 'name' } })] }))
+    expect([e.declaration, e.bad]).toEqual(['a', 'name'])
+  })
+
+  test('a domain dataset declaring checks is refused: they are for engine tables', () => {
+    const e = failure(withDomain({ datasets: [dataset({ checks: ['CHECK (id > 0)'] })], queries: [] }))
+    expect([e.declaration, e.bad]).toEqual(['a', 'checks'])
+  })
+
   const viaOf = (over: Partial<Parameters<typeof defineDataset>[0]>) =>
     withDomain({
       datasets: [...domain.datasets, dataset(), defineDataset({ name: 'b', label: 'B', custom: false, ...over })],
@@ -93,6 +113,24 @@ describe('validateDomain', () => {
     expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
   })
   test('the fixture domain validates', () => expect(() => validateDomain(domain)).not.toThrow())
+
+  const ENGINE_TABLES = ['saved_view', 'revision', '_migrations', 'account', 'magic_link', 'auth_session', 'rate_limit']
+
+  test.each(ENGINE_TABLES)('a domain dataset or query named %s is refused at migrate, nothing created', (name) => {
+    // Spread past define*, whose name pattern would already stop _migrations.
+    for (const over of [{ datasets: [{ ...dataset(), name }], queries: [] }, { queries: [{ ...query(), name }] }]) {
+      const sqlite = new Database(':memory:')
+      let error: unknown
+      try {
+        migrate(sqlite, withDomain(over))
+      } catch (e) {
+        error = e
+      }
+      expect(error).toBeInstanceOf(DomainError)
+      expect([(error as DomainError).declaration, (error as DomainError).bad]).toEqual([name, name])
+      expect(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toEqual([])
+    }
+  })
 
   test('the error keeps its own name', () => {
     expect(failure(withDomain({ datasets: [dataset({ title: 'nope' })], queries: [] })).name).toBe('DomainError')

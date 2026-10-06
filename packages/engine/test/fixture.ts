@@ -3,6 +3,7 @@ import {
   type Domain,
   defineDataset,
   defineQuery,
+  forbid,
   migrate,
   refuse,
   seedDomain,
@@ -15,6 +16,7 @@ const project = defineDataset({
   label: 'Projecten',
   title: 'name',
   custom: true,
+  owners: { owner: 'id' },
   columns: { name: { type: 'text', label: 'Name' } },
 })
 
@@ -24,6 +26,7 @@ const taak = defineDataset({
   title: 'description',
   date: 'day',
   custom: true,
+  owners: { owner: 'project_id' },
   columns: {
     project_id: { type: 'integer', label: 'Project', relation: 'project' },
     description: { type: 'text', label: 'Description' },
@@ -50,6 +53,7 @@ const perProject = defineQuery({
   date: 'day',
   sql: `SELECT MIN(t.id) AS id, t.project_id, p.name, t.day, COUNT(*) AS aantal
         FROM taak t JOIN project p ON p.id = t.project_id WHERE t.deleted_at IS NULL GROUP BY t.project_id, t.day`,
+  owners: { owner: 'project_id' },
   columns: {
     id: { type: 'integer', label: 'Id' },
     project_id: { type: 'integer', label: 'Project', relation: 'project' },
@@ -64,6 +68,7 @@ const note = defineDataset({
   label: 'Notes',
   title: 'tekst',
   custom: true,
+  owners: { owner: 'project_id' },
   columns: {
     project_id: { type: 'integer', label: 'Project', relation: 'project' },
     tekst: { type: 'text', label: 'Tekst' },
@@ -122,7 +127,16 @@ const noteWriter: Writer = { create: derive, update: derive, delete: () => {} }
 
 // Delete only, so project stays non-writable in /schema; records each delete that reached it.
 export const projectDeletes: unknown[] = []
-const projectWriter: Writer = { delete: (ctx) => void projectDeletes.push(ctx.current?.id) }
+// Test-only: lets a test write inside the delete's transaction.
+export const projectDeleteHook = { run: (_id: number): void => {} }
+const projectWriter: Writer = {
+  delete: (ctx) => {
+    const id = ctx.current?.id as number
+    projectDeletes.push(id)
+    projectDeleteHook.run(id)
+    if (ctx.actor.role === 'owner') forbid('an owner may not delete a project')
+  },
+}
 
 export const domain: Domain = {
   datasets: [project, taak, plat, note],
@@ -193,18 +207,23 @@ export interface Sent {
   site?: string
   host?: string
   origin?: string
+  cookie?: string
 }
 
-export function send(app: { request: (path: string, init: RequestInit) => Response | Promise<Response> }) {
+export function send(
+  app: { request: (path: string, init: RequestInit) => Response | Promise<Response> },
+  signedIn?: string,
+) {
   return async (
     method: string,
     path: string,
-    { body, type = 'application/json', site, host = '127.0.0.1:4310', origin }: Sent = {},
+    { body, type = 'application/json', site, host = '127.0.0.1:4310', origin, cookie = signedIn }: Sent = {},
   ) => {
     const headers: Record<string, string> = { host }
     if (type) headers['content-type'] = type
     if (site) headers['sec-fetch-site'] = site
     if (origin) headers.origin = origin
+    if (cookie) headers.cookie = cookie
     const res = await app.request(path, { method, headers, body })
     // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
     return { status: res.status, body: (await res.json()) as Record<string, any> }

@@ -27,6 +27,9 @@ export interface MatrixDecl {
   away?: { dataset: string; across: string; label: string; end: string }
 }
 
+/** The column that ties a row to an owner account's subject: `id`, or a relation column. */
+export type Owners = Partial<Record<'owner', string>>
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
@@ -37,6 +40,9 @@ export interface DatasetDecl {
   indexes?: string[][]
   custom: boolean
   matrix?: MatrixDecl
+  owners?: Owners
+  /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
+  checks?: string[]
 }
 
 export interface QueryDecl {
@@ -47,6 +53,7 @@ export interface QueryDecl {
   date?: string
   sql: string
   columns: Record<string, ColumnDecl>
+  owners?: Owners
 }
 
 export interface SavedViewSeed {
@@ -70,7 +77,8 @@ export interface Domain {
 
 export interface Actor {
   id: number
-  role: string
+  role: 'administrator' | 'editor' | 'owner'
+  subject: { dataset: string; id: number } | null
 }
 
 export interface WriteContext {

@@ -99,6 +99,14 @@ const strings = {
   and: 'en',
   fixedFilter: '+ {n} vaste filter',
   fixedFilters: '+ {n} vaste filters',
+  signIn: 'Aanmelden',
+  email: 'E-mailadres',
+  sendLink: 'Stuur me een link',
+  checkMail: 'Als dit adres een account heeft, staat er nu een link in je mailbox. Hij werkt 15 minuten.',
+  confirmHint: 'Druk op de knop om je aan te melden.',
+  linkDead: 'Deze link werkt niet meer. Vraag een nieuwe aan.',
+  sessionLapsed: 'Je bent afgemeld. Meld je opnieuw aan in een ander tabblad; wat je hier niet bewaarde, blijft staan.',
+  signOut: 'Afmelden',
 }
 
 export type StringKey = keyof typeof strings

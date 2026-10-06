@@ -2,9 +2,11 @@ import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { Hono } from 'hono'
-import { type ColumnDecl, createEngine, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
+import { type Actor, type ColumnDecl, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
+import type { AuthEnv } from '../src/auth'
 import { viewRoutes } from '../src/views'
 import { contents, type Sent, send } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
 const text: ColumnDecl = { type: 'text', label: 'T', nullable: true }
 const rel = (relation: string): ColumnDecl => ({ type: 'integer', label: 'R', relation, nullable: true })
@@ -65,16 +67,25 @@ const SHARED = 2
 const UNSHARED = 3
 const SHARED_DELETED = 4
 const UNSHARED_DELETED = 5
+// The editor signed in for each test is the first account; the seeded view is handed to it to stand for one of mine.
+const ME = 1
 
-beforeEach(() => {
-  sqlite = new Database(':memory:')
-  migrate(sqlite, domain)
-  seedDomain(sqlite, domain)
+function seeded(): Database {
+  const db = new Database(':memory:')
+  migrate(db, domain)
+  seedDomain(db, domain)
+  return db
+}
+
+beforeEach(async () => {
+  sqlite = seeded()
   foreign('Van Zeven gedeeld', true)
   foreign('Van Zeven privé', false)
   foreign('Van Zeven gedeeld weg', true, true)
   foreign('Van Zeven privé weg', false, true)
-  request = send(createEngine(sqlite, domain, { port: 4310 }))
+  const app = testEngine(sqlite, domain)
+  request = send(app, await signIn(app))
+  sqlite.run('UPDATE saved_view SET owner_id = ? WHERE id = ?', [ME, SEEDED])
 })
 
 const state = () => ({ saved_view: contents(sqlite, 'saved_view'), revision: contents(sqlite, 'revision') })
@@ -126,9 +137,9 @@ describe('views denials: forged ownership and audit (attack 2)', () => {
   test('a POST cannot set owner, id, deleted_at, share_token, public or scope', async () => {
     const res = await request('POST', '/api/views', body({ ...NEW, ...forged }))
     expect(res.status).toBe(201)
-    expect(res.body).toMatchObject({ id: 6, owner_id: 0, mine: true })
+    expect(res.body).toMatchObject({ id: 6, owner_id: ME, mine: true })
     const stored = sqlite.query('SELECT owner_id, deleted_at, share_token, public FROM saved_view WHERE id = 6').get()
-    expect(stored).toEqual({ owner_id: 0, deleted_at: null, share_token: null, public: 0 })
+    expect(stored).toEqual({ owner_id: ME, deleted_at: null, share_token: null, public: 0 })
     expect(sqlite.query('SELECT COUNT(*) AS n FROM saved_view WHERE id = 99').get()).toEqual({ n: 0 })
   })
 
@@ -136,7 +147,7 @@ describe('views denials: forged ownership and audit (attack 2)', () => {
     const before = state()
     const res = await request('PATCH', `/api/views/${SEEDED}`, body(forged))
     expect(res.status).toBe(200)
-    expect(res.body).toMatchObject({ id: SEEDED, owner_id: 0 })
+    expect(res.body).toMatchObject({ id: SEEDED, owner_id: ME })
     expect(state()).toEqual(before)
   })
 
@@ -144,6 +155,30 @@ describe('views denials: forged ownership and audit (attack 2)', () => {
     'a PATCH naming %p is 400 bad_view',
     (patch) => denied('PATCH', `/api/views/${SEEDED}`, body(patch), 400, 'bad_view'),
   )
+})
+
+function insertAs(owner: number, extra: { public?: number; deleted?: boolean } = {}): number {
+  const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, public, deleted_at)
+               VALUES ('Systeem', 'dataset', 'taak', ?, 1, ?, ?)`
+  const deleted = extra.deleted ? '2026-10-01T00:00:00Z' : null
+  return Number(sqlite.query(sql).run(owner, extra.public ?? 0, deleted).lastInsertRowid)
+}
+
+describe('views denials: system views and public views (attack 8)', () => {
+  test('PATCH, DELETE and restore of a system view are 403 read_only_view', async () => {
+    const id = insertAs(-1)
+    await denied('PATCH', `/api/views/${id}`, body({ name: 'x' }), 403, 'read_only_view')
+    await denied('DELETE', `/api/views/${id}`, { type: null }, 403, 'read_only_view')
+    await denied('POST', `/api/views/${insertAs(-1, { deleted: true })}/restore`, body({}), 403, 'read_only_view')
+  })
+
+  test("an editor's PATCH, DELETE and restore of their own public view are 403 public_view", async () => {
+    const id = insertAs(ME, { public: 1 })
+    await denied('PATCH', `/api/views/${id}`, body({ visible_fields: ['name', 'status'] }), 403, 'public_view')
+    await denied('DELETE', `/api/views/${id}`, { type: null }, 403, 'public_view')
+    const gone = insertAs(ME, { public: 1, deleted: true })
+    await denied('POST', `/api/views/${gone}/restore`, body({}), 403, 'public_view')
+  })
 })
 
 const hostile: [string, Record<string, unknown>][] = [
@@ -266,25 +301,31 @@ describe('views', () => {
     expect(body.views[1]).toMatchObject({ name: 'Van Zeven gedeeld', owner_id: 7, mine: false, editable: false })
   })
 
-  test('a seeded view is owned by the dev actor, shared, mine and editable', async () => {
-    expect(await view(SEEDED)).toEqual({
-      id: SEEDED,
-      name: 'Alles',
-      source_type: 'dataset',
-      source: 'taak',
-      skin: 'table',
-      filters: { status: 'open' },
-      sort: ['name'],
-      group_by: null,
-      visible_fields: ['name'],
-      shared: true,
-      owner_id: 0,
-      mine: true,
-      editable: true,
-    })
+  test('a seeded view is owned by the system owner, shared, and neither mine nor editable', async () => {
+    const fresh = seeded()
+    const app = testEngine(fresh, domain)
+    const { body } = await send(app, await signIn(app))('GET', '/api/views')
+    expect(body.views).toEqual([
+      {
+        id: SEEDED,
+        name: 'Alles',
+        source_type: 'dataset',
+        source: 'taak',
+        skin: 'table',
+        filters: { status: 'open' },
+        sort: ['name'],
+        group_by: null,
+        visible_fields: ['name'],
+        shared: true,
+        public: false,
+        owner_id: -1,
+        mine: false,
+        editable: false,
+      },
+    ])
   })
 
-  test('POST creates a view with defaults, owned by me, unshared, revised with actor 0', async () => {
+  test('POST creates a view with defaults, owned by me, unshared, revised with my id', async () => {
     const res = await request('POST', '/api/views', body({ ...NEW, name: '  Mijn taken  ' }))
     expect(res.status).toBe(201)
     expect(res.body).toEqual({
@@ -298,15 +339,16 @@ describe('views', () => {
       group_by: null,
       visible_fields: [],
       shared: false,
-      owner_id: 0,
+      public: false,
+      owner_id: ME,
       mine: true,
       editable: true,
     })
     expect(await view(6)).toEqual(res.body)
     const revised = revisions(6)
-    expect(revised.every((r) => r.actor_id === 0 && r.old === null)).toBe(true)
+    expect(revised.every((r) => r.actor_id === ME && r.old === null)).toBe(true)
     expect(revised.find((r) => r.field === 'name')?.new).toBe('"Mijn taken"')
-    expect(revised.find((r) => r.field === 'owner_id')?.new).toBe('0')
+    expect(revised.find((r) => r.field === 'owner_id')?.new).toBe(String(ME))
   })
 
   test('POST keeps a full arrangement, on a query and as a matrix', async () => {
@@ -333,8 +375,8 @@ describe('views', () => {
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ name: 'Anders', shared: true, mine: true, editable: true })
     expect(revisions(created.id).slice(before)).toEqual([
-      { field: 'name', old: '"Mijn taken"', new: '"Anders"', actor_id: 0 },
-      { field: 'shared', old: 'false', new: 'true', actor_id: 0 },
+      { field: 'name', old: '"Mijn taken"', new: '"Anders"', actor_id: ME },
+      { field: 'shared', old: 'false', new: 'true', actor_id: ME },
     ])
   })
 
@@ -353,8 +395,8 @@ describe('views', () => {
     expect(await view(SEEDED)).toEqual(restored.body)
     const audit = revisions(SEEDED)
     expect(audit.map((r) => [r.field, r.old === null, r.new === null, r.actor_id])).toEqual([
-      ['deleted_at', true, false, 0],
-      ['deleted_at', false, true, 0],
+      ['deleted_at', true, false, ME],
+      ['deleted_at', false, true, ME],
     ])
   })
 
@@ -373,9 +415,78 @@ describe('views', () => {
   })
 })
 
-test('view writes credit the actor the routes were built with', async () => {
-  const api = new Hono().basePath('/api')
-  viewRoutes(api, { sqlite, db: drizzle(sqlite), domain }, { id: 5, role: 'planner' })
+describe('system views', () => {
+  test('"save as new" from a system view is a plain POST, owned by the caller', async () => {
+    const system = (await view(insertAs(-1))) as Record<string, unknown>
+    expect(system).toMatchObject({ owner_id: -1, mine: false, editable: false })
+    const { id, owner_id, mine, editable, shared, public: _, source_type, ...copy } = system
+    const res = await request('POST', '/api/views', body({ ...copy, name: 'Mijn kopie' }))
+    expect(res.status).toBe(201)
+    expect(res.body).toMatchObject({ name: 'Mijn kopie', owner_id: ME, mine: true, editable: true })
+  })
+})
+
+describe('the owner-0 migration', () => {
+  const owners = (db: Database) =>
+    db.query('SELECT name, owner_id FROM saved_view ORDER BY id').all() as { name: string; owner_id: number }[]
+  const legacy = (db: Database, name: string, source: string) =>
+    db
+      .query(`INSERT INTO saved_view (name, source_type, source, owner_id, shared) VALUES (?, 'dataset', ?, 0, 1)`)
+      .run(name, source)
+
+  function oldDatabase(): Database {
+    const db = new Database(':memory:')
+    migrate(db, domain)
+    legacy(db, 'Alles', 'taak')
+    legacy(db, 'Alles', 'member')
+    legacy(db, 'Eigen', 'taak')
+    return db
+  }
+
+  test('a seed match moves to -1, any other to the lowest administrator, each revised by -1', () => {
+    const db = oldDatabase()
+    db.run("INSERT INTO account (email, role) VALUES ('ed@example.test', 'editor')")
+    db.run("INSERT INTO account (email, role) VALUES ('a2@example.test', 'administrator')")
+    db.run("INSERT INTO account (email, role) VALUES ('a3@example.test', 'administrator')")
+    migrate(db, domain)
+    expect(owners(db)).toEqual([
+      { name: 'Alles', owner_id: -1 },
+      { name: 'Alles', owner_id: 2 },
+      { name: 'Eigen', owner_id: 2 },
+    ])
+    const audit = db
+      .query("SELECT record_id, field, old, new, actor_id FROM revision WHERE entity = 'saved_view'")
+      .all()
+    expect(audit).toEqual([
+      { record_id: 1, field: 'owner_id', old: '0', new: '-1', actor_id: -1 },
+      { record_id: 2, field: 'owner_id', old: '0', new: '2', actor_id: -1 },
+      { record_id: 3, field: 'owner_id', old: '0', new: '2', actor_id: -1 },
+    ])
+  })
+
+  test('with no administrator the others stay at 0 and startup logs their count', () => {
+    const db = oldDatabase()
+    const logged: string[] = []
+    const log = console.log
+    console.log = (line: string) => logged.push(line)
+    try {
+      migrate(db, domain)
+    } finally {
+      console.log = log
+    }
+    expect(owners(db).map((v) => v.owner_id)).toEqual([-1, 0, 0])
+    expect(logged.some((line) => line.includes('2 views'))).toBe(true)
+  })
+})
+
+test('view writes credit the actor of the request', async () => {
+  const api = new Hono<AuthEnv>().basePath('/api')
+  const actor: Actor = { id: 5, role: 'editor', subject: null }
+  api.use((c, next) => {
+    c.set('actor', actor)
+    return next()
+  })
+  viewRoutes(api, { sqlite, db: drizzle(sqlite), domain })
   const as5 = send(api)
   const created = await as5('POST', '/api/views', body(NEW))
   expect(created.body).toMatchObject({ owner_id: 5, mine: true })
