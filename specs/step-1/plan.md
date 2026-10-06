@@ -22,7 +22,7 @@
 - Domain rules live in theatre writers and SQL views, never in the engine. Engine messages are English; the grid localises codes into Dutch. Writer messages are Dutch.
 - Every write goes through a writer. Seeds bypass writers, so every seeded row is also run through its writer in a test.
 - Custom fields stay in `custom` JSON, and no table is made for them.
-- Fixtures are invented: `@example.test` addresses, invented names. No client data in the repo; the export-terms check enforces it.
+- Fixtures are invented: `@example.test` addresses, invented names. No client data in the repo; the export-terms check flags it when run before a commit (it reads the staged diff only).
 - Real data stays in `~/laika-export`. The migration and parity run on a copy, never on `~/laika-export/engine.db`. Nothing is written to the Laika planning database.
 - A step is done when its gate passes in a real browser. Nothing is merged without Stefan, and nothing is pushed.
 - `docs/SPEC.md` changes are proposed in `specs/step-1/spec.md` and committed only after Stefan sees the diff.
@@ -77,16 +77,16 @@
 | Migration on a copy and value parity | operator command | none, proven by command output in the report | none |
 
 ## Review Focus
-1. The undo check and its writes run in one `.immediate()` transaction: a write landing between check and restore must be impossible (threat 4). Test map row 2.
-2. An action is the caller's write: owner scope on the record and inputs, and the writer's role check on every create (threats 1 and 7). Test map row 3.
-3. `kind = import` and pre-table batches are never undoable (threat 3). Test map row 2.
+1. The undo check and its writes run in one `.immediate()` transaction: a write landing between check and restore must be impossible (threat 4). Test map row 3.
+2. An action is the caller's write: owner scope on the record and inputs, and the writer's role check on every create (threats 1 and 7). Test map row 4.
+3. `kind = import` and pre-table batches are never undoable (threat 3). Test map row 3.
 4. The engine stays domain-free: no `speelreeks`, `sjabloon`, `rol`, `kleur`, `items` or `datum` in `packages/engine`. Checked by `bun run check` (vocabulary).
-5. Untimed items stay untimed: an item without `start_tijd` creates `start_at` null and no `eind_at`, on its own `datum` (carry-over). Test map row 4.
-6. A query-row edit's batch is the target record's. Undo from Dagplanning restores the activity (the shakeout's query-view case). Test map row 5, plus e2e `undo-changed-since` on Dagplanning.
+5. Untimed items stay untimed: an item without `start_tijd` creates `start_at` null and no `eind_at`, on its own `datum` (carry-over). Test map row 5.
+6. A query-row edit's batch is the target record's. Undo from Dagplanning restores the activity (the shakeout's query-view case). Test map rows 3 and 6, plus e2e `undo-changed-since` on Dagplanning.
 
 ---
 
-### Task 0: The export-terms check
+### Task 0: The export-terms check (spec R9)
 **Files:**
 - Create: `scripts/check-export-terms.ts`, `scripts/check-export-terms.test.ts`
 - Modify: `package.json` (`check` runs it after check-staged-export)
@@ -99,6 +99,7 @@ The check reads the term list and allow list from `~/laika-export/scan` (`WT_EXP
 **Files:**
 - Modify: `packages/theatre/src/datasets.ts`, `packages/theatre/src/writers.ts`, `packages/theatre/src/seed.ts`, `packages/theatre/src/index.ts`, `packages/theatre/src/queries.ts`, `packages/theatre/src/queries/dagplanning.sql`, `packages/theatre/src/queries/voorstellingen.sql`
 - Create: `packages/theatre/test/step1.test.ts`
+- Modify: `packages/theatre/test/legacy-post-id.test.ts` narrows to the six imported datasets (Rol, Speelreeks and Sjabloon are not imported and get no `legacy_post_id`).
 - Modify (vocabulary): `kleur` and `items` become theatre column words, so the engine's own tests may not use them. In `packages/engine/test/fixture.ts`, `rows.test.ts`, `filter.test.ts` and `import.test.ts`, the custom key `kleur` becomes `colour`. In `packages/engine/test/fixtures/refusal-domain.ts`, the label `Items` becomes `Entries`.
 
 **Interfaces:**
@@ -119,7 +120,8 @@ Steps (one pass; the denial tests are written first):
   - deleting a Speelreeks with a live activity gets 409 `in_use`, and deleting one without gets 200;
   - a Rol `dagtarief` PATCH by an editor gets 403 with "Alleen een beheerder wijzigt tarieven.", an editor's POST with `uurtarief` gets the same 403, the same by an administrator gets 200, and an editor's `naam` edit gets 200;
   - `validateItems` refuses: a bad soort, an `offset_dag` of -1, `start_tijd` "25:00", `duur` without `start_tijd`, and a `locatie_regel` other than `speelreeks`;
-  - every seeded Sjabloon passes `validateItems`, and every seeded Rol and Speelreeks fixture passes its writer;
+  - every seeded Sjabloon passes `validateItems`, and every seeded Rol row passes the Rol writer;
+  - a `kleur` that is not `#rrggbb` is refused ("Ongeldige kleur.");
   - `/api/schema` marks `sjabloon` not writable;
   - Dagplanning `locatie_bron` is `speelreeks` for an activity without a locatie inside a Speelreeks with one, and `eigen` for an activity with its own locatie;
   - voorstellingen shows the inherited venue.
@@ -129,10 +131,11 @@ Steps (one pass; the denial tests are written first):
 ### Task 2: Engine, the batch table, the write reply and undo by batch
 **Files:**
 - Create: `packages/engine/test/batches.test.ts`
+- Modify (existing tests that pin exact replies, revisions or engine tables): `packages/engine/test/writes.test.ts` (the 201 body gains `revision`; create revisions gain the `id` marker), `packages/theatre/test/parity.test.ts` (an exact 201 reply), `packages/engine/test/migrate.test.ts` (the `_migrations` source list gains `batch`), `packages/engine/test/validate.test.ts` (`ENGINE_TABLES` gains `batch`), `scripts/shakeout/edit-session.lib.ts` and `edit-session.test.ts` (`revisionProblems` expects the `id` marker on a create)
 - Modify: `packages/engine/src/writes.ts` (`runWrite` returns `{ id, batch_id, changed }`; `create` writes a marker revision; `undoBatch` lives here, beside the internals it needs: `inUse`, `diff`, `update`, `liveRow`, `decodeAll`, `currentOf`), `packages/engine/src/import.ts` (records kind `import`), `packages/engine/src/revision.ts` (index `['batch_id']`), `packages/engine/src/engine-tables.ts` (the `batch` table), `packages/engine/src/app.ts` (the reply's `revision` and the route), `packages/engine/src/validate.ts` (reserve the column name `revision`), `packages/engine/test/route-matrix.test.ts`
 
 **Interfaces:**
-- The batch table: an engine dataset `batch` with the integer `id` every engine table has, plus `key` (text, unique index: the UUID that `revision.batch_id` already stores), `actor_id`, `kind` (write · action · undo · import), `at`, and `undone_by` (text, nullable).
+- The batch table: an engine dataset `batch` with the integer `id` every engine table has, plus `key` (text, made unique by `checks: ['UNIQUE (key)']` as `auth-tables.ts:63` does, since `indexes` emits plain indexes: the UUID that `revision.batch_id` already stores), `actor_id`, `kind` (write · action · undo · import), `at`, and `undone_by` (text, nullable).
 - The batch row is written once, by its transaction's owner: `runWrite`, `importExport`, `runAction` and `undoBatch`. `create` and `revise` only take the key.
 - A create is marked: `create` also writes one revision row with field `id`, old null, new the record's id. This is the same pattern as the `deleted_at` row of a delete. Undo treats a record as created only when its batch holds that marker; an edit that filled empty cells stays an edit.
 - A PATCH that changes nothing writes no batch and answers `revision: { batch_id: null, changed: [] }`; the grid pushes no undo entry.
@@ -163,7 +166,7 @@ Steps:
 - [ ] Implement. Undo runs in one `.immediate()` transaction:
   1. Load the batch's revisions, grouped by record.
   2. Check that every column's current value equals `new`.
-  3. Walk records in reverse revision order. A record with the create marker goes through `writableOf(…, 'delete', actor)`, `writer.delete` and `inUse`. Otherwise its `old` values go through `writableOf(…, 'update', actor)`, `valuesOf` with the caller's scope, and the writer's `update`.
+  3. Walk records in reverse revision order. A created record that is already gone (soft-deleted since) counts as changed: 409 `changed_since` naming `deleted_at`. A record with the create marker goes through `writableOf(…, 'delete', actor)`, `writer.delete` and `inUse`. Otherwise its `old` values go through `writableOf(…, 'update', actor)`, `valuesOf` with the caller's scope, and the writer's `update`.
   4. Record a new batch (kind `undo`) and set `undone_by`.
 - [ ] Add route-matrix rows for `POST /batches/:id/undo`, per role and session-less.
 - [ ] Run `bun test packages/engine`, then `bun run gate`. Commit: `feat(engine): batches, the write reply's changed columns, and undo by batch`.
@@ -203,7 +206,7 @@ Steps:
 
 **Interfaces:**
 - Consumes: `ActionDecl` from Task 3; `validateItems` and the datasets from Task 1.
-- Produces: the action `sjabloon_toepassen` on `speelreeks`, with input `sjabloon_id` (relation `sjabloon`, label "Sjabloon").
+- Produces: the action `sjabloon_toepassen` on `speelreeks`, label "Sjabloon toepassen", with input `sjabloon_id` (relation `sjabloon`, label "Sjabloon").
 
 Steps:
 - [ ] Write `apply.test.ts`. It covers:
@@ -222,7 +225,7 @@ Steps:
 
 ### Task 5: The grid, batch undo and the action button
 **Files:**
-- Modify: `apps/grid/src/grid/store.ts`, `apps/grid/src/grid/hooks.ts`, `apps/grid/src/api.ts`, `apps/grid/src/engine.ts`, `apps/grid/src/i18n.ts`, `apps/grid/src/grid/Drawer.tsx`, `apps/grid/src/grid/Grid.tsx`, `apps/grid/src/ui/App.tsx`, `apps/grid/src/types.ts`, `e2e/step-0e.spec.ts` (its undo flows wait for `POST /batches/:id/undo` instead of a PATCH, so the gate stays green in this task)
+- Modify: `apps/grid/src/grid/store.ts`, `apps/grid/src/grid/hooks.ts`, `apps/grid/src/api.ts`, `apps/grid/src/engine.ts`, `apps/grid/src/i18n.ts`, `apps/grid/src/grid/Drawer.tsx`, `apps/grid/src/grid/Grid.tsx`, `apps/grid/src/ui/App.tsx`, `apps/grid/src/types.ts`, `apps/grid/src/matrix/store.ts` and `apps/grid/src/matrix/hooks.ts` (they unwrap `.row` from the new `{ row, batch }` return), `e2e/step-0e.spec.ts` (its undo flows wait for `POST /batches/:id/undo` instead of a PATCH, so the gate stays green in this task)
 - Tests: `apps/grid/src/grid/store.test.ts`, `apps/grid/src/grid/Drawer.test.tsx`
 
 **Interfaces:**
@@ -230,7 +233,8 @@ Steps:
 - Produces:
   - `toRow` destructures `revision` out of a row reply, so it never lands in `row.fields`;
   - `api.update` and `api.create` return `{ row: Row; batch: string | null }`; `updateThrough` keeps the PATCH reply's `revision.batch_id`;
-  - `StoreApi.undo(batchId: string): Promise<{ batch_id: string }>`, after which the grid re-reads the affected rows of its own model (`GET /rows/<model>?filter={"id":…}`), so a query view repaints its query row;
+  - one undo history per browser tab, held at app level (`apps/grid/src/ui/history.ts`), not in a view's store: its entries are `{ batch: string; model: string; id: number | null }`, so it survives a view's reload and navigation between views. The table grid's stores push into it. The matrix keeps its own (ruling above).
+  - `undo()` and `redo()` call `POST /batches/:id/undo`. Afterwards the open view re-reads the entry's own row by its id in its model (`GET /rows/<model>?filter={"id":…}`), or reloads when the entry has no row (an action);
   - `api.runAction(name, id, input)`;
   - an undo entry `{ id, batch: string }`;
   - Dutch errors: `changed_since` → "{label} is intussen gewijzigd; ongedaan maken kan niet." and `already_undone` → "Dit is al ongedaan gemaakt.".
@@ -244,7 +248,8 @@ Steps:
   - `changed_since` keeps the entry, shows the Dutch message naming the column's label, and the row keeps the server's value;
   - a query-row edit's batch comes from the PATCH reply in `updateThrough`;
   - the drawer shows "Sjabloon toepassen" with a Sjabloon picker on a Speelreeks row only;
-  - an applied action becomes one undo entry, and the views reload.
+  - an applied action becomes one undo entry, and the views reload;
+  - the entry survives the view's reload and a navigation Speelreeksen → Dagplanning → Speelreeksen, and Ctrl+Z there undoes the apply.
 - [ ] Remove the 81b7a4b before-image widening (`widen`, `Written.data`, the `editable` option and the multi-column `updateThrough`), keeping `updateThrough`'s single-target PATCH.
 - [ ] Run `cd apps/grid && bunx vitest run`, then `bun run gate`. Commit: `feat(grid): undo by batch on the server; a dataset's actions in the drawer`.
 
@@ -253,7 +258,7 @@ Steps:
 - Create: `e2e/step-1.spec.ts`
 
 Flows, all on invented fixtures:
-- **apply-template:** create a Speelreeks Mon–Thu at the invented venue, apply "speeldag op locatie" from the drawer, then in Dagplanning check that 28 rows appear on the 4 days, at the pattern's times, with Overnachting untimed and `locatie_bron` speelreeks. Back on the Speelreeksen view, whose store holds the apply's undo entry, one Ctrl+Z removes all 28; Dagplanning shows none. Reload. The Revision rows of the 28 share one batch (read through `GET /api/revisions`).
+- **apply-template:** create a Speelreeks Mon–Thu at the invented venue, apply "speeldag op locatie" from the drawer, then in Dagplanning check that 28 rows appear on the 4 days, at the pattern's times, with Overnachting untimed and `locatie_bron` speelreeks. In Dagplanning, one Ctrl+Z (the tab's undo history holds the apply) removes all 28. Reload, and none are back. The Revision rows of the 28 share one batch (read through `GET /api/revisions`).
 - **apply-twice:** the second apply shows the R6 message.
 - **speelreeks-delete-in-use:** delete in the drawer gets the in-use message.
 - **speelreeks-end-before-start:** the Dutch refusal on the cell.
@@ -265,6 +270,9 @@ Steps:
 ### Task 7 (operator): migration on a copy, parity and shakeout
 - [ ] `cp ~/laika-export/engine.db ~/laika-export/step1-copy.db` (0600), then `bun packages/engine/src/serve.ts --domain @worktable/theatre --db ~/laika-export/step1-copy.db --create-admin <existing admin email>`. The expected output is a rebuild of `activiteit`, the new tables created, and `.pre-migrate` written.
 - [ ] `bun scripts/shakeout/value-parity.ts --engine ~/laika-export/step1-copy.db --out-dir ~/laika-export/shakeout/step1`: 0 mismatches. Then data-profile and edit-session on a copy of the copy.
+- [ ] Before that run, `scripts/shakeout/edit-session.ts` changes in two ways, with a test in `edit-session.test.ts`:
+  - a dataset with no rows is reported as "skipped: no rows", not as a problem;
+  - its undo step uses `POST /batches/:id/undo` instead of replaying PATCHes.
 - [ ] Report the migration result and the four reports, by severity, counts only, to Stefan. No commit with names. The report also carries:
   - R4's finding: a greyed inherited display needs a declared engine hint;
   - the proposed `docs/SPEC.md` diff from the spec, shown before any commit.

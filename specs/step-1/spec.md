@@ -119,7 +119,7 @@ This is the approved finding, with Stefan's three changes. Every name is in Engl
    - It runs in one transaction under one `action` batch, and answers `{ batch_id, created: [{ dataset, id }] }`.
    - `/schema` lists each dataset's actions.
    - A test proves an owner is refused.
-6. **Grid.** Every undo entry is a batch id; undo and redo call `POST /batches/:id/undo`. The before-image widening of 81b7a4b is removed. The row drawer shows a dataset's actions as a button with a picker for each input. An applied action is one undo entry, and the views reload after it.
+6. **Grid.** One undo history per browser tab. Every table-grid undo entry is a batch id; undo and redo call `POST /batches/:id/undo`. The before-image widening of 81b7a4b is removed. The row drawer shows a dataset's actions as a button with a picker for each input. An applied action is one undo entry, and the views reload after it.
 
 Source: the finding as approved: "approve the apply-template finding with three changes: redo is only an undo of the undo while nothing has changed since; actions run as the caller with the same scope and role checks, tested for an owner; the twice-applied refusal says how to proceed." And: "The write reply reports the columns the writer changed, and undo restores a column only if its current value is still what the undone edit wrote, otherwise a Dutch refusal naming the column."
 
@@ -136,6 +136,11 @@ The report covers:
 - the migration result on the copy.
 
 Source: "Gate, in a browser, on invented fixtures: create a four-day Speelreeks at a venue and apply "speeldag op locatie". …" "Report the same four things as before, plus the migration result on the copy."
+
+### R9. The export-terms check
+`bun run check` gains a check that fails on any term from the export's name list (kept in `~/laika-export/scan`, outside the repo) in the staged diff's added lines and file names. It names the file and the category, never the term. Without the list it says so and passes.
+
+Source: "Add a gate check that fails on any term from the export list, against staged diffs."
 
 ## Out
 These stay out of step 1:
@@ -155,6 +160,8 @@ Source: "Out: slots and open Toewijzingen, kandidaten, a template editor, Taak, 
 - **Sjabloon row:** `naam, items (JSON: soort, omschrijving, offset_dag, start_tijd?, duur?, locatie_regel)`. Its note becomes: "Activity bundle for one day. Applied to a Speelreeks, it writes the activities of every day from start_datum to eind_datum in one batch."
 - **Step 1 gate:** "Applying "speeldag op locatie" to a four-day Speelreeks produces the Calais day pattern's rows on every day, with the inherited venue, in one batch; one undo removes them."
 - **Revision row and Writer row:** the batch table, the write reply, undo by batch, and actions, as R7.
+- **Package layout paragraph:** after the vocabulary check: "A third check fails any term from the export's name list, kept on the owner's machine outside the repo, in the staged diff; without the list it is skipped."
+- **Undo:** one undo history per browser tab, of batch ids, undone on the server.
 
 ## Open, for Stefan
 - **Seeds into an existing database.** Rol and Sjabloon are seeded only into a fresh database, so the migrated copy has them empty. Two options:

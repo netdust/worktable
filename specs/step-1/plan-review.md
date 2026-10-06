@@ -34,3 +34,27 @@ Verdict: not ready (2 Blocking, 12 Should fix). Every finding was applied to the
 - **Task 7:** reports the R4 finding and the `docs/SPEC.md` diff.
 - **Review Focus 6:** names Dagplanning.
 - **Simplest design:** now compares against the grid posting the 28 creates one by one.
+
+# Plan review: step 1 (round 2)
+Reviewed-plan: b90e6de4c3d0fe704c39aa0792bd718bbad4eb9c
+Verdict: not ready (1 Blocking, 6 Should fix). Every finding was applied, and the review runs again.
+
+## Blocking
+- **K1.** An undo entry in a view's store is lost when that view reloads or the planner navigates away (`hooks.ts:29-35`, `App.tsx:182-203`). So "one undo removes them all" could not pass. **Applied:** there is now one undo history per browser tab, of batch ids, held at app level (`ui/history.ts`), with a test that the entry survives a reload and a navigation. The spec's R7.6 and the proposed `docs/SPEC.md` lines say so.
+
+## Should fix (all applied)
+- **S1.** The Review Focus pointers to Test map rows were off by one after adding Task 0. They are renumbered.
+- **S2.** The create marker breaks `writes.test.ts` (exact create revisions and the 201 body), `theatre/test/parity.test.ts` (an exact 201) and the shakeout `revisionProblems`. All are now listed in Task 2.
+- **S3.** `migrate.test.ts` (the `_migrations` list) and `validate.test.ts` (`ENGINE_TABLES`) are now listed in Task 2.
+- **S4.** `legacy-post-id.test.ts` pins six datasets. It is narrowed to the six imported ones.
+- **S5.** The matrix callers of `api.create`/`api.update` (`matrix/store.ts` and `hooks.ts`) now unwrap `.row`.
+- **S6.** The export-terms check is now spec R9 (Stefan: "Add a gate check that fails on any term from the export list, against staged diffs"), with a proposed `docs/SPEC.md` line. The constraint now says it flags terms when run before a commit.
+- **S7.** The edit session reports a dataset with no rows as "skipped: no rows", and its undo uses the batch route.
+
+## Notes applied
+- The batch `key` is made unique with `checks: ['UNIQUE (key)']`.
+- After an undo, the view re-reads the entry's own row id.
+- A created record that is already gone counts as `changed_since` on `deleted_at`.
+- Task 4 names the label "Sjabloon toepassen".
+- The seed sentence is fixed.
+- There is a refusal test for the `kleur` format.
