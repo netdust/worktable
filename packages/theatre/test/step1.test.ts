@@ -125,6 +125,51 @@ describe('the Speelreeks writer refuses', () => {
   })
 })
 
+describe('the Speelreeks ceiling', () => {
+  test('a reeks of 367 days is refused whatever the parameter says', () => {
+    sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":100000}' WHERE id = 1`)
+    return refused(
+      editor('POST', '/api/rows/speelreeks', { ...REEKS, start_datum: '2026-01-01', eind_datum: '2027-01-02' }),
+      'Een speelreeks duurt hoogstens 366 dagen.',
+    )
+  })
+
+  test('a reeks of 366 days is accepted under that parameter', async () => {
+    sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":100000}' WHERE id = 1`)
+    await reeks({ start_datum: '2026-01-01', eind_datum: '2027-01-01' })
+  })
+})
+
+describe('Organisatie parameters', () => {
+  const PARAMETERS = 'Alleen een beheerder wijzigt parameters.'
+
+  test("an editor's change is 403", () =>
+    denied(
+      editor('PATCH', '/api/rows/organisatie/1', { parameters: { max_speelreeks_dagen: 1000 } }),
+      403,
+      'forbidden',
+      PARAMETERS,
+    ))
+
+  test("an editor's POST with parameters is 403", () =>
+    denied(
+      editor('POST', '/api/rows/organisatie', { naam: 'Nieuw', soort: 'eigen', parameters: { dag_grens_uur: 5 } }),
+      403,
+      'forbidden',
+      PARAMETERS,
+    ))
+
+  test('an editor may echo them unchanged with another edit', async () => {
+    const res = await editor('PATCH', '/api/rows/organisatie/1', { naam: 'Lantaarn', parameters: { dag_grens_uur: 5 } })
+    expect(res.status).toBe(200)
+  })
+
+  test('an administrator changes them', async () => {
+    const res = await admin('PATCH', '/api/rows/organisatie/1', { parameters: { max_speelreeks_dagen: 60 } })
+    expect(res.status).toBe(200)
+  })
+})
+
 describe('the Speelreeks writer accepts', () => {
   test('a reeks of exactly 31 days', async () => {
     await reeks({ start_datum: '2026-11-01', eind_datum: '2026-12-01' })
@@ -205,6 +250,14 @@ describe('Rol rates', () => {
     ).toBe(201)
   })
 
+  test('a former administrator, now an editor, undoing their own rate change is 403', async () => {
+    const res = await admin('PATCH', '/api/rows/rol/1', { dagtarief: 999 })
+    expect(res.status).toBe(200)
+    sqlite.run("UPDATE account SET role = 'editor' WHERE role = 'administrator'")
+    const batch = (res.body.revision as Body).batch_id
+    await denied(admin('POST', `/api/batches/${batch}/undo`, {}), 403, 'forbidden', TARIEVEN)
+  })
+
   test("an editor's naam edit is 200", async () => {
     expect((await editor('PATCH', '/api/rows/rol/1', { naam: 'Hoofdrol' })).status).toBe(200)
   })
@@ -240,6 +293,11 @@ describe('validateItems refuses', () => {
     const { start_tijd: _, ...untimed } = ITEM
     expect(message([untimed])).toBe('Item 1: een duur heeft een starttijd nodig.')
   })
+  test('an offset_dag of 367', () => expect(message([{ ...ITEM, offset_dag: 367 }])).toBe('Item 1: ongeldige dag.'))
+  test('an offset_dag of 1e8', () => expect(message([{ ...ITEM, offset_dag: 1e8 }])).toBe('Item 1: ongeldige dag.'))
+  test('an offset_dag of 366 is accepted', () => expect(message([{ ...ITEM, offset_dag: 366 }])).toBe('accepted'))
+  test('51 items', () => expect(message(Array(51).fill(ITEM))).toBe('Een sjabloon heeft hoogstens 50 items.'))
+  test('50 items are accepted', () => expect(message(Array(50).fill(ITEM))).toBe('accepted'))
   test('a locatie_regel other than speelreeks', () =>
     expect(message([ITEM, { ...ITEM, locatie_regel: 'eigen' }])).toBe('Item 2: ongeldige locatieregel.'))
 })

@@ -106,6 +106,7 @@ export const productieWriter = forPlanners(
 
 export const organisatieWriter = forPlanners(
   writerOf((values, ctx) => {
+    checkParameters(values, ctx)
     if (!filled(merged(values, ctx).naam)) refuse('Naam is verplicht.')
     checkOption(organisatie, 'soort', values, 'Ongeldige soort.')
     return values
@@ -174,6 +175,7 @@ export const beschikbaarheidWriter = writerOf((values, ctx) => {
 })
 
 const DEFAULT_MAX_DAGEN = 31
+const MAX_DAGEN_CEILING = 366
 const DAY_MS = 86_400_000
 
 // The cap is the own organisation's parameter, reached through the productie it produces.
@@ -181,7 +183,8 @@ function maxDagen(ctx: WriteContext, productieId: unknown): number {
   const producer = productieId == null ? null : ctx.find('productie', productieId as number)
   const eigen = producer?.organisatie_id == null ? null : ctx.find('organisatie', producer.organisatie_id as number)
   const cap = eigen?.soort === 'eigen' ? (eigen.parameters as Values | null)?.max_speelreeks_dagen : undefined
-  return Number.isInteger(cap) && (cap as number) > 0 ? (cap as number) : DEFAULT_MAX_DAGEN
+  const max = Number.isInteger(cap) && (cap as number) > 0 ? (cap as number) : DEFAULT_MAX_DAGEN
+  return Math.min(max, MAX_DAGEN_CEILING)
 }
 
 function checkSpan(values: Values, ctx: WriteContext): void {
@@ -210,11 +213,21 @@ export const speelreeksWriter = forPlanners(
 
 const KLEUR = /^#[0-9a-fA-F]{6}$/
 
-// Sending a rate unchanged is no write of it, so an editor may echo a whole row.
+// Sending a value unchanged is no write of it, so an editor may echo a whole row.
+const changes = (values: Values, ctx: WriteContext, k: string): boolean =>
+  Object.hasOwn(values, k) && JSON.stringify(values[k]) !== JSON.stringify(ctx.current?.[k] ?? null)
+
 function checkRates(values: Values, ctx: WriteContext): void {
   if (ctx.actor.role === 'administrator') return
-  const changes = (k: string) => Object.hasOwn(values, k) && values[k] !== (ctx.current?.[k] ?? null)
-  if (changes('dagtarief') || changes('uurtarief')) forbid('Alleen een beheerder wijzigt tarieven.')
+  if (changes(values, ctx, 'dagtarief') || changes(values, ctx, 'uurtarief')) {
+    forbid('Alleen een beheerder wijzigt tarieven.')
+  }
+}
+
+function checkParameters(values: Values, ctx: WriteContext): void {
+  if (ctx.actor.role !== 'administrator' && changes(values, ctx, 'parameters')) {
+    forbid('Alleen een beheerder wijzigt parameters.')
+  }
 }
 
 export const rolWriter = forPlanners(
@@ -228,6 +241,8 @@ export const rolWriter = forPlanners(
   'rollen',
 )
 
+const MAX_ITEMS = 50
+const MAX_OFFSET_DAG = 366
 const TIJD = /^([01]\d|2[0-3]):[0-5]\d$/
 
 function checkItem(item: unknown, n: number): void {
@@ -236,7 +251,9 @@ function checkItem(item: unknown, n: number): void {
   const { soort, omschrijving, offset_dag, start_tijd, duur, locatie_regel } = item as Values
   if (!Object.hasOwn(activiteit.columns.soort?.options ?? {}, String(soort))) at('ongeldige soort.')
   if (!filled(omschrijving)) at('omschrijving is verplicht.')
-  if (!Number.isInteger(offset_dag) || (offset_dag as number) < 0) at('ongeldige dag.')
+  if (!Number.isInteger(offset_dag) || (offset_dag as number) < 0 || (offset_dag as number) > MAX_OFFSET_DAG) {
+    at('ongeldige dag.')
+  }
   if (start_tijd != null && (typeof start_tijd !== 'string' || !TIJD.test(start_tijd))) at('ongeldige starttijd.')
   if (duur != null && start_tijd == null) at('een duur heeft een starttijd nodig.')
   if (duur != null && (!Number.isInteger(duur) || (duur as number) <= 0)) at('ongeldige duur.')
@@ -245,6 +262,7 @@ function checkItem(item: unknown, n: number): void {
 
 export function validateItems(items: unknown): void {
   if (!Array.isArray(items)) refuse('Items moeten een lijst zijn.')
+  if (items.length > MAX_ITEMS) refuse(`Een sjabloon heeft hoogstens ${MAX_ITEMS} items.`)
   for (const [i, item] of items.entries()) checkItem(item, i + 1)
 }
 

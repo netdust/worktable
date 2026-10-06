@@ -172,11 +172,39 @@ describe('sjabloon_toepassen', () => {
     expect(live(id)).toHaveLength(0)
   })
 
+  test('a Sjabloon around its writer with an offset_dag of 1e8 is refused in Dutch, not a 500', async () => {
+    const item = { soort: 'repetitie', omschrijving: 'Doorloop', offset_dag: 1e8, locatie_regel: 'speelreeks' }
+    sqlite.run('INSERT INTO sjabloon (naam, items) VALUES (?, ?)', ['ver weg', JSON.stringify([item])])
+    const sjabloon = (sqlite.query('SELECT MAX(id) AS id FROM sjabloon').get() as { id: number }).id
+    const id = await reeks()
+    const res = await apply(id, sjabloon)
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Item 1: ongeldige dag.',
+    })
+    expect(live(id)).toHaveLength(0)
+  })
+
   test('an owner is refused: speelreeks declares no owners', async () => {
     const id = await reeks()
     const res = await apply(id, SPEELDAG, owner)
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 404, code: 'unknown_source' })
     expect(live(id)).toHaveLength(0)
+  })
+
+  test('undo is refused changed_since once a colleague set the locatie of one of them', async () => {
+    const id = await reeks()
+    const res = await apply(id)
+    const [first] = res.body.created as { id: number }[]
+    const set = await editor('PATCH', `/api/rows/activiteit/${first?.id}`, { locatie_id: 2 })
+    expect(set.status).toBe(200)
+    const undo = await editor('POST', `/api/batches/${res.body.batch_id}/undo`, {})
+    expect({ status: undo.status, code: undo.body.code, column: undo.body.column }).toEqual({
+      status: 409,
+      code: 'changed_since',
+      column: 'locatie_id',
+    })
+    expect(live(id)).toHaveLength(28)
   })
 
   test('undo is refused in_use once a Toewijzing points at one of them', async () => {
