@@ -19,13 +19,24 @@ interface SavedView {
   shared: boolean
 }
 
-async function open(page: Page, view: string) {
-  await page.goto(WEEK)
+/** A column header by its exact label, the sort arrow aside. */
+const header = (page: Page, label: string) =>
+  page.locator('thead th').filter({ hasText: new RegExp(`^\\s*${label}\\s*[↑↓]?\\s*$`) })
+
+/** Picks a view in the rail and waits for `ready`, content only that view shows, so nothing is read off the view it replaced. */
+async function pick(page: Page, view: string, ready: Locator) {
   await page.getByText(view, { exact: true }).first().click()
+  await expect(ready.first()).toBeVisible()
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 }
 
+async function open(page: Page, view: string, ready: Locator) {
+  await page.goto(WEEK)
+  await pick(page, view, ready)
+}
+
 async function columnIndex(page: Page, label: string): Promise<number> {
+  await expect(header(page, label).first()).toBeVisible()
   const index = await page
     .locator('thead th')
     .evaluateAll(
@@ -45,10 +56,10 @@ async function spot(page: Page, title: string, person: string): Promise<Locator>
     .nth((await columnIndex(page, person)) - 1)
 }
 
-/** The first column of the first row, read straight from the e2e database. */
-function readDb(sql: string): unknown {
+/** The first column of the first row, read straight from the e2e database with bound parameters. */
+function readDb(sql: string, ...params: (string | number)[]): unknown {
   const script = `import { Database } from 'bun:sqlite'
-    const row = new Database('e2e/.tmp/e2e.db', { readonly: true }).query(${JSON.stringify(sql)}).get()
+    const row = new Database('e2e/.tmp/e2e.db', { readonly: true }).query(${JSON.stringify(sql)}).get(...${JSON.stringify(params)})
     console.log(JSON.stringify(row ? Object.values(row)[0] : undefined))`
   const out = execFileSync('bun', ['-e', script]).toString().trim()
   return out === 'undefined' || out === '' ? undefined : JSON.parse(out)
@@ -102,7 +113,7 @@ test('matrix-cell-persists', async ({ page }) => {
     (await toewijzingen(page)).find((t) => t.activiteit_id === activiteit && t.persoon_id === persoon)
   expect(await held()).toBeUndefined()
 
-  await open(page, MATRIX)
+  await open(page, MATRIX, header(page, 'Noor Claes'))
   const target = await spot(page, activity, person)
   await expect(target.locator('.nv-mx__mark')).toHaveCount(0)
   await pressKey(target, 'b')
@@ -110,7 +121,7 @@ test('matrix-cell-persists', async ({ page }) => {
   await expect.poll(async () => (await held())?.state).toBe('bevestigd')
 
   await page.reload()
-  await page.getByText(MATRIX, { exact: true }).first().click()
+  await pick(page, MATRIX, header(page, 'Noor Claes'))
   await expect((await spot(page, activity, person)).locator('.nv-mx__mark')).toHaveText('✓')
 
   await pressKey(await spot(page, activity, person), 'Delete')
@@ -119,7 +130,7 @@ test('matrix-cell-persists', async ({ page }) => {
 })
 
 test('matrix-away-mark', async ({ page }) => {
-  await open(page, MATRIX)
+  await open(page, MATRIX, header(page, 'Noor Claes'))
   const away = await spot(page, 'vergadering Antwerpen', 'Noor Claes')
   await expect(away).toHaveClass(/nv-mx__away/)
   await expect(away).toHaveAttribute('aria-label', /Away: Familiefeest/)
@@ -139,7 +150,7 @@ test('matrix-two-activities-undo', async ({ page }) => {
   expect(await held(one)).toBeUndefined()
   expect(await held(two)).toBeUndefined()
 
-  await open(page, MATRIX)
+  await open(page, MATRIX, header(page, 'Noor Claes'))
   await pressKey(await spot(page, first, person), 'b')
   await expect.poll(async () => (await held(one))?.state).toBe('bevestigd')
   await pressKey(await spot(page, second, person), 'u')
@@ -152,10 +163,10 @@ test('matrix-two-activities-undo', async ({ page }) => {
   await expect((await spot(page, first, person)).locator('.nv-mx__mark')).toHaveText('✓')
   await expect.poll(async () => await held(two)).toBeUndefined()
   expect((await held(one))?.state).toBe('bevestigd')
-  expect(readDb(`SELECT deleted_at FROM toewijzing WHERE id = ${secondId}`)).not.toBeNull()
+  expect(readDb('SELECT deleted_at FROM toewijzing WHERE id = ?', secondId)).not.toBeNull()
 
   await page.reload()
-  await page.getByText(MATRIX, { exact: true }).first().click()
+  await pick(page, MATRIX, header(page, 'Noor Claes'))
   await expect((await spot(page, first, person)).locator('.nv-mx__mark')).toHaveText('✓')
   await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveCount(0)
   expect(await held(two)).toBeUndefined()
@@ -165,7 +176,7 @@ test('matrix-two-activities-undo', async ({ page }) => {
 test('view-saved-after-reload', async ({ page }) => {
   const name = 'Mijn planning'
   expect((await views(page)).map((v) => v.name)).not.toContain(name)
-  await open(page, 'Planning')
+  await open(page, 'Planning', header(page, 'Einde'))
 
   const head = page.locator('thead th', { hasText: 'Soort' })
   const before = (await head.boundingBox())?.width as number
@@ -187,7 +198,7 @@ test('view-saved-after-reload', async ({ page }) => {
 
   await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
   await page.reload()
-  await page.getByText(name, { exact: true }).first().click()
+  await pick(page, name, page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' }))
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toContainText('Nachtwacht')
   await expect(page.locator('thead th', { hasText: 'Soort' })).toHaveAttribute('style', new RegExp(`width: ${widened}`))
 })
@@ -195,7 +206,7 @@ test('view-saved-after-reload', async ({ page }) => {
 test('view-delete-undo', async ({ page }) => {
   const copy = 'Dagplanning (copy)'
   expect((await views(page)).map((v) => v.name)).not.toContain(copy)
-  await open(page, 'Dagplanning')
+  await open(page, 'Dagplanning', page.getByRole('grid', { name: 'Dagplanning' }))
   await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
   await page.getByRole('menuitem', { name: 'Duplicate' }).click()
   await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
@@ -222,7 +233,7 @@ test('person-to-name', async ({ page }) => {
   const lotte = await personId(page, 'Lotte Verhaegen')
   const before = (await toewijzingen(page)).find((t) => t.activiteit_id === activiteit && t.persoon_id === lotte)
   expect(before).toBeDefined()
-  await open(page, 'Toewijzingen')
+  await open(page, 'Toewijzingen', header(page, 'Naam'))
 
   const target = page.locator('tbody tr.nv-tr', { hasText: activity })
   await expect(target).toHaveCount(1)
@@ -239,14 +250,14 @@ test('person-to-name', async ({ page }) => {
 })
 
 test('datetime-shown', async ({ page }) => {
-  await open(page, 'Planning')
+  await open(page, 'Planning', header(page, 'Einde'))
   const start = page.locator('tbody td [data-value="2026-10-14T00:30"]').first()
   await expect(start).toHaveText(/^Wed 14\/10 00:30$/)
   await expect(start).not.toContainText('T')
 })
 
 test('in-filter-applies', async ({ page }) => {
-  await open(page, 'Optie of bevestigd')
+  await open(page, 'Optie of bevestigd', row(page, 'vergadering Gent'))
   await expect(page.locator('.nv-toolbar')).toContainText('+ 1 vaste filter')
   await expect(row(page, 'vergadering Gent')).toBeVisible()
   await expect(row(page, 'voorstelling Kortrijk')).toHaveCount(0)
@@ -269,25 +280,29 @@ test('in-filter-applies', async ({ page }) => {
 test('new-without-title', async ({ page }) => {
   const created: string[] = []
   page.on('request', (req) => req.method() === 'POST' && created.push(req.url()))
-  await open(page, 'Planning')
+  await open(page, 'Planning', header(page, 'Einde'))
   await page.getByRole('button', { name: 'New Activiteiten' }).click()
   await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
   expect(created).toEqual([])
 })
 
 test('relation-beyond-page', async ({ page }) => {
-  const asked: string[] = []
+  const titels = (await rows<{ titel: string }>(page, 'productie')).map((p) => p.titel)
+  expect(titels.length).toBeGreaterThan(2)
+  const asked: { limit: string | null; offset: number }[] = []
   page.on('request', (req) => {
     const url = new URL(req.url())
     if (url.pathname === '/api/rows/productie')
-      asked.push(`${url.searchParams.get('limit')}/${url.searchParams.get('offset')}`)
+      asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
-  await open(page, 'Planning')
+  await open(page, 'Planning', header(page, 'Einde'))
   await page.getByRole('button', { name: '+ Filter' }).click()
-  for (const titel of ['De Kersentuin', 'Nachtwacht', 'Zomerstorm']) {
+  for (const titel of titels) {
     await expect(page.getByRole('button', { name: `Productie: ${titel}` })).toBeVisible()
   }
-  expect(asked).toEqual(['2/0', '2/2'])
+  expect(asked.every((a) => a.limit === '2')).toBe(true)
+  const offsets = [...new Set(asked.map((a) => a.offset))].sort((a, b) => a - b)
+  expect(offsets).toEqual(Array.from({ length: Math.ceil(titels.length / 2) }, (_, i) => i * 2))
 })
 
 test.describe('foreign-view-hidden', () => {
@@ -300,7 +315,7 @@ test.describe('foreign-view-hidden', () => {
        const db = new Database('e2e/.tmp/e2e.db')
        db.query("INSERT INTO saved_view (name, source_type, source, skin, owner_id, shared) VALUES (?, 'dataset', 'activiteit', 'table', 7, 0)").run(${JSON.stringify(name)})`,
     ])
-    expect(readDb(`SELECT count(*) FROM saved_view WHERE name = '${name}' AND owner_id = 7 AND shared = 0`)).toBe(1)
+    expect(readDb('SELECT count(*) FROM saved_view WHERE name = ? AND owner_id = 7 AND shared = 0', name)).toBe(1)
   })
 
   test('never listed, never in the rail', async ({ page }) => {
