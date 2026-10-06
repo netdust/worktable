@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util'
 import { createEngine } from './app'
 import type { Domain } from './declare'
 import { migrate, seedDomain } from './migrate'
+import { MigrationError } from './migration-error'
 
 const { values } = parseArgs({
   options: {
@@ -26,7 +27,13 @@ const domain = (await import(Bun.resolveSync(name, process.cwd()))).default as D
 if (values.fresh) for (const suffix of ['', '-wal', '-shm']) rmSync(values.db + suffix, { force: true })
 mkdirSync(dirname(values.db), { recursive: true })
 const sqlite = new Database(values.db, { create: true })
-migrate(sqlite, domain)
+try {
+  migrate(sqlite, domain)
+} catch (err) {
+  if (!(err instanceof MigrationError)) throw err
+  console.error(`migration refused: ${err.message}`)
+  process.exit(1)
+}
 if (values.fresh) seedDomain(sqlite, domain)
 
 const port = Number(values.port)

@@ -329,3 +329,28 @@ describe('migrate a changed dataset', () => {
     copy.close()
   })
 })
+
+describe('serve.ts on a refused migration', () => {
+  const serve = join(import.meta.dir, '..', 'src', 'serve.ts')
+  const domainFile = join(import.meta.dir, 'fixtures', 'refusal-domain.ts')
+
+  test('exits 1 and names the dataset and column on stderr', async () => {
+    const db = join(mkdtempSync(join(tmpdir(), 'wt-serve-')), 'db.sqlite')
+    const first = new Database(db, { create: true })
+    const { default: before } = await import(domainFile)
+    migrate(first, before)
+    first.run("INSERT INTO item (label) VALUES ('x')")
+    first.close()
+
+    const run = Bun.spawn(['bun', serve, '--domain', domainFile, '--db', db, '--port', '4399'], {
+      env: { ...process.env, REFUSAL_STEP: '1' },
+      stderr: 'pipe',
+      stdout: 'pipe',
+    })
+    const code = await run.exited
+    const stderr = await new Response(run.stderr).text()
+    expect(code).toBe(1)
+    expect(stderr).toContain('dataset "item" column "code"')
+    expect(stderr).not.toContain('    at ')
+  })
+})
