@@ -9,21 +9,21 @@ import { contents, type Sent, send } from './fixture'
 const text: ColumnDecl = { type: 'text', label: 'T', nullable: true }
 const rel = (relation: string): ColumnDecl => ({ type: 'integer', label: 'R', relation, nullable: true })
 
-const persoon = defineDataset({ name: 'persoon', label: 'P', title: 'naam', custom: false, columns: { naam: text } })
+const member = defineDataset({ name: 'member', label: 'P', title: 'name', custom: false, columns: { name: text } })
 const taak = defineDataset({
   name: 'taak',
   label: 'T',
-  title: 'naam',
+  title: 'name',
   custom: true,
-  columns: { naam: text, status: { type: 'text', label: 'S', options: { open: 'Open', klaar: 'Klaar' } } },
+  columns: { name: text, status: { type: 'text', label: 'S', options: { open: 'Open', klaar: 'Klaar' } } },
 })
 const koppel = defineDataset({
   name: 'koppel',
   label: 'K',
-  title: 'naam',
+  title: 'name',
   custom: false,
-  columns: { taak_id: rel('taak'), persoon_id: rel('persoon'), naam: text, state: { ...text, options: { a: 'A' } } },
-  matrix: { down: 'taak_id', across: 'persoon_id', cell: 'state', keys: { x: 'a' }, marks: { a: '!' }, count: 'a' },
+  columns: { taak_id: rel('taak'), member_id: rel('member'), name: text, state: { ...text, options: { a: 'A' } } },
+  matrix: { down: 'taak_id', across: 'member_id', cell: 'state', keys: { x: 'a' }, marks: { a: '!' }, count: 'a' },
 })
 const perStatus = defineQuery({
   name: 'per_status',
@@ -34,9 +34,9 @@ const perStatus = defineQuery({
 })
 
 const domain: Domain = {
-  datasets: [persoon, taak, koppel],
+  datasets: [member, taak, koppel],
   queries: [perStatus],
-  seed: (insert) => insert('taak', [{ naam: 'een', status: 'open' }]),
+  seed: (insert) => insert('taak', [{ name: 'een', status: 'open' }]),
   views: [
     {
       name: 'Alles',
@@ -44,9 +44,9 @@ const domain: Domain = {
       source: 'taak',
       skin: 'table',
       filters: { status: 'open' },
-      sort: ['naam'],
+      sort: ['name'],
       group_by: null,
-      visible_fields: ['naam'],
+      visible_fields: ['name'],
     },
   ],
 }
@@ -94,7 +94,7 @@ const view = async (id: number) =>
 
 describe('views denials: another owner (attack 1)', () => {
   const writes: [string, (id: number) => string, Sent][] = [
-    ['PATCH', (id) => `/api/views/${id}`, body({ name: 'Mijn naam nu' })],
+    ['PATCH', (id) => `/api/views/${id}`, body({ name: 'Mijn name nu' })],
     ['DELETE', (id) => `/api/views/${id}`, { type: null }],
   ]
   for (const [method, path, sent] of writes) {
@@ -140,7 +140,7 @@ describe('views denials: forged ownership and audit (attack 2)', () => {
     expect(state()).toEqual(before)
   })
 
-  test.each([{ source: 'persoon' }, { skin: 'matrix' }, { source: 'taak' }, { skin: 'table' }])(
+  test.each([{ source: 'member' }, { skin: 'matrix' }, { source: 'taak' }, { skin: 'table' }])(
     'a PATCH naming %p is 400 bad_view',
     (patch) => denied('PATCH', `/api/views/${SEEDED}`, body(patch), 400, 'bad_view'),
   )
@@ -148,31 +148,31 @@ describe('views denials: forged ownership and audit (attack 2)', () => {
 
 const hostile: [string, Record<string, unknown>][] = [
   ['an unknown filter key', { filters: { nope: 1 } }],
-  ['a quoted filter key', { filters: { 'naam" OR 1=1 --': 1 } }],
-  ['an unknown operator', { filters: { naam: { $regex: 'x' } } }],
+  ['a quoted filter key', { filters: { 'name" OR 1=1 --': 1 } }],
+  ['an unknown operator', { filters: { name: { $regex: 'x' } } }],
   ['an array filter', { filters: [] }],
-  ['a string filter', { filters: 'naam = 1' }],
-  ['an $in over 100 values', { filters: { naam: { $in: Array.from({ length: 101 }, (_, i) => `n${i}`) } } }],
-  ['$contains on a column', { filters: { naam: { $contains: 'x' } } }],
+  ['a string filter', { filters: 'name = 1' }],
+  ['an $in over 100 values', { filters: { name: { $in: Array.from({ length: 101 }, (_, i) => `n${i}`) } } }],
+  ['$contains on a column', { filters: { name: { $contains: 'x' } } }],
   ['a bad custom key', { filters: { 'custom.a-b': 1 } }],
   ['a sort on an unknown column', { sort: ['nope'] }],
-  ['a quoted sort', { sort: ['-naam"; DROP TABLE taak; --'] }],
-  ['a sort that is a string', { sort: 'naam' }],
+  ['a quoted sort', { sort: ['-name"; DROP TABLE taak; --'] }],
+  ['a sort that is a string', { sort: 'name' }],
   ['a sort of numbers', { sort: [1] }],
   ['a group on an unknown column', { group_by: 'nope' }],
   ['a group that is a number', { group_by: 1 }],
-  ['an unknown visible field', { visible_fields: ['naam', 'nope'] }],
-  ['visible fields as an object', { visible_fields: { naam: true } }],
+  ['an unknown visible field', { visible_fields: ['name', 'nope'] }],
+  ['visible fields as an object', { visible_fields: { name: true } }],
   ['shared as a string', { shared: 'true' }],
   ['shared as 1', { shared: 1 }],
   ['an empty name', { name: '' }],
   ['a blank name', { name: '   ' }],
   ['a name of 81 characters', { name: 'a'.repeat(81) }],
   ['a name that is a number', { name: 5 }],
-  ['a sort of 17 keys', { sort: Array(17).fill('naam') }],
-  ['a sort naming a key twice', { sort: ['naam', '-naam'] }],
-  ['visible fields of 17 keys', { visible_fields: Array(17).fill('naam') }],
-  ['visible fields naming a key twice', { visible_fields: ['naam', 'naam'] }],
+  ['a sort of 17 keys', { sort: Array(17).fill('name') }],
+  ['a sort naming a key twice', { sort: ['name', '-name'] }],
+  ['visible fields of 17 keys', { visible_fields: Array(17).fill('name') }],
+  ['visible fields naming a key twice', { visible_fields: ['name', 'name'] }],
   ['a name holding a NUL', { name: 'Mijn\u0000taken' }],
   ['a name holding a bidi override', { name: 'Mijn \u202Etaken' }],
 ]
@@ -192,17 +192,17 @@ describe('views denials: hostile filters, sorts, columns and names (attacks 3, 4
     ['the engine table saved_view', { ...NEW, source: 'saved_view' }],
     ['the engine table revision', { ...NEW, source: 'revision' }],
     ['a skin of calendar', { ...NEW, skin: 'calendar' }],
-    ['a matrix skin on a source with no matrix', { ...NEW, source: 'persoon', skin: 'matrix' }],
+    ['a matrix skin on a source with no matrix', { ...NEW, source: 'member', skin: 'matrix' }],
   ])('a POST with %s is 400 bad_view', (_, sent) => denied('POST', '/api/views', body(sent), 400, 'bad_view'))
 
   test('a POST whose stored view would exceed 16 kB is 400 view_too_large', () => {
     const big = Array.from({ length: 20 }, (_, i) => `${i}${'x'.repeat(1000)}`)
-    return denied('POST', '/api/views', body({ ...NEW, filters: { naam: { $in: big } } }), 400, 'view_too_large')
+    return denied('POST', '/api/views', body({ ...NEW, filters: { name: { $in: big } } }), 400, 'view_too_large')
   })
 
   test('a PATCH that grows a view past 16 kB is 400 view_too_large', () => {
     const big = Array.from({ length: 20 }, (_, i) => `${i}${'x'.repeat(1000)}`)
-    return denied('PATCH', `/api/views/${SEEDED}`, body({ filters: { naam: { $in: big } } }), 400, 'view_too_large')
+    return denied('PATCH', `/api/views/${SEEDED}`, body({ filters: { name: { $in: big } } }), 400, 'view_too_large')
   })
 
   // JSON.stringify cannot carry 1e999, so the body is written by hand; JSON.parse reads it as Infinity.
@@ -213,7 +213,7 @@ describe('views denials: hostile filters, sorts, columns and names (attacks 3, 4
   })
 
   test('a sort of 17 keys is refused for their number', async () => {
-    const res = await request('POST', '/api/views', body({ ...NEW, sort: Array(17).fill('naam') }))
+    const res = await request('POST', '/api/views', body({ ...NEW, sort: Array(17).fill('name') }))
     expect({ status: res.status, message: res.body.message }).toEqual({
       status: 400,
       message: 'sort takes at most 16 keys',
@@ -274,9 +274,9 @@ describe('views', () => {
       source: 'taak',
       skin: 'table',
       filters: { status: 'open' },
-      sort: ['naam'],
+      sort: ['name'],
       group_by: null,
-      visible_fields: ['naam'],
+      visible_fields: ['name'],
       shared: true,
       owner_id: 0,
       mine: true,
@@ -311,10 +311,10 @@ describe('views', () => {
 
   test('POST keeps a full arrangement, on a query and as a matrix', async () => {
     const arrangement = {
-      filters: { status: 'open', naam: { $in: ['a', 'b'] }, 'custom.prio': { $gte: 2 } },
-      sort: ['-naam', 'id'],
+      filters: { status: 'open', name: { $in: ['a', 'b'] }, 'custom.prio': { $gte: 2 } },
+      sort: ['-name', 'id'],
       group_by: 'status',
-      visible_fields: ['status', 'naam'],
+      visible_fields: ['status', 'name'],
       shared: true,
     }
     const res = await request('POST', '/api/views', body({ ...NEW, ...arrangement }))
@@ -339,8 +339,8 @@ describe('views', () => {
   })
 
   test('PATCH keeps the arrangement fields it is not given', async () => {
-    const res = await request('PATCH', `/api/views/${SEEDED}`, body({ sort: ['-naam'] }))
-    expect(res.body).toMatchObject({ name: 'Alles', filters: { status: 'open' }, sort: ['-naam'] })
+    const res = await request('PATCH', `/api/views/${SEEDED}`, body({ sort: ['-name'] }))
+    expect(res.body).toMatchObject({ name: 'Alles', filters: { status: 'open' }, sort: ['-name'] })
   })
 
   test('DELETE hides a view, restore brings it back, both revised', async () => {

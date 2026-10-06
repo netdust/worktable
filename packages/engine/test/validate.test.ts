@@ -5,15 +5,15 @@ import { domain } from './fixture'
 const text: ColumnDecl = { type: 'text', label: 'T' }
 
 const dataset = (over: Partial<Parameters<typeof defineDataset>[0]> = {}) =>
-  defineDataset({ name: 'a', label: 'A', title: 'naam', custom: false, columns: { naam: text }, ...over })
+  defineDataset({ name: 'a', label: 'A', title: 'name', custom: false, columns: { name: text }, ...over })
 
 const query = (over: Partial<Parameters<typeof defineQuery>[0]> = {}) =>
   defineQuery({
     name: 'q',
     label: 'Q',
-    title: 'naam',
+    title: 'name',
     sql: 'SELECT 1 AS id',
-    columns: { id: { type: 'integer', label: 'Id' }, naam: text, a_id: { type: 'integer', label: 'A' } },
+    columns: { id: { type: 'integer', label: 'Id' }, name: text, a_id: { type: 'integer', label: 'A' } },
     ...over,
   })
 
@@ -32,7 +32,7 @@ function failure(d: Domain): DomainError {
 const writes = (over: Partial<NonNullable<ColumnDecl['writes']>> = {}): ColumnDecl => ({
   type: 'text',
   label: 'W',
-  writes: { dataset: 'a', field: 'naam', key: 'a_id', ...over },
+  writes: { dataset: 'a', field: 'name', key: 'a_id', ...over },
 })
 
 describe('validateDomain', () => {
@@ -41,13 +41,13 @@ describe('validateDomain', () => {
       datasets: [...domain.datasets, dataset(), defineDataset({ name: 'b', label: 'B', custom: false, ...over })],
     })
   const rel = { type: 'integer', label: 'P', relation: 'a' } as ColumnDecl
-  const viaA = { a_id: rel, naam: text }
+  const viaA = { a_id: rel, name: text }
 
   test('a via title through a relation validates', () =>
-    expect(() => validateDomain(viaOf({ title: { via: 'a_id', else: 'naam' }, columns: viaA }))).not.toThrow())
+    expect(() => validateDomain(viaOf({ title: { via: 'a_id', else: 'name' }, columns: viaA }))).not.toThrow())
 
   test('via on a non-relation column is refused', () =>
-    expect(failure(viaOf({ title: { via: 'naam', else: 'naam' }, columns: viaA })).bad).toBe('naam'))
+    expect(failure(viaOf({ title: { via: 'name', else: 'name' }, columns: viaA })).bad).toBe('name'))
 
   test('else on an undeclared column is refused', () =>
     expect(failure(viaOf({ title: { via: 'a_id', else: 'nope' }, columns: viaA })).bad).toBe('nope'))
@@ -57,22 +57,22 @@ describe('validateDomain', () => {
       name: 'b',
       label: 'B',
       custom: false,
-      title: { via: 'a_id', else: 'naam' },
+      title: { via: 'a_id', else: 'name' },
       columns: viaA,
     })
     const c = defineDataset({
       name: 'c',
       label: 'C',
       custom: false,
-      title: 'naam',
-      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, naam: text },
+      title: 'name',
+      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, name: text },
     })
     expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
   })
 
   test('a column named title is refused', () =>
     expect(
-      failure(withDomain({ datasets: [...domain.datasets, dataset({ columns: { naam: text, title: text } })] })).bad,
+      failure(withDomain({ datasets: [...domain.datasets, dataset({ columns: { name: text, title: text } })] })).bad,
     ).toBe('title'))
 
   test('a relation to a dataset with a via title is refused', () => {
@@ -80,15 +80,15 @@ describe('validateDomain', () => {
       name: 'b',
       label: 'B',
       custom: false,
-      title: { via: 'a_id', else: 'naam' },
+      title: { via: 'a_id', else: 'name' },
       columns: viaA,
     })
     const c = defineDataset({
       name: 'c',
       label: 'C',
       custom: false,
-      title: { via: 'b_id', else: 'naam' },
-      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, naam: text },
+      title: { via: 'b_id', else: 'name' },
+      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, name: text },
     })
     expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
   })
@@ -110,8 +110,8 @@ describe('validateDomain', () => {
   })
 
   test('date naming an undeclared column throws', () => {
-    const e = failure(withDomain({ datasets: [dataset({ date: 'dag' })], queries: [] }))
-    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'dag' })
+    const e = failure(withDomain({ datasets: [dataset({ date: 'day' })], queries: [] }))
+    expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'day' })
   })
 
   test('a query title naming an undeclared column throws', () => {
@@ -120,19 +120,19 @@ describe('validateDomain', () => {
   })
 
   test('index column undeclared throws', () => {
-    const e = failure(withDomain({ datasets: [dataset({ indexes: [['naam', 'weg']] })], queries: [] }))
+    const e = failure(withDomain({ datasets: [dataset({ indexes: [['name', 'weg']] })], queries: [] }))
     expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'weg' })
   })
 
   test('relation to an undeclared dataset throws', () => {
-    const columns = { naam: text, b_id: { type: 'integer', label: 'B', relation: 'b' } } as const
+    const columns = { name: text, b_id: { type: 'integer', label: 'B', relation: 'b' } } as const
     const e = failure(withDomain({ datasets: [dataset({ columns })], queries: [] }))
     expect({ declaration: e.declaration, bad: e.bad }).toEqual({ declaration: 'a', bad: 'b' })
   })
 
   const bad = (label: string, columns: Record<string, ColumnDecl>, datasets = [dataset()], name?: string) =>
     test(`writes ${label} throws`, () => {
-      const q = query({ columns: { id: { type: 'integer', label: 'Id' }, naam: text, a_id: text, ...columns } })
+      const q = query({ columns: { id: { type: 'integer', label: 'Id' }, name: text, a_id: text, ...columns } })
       const e = failure(withDomain({ datasets, queries: [q] }))
       expect(e.declaration).toBe('q')
       if (name) expect(e.bad).toBe(name)
@@ -140,10 +140,10 @@ describe('validateDomain', () => {
 
   bad('to an undeclared dataset', { w: writes({ dataset: 'zzz' }) }, undefined, 'zzz')
   bad('to an undeclared field', { w: writes({ field: 'zzz' }) }, undefined, 'zzz')
-  bad('to a readonly field', { w: writes() }, [dataset({ columns: { naam: { ...text, readonly: true } } })], 'naam')
+  bad('to a readonly field', { w: writes() }, [dataset({ columns: { name: { ...text, readonly: true } } })], 'name')
   bad('with a key that is not a query column', { w: writes({ key: 'zzz' }) }, undefined, 'zzz')
 
-  const mapped = () => query({ columns: { id: { type: 'integer', label: 'Id' }, naam: text, a_id: text, w: writes() } })
+  const mapped = () => query({ columns: { id: { type: 'integer', label: 'Id' }, name: text, a_id: text, w: writes() } })
 
   test('a valid writes target validates', () => {
     const writers = { a: { update: (values: Record<string, unknown>) => values } }
