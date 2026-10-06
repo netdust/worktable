@@ -3,6 +3,8 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 const FICHE = 'http://127.0.0.1:5175'
 const WEEK = '/#from=2026-10-12'
 
+test.use({ storageState: 'e2e/.tmp/state/fiche-editor.json' })
+
 interface InUse {
   code: string
   by: { label: string; count: number }[]

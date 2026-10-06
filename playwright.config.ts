@@ -4,10 +4,19 @@ export default defineConfig({
   testDir: 'e2e',
   workers: 1,
   reporter: 'list',
-  use: { baseURL: 'http://127.0.0.1:5174', browserName: 'chromium', trace: 'retain-on-failure' },
+  // Runs once the web servers are up (Playwright starts them first): it creates and signs in one account per role.
+  globalSetup: './e2e/global-setup.ts',
+  use: {
+    baseURL: 'http://127.0.0.1:5174',
+    browserName: 'chromium',
+    trace: 'retain-on-failure',
+    storageState: 'e2e/.tmp/state/editor.json',
+  },
   webServer: [
     {
-      command: 'bun packages/engine/src/serve.ts --domain @worktable/theatre --db e2e/.tmp/e2e.db --port 4311 --fresh',
+      command:
+        'bun packages/engine/src/serve.ts --domain @worktable/theatre --db e2e/.tmp/e2e.db --port 4311 --fresh' +
+        ' --outbox e2e/.tmp/outbox --app-url http://127.0.0.1:5174',
       wait: { stdout: /engine listening/ },
       reuseExistingServer: false,
       timeout: 120_000,
@@ -20,7 +29,10 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'bun packages/engine/src/serve.ts --domain @worktable/fiche --db e2e/.tmp/fiche.db --port 4312 --fresh',
+      // Cookies ignore the port: the fiche engine's own cookie name keeps the two sessions apart on 127.0.0.1.
+      command:
+        'bun packages/engine/src/serve.ts --domain @worktable/fiche --db e2e/.tmp/fiche.db --port 4312 --fresh' +
+        ' --outbox e2e/.tmp/outbox-fiche --app-url http://127.0.0.1:5175 --cookie-name wt_session_fiche',
       wait: { stdout: /engine listening/ },
       reuseExistingServer: false,
       timeout: 120_000,
