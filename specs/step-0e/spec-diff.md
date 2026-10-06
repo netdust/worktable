@@ -79,3 +79,15 @@ Laika's core team become editors. An owner account with no subject sees nothing.
 ## U6, the WordPress view shortcode (Stefan, 2026-10-06, after the security audit)
 
 **"WordPress afterwards" row and the package layout paragraph:** "one block that renders a view by its token" becomes "one shortcode and YOOtheme element that render a public view by a site-side name: `[worktable_view view="<name>"]`. The site's configuration maps each name to the view's share token, so a token never reaches post content, revisions or WordPress's REST API, where YOOtheme's stored layout would publish it. The fetch is server-side, cached five minutes per engine, token and window, and stops for a minute when the engine is down or rate-limited."
+
+## Activities without a time (approved by Stefan, 2026-10-06)
+
+**Activiteit row:** the columns become "… omschrijving, datum, start_at (nullable), eind_at (nullable), plandag, …", and the note gains: "`datum` is the calendar day the activity is on; `start_at` empty means it has no time (a meal, a hotel night, a whole day) and the grid shows the day without a time. When `start_at` is set, the writer keeps `datum` equal to its date; an `eind_at` needs a `start_at`."
+
+**Derived columns row:** "`plandag` … computed by the writer from `start_at` and the organisation's day-line hour" becomes "… computed by the writer: from `start_at` and the organisation's day-line hour when the activity has a time, and equal to `datum` when it has none".
+
+**Day line paragraph:** gains "; an activity without a time is on its own `datum`" after the day-line sentence.
+
+**Shows for the website:** "the calendar date (not `plandag` …)" becomes "the calendar date (`datum`, not `plandag` …)", and "time" becomes "time (empty when the show has none)".
+
+**`specs/step-0e/spec.md`, "After the plan review":** the T05:00 rule and the `custom.laika_geen_start` flag are replaced by "An activity with no start exports with `start_at` empty and its `datum`."
