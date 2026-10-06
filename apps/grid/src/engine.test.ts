@@ -122,6 +122,11 @@ describe('writes', () => {
     expect(toEngineData({ title: 'opbouw Gent', status: 'optie' }, writes.sources.activiteit, writes.sources)).toEqual({ omschrijving: 'opbouw Gent', status: 'optie' })
   })
 
+  it('a cleared nullable datetime goes on the wire as null, never as an empty string', () => {
+    const source = { ...writes.sources.activiteit, columns: { ...writes.sources.activiteit.columns, start_at: { type: 'datetime' as const, label: 'Start', nullable: true } } }
+    expect(toEngineData({ start_at: '' }, source, writes.sources)).toEqual({ start_at: null })
+  })
+
   it("a mapped query column takes its target's options and relation, unless it declares its own", () => {
     const own: EngineSchema = {
       ...writes,

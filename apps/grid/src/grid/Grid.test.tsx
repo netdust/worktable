@@ -9,6 +9,7 @@ import { defaults, type Layout } from './layout'
 import { createStore, type StoreApi } from './store'
 
 const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
+  me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve() }))
 vi.mock('../api', () => remote)
 const { App } = await import('../ui/App')

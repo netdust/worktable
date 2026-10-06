@@ -1,16 +1,20 @@
 {
   "name": "worktable",
   "private": true,
+  "engines": {
+    "bun": ">=1.3.9"
+  },
   "type": "module",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "test": "bun test packages",
-    "check": "bun scripts/check-boundaries.ts && biome check . && bun run --filter '*' typecheck",
+    "test": "bun test packages scripts",
+    "check": "bun scripts/check-boundaries.ts && bun scripts/check-vocabulary.ts && bun scripts/check-staged-export.ts && biome check . && bun run --filter '*' typecheck",
     "e2e": "playwright test",
-    "gate": "bun run check && bun test packages && bun run --filter @worktable/grid test && bun run e2e"
+    "parity": "bun scripts/parity.ts",
+    "gate": "bun run check && bun test packages scripts && bun run --filter @worktable/grid test && bun run e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

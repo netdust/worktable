@@ -1,6 +1,6 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, prefs, records, rows, savedViews, schema } from '../api'
+import { awayRows, me, onUnauthenticated, prefs, records, rows, savedViews, schema, signOut } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
@@ -11,11 +11,14 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { ApiError, Row, Schema, Scope, View } from '../types'
+import type { Account, ApiError, Row, Schema, Scope, View } from '../types'
+import { Confirm } from './Confirm'
 import { Filters } from './Filters'
 import { Rail } from './Rail'
+import type { Signed } from './RailFoot'
 import { readHash, writeHash } from './hash'
 import { Search } from './Search'
+import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
 import { Toast, useNotice } from './Toast'
 import { tableOf } from './tables'
@@ -38,8 +41,75 @@ async function titlesOf(view: View, served: Schema | null): Promise<Map<number, 
   return new Map(found.rows.map((row) => [row.id, row.title]))
 }
 
-/** The shell waits for the served schema: it declares the tables, the saved views come with it. */
+type Session = { status: 'checking' } | { status: 'out' } | { status: 'link'; token: string } | { status: 'in'; account: Account; lapsed: boolean }
+
+const LINK = /^#\/auth\/([\w-]+)$/
+const SIGN_IN = '#/signin'
+
+function landing(): Session {
+  const token = LINK.exec(window.location.hash)?.[1]
+  if (token) return { status: 'link', token }
+  return window.location.hash === SIGN_IN ? { status: 'out' } : { status: 'checking' }
+}
+
+/** Routes `#/auth/<token>` to the confirm screen and `#/signin`, or no session, to the form; else the grid. */
 export function App() {
+  const [session, setSession] = useState<Session>(landing)
+  const signedIn = (account: Account) => setSession({ status: 'in', account, lapsed: false })
+
+  // A lapsed session keeps the grid mounted under the form, so a new row's draft survives it.
+  useEffect(() => onUnauthenticated(() => setSession((s) => {
+    if (s.status === 'checking') return { status: 'out' }
+    return s.status === 'in' && !s.lapsed ? { ...s, lapsed: true } : s
+  })), [])
+
+  useEffect(() => {
+    if (session.status === 'checking') me().then(signedIn, () => setSession({ status: 'out' }))
+  }, [session.status])
+
+  // A link pasted into a tab where the app is already open changes only the hash, so nothing reloads.
+  useEffect(() => {
+    const follow = () => {
+      const token = LINK.exec(window.location.hash)?.[1]
+      if (token) setSession({ status: 'link', token })
+    }
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [])
+
+  // Signed in again in another tab: back here, the same account carries on and another one starts afresh.
+  useEffect(() => {
+    if (session.status !== 'in' || !session.lapsed) return
+    const { id } = session.account
+    const recheck = () => me().then((account) => (account.id === id ? signedIn(account) : window.location.reload()), () => undefined)
+    window.addEventListener('focus', recheck)
+    return () => window.removeEventListener('focus', recheck)
+  }, [session])
+
+  if (session.status === 'checking') return <div className="nv-app"><div className="nv-center"><Spinner /></div></div>
+  if (session.status === 'out') return <div className="nv-auth-page"><SignIn /></div>
+  if (session.status === 'link') return <div className="nv-auth-page"><Confirm token={session.token} onSignedIn={signedIn} /></div>
+
+  const signOutNow = () => {
+    signOut().catch(() => undefined).finally(() => {
+      window.history.replaceState(null, '', SIGN_IN)
+      setSession({ status: 'out' })
+    })
+  }
+  return (
+    <>
+      <Workspace signed={{ email: session.account.email, onSignOut: signOutNow }} />
+      {session.lapsed && (
+        <div className="nv-auth-over" role="dialog" aria-modal="true" aria-label={t('signIn')}>
+          <SignIn note={t('sessionLapsed')} />
+        </div>
+      )}
+    </>
+  )
+}
+
+/** The shell waits for the served schema: it declares the tables, the saved views come with it. */
+function Workspace({ signed }: { signed: Signed }) {
   const frame = useRef<HTMLDivElement>(null)
   const [served, setServed] = useState<Schema | null>(null)
   const [unserved, setUnserved] = useState<ApiError | null>(null)
@@ -131,7 +201,7 @@ export function App() {
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
-  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded)
+  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, model)
   const reload = () => (view ? rows(view, dated ? range : {}, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload)
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
@@ -187,7 +257,7 @@ export function App() {
 
   return (
     <div className="nv-app" ref={frame}>
-      <Rail tables={tables} active={view?.key} onSelect={setActiveKey} onTable={openTable} onNewView={view ? () => setPanel('new') : undefined} actions={actions} space={space.status === 'ready' && served?.space && (
+      <Rail signed={signed} tables={tables} active={view?.key} onSelect={setActiveKey} onTable={openTable} onNewView={view ? () => setPanel('new') : undefined} actions={actions} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={served.models[served.space.model]?.label ?? ''} model={served.space.model} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">
@@ -207,6 +277,7 @@ export function App() {
             onSave: isSaved(view) && view.mine && view.editable ? () => save(view) : undefined,
             busy,
             onSaveAs: () => setPanel('saveAs'),
+            readOnly: isSaved(view) && !view.editable,
             onRevert: revert,
           } : null}
           viewNote={viewNote}

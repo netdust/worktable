@@ -24,6 +24,7 @@ export const organisatie = defineDataset({
     toegang: { type: 'text', label: 'Toegang', nullable: true },
     contact: { type: 'text', label: 'Contact', nullable: true },
     parameters: { type: 'json', label: 'Parameters', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
 
@@ -43,6 +44,7 @@ export const productie = defineDataset({
     },
     organisatie_id: { type: 'integer', label: 'Organisatie', nullable: true, relation: 'organisatie' },
     site_ref: { type: 'text', label: 'Site-referentie', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
 
@@ -71,7 +73,8 @@ export const activiteit = defineDataset({
       },
     },
     omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
-    start_at: { type: 'datetime', label: 'Start' },
+    datum: { type: 'date', label: 'Datum' },
+    start_at: { type: 'datetime', label: 'Start', nullable: true },
     eind_at: { type: 'datetime', label: 'Einde', nullable: true },
     plandag: { type: 'date', label: 'Plandag', readonly: true },
     locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
@@ -85,6 +88,7 @@ export const activiteit = defineDataset({
     verrekening_default: { type: 'text', label: 'Verrekening', nullable: true },
     bron: { type: 'text', label: 'Bron', default: 'plan', options: { plan: 'Plan', registratie: 'Registratie' } },
     notities: { type: 'text', label: 'Notities', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
   indexes: [['plandag']],
 })
@@ -94,6 +98,7 @@ export const persoon = defineDataset({
   label: 'Personen',
   title: 'weergavenaam',
   custom: true,
+  owners: { owner: 'id' },
   columns: {
     voornaam: { type: 'text', label: 'Voornaam' },
     achternaam: { type: 'text', label: 'Achternaam' },
@@ -109,6 +114,7 @@ export const persoon = defineDataset({
     },
     dietary: { type: 'text', label: 'Dieet', nullable: true },
     actief: { type: 'boolean', label: 'Actief', default: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
 
@@ -117,6 +123,7 @@ export const toewijzing = defineDataset({
   label: 'Toewijzingen',
   title: { via: 'persoon_id', else: 'naam' },
   custom: true,
+  owners: { owner: 'persoon_id' },
   matrix: {
     down: 'activiteit_id',
     across: 'persoon_id',
@@ -145,6 +152,7 @@ export const toewijzing = defineDataset({
       },
     },
     notitie: { type: 'text', label: 'Notitie', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
   indexes: [['persoon_id'], ['activiteit_id']],
 })
@@ -155,10 +163,12 @@ export const beschikbaarheid = defineDataset({
   title: { via: 'persoon_id', else: 'reden' },
   date: 'start_at',
   custom: true,
+  owners: { owner: 'persoon_id' },
   columns: {
     persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
     start_at: { type: 'datetime', label: 'Start' },
     eind_at: { type: 'datetime', label: 'Einde' },
     reden: { type: 'text', label: 'Reden', nullable: true },
+    legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })

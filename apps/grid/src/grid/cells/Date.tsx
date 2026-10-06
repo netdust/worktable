@@ -19,7 +19,15 @@ export function DateTimeEditor(props: EditorProps) {
 
 function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: EditorProps & { type: 'date' | 'datetime-local'; shape: RegExp }) {
   const input = useRef<HTMLInputElement>(null)
-  const valid = shape.test(editing.draft)
+  // A required column never clears, as Delete never does (keys.ts).
+  const valid = (editing.draft === '' && !column.required) || shape.test(editing.draft)
+
+  const take = (node: HTMLInputElement) => {
+    // Half-typed segments read as '' with badInput: they stay on screen but commit as the stored value.
+    if (node.value === '' && node.validity.badInput) return onDraft(column.edit(row))
+    if (node.value === '' && column.required) node.value = column.edit(row)
+    onDraft(node.value)
+  }
 
   useEffect(() => {
     if (!valid) onDraft(column.edit(row))
@@ -33,8 +41,10 @@ function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: E
       className="nv-editor"
       data-editor
       aria-label={column.label}
-      value={valid ? editing.draft : column.edit(row)}
-      onChange={(event) => onDraft(event.target.value)}
+      defaultValue={valid ? editing.draft : column.edit(row)}
+      onChange={(event) => take(event.currentTarget)}
+      // Chromium fires no input once the value is '': clearing the last segments shows only as a key.
+      onKeyUp={(event) => take(event.currentTarget)}
       onBlur={onLeave}
     />
   )

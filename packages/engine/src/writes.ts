@@ -3,10 +3,10 @@ import { eq } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
-import type { ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
-import { DEV_ACTOR } from './dev-actor'
+import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
+import type { Actor, ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
 import { ApiError, isRealDate } from './params'
-import { sourceOf, writerOf } from './registry'
+import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
 
@@ -41,9 +41,8 @@ const badValue = (column: string, message: string) => new ApiError(400, 'bad_val
 const columnOf = (dataset: DatasetDecl, name: string): ColumnDecl | undefined =>
   Object.hasOwn(dataset.columns, name) ? dataset.columns[name] : undefined
 
-export function writableOf(domain: Domain, name: string, op: WriteOp): Writable {
-  const source = sourceOf(domain, name)
-  if (!source) throw new ApiError(404, 'unknown_source', `unknown source "${name}"`)
+export function writableOf(domain: Domain, name: string, op: WriteOp, actor: Actor): Writable {
+  const source = visibleSource(domain, name, actor)
   const writer = source.kind === 'dataset' ? writerOf(domain, name) : undefined
   if (!writer?.[op]) throw new ApiError(405, 'read_only', `"${name}" does not accept ${op}`)
   return { dataset: source as DatasetDecl, writer }
@@ -95,11 +94,12 @@ function fits(type: ColumnDecl['type'], value: unknown): boolean {
   return typeof value === 'string'
 }
 
-export function checkValues(dataset: DatasetDecl, values: Values): void {
+// Before the writer, nulls wait: a domain writer refuses a missing value first, in its own words.
+export function checkValues(dataset: DatasetDecl, values: Values, nulls = true): void {
   for (const [key, value] of Object.entries(values)) {
     const column = columnOf(dataset, key)
     if (!column) throw badValue(key, 'is not a declared column')
-    if (value === null && !column.nullable) throw badValue(key, 'may not be null')
+    if (nulls && value === null && !column.nullable) throw badValue(key, 'may not be null')
     if (value !== null && !fits(column.type, value)) throw badValue(key, `must be ${column.type}`)
   }
 }
@@ -148,7 +148,7 @@ function decode(column: ColumnDecl, raw: string | number | null): unknown {
   return raw
 }
 
-function encodeAll(dataset: DatasetDecl, values: Values): Stored {
+export function encodeAll(dataset: DatasetDecl, values: Values): Stored {
   const declared = Object.entries(dataset.columns).filter(([key]) => Object.hasOwn(values, key))
   return Object.fromEntries(declared.map(([key, column]) => [key, encode(column, values[key])]))
 }
@@ -194,6 +194,13 @@ function existence(store: Store): WriteContext['exists'] {
   }
 }
 
+export const contextOf = (store: Store, actor: Actor, current: Values | null): WriteContext => ({
+  actor,
+  current,
+  find: finder(store),
+  exists: existence(store),
+})
+
 type Referrer = { label: string; count: number }
 
 function referrers(store: Store, target: DatasetDecl, id: number): Referrer[] {
@@ -237,7 +244,14 @@ function update(sqlite: Database, table: string, id: number, stored: Stored, now
 }
 
 // Read back so the defaults the database filled are revised too.
-function create(sqlite: Database, dataset: DatasetDecl, stored: Stored, now: string, actorId: number): number {
+export function create(
+  sqlite: Database,
+  dataset: DatasetDecl,
+  stored: Stored,
+  now: string,
+  actorId: number,
+  batch?: string,
+): number {
   const id = insert(sqlite, dataset.name, stored)
   const row = liveRow(sqlite, dataset.name, id) as Stored
   const changes = Object.keys(dataset.columns).map((key): Change => [key, null, row[key] ?? null])
@@ -248,6 +262,7 @@ function create(sqlite: Database, dataset: DatasetDecl, stored: Stored, now: str
     changes.filter(([, , value]) => value !== null),
     now,
     actorId,
+    batch,
   )
   return id
 }
@@ -264,8 +279,8 @@ export function revise(
   changes: Change[],
   now: string,
   actorId: number,
+  batch: string = crypto.randomUUID(),
 ): void {
-  const batch = crypto.randomUUID()
   const row = sqlite.query(
     'INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   )
@@ -275,11 +290,38 @@ export function revise(
   }
 }
 
-function valuesOf(store: Store, { dataset, writer }: Writable, op: WriteOp, body: Values, ctx: WriteContext): Values {
-  const cut = cutBody(dataset, body)
-  checkValues(dataset, cut)
+const unknownRecord = (id: unknown) => new ApiError(404, 'unknown_record', `unknown record ${String(id)}`)
+
+// An owner column may only ever hold the subject, so a row cannot be created or moved out of scope.
+function checkOwner(scope: Scope, values: Values): void {
+  if (scope === 'all' || scope === 'none' || !Object.hasOwn(values, scope.column)) return
+  if (values[scope.column] !== scope.id) forbid(`"${scope.column}" must be ${scope.id}`)
+}
+
+function forcedOwner(scope: Scope, cut: Values): Values {
+  if (scope === 'all') return cut
+  if (scope === 'none') throw unknownRecord('new')
+  if (scope.column === 'id') forbid('an owner may not create its own subject')
+  return { ...cut, [scope.column]: scope.id }
+}
+
+export function valuesOf(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  body: Values,
+  ctx: WriteContext,
+  scope: Scope,
+): Values {
+  const { dataset, writer } = target
+  const given = cutBody(dataset, body)
+  checkOwner(scope, given)
+  const cut = op === 'create' ? forcedOwner(scope, given) : given
+  checkValues(dataset, cut, false)
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
-  const values = returned ?? {}
+  checkOwner(scope, returned ?? {})
+  // Forced again on what is stored: a writer may return a fresh object without the owner column.
+  const values = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
   checkValues(dataset, values)
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
@@ -287,29 +329,47 @@ function valuesOf(store: Store, { dataset, writer }: Writable, op: WriteOp, body
   return values
 }
 
-function storedOf(store: Store, target: Writable, op: WriteOp, body: Values, ctx: WriteContext, now: string): Stored {
-  if (op !== 'delete') return encodeAll(target.dataset, valuesOf(store, target, op, body, ctx))
-  inUse(store, target.dataset, ctx.current?.id as number)
+// On delete the writer runs before the in-use check, so an actor it refuses never learns the counts.
+function storedOf(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  body: Values,
+  ctx: WriteContext,
+  scope: Scope,
+  now: string,
+): Stored {
+  if (op !== 'delete') return encodeAll(target.dataset, valuesOf(store, target, op, body, ctx, scope))
   target.writer.delete?.(ctx)
+  inUse(store, target.dataset, ctx.current?.id as number)
   return { deleted_at: now }
 }
 
+function currentOf(sqlite: Database, target: Writable, id: number | null, scope: Scope): Stored | null {
+  if (id === null) return null
+  const current = liveRow(sqlite, target.dataset.name, id)
+  if (!current || !inScope(scope, current)) throw unknownRecord(id)
+  return current
+}
+
 // One transaction: a refusal or a failed Revision insert leaves the table and revision untouched.
-export function runWrite(store: Store, target: Writable, op: WriteOp, id: number | null, body: Values): number {
+export function runWrite(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  id: number | null,
+  body: Values,
+  actor: Actor,
+): number {
   const { sqlite } = store
   const table = target.dataset.name
+  const scope = scopeOf(actor, target.dataset)
   return sqlite
     .transaction(() => {
-      const current = id === null ? null : liveRow(sqlite, table, id)
-      if (id !== null && !current) throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
-      const ctx = {
-        actor: DEV_ACTOR,
-        current: current && decodeAll(target.dataset, current),
-        find: finder(store),
-        exists: existence(store),
-      }
+      const current = currentOf(sqlite, target, id, scope)
+      const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current))
       const now = new Date().toISOString()
-      const stored = storedOf(store, target, op, body, ctx, now)
+      const stored = storedOf(store, target, op, body, ctx, scope, now)
       if (id === null || current === null) return create(sqlite, target.dataset, stored, now, ctx.actor.id)
       const changes = diff(stored, current)
       if (changes.length === 0) return id
@@ -331,9 +391,15 @@ const MAX_REVISIONS = 5000
 
 const parsed = (raw: string | null): unknown => (raw === null ? null : JSON.parse(raw))
 
-export function readRevisions(store: Store, name: string, id: number): Values[] {
-  if (!store.domain.datasets.some((d) => d.name === name) || !writerOf(store.domain, name)) {
+export function readRevisions(store: Store, name: string, id: number, actor: Actor): Values[] {
+  const source = visibleSource(store.domain, name, actor)
+  if (source.kind !== 'dataset' || !writerOf(store.domain, name)) {
     throw new ApiError(404, 'unknown_source', `unknown source "${name}"`)
+  }
+  const scope = scopeOf(actor, source)
+  if (scope !== 'all') {
+    const row = store.sqlite.query(`SELECT * FROM "${name}" WHERE id = ?`).get(id) as Stored | null
+    if (!row || !inScope(scope, row)) throw unknownRecord(id)
   }
   const rows = store.sqlite
     .query(

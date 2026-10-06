@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import {
   type ColumnDecl,
-  createEngine,
   type DatasetDecl,
   type Domain,
   DomainError,
@@ -12,46 +11,47 @@ import {
   seedDomain,
   validateDomain,
 } from '../src'
+import { signIn, testEngine } from './sign-in'
 
 const text: ColumnDecl = { type: 'text', label: 'T', nullable: true }
 const rel = (relation: string): ColumnDecl => ({ type: 'integer', label: 'R', relation, nullable: true })
 const states: ColumnDecl = { type: 'text', label: 'S', options: { a: 'A', b: 'B', c: 'C' } }
 
-const persoon = defineDataset({ name: 'persoon', label: 'P', title: 'naam', custom: false, columns: { naam: text } })
+const member = defineDataset({ name: 'member', label: 'P', title: 'name', custom: false, columns: { name: text } })
 const taak = defineDataset({
   name: 'taak',
   label: 'T',
-  title: 'naam',
-  date: 'dag',
+  title: 'name',
+  date: 'day',
   custom: false,
-  columns: { naam: text, dag: { type: 'date', label: 'D' } },
+  columns: { name: text, day: { type: 'date', label: 'D' } },
 })
 const verlof = defineDataset({
   name: 'verlof',
   label: 'V',
-  title: 'reden',
+  title: 'reason',
   date: 'start_at',
   custom: false,
-  columns: { persoon_id: rel('persoon'), reden: text, start_at: { type: 'date', label: 'S' }, end_at: text },
+  columns: { member_id: rel('member'), reason: text, start_at: { type: 'date', label: 'S' }, end_at: text },
 })
 const matrix = {
   down: 'taak_id',
-  across: 'persoon_id',
-  label: 'naam',
+  across: 'member_id',
+  label: 'name',
   cell: 'state',
-  note: 'notitie',
+  note: 'note',
   keys: { x: 'a', y: 'b' },
   marks: { a: '?', b: '!' },
   count: 'b',
-  away: { dataset: 'verlof', across: 'persoon_id', label: 'reden', end: 'end_at' },
+  away: { dataset: 'verlof', across: 'member_id', label: 'reason', end: 'end_at' },
 }
 const join = (over: Partial<DatasetDecl> = {}): DatasetDecl =>
   defineDataset({
     name: 'koppel',
     label: 'K',
-    title: { via: 'persoon_id', else: 'naam' },
+    title: { via: 'member_id', else: 'name' },
     custom: false,
-    columns: { taak_id: rel('taak'), persoon_id: rel('persoon'), naam: text, state: states, notitie: text },
+    columns: { taak_id: rel('taak'), member_id: rel('member'), name: text, state: states, note: text },
     matrix,
     ...over,
   })
@@ -60,23 +60,23 @@ const domainOf = (...datasets: DatasetDecl[]): Domain => ({
   datasets,
   queries: [],
   seed: (insert) => {
-    insert('persoon', [{ naam: 'Ann' }, { naam: 'Bob' }])
+    insert('member', [{ name: 'Ann' }, { name: 'Bob' }])
     insert('taak', [
-      { naam: 'in', dag: '2026-10-05' },
-      { naam: 'in2', dag: '2026-10-06' },
-      { naam: 'out', dag: '2026-11-01' },
+      { name: 'in', day: '2026-10-05' },
+      { name: 'in2', day: '2026-10-06' },
+      { name: 'out', day: '2026-11-01' },
     ])
     insert('koppel', [
-      { taak_id: 1, persoon_id: 1, state: 'a' },
-      { taak_id: 1, persoon_id: null, naam: 'Vrij', state: 'b' },
-      { taak_id: 2, persoon_id: 2, state: 'a' },
-      { taak_id: 3, persoon_id: 1, state: 'a' },
+      { taak_id: 1, member_id: 1, state: 'a' },
+      { taak_id: 1, member_id: null, name: 'Vrij', state: 'b' },
+      { taak_id: 2, member_id: 2, state: 'a' },
+      { taak_id: 3, member_id: 1, state: 'a' },
     ])
   },
   views: [],
 })
 
-const full = (): Domain => domainOf(persoon, taak, verlof, join())
+const full = (): Domain => domainOf(member, taak, verlof, join())
 
 function failure(d: Domain): DomainError {
   try {
@@ -89,18 +89,18 @@ function failure(d: Domain): DomainError {
 }
 
 const withMatrix = (over: Record<string, unknown>): Domain =>
-  domainOf(persoon, taak, verlof, join({ matrix: { ...matrix, ...over } as DatasetDecl['matrix'] }))
+  domainOf(member, taak, verlof, join({ matrix: { ...matrix, ...over } as DatasetDecl['matrix'] }))
 
 describe('validateDomain: matrix', () => {
   test('a valid matrix passes', () => expect(() => validateDomain(full())).not.toThrow())
 
   const bad: [string, Record<string, unknown>, string][] = [
-    ['down not a relation', { down: 'naam' }, 'naam'],
+    ['down not a relation', { down: 'name' }, 'name'],
     ['down undeclared', { down: 'nope' }, 'nope'],
     ['across not a relation', { across: 'state' }, 'state'],
     ['label not text', { label: 'taak_id' }, 'taak_id'],
     ['note undeclared', { note: 'nope' }, 'nope'],
-    ['cell without options', { cell: 'naam' }, 'naam'],
+    ['cell without options', { cell: 'name' }, 'name'],
     ['key to a non-option', { keys: { x: 'z' } }, 'z'],
     ['mark on a non-option', { marks: { z: '?' } }, 'z'],
     ['count a non-option', { count: 'z' }, 'z'],
@@ -121,29 +121,31 @@ describe('validateDomain: matrix', () => {
   test('an away dataset without a date is refused', () => {
     const { kind, date, ...rest } = verlof
     const noDate = defineDataset(rest)
-    expect(failure(domainOf(persoon, taak, noDate, join())).bad).toBe('verlof')
+    expect(failure(domainOf(member, taak, noDate, join())).bad).toBe('verlof')
   })
 
   test('two matrices on one down source are refused', () => {
     const second = join({ name: 'tweede' })
-    expect(failure(domainOf(persoon, taak, verlof, join(), second)).bad).toBe('taak_id')
+    expect(failure(domainOf(member, taak, verlof, join(), second)).bad).toBe('taak_id')
   })
 })
 
 describe('GET /rows/<down>?cells=1', () => {
   let app: Hono
   let sqlite: Database
+  let cookie: string
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new Database(':memory:')
     const d = full()
     migrate(sqlite, d)
     seedDomain(sqlite, d)
-    app = createEngine(sqlite, d, { port: 4310 })
+    app = testEngine(sqlite, d)
+    cookie = await signIn(app)
   })
 
   async function get(path: string) {
-    const res = await app.request(path, { headers: { host: '127.0.0.1:4310' } })
+    const res = await app.request(path, { headers: { host: '127.0.0.1:4310', cookie } })
     // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
     return { status: res.status, body: (await res.json()) as Record<string, any> }
   }
@@ -154,8 +156,8 @@ describe('GET /rows/<down>?cells=1', () => {
     expect(status).toBe(200)
     expect(body.rows.map((r: { id: number }) => r.id)).toEqual([1, 2])
     expect(body.rows[0].cells.map((c: { title: string }) => c.title)).toEqual(['Ann', 'Vrij'])
-    expect(body.rows[0].cells[0].lookups.persoon_id).toEqual({ id: 1, title: 'Ann' })
-    expect(body.rows[1].cells.map((c: { persoon_id: number }) => c.persoon_id)).toEqual([2])
+    expect(body.rows[0].cells[0].lookups.member_id).toEqual({ id: 1, title: 'Ann' })
+    expect(body.rows[1].cells.map((c: { member_id: number }) => c.member_id)).toEqual([2])
   })
 
   test('a soft-deleted join row is absent', async () => {
@@ -197,8 +199,8 @@ describe('GET /rows/<down>?cells=1', () => {
   })
 
   test('more down rows than one query chunk still get their cells', async () => {
-    const insert = sqlite.prepare("INSERT INTO taak (naam, dag) VALUES ('m', '2026-10-10')")
-    const link = sqlite.prepare('INSERT INTO koppel (taak_id, persoon_id, state) VALUES (?, 1, ?)')
+    const insert = sqlite.prepare("INSERT INTO taak (name, day) VALUES ('m', '2026-10-10')")
+    const link = sqlite.prepare('INSERT INTO koppel (taak_id, member_id, state) VALUES (?, 1, ?)')
     sqlite.transaction(() => {
       for (let i = 0; i < 1500; i++) link.run(Number(insert.run().lastInsertRowid), 'a')
     })()

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, create, createView, deleteView, forgetSchema, prefs, records, remove, restoreView, rows, savePrefs, savedViews, schema, update, updateView } from './api'
+import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, savePrefs, savedViews, schema, signOut, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -508,5 +508,45 @@ describe('the matrix on the engine', () => {
     on(() => json({ rows: [cell, { ...cell, id: 5, persoon_id: null, naam: 'Gastmuzikant', title: 'Gastmuzikant' }], total: 2 }))
 
     expect((await records('toewijzing', 'gast')).rows.map((r) => [r.id, r.title, r.fields.naam])).toEqual([[5, 'Gastmuzikant', 'Gastmuzikant']])
+  })
+})
+
+describe('signing in', () => {
+  it('a 401 on any request calls the unauthenticated callback, and the request still fails', async () => {
+    const lapsed = vi.fn()
+    const stop = onUnauthenticated(lapsed)
+    fetcher.mockImplementation(async () => json({ code: 'unauthenticated', message: 'Sign in first' }, 401))
+
+    await expect(records('productie', '')).rejects.toEqual({ code: 'unauthenticated', message: 'Sign in first' })
+    expect(lapsed).toHaveBeenCalledOnce()
+
+    stop()
+    await expect(me()).rejects.toMatchObject({ code: 'unauthenticated' })
+    expect(lapsed).toHaveBeenCalledOnce()
+  })
+
+  it('another refusal is not a lapsed session', async () => {
+    const lapsed = vi.fn()
+    const stop = onUnauthenticated(lapsed)
+    fetcher.mockImplementation(async () => json({ code: 'forbidden', message: 'Nee' }, 403))
+
+    await expect(remove('productie', 1)).rejects.toMatchObject({ code: 'forbidden' })
+    expect(lapsed).not.toHaveBeenCalled()
+    stop()
+  })
+
+  it('posts the email, the token, and an empty body to sign out', async () => {
+    const account = { id: 3, email: 'an@example.test', role: 'editor', subject: null }
+    fetcher.mockImplementation(async (input) => json(String(input) === '/api/auth/consume' ? { account } : { ok: true }))
+
+    await requestLink('an@example.test')
+    expect(await consumeLink('tok')).toEqual(account)
+    await signOut()
+
+    expect(fetcher.mock.calls.map(([input, init]) => [String(input), init?.method, init?.body])).toEqual([
+      ['/api/auth/request', 'POST', JSON.stringify({ email: 'an@example.test' })],
+      ['/api/auth/consume', 'POST', JSON.stringify({ token: 'tok' })],
+      ['/api/auth/signout', 'POST', '{}'],
+    ])
   })
 })

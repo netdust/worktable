@@ -1,6 +1,7 @@
-import { and, asc, count, desc, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { Scope } from './access'
 import type { DatasetDecl, Domain, MatrixDecl } from './declare'
 import { filterWhere } from './filter'
 import type { RowsParams } from './params'
@@ -20,12 +21,18 @@ type Raw = Record<string, unknown>
 const columnOf = (table: SQLiteTable, name: string): SQLiteColumn =>
   (table as unknown as Record<string, SQLiteColumn>)[name] as SQLiteColumn
 
-function whereOf(source: Source, table: SQLiteTable, params: RowsParams): SQL | undefined {
+function scopeWhere(table: SQLiteTable, scope: Scope): SQL | undefined {
+  if (scope === 'all') return undefined
+  return scope === 'none' ? sql`0` : eq(columnOf(table, scope.column), scope.id)
+}
+
+function whereOf(source: Source, table: SQLiteTable, params: RowsParams, scope: Scope): SQL | undefined {
   const dateColumn = source.date ? columnOf(table, source.date) : null
   const window = (op: '>=' | '<=', day: string | null): SQL | undefined =>
     day && dateColumn ? sql`substr(${dateColumn}, 1, 10) ${sql.raw(op)} ${day}` : undefined
   const parts = [
     source.kind === 'dataset' ? isNull(columnOf(table, 'deleted_at')) : undefined,
+    scopeWhere(table, scope),
     params.filter ? filterWhere(params.filter, source, table) : undefined,
     window('>=', params.from),
     window('<=', params.to),
@@ -87,9 +94,10 @@ export function readRows(
   domain: Domain,
   source: Source,
   params: RowsParams,
+  scope: Scope,
 ): { rows: EngineRow[]; total: number } {
   const table = tableOf(source)
-  const where = whereOf(source, table, params)
+  const where = whereOf(source, table, params, scope)
   const raws = db
     .select()
     .from(table)
@@ -114,6 +122,7 @@ export function cellsOf(
   domain: Domain,
   { join, matrix }: NonNullable<ReturnType<typeof matrixOf>>,
   downIds: number[],
+  scope: Scope,
 ): Map<number, EngineRow[]> {
   const table = tableOf(join)
   const raws: Raw[] = []
@@ -122,7 +131,13 @@ export function cellsOf(
     const chunk = db
       .select()
       .from(table)
-      .where(and(isNull(columnOf(table, 'deleted_at')), inArray(columnOf(table, matrix.down), ids)))
+      .where(
+        and(
+          isNull(columnOf(table, 'deleted_at')),
+          scopeWhere(table, scope),
+          inArray(columnOf(table, matrix.down), ids),
+        ),
+      )
       .orderBy(asc(columnOf(table, 'id')))
       .all() as Raw[]
     raws.push(...chunk)

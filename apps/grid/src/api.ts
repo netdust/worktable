@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -31,10 +31,21 @@ async function refusal(response: Response): Promise<ApiError> {
   return toApiError(body ?? `${response.status} ${response.statusText}`.trim())
 }
 
+let unauthenticated = () => {}
+
+/** Called on every 401: the session is gone. Answers a function that stops it. */
+export function onUnauthenticated(callback: () => void): () => void {
+  unauthenticated = callback
+  return () => {
+    if (unauthenticated === callback) unauthenticated = () => {}
+  }
+}
+
 async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>): Promise<T> {
   try {
     const body = data === undefined ? undefined : JSON.stringify(data)
     const response = await fetch(endpoint(path, query), { method, body, headers: body ? { 'Content-Type': 'application/json' } : undefined })
+    if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     return (await response.json()) as T
   } catch (error) {
@@ -123,13 +134,21 @@ export async function update(model: string, id: number, data: Record<string, unk
 
 /** The write lands on the target record; the row is then read again as the query now computes it. */
 async function updateThrough(model: string, source: EngineSource, id: number, sent: Record<string, unknown>, row?: Row): Promise<Row> {
-  const [[column, value] = ['', undefined]] = Object.entries(sent)
+  const [[column] = ['']] = Object.entries(sent)
   const writes = source.columns[column]?.writes
   if (!writes || !row) throw { code: 'read_only', message: `"${column}" of "${model}" is not written` } satisfies ApiError
   const target = writes.key === 'id' ? row.id : row.fields[writes.key]
   if (target === null || target === undefined) throw { code: 'read_only', message: `"${column}" of "${model}" has no ${writes.key}` } satisfies ApiError
-  await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
-  const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
+  // The first column is the edited one; the others an undo restores with it land only on the same record.
+  const same = Object.entries(sent).filter(([name]) => {
+    const also = source.columns[name]?.writes
+    return also?.dataset === writes.dataset && also.key === writes.key
+  })
+  await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, Object.fromEntries(same.map(([name, value]) => [source.columns[name]?.writes?.field, value])))
+  const written = same.reduce<Row>(
+    (next, [name, value]) => (name === source.title ? { ...next, title: String(value ?? '') } : { ...next, fields: { ...next.fields, [name]: value } }),
+    row,
+  )
   // An edit can move the row out of the query; the write still landed.
   const found = await request<{ rows: EngineRow[] }>('GET', `/rows/${model}`, { filter: JSON.stringify({ id }) }).catch(() => null)
   return found?.rows[0] ? toRow(found.rows[0]) : written
@@ -182,4 +201,22 @@ export function prefs(): Promise<Prefs> {
 /** Prefs are not stored yet: the change holds for this visit. */
 export function savePrefs(data: Prefs): Promise<Prefs> {
   return Promise.resolve(data)
+}
+
+/** The engine answers the same for any address, so the caller can say nothing more than "look in your mail". */
+export function requestLink(email: string): Promise<unknown> {
+  return request('POST', '/auth/request', {}, { email })
+}
+
+export async function consumeLink(token: string): Promise<Account> {
+  return (await request<{ account: Account }>('POST', '/auth/consume', {}, { token })).account
+}
+
+export function me(): Promise<Account> {
+  return request<Account>('GET', '/auth/me')
+}
+
+export function signOut(): Promise<unknown> {
+  forgetSchema()
+  return request('POST', '/auth/signout', {}, {})
 }

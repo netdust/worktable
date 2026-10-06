@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { createEngine } from '../src'
 import { domain, freshDb } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
-const app = createEngine(freshDb(), domain, { port: 4310 })
-const schema = (host?: string) => app.request('/api/schema', { headers: host ? { host } : {} })
+const app = testEngine(freshDb(), domain)
+const cookie = await signIn(app)
+const schema = (host?: string) => app.request('/api/schema', { headers: host ? { host, cookie } : { cookie } })
 
 describe('host allowlist', () => {
   test('a rebound name is 403 forbidden_host', async () => {

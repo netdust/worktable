@@ -1,15 +1,18 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { createEngine, type Domain, defineDataset, migrate, seedDomain } from '../src'
+import { type Domain, defineDataset, migrate, seedDomain } from '../src'
 import { domain, freshDb } from './fixture'
+import { signIn, testEngine } from './sign-in'
 
 let sqlite: Database
 let app: Hono
+let cookie: string
 
-beforeEach(() => {
+beforeEach(async () => {
   sqlite = freshDb()
-  app = createEngine(sqlite, domain, { port: 4310 })
+  app = testEngine(sqlite, domain)
+  cookie = await signIn(app)
 })
 
 const counts = (): Record<string, number> => {
@@ -20,7 +23,7 @@ const counts = (): Record<string, number> => {
 }
 
 async function get(path: string) {
-  const res = await app.request(path, { headers: { host: '127.0.0.1:4310' } })
+  const res = await app.request(path, { headers: { host: '127.0.0.1:4310', cookie } })
   // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
   return { status: res.status, body: (await res.json()) as Record<string, any> }
 }
@@ -44,7 +47,7 @@ const badFilter = (filter: unknown) =>
   )
 
 describe('denials', () => {
-  test('filter key outside the declared columns is 400 bad_filter', () => badFilter({ 'titel) OR 1=1 --': 1 }))
+  test('filter key outside the declared columns is 400 bad_filter', () => badFilter({ 'heading) OR 1=1 --': 1 }))
   test('custom key with a quote is 400 bad_filter', () => badFilter({ "custom.x') --": 1 }))
   test('internal columns are not filterable', () => badFilter({ deleted_at: null }))
 
@@ -57,7 +60,7 @@ describe('denials', () => {
   })
 
   test('sort on an undeclared key is 400 bad_sort', () =>
-    denied('/api/rows/taak?sort=titel;DROP TABLE x', 400, 'bad_sort'))
+    denied('/api/rows/taak?sort=heading;DROP TABLE x', 400, 'bad_sort'))
   test('sort on custom.key is 400 bad_sort', () => denied('/api/rows/taak?sort=custom.kleur', 400, 'bad_sort'))
   test('2001 sort keys is 400 bad_sort, not a 500', () =>
     denied(`/api/rows/taak?sort=${Array(2001).fill('id').join(',')}`, 400, 'bad_sort'))
@@ -119,11 +122,11 @@ describe('rows', () => {
     expect(body.rows[0]).toEqual({
       id: 1,
       project_id: 1,
-      omschrijving: 'een',
+      description: 'een',
       status: 'open',
       prio: 2,
       start_at: '2026-10-12T09:00',
-      dag: '2026-10-12',
+      day: '2026-10-12',
       afgerond: false,
       title: 'een',
       custom: { kleur: 'rood', labels: ['a', 'b'] },
@@ -144,17 +147,17 @@ describe('rows', () => {
     const groep = defineDataset({
       name: 'groep',
       label: 'Groepen',
-      title: 'naam',
+      title: 'name',
       custom: false,
-      columns: { naam: { type: 'text', label: 'Naam', nullable: true } },
+      columns: { name: { type: 'text', label: 'Name', nullable: true } },
     })
     const lid = defineDataset({
       name: 'lid',
       label: 'Leden',
-      title: 'naam',
+      title: 'name',
       custom: false,
       columns: {
-        naam: { type: 'text', label: 'Naam' },
+        name: { type: 'text', label: 'Name' },
         groep_id: { type: 'integer', label: 'Groep', relation: 'groep' },
       },
     })
@@ -162,15 +165,16 @@ describe('rows', () => {
       datasets: [groep, lid],
       queries: [],
       seed: (insert) => {
-        insert('groep', [{ naam: null }])
-        insert('lid', [{ naam: 'x', groep_id: 1 }])
+        insert('groep', [{ name: null }])
+        insert('lid', [{ name: 'x', groep_id: 1 }])
       },
       views: [],
     }
     sqlite = new Database(':memory:')
     migrate(sqlite, nullTitle)
     seedDomain(sqlite, nullTitle)
-    app = createEngine(sqlite, nullTitle, { port: 4310 })
+    app = testEngine(sqlite, nullTitle)
+    cookie = await signIn(app)
     const { body } = await rows('lid')
     expect(body.rows[0].lookups).toEqual({ groep_id: { id: 1, title: '' } })
   })
@@ -181,8 +185,8 @@ describe('rows', () => {
     expect(body.rows[0]).toEqual({
       id: 1,
       project_id: 1,
-      naam: 'Alfa',
-      dag: '2026-10-12',
+      name: 'Alfa',
+      day: '2026-10-12',
       aantal: 2,
       title: 'Alfa',
       custom: {},
@@ -207,8 +211,8 @@ describe('rows', () => {
     expect(body.rows.map((r: { id: number }) => r.id)).toEqual([4, 3, 1, 2])
   })
 
-  test('group dag orders by dag before sort', async () => {
-    const { body } = await rows('taak', 'group=dag&sort=-start_at')
+  test('group day orders by day before sort', async () => {
+    const { body } = await rows('taak', 'group=day&sort=-start_at')
     expect(body.rows.map((r: { id: number }) => r.id)).toEqual([1, 2, 3, 4])
   })
 
@@ -228,8 +232,8 @@ describe('rows', () => {
   test('schema lists every declared source and no saved views: GET /api/views serves those', async () => {
     const { status, body } = await get('/api/schema')
     expect(status).toBe(200)
-    expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'notitie', 'per_project', 'notitie_lijst'])
-    expect(body.sources.taak).toMatchObject({ kind: 'dataset', label: 'Taken', title: 'omschrijving', date: 'dag' })
+    expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'note', 'per_project', 'note_lijst'])
+    expect(body.sources.taak).toMatchObject({ kind: 'dataset', label: 'Taken', title: 'description', date: 'day' })
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })
     expect(body.sources.project.date).toBeNull()
     expect(body.sources.per_project.kind).toBe('query')
@@ -260,7 +264,7 @@ describe('limit', () => {
 
   test('default limit is 5000', async () => {
     const insert = sqlite.prepare(
-      "INSERT INTO taak (project_id, omschrijving, status, start_at, dag) VALUES (1, 'x', 'open', '2026-10-12T09:00', '2026-10-12')",
+      "INSERT INTO taak (project_id, description, status, start_at, day) VALUES (1, 'x', 'open', '2026-10-12T09:00', '2026-10-12')",
     )
     sqlite.transaction(() => {
       for (let i = 0; i < 4997; i++) insert.run()
@@ -274,7 +278,7 @@ describe('cost', () => {
   test('a 100-value $contains over 20k rows answers within 2600 ms, count included', async () => {
     const all = Array.from({ length: 100 }, (_, i) => `v${i}`)
     const insert = sqlite.prepare(
-      "INSERT INTO taak (project_id, omschrijving, status, start_at, dag, custom) VALUES (1, 'x', 'open', '2026-10-12T09:00', '2026-10-12', ?)",
+      "INSERT INTO taak (project_id, description, status, start_at, day, custom) VALUES (1, 'x', 'open', '2026-10-12T09:00', '2026-10-12', ?)",
     )
     sqlite.transaction(() => {
       for (let i = 0; i < 20_000; i++) insert.run(JSON.stringify({ labels: i % 1000 === 0 ? all : all.slice(0, 99) }))
@@ -292,18 +296,18 @@ describe('title through a relation', () => {
   const groep = defineDataset({
     name: 'groep',
     label: 'Groepen',
-    title: 'naam',
+    title: 'name',
     custom: false,
-    columns: { naam: { type: 'text', label: 'Naam' } },
+    columns: { name: { type: 'text', label: 'Name' } },
   })
   const regel = defineDataset({
     name: 'regel',
     label: 'Regels',
-    title: { via: 'groep_id', else: 'reden' },
+    title: { via: 'groep_id', else: 'reason' },
     custom: false,
     columns: {
       groep_id: { type: 'integer', label: 'Groep', relation: 'groep', nullable: true },
-      reden: { type: 'text', label: 'Reden', nullable: true },
+      reason: { type: 'text', label: 'Reason', nullable: true },
     },
   })
   const via: Domain = {
@@ -311,35 +315,36 @@ describe('title through a relation', () => {
     queries: [],
     writers: { regel: { create: (v) => v } },
     seed: (insert) => {
-      insert('groep', [{ naam: 'Alfa' }, { naam: 'Beta' }])
-      insert('regel', [{ groep_id: 1 }, { groep_id: null, reden: 'ziek' }, { groep_id: 2, reden: 'x' }])
+      insert('groep', [{ name: 'Alfa' }, { name: 'Beta' }])
+      insert('regel', [{ groep_id: 1 }, { groep_id: null, reason: 'ziek' }, { groep_id: 2, reason: 'x' }])
     },
     views: [],
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new Database(':memory:')
     migrate(sqlite, via)
     seedDomain(sqlite, via)
-    app = createEngine(sqlite, via, { port: 4310 })
+    app = testEngine(sqlite, via)
+    cookie = await signIn(app)
   })
 
   test('resolves to the target title, else the fallback column, else empty', async () => {
     const { body } = await rows('regel', 'sort=id')
     expect(body.rows.map((r: { title: string }) => r.title)).toEqual(['Alfa', 'ziek', 'Beta'])
-    sqlite.run('INSERT INTO regel (groep_id, reden) VALUES (NULL, NULL)')
+    sqlite.run('INSERT INTO regel (groep_id, reason) VALUES (NULL, NULL)')
     expect((await rows('regel', 'sort=-id&limit=1')).body.rows[0].title).toBe('')
   })
 
   test('renaming the target changes the title on the next read', async () => {
-    sqlite.run("UPDATE groep SET naam = 'Gamma' WHERE id = 1")
+    sqlite.run("UPDATE groep SET name = 'Gamma' WHERE id = 1")
     expect((await rows('regel', 'sort=id')).body.rows[0].title).toBe('Gamma')
   })
 
   test('a write reply carries the title', async () => {
     const res = await app.request('/api/rows/regel', {
       method: 'POST',
-      headers: { host: '127.0.0.1:4310', 'content-type': 'application/json' },
+      headers: { host: '127.0.0.1:4310', 'content-type': 'application/json', cookie },
       body: JSON.stringify({ groep_id: 2 }),
     })
     expect(res.status).toBe(201)
@@ -348,7 +353,7 @@ describe('title through a relation', () => {
 
   test('/schema keeps title as the else column and names the relation', async () => {
     const { body } = await get('/api/schema')
-    expect(body.sources.regel).toMatchObject({ title: 'reden', title_via: 'groep_id' })
+    expect(body.sources.regel).toMatchObject({ title: 'reason', title_via: 'groep_id' })
     expect(body.sources.groep.title_via).toBeUndefined()
   })
 })
