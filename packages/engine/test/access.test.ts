@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { type Actor, type DatasetDecl, type Domain, defineDataset, migrate, seedDomain, type Writer } from '../src'
+import { type DatasetDecl, type Domain, defineDataset, migrate, seedDomain, type Writer } from '../src'
 import { contents, domain, freshDb, projectDeleteHook, projectDeletes, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
