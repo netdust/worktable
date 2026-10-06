@@ -93,7 +93,7 @@
 
 The check reads the term list and allow list from `~/laika-export/scan` (`WT_EXPORT_SCAN` overrides). It fails on any listed term in the staged diff's added lines or file names, naming only the file and the category. Without the list it prints "skipped" and passes. The tests use invented terms: a hit, a near-miss inside a longer word, an allowed term, a file name, and a missing list.
 
-- [ ] Write the tests, then the script; run `bun test scripts/check-export-terms.test.ts` and `bun run check`. Commit: `chore(check): staged diffs may not hold names from the export`.
+- [x] Done before execution, on Stefan's direct request (e7d02ff). Write the tests, then the script; run `bun test scripts/check-export-terms.test.ts` and `bun run check`. Commit: `chore(check): staged diffs may not hold names from the export`.
 
 ### Task 1: Theatre datasets, writers, seeds and views
 **Files:**
@@ -116,7 +116,7 @@ Steps (one pass; the denial tests are written first):
   - an unknown productie, and a deleted locatie, are refused;
   - an owner gets 404 `unknown_source` on `speelreeks`, `rol` and `sjabloon` through REST (none declares `owners`), and a direct writer call with an owner actor gets 403;
   - an Activiteit write with an unknown or deleted `speelreeks_id` is refused in Dutch ("Speelreeks bestaat niet."), through a `checkLive(ctx, 'speelreeks', …)` in the Activiteit writer;
-  - a Speelreeks of exactly 31 days (start to end inclusive) is accepted and one of 32 is refused;
+  - a Speelreeks of exactly 31 days (start to end inclusive) is accepted and one of 32 is refused. The cap reads the own organisation's `parameters.max_speelreeks_dagen`, default 31 when it is absent (Stefan, 2026-10-06: an organisation parameter, default 31 days, or keep the constant and say so in the report); a test with the parameter set to 10 refuses an 11-day reeks;
   - deleting a Speelreeks with a live activity gets 409 `in_use`, and deleting one without gets 200;
   - a Rol `dagtarief` PATCH by an editor gets 403 with "Alleen een beheerder wijzigt tarieven.", an editor's POST with `uurtarief` gets the same 403, the same by an administrator gets 200, and an editor's `naam` edit gets 200;
   - `validateItems` refuses: a bad soort, an `offset_dag` of -1, `start_tijd` "25:00", `duur` without `start_tijd`, and a `locatie_regel` other than `speelreeks`;
@@ -217,7 +217,9 @@ Steps:
   - a second apply is refused with the R6 message;
   - an `offset_dag` of 1 on the last day lands the day after `eind_datum`;
   - an owner gets 404 `unknown_source` (speelreeks declares no `owners`);
-  - after a Toewijzing is added to one of the 28, undoing the apply answers 409 `in_use`, and all 28 stay live.
+  - after a Toewijzing is added to one of the 28, undoing the apply answers 409 `in_use`, and all 28 stay live;
+  - (Stefan, 2026-10-06) undo by batch of a day-line move (`start_at` 23:30 → 01:30 the next day) restores `start_at`, `datum` and `plandag`, through the Activiteit writer;
+  - (Stefan, 2026-10-06) undo by batch of a person → name switch on a Toewijzing restores the person and clears the name, and passes the writer's one-of-person-or-name rule (no "Kies een persoon of een naam.").
 - [ ] Implement `run`:
   - refuse when the reeks has live activities;
   - otherwise build the creates per day and per item; the Activiteit writer derives `plandag`.
@@ -275,6 +277,11 @@ Steps:
   - a dataset with no rows is reported as "skipped: no rows", not as a problem;
   - its undo step uses `POST /batches/:id/undo` instead of replaying PATCHes.
   Commit the script change (code only): `test(shakeout): the edit session skips empty datasets and undoes by batch`.
+- [ ] On the migrated copy, assert (read-only SQL, counts only), comparing with the same queries on `~/laika-export/engine.db` (opened read-only):
+  - `SELECT count(*) FROM revision` is unchanged;
+  - `SELECT name, seq FROM sqlite_sequence` is unchanged for every pre-existing table;
+  - the import's 4,802 revisions still carry their one `batch_id`, and no `batch` row exists for it;
+  - `POST /batches/<that id>/undo` on an engine serving the copy of the copy answers 422 `not_undoable`, and the revision count is unchanged afterwards.
 - [ ] Report the migration result and the four reports, by severity, counts only, to Stefan. No commit with names. The report also carries:
   - R4's finding: a greyed inherited display needs a declared engine hint;
   - the proposed `docs/SPEC.md` diff from the spec, shown before any commit.
