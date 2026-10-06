@@ -1,0 +1,8 @@
+# Generic English words a domain also declares; the engine may use them. One per line, with the reason.
+status # HTTP status and a domain's status column
+type # TypeScript and column types
+default # a column's default value
+site # Sec-Fetch-Site in the write guard
+start # generic, as in a window's start
+state # generic English
+parameters # TypeScript's Parameters<> and the English word

@@ -8,23 +8,23 @@ import { type Domain, defineDataset, defineQuery, MigrationError, migrate, seedD
 const klant = defineDataset({
   name: 'klant',
   label: 'Klant',
-  title: 'naam',
+  title: 'name',
   custom: true,
-  columns: { naam: { type: 'text', label: 'Naam' } },
+  columns: { name: { type: 'text', label: 'Name' } },
 })
 
 const order = defineDataset({
   name: 'bestelling',
   label: 'Bestelling',
-  title: 'omschrijving',
-  date: 'datum',
+  title: 'description',
+  date: 'date',
   custom: false,
   columns: {
-    omschrijving: { type: 'text', label: 'Omschrijving' },
-    datum: { type: 'date', label: 'Datum', nullable: true },
+    description: { type: 'text', label: 'Description' },
+    date: { type: 'date', label: 'Date', nullable: true },
     klant_id: { type: 'integer', label: 'Klant', relation: 'klant' },
   },
-  indexes: [['datum']],
+  indexes: [['date']],
 })
 
 const perKlant = (sql = 'SELECT klant_id AS id, COUNT(*) AS aantal FROM bestelling GROUP BY klant_id') =>
@@ -40,8 +40,8 @@ const domain = (overrides: Partial<Domain> = {}): Domain => ({
   datasets: [klant, order],
   queries: [perKlant()],
   seed: (insert) => {
-    insert('klant', [{ naam: 'Anna' }])
-    insert('bestelling', [{ omschrijving: 'een', datum: '2026-10-12', klant_id: 1 }])
+    insert('klant', [{ name: 'Anna' }])
+    insert('bestelling', [{ description: 'een', date: '2026-10-12', klant_id: 1 }])
   },
   views: [
     {
@@ -49,10 +49,10 @@ const domain = (overrides: Partial<Domain> = {}): Domain => ({
       source_type: 'dataset',
       source: 'bestelling',
       skin: 'table',
-      filters: { omschrijving: 'een' },
-      sort: ['datum'],
+      filters: { description: 'een' },
+      sort: ['date'],
       group_by: null,
-      visible_fields: ['omschrijving'],
+      visible_fields: ['description'],
     },
   ],
   ...overrides,
@@ -70,11 +70,11 @@ describe('migrate', () => {
   test('creates each dataset table with id, custom, created_at, updated_at, deleted_at and its declared columns', () => {
     const sqlite = fresh()
     const columns = (t: string) => names(sqlite.query(`PRAGMA table_info(${t})`).all())
-    expect(columns('klant')).toEqual(['id', 'naam', 'custom', 'created_at', 'updated_at', 'deleted_at'])
+    expect(columns('klant')).toEqual(['id', 'name', 'custom', 'created_at', 'updated_at', 'deleted_at'])
     expect(columns('bestelling')).toEqual([
       'id',
-      'omschrijving',
-      'datum',
+      'description',
+      'date',
       'klant_id',
       'created_at',
       'updated_at',
@@ -84,7 +84,7 @@ describe('migrate', () => {
 
   test('creates declared indexes and foreign keys', () => {
     const sqlite = fresh()
-    expect(names(sqlite.query('PRAGMA index_list(bestelling)').all())).toContain('bestelling_datum_idx')
+    expect(names(sqlite.query('PRAGMA index_list(bestelling)').all())).toContain('bestelling_date_idx')
     const keys = sqlite.query('PRAGMA foreign_key_list(bestelling)').all() as { table: string; from: string }[]
     expect(keys).toMatchObject([{ table: 'klant', from: 'klant_id' }])
   })
@@ -114,8 +114,8 @@ describe('migrate', () => {
   test('a changed query SQL recreates the view', () => {
     const sqlite = fresh()
     const sql = 'SELECT klant_id AS id, COUNT(*) + 100 AS aantal FROM bestelling GROUP BY klant_id'
-    sqlite.run("INSERT INTO klant (naam) VALUES ('A')")
-    sqlite.run("INSERT INTO bestelling (omschrijving, klant_id) VALUES ('x', 1)")
+    sqlite.run("INSERT INTO klant (name) VALUES ('A')")
+    sqlite.run("INSERT INTO bestelling (description, klant_id) VALUES ('x', 1)")
     migrate(sqlite, domain({ queries: [perKlant(sql)] }))
     expect(sqlite.query('SELECT aantal FROM per_klant').get()).toEqual({ aantal: 101 })
   })
@@ -140,12 +140,12 @@ describe('migrate', () => {
   test("seedDomain inserts the domain's rows and its saved views", () => {
     const sqlite = fresh()
     seedDomain(sqlite, domain())
-    expect(sqlite.query('SELECT naam, custom FROM klant').get()).toEqual({ naam: 'Anna', custom: '{}' })
+    expect(sqlite.query('SELECT name, custom FROM klant').get()).toEqual({ name: 'Anna', custom: '{}' })
     expect(sqlite.query('SELECT COUNT(*) AS n FROM bestelling').get()).toEqual({ n: 1 })
     expect(sqlite.query('SELECT name, filters, sort, group_by FROM saved_view').get()).toEqual({
       name: 'Alles',
-      filters: '{"omschrijving":"een"}',
-      sort: '["datum"]',
+      filters: '{"description":"een"}',
+      sort: '["date"]',
       group_by: null,
     })
   })

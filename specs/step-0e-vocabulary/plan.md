@@ -53,6 +53,10 @@ Not a security surface.
 
 | Task | Start | End |
 |---|---|---|
+| 1 | 10-06 14:22 | 14:26 |
+| 2 | 14:26 | 14:31 |
+
+Commit stamps; start = the previous commit.
 
 ---
 

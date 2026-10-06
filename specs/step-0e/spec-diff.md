@@ -11,3 +11,8 @@ Collected per plan, proposed at the end of 0e and committed only after Stefan se
 **Queries row:** "a changed hash drops and recreates the view" gains: "and every view is recreated after any dataset change".
 
 **"What was in WordPress" row:** the clause "the table-rebuild migrator (ALTER and SQLite's table rebuild) exists before the first real import" becomes "the table-rebuild migrator (built in step 0e) runs every declaration change, including the import's `legacy_post_id`".
+
+## U3, the vocabulary check
+
+**Package layout paragraph**, after "A lint check in the gate fails any import of a domain package (`theatre`, `fiche`) from inside `engine`":
+"A second check fails any domain word anywhere in `packages/engine`, in code, comments and tests. Its word list is built from the domain packages' dataset, query and column names, plus a fixed list of the spec's domain nouns. A committed allowlist, one word per line with its reason, names the generic English words a domain also uses (`status`, `type` …)."
