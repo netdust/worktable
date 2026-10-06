@@ -31,3 +31,26 @@ Branch `feature/step-0e-datum`, range 409e081..2495bd8, plus Laika `feature/work
 
 ## Gate
 `bun run gate` after the fix wave: bun 770, grid 574, Playwright 39, all green.
+
+# Review: the shakeout fix pass
+
+Range ec7743e..81b7a4b, reviewed on 2026-10-06 by one fresh reviewer on the most capable model. Its verdict: **approve with one Important fix**. The fix pass is 2 commits after 81b7a4b. The gate is green: bun 809, grid 581, Playwright 44.
+
+## Fixed
+1. **(Important) Undo in the Dagplanning view still lost the day.** The query had no `datum` column, so the undo entry could not capture it. Dagplanning now carries `datum`, written through to the activity. The e2e test `undo-time-on-untimed-in-dagplanning` was RED, then GREEN, with a reload.
+2. **(Important, upgraded from Minor) The edit-session script could write row values inside the repository.** Its `--out` defaulted to the database's directory. It now defaults to `~/laika-export/shakeout` and refuses any `--out` or `--outbox` inside the checkout. A test for this was RED against the old script, then GREEN.
+
+## For Stefan
+- **Undo can overwrite another planner's change.** The before-image is taken from this tab's last copy of the row. If another planner changed a column since then, and the edit's reply carries that change, undo writes the old value back. Example: B confirms an activity, A edits its description, A presses Ctrl+Z, and B's confirmation is reverted. Before this branch, undo only touched the edited field. To fix it, the engine's write answer would report which columns the writer changed. It already computes this diff for Revision (`packages/engine/src/writes.ts:372`). That changes the engine's REST contract.
+
+## Minor, deferred
+3. `api.ts` updateThrough silently drops a query column that writes to a different record. No query does that today.
+4. If the re-read after a query write fails, the fallback row loses the derived columns, and that undo becomes single-column again.
+5. The real `editable` predicate in `hooks.ts` has no unit test. Only e2e covers it.
+6. e2e `undo-person-to-name` checks only that `persoon_id` is a number, not that it is the original person, and it assumes the first row has a person.
+7. e2e `undo-day-line-move` pins only the PATCH body. The old store reached the same final state.
+8. The step 1 and step 3 carry-over notes are not referenced from `docs/SPEC.md`.
+
+## Executor's rulings
+- Query columns that write to another record are dropped from a multi-column undo. Today every `writes` goes through `activiteit_id`. Cost if wrong: one column not restored on a future query.
+- The step 1 and step 3 notes live in `specs/step-N/carry-over.md`, because neither step has a spec yet. They follow the step 0 precedent.
