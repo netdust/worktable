@@ -160,13 +160,13 @@ Then stop and report.
 All six open questions were answered and are written into the units above: the public route with its four constraints, maybe, role order, the name split, activity kinds, and the account link with the role named owner. Two additions came with them, also written in: the export's personal data is gitignored with a staged-file gate check, and sign-in answers identically with a rate limit.
 
 ## Plans
-One plan per unit, each `specs/<feature>/plan.md` in this repo with its `**Spec:**` naming this file. The plans for other repositories name their repository and branch. They live here so the set is reviewed as one.
+One plan per unit, each `specs/<feature>/plan.md` in this repo with its `**Spec:**` naming this file. The plans for other repositories name their repository and branch. They live here so the set is reviewed as one. The worktable plans run in the order listed, each merged before the next branches: the migrator is Stefan's entry condition, the vocabulary plan renames the engine's test fixtures before auth rewrites every test, and the import runs as an administrator. The four plans in other repositories are independent of each other.
 
 | Plan | Repository · branch |
 |---|---|
 | `specs/step-0e-migrator/plan.md` | worktable · `feature/step-0e-migrator` |
-| `specs/step-0e-auth/plan.md` | worktable · `feature/step-0e-auth` |
 | `specs/step-0e-vocabulary/plan.md` | worktable · `feature/step-0e-vocabulary` |
+| `specs/step-0e-auth/plan.md` | worktable · `feature/step-0e-auth` |
 | `specs/step-0e-import/plan.md` | worktable · `feature/step-0e-import` |
 | `specs/step-0e-laika-export/plan.md` | laika · `feature/worktable-export` (`make feature`) |
 | `specs/step-0e-atelier-view/plan.md` | atelier · `feature/worktable-view` |
