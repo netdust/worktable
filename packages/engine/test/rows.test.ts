@@ -194,6 +194,16 @@ describe('rows', () => {
     })
   })
 
+  // A computed view column has no type affinity, so SQLite never converts a text value for it.
+  test('a numeric text filter matches a computed integer column of a view', async () => {
+    const asNumber = await filtered('per_project', { aantal: 2 })
+    const asText = await filtered('per_project', { aantal: { $eq: '2' } })
+    const inText = await filtered('per_project', { id: { $in: ['1'] } })
+    expect(asNumber.body.total).toBeGreaterThan(0)
+    expect(asText.body.total).toBe(asNumber.body.total)
+    expect(inText.body.total).toBe(1)
+  })
+
   test('rows with deleted_at set are not returned', async () => {
     sqlite.run("UPDATE taak SET deleted_at = '2026-10-13' WHERE id = 1")
     const { body } = await rows('taak')

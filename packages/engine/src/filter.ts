@@ -6,7 +6,7 @@ import type { Source } from './registry'
 
 export const CUSTOM_KEY = /^[A-Za-z0-9_]+$/
 
-type Lhs = { expr: SQL | SQLiteColumn; custom: string | null }
+type Lhs = { expr: SQL | SQLiteColumn; custom: string | null; numeric: boolean }
 
 function resolveKey(key: string, source: Source, table: SQLiteTable): Lhs {
   if (key.startsWith('custom.')) {
@@ -15,27 +15,34 @@ function resolveKey(key: string, source: Source, table: SQLiteTable): Lhs {
       throw new ApiError(400, 'bad_filter', `"${source.name}" has no custom fields`)
     if (!CUSTOM_KEY.test(name)) throw new ApiError(400, 'bad_filter', `invalid custom key "${name}"`)
     const column = (table as unknown as Record<string, SQLiteColumn>).custom as SQLiteColumn
-    return { expr: sql`json_extract(${column}, ${`$.${name}`})`, custom: `$.${name}` }
+    return { expr: sql`json_extract(${column}, ${`$.${name}`})`, custom: `$.${name}`, numeric: false }
   }
   const declared = Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
   if (!declared) throw new ApiError(400, 'bad_filter', `unknown filter key "${key}"`)
-  return { expr: (table as unknown as Record<string, SQLiteColumn>)[key] as SQLiteColumn, custom: null }
+  const type = key === 'id' ? 'integer' : source.columns[key]?.type
+  const numeric = type === 'integer' || type === 'real'
+  return { expr: (table as unknown as Record<string, SQLiteColumn>)[key] as SQLiteColumn, custom: null, numeric }
 }
 
 const isScalar = (v: unknown): v is string | number | boolean | null =>
   v === null || ['string', 'number', 'boolean'].includes(typeof v)
 
-const bound = (v: unknown): unknown => (typeof v === 'boolean' ? Number(v) : v)
-
-function scalar(key: string, op: string, value: JsonValue): unknown {
-  if (!isScalar(value)) throw new ApiError(400, 'bad_filter', `${op} on "${key}" requires a single value`)
-  return bound(value)
+// A view's computed column has no type affinity, so a numeric string is bound as the number it names.
+const bound = (v: unknown, numeric: boolean): unknown => {
+  if (typeof v === 'boolean') return Number(v)
+  if (numeric && typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v)
+  return v
 }
 
-function list(key: string, op: string, value: JsonValue): unknown[] {
+function scalar(lhs: Lhs, key: string, op: string, value: JsonValue): unknown {
+  if (!isScalar(value)) throw new ApiError(400, 'bad_filter', `${op} on "${key}" requires a single value`)
+  return bound(value, lhs.numeric)
+}
+
+function list(lhs: Lhs, key: string, op: string, value: JsonValue): unknown[] {
   const values = value as JsonValue[]
   if (!values.every(isScalar)) throw new ApiError(400, 'bad_filter', `${op} on "${key}" requires scalar values`)
-  return values.map(bound)
+  return values.map((v) => bound(v, lhs.numeric))
 }
 
 function contains(lhs: Lhs, key: string, column: SQLiteColumn, value: JsonValue): SQL {
@@ -55,25 +62,25 @@ function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: 
   const expr = lhs.expr as SQLiteColumn
   switch (op) {
     case '$eq': {
-      const v = scalar(key, op, value)
+      const v = scalar(lhs, key, op, value)
       return v === null ? isNull(expr) : eq(expr, v)
     }
     case '$ne': {
-      const v = scalar(key, op, value)
+      const v = scalar(lhs, key, op, value)
       return v === null ? isNotNull(expr) : ne(expr, v)
     }
     case '$gt':
-      return gt(expr, scalar(key, op, value))
+      return gt(expr, scalar(lhs, key, op, value))
     case '$gte':
-      return gte(expr, scalar(key, op, value))
+      return gte(expr, scalar(lhs, key, op, value))
     case '$lt':
-      return lt(expr, scalar(key, op, value))
+      return lt(expr, scalar(lhs, key, op, value))
     case '$lte':
-      return lte(expr, scalar(key, op, value))
+      return lte(expr, scalar(lhs, key, op, value))
     case '$in':
-      return inArray(expr, list(key, op, value))
+      return inArray(expr, list(lhs, key, op, value))
     case '$nin':
-      return notInArray(expr, list(key, op, value))
+      return notInArray(expr, list(lhs, key, op, value))
     case '$exists':
       return value ? isNotNull(expr) : isNull(expr)
     case '$contains':
