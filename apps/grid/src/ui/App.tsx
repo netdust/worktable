@@ -11,9 +11,10 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, ModelAction, Row, Schema, Scope, View } from '../types'
+import type { Account, ApiError, ModelAction, Row, Schema, Scope, View, ViewType } from '../types'
 import { Confirm } from './Confirm'
 import { Filters } from './Filters'
+import { NewViewDialog } from './NewViewDialog'
 import { Rail } from './Rail'
 import type { Signed } from './RailFoot'
 import { readHash, writeHash } from './hash'
@@ -22,7 +23,7 @@ import { Search } from './Search'
 import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
 import { Toast, useNotice } from './Toast'
-import { tableOf } from './tables'
+import { type Table, tableOf } from './tables'
 import { Toolbar } from './Toolbar'
 import { ViewPanel } from './ViewPanel'
 import { useFilterNames } from './useFilterNames'
@@ -116,7 +117,8 @@ function Workspace({ signed }: { signed: Signed }) {
   const [unserved, setUnserved] = useState<ApiError | null>(null)
   const [settled, setSettled] = useState(false)
   const [activeKey, setActive] = useState<string | undefined>(() => readHash('view') ?? undefined)
-  const [panel, setPanel] = useState<'new' | 'saveAs' | null>(null)
+  const [panel, setPanel] = useState<'saveAs' | null>(null)
+  const [adding, setAdding] = useState<{ table: Table; type: ViewType } | null>(null)
   const [viewNote, setViewNote] = useState<string | null>(null)
   const [notice, notify] = useNotice()
   // A revert remounts the matrix, whose picked columns are its own state.
@@ -128,6 +130,7 @@ function Workspace({ signed }: { signed: Signed }) {
     writeHash('view', key)
     setActive(key)
     setPanel(null)
+    setAdding(null)
     setViewNote(null)
   }
   const [range, setRange] = useWindow()
@@ -261,7 +264,6 @@ function Workspace({ signed }: { signed: Signed }) {
     }
     notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
-  const types = declared.find((table) => table.key === view?.table)?.types ?? ['grid']
 
   if (!served) {
     return (
@@ -275,7 +277,8 @@ function Workspace({ signed }: { signed: Signed }) {
 
   return (
     <div className="nv-app" ref={frame}>
-      <Rail signed={signed} tables={tables} active={view?.key} onSelect={setActiveKey} onTable={openTable} onNewView={view ? () => setPanel('new') : undefined} actions={actions} space={space.status === 'ready' && served?.space && (
+      <Rail signed={signed} tables={tables} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
+        onNewView={(table, type) => setAdding({ table, type })} actions={actions} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={served.models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">
@@ -316,12 +319,16 @@ function Workspace({ signed }: { signed: Signed }) {
           )}
         </section>
         {panel && view && (
-          <ViewPanel key={panel} label={t(panel === 'new' ? 'newView' : 'saveAsNew')} types={panel === 'new' ? types : null} type={panel === 'saveAs' ? view.type ?? 'grid' : undefined}
-            onSubmit={(name, type) => (panel === 'new' ? create : saveAs)(view, name, type)} onClose={() => setPanel(null)} />
+          <ViewPanel label={t('saveAsNew')} type={view.type ?? 'grid'} onSubmit={(name, type) => saveAs(view, name, type)} onClose={() => setPanel(null)} />
         )}
         </div>
         {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
       </main>
+      {adding && (
+        <NewViewDialog source={adding.table.label} type={adding.type}
+          scope={adding.table.space === 'scoped' && space.status === 'ready' ? space.selected?.title ?? null : null}
+          onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
+      )}
     </div>
   )
 }

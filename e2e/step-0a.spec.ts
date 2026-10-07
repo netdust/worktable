@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
+import { openView } from './tree'
 
 const WEEK = '/#from=2026-10-12'
 
@@ -8,9 +9,9 @@ interface Section {
   values: string[]
 }
 
-async function open(page: Page, view: string) {
+async function open(page: Page, view: string, model = view) {
   await page.goto(WEEK)
-  await page.getByText(view, { exact: true }).first().click()
+  await openView(page, view, model)
 }
 
 /** A sorted header carries an arrow after its label, so it is stripped before comparing. */
@@ -76,7 +77,7 @@ function iso(day: string): string {
 const ascending = (values: string[]) => [...values].sort()
 
 test('planning-grouped-sorted', async ({ page }) => {
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 
   const found = await sections(page)
@@ -94,7 +95,7 @@ test('planning-grouped-sorted', async ({ page }) => {
 })
 
 test('planning-status-filter', async ({ page }) => {
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   expect(new Set(await columnTexts(page, 'Status'))).toEqual(new Set(['Bevestigd']))
 
@@ -114,7 +115,7 @@ test('planning-status-filter', async ({ page }) => {
 test('query-view-loads', async ({ page }) => {
   await page.goto(WEEK)
   const response = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/rows/productie_dag')
-  await page.getByText('Per productie per dag', { exact: true }).first().click()
+  await openView(page, 'Per productie per dag')
   expect((await response).status()).toBe(200)
 
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()

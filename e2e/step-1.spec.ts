@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
+import { openView } from './tree'
 
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
 const APPLY_WEEK = '2026-11-02'
@@ -58,8 +59,8 @@ async function speelreeks(api: Api, naam: string, start: string, eind: string): 
   })
 }
 
-async function pick(page: Page, view: string) {
-  await page.getByText(view, { exact: true }).first().click()
+async function pick(page: Page, view: string, model = view) {
+  await openView(page, view, model)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
 }
 

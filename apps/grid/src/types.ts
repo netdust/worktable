@@ -64,6 +64,8 @@ export interface TableDef {
   sort?: string[]
   /** `scoped`: its rows are the selected space record's; `global`: beside any space. */
   space?: 'scoped' | 'global'
+  /** A query's rows: joined, never created. */
+  query?: boolean
   /** What a group's band says of its rows, computed by the grid. */
   facts?: GroupFact[]
   /** A matrix table: the records that join a row to a column, and what they mean. */

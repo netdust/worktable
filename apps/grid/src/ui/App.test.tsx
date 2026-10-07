@@ -43,11 +43,12 @@ const toolbarItem = (name: string | RegExp) => {
   fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'More actions' }))
   return within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name })
 }
-/** A rail entry for a table, never the item of the same name in the views list. */
-const tableEntry = (name: string) => {
-  const types = within(rail()).getByRole('group', { name: 'View type' })
-  return within(rail()).getAllByRole('button', { name }).find((b) => !types.contains(b))!
-}
+/** A model's node in the tree, named by its label alone. */
+const node = (model: string) => within(rail()).getByRole('treeitem', { name: model })
+/** A model's name in the tree, never the view of the same name in its list. */
+const tableEntry = (model: string) => within(node(model)).getAllByRole('button', { name: model })[0]
+/** An open model's views. */
+const typesOf = (model: string) => within(node(model)).getByRole('group', { name: 'View type' })
 
 beforeEach(() => {
   api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'editor', subject: null })
@@ -73,9 +74,33 @@ describe('App shell', () => {
   it('renders the rail with the views from the schema', async () => {
     await shell()
 
-    expect(await within(rail()).findByRole('button', { name: 'Afwezigheden' })).toBeTruthy()
-    expect(tableEntry('Planning').getAttribute('aria-current')).toBe('page')
+    expect(await within(rail()).findByRole('treeitem', { name: 'Afwezigheden' })).toBeTruthy()
+    expect(within(typesOf('Planning')).getByRole('button', { name: 'Planning' }).getAttribute('aria-current')).toBe('page')
+    expect(tableEntry('Planning').getAttribute('aria-current')).toBeNull()
     await screen.findByText('No rows in this window')
+  })
+
+  it('lands on the same view when the sections put another model first', async () => {
+    api.schema.mockResolvedValue({ ...served, sections: [{ label: 'Eerst', sources: ['absences', 'planning'] }] })
+    await shell()
+
+    expect(within(rail()).getAllByRole('treeitem')[0].getAttribute('aria-expanded')).toBe('false')
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
+    expect(node('Planning').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('opens a view named like its model from its button, twice in a row', async () => {
+    await shell()
+    await screen.findByText('No rows in this window')
+    fireEvent.click(within(node('Afwezigheden')).getByRole('button', { name: 'Uitklappen' }))
+
+    for (const _ of [1, 2]) {
+      fireEvent.click(within(typesOf('Afwezigheden')).getByRole('button', { name: 'Afwezigheden' }))
+      expect(new URLSearchParams(window.location.hash.slice(1)).get('view')).toBe('absences')
+      expect(within(typesOf('Afwezigheden')).getByRole('button', { name: 'Afwezigheden' }).getAttribute('aria-current')).toBe('page')
+    }
+    await screen.findByText('No rows')
   })
 
   it('falls back to the first view when the hash names an unknown one', async () => {
@@ -126,7 +151,7 @@ describe('App shell', () => {
     const add = screen.getByRole('button', { name: 'New Activiteit' })
     expect((add as HTMLButtonElement).disabled).toBe(false)
 
-    fireEvent.click(within(rail()).getByRole('button', { name: 'Afwezigheden' }))
+    fireEvent.click(tableEntry('Afwezigheden'))
     expect((screen.getByRole('button', { name: 'New Afwezigheid' }) as HTMLButtonElement).disabled).toBe(true)
     await screen.findByText('No rows')
   })
@@ -321,11 +346,16 @@ describe('the production space', () => {
     await waitFor(() => expect(api.create).toHaveBeenCalledWith('activity', expect.objectContaining({ production: [9] })))
   })
 
-  it('lists a global view under General and asks it for every row', async () => {
+  it('puts the served sections first and an undeclared source in a last unlabelled one, and asks a global view for every row', async () => {
+    api.schema.mockResolvedValue({ ...spaced, sections: [{ label: 'Werk', sources: ['planning'] }] })
     await shell()
-    const general = await within(rail()).findByRole('group', { name: 'General' })
+    const tree = within(rail()).getByRole('tree', { name: 'Views' })
+    const [werk, rest] = within(tree).getAllByRole('group').filter((group) => group.parentElement === tree)
 
-    fireEvent.click(within(general).getByRole('button', { name: 'Afwezigheden' }))
+    expect(werk.getAttribute('aria-label')).toBe('Werk')
+    expect(within(werk).getByRole('treeitem', { name: 'Planning' })).toBeTruthy()
+    expect(rest.getAttribute('aria-label')).toBeNull()
+    fireEvent.click(within(within(rest).getByRole('treeitem', { name: 'Afwezigheden' })).getAllByRole('button', { name: 'Afwezigheden' })[0])
 
     await screen.findByText('No rows')
     expect(api.rows).toHaveBeenLastCalledWith(spaced.views[1], {}, null, expect.any(Object))
@@ -661,7 +691,7 @@ describe('a table with two views', () => {
   }
   const montage = { id: 1, title: 'Montage', status: 'publish', fields: { date: '2026-05-18' }, rollups: { cells: [] } }
   const week = { from: '2026-05-18', to: '2026-05-24' }
-  const types = () => within(rail()).getByRole('group', { name: 'View type' })
+  const types = () => typesOf('Planning')
 
   beforeEach(() => {
     window.localStorage.clear()
@@ -704,7 +734,7 @@ describe('a table with two views', () => {
   })
   describe('the view a table opens on (V21)', () => {
     const view = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
-    const entry = (name: string) => within(rail()).getAllByRole('button', { name }).find((b) => !types().contains(b))!
+    const entry = tableEntry
     const render2 = () => render(<App />)
 
     it('opens the view last used there on a click on the table, and keeps it in the prefs', async () => {
@@ -712,7 +742,7 @@ describe('a table with two views', () => {
       await screen.findByRole('grid', { name: 'Planning' })
 
       fireEvent.click(within(types()).getByRole('button', { name: 'Matrix' }))
-      fireEvent.click(await within(rail()).findByRole('button', { name: 'Afwezigheden' }))
+      fireEvent.click(await within(node('Afwezigheden')).findByRole('button', { name: 'Afwezigheden' }))
       expect(view()).toBe('afwezigheden')
       fireEvent.click(entry('Planning'))
 
@@ -759,7 +789,7 @@ describe('saved views', () => {
     key: '42', id: 42, label: 'Calais techniek', table: 'planning', table_label: 'Planning', model: 'activity', date_field: 'date', type: 'grid',
     starting: false, arrangement: empty, shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
   }
-  const types = () => within(rail()).getByRole('group', { name: 'View type' })
+  const types = () => typesOf('Planning')
   const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
   const local = (key: string) => window.localStorage.getItem(`ntdst-views/layout/v1/${key}`)
   const changeLocally = (key: string) => window.localStorage.setItem(`ntdst-views/layout/v1/${key}`, JSON.stringify({
@@ -780,7 +810,7 @@ describe('saved views', () => {
     await shell()
 
     expect(await within(types()).findByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
-    expect(within(types()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Planning', 'Calais techniek', 'Calendarsoon'])
+    expect(within(types()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Planning', 'Calais techniek'])
     await screen.findByText('No rows in this window')
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ }).getAttribute('aria-current')).toBe('page')
     expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
@@ -806,24 +836,59 @@ describe('saved views', () => {
     expect(api.rows).not.toHaveBeenCalledWith(calais, expect.any(Object), null, expect.any(Object))
   })
 
-  it("creates a view from + View: personal, from the table's starting view of that type, opened and in the hash", async () => {
+  it("creates a team view from a model's +, from the table's starting view of that type, opened and in the hash", async () => {
     api.schema.mockResolvedValue({ ...served, views: [{ ...served.views[0], sort: ['-date'], group: 'date', hidden: ['place'] }, served.views[1]] })
     api.createView.mockResolvedValue(calais)
     render(<App />)
     await screen.findByText('No rows in this window')
 
-    fireEvent.click(within(rail()).getByRole('button', { name: '+ View' }))
-    const panel = screen.getByRole('complementary', { name: '+ View' })
-    fireEvent.change(within(panel).getByRole('textbox', { name: 'Name' }), { target: { value: 'Calais techniek' } })
-    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Planning' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
+    const dialog = screen.getByRole('dialog', { name: 'Nieuwe gridweergave' })
+    expect(within(dialog).getByText('Op Planning')).toBeTruthy()
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Calais techniek' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Weergave maken' }))
 
     expect(api.createView).toHaveBeenCalledWith({
-      name: 'Calais techniek', table: 'planning', type: 'grid', field: null, shared: false,
+      name: 'Calais techniek', table: 'planning', type: 'grid', field: null, shared: true,
       arrangement: { ...empty, sort: [{ id: 'date', desc: true }], group: 'date', hidden: ['place'] },
     })
     await waitFor(() => expect(hash()).toBe('42'))
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ }).getAttribute('aria-current')).toBe('page')
-    expect(screen.queryByRole('complementary', { name: '+ View' })).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it("creates a personal first view on a model without one, which opens unfolded", async () => {
+    const spare = { key: 'spare', label: 'Reserve', model: 'absence', types: ['grid' as const] }
+    const first = { ...calais, key: '60', id: 60, label: 'Grid', table: 'spare', table_label: 'Reserve', model: 'absence', date_field: undefined }
+    api.schema.mockResolvedValue({ ...served, tables: [...served.tables, spare] })
+    api.createView.mockResolvedValue(first)
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    expect(node('Reserve').getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Reserve' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Alleen ik' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Weergave maken' }))
+
+    expect(api.createView).toHaveBeenCalledWith({ name: 'Grid', table: 'spare', type: 'grid', field: null, shared: false, arrangement: empty })
+    await waitFor(() => expect(hash()).toBe('60'))
+    expect(node('Reserve').getAttribute('aria-expanded')).toBe('true')
+    expect(within(typesOf('Reserve')).getByRole('button', { name: 'Grid' }).getAttribute('aria-current')).toBe('page')
+  })
+
+  it('closes the new view dialog on Escape, creating nothing', async () => {
+    render(<App />)
+    await screen.findByText('No rows in this window')
+
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Planning' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
+    fireEvent.keyDown(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Naam' }), { key: 'Escape' })
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(api.createView).not.toHaveBeenCalled()
   })
 
   it('shows an own changed view as modified: Save, and Save as new view and Revert under More actions', async () => {
@@ -1042,7 +1107,7 @@ describe("a saved view's actions", () => {
   })
   const calais = view(42, 'Calais techniek', { arrangement: { ...empty, hidden: ['place'] } })
   const montage = view(43, 'Montage')
-  const types = () => within(rail()).getByRole('group', { name: 'View type' })
+  const types = () => typesOf('Planning')
   const names = () => within(types()).getAllByRole('button').map((b) => b.textContent)
   const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
   const choose = (name: string, action: string) => {
@@ -1065,20 +1130,20 @@ describe("a saved view's actions", () => {
     api.createView.mockResolvedValue(view(50, 'Calais techniek (kopie)', { arrangement: calais.arrangement }))
     await opened()
 
-    choose('Calais techniek', 'Duplicate')
+    choose('Calais techniek', 'Kopie maken')
 
     expect(api.createView).toHaveBeenCalledWith({
       name: 'Calais techniek (kopie)', table: 'planning', type: 'grid', field: null, shared: false, arrangement: { ...empty, hidden: ['place'] },
     })
     await waitFor(() => expect(hash()).toBe('50'))
-    expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calais techniek (kopie)', 'Calendarsoon'])
+    expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calais techniek (kopie)'])
   })
 
   it('duplicates a starting view too', async () => {
     api.createView.mockResolvedValue(view(50, 'Planning (copy)'))
     await opened()
 
-    choose('Planning', 'Duplicate')
+    choose('Planning', 'Kopie maken')
 
     expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ name: 'Planning (copy)', table: 'planning', type: 'grid', shared: false }))
   })
@@ -1088,15 +1153,15 @@ describe("a saved view's actions", () => {
     api.restoreView.mockResolvedValue(calais)
     await opened()
 
-    choose('Calais techniek', 'Remove')
+    choose('Calais techniek', 'Verwijderen')
 
     expect(api.deleteView).toHaveBeenCalledWith(42)
-    expect(names()).toEqual(['Planning', 'Montage', 'Calendarsoon'])
+    expect(names()).toEqual(['Planning', 'Montage'])
     const notice = await screen.findByRole('status', { name: 'View removed' })
     fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
 
     expect(api.restoreView).toHaveBeenCalledWith(42)
-    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calendarsoon']))
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage']))
     expect(screen.queryByRole('status', { name: 'View removed' })).toBeNull()
   })
 
@@ -1106,8 +1171,8 @@ describe("a saved view's actions", () => {
     api.restoreView.mockResolvedValue(montage)
     await opened()
 
-    choose('Calais techniek', 'Remove')
-    choose('Montage', 'Remove')
+    choose('Calais techniek', 'Verwijderen')
+    choose('Montage', 'Verwijderen')
     await screen.findByRole('status', { name: 'View removed' })
     await act(async () => answerFirst({}))
     fireEvent.click(within(screen.getByRole('status', { name: 'View removed' })).getByRole('button', { name: 'Undo' }))
@@ -1121,7 +1186,7 @@ describe("a saved view's actions", () => {
     api.deleteView.mockResolvedValue({})
     await opened()
 
-    choose('Calais techniek', 'Remove')
+    choose('Calais techniek', 'Verwijderen')
 
     await waitFor(() => expect(hash()).toBe('planning'))
   })
@@ -1132,10 +1197,10 @@ describe("a saved view's actions", () => {
     api.savedViews.mockResolvedValueOnce([calais, montage]).mockResolvedValue([calais, montage])
     await opened()
 
-    choose('Calais techniek', 'Remove')
+    choose('Calais techniek', 'Verwijderen')
 
     expect(await screen.findByText('Alleen de eigenaar kan deze weergave wijzigen')).toBeTruthy()
-    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calendarsoon']))
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage']))
   })
 
   it('says why an undo could not restore', async () => {
@@ -1144,27 +1209,27 @@ describe("a saved view's actions", () => {
     api.restoreView.mockRejectedValue({ code: 'views_limit', message: 'Limit.' })
     await opened()
 
-    choose('Calais techniek', 'Remove')
+    choose('Calais techniek', 'Verwijderen')
     fireEvent.click(within(await screen.findByRole('status', { name: 'View removed' })).getByRole('button', { name: 'Undo' }))
 
     expect(await screen.findByText('Je hebt het maximum van 200 weergaven bereikt')).toBeTruthy()
-    expect(names()).toEqual(['Planning', 'Montage', 'Calendarsoon'])
+    expect(names()).toEqual(['Planning', 'Montage'])
   })
 
   it('shares a view with the team, and takes it back', async () => {
     api.updateView.mockResolvedValueOnce({ ...calais, shared: true })
     await opened()
 
-    choose('Calais techniek', 'Share with the team')
+    choose('Calais techniek', 'Delen met het team')
 
     expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { shared: true })
     const item = () => within(types()).getByRole('button', { name: /^Calais techniek/ }).parentElement!
-    await waitFor(() => expect(within(item()).getByRole('img', { name: 'Shared with the team' })).toBeTruthy())
+    await waitFor(() => expect(within(item()).queryByRole('img', { name: 'Alleen voor jou' })).toBeNull())
 
     api.updateView.mockResolvedValueOnce(calais)
-    choose('Calais techniek', 'Only for me')
+    choose('Calais techniek', 'Niet meer delen')
     expect(api.updateView).toHaveBeenLastCalledWith(expect.objectContaining({ id: 42 }), { shared: false })
-    await waitFor(() => expect(within(item()).getByRole('img', { name: 'Mine' })).toBeTruthy())
+    await waitFor(() => expect(within(item()).getByRole('img', { name: 'Alleen voor jou' })).toBeTruthy())
   })
 
   it('renames in place on a double-click', async () => {
@@ -1177,7 +1242,7 @@ describe("a saved view's actions", () => {
     fireEvent.keyDown(name, { key: 'Enter' })
 
     expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { name: 'Calais licht' })
-    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais licht', 'Montage', 'Calendarsoon']))
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Calais licht', 'Montage']))
   })
 
   it('drops a view another tab deleted on a rename, in Dutch, and keeps its change on the starting view', async () => {
@@ -1187,10 +1252,10 @@ describe("a saved view's actions", () => {
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     await opened()
 
-    choose('Calais techniek', 'Share with the team')
+    choose('Calais techniek', 'Delen met het team')
 
     expect(await screen.findByText('Deze weergave bestaat niet meer')).toBeTruthy()
-    await waitFor(() => expect(names()).toEqual(['Planning', 'Montage', 'Calendarsoon']))
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Montage']))
     expect(JSON.parse(window.localStorage.getItem('ntdst-views/layout/v1/planning') ?? '{}').hidden).toEqual(['kind'])
   })
 
@@ -1201,12 +1266,12 @@ describe("a saved view's actions", () => {
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     await opened()
 
-    choose('Calais techniek', 'Share with the team')
+    choose('Calais techniek', 'Delen met het team')
 
     expect(await screen.findByText('Alleen de eigenaar kan deze weergave wijzigen')).toBeTruthy()
     await waitFor(() => expect(api.savedViews).toHaveBeenCalledTimes(2))
     fireEvent.click(within(rail()).getByRole('button', { name: 'More actions: Calais techniek' }))
-    await waitFor(() => expect(within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Duplicate']))
+    await waitFor(() => expect(within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Kopie maken']))
     expect(JSON.parse(window.localStorage.getItem('ntdst-views/layout/v1/42') ?? '{}').hidden).toEqual(['kind'])
   })
 
@@ -1214,9 +1279,9 @@ describe("a saved view's actions", () => {
     await opened()
 
     choose('Montage', 'Move up')
-    expect(names()).toEqual(['Planning', 'Montage', 'Calais techniek', 'Calendarsoon'])
+    expect(names()).toEqual(['Planning', 'Montage', 'Calais techniek'])
     choose('Montage', 'Move down')
-    expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage', 'Calendarsoon'])
+    expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage'])
   })
 
   it('keeps a dragged order in the prefs, and the list holds it when opened again from them', async () => {
@@ -1231,7 +1296,7 @@ describe("a saved view's actions", () => {
     fireEvent.pointerMove(window, { clientY: 10 })
     fireEvent.pointerUp(window, { clientY: 10 })
 
-    expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek', 'Calendarsoon'])
+    expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek'])
     const stored = { order: { planning: ['43', 'planning', '42'] }, last: {} }
     await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith(stored))
     cleanup()
@@ -1239,7 +1304,7 @@ describe("a saved view's actions", () => {
     api.prefs.mockResolvedValue(stored)
     await opened()
 
-    expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek', 'Calendarsoon'])
+    expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek'])
   })
 
   it('puts an undone view back in its own place, though the list changed while it was gone', async () => {
@@ -1250,13 +1315,13 @@ describe("a saved view's actions", () => {
     api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     await opened()
 
-    choose('Montage', 'Remove')
+    choose('Montage', 'Verwijderen')
     const notice = await screen.findByRole('status', { name: 'View removed' })
-    choose('Calais techniek', 'Share with the team')
-    await waitFor(() => expect(names()).toEqual(['Planning', 'Licht', 'Calendarsoon']))
+    choose('Calais techniek', 'Delen met het team')
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Licht']))
     fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
 
-    await waitFor(() => expect(names()).toEqual(['Planning', 'Montage', 'Licht', 'Calendarsoon']))
+    await waitFor(() => expect(names()).toEqual(['Planning', 'Montage', 'Licht']))
   })
 
   it("clears a deleted view's change in this browser once its undo is gone, and keeps it when undone", async () => {
@@ -1267,14 +1332,14 @@ describe("a saved view's actions", () => {
     api.restoreView.mockResolvedValue(montage)
     await opened()
 
-    choose('Montage', 'Remove')
+    choose('Montage', 'Verwijderen')
     fireEvent.click(within(await screen.findByRole('status', { name: 'View removed' })).getByRole('button', { name: 'Undo' }))
     await waitFor(() => expect(names()).toContain('Montage'))
     expect(window.localStorage.getItem('ntdst-views/layout/v1/43')).toBe(changed)
 
     vi.useFakeTimers()
     try {
-      choose('Calais techniek', 'Remove')
+      choose('Calais techniek', 'Verwijderen')
       await act(async () => undefined)
       expect(screen.getByRole('status', { name: 'View removed' })).toBeTruthy()
       expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBe(changed)

@@ -121,7 +121,7 @@ describe('what stays in this browser', () => {
 
 describe('a table\'s list', () => {
   const bezetting: View = { ...tabel, key: 'bezetting', label: 'Matrix', type: 'matrix' }
-  const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', views: [tabel, bezetting] }
+  const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', types: ['grid', 'matrix'], views: [tabel, bezetting] }
   const other: SavedView = { ...calais, key: '43', id: 43, label: 'Montage', type: 'grid' }
   const elsewhere: SavedView = { ...calais, key: '44', id: 44, table: 'afwezigheden' }
 
@@ -160,7 +160,7 @@ describe('an order', () => {
 
 describe('the view a table opens on', () => {
   const bezetting: View = { ...tabel, key: 'bezetting', label: 'Matrix', type: 'matrix' }
-  const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', views: [bezetting, tabel, calais] }
+  const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', types: ['grid', 'matrix'], views: [bezetting, tabel, calais] }
 
   it('is the last one used there while it is still in the list', () => {
     expect(lastIn(table, { planning: '42' })?.key).toBe('42')

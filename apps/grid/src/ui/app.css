@@ -37,8 +37,22 @@
   border-right: 1px solid var(--color-border-subtle);
 }
 
-.nv-rail__label {
-  margin: 0 0 0 8px;
+/* The tree: sections of models, each folding open on its views. It never scrolls: a scroll box would clip the + and ⋯ menus. */
+.nv-tree {
+  flex: 1;
+  padding-bottom: 12px;
+}
+
+/* The sources no section lists, set apart from the last labelled one. */
+.nv-tree__section:not([aria-label]):not(:first-child) {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.nv-tree__label {
+  margin: 0;
+  padding: 14px 8px 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -46,17 +60,204 @@
   color: var(--color-fg-subtle);
 }
 
-.nv-rail__views {
+.nv-model {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
 }
 
-#root .nv-rail__views [aria-current="page"] {
-  background: var(--color-bg-surface);
-  color: var(--color-fg-default);
+.nv-model:hover {
+  background: var(--color-bg-hover);
+}
+
+#root .nv-model button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+#root .nv-model__lead {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-muted);
+}
+
+.nv-model__chevron {
+  transition: transform 120ms ease;
+}
+
+.nv-node[aria-expanded="true"] .nv-model__chevron {
+  transform: rotate(90deg);
+}
+
+#root .nv-model__name {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 2px;
+  overflow: hidden;
   font-weight: 500;
-  box-shadow: 0 0 0 1px var(--color-border-subtle);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The + and ⋯ wait for hover or focus; hidden by opacity, they stay in the tab order. */
+.nv-model__tools {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.nv-model[data-hot] .nv-model__tools,
+.nv-model:focus-within .nv-model__tools,
+.nv-model:has([aria-expanded="true"]) .nv-model__tools {
+  opacity: 1;
+}
+
+#root .nv-model__tools .nv-more {
+  width: 22px;
+  height: 22px;
+}
+
+/* A model's views, indented under it with a guide line. */
+.nv-node > .nv-rail__types {
+  position: relative;
+  padding: 1px 0 4px 22px;
+}
+
+.nv-node > .nv-rail__types::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 0;
+  bottom: 6px;
+  border-left: 1px solid var(--color-border-default);
+}
+
+#root .nv-views [aria-current="page"] {
+  background: var(--color-bg-selected);
+  color: var(--color-accent-default);
+  font-weight: 500;
+}
+
+/* The new view dialog, over a dimmed page. */
+.nv-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(15 20 28 / 35%);
+}
+
+.nv-dialog {
+  display: grid;
+  gap: 16px;
+  width: min(440px, 100%);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.nv-dialog__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.nv-dialog__field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nv-dialog__field > label,
+.nv-dialog__field > legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-fg-muted);
+}
+
+#root .nv-dialog__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: inherit;
+  font: inherit;
+}
+
+#root .nv-dialog__input:focus {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.nv-dialog__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nv-dialog__choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.nv-dialog__choice input {
+  margin: 0;
+  accent-color: var(--color-accent-default);
+}
+
+.nv-dialog__choice:has(input:checked) {
+  border-color: var(--color-accent-default);
+  background: var(--color-accent-subtle);
+}
+
+.nv-dialog__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-fg-subtle);
+}
+
+.nv-dialog__refusal {
+  margin: 0;
+  color: var(--color-danger-fg);
+}
+
+.nv-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .nv-main {
@@ -137,10 +338,6 @@
   min-width: 0;
   padding: 3px 4px;
   font-size: 11px;
-}
-
-.nv-rail__types [disabled] {
-  opacity: 0.6;
 }
 
 /* After a change: what happened and the way back, over the sheet's foot. */
@@ -490,12 +687,6 @@
 
 #root .nv-space__option.is-active:not([aria-selected="true"]) {
   background: var(--color-bg-hover);
-}
-
-.nv-rail__section {
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* The record picker: a search over one model, its matches under it. */
@@ -1519,24 +1710,6 @@
   pointer-events: none;
 }
 
-#root .nv-views__new {
-  width: 100%;
-  margin-top: 2px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--color-fg-subtle);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-#root .nv-views__new:hover {
-  background: var(--color-bg-muted);
-  color: var(--color-fg-default);
-}
-
 /* The view differs from how it is saved: the word, then what to do with it. */
 .nv-modified {
   display: flex;
@@ -1679,39 +1852,6 @@
   cursor: pointer;
 }
 
-.nv-viewpanel__types {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nv-viewpanel__type {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.nv-viewpanel__type:hover {
-  background: var(--color-bg-muted);
-}
-
-.nv-viewpanel__type--soon {
-  color: var(--color-fg-subtle);
-  cursor: default;
-}
-
-.nv-viewpanel__type--soon:hover {
-  background: none;
-}
-
-.nv-viewpanel__soon {
-  margin-left: 6px;
-  font-size: 11px;
-}
-
 .nv-viewpanel__refusal {
   color: var(--color-danger-fg);
   font-size: 12px;
@@ -1728,20 +1868,10 @@
     grid-template-rows: auto 1fr;
   }
 
+  /* The rail above the sheet: the tree scrolls in a band of its own. */
   .nv-rail {
-    flex-direction: row;
-    align-items: center;
-    overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--color-border-subtle);
-  }
-
-  .nv-rail__label {
-    display: none;
-  }
-
-  .nv-rail__views {
-    flex-direction: row;
   }
 
   .nv-toolbar {
@@ -1752,27 +1882,7 @@
     margin-left: 0;
   }
 
-  .nv-rail__foot,
-  .nv-rail__types [disabled] {
+  .nv-rail__foot {
     display: none;
-  }
-
-  .nv-views {
-    display: flex;
-    flex-direction: row;
-  }
-
-  /* A row of views has no room over its items: the actions wait for a wider screen. */
-  .nv-views__menus {
-    display: none;
-  }
-
-  /* The table's views are the only way to its other views: they stay, beside the tables. */
-  .nv-rail__types {
-    display: flex;
-    margin: 0;
-    padding: 0 0 0 8px;
-    border-top: 0;
-    border-left: 1px solid var(--color-border-subtle);
   }
 }

@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { openView } from './tree'
 
 const WEEK = '/#from=2026-10-12'
 
@@ -19,9 +20,9 @@ interface Revision {
   new: unknown
 }
 
-async function open(page: Page, view: string) {
+async function open(page: Page, view: string, model = view) {
   await page.goto(WEEK)
-  await page.getByText(view, { exact: true }).first().click()
+  await openView(page, view, model)
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 }
 
@@ -85,7 +86,7 @@ async function sectionOf(page: Page, omschrijving: string): Promise<string> {
 test('status-persists', async ({ page }) => {
   const name = 'maaltijd Gent'
   expect((await activiteit(page, name)).status).toBe('optie')
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
   await dropStatusFilter(page)
 
   const status = await cell(page, name, 'Status')
@@ -103,7 +104,7 @@ test('refused-edit', async ({ page }) => {
   const name = 'vergadering Gent'
   const before = await activiteit(page, name)
   expect(before.status).toBe('bevestigd')
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
 
   await typeInto(await cell(page, name, 'Einde'), '2026-10-16T09:00')
   await expect(row(page, name).getByRole('alert')).toContainText('Einde ligt voor de start.')
@@ -157,7 +158,7 @@ test('day-line-move', async ({ page }) => {
   const before = await activiteit(page, name)
   expect(before.start_at).toBe('2026-10-12T14:00')
   expect(before.plandag).toBe('2026-10-12')
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
   expect(await sectionOf(page, name)).toContain('October 12')
 
   await typeInto(await cell(page, name, 'Einde'), '2026-10-13T08:00')
@@ -183,7 +184,7 @@ test('relation-pick', async ({ page }) => {
   const name = 'reis Gent'
   const before = await activiteit(page, name)
   expect([before.status, before.productie_id]).toEqual(['bevestigd', 1])
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
 
   const productie = await cell(page, name, 'Productie')
   await expect(productie).toHaveText('De Kersentuin')
@@ -199,7 +200,7 @@ test('relation-pick', async ({ page }) => {
 test('clear-end', async ({ page }) => {
   const name = 'afbouw Gent'
   expect((await activiteit(page, name)).eind_at).toBe('2026-10-13T01:00')
-  await open(page, 'Planning')
+  await open(page, 'Planning', 'Activiteiten')
 
   const einde = await cell(page, name, 'Einde')
   await typeInto(einde, '')

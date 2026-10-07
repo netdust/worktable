@@ -122,10 +122,11 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
       return null
     })
 
-  const create = (from: View, name: string, type: ViewType) => {
-    const model = startingOf(from.table, type)
+  /** A new view on a table, from its starting view of that type when it has one: no other view is needed. */
+  const create = (table: string, name: string, type: ViewType, shared: boolean) => {
+    const model = startingOf(table, type)
     const arrangement = model ? toStored(arrangementOf(model)) : blank()
-    return createView({ name, table: from.table, type, field: null, shared: false, arrangement }).then(added)
+    return createView({ name, table, type, field: null, shared, arrangement }).then(added)
   }
 
   const saveAs = (from: View, name: string, type: ViewType) => {

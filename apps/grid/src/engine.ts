@@ -169,6 +169,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     key: name, label: source.label, model: name,
     ...(source.date ? { date_field: source.date } : {}),
     ...(source.space ? { space: source.space } : {}),
+    ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: ['grid'],
   }

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { modelNode, openView } from './tree'
 
 const WEEK = '/#from=2026-10-12'
 const MATRIX = 'Toewijzingen per activiteit'
@@ -24,15 +25,15 @@ const header = (page: Page, label: string) =>
   page.locator('thead th').filter({ hasText: new RegExp(`^\\s*${label}\\s*[↑↓]?\\s*$`) })
 
 /** Picks a view in the rail and waits for `ready`, content only that view shows, so nothing is read off the view it replaced. */
-async function pick(page: Page, view: string, ready: Locator) {
-  await page.getByText(view, { exact: true }).first().click()
+async function pick(page: Page, view: string, ready: Locator, model = view) {
+  await openView(page, view, model)
   await expect(ready.first()).toBeVisible()
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 }
 
-async function open(page: Page, view: string, ready: Locator) {
+async function open(page: Page, view: string, ready: Locator, model = view) {
   await page.goto(WEEK)
-  await pick(page, view, ready)
+  await pick(page, view, ready, model)
 }
 
 async function columnIndex(page: Page, label: string): Promise<number> {
@@ -113,7 +114,7 @@ test('matrix-cell-persists', async ({ page }) => {
     (await toewijzingen(page)).find((t) => t.activiteit_id === activiteit && t.persoon_id === persoon)
   expect(await held()).toBeUndefined()
 
-  await open(page, MATRIX, header(page, 'Noor Claes'))
+  await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
   const target = await spot(page, activity, person)
   await expect(target.locator('.nv-mx__mark')).toHaveCount(0)
   await pressKey(target, 'b')
@@ -121,7 +122,7 @@ test('matrix-cell-persists', async ({ page }) => {
   await expect.poll(async () => (await held())?.state).toBe('bevestigd')
 
   await page.reload()
-  await pick(page, MATRIX, header(page, 'Noor Claes'))
+  await pick(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
   await expect((await spot(page, activity, person)).locator('.nv-mx__mark')).toHaveText('✓')
 
   await pressKey(await spot(page, activity, person), 'Delete')
@@ -130,7 +131,7 @@ test('matrix-cell-persists', async ({ page }) => {
 })
 
 test('matrix-away-mark', async ({ page }) => {
-  await open(page, MATRIX, header(page, 'Noor Claes'))
+  await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
   const away = await spot(page, 'vergadering Antwerpen', 'Noor Claes')
   await expect(away).toHaveClass(/nv-mx__away/)
   await expect(away).toHaveAttribute('aria-label', /Away: Familiefeest/)
@@ -150,7 +151,7 @@ test('matrix-two-activities-undo', async ({ page }) => {
   expect(await held(one)).toBeUndefined()
   expect(await held(two)).toBeUndefined()
 
-  await open(page, MATRIX, header(page, 'Noor Claes'))
+  await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
   await pressKey(await spot(page, first, person), 'b')
   await expect.poll(async () => (await held(one))?.state).toBe('bevestigd')
   await pressKey(await spot(page, second, person), 'u')
@@ -166,7 +167,7 @@ test('matrix-two-activities-undo', async ({ page }) => {
   expect(readDb('SELECT deleted_at FROM toewijzing WHERE id = ?', secondId)).not.toBeNull()
 
   await page.reload()
-  await pick(page, MATRIX, header(page, 'Noor Claes'))
+  await pick(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
   await expect((await spot(page, first, person)).locator('.nv-mx__mark')).toHaveText('✓')
   await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveCount(0)
   expect(await held(two)).toBeUndefined()
@@ -176,7 +177,7 @@ test('matrix-two-activities-undo', async ({ page }) => {
 test('view-saved-after-reload', async ({ page }) => {
   const name = 'Mijn planning'
   expect((await views(page)).map((v) => v.name)).not.toContain(name)
-  await open(page, 'Planning', header(page, 'Einde'))
+  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
 
   const head = page.locator('thead th', { hasText: 'Soort' })
   const before = (await head.boundingBox())?.width as number
@@ -198,7 +199,7 @@ test('view-saved-after-reload', async ({ page }) => {
 
   await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
   await page.reload()
-  await pick(page, name, page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' }))
+  await pick(page, name, page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' }), 'Activiteiten')
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toContainText('Nachtwacht')
   await expect(page.locator('thead th', { hasText: 'Soort' })).toHaveAttribute('style', new RegExp(`width: ${widened}`))
 })
@@ -208,7 +209,7 @@ test('view-delete-undo', async ({ page }) => {
   expect((await views(page)).map((v) => v.name)).not.toContain(copy)
   await open(page, 'Dagplanning', page.getByRole('grid', { name: 'Dagplanning' }))
   await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
-  await page.getByRole('menuitem', { name: 'Duplicate' }).click()
+  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
   const made = (await views(page)).find((v) => v.name === copy)
   expect(made?.mine).toBe(true)
@@ -217,7 +218,7 @@ test('view-delete-undo', async ({ page }) => {
   const deleted = page.waitForResponse(
     (res) => res.request().method() === 'DELETE' && res.url().endsWith(`/api/views/${made?.id}`),
   )
-  await page.getByRole('menuitem', { name: 'Remove' }).click()
+  await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
   expect((await deleted).status()).toBe(200)
 
   const restored = page.waitForResponse((res) => res.url().endsWith(`/api/views/${made?.id}/restore`))
@@ -250,14 +251,14 @@ test('person-to-name', async ({ page }) => {
 })
 
 test('datetime-shown', async ({ page }) => {
-  await open(page, 'Planning', header(page, 'Einde'))
+  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
   const start = page.locator('tbody td [data-value="2026-10-14T00:30"]').first()
   await expect(start).toHaveText(/^Wed 14\/10 00:30$/)
   await expect(start).not.toContainText('T')
 })
 
 test('in-filter-applies', async ({ page }) => {
-  await open(page, 'Optie of bevestigd', row(page, 'vergadering Gent'))
+  await open(page, 'Optie of bevestigd', row(page, 'vergadering Gent'), 'Activiteiten')
   await expect(page.locator('.nv-toolbar')).toContainText('+ 1 vaste filter')
   await expect(row(page, 'vergadering Gent')).toBeVisible()
   await expect(row(page, 'voorstelling Kortrijk')).toHaveCount(0)
@@ -280,7 +281,7 @@ test('in-filter-applies', async ({ page }) => {
 test('new-without-title', async ({ page }) => {
   const created: string[] = []
   page.on('request', (req) => req.method() === 'POST' && created.push(req.url()))
-  await open(page, 'Planning', header(page, 'Einde'))
+  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
   await page.getByRole('button', { name: 'New Activiteiten' }).click()
   await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
   expect(created).toEqual([])
@@ -295,7 +296,7 @@ test('relation-beyond-page', async ({ page }) => {
     if (url.pathname === '/api/rows/productie')
       asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
-  await open(page, 'Planning', header(page, 'Einde'))
+  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
   await page.getByRole('button', { name: '+ Filter' }).click()
   for (const titel of titels) {
     await expect(page.getByRole('button', { name: `Productie: ${titel}` })).toBeVisible()
@@ -321,8 +322,10 @@ test.describe('foreign-view-hidden', () => {
   test('never listed, never in the rail', async ({ page }) => {
     expect((await views(page)).map((v) => v.name)).not.toContain(name)
     await page.goto(WEEK)
-    await expect(page.getByText('Planning', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('Dagplanning', { exact: true }).first()).toBeVisible()
+    const nav = page.getByRole('navigation', { name: 'Views' })
+    await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toBeVisible()
+    await expect(modelNode(page, 'Dagplanning')).toBeVisible()
+    await expect(nav.getByRole('button', { name })).toHaveCount(0)
     await expect(page.getByText(name)).toHaveCount(0)
   })
 })

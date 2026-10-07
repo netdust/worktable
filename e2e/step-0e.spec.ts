@@ -1,5 +1,6 @@
 import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test'
 import { ACCOUNTS, requestAndOpenLink, state, THEATRE } from './auth'
+import { openModel, openView } from './tree'
 
 const WEEK = '/#from=2026-10-12'
 const LOTTE = 'Lotte Verhaegen'
@@ -29,8 +30,8 @@ async function views(api: APIRequestContext | Page['request']): Promise<SavedVie
   return ((await response.json()) as { views: SavedView[] }).views
 }
 
-async function pick(page: Page, view: string) {
-  await page.getByText(view, { exact: true }).first().click()
+async function pick(page: Page, view: string, model = view) {
+  await openView(page, view, model)
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 }
 
@@ -83,12 +84,12 @@ test.describe('as the owner', () => {
 
     // Lotte's absence starts in the week of 5 October; the week of 12 October holds only other people's.
     await land(page, '/#from=2026-10-05')
-    await pick(page, 'Beschikbaarheden')
+    await pick(page, 'Afwezigheden', 'Beschikbaarheden')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beschikbaarheden')
     await expect(gridRows(page)).toHaveCount(1)
     await expect(gridRows(page).first()).toHaveAttribute('data-title', LOTTE)
     await land(page, WEEK)
-    await pick(page, 'Beschikbaarheden')
+    await pick(page, 'Afwezigheden', 'Beschikbaarheden')
     await expect(page.getByText('No rows in this window')).toBeVisible()
     expect((await rows(editor, 'beschikbaarheid')).some((r) => r.persoon_id !== 1)).toBe(true)
 
@@ -98,7 +99,9 @@ test.describe('as the owner', () => {
     await land(page, `/#view=${planning?.id}`)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Planning')
-    await expect(page.getByText('Planning', { exact: true })).toHaveCount(0)
+    const nav = page.getByRole('navigation', { name: 'Views' })
+    await expect(nav.getByRole('treeitem', { name: 'Activiteiten', exact: true })).toHaveCount(0)
+    await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toHaveCount(0)
     await editor.dispose()
   })
 })
@@ -111,7 +114,7 @@ test('seeded-view-read-only', async ({ page }) => {
   expect(patched.status()).toBe(403)
 
   await page.goto(WEEK)
-  await pick(page, 'Planning')
+  await pick(page, 'Planning', 'Activiteiten')
   await page.getByRole('button', { name: '+ Filter' }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
   const toolbar = page.locator('.nv-toolbar')
@@ -134,7 +137,7 @@ test('seeded-view-read-only', async ({ page }) => {
     .not.toContain('productie_id')
 
   await page.reload()
-  await pick(page, name)
+  await pick(page, name, 'Activiteiten')
   await expect(toolbar.getByText('· modified')).toHaveCount(0)
   await expect(page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' })).toHaveCount(0)
 })
@@ -163,11 +166,11 @@ test('public-view-by-token', async () => {
 
 test('session-less-401', async ({ page, context }) => {
   await page.goto(WEEK)
-  await pick(page, 'Planning')
+  await pick(page, 'Planning', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
 
   await context.clearCookies()
-  await page.getByText('Producties', { exact: true }).first().click()
+  await openModel(page, 'Producties')
 
   const dialog = page.getByRole('dialog', { name: 'Aanmelden' })
   await expect(dialog).toBeVisible()
@@ -240,7 +243,7 @@ const undoOf = (page: Page) =>
 
 test('untimed-activity', async ({ page }) => {
   await page.goto(WEEK)
-  await pick(page, 'Optie of bevestigd')
+  await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
 
   const body = await createActivity(page, 'zonder tijd e2e')
@@ -250,7 +253,7 @@ test('untimed-activity', async ({ page }) => {
   const day = await shown(page, datum)
 
   await page.reload()
-  await pick(page, 'Optie of bevestigd')
+  await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(named(page, 'zonder tijd e2e')).toBeVisible()
   await expect(await cellOf(page, named(page, 'zonder tijd e2e'), 'Datum')).toHaveText(day)
   await expect(await cellOf(page, named(page, 'zonder tijd e2e'), 'Start')).toHaveText('')
@@ -260,7 +263,7 @@ test('untimed-activity', async ({ page }) => {
   await typeInto(start, `${datum}T05:00`)
   await expect(start).toHaveText(/ 05:00$/)
   await page.reload()
-  await pick(page, 'Optie of bevestigd')
+  await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Start')).toHaveText(/ 05:00$/)
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Datum')).toHaveText(day)
 
@@ -287,7 +290,7 @@ test('untimed-activity', async ({ page }) => {
   expect((await patched).postDataJSON()).toEqual({ start_at: null })
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Start')).toHaveText('')
   await page.reload()
-  await pick(page, 'Optie of bevestigd')
+  await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Start')).toHaveText('')
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Datum')).toHaveText(day)
 })
@@ -297,12 +300,12 @@ test.describe('undo restores what the writer changed with the edit', () => {
 
   async function reopen(page: Page) {
     await page.reload()
-    await pick(page, VIEW)
+    await pick(page, VIEW, 'Activiteiten')
   }
 
   test('undo-time-on-untimed', async ({ page }) => {
     await page.goto(WEEK)
-    await pick(page, VIEW)
+    await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'undo tijd e2e')).datum as string
     const later = plusDays(datum, 2)
     const row = () => named(page, 'undo tijd e2e')
@@ -323,7 +326,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
 
   test('undo-day-line-move', async ({ page }) => {
     await page.goto(WEEK)
-    await pick(page, VIEW)
+    await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'undo nacht e2e')).datum as string
     const row = () => named(page, 'undo nacht e2e')
     await typeInto(await cellOf(page, row(), 'Start'), `${datum}T23:30`)
@@ -369,7 +372,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
 
   test('clear-start-segment-by-segment', async ({ page }) => {
     await page.goto(WEEK)
-    await pick(page, VIEW)
+    await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'wis per deel e2e')).datum as string
     const row = () => named(page, 'wis per deel e2e')
     await typeInto(await cellOf(page, row(), 'Start'), `${datum}T10:00`)

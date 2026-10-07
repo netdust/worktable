@@ -1,5 +1,5 @@
 import { SidebarItem } from '@sakaniui/react'
-import { CalendarDays, Grid3x3, Table as TableIcon, UserRound, Users } from 'lucide-react'
+import { Grid3x3, Lock, Table as TableIcon, UserRound } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import type { SavedView, View } from '../types'
@@ -19,38 +19,37 @@ export interface ViewActions {
 }
 
 interface Props {
-  table: Table | undefined
+  table: Table
   active: string | undefined
   onSelect: (viewKey: string) => void
-  /** Opens the side panel for a new view; without it there is no "+ View". */
-  onNew?: () => void
   /** Without them there is no ⋯ and no rename. */
   actions?: ViewActions
 }
 
-/** A saved view's mark: one's own unshared view is mine, a shared one the team's; a starting view has none. */
+const editable = (view: View): view is SavedView => isSaved(view) && view.editable
+
+/** A view's mark: a lock on one this user can only copy, a person on one's own unshared view. */
 function Mark({ view }: { view: View }) {
-  if (!isSaved(view) || (!view.shared && !view.mine)) return null
-  const word = view.shared ? t('sharedView') : t('mine')
+  const locked = !editable(view)
+  if (!locked && !(view.mine && !view.shared)) return null
+  const word = t(locked ? 'readOnlyView' : 'mine')
   return (
-    <span className={view.shared ? 'nv-view__mark nv-view__shared' : 'nv-view__mark nv-view__own'} role="img" aria-label={word} title={word}>
-      {view.shared ? <Users size={12} aria-hidden="true" /> : <UserRound size={12} aria-hidden="true" />}
+    <span className={locked ? 'nv-view__mark nv-view__lock' : 'nv-view__mark nv-view__own'} role="img" aria-label={word} title={word}>
+      {locked ? <Lock size={12} aria-hidden="true" /> : <UserRound size={12} aria-hidden="true" />}
     </span>
   )
 }
 
-const editable = (view: View): view is SavedView => isSaved(view) && view.editable
-
-/** Rename, duplicate, share, move and delete on one's own: the engine makes only the owner's views editable; duplicate on any. */
+/** A copy of any; rename, share, move and delete on one's own: the engine makes only the owner's views editable. */
 function choices(view: View, at: number, count: number, actions: ViewActions, rename: () => void, move: (step: -1 | 1) => void): Action[] {
   const own = editable(view) && view.mine ? view : null
   return [
-    ...(editable(view) ? [{ label: t('rename'), run: rename }] : []),
     { label: t('duplicate'), run: () => actions.duplicate(view) },
+    ...(editable(view) ? [{ label: t('renameView'), run: rename }] : []),
     ...(own ? [{ label: t(own.shared ? 'unshare' : 'share'), run: () => actions.share(own, !own.shared) }] : []),
     ...(own && at > 0 ? [{ label: t('moveUp'), run: () => move(-1) }] : []),
     ...(own && at < count - 1 ? [{ label: t('moveDown'), run: () => move(1) }] : []),
-    ...(editable(view) ? [{ label: t('remove'), run: () => actions.remove(view) }] : []),
+    ...(editable(view) ? [{ label: t('delete'), run: () => actions.remove(view) }] : []),
   ]
 }
 
@@ -79,18 +78,18 @@ function RenameField({ view, onDone }: { view: SavedView; onDone: (name: string 
 }
 
 /**
- * The active table's views, each by its own label; the calendar follows. The group holds exactly
- * those buttons — the e2e counts them — so each ⋯ and "+ View" sit outside it: the list is one grid,
- * and the group and the menus lay their items over the same rows.
+ * A model's views, each by its own label. The group holds exactly those buttons — the e2e counts
+ * them — so each ⋯ sits outside it: the list is one grid, and the group and the menus lay their
+ * items over the same rows.
  */
-export function ViewList({ table, active, onSelect, onNew, actions }: Props) {
+export function ViewList({ table, active, onSelect, actions }: Props) {
   const [renaming, setRenaming] = useState<string | null>(null)
-  const views = table?.views ?? []
+  const views = table.views
   const keys = views.map((view) => view.key)
   const rows = useRef(new Map<string, HTMLElement>())
   // A moved row keeps the keyboard: React may re-insert its element, and a re-inserted element loses focus.
   const refocus = useRef<string | null>(null)
-  const order = (next: string[]) => table && actions?.order(table.key, next)
+  const order = (next: string[]) => actions?.order(table.key, next)
   const drag = useDragOrder(keys, rows, order)
   const move = (key: string, step: -1 | 1) => {
     refocus.current = key
@@ -116,8 +115,7 @@ export function ViewList({ table, active, onSelect, onNew, actions }: Props) {
     drag.drop?.key === key && `nv-view--drop-${drag.drop.edge}`,
   ].filter(Boolean).join(' ')
   return (
-    <div className="nv-rail__section nv-rail__types">
-      <p className="nv-rail__label" aria-hidden="true">{t('views')}</p>
+    <div className="nv-rail__types">
       <div className={actions ? 'nv-views nv-views--actions' : 'nv-views'}>
         <div className="nv-views__items" role="group" aria-label={t('viewType')} onClickCapture={drag.clickCapture}>
           {views.map((view, at) => (
@@ -143,9 +141,6 @@ export function ViewList({ table, active, onSelect, onNew, actions }: Props) {
               )}
             </div>
           ))}
-          <div className="nv-view" style={{ gridRow: views.length + 1 }}>
-            <SidebarItem icon={CalendarDays} label={t('calendar')} badge={t('soon')} disabled />
-          </div>
         </div>
         {actions && (
           <div className="nv-views__menus">
@@ -157,11 +152,6 @@ export function ViewList({ table, active, onSelect, onNew, actions }: Props) {
           </div>
         )}
       </div>
-      {onNew && (
-        <button type="button" className="nv-views__new" onClick={onNew}>
-          {t('newView')}
-        </button>
-      )}
     </div>
   )
 }

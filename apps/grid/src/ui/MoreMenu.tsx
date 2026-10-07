@@ -1,5 +1,5 @@
 import { Menu, MenuItem, Popover, type PopoverPlacement } from '@sakaniui/react'
-import { Ellipsis } from 'lucide-react'
+import { Ellipsis, type LucideIcon } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 
@@ -12,9 +12,16 @@ export interface Action {
 
 /**
  * The actions that do not fit beside the main one, behind ⋯: Escape closes and gives focus back to it.
- * `label` names the ⋯ where several sit side by side; `placement` turns the menu away from an edge.
+ * `label` names the ⋯ where several sit side by side; `placement` turns the menu away from an edge;
+ * `icon` and `menu` (the menu's name) make it another trigger, such as a `+`.
  */
-export function MoreMenu({ actions, label = t('moreActions'), placement = 'bottom-end' }: { actions: Action[]; label?: string; placement?: PopoverPlacement }) {
+export function MoreMenu({ actions, label = t('moreActions'), placement = 'bottom-end', icon: Icon = Ellipsis, menu = t('moreActions') }: {
+  actions: Action[]
+  label?: string
+  placement?: PopoverPlacement
+  icon?: LucideIcon
+  menu?: string
+}) {
   // A chosen action closes the menu: the popover keeps its own open state, so it starts again.
   const [round, setRound] = useState(0)
   const [open, setOpen, root] = useOpen()
@@ -23,10 +30,10 @@ export function MoreMenu({ actions, label = t('moreActions'), placement = 'botto
       <Popover key={round} placement={placement} trigger={
         <button type="button" className="nv-more" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open}
           onClick={() => setOpen(!open)}>
-          <Ellipsis size={16} aria-hidden="true" />
+          <Icon size={16} aria-hidden="true" />
         </button>
       }>
-        <Items actions={actions} onChosen={() => {
+        <Items actions={actions} label={menu} onChosen={() => {
           setOpen(false)
           setRound((n) => n + 1)
         }} />
@@ -59,7 +66,7 @@ function useOpen() {
   return [open, setOpen, root] as const
 }
 
-function Items({ actions, onChosen }: { actions: Action[]; onChosen: () => void }) {
+function Items({ actions, label, onChosen }: { actions: Action[]; label: string; onChosen: () => void }) {
   const list = useRef<HTMLDivElement>(null)
   const items = () => [...(list.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? [])]
 
@@ -76,7 +83,7 @@ function Items({ actions, onChosen }: { actions: Action[]; onChosen: () => void 
 
   return (
     <div ref={list} onKeyDown={move}>
-      <Menu aria-label={t('moreActions')} minWidth={200}>
+      <Menu aria-label={label} minWidth={200}>
         {actions.map((action) => (
           <MenuItem key={action.label} state={action.blocked ? 'disabled' : 'default'} onSelect={() => {
             onChosen()
