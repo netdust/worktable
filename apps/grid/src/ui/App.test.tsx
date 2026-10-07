@@ -1782,6 +1782,24 @@ describe("a query's views under the model it reads", () => {
     vi.restoreAllMocks()
   })
 
+  it("does not move a query's view that is not first in its block when dropped among the model's own views", async () => {
+    const ROW = 28
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = (Number(this.style.gridRow) - 1) * ROW
+      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
+    })
+    await opened('20')
+
+    fireEvent.pointerDown(within(typesOf('Activiteiten')).getByRole('button', { name: /^Dagplanning \(kopie\)$/ }).parentElement!, { button: 0, clientY: 2 * ROW + 14 })
+    fireEvent.pointerMove(window, { clientY: 4 })
+    fireEvent.pointerUp(window, { clientY: 4 })
+
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning', 'Dagplanning (kopie)', 'Per productie per dag', 'Voorstellingen'])
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(api.savePrefs).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
   it('reopens the query view last used when its model is clicked again', async () => {
     await opened('20')
 

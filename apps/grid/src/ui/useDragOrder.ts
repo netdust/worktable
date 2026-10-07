@@ -24,9 +24,12 @@ export function useDragOrder(keysOf: (key: string) => string[], rows: MutableRef
   const stop = useRef<(() => void) | null>(null)
   useEffect(() => () => stop.current?.(), [])
 
-  /** The first row whose middle lies below the pointer takes the drop before it; past them all, after the last. */
+  /** The first row whose middle lies below the pointer takes the drop before it; past them all, after the last. Outside the block, no drop. */
   const dropAt = (key: string, y: number): Drop | null => {
     const order = latest.current.keysOf(key)
+    const top = rows.current.get(order[0])?.getBoundingClientRect().top
+    const bottom = rows.current.get(order[order.length - 1])?.getBoundingClientRect().bottom
+    if (top === undefined || bottom === undefined || y < top || y > bottom) return null
     const below = order.find((k) => {
       const box = rows.current.get(k)?.getBoundingClientRect()
       return box !== undefined && y < box.top + box.height / 2
