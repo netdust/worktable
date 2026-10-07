@@ -252,3 +252,22 @@
 
 - [ ] Write the flows of spec R8 on invented fixtures: the theatre seed plus a speeldag applied through the API, for the band facts and the inherited venue.
 - [ ] Run `bunx playwright test e2e/grid-ux.spec.ts`, then `rm -rf e2e/.tmp && bun run gate` three times. Commit `test(e2e): the grid UX gate`.
+
+### Task 9 (follow-up, Stefan 2026-10-07): status colours
+**Files:**
+- Modify:
+  - `packages/engine/src/declare.ts`: `ColumnDecl.tones?: Record<string, 'ok' | 'warn' | 'bad'>`, keyed by option key;
+  - `validate.ts`: refuses a tone on a column without options, or keyed by an unknown option;
+  - `app.ts`: columns pass `tones` through;
+  - `apps/grid/src/engine.ts` and `types.ts`: `Field.tones`;
+  - `apps/grid/src/grid/cells/tones.ts`: a declared tone wins over the built-in English defaults;
+  - `packages/theatre/src/datasets.ts`: `activiteit.status` (optie warn, bevestigd ok, geannuleerd bad) and `toewijzing.state` (uitgenodigd warn, bevestigd ok, geweigerd bad, geannuleerd bad; open neutral).
+- Tests:
+  - engine validation;
+  - `/schema` serves `tones`;
+  - `Select.test.tsx`:
+    - a declared tone colours the pill;
+    - an undeclared option stays neutral;
+    - English defaults still apply where nothing is declared.
+
+- [ ] Implement. Run the tests and the gate. Commit `feat: a column may declare a tone per option; theatre's statuses are coloured`.
