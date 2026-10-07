@@ -1,4 +1,10 @@
-import { defineDataset } from '@worktable/engine'
+import { defineDataset, type GroupFact } from '@worktable/engine'
+
+// A day band's facts on the planning sources.
+export const dagFacts: GroupFact[] = [
+  { kind: 'first', column: 'start_at', where: { soort: 'voorstelling' }, label: 'voorstelling' },
+  { kind: 'empty', column: 'start_at', label: 'zonder tijd' },
+]
 
 export const organisatie = defineDataset({
   name: 'organisatie',
@@ -54,6 +60,8 @@ export const activiteit = defineDataset({
   title: 'omschrijving',
   date: 'plandag',
   custom: true,
+  scoped: 'productie_id',
+  group_facts: dagFacts,
   columns: {
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
     speelreeks_id: { type: 'integer', label: 'Speelreeks', nullable: true, relation: 'speelreeks' },
@@ -198,6 +206,7 @@ export const speelreeks = defineDataset({
   label: 'Speelreeksen',
   title: 'naam',
   custom: true,
+  scoped: 'productie_id',
   columns: {
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
     naam: { type: 'text', label: 'Naam' },

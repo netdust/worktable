@@ -11,7 +11,15 @@ export interface ColumnDecl {
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }
+  /** Query columns only: the value is taken over from elsewhere when the row's `flag` column is neither `own` nor empty. */
+  inherited?: { flag: string; own: string }
 }
+
+/** A fact the grid computes from a group's rows. */
+export type GroupFact =
+  | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
+  | { kind: 'count'; where?: Record<string, unknown>; label: string }
+  | { kind: 'empty'; column: string; label: string }
 
 export type TitleDecl = string | { via: string; else: string }
 
@@ -45,6 +53,9 @@ export interface DatasetDecl {
   config?: boolean
   /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
   checks?: string[]
+  /** The relation column that points at the domain's space. */
+  scoped?: string
+  group_facts?: GroupFact[]
 }
 
 export interface QueryDecl {
@@ -56,6 +67,8 @@ export interface QueryDecl {
   sql: string
   columns: Record<string, ColumnDecl>
   owners?: Owners
+  scoped?: string
+  group_facts?: GroupFact[]
 }
 
 export interface SavedViewSeed {
@@ -76,6 +89,10 @@ export interface Domain {
   views: SavedViewSeed[]
   writers?: Record<string, Writer>
   actions?: Record<string, ActionDecl>
+  /** The dataset whose records split the work. A view filter for the grid, never access control. */
+  space?: { dataset: string }
+  /** The order of the sources in the grid's tree; unlisted sources follow, unlabelled. */
+  sections?: { label: string; sources: string[] }[]
 }
 
 export interface Actor {

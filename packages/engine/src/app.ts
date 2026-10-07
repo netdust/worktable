@@ -5,9 +5,9 @@ import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
 import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
-import type { DatasetDecl, Domain } from './declare'
+import type { Actor, DatasetDecl, Domain } from './declare'
 import { ApiError, parseRowsParams } from './params'
-import { type Source, sourcesOf, writerOf } from './registry'
+import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
@@ -64,6 +64,24 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   )
 }
 
+// A space narrows what a planner sees and never limits what they may read: only a reader of its dataset gets it.
+function spaceOf(domain: Domain, actor: Actor): { model: string; field: string } | undefined {
+  const model = domain.space?.dataset
+  const space = model ? sourceOf(domain, model) : null
+  const field = sourcesOf(domain).find((s) => s.scoped)?.scoped
+  return model && space && field && readable(actor, space) ? { model, field } : undefined
+}
+
+function sectionsOf(domain: Domain, actor: Actor): { label: string; sources: string[] }[] | undefined {
+  const visible = (name: string): boolean => {
+    const source = sourceOf(domain, name)
+    return source !== null && readable(actor, source)
+  }
+  return domain.sections
+    ?.map(({ label, sources }) => ({ label, sources: sources.filter(visible) }))
+    .filter((section) => section.sources.length > 0)
+}
+
 export interface EngineOptions {
   port: number
   appUrl?: string
@@ -103,6 +121,8 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
 
   app.get('/schema', (c) => {
     const actor = c.get('actor')
+    const space = spaceOf(domain, actor)
+    const sections = sectionsOf(domain, actor)
     const joinOf = (s: Source): string | undefined => {
       const join = matrixOf(domain, s)?.join
       return join && readable(actor, join) ? join.name : undefined
@@ -124,10 +144,12 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             writable: isWritable(domain, s),
             deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
             actions: actionsOn(domain, s.name),
+            ...(space ? { space: s.scoped ? 'scoped' : 'global' } : {}),
+            ...(s.group_facts ? { group_facts: s.group_facts } : {}),
           },
         ]),
     )
-    return c.json({ sources })
+    return c.json({ sources, ...(space ? { space } : {}), ...(sections ? { sections } : {}) })
   })
 
   app.get('/rows/:source', (c) => {

@@ -8,6 +8,7 @@ export type {
   ColumnType,
   DatasetDecl,
   Domain,
+  GroupFact,
   MatrixDecl,
   Owners,
   QueryDecl,

@@ -112,6 +112,7 @@ describe('the fiche domain', () => {
       ['fiche', true],
       ['zichtbare_fiches', false],
     ])
+    expect(Object.keys(body)).toEqual(['sources'])
   })
 
   test('the domain passes validateDomain', () => {

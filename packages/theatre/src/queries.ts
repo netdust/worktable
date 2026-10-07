@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { defineQuery } from '@worktable/engine'
+import { dagFacts } from './datasets'
 
 const count = (label: string) => ({ type: 'integer' as const, label })
 
@@ -8,6 +9,7 @@ export const productieDag = defineQuery({
   label: 'Per productie per dag',
   title: 'productie',
   date: 'plandag',
+  scoped: 'productie_id',
   sql: readFileSync(new URL('./queries/productie_dag.sql', import.meta.url), 'utf8'),
   columns: {
     id: { type: 'integer', label: 'Id' },
@@ -34,6 +36,8 @@ export const dagplanning = defineQuery({
   label: 'Dagplanning',
   title: 'omschrijving',
   date: 'plandag',
+  scoped: 'productie_id',
+  group_facts: dagFacts,
   sql: readFileSync(new URL('./queries/dagplanning.sql', import.meta.url), 'utf8'),
   columns: {
     id: { type: 'integer', label: 'Id' },
@@ -46,7 +50,14 @@ export const dagplanning = defineQuery({
     start_at: { type: 'datetime', label: 'Start', nullable: true, writes: writesActiviteit('start_at') },
     plandag: { type: 'date', label: 'Plandag' },
     status: { type: 'text', label: 'Status', writes: writesActiviteit('status') },
-    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie', readonly: true },
+    locatie_id: {
+      type: 'integer',
+      label: 'Locatie',
+      nullable: true,
+      relation: 'organisatie',
+      readonly: true,
+      inherited: { flag: 'locatie_bron', own: 'eigen' },
+    },
     locatie_bron: {
       type: 'text',
       label: 'Locatie van',

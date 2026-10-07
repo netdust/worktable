@@ -1,6 +1,6 @@
 import type { ColumnDecl, DatasetDecl, Domain, QueryDecl } from './declare'
 import { reservedNames } from './engine-tables'
-import { sourcesOf, writerOf } from './registry'
+import { sourceOf, sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
   constructor(
@@ -165,6 +165,57 @@ function checkConfig(domain: Domain, dataset: DatasetDecl): void {
   }
 }
 
+function checkSpace(domain: Domain): void {
+  const space = domain.space?.dataset
+  if (space !== undefined && !domain.datasets.some((d) => d.name === space)) {
+    throw new DomainError('space', space, `space dataset "${space}" is not declared`)
+  }
+  let field: string | undefined
+  for (const source of sourcesOf(domain)) {
+    const column = source.scoped
+    if (column === undefined) continue
+    if (space === undefined)
+      throw new DomainError(source.name, column, `scoped "${column}", but the domain declares no space`)
+    if (source.columns[column]?.relation !== space) {
+      throw new DomainError(source.name, column, `scoped "${column}" is not a relation column to "${space}"`)
+    }
+    if (field !== undefined && column !== field) {
+      throw new DomainError(source.name, column, `scoped "${column}", but another source is scoped by "${field}"`)
+    }
+    field = column
+  }
+  if (space !== undefined && field === undefined)
+    throw new DomainError('space', space, 'no source is scoped to the space')
+}
+
+function checkSections(domain: Domain): void {
+  const seen = new Set<string>()
+  for (const { label, sources } of domain.sections ?? []) {
+    for (const name of sources) {
+      if (!sourceOf(domain, name)) throw new DomainError(label, name, `section lists unknown source "${name}"`)
+      if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
+      seen.add(name)
+    }
+  }
+}
+
+function checkFacts(source: DatasetDecl | QueryDecl): void {
+  for (const fact of source.group_facts ?? []) {
+    if (fact.kind !== 'count') checkColumn(source, 'fact column', fact.column)
+    const where = fact.kind === 'empty' ? undefined : fact.where
+    for (const column of Object.keys(where ?? {})) checkColumn(source, 'fact where', column)
+  }
+}
+
+function checkInherited(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.inherited) continue
+    if (source.kind === 'dataset') throw new DomainError(source.name, column, `${column} is inherited on a dataset`)
+    const { flag } = decl.inherited
+    if (!declared(source, flag)) throw new DomainError(source.name, flag, `${column} has flag "${flag}", not a column`)
+  }
+}
+
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
     if (reservedNames.has(source.name)) {
@@ -174,7 +225,11 @@ export function validateDomain(domain: Domain): void {
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
     checkOwners(source)
+    checkFacts(source)
+    checkInherited(source)
   }
+  checkSpace(domain)
+  checkSections(domain)
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
