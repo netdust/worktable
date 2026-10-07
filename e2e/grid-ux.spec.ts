@@ -513,7 +513,10 @@ test('dagplanning-details @e2e', async ({ page }) => {
   expect((await created).status()).toBe(201)
   await expect(gridRows(page)).toHaveCount(29)
 
-  // The compact rail foot keeps the whole tree in view at 720px.
+  // The compact rail foot leaves the tree its height at 720px: the gate's dark shot cut it after Gegevens.
   await page.setViewportSize({ width: 1440, height: 720 })
-  await expect(modelNode(page, 'Sjablonen').locator('.nv-model__name')).toBeInViewport()
+  const foot = (await page.locator('.nv-rail__foot').boundingBox())?.height ?? 0
+  const tree = (await page.getByRole('tree', { name: 'Views' }).boundingBox())?.height ?? 0
+  expect(foot).toBeLessThan(120)
+  expect(tree).toBeGreaterThan(480)
 })
