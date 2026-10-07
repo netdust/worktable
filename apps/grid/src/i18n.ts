@@ -113,7 +113,7 @@ const strings = {
   deletedSince: '{label}: dit record is intussen verwijderd; ongedaan maken kan niet.',
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
-  actionDone: '{action}: gedaan.',
+  actionDone: '{action} uitgevoerd.',
 }
 
 export type StringKey = keyof typeof strings

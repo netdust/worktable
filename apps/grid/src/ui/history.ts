@@ -24,8 +24,8 @@ export interface History {
   redo: () => Promise<Entry | null>
 }
 
-/** The one refusal the planner can resolve; after any other the step leaves the history. */
-const RESOLVABLE = 'in_use'
+/** The refusal the planner can resolve, and an undo that never reached the server; after any other the step leaves the history. */
+const KEPT = new Set(['in_use', 'unknown'])
 
 /** One per browser tab, of batch ids: `send` undoes a batch on the server and answers the undo's own batch, which a redo undoes. */
 export function createHistory(send: (batch: string) => Promise<string>): History {
@@ -62,7 +62,7 @@ export function createHistory(send: (batch: string) => Promise<string>): History
       answered(await send(batch))
       return entry
     } catch (error) {
-      refused((error as Partial<ApiError> | null)?.code === RESOLVABLE)
+      refused(KEPT.has(String((error as Partial<ApiError> | null)?.code)))
       throw error
     }
   }

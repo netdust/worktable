@@ -203,7 +203,7 @@ test('apply-template', async ({ page }) => {
   expect(answered.status()).toBe(201)
   const reply = (await answered.json()) as { batch_id: string; created: { dataset: string; id: number }[] }
   expect(reply.created).toHaveLength(28)
-  await expect(page.getByText(`Sjabloon toepassen: gedaan.`)).toBeVisible()
+  await expect(page.getByText(`Sjabloon toepassen uitgevoerd.`)).toBeVisible()
 
   // The 28 activities, as the server holds them: every day the pattern, at its times, the venue left to inherit.
   const made = await rowsOf<Values>(page.request, 'activiteit', { speelreeks_id: reeks?.id })

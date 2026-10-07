@@ -1357,7 +1357,7 @@ describe("a dataset's action and the tab's undo history", () => {
 
     expect(api.runAction).toHaveBeenCalledExactlyOnceWith('sjabloon_toepassen', 3, { sjabloon_id: 4 })
     await waitFor(() => expect(reads('speelreeks')).toBe(2))
-    const notice = await screen.findByRole('status', { name: 'Sjabloon toepassen: gedaan.' })
+    const notice = await screen.findByRole('status', { name: 'Sjabloon toepassen uitgevoerd.' })
     await grid('Speelreeksen')
     await act(async () => {
       fireEvent.click(within(notice).getByRole('button', { name: 'Undo' }))
@@ -1376,7 +1376,7 @@ describe("a dataset's action and the tab's undo history", () => {
     await grid('Speelreeksen')
     await applyTemplate()
     await waitFor(() => expect(reads('speelreeks')).toBe(3))
-    const notice = await screen.findByRole('status', { name: 'Sjabloon toepassen: gedaan.' })
+    const notice = await screen.findByRole('status', { name: 'Sjabloon toepassen uitgevoerd.' })
     const cell = (await grid('Speelreeksen')).querySelector<HTMLElement>('td[data-cell]')!
     fireEvent.click(cell)
     await act(async () => {

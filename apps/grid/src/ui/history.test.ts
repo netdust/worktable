@@ -50,6 +50,19 @@ describe('the undo history', () => {
     expect([history.canUndo(), history.canRedo()]).toEqual([false, false])
   })
 
+  it('keeps a step whose undo never reached the server, so the next press tries it again', async () => {
+    const send = vi.fn<(batch: string) => Promise<string>>().mockRejectedValueOnce({ code: 'unknown', message: 'Failed to fetch' }).mockResolvedValueOnce('u1')
+    const history = createHistory(send)
+    history.push(step('b1'))
+    history.push(step('b2'))
+
+    await expect(history.undo()).rejects.toMatchObject({ code: 'unknown' })
+    expect([history.canUndo(), history.canRedo()]).toEqual([true, false])
+    await history.undo()
+
+    expect(send.mock.calls).toEqual([['b2'], ['b2']])
+  })
+
   it.each(['changed_since', 'forbidden', 'unknown_source'])('drops a step refused %s, so the next undo reaches the older step', async (code) => {
     const send = vi.fn<(batch: string) => Promise<string>>().mockRejectedValueOnce({ code, message: 'no' }).mockResolvedValueOnce('u1')
     const history = createHistory(send)
