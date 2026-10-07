@@ -463,7 +463,6 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
 
 // Bug: Enter on the focused Annuleren reaches the grid, which closes the box and commits the people cell as a value; the store refuses it and marks the cell.
 test('removal-question-enter-on-annuleren @e2e', async ({ page }) => {
-  test.fail()
   const api = page.request
   const writes: string[] = []
   page.on('request', (req) => {
@@ -483,7 +482,6 @@ test('removal-question-enter-on-annuleren @e2e', async ({ page }) => {
 
 // Bug: Tab on the question moves the grid's cell and closes the box; Verwijderen is never reached by the keyboard.
 test('removal-question-tab-to-verwijderen @e2e', async ({ page }) => {
-  test.fail()
   await withQuestion(page, 'mensen tab e2e', '13:00', async () => {
     const question = page.getByRole('alertdialog')
     await page.keyboard.press('Tab')
@@ -493,7 +491,6 @@ test('removal-question-tab-to-verwijderen @e2e', async ({ page }) => {
 
 // Bug: the question's buttons carry nv-btn and nv-btn--danger, which no stylesheet defines: browser buttons in Arial, Verwijderen like Annuleren.
 test('removal-question-buttons-styled @e2e', async ({ page }) => {
-  test.fail()
   await withQuestion(page, 'mensen knoppen e2e', '14:00', async () => {
     const question = page.getByRole('alertdialog')
     const style = (name: string) =>
@@ -510,7 +507,6 @@ test('removal-question-buttons-styled @e2e', async ({ page }) => {
 
 // Bug: at 1280 wide the people box runs past the viewport's right edge.
 test('people-box-fits-at-1280 @e2e', async ({ page }) => {
-  test.fail()
   await page.setViewportSize({ width: 1280, height: 720 })
   const api = page.request
   await withActivity(page, 'mensen breedte e2e', '16:00', async (activity) => {
@@ -634,7 +630,6 @@ test('period-empty-result @e2e', async ({ page }) => {
 
 // Bug: a double-click on an option adds twice; the second is refused, so a person added once reads as a failed add.
 test('people-double-pick @e2e', async ({ page }) => {
-  test.fail()
   const api = page.request
   const posts: number[] = []
   page.on('response', (res) => {

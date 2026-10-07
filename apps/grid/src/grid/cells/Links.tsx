@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
-import { createContext, type KeyboardEvent, type MouseEvent, useContext, useState } from 'react'
+import { Button } from '@sakaniui/react'
+import { createContext, type KeyboardEvent, type MouseEvent, useContext, useEffect, useRef, useState } from 'react'
 import { t } from '../../i18n'
 import type { Link, LinkItem, Row } from '../../types'
 import { linksOf } from '../columns'
@@ -58,20 +59,27 @@ function Chosen({ items, link, onRemove }: { items: LinkItem[]; link: Link; onRe
   )
 }
 
-/** Asked before a removal. Annuleren has focus, so the keyboard reaches it; Escape keeps the person, as Annuleren does. */
+/** Asked before a removal: no key reaches the grid behind it; Tab moves between the two answers and Escape keeps the person. */
 function Question({ text, onCancel, onConfirm }: { text: string; onCancel: () => void; onConfirm: () => void }) {
+  const cancel = useRef<HTMLButtonElement>(null)
+  const confirm = useRef<HTMLButtonElement>(null)
+  useEffect(() => cancel.current?.focus(), [])
   const keys = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape') return
-    event.preventDefault()
     event.stopPropagation()
-    onCancel()
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancel()
+    } else if (event.key === 'Tab') {
+      event.preventDefault()
+      ;(document.activeElement === cancel.current ? confirm : cancel).current?.focus()
+    }
   }
   return (
     <div className="nv-pop nv-confirm" role="alertdialog" aria-label={text} onKeyDown={keys}>
       <p>{text}</p>
       <div className="nv-confirm__actions">
-        <button type="button" className="nv-btn" ref={(button) => button?.focus()} onClick={onCancel}>{t('cancel')}</button>
-        <button type="button" className="nv-btn nv-btn--danger" onClick={onConfirm}>{t('delete')}</button>
+        <Button ref={cancel} variant="secondary" size="sm" onClick={onCancel}>{t('cancel')}</Button>
+        <Button ref={confirm} variant="destructive" size="sm" onClick={onConfirm}>{t('delete')}</Button>
       </div>
     </div>
   )
@@ -81,6 +89,8 @@ function Question({ text, onCancel, onConfirm }: { text: string; onCancel: () =>
 export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorProps) {
   const actions = useContext(LinksContext)
   const [asking, setAsking] = useState<LinkItem | null>(null)
+  // A second click on a name, before the first add answered, would be refused as a duplicate.
+  const adding = useRef(new Set<number>())
   const { link } = column
   const key = column.field ?? column.id
   const items = linksOf(row, key)
@@ -113,7 +123,12 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
           query={editing.mode === 'enter' ? editing.draft : ''}
           before={<Chosen items={items} link={link} onRemove={drop} />}
           hide={(record) => items.some((item) => item.target === record.id)}
-          onPick={(record) => void actions.add(key, row, record.id)}
+          clearOnPick
+          onPick={(record) => {
+            if (adding.current.has(record.id)) return
+            adding.current.add(record.id)
+            void actions.add(key, row, record.id).finally(() => adding.current.delete(record.id))
+          }}
           onClear={() => {
             const last = removable[removable.length - 1]
             if (last) drop(last)
