@@ -50,7 +50,7 @@
 5. Kept contracts:
    - `navigation "Views"`;
    - `More actions: <name>`;
-   - opening a view by its name in the rail. The landing view stays `tables[0].views[0]` in today's `byFirstView` order; sections order only the tree. Opening a model by its name also unfolds it. The e2e helpers click rail buttons by role and exact name inside `navigation "Views"`, never `getByText`, so a section label ("Planning") is never a click target.
+   - opening a view by its name in the rail. The landing view stays `tables[0].views[0]` in today's `byFirstView` order; sections order only the tree. Opening a model by its name also unfolds it. A model node is a `treeitem` (with `aria-expanded`) named by its label alone; its views are buttons inside its own `role=group "View type"`, rendered in the node's wrapper. The e2e helpers never use `getByText`: they click the model's `treeitem` by exact name, then the view button by exact name inside that node's group (skipping the second click when it is already open). So a section label is never a click target, and a view named like its model (10 of 14 seeded views) is never ambiguous.
    - the `…` on a model is named `Meer voor <model>`, so `More actions: <view>` stays unique;
    - the add button's name.
 
@@ -148,7 +148,7 @@
   - `App.test.tsx`:
     - switching narrows the rows request and pre-fills new rows;
     - "Alle" sends no scope and never shows "choose";
-    - rewrite `:254` ("heads the rail with the first production") and `:306` ("asks for a production when there is none") for the new default.
+    - rewrite the tests titled "heads the rail with the first production" (about `:255`) and "asks for a production when there is none" (about `:314`) for the new default.
 
   Because the default is "Alle producties", the existing e2e stays green.
 - [ ] Implement. Run the grid tests and the gate. Commit `feat(grid): the production switcher, scoped through the rows filter`.
@@ -162,16 +162,18 @@
   - `MoreMenu.tsx`: an icon prop, reused for `+` and `…`;
   - `App.tsx`: the `+ View` panel is replaced by the dialog;
   - `i18n.ts` and `app.css`;
-  - the e2e `open`/`pick` helpers in step-0a, 0b, 0d, 0e and step-1 (a decided step, not only if a flow breaks): they click a button by role and exact name inside `navigation "Views"`. A view under another model passes its model, which the helper opens first (for example `open(page, 'Optie of bevestigd', 'Activiteiten')`). `e2e/step-0e.spec.ts:101` counts tree buttons, not text.
+  - the e2e helpers and direct opens (a decided step): the `open`/`pick` helpers in step-0a, 0b, 0c (its own `open`, :19–21), 0d, 0e and step-1, plus the direct `getByText` opens at step-0a.spec.ts:117 and step-0e.spec.ts:170. They take `(view, model = view)`: click the model's `treeitem` by exact name, then the view's button inside that node's group. A view under another model passes its model, e.g. `open(page, 'Optie of bevestigd', 'Activiteiten')` and the matrix `open(page, 'Toewijzingen per activiteit', 'Activiteiten')`. `e2e/step-0e.spec.ts:101` counts tree items and buttons, not text; `e2e/step-0d.spec.ts:324` asserts a button named "Planning" inside `navigation "Views"`.
 - Create: `apps/grid/src/ui/NewViewDialog.tsx` and its test.
 
 **Behaviour:**
 - Clicking a model's name opens it, unfolds it, and shows its first or last-used view (`openTable` and `Prefs.last` stay). Clicking the chevron that replaces the icon on hover or focus folds or unfolds it without changing the view. On a first visit the active view's model is open. The landing view is unchanged: `tables[0].views[0]` in `byFirstView` order.
 - Open state is stored per browser.
-- The open model's views sit in `role=group` named `View type`. Tests that expect a single such group keep one model open.
+- Each open model's views sit in that node's own `role=group` named `View type`. Tests that expect a single such group keep one model open; the e2e helpers scope to the node.
 - [ ] Tests:
   - the landing view is the same as before the tree when sections reorder it;
   - a model opened by name is unfolded;
+  - a view named like its model opens twice in a row (the treeitem and the view button never collide);
+  - the model `treeitem`'s accessible name is its label alone (no fold state, no icon label);
   - hover and focus show the chevron and the tools;
   - name and chevron behave as above, and the open state persists;
   - the active view is highlighted;

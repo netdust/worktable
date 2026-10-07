@@ -51,3 +51,22 @@ Verdict: not ready (1 Blocking, 3 Should fix). All 13 round-1 findings were conf
 ## Notes (applied)
 - The source key is `beschikbaarheid`, whose node reads "Beschikbaarheden". The spec is corrected.
 - The engine fixture domain avoids fiche words too.
+
+# Plan review: grid-ux (round 3)
+Reviewed-plan: 83a1351cf7c0997e7cb96f38b58e9a5298917bfd
+Verdict: not ready (1 Blocking, 1 Should fix). All round-2 findings were confirmed fixed. Applied below.
+
+## Blocking (applied)
+- **An exact-name helper would hit two buttons when a view has its model's name (10 of 14 seeded views).**
+  - A model node is now a `treeitem` named by its label alone.
+  - Its views are buttons inside that node's own `group "View type"`.
+  - The helpers take `(view, model = view)`: they click the treeitem, then the view inside that node.
+  - A unit test checks that a same-named view opens twice in a row.
+
+## Should fix (applied)
+- **The helper list missed some call sites.** It now includes step-0c's `open` and the direct opens at step-0a:117 and step-0e:170. step-0d:324 now asserts a button.
+
+## Notes (applied)
+- Test line numbers corrected.
+- The matrix example is added.
+- The model's accessible name is its label alone.
