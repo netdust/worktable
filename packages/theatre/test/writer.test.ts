@@ -232,7 +232,14 @@ describe('dagplanning', () => {
 
   const dagRows = async () => {
     const res = await request('GET', '/api/rows/dagplanning?limit=500')
-    return res.body.rows as { id: number; activiteit_id: number; start_at: string; plandag: string }[]
+    return res.body.rows as {
+      id: number
+      activiteit_id: number
+      start_at: string
+      plandag: string
+      locatie_id: number | null
+      locatie_bron: string | null
+    }[]
   }
 
   test('a soft-deleted activiteit leaves dagplanning, and every row has id equal to activiteit_id', async () => {
@@ -249,5 +256,36 @@ describe('dagplanning', () => {
     await patch(1, { eind_at: null, start_at: '2026-10-15T03:30' })
     const row = (await dagRows()).find((r) => r.id === 1)
     expect(row).toMatchObject({ start_at: '2026-10-15T03:30', plandag: '2026-10-14' })
+  })
+
+  // The engine has no PATCH on a query: the grid sends a mapped column to the dataset in its `writes`.
+  const dagPatch = (id: number, body: unknown) => patch(id, body)
+
+  test('omschrijving, soort and locatie in dagplanning write the activity', async () => {
+    const { body } = await request('GET', '/api/schema')
+    const columns = body.sources.dagplanning.columns
+    for (const field of ['omschrijving', 'soort', 'locatie_id']) {
+      expect(columns[field].writes).toEqual({ dataset: 'activiteit', field, key: 'activiteit_id' })
+      expect(columns[field].readonly).toBeFalsy()
+    }
+    const res = await dagPatch(1, { omschrijving: 'Nieuwe titel', soort: 'opbouw', locatie_id: 2 })
+    expect(res.status).toBe(200)
+    expect(stored(1)).toMatchObject({ omschrijving: 'Nieuwe titel', soort: 'opbouw', locatie_id: 2 })
+  })
+
+  test('clearing dagplanning locatie falls back to the speelreeks', async () => {
+    sqlite.run(
+      "INSERT INTO speelreeks (productie_id, naam, locatie_id, start_datum, eind_datum) VALUES (1, 'Tour', 3, '2026-10-12', '2026-10-12')",
+    )
+    const reeks = (sqlite.query('SELECT last_insert_rowid() AS id').get() as { id: number }).id
+    sqlite.run('UPDATE activiteit SET speelreeks_id = ?, locatie_id = NULL WHERE id = 1', [reeks])
+    const reeksBefore = sqlite.query('SELECT * FROM speelreeks WHERE id = ?').get(reeks)
+    const row = async () => (await dagRows()).find((r) => r.id === 1)
+
+    expect((await dagPatch(1, { locatie_id: 2 })).status).toBe(200)
+    expect(await row()).toMatchObject({ locatie_id: 2, locatie_bron: 'eigen' })
+    expect((await dagPatch(1, { locatie_id: null })).status).toBe(200)
+    expect(await row()).toMatchObject({ locatie_id: 3, locatie_bron: 'speelreeks' })
+    expect(sqlite.query('SELECT * FROM speelreeks WHERE id = ?').get(reeks)).toEqual(reeksBefore)
   })
 })
