@@ -10,6 +10,7 @@ import {
   revisionProblems,
   scalarEdit,
   skipReason,
+  speelreeksBody,
   undoOrder,
 } from './edit-session.lib'
 
@@ -99,6 +100,33 @@ describe('the undo by batch', () => {
       { label: 'c', batch: 'b3' },
     ]
     expect(undoOrder(done).map((d) => d.label)).toEqual(['c', 'a'])
+  })
+})
+
+describe('the speelreeks the session creates first', () => {
+  const producties = [{ id: 4, deleted_at: null }]
+  const organisaties = [
+    { id: 1, soort: 'eigen', deleted_at: null },
+    { id: 2, soort: 'venue', deleted_at: '2026-01-01T00:00:00Z' },
+    { id: 3, soort: 'venue', deleted_at: null },
+  ]
+
+  it('sits on a live productie and a live venue, two days from the given day', () => {
+    expect(speelreeksBody(producties, organisaties, '2026-12-31')).toEqual({
+      productie_id: 4,
+      naam: 'shakeout-speelreeks',
+      locatie_id: 3,
+      start_datum: '2026-12-31',
+      eind_datum: '2027-01-01',
+    })
+  })
+
+  it('leaves the locatie empty when no live venue exists', () => {
+    expect(speelreeksBody(producties, organisaties.slice(0, 2), '2026-05-01')?.locatie_id).toBeNull()
+  })
+
+  it('is null without a live productie', () => {
+    expect(speelreeksBody([{ id: 4, deleted_at: '2026-01-01T00:00:00Z' }], organisaties, '2026-05-01')).toBeNull()
   })
 })
 

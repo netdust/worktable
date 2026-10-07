@@ -18,6 +18,7 @@ import {
   rowDiff,
   scalarEdit,
   skipReason,
+  speelreeksBody,
   undoOrder,
 } from './edit-session.lib'
 
@@ -446,6 +447,24 @@ function planEdit(snap: Snapshot, dataset: string, column: string, decl: Column)
 const editable = (source: Source): [string, Column][] =>
   Object.entries(source.columns).filter(([, column]) => !column.readonly)
 
+// ---- step 0: a speelreeks, so activiteit.speelreeks_id has a real target ---------------------------
+
+async function stepSpeelreeks(): Promise<void> {
+  const step = '0 speelreeks'
+  const label = 'create a speelreeks'
+  const snap = snapshot()
+  const dated = live(snap, 'activiteit').find((a) => typeof a.datum === 'string')
+  const day = String(dated?.datum ?? new Date().toISOString().slice(0, 10))
+  const body = speelreeksBody(live(snap, 'productie'), live(snap, 'organisatie'), day)
+  if (!datasets.speelreeks || !body) return record(step, label, ['no writable speelreeks or no productie'], {})
+  const op = { method: 'POST' as const, dataset: 'speelreeks', id: null, body }
+  const ok = await attempt(step, label, op, { accept: true, fields: body })
+  if (!ok) return
+  // First in done, so the undo walks back to it last, after every write that points at it.
+  done.push(ok)
+  notes.push(`speelreeks ${ok.id} was created first for activiteit.speelreeks_id to point at; step 5 undoes it last`)
+}
+
 // ---- step 1: every editable column ----------------------------------------------------------------
 
 async function stepColumns(): Promise<void> {
@@ -807,6 +826,7 @@ async function main(): Promise<number> {
     datasets = Object.fromEntries(Object.entries(sources).filter(([, s]) => s.kind === 'dataset' && s.writable))
     const start = snapshot()
     console.log(`signed in; ${Object.keys(datasets).length} writable datasets, ${start.size} rows`)
+    await stepSpeelreeks()
     await stepColumns()
     await stepDayLine()
     await stepPersonName()

@@ -132,3 +132,19 @@ export function batchOf(reply: Row): string | null {
 export function undoOrder<T extends { batch: string | null }>(done: T[]): T[] {
   return done.filter((d) => d.batch !== null).reverse()
 }
+
+const liveRows = (rows: Row[]): Row[] => rows.filter((r) => r.deleted_at === null)
+
+/** A two-day Speelreeks on a live productie and, when there is one, a live venue; null without a productie. */
+export function speelreeksBody(producties: Row[], organisaties: Row[], day: string): Row | null {
+  const productie = liveRows(producties)[0]
+  if (!productie) return null
+  const venue = liveRows(organisaties).find((o) => o.soort === 'venue')
+  return {
+    productie_id: productie.id,
+    naam: 'shakeout-speelreeks',
+    locatie_id: venue?.id ?? null,
+    start_datum: day,
+    eind_datum: addDays(day, 1),
+  }
+}
