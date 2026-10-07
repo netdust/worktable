@@ -10,6 +10,7 @@ import { ApiError, isRealDate } from './params'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
+import { SYSTEM_OWNER } from './views'
 
 export class WriteRefused extends ApiError {
   constructor(message: string) {
@@ -458,9 +459,10 @@ function undoableBatch(sqlite: Database, key: string, actor: Actor): void {
   const sql = 'SELECT actor_id, kind, undone_by FROM batch WHERE key = ?'
   const batch = sqlite.query(sql).get(key) as BatchRow | null
   if (!batch) throw notUndoable('this batch cannot be undone')
-  // The kind first: a seed batch belongs to no account, and no account may undo it.
+  // A system batch belongs to no account, so it falls through to the kind check.
+  if (batch.actor_id !== actor.id && batch.actor_id !== SYSTEM_OWNER)
+    forbid('only the account that made a batch may undo it')
   if (!UNDOABLE.has(batch.kind)) throw notUndoable(`a batch of kind ${batch.kind} cannot be undone`)
-  if (batch.actor_id !== actor.id) forbid('only the account that made a batch may undo it')
   if (batch.undone_by !== null) throw new ApiError(409, 'already_undone', 'this batch is already undone')
 }
 

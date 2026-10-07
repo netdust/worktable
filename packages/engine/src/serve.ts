@@ -172,8 +172,8 @@ function runSeedMissingCommand(): number | null {
     for (const line of seedLines(seedMissing(sqlite, domain))) console.log(line)
     return 0
   } catch (err) {
-    if (!(err instanceof SeedRefused)) throw err
-    console.error(`seed-missing refused: ${err.message}`)
+    if (err instanceof SeedRefused) console.error(`seed-missing refused: ${err.message}`)
+    else console.error(`seed-missing failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }

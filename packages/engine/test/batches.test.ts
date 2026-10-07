@@ -129,6 +129,20 @@ describe('undo denials', () => {
     await denied(() => undo(asA, key), 422, 'not_undoable')
   })
 
+  test("another account's import batch is 403 forbidden: the owner is checked before the kind", async () => {
+    await engineFor(importDomain, false)
+    const data = { worktable_export: 1, datasets: { plat: [{ legacy_id: 1, name: 'x' }] } }
+    importExport(sqlite, importDomain, data, { id: A, role: 'administrator', subject: null }, { acceptReport: false })
+    const { batch_id: key } = sqlite.query('SELECT DISTINCT batch_id FROM revision').get() as { batch_id: string }
+    await denied(() => undo(asB, key), 403, 'forbidden')
+  })
+
+  test('a seed batch, owned by the system, is 422 not_undoable for any account', async () => {
+    recordBatch(sqlite, 'seeded', -1, 'seed', new Date().toISOString())
+    await denied(() => undo(asA, 'seeded'), 422, 'not_undoable')
+    await denied(() => undo(asB, 'seeded'), 422, 'not_undoable')
+  })
+
   test('a delete batch is 422 not_undoable', async () => {
     expect((await asA('DELETE', '/api/rows/note/1', { type: null })).status).toBe(200)
     const { batch_id: key } = sqlite.query("SELECT batch_id FROM revision WHERE field = 'deleted_at'").get() as {

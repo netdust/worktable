@@ -15,6 +15,8 @@ export type DatasetOutcome = number | 'not config' | 'has rows'
 export interface SeedReport {
   datasets: Record<string, DatasetOutcome>
   views: { added: number; updated: number; present: number }
+  // One line per system view it updated or left alone for being public.
+  named: string[]
   batch: string | null
 }
 
@@ -30,6 +32,7 @@ interface Run {
   now: string
   batch: string
   written: number
+  named: string[]
 }
 
 const SYSTEM: Actor = { id: SYSTEM_OWNER, role: 'administrator', subject: null }
@@ -104,8 +107,15 @@ function addView(run: Run, next: Stored): void {
   run.written++
 }
 
-// Answers whether the view changed; only the system owner's views are brought up to date.
+const isPublic = (view: Stored): boolean => view.public === 1 || view.share_token !== null
+
+// Answers whether the view changed; only the system owner's views are brought up to date, never a public one.
 function updateView(run: Run, current: Stored, next: Stored): boolean {
+  const label = `view "${current.name}" (${current.source})`
+  if (isPublic(current)) {
+    run.named.push(`${label} is public, left alone`)
+    return false
+  }
   const changes = DECLARED.map((key): Change => [key, current[key] ?? null, next[key] ?? null]).filter(
     ([, old, value]) => old !== value,
   )
@@ -115,6 +125,7 @@ function updateView(run: Run, current: Stored, next: Stored): boolean {
   run.store.sqlite.query(`UPDATE saved_view SET ${sets.join(', ')} WHERE id = ?`).run(...values)
   revise(run.store.sqlite, savedView, current.id as number, changes, run.now, SYSTEM_OWNER, run.batch)
   run.written++
+  run.named.push(`${label} updated`)
   return true
 }
 
@@ -123,7 +134,10 @@ function seedViews(run: Run): SeedReport['views'] {
   const sql = 'SELECT * FROM saved_view WHERE name = ? AND source = ? AND deleted_at IS NULL ORDER BY id'
   for (const seed of run.store.domain.views) {
     const next = storedView(seed)
-    const live = run.store.sqlite.query(sql).all(seed.name, seed.source) as Stored[]
+    // A user's private view never blocks the seeded one; only a system-owned or shared view counts.
+    const live = (run.store.sqlite.query(sql).all(seed.name, seed.source) as Stored[]).filter(
+      (view) => view.owner_id === SYSTEM_OWNER || view.shared === 1,
+    )
     const system = live.find((view) => view.owner_id === SYSTEM_OWNER)
     if (live.length === 0) {
       addView(run, next)
@@ -141,26 +155,27 @@ export function seedMissing(sqlite: Database, domain: Domain): SeedReport {
     now: new Date().toISOString(),
     batch: crypto.randomUUID(),
     written: 0,
+    named: [],
   }
   return sqlite
     .transaction((): SeedReport => {
       const datasets: Record<string, DatasetOutcome> = {}
       for (const [name, rows] of seedRows(domain)) datasets[name] = seedDataset(run, name, rows)
       const views = seedViews(run)
-      if (run.written === 0) return { datasets, views, batch: null }
+      if (run.written === 0) return { datasets, views, named: run.named, batch: null }
       recordBatch(sqlite, run.batch, SYSTEM_OWNER, 'seed', run.now)
-      return { datasets, views, batch: run.batch }
+      return { datasets, views, named: run.named, batch: run.batch }
     })
     .immediate()
 }
 
-// Counts only: no row value reaches the log.
+// Counts and declared view names only: no row value reaches the log.
 export function seedLines(report: SeedReport): string[] {
   const lines = Object.entries(report.datasets).map(([name, outcome]) => {
     if (typeof outcome !== 'number') return `${name} skipped (${outcome})`
     return `${name} ${outcome} ${outcome === 1 ? 'row' : 'rows'}`
   })
   const { added, updated, present } = report.views
-  lines.push(`views ${added} added, ${updated} updated, ${present} present`)
+  lines.push(...report.named, `views ${added} added, ${updated} updated, ${present} present`)
   return lines.map((line) => `seed-missing: ${line}`)
 }

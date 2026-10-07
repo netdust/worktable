@@ -1,10 +1,10 @@
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Domain, DomainError, defineDataset, migrate, validateDomain } from '../src'
-import { seedMissing } from '../src/seed-missing'
+import { seedLines, seedMissing } from '../src/seed-missing'
 import { SYSTEM_OWNER } from '../src/views'
 import { contents, send } from './fixture'
 import seedDomain from './fixtures/seed-domain'
@@ -23,10 +23,17 @@ function existingDb(): Database {
   return sqlite
 }
 
-function insertView(sqlite: Database, owner: number, name: string, source: string, visible: string[]): number {
+function insertView(
+  sqlite: Database,
+  owner: number,
+  name: string,
+  source: string,
+  visible: string[],
+  shared = 1,
+): number {
   const sql = `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
-               VALUES (?, 'dataset', ?, 'table', '{}', '[]', NULL, ?, ?, 1)`
-  return Number(sqlite.query(sql).run(name, source, JSON.stringify(visible), owner).lastInsertRowid)
+               VALUES (?, 'dataset', ?, 'table', '{}', '[]', NULL, ?, ?, ?)`
+  return Number(sqlite.query(sql).run(name, source, JSON.stringify(visible), owner, shared).lastInsertRowid)
 }
 
 const viewsNamed = (sqlite: Database, name: string) =>
@@ -130,6 +137,7 @@ describe('seedMissing: one seed batch', () => {
         kit: 'has rows',
       },
       views: { added: 0, updated: 0, present: 2 },
+      named: [],
       batch: null,
     })
     expect(everything(sqlite)).toEqual(before)
@@ -150,6 +158,28 @@ describe('seedMissing: views', () => {
       ['badge', SYSTEM_OWNER, 1],
     ])
     expect(JSON.parse(badges[1]?.visible_fields as string)).toEqual(['name', 'size'])
+  })
+
+  test("a user's private view with the seeded name and source does not block the seeded view, and is untouched", () => {
+    const sqlite = existingDb()
+    const mine = insertView(sqlite, 7, 'Open', 'taak', ['day'], 0)
+    const before = sqlite.query('SELECT * FROM saved_view WHERE id = ?').get(mine)
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.views).toEqual({ added: 2, updated: 0, present: 0 })
+    const open = viewsNamed(sqlite, 'Open')
+    expect(open.map((v) => [v.owner_id, v.shared])).toEqual([
+      [7, 0],
+      [SYSTEM_OWNER, 1],
+    ])
+    expect(open[0]).toEqual(before as Record<string, unknown>)
+  })
+
+  test("another user's shared view with the seeded name and source counts as present", () => {
+    const sqlite = existingDb()
+    insertView(sqlite, 7, 'Open', 'taak', ['day'], 1)
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.views).toEqual({ added: 1, updated: 0, present: 1 })
+    expect(viewsNamed(sqlite, 'Open').map((v) => v.owner_id)).toEqual([7])
   })
 
   test('a view owned by anyone else is left alone, even when it differs from the declaration', () => {
@@ -179,6 +209,39 @@ describe('seedMissing: views', () => {
       .all(id) as Record<string, unknown>[]
     expect(revised.map((r) => r.field).sort()).toEqual(['filters', 'group_by', 'sort', 'visible_fields'])
     expect(revised.every((r) => r.actor_id === SYSTEM_OWNER && r.batch_id === report.batch)).toBe(true)
+  })
+})
+
+describe('seedMissing: public and updated system views', () => {
+  test('a public system view keeps its filters, fields, public flag, share token and format, and is named', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
+    sqlite.query("UPDATE saved_view SET public = 1, share_token = 'tok', format = 'ical' WHERE id = ?").run(id)
+    const before = viewsNamed(sqlite, 'Open')
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(report.views).toMatchObject({ added: 1, updated: 0, present: 1 })
+    expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is public, left alone')
+    expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
+  })
+
+  test('a system view holding only a share token counts as public and is left alone', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
+    sqlite.query("UPDATE saved_view SET share_token = 'tok' WHERE id = ?").run(id)
+    const before = viewsNamed(sqlite, 'Open')
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is public, left alone')
+  })
+
+  test('each system view brought up to date is named in the log, besides the counts', () => {
+    const sqlite = existingDb()
+    insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
+    const lines = seedLines(seedMissing(sqlite, seedDomain))
+    expect(lines).toContain('seed-missing: view "Open" (taak) updated')
+    expect(lines).toContain('seed-missing: views 1 added, 1 updated, 0 present')
+    expect(lines.filter((line) => line.startsWith('seed-missing: view "'))).toHaveLength(1)
   })
 })
 
@@ -244,6 +307,15 @@ describe('serve.ts --seed-missing', () => {
     expect(fileContents(db)).toEqual(before)
   }, 20_000)
 
+  test('any other error writes nothing and exits 1 with one line, no stack trace', async () => {
+    const db = existingFile()
+    const before = fileContents(db)
+    const result = await cli('seed-crash-domain.ts', db, '--seed-missing')
+    expect(result.code).toBe(1)
+    expect(result.err).toBe('seed-missing failed: disk on fire\n')
+    expect(fileContents(db)).toEqual(before)
+  }, 20_000)
+
   test('is refused together with --fresh, and the file is left as it was', async () => {
     const db = existingFile()
     const before = fileContents(db)
@@ -252,4 +324,22 @@ describe('serve.ts --seed-missing', () => {
     expect(result.err).toContain('--seed-missing cannot be combined with --fresh')
     expect(fileContents(db)).toEqual(before)
   }, 20_000)
+
+  for (const other of [
+    ['--import', 'export.json', '--as', 'a@example.test'],
+    ['--create-admin', 'a@example.test'],
+    ['--create-account', 'a@example.test', '--role', 'editor'],
+    ['--disable-account', 'a@example.test'],
+  ]) {
+    test(`is refused together with ${other[0]}, before the file is touched`, async () => {
+      const db = existingFile()
+      const before = fileContents(db)
+      const stamp = statSync(db).mtimeMs
+      const result = await cli('seed-domain.ts', db, '--seed-missing', ...other)
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('--seed-missing cannot be combined with --import or an account command')
+      expect(fileContents(db)).toEqual(before)
+      expect(statSync(db).mtimeMs).toBe(stamp)
+    }, 20_000)
+  }
 })
