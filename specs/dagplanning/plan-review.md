@@ -395,3 +395,122 @@ All of round 2's findings are fixed except one, and that one now disagrees with 
 - R6 is done before Task 0 → commit `63f3b6f` → holds
 - The toewijzing dataset's label → `packages/theatre/src/datasets.ts:155` (`Toewijzingen`) → not the spec's "Toewijzing" (S3-4)
 - `/schema` serves site strings → `app.ts:176` → does not hold (S3-4)
+
+---
+
+# Plan review — dagplanning (round 4)
+Reviewed-plan: 8dfb98c5dd1a933b6dbbaae9551a9f85ffbbb8c5
+Verdict: ready with fixes
+
+Round 3's blocking finding (B3-1) and all six should-fix findings are resolved, and so are the four notes. Nothing blocks. Three of the round-4 edits leave gaps an executor would get wrong without failing a test, and one older edit left the Review Focus pointing at the wrong Test map rows.
+
+## Round 3 findings
+
+| # | Status | Evidence in this plan |
+|---|---|---|
+| B3-1 | Resolved | Task 0 now says `toSchema`/`tableDefOf` only carry `of`, and the grouping goes in `groupTables` (`tables.ts:22-32`) and `listFor` (`views.ts:124-129`). `view.table` stays the query. This matches `api.ts:192-200` and `useSavedViews.ts:134,154`. `SavedView` spreads `tableDefOf` (`engine.ts:297`), so `view.of` will exist once `tableDefOf` carries it. |
+| S3-1 | Resolved | The title will come from `models[view.model].label`. `App.tsx:202` is the line to change. `Model.label` exists (`types.ts:29`), and `renamed()` (`App.tsx:124`) keeps an administrator's rename. Step 2 asserts the title. |
+| S3-2 | Resolved | The named callers hold. The grep (`open(`, `openView(`, `pick(`, `modelNode(`) also catches the unnamed ones: see the note on e2e callers. |
+| S3-3 | Resolved | `space-domain.ts:52,76-78` and `declarations.test.ts:51,134-137` are named. |
+| S3-4 | Resolved (Stefan's ruling) | `LinkDecl.item` exists, and the question is "<item> van <titel> verwijderen?". The `/schema` shape and the tests do not carry it yet: see S4-3. |
+| S3-5 | Resolved in the theatre declaration, but not at runtime | `index.ts:32` gets the new order, but the grid builds the tree from a re-sorted list: see S4-1. |
+| S3-6 | Resolved | `of` is served only when the caller can read the dataset, like `createsOf` (`app.ts:99-102`). Step 1 has the owner test. |
+| N3-1 ruling | Holds against source, but is incomplete | Keying `last` by the rail node is possible (`remember`, `useSavedViews.ts:66-67`; `lastIn`, `views.ts:149-150`). "Drag stays inside a block" has no mechanism and no test: see S4-2. |
+| N3-2 ruling | Holds | `of?` is optional, and fiche's `zichtbare_fiches` (`packages/fiche/src/queries.ts:4`) declares none. Step 2 tests "a query without `of` keeps its own node". |
+| N3-3 ruling | Holds | The spec's R5 now says it. The model `…` menu already acts on `table.key` (`App.tsx:286-297`), so nothing needs building. |
+| N3-4 ruling | Holds | Step 1 refuses `of` naming an unknown dataset, a query, or the query itself. |
+
+## Blocking
+None.
+
+## Should fix
+
+**S4-1. The grid gets the three query views in the wrong order: Per productie per dag comes before Dagplanning.**
+- **Plan:** Task 0 Files: groupTables/listFor take "each query's in declared order". Task 0 also reorders theatre `queries` (`index.ts:32`). Step 2 expects Dagplanning, then Per productie per dag, then Voorstellingen.
+- **Source:**
+  - `groupTables` does not receive the declared order. It receives `byFirstView(declared, …)` (`useSavedViews.ts:52`), which re-sorts the TableDefs by the position of each source's first saved view (`tables.ts:46-52`).
+  - The seeded views are in this order: Per productie per dag (`seed.ts:180`), then Dagplanning (`seed.ts:190`), then Voorstellingen (`seed.ts:260`).
+  - So any order taken from groupTables' input puts `productie_dag` first, whatever `index.ts:32` says.
+  - `listFor` sorts saved views by id, which would mix the query views in among Activiteiten's own views.
+- **Why nothing catches it:** the vitest uses a mock schema, and Step 6's e2e checks that the three views are there but not their order.
+- **Smallest change:**
+  - In Task 0, state that the query order comes from `declared` (the `/schema` order, `registry.ts:6`), not from the `byFirstView` result.
+  - In Step 6, assert the order of the views under Activiteiten.
+
+**S4-2. "Drag-reordering stays inside a block" says what, not how, and nothing tests it or the `last` ruling.**
+- **Plan:** Task 0 Files, Prefs bullet. It names only `useSavedViews.ts:66`, and Step 2 has no test for either ruling.
+- **Source:**
+  - `ViewList` passes one list of keys for the whole node to `useDragOrder` (`ViewList.tsx:89-94`) and writes it with `actions.order(table.key, …)`.
+  - "Move up" and "Move down" use positions in the whole list (`ViewList.tsx:51-52`).
+  - `useSavedViews.ts:52` hands `listFor` only `prefs.order[table.key]`, and `listFor` puts the named keys first (`views.ts:126-128`).
+- **What goes wrong:** as written, a drag or a Move up crosses from one block into another. One of two things happens:
+  - the stored order puts a query view above the model's own views, which breaks R5's "its own views, then …"; or
+  - the view snaps back after the drop, with no explanation.
+  - In both cases, a stored `order['dagplanning']` is left unused.
+- **Smallest change:** say how it works, and add two tests to Step 2.
+  - Order stays keyed by the view's source: `actions.order(view.table, keys of that block)`.
+  - `listFor` applies `prefs.order[<that source>]` within each block.
+  - A drop or a Move outside the view's own block is not offered.
+  - Test: a drag across the boundary does not move the view.
+  - Test: clicking Activiteiten after using Dagplanning reopens Dagplanning.
+
+**S4-3. `item` is missing from the `/schema` shape, and no test checks the question's wording.**
+- **Plan:** Task 3 Interfaces says "`/schema` serves `item` with the link". The next bullet's shape is `{ label, dataset, target, target_dataset, state? }`, without `item`.
+- **The tests do not check it either:**
+  - Task 3 Step 1 and Task 4 Step 2 assert `target_dataset`, the tones and `default`, but not `item`.
+  - Links.test only says "opens the confirm".
+  - The e2e only says "asks first".
+- **Why it matters:** spec R2 fixes the text as "Toewijzing van <naam> verwijderen?". An executor following the shape literally leaves `item` out, and every test still passes.
+- **Smallest change:**
+  - Add `item` to the shape.
+  - Assert `links.mensen.item === 'Toewijzing'` in Task 4 Step 2.
+  - Assert the exact text "Toewijzing van <naam> verwijderen?" in Links.test and in the people-tags e2e.
+
+**S4-4. The Review Focus row numbers are off by one.**
+- **Cause:** commit 23d8db8 inserted Task 0's row ("Query `of` and the tree") at the top of the Test map. The Review Focus numbers were not updated.
+- **The wrong references:**
+  - Review Focus 1 and 2 (threats 1 and 5) cite row 1, which is the tree. They mean row 2, Engine `links`.
+  - Review Focus 4 (Locatie) cites row 2, which is the engine. It means row 3.
+  - Review Focus 3 cites row 3. It means row 4.
+  - Review Focus 5 cites row 4. It means row 5.
+  - Review Focus 7 cites rows 1 and 3. It means rows 2 and 4.
+- **Smallest change:** add one to each number.
+
+## Note
+- **e2e callers.** The named list is a minority of the hits. The grep also returns:
+  - about 10 `pick(page, 'Dagplanning')` in `e2e/grid-ux.spec.ts` (:161 to :703);
+  - about 8 in `e2e/step-1.spec.ts` (:238 to :485);
+  - 2 in `e2e/step-0e.spec.ts` (:419, :433);
+  - `e2e/title-line.spec.ts:11,27` `openView(page, 'Dagplanning')`.
+  - All of them default the model to the view's name (`tree.ts:14`, and each spec's own `pick`). The "every other hit" clause covers them, but expect about 25 edits, not 8.
+- **Task 0 Step 1's owner test has no subject.**
+  - `job_room` declares no `owners`, so an owner cannot read it at all.
+  - The test needs a query with `owners` whose `of` dataset declares none. For example, `per_project` (`fixture.ts:50-57`) with `of` set to a dataset without owners, such as `plat` if that holds.
+  - Naming the subject saves a ruling.
+- **Deleting a query view.** `leave` (`useSavedViews.ts:88`) and `vanished`/`startingOf` look up `tables.find(t.key === gone.table)`. After Task 0 no node has a query's key, so deleting the open Dagplanning copy jumps to `tables[0].views[0]`, not the next view under Activiteiten. Map through `tableOf(tables, gone.key)` if that matters.
+- **The proposed `docs/SPEC.md` line for links.** The spec's "Proposed docs/SPEC.md lines" give `links: { dataset, key, target, state? }`, without `label` and `item`, while R3 and `LinkDecl` have both. Task 3 Step 5 copies that line, so add the two words when copying.
+- **Not part of this plan.** The `--seed-missing` removal (8699aad) is already in `docs/SPEC.md`'s working-tree diff, as you said.
+
+## Premises checked
+- The grid groups views by `view.table` → `apps/grid/src/ui/tables.ts:30`, `views.ts:125` → holds; the plan now names both
+- `view.table` is the saved-view source → `api.ts:192-200`, `useSavedViews.ts:134,154` → holds; it stays the query
+- Saved views carry their TableDef's fields → `engine.ts:291-298` → holds (`view.of` reachable)
+- Query order in the tree comes from the declared order → `useSavedViews.ts:52` + `tables.ts:46-52` + `seed.ts:180,190` → does not hold as stated (S4-1)
+- `/schema` source order is datasets then queries as declared → `packages/engine/src/registry.ts:5-7` → holds
+- Grid title from the rail node, at `App.tsx:202` → holds; `Model.label` → `types.ts:29` → holds; the h1 uses `view.label` (`App.tsx:342`), so it is unaffected
+- `remember` and `lastIn` keys → `useSavedViews.ts:66-67`, `views.ts:149-150` → holds
+- Drag order covers the whole node → `ViewList.tsx:89-98`, `useDragOrder.ts:17` → holds; the block rule needs a mechanism (S4-2)
+- `createsOf` serves only to a reader → `packages/engine/src/app.ts:99-102` → holds
+- `QueryDecl` has no `of` → `packages/engine/src/declare.ts:90-104` → holds
+- The section check is only for unknown sources → `validate.ts:237-239` → holds
+- A query's migration hash is SQL only, so adding `of` re-runs nothing → `migrate.ts:78-84` → holds
+- The space fixture lists `job_room` in Work → `space-domain.ts:51,76-78`; `declarations.test.ts:51,134-137` → holds
+- Theatre query order and the Planning section → `packages/theatre/src/index.ts:32,48` → holds
+- The theatre sections test → `packages/theatre/test/grid-ux.test.ts:42-50` → holds
+- Dagplanning's visible fields → `seed-missing.test.ts:14`, `grid-ux.test.ts:138` → holds
+- Toewijzing state default is `uitgenodigd`, with tones → `packages/theatre/src/datasets.ts:176-187` → holds
+- Seeded engine views are `views: []`, so there are no starting views → `engine.ts:195` → holds (`startingOf` is moot)
+- Fiche's query has no `of` → `packages/fiche/src/queries.ts:4-8` → holds
+- The e2e helpers default the model to the view's name → `e2e/tree.ts:14`, `grid-ux.spec.ts:75`, `step-1.spec.ts:71`, `step-0e.spec.ts:33` → holds (Note)
+- `rail-tree.spec.ts:17-20` uses Voorstellingen as the last node → holds
+- `readable()` → `packages/engine/src/access.ts:48-50` → holds

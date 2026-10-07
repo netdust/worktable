@@ -56,13 +56,13 @@
 | Period chip | render, `rows()` window | unit · `apps/grid/src/ui/Period.test.tsx` (new), `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | period-chip |
 
 ## Review Focus
-1. Threat 1: an owner reading a source with a links column gets only its own link rows. Test map row 1, asserting the denial on another person's row.
-2. Threat 5: `/schema` omits a links column for a caller who cannot read its dataset. Test map row 1.
-3. A link row soft-deleted elsewhere vanishes from the tags on the next read. Removing a tag is final; removing one whose state is not the default asks first. Adding is undone by one undo. Test map row 3 and the people-tags flow.
-4. Clearing Dagplanning's Locatie writes null to the activity and shows the speelreeks' venue grey again. It never writes the speelreeks. Test map row 2.
-5. The period: a matrix never offers Alles; a reload keeps the chosen period; Volgende week from a week across New Year lands on the right ISO week. Test map row 4.
+1. Threat 1: an owner reading a source with a links column gets only its own link rows. Test map row 2, asserting the denial on another person's row.
+2. Threat 5: `/schema` omits a links column for a caller who cannot read its dataset. Test map row 2.
+3. A link row soft-deleted elsewhere vanishes from the tags on the next read. Removing a tag is final; removing one whose state is not the default asks first. Adding is undone by one undo. Test map row 4 and the people-tags flow.
+4. Clearing Dagplanning's Locatie writes null to the activity and shows the speelreeks' venue grey again. It never writes the speelreeks. Test map row 3.
+5. The period: a matrix never offers Alles; a reload keeps the chosen period; Volgende week from a week across New Year lands on the right ISO week. Test map row 5.
 6. Fiche declares no date and no links: it renders no Periode chip and nothing else new. The `fiche-renders-as-before` e2e (`e2e/grid-ux.spec.ts:640`) asserts the chip's absence.
-7. A saved Dagplanning arrangement that shows Mensen saves (no 400). Mensen offers no sort, group or filter. Test map rows 1 and 3.
+7. A saved Dagplanning arrangement that shows Mensen saves (no 400). Mensen offers no sort, group or filter. Test map rows 2 and 4.
 
 ---
 
@@ -73,10 +73,13 @@
 - Modify: `packages/theatre/src/queries.ts` (`of: 'activiteit'` on all three queries); `packages/theatre/src/index.ts` (the Planning section loses `dagplanning`).
 - Modify (grid):
   - `apps/grid/src/engine.ts` `toSchema` / `tableDefOf`: only carry `of` onto `TableDef`. `view.table` stays the query: it is the source every saved-view write uses (`api.ts:192,198`, `useSavedViews.ts:134,154`).
-  - `apps/grid/src/ui/tables.ts` `groupTables` (:30) and `apps/grid/src/ui/views.ts` `listFor` (:125): a table also takes the views whose table's `of` is its key, its own views first, then each query's in declared order. A table with `of` gets no node of its own.
+  - `apps/grid/src/ui/tables.ts` `groupTables` (:30) and `apps/grid/src/ui/views.ts` `listFor` (:125): a table also takes the views whose table's `of` is its key, its own views first, then each query's. The query order is `declared` (the `/schema` source order, `packages/engine/src/registry.ts:6`), never the `byFirstView` result, which re-sorts by first saved view (`tables.ts:46-52`). A table with `of` gets no node of its own.
   - `apps/grid/src/ui/App.tsx:202`: the grid's title comes from the view's own source label (`models[view.model].label`), not from the rail node, so a query view's grid, matrix and export stay named by the query.
   - `apps/grid/src/ui/ViewList.tsx` (:134): a view with `view.query` shows the query icon.
-  - Prefs: `last` is keyed by the rail node (`remember` in `useSavedViews.ts:66`), so Activiteiten reopens Dagplanning after it was used. Drag-reordering stays inside a block: a model's own views, or one query's views.
+  - Prefs: `last` is keyed by the rail node (`remember` in `useSavedViews.ts:66`, `lastIn` in `views.ts:149`), so Activiteiten reopens Dagplanning after it was used.
+  - Order stays keyed by the view's source: `ViewList` (`:89-94`, Move up/down `:51-52`) reorders within a block (the model's own views, or one query's) with `actions.order(view.table, <keys of that block>)`, and `listFor` applies `prefs.order[<source>]` within each block. A drop or a Move outside the view's own block is not offered.
+  - Deleting the open query view moves to the next view under the same rail node: `leave` (`useSavedViews.ts:88`) looks the node up through the view, not through `gone.table`.
+- The e2e callers: expect about 25 edits (the named lines below plus every `pick(page, 'Dagplanning')` in `grid-ux.spec.ts`, `step-1.spec.ts`, `step-0e.spec.ts` and `title-line.spec.ts:11,27`).
 - Modify (engine fixture): `packages/engine/test/fixtures/space-domain.ts:52,76-78`: `job_room` leaves section `Work` and gains `of: 'job'`; update `packages/engine/test/declarations.test.ts:51,134-137`.
 - Modify (theatre): `packages/theatre/src/index.ts:32`: `queries: [dagplanning, productieDag, voorstellingen]`, so the declared order is the tree's.
 - Test: `packages/engine/test/declarations.test.ts`, `packages/theatre/test/grid-ux.test.ts` (sections), `apps/grid/src/ui/tables.test.ts` (`groupTables`, `sectionsOf`), `apps/grid/src/ui/Rail.test.tsx`, `apps/grid/src/ui/App.test.tsx` (title), `apps/grid/src/engine.test.ts`.
@@ -92,12 +95,12 @@
 **Interfaces:**
 - Produces: `/schema` `sources[q].of` for a query, served only when the caller can read that dataset (as `createsOf` serves `creates`, `app.ts:99`); otherwise absent, and the grid shows the query as a node of its own, as today. In the grid, a model's views are its own tables' views, then each `of` query's views in the declared query order; each view keeps its own `model` (the query) for reads and writes.
 
-- [ ] Step 1: Engine tests: `of` naming an unknown dataset, a query, or itself is refused; a section listing a query is refused; `/schema` serves `of` (on the fixture's `job_room`); an owner who cannot read the `of` dataset gets no `of` and still reads the query.
-- [ ] Step 2: Grid tests: the rail lists no query with `of` as a node; Activiteiten's views end with Dagplanning, Per productie per dag and Voorstellingen, in that order, each with the query icon; opening one reads `/rows/<query>` and the grid is named by the query; "+ Weergave" on Activiteiten makes a view on `activiteit`; Kopie maken on a query view makes a view on the query; a query without `of` keeps its own node.
+- [ ] Step 1: Engine tests: `of` naming an unknown dataset, a query, or itself is refused; a section listing a query is refused; `/schema` serves `of` (on the fixture's `job_room`); an owner who cannot read the `of` dataset gets no `of` and still reads the query (subject: the fixture's `per_project`, which declares owners, given `of` a dataset without owners such as `plat`).
+- [ ] Step 2: Grid tests: the rail lists no query with `of` as a node; Activiteiten's views end with Dagplanning, Per productie per dag and Voorstellingen, in that order, each with the query icon; opening one reads `/rows/<query>` and the grid is named by the query; "+ Weergave" on Activiteiten makes a view on `activiteit`; Kopie maken on a query view makes a view on the query; a query without `of` keeps its own node; a drag of a query view across the boundary into the model's own views does not move it; clicking Activiteiten after using Dagplanning reopens Dagplanning; deleting the open Dagplanning copy opens the next view under Activiteiten.
 - [ ] Step 3: Run them. Expected: FAIL.
 - [ ] Step 4: Implement.
 - [ ] Step 5: Run them. Expected: PASS.
-- [ ] Step 6: E2E `query-views-under-model @e2e` in `e2e/rail-tree.spec.ts`: Activiteiten folds out to its views then the three query views; Dagplanning opens from there; no query sits at the bottom of the rail. Update the callers listed above.
+- [ ] Step 6: E2E `query-views-under-model @e2e` in `e2e/rail-tree.spec.ts`: Activiteiten folds out to its own views, then Dagplanning, Per productie per dag and Voorstellingen in that order (asserted); Dagplanning opens from there; no query sits at the bottom of the rail. Update the callers listed above.
 - [ ] Step 7: `bun run gate` exits 0. Commit `feat: a query's views sit under the data model it reads`.
 
 ### Task 1: Dagplanning's own columns are editable (R1)
@@ -182,7 +185,7 @@
 **Interfaces:**
 - Produces:
   - `interface LinkDecl { label: string; item: string; dataset: string; key: string; target: string; state?: string }`. `/schema` serves `item` with the link.
-  - `/schema`: `sources[s].links = { [name]: { label, dataset, target, target_dataset, state?: { options, tones, default } } }`. The grid knows the state column's default from it.
+  - `/schema`: `sources[s].links = { [name]: { label, item, dataset, target, target_dataset, state?: { options, tones, default } } }`. The grid knows the state column's default from it.
   - `/rows/:source`: each row gains `links: { [name]: { id: number; target: number | null; title: string; state: string | null }[] }`, ordered by link row id.
   - `linksOf(db, domain, source, ids, actor): Map<number, Record<string, LinkRow[]>>`.
 
@@ -204,7 +207,7 @@
 - [ ] Step 2: Run `bun test packages/engine`. Expected: FAIL.
 - [ ] Step 3: Implement, following `cellsOf`: read in chunks with `isNull(deleted_at)`, `scopeWhere(scopeOf(actor, linkDataset))` and `inArray(key, ids)`. Titles come through `withLookups`.
 - [ ] Step 4: Run `bun test packages/engine`. Expected: PASS. `bun run check` exits 0 (vocabulary).
-- [ ] Step 5: Add the proposed `links` lines to the `docs/SPEC.md` working-tree diff (spec "Proposed docs/SPEC.md lines"). Do not stage it.
+- [ ] Step 5: Add the proposed `links` lines to the `docs/SPEC.md` working-tree diff (spec "Proposed docs/SPEC.md lines"), with `label` and `item` in the shape. Do not stage it.
 - [ ] Step 6: `bun run gate` exits 0. Commit `feat(engine): a source may declare links: the rows of another dataset that point at it`.
 
 ### Task 4: People as tags in Dagplanning (R2)
@@ -234,11 +237,11 @@
   - A null-target tag has no ×.
   - Picking an unchecked person calls `onAdd(personId)`; × calls `onRemove(linkId)`.
   - An already-linked person shows checked, and unchecking it calls `onRemove` with its link id.
-  - Removing a tag whose state is not the default opens the confirm; Verwijderen calls `onRemove`, Annuleren does not; removing a tag in the default state calls `onRemove` at once.
+  - Removing a tag whose state is not the default opens the confirm, reading exactly "Toewijzing van <naam> verwijderen?" (with `item: 'Toewijzing'` in the test's link); Verwijderen calls `onRemove`, Annuleren does not; removing a tag in the default state calls `onRemove` at once.
   - The column offers no sort and no group, and the filter menu does not list it.
   - Keyboard: Enter opens the editor, Escape closes it.
 - [ ] Step 1b: Vitest in `apps/grid/src/engine.test.ts`: `toStoredView` / `fromStoredView` round-trip `mensen`, shown in place and hidden.
-- [ ] Step 2: Theatre integration in `packages/theatre/test/writer.test.ts` `describe('dagplanning')`: `/schema` dagplanning has `links.mensen` with target_dataset `persoon`, the state tones and `default: 'uitgenodigd'`. `/rows/dagplanning` lists a seeded activity's toewijzingen.
+- [ ] Step 2: Theatre integration in `packages/theatre/test/writer.test.ts` `describe('dagplanning')`: `/schema` dagplanning has `links.mensen` with `item: 'Toewijzing'`, target_dataset `persoon`, the state tones and `default: 'uitgenodigd'`. `/rows/dagplanning` lists a seeded activity's toewijzingen.
 - [ ] Step 3: Run them. Expected: FAIL.
 - [ ] Step 4: Implement. A writer refusal (duplicate person) shows the existing error toast, and the tag list is re-read.
 - [ ] Step 5: Run them. Expected: PASS.
@@ -247,7 +250,7 @@
   - add a person; the tag appears amber (uitgenodigd);
   - undo; the added tag is gone; add it again; reload; it stays (the history is per page, so undo comes before the reload);
   - remove it with ×; it is gone, without a question (uitgenodigd);
-  - × on a bevestigd tag asks first; Annuleren keeps it;
+  - × on a bevestigd tag asks "Toewijzing van <naam> verwijderen?" (exact text); Annuleren keeps it;
   - save a copy of the view showing Mensen; reopen the copy; Mensen is where it was;
   - create the same Toewijzing through the API after the page loaded (a stale row), then pick that person: the writer's refusal shows (`checkAssignee`, `writers.ts:136`).
 - [ ] Step 7: `bun run gate` exits 0. Commit `feat: people on an activity as tags in Dagplanning, added and removed through the Toewijzing writer`.
