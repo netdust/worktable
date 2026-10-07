@@ -40,7 +40,7 @@ export interface GridProps {
   /** Set to a reader of what is on screen, for the toolbar's export. */
   snapshot?: RefObject<(() => OnScreen) | null>
   /** Told what is on screen, for the title line's summary. */
-  onShown?: (shown: { rows: number; groups: number | null } | null) => void
+  onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
@@ -115,8 +115,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const shownRows = total(groups)
   const shownGroups = by ? groups.length : null
   useEffect(() => {
-    onShown?.({ rows: shownRows, groups: shownGroups })
-  }, [shownRows, shownGroups])
+    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null })
+  }, [shownRows, shownGroups, cut])
   useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)

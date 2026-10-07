@@ -21,7 +21,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -519,6 +519,19 @@ describe('the group bands', () => {
     expect([...band('Dinsdag 19 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow 16:30'])
   })
 
+  it('marks the count and the totals of the group the read limit may have cut short, and the summary', () => {
+    const onShown = vi.fn()
+    renderGrid(calais, { view: declared, cut: calais[5], onShown })
+
+    const wednesday = band('Woensdag 20 mei')
+    expect(wednesday.querySelector('.nv-group__count')?.textContent).toBe('1+')
+    expect(wednesday.querySelector('.nv-group__totals')?.textContent).not.toMatch(/\d/)
+    expect(wednesday.querySelector('.nv-group__totals')?.textContent).toContain('…')
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__count')?.textContent).toBe('2')
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__totals')?.textContent).toContain('24')
+    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: true })
+  })
+
   it('keeps … on the group the last loaded row was in while the search hides that row', () => {
     const koffie: Row = { ...calais[5], id: 107, title: 'Ochtendkoffie', fields: { ...calais[5].fields, kind: 'travel' } }
     renderGrid([...calais, koffie], { view: declared, cut: calais[5], query: 'koffie' })
@@ -553,7 +566,7 @@ describe('the group bands', () => {
     const total = screen.getByTestId('total')
     expect(total.textContent).toContain('Totaal · 6 rijen')
     expect(within(total).getByText('47')).toBeTruthy()
-    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3 })
+    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: false })
   })
 
   it('leave folded rows out of keyboard movement', () => {

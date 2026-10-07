@@ -219,8 +219,8 @@ export function rowCount(n: number): string {
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */
-export function summary(rows: number, groups: number | null): string {
-  const said = [rows === 1 ? '1 rij' : `${rows} rijen`]
+export function summary(rows: number, groups: number | null, cut = false): string {
+  const said = [cut ? `${rows}+ rijen` : rows === 1 ? '1 rij' : `${rows} rijen`]
   if (groups !== null) said.push(groups === 1 ? '1 groep' : `${groups} groepen`)
   return said.join(' · ')
 }

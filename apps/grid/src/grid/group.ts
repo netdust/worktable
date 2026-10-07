@@ -20,6 +20,8 @@ export interface Group {
   rows: Row[]
   count: number
   facts: Fact[]
+  /** The read limit may have cut this group short: its count and totals are what loaded, not what is. */
+  cut: boolean
 }
 
 /** What a band says of its rows: the declared facts, read through the view's columns. */
@@ -78,8 +80,7 @@ function toneOf(fact: GroupFact, band: Band): Tone | undefined {
   return key === undefined ? undefined : band.columns.find((c) => c.id === key)?.tones?.[String(wanted)]
 }
 
-function factsOf(key: string, rows: Row[], band: Band, by: Column): Fact[] {
-  const cut = band.cut !== null && keyOf(band.cut, by) === key
+function factsOf(cut: boolean, rows: Row[], band: Band, by: Column): Fact[] {
   const real = rows.filter((row) => row.id !== DRAFT)
   return band.facts
     .map((fact) => {
@@ -124,18 +125,18 @@ function labelOf(key: string, row: Row, by: Column): string {
 }
 
 export function groupRows(rows: Row[], by: Column | undefined, band?: Band): Group[] {
-  if (!by) return [{ key: '', label: '', rows, count: rows.length, facts: [] }]
+  if (!by) return [{ key: '', label: '', rows, count: rows.length, facts: [], cut: false }]
 
   const groups = new Map<string, Group>()
   for (const row of rows) {
     const key = keyOf(row, by)
-    const group = groups.get(key) ?? { key, label: labelOf(key, row, by), rows: [], count: 0, facts: [], ...(by.kind === 'date' && key !== '' ? { day: dayParts(key) } : {}) }
+    const group = groups.get(key) ?? { key, label: labelOf(key, row, by), rows: [], count: 0, facts: [], cut: band?.cut != null && keyOf(band.cut, by) === key, ...(by.kind === 'date' && key !== '' ? { day: dayParts(key) } : {}) }
     group.rows.push(row)
     group.count++
     groups.set(key, group)
   }
 
-  if (band) for (const group of groups.values()) group.facts = factsOf(group.key, group.rows, band, by)
+  if (band) for (const group of groups.values()) group.facts = factsOf(group.cut, group.rows, band, by)
   const order = rank(by)
   return [...groups.values()].sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : order(a.key, b.key)))
 }

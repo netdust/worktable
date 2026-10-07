@@ -110,12 +110,12 @@ function Band({ group, columns, open, onFold }: { group: Group; columns: Column[
           <span className="nv-group__label">
             {group.day ? <><span className="nv-group__day">{group.day.weekday}</span> <span className="nv-group__date">{group.day.date}</span></> : group.label}
           </span>
-          <span className="nv-group__count">{group.count}</span>
+          <span className="nv-group__count">{group.cut ? `${group.count}+` : group.count}</span>
           {group.facts.map((fact) => <FactText key={`${fact.kind}:${fact.label}`} fact={fact} />)}
           {Object.keys(totals).length > 0 && (
             <span className="nv-group__totals">
               {columns.filter((c) => c.id in totals).map((c) => (
-                <span key={c.id} className="nv-group__total">{c.label} <span className="nv-group__num">{totals[c.id]}</span></span>
+                <span key={c.id} className="nv-group__total">{c.label} <span className="nv-group__num">{group.cut ? '…' : totals[c.id]}</span></span>
               ))}
             </span>
           )}

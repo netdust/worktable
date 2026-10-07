@@ -24,21 +24,27 @@ describe('the toolbar', () => {
   })
 
   it('says on one line what the view is: its name, a lock where it is read-only, and the summary', () => {
-    const { rerender } = render(<Toolbar {...base} title="Dagplanning" shown={{ rows: 21, groups: 3 }} locked="standard" />)
+    const { rerender } = render(<Toolbar {...base} title="Dagplanning" shown={{ rows: 21, groups: 3, cut: false }} locked="standard" />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Dagplanning' })).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeTruthy()
     expect(screen.getByText('21 rijen · 3 groepen')).toBeTruthy()
 
-    rerender(<Toolbar {...base} title="Ploeg" shown={{ rows: 1, groups: null }} locked="colleague" />)
+    rerender(<Toolbar {...base} title="Ploeg" shown={{ rows: 1, groups: null, cut: false }} locked="colleague" />)
 
     expect(screen.getByRole('img', { name: 'Gedeeld door een collega: maak een kopie om aan te passen' })).toBeTruthy()
     expect(screen.queryByRole('img', { name: /Standaardweergave/ })).toBeNull()
 
-    rerender(<Toolbar {...base} title="Mijn week" shown={{ rows: 1, groups: null }} />)
+    rerender(<Toolbar {...base} title="Mijn week" shown={{ rows: 1, groups: null, cut: false }} />)
 
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.getByText('1 rij')).toBeTruthy()
+  })
+
+  it('says "+" after the loaded rows when the read limit cut them', () => {
+    render(<Toolbar {...base} shown={{ rows: 5000, groups: 3, cut: true }} />)
+
+    expect(screen.getByText('5000+ rijen · 3 groepen')).toBeTruthy()
   })
 
   it('has no add button without an add', () => {
