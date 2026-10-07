@@ -20,9 +20,8 @@ test('title-line-reads-in-full @e2e', async ({ page }) => {
   await shot(page, 'title-line')
 })
 
-// Shake-out row 18: at 1280px Dagplanning's toolbar is 47px wider than its room; "Nieuwe activiteit" runs off the window.
+// Shake-out row 20: at 1280px Dagplanning's toolbar must not overflow; "Nieuwe activiteit" stays on screen.
 test('title-line-fits-at-1280 @e2e', async ({ page }) => {
-  test.fail()
   await page.goto('/#from=2026-10-12')
   await page.reload()
   await openView(page, 'Dagplanning')

@@ -369,9 +369,9 @@
   color: var(--color-fg-default);
 }
 
-/* The name reads whole; the summary beside it is the first to give way, so a refusal's message stays readable too. */
+/* The name and its summary read whole up to 40% of the bar; the toolbar's end (the hint, the search) gives way instead. */
 .nv-toolbar > .nv-toolbar__name {
-  flex: 0 1 auto;
+  flex: none;
   max-width: 40%;
   min-width: 0;
   overflow: hidden;
@@ -795,7 +795,7 @@
 .nv-search {
   position: relative;
   flex: 0 1 226px;
-  min-width: 150px;
+  min-width: 136px;
 }
 
 /* The placeholder must read whole beside the ⌘K hint. */
@@ -810,6 +810,13 @@
 
 .nv-toolbar__end > :not(.nv-search):not(.nv-save) {
   flex: none;
+}
+
+/* Why the button is off needs room the bar lacks below 1360px; the button's tooltip says it there. */
+@media (max-width: 1359px) {
+  .nv-toolbar__end > .nv-toolbar__note.nv-toolbar__note--hint {
+    display: none;
+  }
 }
 
 .nv-search__views {

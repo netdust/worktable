@@ -105,9 +105,9 @@ export function Toolbar({ title, matrix, locked, shown, window, onWindow, search
         {saving && <SaveState state={saving} />}
         {exportNote && <span className="nv-toolbar__note" role="alert">{exportNote}</span>}
         {more.length > 0 && <MoreMenu actions={more} />}
-        {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note">{addBlocked}</span>}
+        {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note nv-toolbar__note--hint">{addBlocked}</span>}
         {onAdd && (
-          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} disabled={addBlocked !== null} onClick={onAdd}>
+          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} disabled={addBlocked !== null} title={addBlocked ?? undefined} onClick={onAdd}>
             {addLabel}
           </Button>
         )}
