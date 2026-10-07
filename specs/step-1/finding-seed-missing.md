@@ -36,3 +36,10 @@ So a migrated real database has empty `rol` and `sjabloon` tables and none of st
 - **The `docs/SPEC.md` line** (with the rest of step 1's diff): Datasets row: "may declare `config: true`: its seeds are configuration, written into an existing database by `--seed-missing` when its table is empty, through its writer, under a `seed` batch that cannot be undone".
 
 Approved by Stefan 2026-10-07 with option (b)
+
+## After the review (Stefan, 2026-10-07)
+- A system-owned seeded view that is public is left alone and named in the log; publishing it was a person's act.
+- Every system view `--seed-missing` updates is named in the log.
+- Only a live view with the seeded name and source that is system-owned or shared counts as present; a user's private view no longer blocks the seeded view, and stays untouched.
+- Undo checks the batch's owner first, exempting only the system owner, so another account's import batch answers 403 and a seed batch 422.
+- Config seeds between config datasets refer by natural key (the target's title), in the proposed `docs/SPEC.md` lines; not built while no config dataset relates to another.
