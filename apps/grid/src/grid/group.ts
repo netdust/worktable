@@ -22,16 +22,16 @@ export interface Group {
 export interface Band {
   facts: GroupFact[]
   columns: Column[]
-  /** The last row loaded when the read limit cut the rows; null when every row came. */
-  cut: number | null
+  /** The last row as loaded when the read limit cut the rows; null when every row came. Its group is the one cut short. */
+  cut: Row | null
 }
 
 const UNCUT = '…'
 const CLOCK = /[T ](\d{2}:\d{2})/
 
 /** The last row the read limit let through, when it held rows back. */
-export function cutAt(loaded: Row[], total: number): number | null {
-  return total > loaded.length ? loaded.at(-1)?.id ?? null : null
+export function cutAt(loaded: Row[], total: number): Row | null {
+  return total > loaded.length ? loaded.at(-1) ?? null : null
 }
 
 function raw(row: Row, key: string): unknown {
@@ -68,12 +68,12 @@ function valueOf(fact: GroupFact, rows: Row[], band: Band, by: Column): string {
   return first ? shown(first, fact.column, band, by) : ''
 }
 
-function factsOf(rows: Row[], band: Band, by: Column): Fact[] {
-  const cut = band.cut !== null && rows.some((row) => row.id === band.cut)
+function factsOf(key: string, rows: Row[], band: Band, by: Column): Fact[] {
+  const cut = band.cut !== null && keyOf(band.cut, by) === key
   const real = rows.filter((row) => row.id !== DRAFT)
   return band.facts
     .map((fact) => ({ kind: fact.kind, label: fact.label, value: cut ? UNCUT : valueOf(fact, real, band, by) }))
-    .filter((fact) => fact.value !== '' && fact.value !== '0')
+    .filter((fact) => fact.value !== '' && (fact.kind === 'first' || fact.value !== '0'))
 }
 
 export function dayLabel(iso: string): string {
@@ -113,7 +113,7 @@ export function groupRows(rows: Row[], by: Column | undefined, band?: Band): Gro
     groups.set(key, group)
   }
 
-  if (band) for (const group of groups.values()) group.facts = factsOf(group.rows, band, by)
+  if (band) for (const group of groups.values()) group.facts = factsOf(group.key, group.rows, band, by)
   const order = rank(by)
   return [...groups.values()].sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : order(a.key, b.key)))
 }

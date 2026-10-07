@@ -50,8 +50,8 @@ export interface GridProps {
   filters?: ReactNode
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
-  /** The last row loaded when the read limit held rows back: its group's facts may be short. */
-  cut?: number | null
+  /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
+  cut?: Row | null
 }
 
 const NO_MODELS: Record<string, Model> = {}

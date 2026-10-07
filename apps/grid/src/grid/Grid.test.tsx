@@ -21,7 +21,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: number | null; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -459,10 +459,17 @@ describe('the group bands', () => {
   })
 
   it('shows … for each fact of the group the read limit may have cut short', () => {
-    renderGrid(calais, { view: declared, cut: 106 })
+    renderGrid(calais, { view: declared, cut: calais[5] })
 
     expect([...band('Woensdag 20 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow …', '… maaltijd'])
     expect([...band('Dinsdag 19 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow 16:30'])
+  })
+
+  it('keeps … on the group the last loaded row was in while the search hides that row', () => {
+    const koffie: Row = { ...calais[5], id: 107, title: 'Ochtendkoffie', fields: { ...calais[5].fields, kind: 'travel' } }
+    renderGrid([...calais, koffie], { view: declared, cut: calais[5], query: 'koffie' })
+
+    expect([...band('Woensdag 20 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow …', '… maaltijd'])
   })
 
   it('fold on a click, and open on Enter, aria-expanded following', () => {

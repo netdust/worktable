@@ -120,7 +120,7 @@ describe('the facts a band declares', () => {
     { kind: 'count', where: { kind: 'meal' }, label: 'maaltijden' },
     { kind: 'empty', column: 'start_at', label: 'open' },
   ]
-  const factsOf = (rows: Row[], cut: number | null = null) => groupRows(rows, plandag, { facts, columns: cols, cut }).map((g) => g.facts)
+  const factsOf = (rows: Row[], cut: Row | null = null) => groupRows(rows, plandag, { facts, columns: cols, cut }).map((g) => g.facts)
 
   it('gives the earliest matching value, as its time in a day group, and counts', () => {
     const rows = [at(1, 'show', '2026-10-13T22:00'), at(2, 'show', '2026-10-13T20:00'), at(3, 'meal', null), at(4, 'meal', '2026-10-13T18:00'), at(5, 'build', '2026-10-13T08:00')]
@@ -153,7 +153,7 @@ describe('the facts a band declares', () => {
     const loaded = [at(1, 'show', '2026-10-13T20:00'), at(2, 'build', '2026-10-14T08:00', '2026-10-14')]
     const cut = cutAt(loaded, 9)
 
-    expect(cut).toBe(2)
+    expect(cut).toBe(loaded[1])
     expect(factsOf(loaded, cut)).toEqual([
       [{ kind: 'first', label: 'show', value: '20:00' }],
       [
@@ -162,6 +162,25 @@ describe('the facts a band declares', () => {
         { kind: 'empty', label: 'open', value: '…' },
       ],
     ])
+  })
+
+  it('marks the group the last row was loaded in, though a search hides it or a write moved it', () => {
+    const loaded = [at(1, 'show', '2026-10-13T20:00'), at(2, 'build', '2026-10-14T08:00', '2026-10-14')]
+    const cut = cutAt(loaded, 9)
+    const shown = [loaded[0], at(3, 'meal', null, '2026-10-14')]
+
+    expect(factsOf(shown, cut).map((f) => f.map((fact) => fact.value))).toEqual([['20:00'], ['…', '…', '…']])
+    const moved = [{ ...loaded[1], fields: { ...loaded[1].fields, plandag: '2026-10-13' } }, at(3, 'meal', null, '2026-10-14')]
+    expect(factsOf(moved, cut).map((f) => f.map((fact) => fact.value))).toEqual([[], ['…', '…', '…']])
+  })
+
+  it('shows a first whose earliest value is 0', () => {
+    const counted: Model = { ...timed, fields: { ...timed.fields, seats: { type: 'int', label: 'Plaatsen', required: false, fact: true } } }
+    const seated = columnsFor(counted, { ...view, columns: [...view.columns, 'seats'] })
+    const rows = [{ ...at(1, 'show', null), fields: { ...at(1, 'show', null).fields, seats: 0 } }, { ...at(2, 'show', null), fields: { ...at(2, 'show', null).fields, seats: 5 } }]
+    const [group] = groupRows(rows, plandag, { facts: [{ kind: 'first', column: 'seats', where: { kind: 'show' }, label: 'plaatsen' }], columns: seated, cut: null })
+
+    expect(group.facts).toEqual([{ kind: 'first', label: 'plaatsen', value: '0' }])
   })
 
   it('cuts nothing when every row was loaded', () => {
