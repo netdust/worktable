@@ -1035,6 +1035,7 @@
 
 /* The grid's own look (the prototype's): taller rows by density, no vertical lines, a light header. The matrix keeps its own. */
 .nv-grid:not(.nv-mx) .nv-td {
+  box-sizing: border-box;
   height: var(--row-h, 40px);
 }
 

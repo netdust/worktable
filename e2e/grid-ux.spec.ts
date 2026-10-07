@@ -1,0 +1,427 @@
+import { expect, type Locator, type Page, test } from '@playwright/test'
+import { modelNode, openModel, openView } from './tree'
+
+// One empty week per flow that applies a speeldag, so no flow sees another's rows.
+const FOLD_WEEK = '2027-03-01'
+const FACTS_WEEK = '2027-03-08'
+const INHERIT_WEEK = '2027-03-15'
+const SEED_WEEK = '2026-10-12'
+const VENUE = 'Theater Het Anker'
+const OWN_VENUE = 'Repetitiekot De Loods'
+
+// The shake-out's screenshots, one per surface, only when asked for.
+const SHOTS = process.env.GRID_UX_SHOTS
+const shot = async (target: Page | Locator, name: string) => {
+  if (SHOTS) await target.screenshot({ path: `${SHOTS}/grid-ux-gate-${name}.png` })
+}
+
+type Api = Page['request']
+type Values = Record<string, unknown>
+
+async function rowsOf<T = Values>(api: Api, dataset: string, filter?: Values): Promise<T[]> {
+  const query = filter ? `&filter=${encodeURIComponent(JSON.stringify(filter))}` : ''
+  const response = await api.get(`/api/rows/${dataset}?limit=500${query}`)
+  expect(response.status()).toBe(200)
+  return ((await response.json()) as { rows: T[] }).rows
+}
+
+async function idOf(api: Api, dataset: string, values: Values): Promise<number> {
+  const response = await api.post(`/api/rows/${dataset}`, { data: values })
+  expect(response.status(), await response.text()).toBe(201)
+  return ((await response.json()) as { id: number }).id
+}
+
+const idByName = async (api: Api, dataset: string, column: string, name: string) =>
+  (await rowsOf<Values & { id: number }>(api, dataset)).find((r) => r[column] === name)?.id as number
+
+interface SavedView {
+  id: number
+  name: string
+  shared: boolean
+  mine: boolean
+}
+
+async function views(api: Api): Promise<SavedView[]> {
+  const response = await api.get('/api/views')
+  expect(response.status()).toBe(200)
+  return ((await response.json()) as { views: SavedView[] }).views
+}
+
+const plusDays = (iso: string, days: number) => {
+  const at = new Date(`${iso}T12:00:00Z`)
+  at.setUTCDate(at.getUTCDate() + days)
+  return at.toISOString().slice(0, 10)
+}
+
+/** An invented four-day Speelreeks of Nachtwacht at the venue, with "speeldag op locatie" applied: 28 activities. */
+async function speeldagen(api: Api, naam: string, monday: string): Promise<number> {
+  const id = await idOf(api, 'speelreeks', {
+    naam,
+    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
+    locatie_id: await idByName(api, 'organisatie', 'naam', VENUE),
+    start_datum: monday,
+    eind_datum: plusDays(monday, 3),
+  })
+  const applied = await api.post('/api/actions/sjabloon_toepassen', {
+    data: { id, input: { sjabloon_id: await idByName(api, 'sjabloon', 'naam', 'speeldag op locatie') } },
+  })
+  expect(applied.status(), await applied.text()).toBe(201)
+  return id
+}
+
+/** The grid reads the hash once, on load: a hash-only goto needs the reload. */
+async function land(page: Page, hash: string) {
+  await page.goto(hash)
+  await page.reload()
+}
+
+async function pick(page: Page, view: string, model = view) {
+  await openView(page, view, model)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
+}
+
+const gridRows = (page: Page) => page.locator('tbody tr.nv-tr')
+const bands = (page: Page) => page.locator('tbody tr.nv-group')
+const named = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
+
+async function columnIndex(page: Page, label: string): Promise<number> {
+  const index = await page
+    .locator('thead th')
+    .evaluateAll(
+      (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
+      label,
+    )
+  expect(index, `column ${label}`).toBeGreaterThanOrEqual(0)
+  return index
+}
+
+/** The distinct values a column shows over the loaded rows. */
+async function shownIn(page: Page, label: string): Promise<string[]> {
+  const at = await columnIndex(page, label)
+  const values = await gridRows(page).evaluateAll(
+    (trs, i) => trs.map((tr) => (tr.children[i]?.textContent ?? '').trim()),
+    at,
+  )
+  return [...new Set(values)].sort()
+}
+
+async function switchTo(page: Page, from: string, to: string) {
+  await page.getByRole('button', { name: from, exact: true }).click()
+  await page.getByRole('listbox', { name: 'Producties' }).getByRole('option', { name: to, exact: true }).click()
+  await expect(page.getByRole('button', { name: to, exact: true })).toBeVisible()
+}
+
+async function filterMenu(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: '+ Filter' }).click()
+  return page.locator('.nv-filters__menu')
+}
+
+async function closeFilterMenu(page: Page) {
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.nv-filters__menu')).toBeHidden()
+}
+
+test('switch-production @e2e', async ({ page }) => {
+  await land(page, `/#from=${SEED_WEEK}`)
+  await pick(page, 'Planning', 'Activiteiten')
+  await expect(gridRows(page).first()).toBeVisible()
+  expect((await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
+  await expect((await filterMenu(page)).getByRole('button', { name: 'Productie: Nachtwacht' })).toBeVisible()
+  await closeFilterMenu(page)
+
+  await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
+  await expect(page.getByRole('listbox', { name: 'Producties' }).getByRole('option')).toHaveText([
+    'Alle producties',
+    'De Kersentuin',
+    'Nachtwacht',
+    'Zomerstorm',
+  ])
+  await shot(page, 'switcher-open')
+  await page.getByRole('option', { name: 'Nachtwacht', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
+
+  await expect.poll(() => shownIn(page, 'Productie')).toEqual(['Nachtwacht'])
+  await expect(gridRows(page).first()).toBeVisible()
+  await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toHaveCount(0)
+  await expect((await filterMenu(page)).getByRole('button', { name: /^Productie:/ })).toHaveCount(0)
+  await closeFilterMenu(page)
+
+  await pick(page, 'Dagplanning')
+  await expect(gridRows(page).first()).toBeVisible()
+  await expect.poll(() => shownIn(page, 'Productie')).toEqual(['Nachtwacht'])
+
+  // Kept in this browser: a reload still works in Nachtwacht.
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
+  await pick(page, 'Dagplanning')
+  await expect(gridRows(page).first()).toBeVisible()
+  await expect.poll(() => shownIn(page, 'Productie')).toEqual(['Nachtwacht'])
+
+  await switchTo(page, 'Nachtwacht', 'Alle producties')
+  await expect.poll(async () => (await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
+  await pick(page, 'Planning', 'Activiteiten')
+  await expect.poll(async () => (await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
+})
+
+test('tree-fold-and-hover @e2e', async ({ page }) => {
+  await land(page, `/#from=${SEED_WEEK}`)
+  await pick(page, 'Dagplanning')
+  const node = modelNode(page, 'Speelreeksen')
+  const row = node.locator('.nv-model')
+  const tools = row.locator('.nv-model__tools')
+
+  await page.mouse.move(0, 0)
+  await expect(tools).toHaveCSS('opacity', '0')
+  await expect(row.locator('.nv-model__chevron')).toHaveCount(0)
+  await row.hover()
+  await expect(row.locator('.nv-model__chevron')).toBeVisible()
+  await expect(tools).toHaveCSS('opacity', '1')
+  await expect(row.getByRole('button', { name: 'Weergave toevoegen aan Speelreeksen' })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Meer voor Speelreeksen' })).toBeVisible()
+  await shot(page.getByRole('navigation', { name: 'Views' }), 'tree-hover')
+
+  // The chevron folds and unfolds; the view stays Dagplanning.
+  const views = node.getByRole('group', { name: 'View type' })
+  if ((await node.getAttribute('aria-expanded')) !== 'true') {
+    await row.getByRole('button', { name: 'Uitklappen' }).click()
+  }
+  await expect(node).toHaveAttribute('aria-expanded', 'true')
+  await expect(views.getByRole('button', { name: 'Speelreeksen', exact: true })).toBeVisible()
+  await row.getByRole('button', { name: 'Inklappen' }).click()
+  await expect(node).toHaveAttribute('aria-expanded', 'false')
+  await expect(views).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await row.getByRole('button', { name: 'Uitklappen' }).click()
+  await expect(node).toHaveAttribute('aria-expanded', 'true')
+  await expect(views.getByRole('button', { name: 'Speelreeksen', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+
+  // The name opens the model's view.
+  await openModel(page, 'Speelreeksen')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speelreeksen')
+})
+
+async function newView(page: Page, model: string, name: string, who: 'Het team' | 'Alleen ik', snap?: string) {
+  const row = modelNode(page, model).locator('.nv-model')
+  await row.hover()
+  await row.getByRole('button', { name: `Weergave toevoegen aan ${model}` }).click()
+  await page
+    .getByRole('menu', { name: `Weergave toevoegen aan ${model}` })
+    .getByRole('menuitem', { name: 'Grid' })
+    .click()
+  const dialog = page.getByRole('dialog', { name: 'Nieuwe gridweergave' })
+  await expect(dialog.getByRole('textbox', { name: 'Naam' })).toHaveValue('Grid')
+  await dialog.getByRole('textbox', { name: 'Naam' }).fill(name)
+  await dialog.getByRole('radio', { name: who }).check()
+  if (snap) await shot(page, snap)
+  const created = page.waitForResponse(
+    (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/views',
+  )
+  await dialog.getByRole('button', { name: 'Weergave maken' }).click()
+  expect((await created).status()).toBe(201)
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
+}
+
+const viewRow = (page: Page, model: string, name: string) =>
+  modelNode(page, model)
+    .getByRole('group', { name: 'View type' })
+    .locator('.nv-view', { has: page.getByRole('button', { name, exact: true }) })
+
+test('create-team-and-personal-view @e2e', async ({ page }) => {
+  const team = 'Team e2e weergave'
+  const own = 'Eigen e2e weergave'
+  await page.goto('/')
+  await pick(page, 'Planning', 'Activiteiten')
+
+  await newView(page, 'Activiteiten', team, 'Het team', 'dialog')
+  await expect(viewRow(page, 'Activiteiten', team)).toHaveCount(1)
+  await expect(viewRow(page, 'Activiteiten', team).getByRole('img', { name: 'Alleen voor jou' })).toHaveCount(0)
+
+  await newView(page, 'Activiteiten', own, 'Alleen ik')
+  await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+
+  const held = await views(page.request)
+  expect(held.find((v) => v.name === team)).toMatchObject({ shared: true, mine: true })
+  expect(held.find((v) => v.name === own)).toMatchObject({ shared: false, mine: true })
+
+  await page.reload()
+  await pick(page, team, 'Activiteiten')
+  await pick(page, own, 'Activiteiten')
+  await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+})
+
+test('copy-rename-delete-view @e2e', async ({ page }) => {
+  const copy = 'Speelreeksen (copy)'
+  const renamed = 'Reeksen e2e hernoemd'
+  await page.goto('/')
+  await pick(page, 'Speelreeksen')
+
+  await page.getByRole('button', { name: 'More actions: Speelreeksen' }).click()
+  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+  await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(1)
+  await expect.poll(async () => (await views(page.request)).find((v) => v.name === copy)?.mine).toBe(true)
+  const made = (await views(page.request)).find((v) => v.name === copy) as SavedView
+
+  await page.getByRole('button', { name: `More actions: ${copy}` }).click()
+  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+  await page.getByRole('textbox', { name: 'Rename' }).fill(renamed)
+  await page.getByRole('textbox', { name: 'Rename' }).press('Enter')
+  await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(1)
+  await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(0)
+  await expect.poll(async () => (await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
+
+  await page.getByRole('button', { name: `More actions: ${renamed}` }).click()
+  const deleted = page.waitForResponse(
+    (res) => res.request().method() === 'DELETE' && new URL(res.url()).pathname === `/api/views/${made.id}`,
+  )
+  await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
+  expect((await deleted).status()).toBe(200)
+  await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(0)
+  expect((await views(page.request)).some((v) => v.id === made.id)).toBe(false)
+
+  const restored = page.waitForResponse((res) => new URL(res.url()).pathname === `/api/views/${made.id}/restore`)
+  await page.getByRole('status', { name: 'View removed' }).getByRole('button', { name: 'Undo' }).click()
+  expect((await restored).status()).toBe(200)
+  await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(1)
+  expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
+  await page.reload()
+  await pick(page, renamed, 'Speelreeksen')
+})
+
+const facts = (band: Locator) => band.locator('.nv-group__fact')
+
+test('fold-day-band @e2e', async ({ page }) => {
+  await speeldagen(page.request, 'Speelreeks e2e vouwen', FOLD_WEEK)
+  await land(page, `/#from=${FOLD_WEEK}`)
+  await pick(page, 'Dagplanning')
+  await expect(gridRows(page)).toHaveCount(28)
+  await expect(bands(page)).toHaveCount(4)
+
+  const first = bands(page).first()
+  await expect(first).toHaveAttribute('aria-expanded', 'true')
+  await first.click()
+  await expect(first).toHaveAttribute('aria-expanded', 'false')
+  await expect(gridRows(page)).toHaveCount(21)
+  await expect(first.locator('.nv-group__count')).toHaveText('7')
+  await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  await expect(bands(page).nth(1)).toHaveAttribute('aria-expanded', 'true')
+
+  // Kept per view in this browser.
+  await page.reload()
+  await pick(page, 'Dagplanning')
+  await expect(bands(page)).toHaveCount(4)
+  await expect(bands(page).first()).toHaveAttribute('aria-expanded', 'false')
+  await expect(gridRows(page)).toHaveCount(21)
+  await expect(bands(page).first().locator('.nv-group__count')).toHaveText('7')
+
+  // Enter unfolds it again.
+  await bands(page).first().focus()
+  await page.keyboard.press('Enter')
+  await expect(bands(page).first()).toHaveAttribute('aria-expanded', 'true')
+  await expect(gridRows(page)).toHaveCount(28)
+})
+
+test('band-facts @e2e', async ({ page }) => {
+  await speeldagen(page.request, 'Speelreeks e2e feiten', FACTS_WEEK)
+  await land(page, `/#from=${FACTS_WEEK}`)
+  await pick(page, 'Dagplanning')
+  await expect(gridRows(page)).toHaveCount(28)
+  await expect(bands(page)).toHaveCount(4)
+  for (const band of await bands(page).all()) {
+    await expect(band.locator('.nv-group__count')).toHaveText('7')
+    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  }
+})
+
+test('inherited-venue @e2e', async ({ page }) => {
+  const reeks = await speeldagen(page.request, 'Speelreeks e2e erven', INHERIT_WEEK)
+  const own = 'Repetitie e2e eigen zaal'
+  const day = plusDays(INHERIT_WEEK, 1)
+  await idOf(page.request, 'activiteit', {
+    productie_id: await idByName(page.request, 'productie', 'titel', 'Nachtwacht'),
+    soort: 'repetitie',
+    datum: day,
+    start_at: `${day}T10:00`,
+    omschrijving: own,
+    locatie_id: await idByName(page.request, 'organisatie', 'naam', OWN_VENUE),
+  })
+  // The template leaves the venue to inherit: the server holds none on its activities.
+  for (const a of await rowsOf<Values>(page.request, 'activiteit', { speelreeks_id: reeks })) {
+    expect(a.locatie_id ?? null).toBeNull()
+  }
+
+  await land(page, `/#from=${INHERIT_WEEK}`)
+  await pick(page, 'Dagplanning')
+  await expect(gridRows(page)).toHaveCount(29)
+  const locatie = await columnIndex(page, 'Locatie')
+
+  const inherited = named(page, 'Voorstelling')
+  await expect(inherited).toHaveCount(4)
+  for (const tr of await inherited.all()) {
+    const cell = tr.locator('td').nth(locatie)
+    await expect(cell.locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
+    await expect(cell.locator('.nv-via')).toHaveText('via Speelreeks')
+    await expect(cell.locator('.nv-inherited')).toHaveCSS('font-style', 'italic')
+  }
+
+  const ownCell = named(page, own).locator('td').nth(locatie)
+  await expect(ownCell.locator('.nv-cell__text')).toHaveText(OWN_VENUE)
+  await expect(ownCell.locator('.nv-inherited, .nv-via')).toHaveCount(0)
+  await expect(ownCell.locator('.nv-cell__text')).toHaveCSS('font-style', 'normal')
+  const grey = await inherited
+    .first()
+    .locator('td')
+    .nth(locatie)
+    .locator('.nv-inherited')
+    .evaluate((el) => getComputedStyle(el).color)
+  const plain = await ownCell.locator('.nv-cell__text').evaluate((el) => getComputedStyle(el).color)
+  expect(grey).not.toBe(plain)
+
+  // The surface Stefan reads: one band folded, the others with their facts and the venue via the Speelreeks.
+  await page.setViewportSize({ width: 1440, height: 1200 })
+  await bands(page).nth(2).click()
+  await expect(bands(page).nth(2)).toHaveAttribute('aria-expanded', 'false')
+  await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  await shot(page, 'dagplanning')
+})
+
+const rowHeight = async (page: Page) => (await gridRows(page).first().boundingBox())?.height ?? 0
+
+test('dark-and-density @e2e', async ({ page }) => {
+  await land(page, `/#from=${SEED_WEEK}`)
+  await pick(page, 'Planning', 'Activiteiten')
+  await expect(gridRows(page).first()).toBeVisible()
+  const root = page.locator('#root')
+  const theme = page.getByRole('group', { name: 'Theme' })
+  const density = page.getByRole('group', { name: 'Dichtheid' })
+
+  const light = await root.evaluate((el) => getComputedStyle(el).backgroundColor)
+  await theme.getByRole('tab', { name: 'Dark' }).click()
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(light)
+  const dark = await root.evaluate((el) => getComputedStyle(el).backgroundColor)
+  expect(dark).toBe('rgb(22, 23, 26)')
+
+  expect(Math.round(await rowHeight(page))).toBe(40)
+  await density.getByRole('tab', { name: 'Compact' }).click()
+  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(32)
+  await expect(density.getByRole('tab', { name: 'Compact' })).toHaveAttribute('aria-selected', 'true')
+  await shot(page, 'dark')
+  await density.getByRole('tab', { name: 'Ruim' }).click()
+  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(46)
+
+  await page.reload()
+  await pick(page, 'Planning', 'Activiteiten')
+  await expect(gridRows(page).first()).toBeVisible()
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  expect(await root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(dark)
+  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(46)
+  await expect(density.getByRole('tab', { name: 'Ruim' })).toHaveAttribute('aria-selected', 'true')
+  await expect(theme.getByRole('tab', { name: 'Dark' })).toHaveAttribute('aria-selected', 'true')
+
+  await theme.getByRole('tab', { name: 'Light' }).click()
+  await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(light)
+})
