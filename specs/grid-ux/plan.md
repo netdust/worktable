@@ -271,3 +271,21 @@
     - English defaults still apply where nothing is declared.
 
 - [ ] Implement. Run the tests and the gate. Commit `feat: a column may declare a tone per option; theatre's statuses are coloured`.
+
+### Task 10 (Stefan 2026-10-07): the model menu — name, icon, export
+**Threat model (an authorization surface):** only an administrator may change a source's display name or icon. The refused actor is an editor or owner (403), and a session-less caller (401). The write goes through the write guard (JSON, same-origin). An owner never learns about sources it cannot read. A display name is plain text: the grid renders it as text, never HTML.
+
+**Files:**
+- Modify:
+  - `packages/engine/src/engine-tables.ts`: `source_display` (`source` text, unique; `label` text, nullable; `icon` text, nullable);
+  - `packages/engine/src/app.ts`: `PUT /sources/:name/display` with `{ label?, icon? }`, administrator only; it validates `icon` against the fixed set and `label` length (1–60); it is revised. `/schema` overlays the label and icon on the readable sources and serves `icon`;
+  - `packages/engine/src/declare.ts` (the icon set as a constant);
+  - `apps/grid/src/engine.ts`, `types.ts` (`TableDef.icon`), `api.ts` (`setDisplay`), `ui/Rail.tsx` (the model `…`: Naam wijzigen inline, Icoon wijzigen as a small icon grid, Exporteren, In-/Uitklappen; the first two disabled with a reason for non-administrators), `i18n.ts`;
+  - the route-matrix test.
+- Tests:
+  - engine: an administrator's PUT changes `/schema`'s label and icon; an editor and an owner get 403 with nothing changed; session-less gets 401; an unknown icon or an empty or over-long label gets 400; an unknown or unreadable source gets 404; the write is revised;
+  - grid:
+    - the menu items, by role;
+    - a rename and an icon change update the tree;
+    - Exporteren calls the existing export for the open view.
+- [ ] Implement, RED first for the denials. Run the tests and the gate. Commit `feat: an administrator renames a model or changes its icon; the model menu exports`.

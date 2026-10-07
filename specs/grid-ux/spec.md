@@ -137,6 +137,16 @@ These flows pass in a browser on invented fixtures:
 
 Existing gates stay green, with their selectors updated where the markup changed.
 
+### R9. The model menu: name, icon and export (Stefan, 2026-10-07)
+A model's `…` menu holds Naam wijzigen, Icoon wijzigen, Exporteren and In-/Uitklappen.
+- **Name and icon are display settings for everyone, set by an administrator** (option a). The engine keeps them in a small table of its own (`source_display`: source, label, icon). `/schema` serves the overriding label and icon. A source's declared label stays the default.
+- **The icon** is picked from a fixed, generic set (no domain words), such as table, calendar, users, clock, tag, pin, check, list, film, box, star and flag.
+- **Writes are administrator-only** (403 for anyone else) and revised like any write. An editor sees Naam wijzigen and Icoon wijzigen disabled, with a reason.
+- **Exporteren** exports the model's open view as xlsx, using the existing export.
+- **Dupliceren is out.** Datasets are code (AGENTS.md; the scope lock).
+
+Source: Stefan, 2026-10-07: "that ... menu should hold rename, change icon, duplicate, export... stuff like that"; "agreed, option a, add task 10".
+
 ## Out
 - The Dagkolommen layout (a column per day). It waits until Stefan has used the new table (2026-10-07: "Not now, table first").
 - Per-model row counts in the tree.
