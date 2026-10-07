@@ -102,7 +102,9 @@ export function revisionProblems(
     problems.push('a revision names another record')
   if (revisions.some((r) => r.actor_id !== expect.actor)) problems.push('a revision names another actor')
   const fields = revisions.map((r) => r.field).sort()
-  if (!Bun.deepEquals(fields, [...expect.fields].sort())) problems.push('revised fields differ from the changed fields')
+  // A create carries the engine's marker row: field id, old null, new the record's id.
+  const expected = expect.before === undefined ? [...expect.fields, 'id'] : expect.fields
+  if (!Bun.deepEquals(fields, [...expected].sort())) problems.push('revised fields differ from the changed fields')
   for (const r of revisions) {
     const column = expect.columns[r.field]
     const old = r.old === null ? null : JSON.parse(r.old)
@@ -113,4 +115,36 @@ export function revisionProblems(
       problems.push(`revision new of ${r.field} is not the value after`)
   }
   return problems
+}
+
+/** Why a dataset's column edits are not driven: with no rows there is nothing to edit, which is no problem. */
+export function skipReason(rows: number): string | null {
+  return rows === 0 ? 'skipped: no rows' : null
+}
+
+/** The batch a write's reply names; null when it changed nothing or was refused. */
+export function batchOf(reply: Row): string | null {
+  const batch = (reply.revision as Row | undefined)?.batch_id
+  return typeof batch === 'string' ? batch : null
+}
+
+/** Newest first, as the grid's history undoes them; a write without a batch has nothing to undo. */
+export function undoOrder<T extends { batch: string | null }>(done: T[]): T[] {
+  return done.filter((d) => d.batch !== null).reverse()
+}
+
+const liveRows = (rows: Row[]): Row[] => rows.filter((r) => r.deleted_at === null)
+
+/** A two-day Speelreeks on a live productie and, when there is one, a live venue; null without a productie. */
+export function speelreeksBody(producties: Row[], organisaties: Row[], day: string): Row | null {
+  const productie = liveRows(producties)[0]
+  if (!productie) return null
+  const venue = liveRows(organisaties).find((o) => o.soort === 'venue')
+  return {
+    productie_id: productie.id,
+    naam: 'shakeout-speelreeks',
+    locatie_id: venue?.id ?? null,
+    start_datum: day,
+    eind_datum: addDays(day, 1),
+  }
 }

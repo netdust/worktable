@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { Model, Row, SavedView, Schema } from '../types'
+import type { Model, Row, Saved, SavedView, Schema } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
@@ -10,15 +10,22 @@ import { createStore, type StoreApi } from './store'
 
 const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined,
-  prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve() }))
+  prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))
 vi.mock('../api', () => remote)
 const { App } = await import('../ui/App')
 
-let api: { update: ReturnType<typeof vi.fn<StoreApi['update']>>; create: ReturnType<typeof vi.fn<StoreApi['create']>>; remove: ReturnType<typeof vi.fn<NonNullable<StoreApi['remove']>>> }
+let api: {
+  update: ReturnType<typeof vi.fn<StoreApi['update']>>; create: ReturnType<typeof vi.fn<StoreApi['create']>>; remove: ReturnType<typeof vi.fn<NonNullable<StoreApi['remove']>>>
+  read: ReturnType<typeof vi.fn<NonNullable<StoreApi['read']>>>; undo: ReturnType<typeof vi.fn<NonNullable<StoreApi['undo']>>>
+}
 let saved: Layout | null
 
 function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model } = {}) {
-  api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>() }
+  api = {
+    update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
+    read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
+  }
   const store = createStore({ model: 'activity', rows, api })
   function Harness() {
     const [layout, setLayout] = useState(options.layout ?? defaults(planning))
@@ -166,7 +173,7 @@ describe('the sheet', () => {
 describe('editing', () => {
   it('typing in a cell and pressing Enter writes that one field', async () => {
     renderGrid()
-    api.update.mockResolvedValue({ ...calais[1], fields: { ...calais[1].fields, place: 'Zaal 2' } })
+    api.update.mockResolvedValue({ row: { ...calais[1], fields: { ...calais[1].fields, place: 'Zaal 2' } }, batch: 'b1' })
 
     const place = cell('Montage', 'place')
     fireEvent.click(place)
@@ -214,7 +221,7 @@ describe('editing', () => {
 
   it('picks a select from its listbox by letter and Enter', async () => {
     renderGrid()
-    api.update.mockResolvedValue({ ...calais[2], fields: { ...calais[2].fields, kind: 'show' } })
+    api.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, kind: 'show' } }, batch: 'b1' })
 
     const kind = cell('Lunch bistrot', 'kind')
     fireEvent.click(kind)
@@ -231,7 +238,7 @@ describe('editing', () => {
 
   it('reads a typed time the way a hand types it', async () => {
     renderGrid()
-    api.update.mockResolvedValue(calais[1])
+    api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
 
     const start = cell('Montage', 'start')
     fireEvent.click(start)
@@ -246,7 +253,7 @@ describe('editing', () => {
 
   it('empties an optional field on Delete and leaves a required one', async () => {
     renderGrid()
-    api.update.mockResolvedValue(calais[1])
+    api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
 
     fireEvent.click(cell('Montage', 'kind'))
     type(cell('Montage', 'kind'), 'Delete')
@@ -259,9 +266,12 @@ describe('editing', () => {
     expect(api.update).toHaveBeenCalledWith('activity', 102, { place: '' }, expect.objectContaining({ id: 102 }))
   })
 
-  it('undoes the last write on Ctrl+Z with the inverse write', async () => {
+  it('undoes the last write on Ctrl+Z by its batch on the server, and repaints the row it reads back', async () => {
     renderGrid()
-    api.update.mockImplementation(async (_m, id, data) => ({ ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }))
+    api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: `b${id}` }))
+
+    api.undo.mockResolvedValueOnce('u1')
+    api.read.mockResolvedValueOnce(calais[1])
 
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
@@ -271,13 +281,14 @@ describe('editing', () => {
       type(cell('Montage', 'place'), 'z', { ctrlKey: true })
     })
 
-    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b102')
+    expect(api.update).toHaveBeenCalledTimes(1)
     expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
   it('follows the record, not the position, when a commit re-sorts the rows', async () => {
     renderGrid()
-    api.update.mockImplementation(async (_m, id, data) => ({ ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }))
+    api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: `b${id}` }))
 
     fireEvent.click(cell('Montage', 'start'))
     type(cell('Montage', 'start'), '1')
@@ -301,8 +312,8 @@ describe('editing', () => {
 
   it('commits an open editor to its own record when a server answer re-sorts underneath it', async () => {
     renderGrid()
-    let answer!: (row: Row) => void
-    api.update.mockReturnValueOnce(new Promise<Row>((resolve) => (answer = resolve))).mockResolvedValue(calais[2])
+    let answer!: (saved: Saved) => void
+    api.update.mockReturnValueOnce(new Promise<Saved>((resolve) => (answer = resolve))).mockResolvedValue({ row: calais[2], batch: 'b1' })
 
     fireEvent.click(cell('Montage', 'start'))
     type(cell('Montage', 'start'), '2')
@@ -310,7 +321,7 @@ describe('editing', () => {
     type(editor(), 'Enter')
     fireEvent.click(cell('Auto Pavel + Sien', 'place'))
     type(cell('Auto Pavel + Sien', 'place'), 'X')
-    await act(async () => answer({ ...calais[1], fields: { ...calais[1].fields, start: '06:00' } }))
+    await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, start: '06:00' } }, batch: 'b1' }))
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title)[0].dataset.title).toBe('Montage')
     fireEvent.change(editor(), { target: { value: 'Xavier' } })
     await act(async () => {
@@ -345,7 +356,7 @@ describe('editing', () => {
 
   it('leaves keys on a header button and on Open out of the cells, and lets Cmd/Ctrl+K through both', () => {
     renderGrid(calais, { layout: { ...defaults(planning), group: null, sort: [] } })
-    api.update.mockResolvedValue(calais[1])
+    api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
     fireEvent.click(cell('Montage', 'place'))
     const sortTitle = within(screen.getAllByRole('columnheader')[0]).getByRole('button')
 
@@ -390,7 +401,7 @@ describe('editing', () => {
 
   it('copies the shown value and pastes one cell', async () => {
     renderGrid()
-    api.update.mockResolvedValue(calais[1])
+    api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
     const data = new Map<string, string>()
     const clipboardData = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? '' }
 
@@ -407,7 +418,7 @@ describe('editing', () => {
 
   it('opens a new row with its title in edit and creates it on Enter', async () => {
     const { store } = renderGrid()
-    api.create.mockResolvedValue({ ...calais[0], id: 200, title: 'Soundcheck' })
+    api.create.mockResolvedValue({ row: { ...calais[0], id: 200, title: 'Soundcheck' }, batch: 'b1' })
 
     act(() => store.draft({ date: '2026-05-19', kind: 'travel', status: 'confirmed' }))
 
@@ -662,7 +673,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it('offers undo in a toast after a change', async () => {
-    remote.update.mockResolvedValueOnce({ ...calais[1], fields: { ...calais[1].fields, place: '' } })
+    remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
@@ -673,11 +684,14 @@ describe('the toolbar over the grid', () => {
 
     const toast = screen.getByRole('status', { name: 'Changed' })
     expect(toast.textContent).toContain('⌘Z')
-    remote.update.mockResolvedValueOnce(calais[1])
+    remote.undoBatch.mockResolvedValueOnce('u1')
+    remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
       fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }))
     })
-    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
+    expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
+    expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
+    expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
   it('keeps an edited cell and its undo through Save on a saved view', async () => {
@@ -688,7 +702,7 @@ describe('the toolbar over the grid', () => {
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: 'date' }))
     remote.savedViews.mockResolvedValue([mine])
     remote.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['kind'], group: 'date' } })
-    remote.update.mockResolvedValueOnce({ ...calais[1], fields: { ...calais[1].fields, place: '' } })
+    remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
     render(<App />)
     await screen.findByText('Maandag 18 mei')
     fireEvent.click(cell('Montage', 'place'))
@@ -703,11 +717,14 @@ describe('the toolbar over the grid', () => {
     expect(remote.updateView).toHaveBeenCalled()
     expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBeNull()
     expect(cell('Montage', 'place').textContent).toBe('')
-    remote.update.mockResolvedValueOnce(calais[1])
+    remote.undoBatch.mockResolvedValueOnce('u1')
+    remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
       type(cell('Montage', 'place'), 'z', { ctrlKey: true })
     })
-    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
+    expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
+    expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
+    expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
     expect(remote.rows).toHaveBeenCalledTimes(1)
   })
 
@@ -730,8 +747,8 @@ describe('the toolbar over the grid', () => {
   })
 
   it('shows Saving, then Saved; Not saved with the message on a refusal; and Undo with a word', async () => {
-    let answer!: (row: Row) => void
-    remote.update.mockReturnValueOnce(new Promise<Row>((resolve) => (answer = resolve)))
+    let answer!: (saved: Saved) => void
+    remote.update.mockReturnValueOnce(new Promise<Saved>((resolve) => (answer = resolve)))
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
@@ -739,7 +756,7 @@ describe('the toolbar over the grid', () => {
     type(cell('Montage', 'place'), 'Delete')
     expect(within(toolbar()).getByRole('status').textContent).toContain('Saving…')
 
-    await act(async () => answer({ ...calais[1], fields: { ...calais[1].fields, place: '' } }))
+    await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' }))
     expect(within(toolbar()).getByRole('status').textContent).toContain('Saved')
 
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
@@ -750,11 +767,14 @@ describe('the toolbar over the grid', () => {
     })
     expect(within(toolbar()).getByRole('status').textContent).toBe('Not saved: A title is required.')
 
-    remote.update.mockResolvedValueOnce(calais[1])
+    remote.undoBatch.mockResolvedValueOnce('u1')
+    remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
       fireEvent.click(within(screen.getByRole('status', { name: 'Changed' })).getByRole('button', { name: 'Undo' }))
     })
-    expect(remote.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Grote zaal' }, expect.objectContaining({ id: 102 }))
+    expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
+    expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
+    expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
   it("+ New opens a row at the top of today's group with its title in edit", async () => {
@@ -784,7 +804,7 @@ describe('the toolbar over the grid', () => {
   })
 
   it('commits an open editor when focus leaves for the search, and leaves focus there', async () => {
-    remote.update.mockResolvedValue({ ...calais[2], fields: { ...calais[2].fields, place: 'x' } })
+    remote.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, place: 'x' } }, batch: 'b1' })
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
@@ -897,7 +917,7 @@ describe('a new row the writer refuses', () => {
 
   it('a new row refused for a missing person offers the Persoon picker and saves on the pick', async () => {
     remote.create.mockRejectedValueOnce({ code: 'person_or_name', message: 'A person or a name is required.' })
-    remote.create.mockResolvedValueOnce({ id: 50, title: 'Ann op Montage', status: 'publish', fields: { activity: [102], person: [5], status: 'requested' }, lookups: { person: ann } })
+    remote.create.mockResolvedValueOnce({ row: { id: 50, title: 'Ann op Montage', status: 'publish', fields: { activity: [102], person: [5], status: 'requested' }, lookups: { person: ann } }, batch: 'b1' })
     render(<App />)
     await screen.findByText('Bert op Lunch')
 
@@ -953,7 +973,7 @@ describe('a new record with a required relation', () => {
   })
 
   it('opens the picker on the person and creates the absence once one is picked', async () => {
-    remote.create.mockResolvedValue({ id: 40, title: 'Ann 19/05', status: 'publish', fields: { person: [5], from: '2026-05-19', to: '2026-05-19' }, lookups: { person: ann } })
+    remote.create.mockResolvedValue({ row: { id: 40, title: 'Ann 19/05', status: 'publish', fields: { person: [5], from: '2026-05-19', to: '2026-05-19' }, lookups: { person: ann } }, batch: 'b1' })
     render(<App />)
     await screen.findAllByText('Bert')
 
@@ -970,7 +990,7 @@ describe('a new record with a required relation', () => {
 
   it('shows the column a draft needs when the view does not, and saves the pick', async () => {
     remote.schema.mockResolvedValue({ ...served, views: [{ ...absences, columns: ['title', 'from', 'to'], lookups: {} }] })
-    remote.create.mockResolvedValue({ id: 41, title: 'Ann 19/05', status: 'publish', fields: { person: [5], from: '2026-05-19', to: '2026-05-19' }, lookups: {} })
+    remote.create.mockResolvedValue({ row: { id: 41, title: 'Ann 19/05', status: 'publish', fields: { person: [5], from: '2026-05-19', to: '2026-05-19' }, lookups: {} }, batch: 'b1' })
     render(<App />)
     await screen.findByText('Bert')
     expect(screen.queryByRole('columnheader', { name: /Persoon/ })).toBeNull()

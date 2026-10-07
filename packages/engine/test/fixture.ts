@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite'
 import {
+  type ActionDecl,
   type Domain,
   defineDataset,
   defineQuery,
@@ -138,12 +139,25 @@ const projectWriter: Writer = {
   },
 }
 
+// Three notes on the project, each named after the source note.
+const copyNotes: ActionDecl = {
+  label: 'Notes kopiëren',
+  on: 'project',
+  input: { source: { relation: 'note', label: 'Source' } },
+  run: (record, input) =>
+    [1, 2, 3].map((n) => ({
+      dataset: 'note',
+      values: { project_id: record.id, tekst: `${input.source?.tekst} ${n}` },
+    })),
+}
+
 export const domain: Domain = {
   datasets: [project, taak, plat, note],
   queries: [perProject, noteLijst],
   writers: { project: projectWriter, note: noteWriter },
+  actions: { copy_notes: copyNotes },
   seed: (insert) => {
-    insert('project', [{ name: 'Alfa', custom: { kleur: 'rood', labels: ['a', 'b'] } }, { name: 'Beta' }])
+    insert('project', [{ name: 'Alfa', custom: { colour: 'rood', labels: ['a', 'b'] } }, { name: 'Beta' }])
     insert('taak', [
       {
         project_id: 1,
@@ -152,7 +166,7 @@ export const domain: Domain = {
         prio: 2,
         start_at: '2026-10-12T09:00',
         day: '2026-10-12',
-        custom: { kleur: 'rood', labels: ['a', 'b'] },
+        custom: { colour: 'rood', labels: ['a', 'b'] },
       },
       {
         project_id: 1,
@@ -162,7 +176,7 @@ export const domain: Domain = {
         start_at: '2026-10-12T08:00',
         day: '2026-10-12',
         afgerond: true,
-        custom: { kleur: 'blauw', labels: 'a' },
+        custom: { colour: 'blauw', labels: 'a' },
       },
       {
         project_id: 2,

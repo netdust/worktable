@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Row } from '../types'
-import { Drawer } from './Drawer'
+import type { ModelAction, Row } from '../types'
+
+const remote = vi.hoisted(() => ({ records: vi.fn() }))
+vi.mock('../api', () => remote)
+const { Drawer } = await import('./Drawer')
 import { columnsFor } from './columns'
 import { activity, planning } from './calais.test.data'
 
@@ -83,5 +86,53 @@ describe('the drawer', () => {
 
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe("the drawer's actions", () => {
+  const apply: ModelAction = { name: 'sjabloon_toepassen', label: 'Sjabloon toepassen', input: { sjabloon_id: { relation: 'sjabloon', label: 'Sjabloon' } } }
+  const speeldag: Row = { id: 4, title: 'speeldag op locatie', status: '', fields: {} }
+
+  async function pickSjabloon() {
+    remote.records.mockResolvedValue({ rows: [speeldag], total: 1 })
+    fireEvent.click(screen.getByRole('button', { name: 'Sjabloon: —' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'speeldag op locatie' }))
+  }
+
+  it('shows a button per action with a picker per input, run only once each input is picked', async () => {
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)
+    const group = screen.getByRole('group', { name: 'Sjabloon toepassen' })
+    const run = within(group).getByRole('button', { name: 'Sjabloon toepassen' })
+    expect(run.hasAttribute('disabled')).toBe(true)
+
+    await pickSjabloon()
+    expect(remote.records).toHaveBeenCalledWith('sjabloon', '')
+    expect(within(group).getByRole('button', { name: 'Sjabloon: speeldag op locatie' })).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(run)
+    })
+
+    expect(onAction).toHaveBeenCalledExactlyOnceWith(apply, { sjabloon_id: 4 })
+  })
+
+  it("says a refusal under the action, in the writer's words", async () => {
+    const onAction = vi.fn().mockRejectedValue({ code: 'refused', message: 'Dit sjabloon is al toegepast.' })
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)
+
+    await pickSjabloon()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sjabloon toepassen' }))
+    })
+
+    expect(screen.getByRole('alert').textContent).toBe('Dit sjabloon is al toegepast.')
+  })
+
+  it('offers no action without a way to run it, nor on a model that declares none', () => {
+    const { rerender } = render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onClose={() => undefined} />)
+    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+
+    rerender(<Drawer row={row(3, 'Calais')} columns={[]} onAction={vi.fn()} onClose={() => undefined} />)
+    expect(screen.queryByRole('button', { name: 'Sjabloon toepassen' })).toBeNull()
   })
 })

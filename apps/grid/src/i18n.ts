@@ -1,3 +1,5 @@
+import type { ApiError } from './types'
+
 const strings = {
   views: 'Views',
   noViews: 'No views declared',
@@ -107,6 +109,11 @@ const strings = {
   linkDead: 'Deze link werkt niet meer. Vraag een nieuwe aan.',
   sessionLapsed: 'Je bent afgemeld. Meld je opnieuw aan in een ander tabblad; wat je hier niet bewaarde, blijft staan.',
   signOut: 'Afmelden',
+  changedSince: '{label} is intussen gewijzigd; ongedaan maken kan niet.',
+  deletedSince: '{label}: dit record is intussen verwijderd; ongedaan maken kan niet.',
+  alreadyUndone: 'Dit is al ongedaan gemaakt.',
+  notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
+  actionDone: '{action} uitgevoerd.',
 }
 
 export type StringKey = keyof typeof strings
@@ -145,6 +152,18 @@ export function locale(): string {
   } catch {
     return 'en'
   }
+}
+
+/** Why an undo or redo was refused, in Dutch; a removed record names `deleted_at`, under its dataset's label. */
+export function undoText(error: Partial<ApiError>): string {
+  const code = error.code ?? 'unknown'
+  const label = error.label ?? ''
+  const said = code === 'in_use' && error.by?.length ? inUse(error.by)
+    : code === 'changed_since' ? t(error.column === 'deleted_at' ? 'deletedSince' : 'changedSince', { label })
+    : code === 'already_undone' ? t('alreadyUndone')
+    : code === 'not_undoable' ? t('notUndoable')
+    : String(error.message ?? code)
+  return errorText(code, said)
 }
 
 /** The engine's 409 `by` as one sentence: "Nog in gebruik door Activiteiten (3) en Personen (1)." */

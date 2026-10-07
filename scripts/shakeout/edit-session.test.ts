@@ -1,7 +1,18 @@
 import { describe, expect, it, test } from 'bun:test'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addDays, addMinutes, expectedPlandag, type Revision, revisionProblems, scalarEdit } from './edit-session.lib'
+import {
+  addDays,
+  addMinutes,
+  batchOf,
+  expectedPlandag,
+  type Revision,
+  revisionProblems,
+  scalarEdit,
+  skipReason,
+  speelreeksBody,
+  undoOrder,
+} from './edit-session.lib'
 
 describe('the shakeout clock', () => {
   it('crosses a month and a year', () => {
@@ -52,11 +63,70 @@ describe('revision problems', () => {
     ).toEqual([])
   })
 
+  it('expects the id marker on a create, with the new id', () => {
+    const created = { ...expectFor(['naam']), before: undefined, after: { id: 7, naam: 'b' } }
+    expect(revisionProblems([rev('id', null, 7), rev('naam', null, 'b')], created)).toEqual([])
+    expect(revisionProblems([rev('naam', null, 'b')], created)).toEqual([
+      'revised fields differ from the changed fields',
+    ])
+  })
+
   it('names a missing field and a wrong old value', () => {
     expect(revisionProblems([rev('naam', 'z', 'b')], expectFor(['naam', 'actief']))).toEqual([
       'revised fields differ from the changed fields',
       'revision old of naam is not the value before',
     ])
+  })
+})
+
+describe('a dataset with no rows', () => {
+  it('is skipped, not a problem', () => {
+    expect(skipReason(0)).toBe('skipped: no rows')
+    expect(skipReason(3)).toBeNull()
+  })
+})
+
+describe('the undo by batch', () => {
+  it("reads the batch from a write's reply, and none from a reply that changed nothing", () => {
+    expect(batchOf({ id: 7, revision: { batch_id: 'b1', changed: ['naam'] } })).toBe('b1')
+    expect(batchOf({ id: 7, revision: { batch_id: null, changed: [] } })).toBeNull()
+    expect(batchOf({ code: 'refused' })).toBeNull()
+  })
+
+  it('undoes the newest batch first and skips a write without one', () => {
+    const done = [
+      { label: 'a', batch: 'b1' },
+      { label: 'b', batch: null },
+      { label: 'c', batch: 'b3' },
+    ]
+    expect(undoOrder(done).map((d) => d.label)).toEqual(['c', 'a'])
+  })
+})
+
+describe('the speelreeks the session creates first', () => {
+  const producties = [{ id: 4, deleted_at: null }]
+  const organisaties = [
+    { id: 1, soort: 'eigen', deleted_at: null },
+    { id: 2, soort: 'venue', deleted_at: '2026-01-01T00:00:00Z' },
+    { id: 3, soort: 'venue', deleted_at: null },
+  ]
+
+  it('sits on a live productie and a live venue, two days from the given day', () => {
+    expect(speelreeksBody(producties, organisaties, '2026-12-31')).toEqual({
+      productie_id: 4,
+      naam: 'shakeout-speelreeks',
+      locatie_id: 3,
+      start_datum: '2026-12-31',
+      eind_datum: '2027-01-01',
+    })
+  })
+
+  it('leaves the locatie empty when no live venue exists', () => {
+    expect(speelreeksBody(producties, organisaties.slice(0, 2), '2026-05-01')?.locatie_id).toBeNull()
+  })
+
+  it('is null without a live productie', () => {
+    expect(speelreeksBody([{ id: 4, deleted_at: '2026-01-01T00:00:00Z' }], organisaties, '2026-05-01')).toBeNull()
   })
 })
 

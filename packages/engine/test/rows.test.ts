@@ -61,7 +61,7 @@ describe('denials', () => {
 
   test('sort on an undeclared key is 400 bad_sort', () =>
     denied('/api/rows/taak?sort=heading;DROP TABLE x', 400, 'bad_sort'))
-  test('sort on custom.key is 400 bad_sort', () => denied('/api/rows/taak?sort=custom.kleur', 400, 'bad_sort'))
+  test('sort on custom.key is 400 bad_sort', () => denied('/api/rows/taak?sort=custom.colour', 400, 'bad_sort'))
   test('2001 sort keys is 400 bad_sort, not a 500', () =>
     denied(`/api/rows/taak?sort=${Array(2001).fill('id').join(',')}`, 400, 'bad_sort'))
   test('17 sort keys is 400 bad_sort for their number', async () => {
@@ -96,9 +96,9 @@ describe('denials', () => {
   test('a null filter is 400', () => badFilter('null'))
 
   test('custom.key on a query is 400 bad_filter', () =>
-    denied(`/api/rows/per_project?filter=${encodeURIComponent('{"custom.kleur":"rood"}')}`, 400, 'bad_filter'))
+    denied(`/api/rows/per_project?filter=${encodeURIComponent('{"custom.colour":"rood"}')}`, 400, 'bad_filter'))
   test('custom.key on a dataset without custom is 400 bad_filter', () =>
-    denied(`/api/rows/plat?filter=${encodeURIComponent('{"custom.kleur":"rood"}')}`, 400, 'bad_filter'))
+    denied(`/api/rows/plat?filter=${encodeURIComponent('{"custom.colour":"rood"}')}`, 400, 'bad_filter'))
 
   test('window with a non-date is 400 bad_window', () =>
     denied("/api/rows/taak?from=2026-01-01' OR 1=1", 400, 'bad_window'))
@@ -129,7 +129,7 @@ describe('rows', () => {
       day: '2026-10-12',
       afgerond: false,
       title: 'een',
-      custom: { kleur: 'rood', labels: ['a', 'b'] },
+      custom: { colour: 'rood', labels: ['a', 'b'] },
       lookups: { project_id: { id: 1, title: 'Alfa' } },
     })
     expect(body.rows[1].afgerond).toBe(true)

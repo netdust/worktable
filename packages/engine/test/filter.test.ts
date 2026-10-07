@@ -44,8 +44,8 @@ describe('compileFilter', () => {
     expect(ids({ afgerond: true })).toEqual([2])
   })
   test('custom.key compiles to json_extract', () => {
-    expect(ids({ 'custom.kleur': 'rood' })).toEqual([1])
-    expect(ids({ 'custom.kleur': { $exists: true } })).toEqual([1, 2])
+    expect(ids({ 'custom.colour': 'rood' })).toEqual([1])
+    expect(ids({ 'custom.colour': { $exists: true } })).toEqual([1, 2])
   })
   test('$contains matches array membership and skips a scalar', () => {
     expect(ids({ 'custom.labels': { $contains: 'a' } })).toEqual([1])

@@ -4,7 +4,7 @@ import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { RelationContext } from './cells/Relation'
 import { type Column, columnsFor } from './columns'
-import { Drawer } from './Drawer'
+import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
 import { GridBar } from './GridBar'
@@ -45,6 +45,8 @@ export interface GridProps {
   spaceModel?: string | null
   /** The filter chips, shown in the bar over the sheet. */
   filters?: ReactNode
+  /** Runs one of the model's actions on a record; without it the drawer offers none. */
+  onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
 }
 
 const NO_MODELS: Record<string, Model> = {}
@@ -58,7 +60,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, models = NO_MODELS, scope = null, spaceModel = null, filters }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, models = NO_MODELS, scope = null, spaceModel = null, filters, onAction }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -278,7 +280,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridFoot columns={visible} count={total(groups) - drafts.length} sums={sums(shown, visible)} />
           </table>
         </div>
-        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)}
+        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions}
+          onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>
       )}

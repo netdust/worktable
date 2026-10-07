@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -20,7 +20,9 @@ function isReferrer(entry: unknown): entry is Referrer {
 function toApiError(error: unknown): ApiError {
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
     const by = 'by' in error && Array.isArray(error.by) ? { by: error.by.filter(isReferrer) } : {}
-    return { code: String(error.code), message: String(error.message), ...by }
+    const named = 'label' in error && typeof error.label === 'string' ? { label: error.label } : {}
+    const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
@@ -118,40 +120,54 @@ export async function records(model: string, search: string): Promise<RowsRespon
   return { rows: found, total: found.length }
 }
 
-export async function create(model: string, data: Record<string, unknown>): Promise<Row> {
+/** A write's row, and the batch an undo names it by: none when the write changed nothing. */
+function writtenOf(reply: EngineRow): Saved {
+  return { row: toRow(reply), batch: reply.revision?.batch_id ?? null }
+}
+
+export async function create(model: string, data: Record<string, unknown>): Promise<Saved> {
   const source = await sourceOf(model)
   const sent = toEngineData(data, source, (await engineSchema()).sources)
-  return toRow(await request<EngineRow>('POST', `/rows/${model}`, {}, sent))
+  return writtenOf(await request<EngineRow>('POST', `/rows/${model}`, {}, sent))
 }
 
 /** A query's row is written through its mapped column, so `row` is needed to find the target record. */
-export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row): Promise<Row> {
+export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row): Promise<Saved> {
   const source = await sourceOf(model)
   const sent = toEngineData(data, source, (await engineSchema()).sources)
   if (source.kind === 'query') return updateThrough(model, source, id, sent, row)
-  return toRow(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent))
+  return writtenOf(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent))
+}
+
+/** One row as its source computes it now; null once it left the source. */
+export async function rowOf(model: string, id: number): Promise<Row | null> {
+  const found = await request<{ rows: EngineRow[] }>('GET', `/rows/${model}`, { filter: JSON.stringify({ id }) })
+  return found.rows[0] ? toRow(found.rows[0]) : null
 }
 
 /** The write lands on the target record; the row is then read again as the query now computes it. */
-async function updateThrough(model: string, source: EngineSource, id: number, sent: Record<string, unknown>, row?: Row): Promise<Row> {
-  const [[column] = ['']] = Object.entries(sent)
+async function updateThrough(model: string, source: EngineSource, id: number, sent: Record<string, unknown>, row?: Row): Promise<Saved> {
+  const [[column, value] = ['', undefined]] = Object.entries(sent)
   const writes = source.columns[column]?.writes
   if (!writes || !row) throw { code: 'read_only', message: `"${column}" of "${model}" is not written` } satisfies ApiError
   const target = writes.key === 'id' ? row.id : row.fields[writes.key]
   if (target === null || target === undefined) throw { code: 'read_only', message: `"${column}" of "${model}" has no ${writes.key}` } satisfies ApiError
-  // The first column is the edited one; the others an undo restores with it land only on the same record.
-  const same = Object.entries(sent).filter(([name]) => {
-    const also = source.columns[name]?.writes
-    return also?.dataset === writes.dataset && also.key === writes.key
-  })
-  await request('PATCH', `/rows/${writes.dataset}/${target}`, {}, Object.fromEntries(same.map(([name, value]) => [source.columns[name]?.writes?.field, value])))
-  const written = same.reduce<Row>(
-    (next, [name, value]) => (name === source.title ? { ...next, title: String(value ?? '') } : { ...next, fields: { ...next.fields, [name]: value } }),
-    row,
-  )
+  const reply = await request<EngineRow>('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
+  const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.
-  const found = await request<{ rows: EngineRow[] }>('GET', `/rows/${model}`, { filter: JSON.stringify({ id }) }).catch(() => null)
-  return found?.rows[0] ? toRow(found.rows[0]) : written
+  const found = await rowOf(model, id).catch(() => null)
+  return { row: found ?? written, batch: reply.revision?.batch_id ?? null }
+}
+
+/** Undoes a batch on the server; answers the undo's own batch, which a redo undoes. An empty JSON body: the write guard refuses a POST that is not JSON. */
+export async function undoBatch(batch: string): Promise<string> {
+  return (await request<{ batch_id: string }>('POST', `/batches/${encodeURIComponent(batch)}/undo`, {}, {})).batch_id
+}
+
+/** Runs a dataset's declared action on one record, in one batch. */
+export async function runAction(name: string, id: number, input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
+  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })
+  return { batch: reply.batch_id, created: reply.created }
 }
 
 export function remove(model: string, id: number): Promise<unknown> {

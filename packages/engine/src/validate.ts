@@ -39,9 +39,17 @@ function checkOwners(source: DatasetDecl | QueryDecl): void {
   throw new DomainError(source.name, column, `owner column "${column}" is not id or a relation column`)
 }
 
+// Keys the engine adds to every row it answers.
+const OVERWRITTEN = [
+  ['title', 'the computed row title'],
+  ['revision', 'the write reply'],
+] as const
+
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
-  if (Object.hasOwn(source.columns, 'title')) {
-    throw new DomainError(source.name, 'title', 'a column named "title" would be overwritten by the computed row title')
+  for (const [column, by] of OVERWRITTEN) {
+    if (Object.hasOwn(source.columns, column)) {
+      throw new DomainError(source.name, column, `a column named "${column}" would be overwritten by ${by}`)
+    }
   }
   const names = new Set(domain.datasets.map((d) => d.name))
   for (const [column, decl] of Object.entries(source.columns)) {
@@ -131,6 +139,32 @@ function checkAway(
   }
 }
 
+const ACTION_NAME = /^[a-z][a-z0-9_]*$/
+
+function checkActions(domain: Domain): void {
+  const datasets = new Set(domain.datasets.map((d) => d.name))
+  for (const [name, action] of Object.entries(domain.actions ?? {})) {
+    if (!ACTION_NAME.test(name)) throw new DomainError(name, name, `action name must match ${ACTION_NAME}`)
+    if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
+      throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
+    }
+    for (const [key, { relation }] of Object.entries(action.input)) {
+      if (!datasets.has(relation)) throw new DomainError(name, key, `input ${key} relates to undeclared "${relation}"`)
+    }
+  }
+}
+
+// A config seed never points at demo rows.
+function checkConfig(domain: Domain, dataset: DatasetDecl): void {
+  if (!dataset.config) return
+  for (const [column, decl] of Object.entries(dataset.columns)) {
+    const target = domain.datasets.find((d) => d.name === decl.relation)
+    if (target && !target.config) {
+      throw new DomainError(dataset.name, column, `${column} relates to "${target.name}", which is not config`)
+    }
+  }
+}
+
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
     if (reservedNames.has(source.name)) {
@@ -145,6 +179,7 @@ export function validateDomain(domain: Domain): void {
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
+    checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {
@@ -152,4 +187,5 @@ export function validateDomain(domain: Domain): void {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }
   }
+  checkActions(domain)
 }

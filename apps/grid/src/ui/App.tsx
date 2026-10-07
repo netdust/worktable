@@ -1,6 +1,6 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, me, onUnauthenticated, prefs, records, rows, savedViews, schema, signOut } from '../api'
+import { awayRows, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
@@ -11,12 +11,13 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, Row, Schema, Scope, View } from '../types'
+import type { Account, ApiError, ModelAction, Row, Schema, Scope, View } from '../types'
 import { Confirm } from './Confirm'
 import { Filters } from './Filters'
 import { Rail } from './Rail'
 import type { Signed } from './RailFoot'
 import { readHash, writeHash } from './hash'
+import { createHistory } from './history'
 import { Search } from './Search'
 import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
@@ -134,6 +135,10 @@ function Workspace({ signed }: { signed: Signed }) {
   const [query, setQuery] = useState('')
   const [exportFailed, setExportFailed] = useState(false)
   const snapshot = useRef<(() => OnScreen) | null>(null)
+  // The tab's undo history: it outlives every view's store, so an undo reaches back across a reload or a switch.
+  const [history] = useState(() => createHistory(undoBatch))
+  const [reloads, setReloads] = useState(0)
+  const reloadView = () => setReloads((n) => n + 1)
   useFillViewport(frame)
 
   useEffect(() => {
@@ -193,7 +198,7 @@ function Workspace({ signed }: { signed: Signed }) {
       live = false
     }
     // By key, and by what the server applies (filters, sort, group): a width or a hidden column stays in the browser.
-  }, [settled, view?.key, dated, range, scopeId, asks])
+  }, [settled, view?.key, dated, range, scopeId, asks, reloads])
 
   const model = view ? served?.models[view.model] : undefined
   const writable = view ? served?.writable[view.model] === true : false
@@ -201,7 +206,9 @@ function Workspace({ signed }: { signed: Signed }) {
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
-  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, model)
+  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
+  const live = useRef(store)
+  live.current = store
   const reload = () => (view ? rows(view, dated ? range : {}, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload)
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
@@ -242,6 +249,18 @@ function Workspace({ signed }: { signed: Signed }) {
       keepLocal(view, previous)
       setResets((n) => n + 1)
     } } })
+  }
+  // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
+  const act = async (row: Row, action: ModelAction, input: Record<string, number>) => {
+    if (!view) return
+    const { batch } = await runAction(action.name, row.id, input)
+    const entry = { batch: Promise.resolve(batch), model: view.model, id: null }
+    history.push(entry)
+    reloadView()
+    const undo = () => {
+      if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
+    }
+    notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
   const types = declared.find((table) => table.key === view?.table)?.types ?? ['grid']
 
@@ -292,7 +311,7 @@ function Workspace({ signed }: { signed: Signed }) {
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot}
-              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} />
+              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} onAction={act} />
           ) : (
             <Sheet hasView={view !== undefined} dated={dated} result={result} />
           )}

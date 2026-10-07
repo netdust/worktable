@@ -5,10 +5,12 @@ import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
+import type { BatchKind } from './engine-tables'
 import { ApiError, isRealDate } from './params'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
+import { SYSTEM_OWNER } from './views'
 
 export class WriteRefused extends ApiError {
   constructor(message: string) {
@@ -243,6 +245,19 @@ function update(sqlite: Database, table: string, id: number, stored: Stored, now
   sqlite.query(`UPDATE "${table}" SET ${sets.join(', ')} WHERE id = ?`).run(...Object.values(stored), now, id)
 }
 
+export interface Written {
+  id: number
+  batch_id: string | null
+  changed: string[]
+}
+
+export function recordBatch(sqlite: Database, key: string, actorId: number, kind: BatchKind, now: string): void {
+  sqlite.query('INSERT INTO batch (key, actor_id, kind, at) VALUES (?, ?, ?, ?)').run(key, actorId, kind, now)
+}
+
+// The marker row says the batch created the record, as the deleted_at row says a delete removed it.
+const CREATED = 'id'
+
 // Read back so the defaults the database filled are revised too.
 export function create(
   sqlite: Database,
@@ -250,21 +265,15 @@ export function create(
   stored: Stored,
   now: string,
   actorId: number,
-  batch?: string,
-): number {
+  batch: string,
+): { id: number; changed: string[] } {
   const id = insert(sqlite, dataset.name, stored)
   const row = liveRow(sqlite, dataset.name, id) as Stored
-  const changes = Object.keys(dataset.columns).map((key): Change => [key, null, row[key] ?? null])
-  revise(
-    sqlite,
-    dataset,
-    id,
-    changes.filter(([, , value]) => value !== null),
-    now,
-    actorId,
-    batch,
-  )
-  return id
+  const changes = Object.keys(dataset.columns)
+    .map((key): Change => [key, null, row[key] ?? null])
+    .filter(([, , value]) => value !== null)
+  revise(sqlite, dataset, id, [[CREATED, null, id], ...changes], now, actorId, batch)
+  return { id, changed: changes.map(([field]) => field) }
 }
 
 function asJson(dataset: DatasetDecl, field: string, value: string | number | null): string | null {
@@ -360,22 +369,28 @@ export function runWrite(
   id: number | null,
   body: Values,
   actor: Actor,
-): number {
+): Written {
   const { sqlite } = store
   const table = target.dataset.name
   const scope = scopeOf(actor, target.dataset)
   return sqlite
-    .transaction(() => {
+    .transaction((): Written => {
       const current = currentOf(sqlite, target, id, scope)
       const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current))
       const now = new Date().toISOString()
       const stored = storedOf(store, target, op, body, ctx, scope, now)
-      if (id === null || current === null) return create(sqlite, target.dataset, stored, now, ctx.actor.id)
+      const key = crypto.randomUUID()
+      if (id === null || current === null) {
+        const made = create(sqlite, target.dataset, stored, now, actor.id, key)
+        recordBatch(sqlite, key, actor.id, 'write', now)
+        return { ...made, batch_id: key }
+      }
       const changes = diff(stored, current)
-      if (changes.length === 0) return id
+      if (changes.length === 0) return { id, batch_id: null, changed: [] }
       update(sqlite, table, id, stored, now)
-      revise(sqlite, target.dataset, id, changes, now, ctx.actor.id)
-      return id
+      revise(sqlite, target.dataset, id, changes, now, actor.id, key)
+      recordBatch(sqlite, key, actor.id, 'write', now)
+      return { id, batch_id: key, changed: changes.map(([field]) => field) }
     })
     .immediate()
 }
@@ -407,4 +422,131 @@ export function readRevisions(store: Store, name: string, id: number, actor: Act
     )
     .all(name, id, MAX_REVISIONS) as Stored[]
   return rows.map((r) => ({ ...r, old: parsed(r.old as string | null), new: parsed(r.new as string | null) }))
+}
+
+interface BatchRow {
+  actor_id: number
+  kind: BatchKind
+  undone_by: string | null
+}
+
+interface Revised {
+  entity: string
+  record_id: number
+  field: string
+  old: string | null
+  new: string | null
+}
+
+// One record's part of a batch: per field the first old and the last new.
+interface Touched {
+  dataset: DatasetDecl
+  id: number
+  created: boolean
+  fields: Map<string, { old: string | null; new: string | null }>
+}
+
+interface Planned extends Touched {
+  target: Writable
+  scope: Scope
+}
+
+const UNDOABLE = new Set<BatchKind>(['write', 'action', 'undo'])
+
+const notUndoable = (message: string) => new ApiError(422, 'not_undoable', message)
+
+function undoableBatch(sqlite: Database, key: string, actor: Actor): void {
+  const sql = 'SELECT actor_id, kind, undone_by FROM batch WHERE key = ?'
+  const batch = sqlite.query(sql).get(key) as BatchRow | null
+  if (!batch) throw notUndoable('this batch cannot be undone')
+  // A system batch belongs to no account, so it falls through to the kind check.
+  if (batch.actor_id !== actor.id && batch.actor_id !== SYSTEM_OWNER)
+    forbid('only the account that made a batch may undo it')
+  if (!UNDOABLE.has(batch.kind)) throw notUndoable(`a batch of kind ${batch.kind} cannot be undone`)
+  if (batch.undone_by !== null) throw new ApiError(409, 'already_undone', 'this batch is already undone')
+}
+
+// In revision order; a delete in the batch makes it not undoable, since undoing a delete is out.
+function touchedBy(store: Store, key: string): Touched[] {
+  const sql = 'SELECT entity, record_id, field, old, new FROM revision WHERE batch_id = ? ORDER BY id'
+  const records = new Map<string, Touched>()
+  for (const r of store.sqlite.query(sql).all(key) as Revised[]) {
+    if (r.field === 'deleted_at') throw notUndoable('a batch holding a delete cannot be undone')
+    const dataset = store.domain.datasets.find((d) => d.name === r.entity)
+    if (!dataset) throw notUndoable('this batch cannot be undone')
+    const at = `${r.entity}:${r.record_id}`
+    const record = records.get(at) ?? { dataset, id: r.record_id, created: false, fields: new Map() }
+    records.set(at, record)
+    const first = record.fields.get(r.field)
+    if (r.field === CREATED) record.created = true
+    else record.fields.set(r.field, { old: first ? first.old : r.old, new: r.new })
+  }
+  return [...records.values()]
+}
+
+function changedSince(dataset: DatasetDecl, id: number, column: string): ApiError {
+  const label = columnOf(dataset, column)?.label ?? dataset.label
+  return new ApiError(409, 'changed_since', `"${column}" changed since`, { dataset: dataset.name, id, column, label })
+}
+
+// The caller's own access first, so a refused source or record never learns what changed.
+function planUndo(store: Store, record: Touched, actor: Actor): Planned {
+  const { dataset, id, created } = record
+  const target = writableOf(store.domain, dataset.name, created ? 'delete' : 'update', actor)
+  const scope = scopeOf(actor, target.dataset)
+  const row = store.sqlite.query(`SELECT * FROM "${dataset.name}" WHERE id = ?`).get(id) as Stored | null
+  if (!row || !inScope(scope, row)) throw unknownRecord(id)
+  if (row.deleted_at !== null) throw changedSince(dataset, id, 'deleted_at')
+  for (const [field, { new: value }] of record.fields) {
+    if (asJson(dataset, field, row[field] ?? null) !== value) throw changedSince(dataset, id, field)
+  }
+  // A create revises only the columns it filled, so any other column filled since is a later change.
+  if (created) {
+    const filled = Object.keys(dataset.columns).find((key) => !record.fields.has(key) && (row[key] ?? null) !== null)
+    if (filled) throw changedSince(dataset, id, filled)
+  }
+  return { ...record, target, scope }
+}
+
+function restore(store: Store, planned: Planned, actor: Actor, now: string, key: string): void {
+  const { sqlite } = store
+  const { dataset, id, target, scope } = planned
+  const current = liveRow(sqlite, dataset.name, id) as Stored
+  const ctx = contextOf(store, actor, decodeAll(dataset, current))
+  let stored: Stored
+  if (planned.created) {
+    target.writer.delete?.(ctx)
+    inUse(store, dataset, id)
+    stored = { deleted_at: now }
+  } else {
+    const old = [...planned.fields].map(([field, values]) => [field, parsed(values.old)])
+    stored = encodeAll(dataset, valuesOf(store, target, 'update', Object.fromEntries(old), ctx, scope))
+  }
+  const changes = diff(stored, current)
+  if (changes.length === 0) return
+  update(sqlite, dataset.name, id, stored, now)
+  revise(sqlite, dataset, id, changes, now, actor.id, key)
+}
+
+// One transaction: every check runs before any write, and any refusal rolls the whole undo back.
+export function undoBatch(
+  store: Store,
+  key: string,
+  actor: Actor,
+): { batch_id: string; affected: { dataset: string; id: number }[] } {
+  const { sqlite } = store
+  return sqlite
+    .transaction(() => {
+      undoableBatch(sqlite, key, actor)
+      const planned = touchedBy(store, key)
+        .reverse()
+        .map((record) => planUndo(store, record, actor))
+      const now = new Date().toISOString()
+      const undone = crypto.randomUUID()
+      for (const record of planned) restore(store, record, actor, now, undone)
+      recordBatch(sqlite, undone, actor.id, 'undo', now)
+      sqlite.query('UPDATE batch SET undone_by = ? WHERE key = ?').run(undone, key)
+      return { batch_id: undone, affected: planned.map(({ dataset, id }) => ({ dataset: dataset.name, id })) }
+    })
+    .immediate()
 }

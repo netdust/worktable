@@ -7,7 +7,9 @@ const columns = {
 } as const
 
 const domain: Domain = {
-  datasets: [defineDataset({ name: 'item', label: 'Items', title: 'label', custom: false, columns: columns as never })],
+  datasets: [
+    defineDataset({ name: 'item', label: 'Entries', title: 'label', custom: false, columns: columns as never }),
+  ],
   queries: [],
   seed: () => {},
   views: [],

@@ -6,7 +6,7 @@ import type { Actor, DatasetDecl, Domain, Writer } from './declare'
 import { CUSTOM_KEY } from './filter'
 import { ApiError } from './params'
 import { writerOf } from './registry'
-import { contextOf, create, encodeAll, type Store, valuesOf, WriteRefused } from './writes'
+import { contextOf, create, encodeAll, recordBatch, type Store, valuesOf, WriteRefused } from './writes'
 
 export interface Refusal {
   dataset: string
@@ -163,7 +163,7 @@ function importRow(run: Run, plan: Plan, row: Row): number {
   const stored = encodeAll(plan.dataset, values)
   if (Object.hasOwn(plan.dataset.columns, LEGACY_COLUMN)) stored[LEGACY_COLUMN] = row.legacy_id as number
   if (row.custom !== undefined) stored.custom = JSON.stringify(row.custom)
-  return create(store.sqlite, plan.dataset, stored, run.now, actor.id, run.batch)
+  return create(store.sqlite, plan.dataset, stored, run.now, actor.id, run.batch).id
 }
 
 // A refusal names the row by its legacy id and carries the pipeline's message, never a column value.
@@ -223,6 +223,7 @@ export function importExport(
     return sqlite
       .transaction(() => {
         checkEmpty(sqlite, plans)
+        recordBatch(sqlite, run.batch, actor.id, 'import', run.now)
         const done = importAll(run, plans)
         const result = { ...done, committed: done.refused.length === 0 || opts.acceptReport }
         if (!result.committed) throw new Rollback(result)

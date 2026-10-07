@@ -51,6 +51,30 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
   },
   { method: 'DELETE', path: '/api/rows/note/1', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   { method: 'DELETE', path: '/api/rows/project/1', status: { none: 401, owner: 403, editor: 409, administrator: 409 } },
+  {
+    method: 'POST',
+    path: '/api/batches/matrix-own/undo',
+    body: {},
+    status: { none: 401, owner: 200, editor: 200, administrator: 200 },
+  },
+  {
+    method: 'POST',
+    path: '/api/batches/matrix-other/undo',
+    body: {},
+    status: { none: 401, owner: 403, editor: 403, administrator: 403 },
+  },
+  {
+    method: 'POST',
+    path: '/api/actions/copy_notes',
+    body: { id: 1, input: { source: 1 } },
+    status: { none: 401, owner: 201, editor: 201, administrator: 201 },
+  },
+  {
+    method: 'POST',
+    path: '/api/actions/nope',
+    body: { id: 1, input: {} },
+    status: { none: 401, owner: 404, editor: 404, administrator: 404 },
+  },
   { method: 'GET', path: '/api/views', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   {
     method: 'POST',
@@ -118,6 +142,15 @@ describe('the permissions matrix', () => {
              VALUES ('Own', 'dataset', 'taak', ${account}, '[]', 0, NULL),
                     ('Query', 'query', 'per_project', ${account}, '["name"]', 0, NULL),
                     ('Public', 'query', 'per_project', ${account}, '["name"]', 1, '${PUBLIC_HASH}')`,
+          )
+          // One batch of the signed-in account's on a note every role may write, and one of another account.
+          sqlite.run(
+            `INSERT INTO batch (key, actor_id, kind, at) VALUES ('matrix-own', ${account}, 'write', 'x'), ('matrix-other', 999, 'write', 'x')`,
+          )
+          sqlite.run(
+            `INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id)
+             VALUES ('note', 1, 'tekst', '"oud"', '"eerste"', ${account}, 'x', 'matrix-own'),
+                    ('note', 1, 'tekst', '"oud"', '"eerste"', 999, 'x', 'matrix-other')`,
           )
           const res = await send(app, cookies[role])(
             method,

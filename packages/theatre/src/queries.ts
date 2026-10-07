@@ -46,6 +46,14 @@ export const dagplanning = defineQuery({
     start_at: { type: 'datetime', label: 'Start', nullable: true, writes: writesActiviteit('start_at') },
     plandag: { type: 'date', label: 'Plandag' },
     status: { type: 'text', label: 'Status', writes: writesActiviteit('status') },
+    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie', readonly: true },
+    locatie_bron: {
+      type: 'text',
+      label: 'Locatie van',
+      nullable: true,
+      readonly: true,
+      options: { eigen: 'Eigen', speelreeks: 'Speelreeks' },
+    },
   },
 })
 

@@ -1,5 +1,5 @@
 import { type DatasetDecl, forbid, refuse, type WriteContext, type Writer } from '@worktable/engine'
-import { activiteit, organisatie, persoon, productie, toewijzing } from './datasets'
+import { activiteit, organisatie, persoon, productie, rol, speelreeks, toewijzing } from './datasets'
 import { plandag } from './plandag'
 
 const DAY_LINE_HOUR = 5
@@ -87,6 +87,7 @@ export const activiteitWriter = forPlanners(
     checkRequired(values, ctx, 'productie_id', 'Productie is verplicht.')
     checkLive(ctx, 'productie', values.productie_id, 'Productie bestaat niet.')
     checkLive(ctx, 'organisatie', values.locatie_id, 'Organisatie bestaat niet.')
+    checkLive(ctx, 'speelreeks', values.speelreeks_id, 'Speelreeks bestaat niet.')
     checkOrder(values, ctx)
     return withDay(values, ctx)
   }),
@@ -105,6 +106,7 @@ export const productieWriter = forPlanners(
 
 export const organisatieWriter = forPlanners(
   writerOf((values, ctx) => {
+    checkParameters(values, ctx)
     if (!filled(merged(values, ctx).naam)) refuse('Naam is verplicht.')
     checkOption(organisatie, 'soort', values, 'Ongeldige soort.')
     return values
@@ -171,3 +173,107 @@ export const beschikbaarheidWriter = writerOf((values, ctx) => {
   checkOrder(values, ctx)
   return values
 })
+
+const DEFAULT_MAX_DAGEN = 31
+const MAX_DAGEN_CEILING = 366
+const DAY_MS = 86_400_000
+
+// The cap is the own organisation's parameter, reached through the productie it produces.
+function maxDagen(ctx: WriteContext, productieId: unknown): number {
+  const producer = productieId == null ? null : ctx.find('productie', productieId as number)
+  const eigen = producer?.organisatie_id == null ? null : ctx.find('organisatie', producer.organisatie_id as number)
+  const cap = eigen?.soort === 'eigen' ? (eigen.parameters as Values | null)?.max_speelreeks_dagen : undefined
+  const max = Number.isInteger(cap) && (cap as number) > 0 ? (cap as number) : DEFAULT_MAX_DAGEN
+  return Math.min(max, MAX_DAGEN_CEILING)
+}
+
+// Only a write that moves the span or its producer checks it, so a lowered cap never blocks a rename.
+function checkSpan(values: Values, ctx: WriteContext): void {
+  if (!['start_datum', 'eind_datum', 'productie_id'].some((k) => Object.hasOwn(values, k))) return
+  const { start_datum, eind_datum, productie_id } = merged(values, ctx)
+  if (typeof start_datum !== 'string' || typeof eind_datum !== 'string') return
+  if (eind_datum < start_datum) refuse('Einde ligt voor de start.')
+  const dagen = (Date.parse(eind_datum) - Date.parse(start_datum)) / DAY_MS + 1
+  const max = maxDagen(ctx, productie_id)
+  if (dagen > max) refuse(`Een speelreeks duurt hoogstens ${max} dagen.`)
+}
+
+export const speelreeksWriter = forPlanners(
+  writerOf((values, ctx) => {
+    if (!filled(merged(values, ctx).naam)) refuse('Naam is verplicht.')
+    checkOption(speelreeks, 'status', values, 'Ongeldige status.')
+    checkRequired(values, ctx, 'productie_id', 'Productie is verplicht.')
+    checkRequired(values, ctx, 'start_datum', 'Start is verplicht.')
+    checkRequired(values, ctx, 'eind_datum', 'Einde is verplicht.')
+    checkLive(ctx, 'productie', values.productie_id, 'Productie bestaat niet.')
+    checkLive(ctx, 'organisatie', values.locatie_id, 'Locatie bestaat niet.')
+    checkSpan(values, ctx)
+    return values
+  }),
+  'speelreeksen',
+)
+
+const KLEUR = /^#[0-9a-fA-F]{6}$/
+
+// Sending a value unchanged is no write of it, so an editor may echo a whole row.
+const changes = (values: Values, ctx: WriteContext, k: string): boolean =>
+  Object.hasOwn(values, k) && JSON.stringify(values[k]) !== JSON.stringify(ctx.current?.[k] ?? null)
+
+function checkRates(values: Values, ctx: WriteContext): void {
+  if (ctx.actor.role === 'administrator') return
+  if (changes(values, ctx, 'dagtarief') || changes(values, ctx, 'uurtarief')) {
+    forbid('Alleen een beheerder wijzigt tarieven.')
+  }
+}
+
+function checkParameters(values: Values, ctx: WriteContext): void {
+  if (ctx.actor.role !== 'administrator' && changes(values, ctx, 'parameters')) {
+    forbid('Alleen een beheerder wijzigt parameters.')
+  }
+}
+
+export const rolWriter = forPlanners(
+  writerOf((values, ctx) => {
+    checkRates(values, ctx)
+    if (!filled(merged(values, ctx).naam)) refuse('Naam is verplicht.')
+    checkOption(rol, 'categorie', values, 'Ongeldige categorie.')
+    if (values.kleur != null && !KLEUR.test(String(values.kleur))) refuse('Ongeldige kleur.')
+    return values
+  }),
+  'rollen',
+)
+
+const MAX_ITEMS = 50
+const MAX_OFFSET_DAG = 366
+const TIJD = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function checkItem(item: unknown, n: number): void {
+  const at = (message: string) => refuse(`Item ${n}: ${message}`)
+  if (typeof item !== 'object' || item === null || Array.isArray(item)) at('ongeldig item.')
+  const { soort, omschrijving, offset_dag, start_tijd, duur, locatie_regel } = item as Values
+  if (!Object.hasOwn(activiteit.columns.soort?.options ?? {}, String(soort))) at('ongeldige soort.')
+  if (!filled(omschrijving)) at('omschrijving is verplicht.')
+  if (!Number.isInteger(offset_dag) || (offset_dag as number) < 0 || (offset_dag as number) > MAX_OFFSET_DAG) {
+    at('ongeldige dag.')
+  }
+  if (start_tijd != null && (typeof start_tijd !== 'string' || !TIJD.test(start_tijd))) at('ongeldige starttijd.')
+  if (duur != null && start_tijd == null) at('een duur heeft een starttijd nodig.')
+  if (duur != null && (!Number.isInteger(duur) || (duur as number) <= 0)) at('ongeldige duur.')
+  if (locatie_regel !== 'speelreeks') at('ongeldige locatieregel.')
+}
+
+export function validateItems(items: unknown): void {
+  if (!Array.isArray(items)) refuse('Items moeten een lijst zijn.')
+  if (items.length > MAX_ITEMS) refuse(`Een sjabloon heeft hoogstens ${MAX_ITEMS} items.`)
+  for (const [i, item] of items.entries()) checkItem(item, i + 1)
+}
+
+// Create only: without update or delete the grid shows Sjabloon read-only.
+export const sjabloonWriter: Writer = {
+  create(values, ctx) {
+    if (ctx.actor.role === 'owner') forbid('Alleen de planning wijzigt sjablonen.')
+    if (!filled(values.naam)) refuse('Naam is verplicht.')
+    validateItems(values.items)
+    return values
+  },
+}

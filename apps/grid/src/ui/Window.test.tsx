@@ -4,7 +4,8 @@ import { formatWindow, shift, useWindow, weekOf, WindowControl } from './Window'
 
 const api = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), update: vi.fn(), create: vi.fn(), savedViews: () => Promise.resolve([]),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined,
-  prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve() }))
+  prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))
 vi.mock('../api', () => api)
 const { App } = await import('./App')
 

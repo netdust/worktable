@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
-import { create, remove, update } from '../api'
-import type { Model, Row, View } from '../types'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { create, remove, rowOf, update } from '../api'
+import type { Row, View } from '../types'
+import type { History } from '../ui/history'
 import { layoutOf, storeLayout, useStoredRevision } from '../ui/views'
 import { type Layout, storedRevision } from './layout'
 import { createStore, type Store, type StoreState } from './store'
@@ -26,13 +27,14 @@ export function useLayout(view: View | undefined): [Layout | null, (layout: Layo
 const idle: StoreState = { rows: [], save: 'saved', error: null, errors: {}, canUndo: false, canRedo: false, needs: [], asked: 0 }
 const never = () => () => undefined
 
-/** One store per loaded window of one view: a new window starts a new undo history. */
-export function useGridStore(view: View | undefined, rows: Row[] | null, model?: Model): [Store | null, StoreState] {
-  const store = useMemo(() => {
-    if (!view || !rows) return null
-    const editable = (field: string) => (field === 'title' ? model?.title_readonly === false : Boolean(model?.fields[field] && !model.fields[field].readonly))
-    return createStore({ model: view.model, rows, api: { update, create, remove }, editable })
-  }, [view, rows, model])
+/** One store per loaded window of one view; the undo history is the tab's, so it outlives the store. */
+export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void): [Store | null, StoreState] {
+  const latest = useRef(reload)
+  latest.current = reload
+  const store = useMemo(
+    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create, remove, read: rowOf }, history, reload: () => latest.current() }) : null),
+    [view, rows, history],
+  )
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))
   return [store, state]
 }
