@@ -7,6 +7,7 @@ import { type Column, columnsFor } from './columns'
 import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
+import { useFolded } from './hooks'
 import { GridBar } from './GridBar'
 import { type BodyActions, GridBody } from './GridBody'
 import { GridFoot } from './GridFoot'
@@ -49,6 +50,8 @@ export interface GridProps {
   filters?: ReactNode
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
+  /** The last row loaded when the read limit held rows back: its group's facts may be short. */
+  cut?: number | null
 }
 
 const NO_MODELS: Record<string, Model> = {}
@@ -62,7 +65,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, onAction }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, onAction, cut = null }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -84,8 +87,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Grouped by a day, each section names it: the column would repeat it on every row.
   const table = useGridTable(columns, shown, layout, onLayout, by?.kind === 'date' ? [by.id] : [], wanted)
   const visible = table.getVisibleLeafColumns().map((c) => byId.get(c.id)!)
-  const groups = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by)
-  const ordered = groups.flatMap((g) => g.rows)
+  const groups = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by, { facts: view.facts ?? [], columns: every, cut })
+  const [folded, fold] = useFolded(view.key, by?.id ?? null)
+  // A group holding the draft stays open: the row being written must stay in reach.
+  const shut = new Set(groups.filter((g) => folded.has(g.key) && !g.rows.some((r) => r.id === DRAFT)).map((g) => g.key))
+  const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
 
   const sorted = table.getRowModel().rows
   useEffect(() => {
@@ -284,8 +290,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         <div className="nv-scroll">
           <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
             <GridHeader table={table} byId={byId} />
-            <GridBody groups={groups} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
-              emptyText={ordered.length === 0 ? t('noRowsMatch') : null} />
+            <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+              emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
             <GridFoot columns={visible} count={total(groups) - drafts.length} sums={sums(shown, visible)} />
           </table>
         </div>

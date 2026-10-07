@@ -5,6 +5,7 @@ import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
 import { useGridStore, useLayout } from '../grid/hooks'
+import { cutAt } from '../grid/group'
 import { filter } from '../grid/layout'
 import { newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
@@ -32,7 +33,7 @@ import { changed, clearLocal, isSaved, keepLocal, localOf, useStoredRevision } f
 import { useFillViewport } from './viewport'
 import { formatWindow, useWindow } from './Window'
 
-type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
+type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
 /** A matrix's column titles: the live records of the model its join points at. */
 async function titlesOf(view: View, served: Schema | null): Promise<Map<number, string>> {
@@ -194,7 +195,7 @@ function Workspace({ signed }: { signed: Signed }) {
     const asked = dated ? range : {}
     const away = view.type === 'matrix' ? view.away : undefined
     Promise.all([rows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
-      ([r, away, titles]) => live && setResult({ status: 'ready', rows: r.rows, away, titles }),
+      ([r, away, titles]) => live && setResult({ status: 'ready', rows: r.rows, total: r.total, away, titles }),
       (error: ApiError) => live && setResult({ status: 'error', error }),
     )
     return () => {
@@ -317,7 +318,8 @@ function Workspace({ signed }: { signed: Signed }) {
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
-              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} onAction={act} />
+              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} onAction={act}
+              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} />
           ) : (
             <Sheet hasView={view !== undefined} dated={dated} result={result} />
           )}

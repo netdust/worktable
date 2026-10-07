@@ -1,10 +1,10 @@
-import { Fragment } from 'react'
-import { rowCount, t } from '../i18n'
+import { Fragment, type KeyboardEvent } from 'react'
+import { t } from '../i18n'
 import type { Row } from '../types'
 import { Display, Editor } from './cells'
 import type { Pick } from './cells/RelationPicker'
 import type { Column } from './columns'
-import type { Group } from './group'
+import { type Fact, type Group, sums } from './group'
 import type { Cell, KeyState, Move } from './keys'
 import { cellKey, type CellError, DRAFT } from './store'
 
@@ -24,6 +24,9 @@ export interface BodyActions {
 
 interface Props {
   groups: Group[]
+  /** The keys of the groups folded away. */
+  shut: Set<string>
+  onFold: (key: string) => void
   columns: Column[]
   keys: KeyState
   errors: Record<string, CellError>
@@ -85,7 +88,42 @@ function GridCell({ row, column, cell, keys, error, actions }: {
   )
 }
 
-export function GridBody({ groups, columns, keys, errors, actions, emptyText }: Props) {
+function FactText({ fact }: { fact: Fact }) {
+  if (fact.kind === 'first') return <span className="nv-group__fact"><i aria-hidden="true">●</i> {fact.label} <span className="nv-group__num">{fact.value}</span></span>
+  return <span className="nv-group__fact"><span className="nv-group__num">{fact.value}</span> {fact.label}</span>
+}
+
+function Band({ group, columns, open, onFold }: { group: Group; columns: Column[]; open: boolean; onFold: () => void }) {
+  const totals = sums(group.rows, columns)
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    onFold()
+  }
+  return (
+    <tr className="nv-group nv-group--fold" tabIndex={0} aria-expanded={open} onClick={onFold} onKeyDown={onKeyDown}>
+      <th role="rowheader" colSpan={columns.length}>
+        <span className="nv-group__in">
+          <span className="nv-group__chevron" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="12" height="12"><path d="M6 4l4 4-4 4" /></svg>
+          </span>
+          <span className="nv-group__label">{group.label}</span>
+          <span className="nv-group__count">{group.count}</span>
+          {group.facts.map((fact) => <FactText key={`${fact.kind}:${fact.label}`} fact={fact} />)}
+          {Object.keys(totals).length > 0 && (
+            <span className="nv-group__totals">
+              {columns.filter((c) => c.id in totals).map((c) => (
+                <span key={c.id} className="nv-group__total">{c.label} <span className="nv-group__num">{totals[c.id]}</span></span>
+              ))}
+            </span>
+          )}
+        </span>
+      </th>
+    </tr>
+  )
+}
+
+export function GridBody({ groups, shut, onFold, columns, keys, errors, actions, emptyText }: Props) {
   let index = 0
   return (
     <tbody>
@@ -96,12 +134,8 @@ export function GridBody({ groups, columns, keys, errors, actions, emptyText }: 
       )}
       {groups.map((group) => (
         <Fragment key={group.key}>
-          {group.label !== '' && (
-            <tr className="nv-group">
-              <th role="rowheader" colSpan={columns.length}><span className="nv-sticky">{group.label}</span></th>
-            </tr>
-          )}
-          {group.rows.map((row) => {
+          {group.label !== '' && <Band group={group} columns={columns} open={!shut.has(group.key)} onFold={() => onFold(group.key)} />}
+          {!shut.has(group.key) && group.rows.map((row) => {
             const r = index++
             return (
               <tr key={row.id} data-title={row.title} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
@@ -112,11 +146,6 @@ export function GridBody({ groups, columns, keys, errors, actions, emptyText }: 
               </tr>
             )
           })}
-          {group.label !== '' && (
-            <tr className="nv-groupfoot">
-              <td colSpan={columns.length} data-testid="group-foot"><span className="nv-sticky">{rowCount(group.count)}</span></td>
-            </tr>
-          )}
         </Fragment>
       ))}
     </tbody>

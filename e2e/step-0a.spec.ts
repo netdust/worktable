@@ -42,7 +42,8 @@ async function sections(page: Page): Promise<Section[]> {
     .evaluate((body, i) => {
       const out: { day: string; starts: string[]; values: string[] }[] = []
       for (const tr of Array.from(body.querySelectorAll('tr'))) {
-        if (tr.classList.contains('nv-group')) out.push({ day: tr.textContent?.trim() ?? '', starts: [], values: [] })
+        if (tr.classList.contains('nv-group'))
+          out.push({ day: tr.querySelector('.nv-group__label')?.textContent?.trim() ?? '', starts: [], values: [] })
         else if (tr.classList.contains('nv-tr')) {
           const td = tr.querySelectorAll('td')[i]
           out[out.length - 1]?.starts.push(td?.textContent?.trim() ?? '')

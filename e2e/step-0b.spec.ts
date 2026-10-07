@@ -79,7 +79,7 @@ async function sectionOf(page: Page, omschrijving: string): Promise<string> {
   return row(page, omschrijving).evaluate((tr) => {
     let el: Element | null = tr
     while (el && !el.classList.contains('nv-group')) el = el.previousElementSibling
-    return el?.textContent?.trim() ?? ''
+    return el?.querySelector('.nv-group__label')?.textContent?.trim() ?? ''
   })
 }
 

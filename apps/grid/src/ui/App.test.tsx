@@ -224,6 +224,20 @@ describe('App shell', () => {
     window.localStorage.clear()
   })
 
+  it("marks the facts of the group the read limit may have cut short with …", async () => {
+    const facts = [{ kind: 'count' as const, where: { kind: 'meal' }, label: 'maaltijd' }]
+    api.schema.mockResolvedValue({ ...calaisSchema, views: [{ ...calaisSchema.views[0], facts }] })
+    api.rows.mockResolvedValue({ rows: calais, total: 5000 })
+
+    render(<App />)
+    await screen.findByText('Montage')
+
+    const factOf = (day: string) => [...document.querySelectorAll('tr.nv-group')]
+      .find((b) => b.querySelector('.nv-group__label')?.textContent === day)?.querySelector('.nv-group__fact')?.textContent
+    expect(factOf('Monday, May 18')).toBe('1 maaltijd')
+    expect(factOf('Wednesday, May 20')).toBe('… maaltijd')
+  })
+
   it('says so when the export fails', async () => {
     exporter.exportSheet.mockRejectedValue(new Error('Failed to fetch dynamically imported module'))
     api.schema.mockResolvedValue(calaisSchema)

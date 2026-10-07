@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { Model, Row, Saved, SavedView, Schema } from '../types'
+import type { Model, Row, Saved, SavedView, Schema, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
@@ -21,7 +21,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: number | null; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -34,14 +34,19 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
       setLayout(next)
     }
     return (
-      <Grid model={options.model ?? activity} view={planning} store={store} writable layout={layout} onLayout={change} title={options.title}
-        query={options.query ?? ''} emptyTitle="No rows in this window" emptyHint="Week 18 – 24 mei" filters={options.filters} />
+      <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
+        query={options.query ?? ''} emptyTitle="No rows in this window" emptyHint="Week 18 – 24 mei" filters={options.filters}
+        cut={options.cut} onShown={options.onShown} />
     )
   }
   return { store, ...render(<Harness />) }
 }
 
 const headers = () => screen.getAllByRole('columnheader').map((h) => h.dataset.column)
+const bands = () => screen.getAllByRole('row').filter((r) => r.classList.contains('nv-group'))
+const labels = () => bands().map((b) => b.querySelector('.nv-group__label')?.textContent)
+const band = (label: string) => bands().find((b) => b.querySelector('.nv-group__label')?.textContent === label)!
+const titled = () => screen.getAllByRole('row').flatMap((r) => (r.dataset.title ? [r.dataset.title] : []))
 function cell(title: string, column: string): HTMLElement {
   const row = screen.getAllByRole('row').find((r) => r.dataset.title === title)
   if (!row) throw new Error(`no row ${title}`)
@@ -69,16 +74,16 @@ describe('the sheet', () => {
     expect(screen.getByRole('grid', { name: planning.label })).toBeTruthy()
   })
 
-  it('renders the Calais week grouped by day, header and first column sticky, a foot per group and a total', () => {
+  it('renders the Calais week grouped by day, header and first column sticky, a count per band and a total', () => {
     const { container } = renderGrid()
 
     expect(container.querySelector('thead')?.classList.contains('nv-grid__head')).toBe(true)
     expect(headers()).toEqual(['title', 'start', 'end', 'kind', 'status', 'location', 'place', 'settled_by', 'rollups.confirmed'])
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title).every((r) => r.firstElementChild?.classList.contains('nv-first'))).toBe(true)
 
-    const sections = screen.getAllByRole('rowheader').map((h) => h.textContent)
-    expect(sections).toEqual(['Maandag 18 mei', 'Dinsdag 19 mei', 'Woensdag 20 mei'])
-    expect(screen.getAllByTestId('group-foot').map((f) => f.textContent)).toEqual(['3 rows', '2 rows', '1 row'])
+    expect(labels()).toEqual(['Maandag 18 mei', 'Dinsdag 19 mei', 'Woensdag 20 mei'])
+    expect(bands().map((b) => b.querySelector('.nv-group__count')?.textContent)).toEqual(['3', '2', '1'])
+    expect(screen.queryByTestId('group-foot')).toBeNull()
 
     const total = screen.getByTestId('total')
     expect(total.textContent).toContain('Total · 6 rows')
@@ -429,6 +434,100 @@ describe('editing', () => {
     })
 
     expect(api.create).toHaveBeenCalledWith('activity', { date: '2026-05-19', kind: 'travel', status: 'confirmed', title: 'Soundcheck' })
+  })
+})
+
+describe('the group bands', () => {
+  const declared: View = {
+    ...planning,
+    facts: [
+      { kind: 'first', column: 'start', where: { kind: 'show' }, label: 'avondshow' },
+      { kind: 'count', where: { kind: 'meal' }, label: 'maaltijd' },
+    ],
+  }
+  afterEach(() => window.localStorage.clear())
+
+  it('carry a chevron, the label, a count badge, the declared facts and the totals', () => {
+    renderGrid(calais, { view: declared })
+
+    const tuesday = band('Dinsdag 19 mei')
+    expect(tuesday.querySelector('.nv-group__chevron')).toBeTruthy()
+    expect(tuesday.querySelector('.nv-group__count')?.textContent).toBe('2')
+    expect([...tuesday.querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow 16:30'])
+    expect([...band('Maandag 18 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['1 maaltijd'])
+    expect(tuesday.querySelector('.nv-group__totals')?.textContent).toContain('24')
+  })
+
+  it('shows … for each fact of the group the read limit may have cut short', () => {
+    renderGrid(calais, { view: declared, cut: 106 })
+
+    expect([...band('Woensdag 20 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow …', '… maaltijd'])
+    expect([...band('Dinsdag 19 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow 16:30'])
+  })
+
+  it('fold on a click, and open on Enter, aria-expanded following', () => {
+    renderGrid()
+
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(band('Dinsdag 19 mei'))
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('false')
+    expect(titled()).not.toContain('Présentation interne')
+
+    type(band('Dinsdag 19 mei'), 'Enter')
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+    expect(titled()).toContain('Présentation interne')
+
+    type(band('Dinsdag 19 mei'), ' ')
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('keep the count, totals and summary of folded rows', () => {
+    const onShown = vi.fn()
+    renderGrid(calais, { onShown })
+
+    fireEvent.click(band('Dinsdag 19 mei'))
+
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__count')?.textContent).toBe('2')
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__totals')?.textContent).toContain('24')
+    const total = screen.getByTestId('total')
+    expect(total.textContent).toContain('Total · 6 rows')
+    expect(within(total).getByText('47')).toBeTruthy()
+    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3 })
+  })
+
+  it('leave folded rows out of keyboard movement', () => {
+    renderGrid()
+
+    fireEvent.click(band('Dinsdag 19 mei'))
+    fireEvent.click(cell('Montage', 'start'))
+    type(document.activeElement as HTMLElement, 'ArrowDown')
+    type(document.activeElement as HTMLElement, 'ArrowDown')
+
+    expect(document.activeElement).toBe(cell('Diner door Rosalie', 'start'))
+  })
+
+  it("never fold the draft's group", () => {
+    const { store } = renderGrid()
+
+    fireEvent.click(band('Dinsdag 19 mei'))
+    act(() => store.draft({ date: '2026-05-19', kind: 'travel', status: 'confirmed' }))
+
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getAllByRole('row').some((r) => r.classList.contains('nv-tr--draft'))).toBe(true)
+    expect(titled()).toContain('Présentation interne')
+  })
+
+  it('stay folded in this browser, per view', () => {
+    renderGrid()
+    fireEvent.click(band('Dinsdag 19 mei'))
+    cleanup()
+
+    renderGrid()
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('false')
+    cleanup()
+
+    renderGrid(calais, { view: { ...planning, key: 'other' } })
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
   })
 })
 
@@ -784,7 +883,7 @@ describe('the toolbar over the grid', () => {
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
 
     const tuesday = screen.getAllByRole('row')
-    const header = tuesday.findIndex((r) => r.textContent === 'Dinsdag 19 mei')
+    const header = tuesday.findIndex((r) => r.querySelector('.nv-group__label')?.textContent === 'Dinsdag 19 mei')
     expect(tuesday[header + 1].classList.contains('nv-tr--draft')).toBe(true)
     expect(editor().getAttribute('aria-label')).toBe('Titel')
   })
