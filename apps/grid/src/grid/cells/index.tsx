@@ -1,3 +1,4 @@
+import { t } from '../../i18n'
 import { BoolCell } from './Bool'
 import { DateCell, DateEditor, DateTimeEditor } from './Date'
 import { NumberCell, NumberEditor } from './Number'
@@ -7,7 +8,18 @@ import { SelectCell, SelectEditor } from './Select'
 import { InputEditor, LongTextEditor, TextCell } from './Text'
 import { TimeCell, TimeEditor } from './Time'
 
-export function Display({ column, row, onToggle }: CellProps & { onToggle: () => void }) {
+export function Display(props: CellProps & { onToggle: () => void }) {
+  const via = props.column.via?.(props.row)
+  if (!via) return <Value {...props} />
+  return (
+    <span className="nv-inherited">
+      <Value {...props} />
+      <span className="nv-via">{t('via')} {via}</span>
+    </span>
+  )
+}
+
+function Value({ column, row, onToggle }: CellProps & { onToggle: () => void }) {
   switch (column.kind) {
     case 'select':
       return <SelectCell column={column} row={row} />

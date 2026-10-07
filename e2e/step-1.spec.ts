@@ -235,7 +235,9 @@ test('apply-template @e2e', async ({ page }) => {
   expect(groups).toHaveLength(4)
   groups.forEach((rows, n) => {
     const [, m, d] = days[n].split('-')
-    const want = PATTERN.map(([title, tijd]) => `${title}|${tijd ? `${d}/${m} ${tijd}` : ''}|${VENUE}|Speelreeks`)
+    const want = PATTERN.map(
+      ([title, tijd]) => `${title}|${tijd ? `${d}/${m} ${tijd}` : ''}|${VENUE}via Speelreeks|Speelreeks`,
+    )
     expect(rows.map((r) => `${r.title}|${r.start.replace(/^\S+ /, '')}|${r.locatie}|${r.bron}`).sort()).toEqual(
       want.sort(),
     )
@@ -439,7 +441,7 @@ test('dagplanning-locatie-van @e2e', async ({ page }) => {
     await (await cellOf(page, named(page, title), 'Locatie')).textContent(),
     await (await cellOf(page, named(page, title), 'Locatie van')).textContent(),
   ]
-  expect(await seen('bron geerfd')).toEqual([VENUE, 'Speelreeks'])
+  expect(await seen('bron geerfd')).toEqual([`${VENUE}via Speelreeks`, 'Speelreeks'])
   expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'Eigen'])
   expect(await seen('bron geen')).toEqual(['', ''])
 

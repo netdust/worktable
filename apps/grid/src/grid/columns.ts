@@ -24,6 +24,8 @@ export interface Column {
   value: (row: Row) => unknown
   /** What the cell shows, copy takes and search reads. */
   text: (row: Row) => string
+  /** For an inherited value, the flag column's option label saying where it comes from; empty when the row's own. */
+  via?: (row: Row) => string
   /** What an editor opens with. */
   edit: (row: Row) => string
   /** What a write sends for what was typed. */
@@ -138,7 +140,14 @@ export function firstId(value: unknown): string {
   return scalar(Array.isArray(value) ? value[0] : value)
 }
 
-function fieldColumn(key: string, field: Field, writable: boolean): Column {
+function viaOf({ flag, own }: { flag: string; own: string }, source?: Field): (row: Row) => string {
+  return (row) => {
+    const value = scalar(row.fields[flag])
+    return value === '' || value === own ? '' : source?.options?.[value] ?? value
+  }
+}
+
+function fieldColumn(key: string, field: Field, writable: boolean, model: Model): Column {
   const kind = kindOf(field)
   const column = base(key, kind, field.label, (row) => row.fields[key])
   column.field = key
@@ -171,6 +180,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
     column.edit = (row) => firstId(row.fields[key])
     column.parse = (draft) => (draft === '' ? [] : [Number(draft)])
   }
+  if (field.inherited) column.via = viaOf(field.inherited, model.fields[field.inherited.flag])
   if (kind === 'other') column.text = (row) => (Array.isArray(row.fields[key]) ? String((row.fields[key] as unknown[]).length) : scalar(row.fields[key]))
 
   return column
@@ -217,7 +227,7 @@ export function columnsFor(model: Model, view: View, writable = true, models: Re
   const shown = (view.columns ?? Object.keys(model.fields)).filter((key) => key !== 'title' && key in model.fields)
   return [
     titleColumn(model, writable),
-    ...shown.map((key) => fieldColumn(key, model.fields[key], writable)),
+    ...shown.map((key) => fieldColumn(key, model.fields[key], writable, model)),
     ...lookupColumns(model, view, shown, models),
     ...rollupColumns(view),
   ]

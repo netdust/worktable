@@ -25,6 +25,7 @@ const strings = {
   yes: 'Yes',
   no: 'No',
   empty: '—',
+  via: 'via',
   rows: '{n} rows',
   row: '1 row',
   dismiss: 'Dismiss',
