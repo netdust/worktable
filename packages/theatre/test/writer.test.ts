@@ -226,6 +226,35 @@ describe('dagplanning', () => {
     expect(query.columns.start_at.writes).toEqual({ dataset: 'activiteit', field: 'start_at', key: 'activiteit_id' })
   })
 
+  test('serves the people on an activity as links.mensen', async () => {
+    const { body } = await request('GET', '/api/schema')
+    expect(body.sources.dagplanning.links.mensen).toEqual({
+      label: 'Mensen',
+      item: 'Toewijzing',
+      dataset: 'toewijzing',
+      key: 'activiteit_id',
+      target: 'persoon_id',
+      target_dataset: 'persoon',
+      state: {
+        options: body.sources.toewijzing.columns.state.options,
+        tones: { uitgenodigd: 'warn', bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' },
+        default: 'uitgenodigd',
+      },
+    })
+  })
+
+  test("a dagplanning row lists its activity's toewijzingen as mensen", async () => {
+    const assigned = (await request('GET', '/api/rows/toewijzing?limit=500')).body.rows as {
+      id: number
+      activiteit_id: number
+    }[]
+    const activity = assigned[0]?.activiteit_id as number
+    const ids = assigned.filter((t) => t.activiteit_id === activity).map((t) => t.id)
+    const { body } = await request('GET', '/api/rows/dagplanning?limit=500')
+    const row = (body.rows as { id: number; links: { mensen: { id: number }[] } }[]).find((r) => r.id === activity)
+    expect(row?.links.mensen.map((m) => m.id).sort()).toEqual(ids.sort())
+  })
+
   test('the theatre domain passes validateDomain with dagplanning writes', () => {
     expect(() => validateDomain(theatre)).not.toThrow()
   })

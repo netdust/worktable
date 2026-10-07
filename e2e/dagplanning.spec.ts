@@ -24,14 +24,25 @@ async function idOf(api: Api, dataset: string, values: Values): Promise<number> 
 const idByName = async (api: Api, dataset: string, column: string, name: string) =>
   (await rowsOf<Values & { id: number }>(api, dataset)).find((r) => r[column] === name)?.id as number
 
+// The header may still be laying out its columns: wait for the one asked for.
 async function columnIndex(page: Page, label: string): Promise<number> {
-  const index = await page
-    .locator('thead th')
-    .evaluateAll(
-      (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
-      label,
+  const find = () =>
+    page
+      .locator('thead th')
+      .evaluateAll(
+        (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
+        label,
+      )
+  let index = -1
+  await expect
+    .poll(
+      async () => {
+        index = await find()
+        return index
+      },
+      { message: `column ${label}` },
     )
-  expect(index, `column ${label}`).toBeGreaterThanOrEqual(0)
+    .toBeGreaterThanOrEqual(0)
   return index
 }
 
@@ -165,4 +176,87 @@ test('period-chip @e2e', async ({ page }) => {
   await value.click()
   await expect(page.getByRole('button', { name: 'Deze maand' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Alles' })).toHaveCount(0)
+})
+
+test('people-tags @e2e', async ({ page }) => {
+  const api = page.request
+  const title = 'mensen e2e'
+  const activity = await idOf(api, 'activiteit', {
+    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
+    soort: 'repetitie',
+    datum: WEEK,
+    start_at: `${WEEK}T15:00`,
+    omschrijving: title,
+  })
+  const bram = await idByName(api, 'persoon', 'weergavenaam', 'Bram De Wilde')
+  const noor = await idByName(api, 'persoon', 'weergavenaam', 'Noor Claes')
+  const sam = await idByName(api, 'persoon', 'weergavenaam', 'Sam Peeters')
+  await idOf(api, 'toewijzing', { activiteit_id: activity, persoon_id: bram, state: 'bevestigd' })
+  await openDagplanning(page)
+
+  const people = async () => cellOf(page, title, 'Mensen')
+  const tags = async () => (await people()).locator('.nv-tags li')
+  const assigned = async () =>
+    (await rowsOf<{ persoon_id: number | null }>(api, 'toewijzing', { activiteit_id: activity }))
+      .map((t) => t.persoon_id)
+      .sort()
+
+  // A row shows its people, toned by their state.
+  await expect(await tags()).toHaveText(['Bram De Wilde'])
+  await expect((await tags()).first()).toHaveClass(/nv-pill--ok/)
+
+  // Picking a person adds them as uitgenodigd; the list stays open.
+  const cell = await people()
+  await cell.click()
+  await cell.press('Enter')
+  const search = page.getByRole('combobox', { name: 'Mensen' })
+  await search.fill('Noor')
+  await page.getByRole('option', { name: 'Noor Claes' }).click()
+  await expect(page.locator('.nv-links-pop .nv-tags li', { hasText: 'Noor Claes' })).toHaveClass(/nv-pill--warn/)
+  await expect(search).toBeVisible()
+  expect(await assigned()).toEqual([bram, noor].sort())
+
+  // Undo takes the add back (the history is per page: before any reload); add again, and a reload keeps it.
+  await search.press('Escape')
+  await cell.press('Control+z')
+  await expect(await tags()).toHaveText(['Bram De Wilde'])
+  await expect.poll(assigned).toEqual([bram])
+  // The undo read the view again: the cell takes focus anew.
+  await (await people()).click()
+  await (await people()).press('Enter')
+  await search.fill('Noor')
+  await page.getByRole('option', { name: 'Noor Claes' }).click()
+  await expect.poll(assigned).toEqual([bram, noor].sort())
+  await page.reload()
+  await expect(await tags()).toHaveText(['Bram De Wilde', 'Noor Claes'])
+
+  // × on an uitgenodigd tag removes it without a question.
+  await (await people()).click()
+  await (await people()).press('Enter')
+  await page.getByRole('button', { name: 'Noor Claes verwijderen' }).click()
+  await expect.poll(assigned).toEqual([bram])
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
+
+  // × on a bevestigd tag asks first; Annuleren keeps it.
+  await page.getByRole('button', { name: 'Bram De Wilde verwijderen' }).click()
+  await expect(page.getByRole('alertdialog')).toContainText('Toewijzing van Bram De Wilde verwijderen?')
+  await page.getByRole('button', { name: 'Annuleren' }).click()
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
+  expect(await assigned()).toEqual([bram])
+
+  // A stale pick: the same person was assigned elsewhere meanwhile; the writer refuses, and the tags read again.
+  await idOf(api, 'toewijzing', { activiteit_id: activity, persoon_id: sam })
+  await page.getByRole('combobox', { name: 'Mensen' }).fill('Sam')
+  await page.getByRole('option', { name: 'Sam Peeters' }).click()
+  await expect(page.getByRole('status', { name: 'Deze persoon is al toegewezen aan deze activiteit.' })).toBeVisible()
+  await expect.poll(assigned).toEqual([bram, sam].sort())
+  await page.getByRole('combobox', { name: 'Mensen' }).press('Escape')
+
+  // A copy of the view keeps Mensen after Locatie.
+  await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
+  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+  await page.reload()
+  await openView(page, 'Dagplanning (kopie)', 'Activiteiten')
+  const heads = (await page.locator('thead th').allTextContents()).map((h) => h.replace(/\s*[↑↓]$/, '').trim())
+  expect(heads.indexOf('Mensen')).toBe(heads.indexOf('Locatie') + 1)
 })

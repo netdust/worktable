@@ -2301,3 +2301,75 @@
   border-radius: 3px;
   padding: 0 4px;
 }
+
+/* A links cell: one pill per linked row, toned by its state; a free-text one muted. */
+.nv-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-pill--muted {
+  font-style: italic;
+}
+
+.nv-tags__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-right: -3px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nv-tags__remove:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.nv-picker__check {
+  margin-right: 6px;
+}
+
+.nv-pop__option[aria-checked="false"] .nv-picker__check {
+  visibility: hidden;
+}
+
+.nv-confirm {
+  padding: 10px 12px;
+  max-width: 260px;
+}
+
+.nv-confirm p {
+  margin: 0 0 8px;
+}
+
+.nv-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.nv-links-pop {
+  width: 272px;
+}
+
+.nv-links-pop > .nv-tags {
+  margin-bottom: 6px;
+}
+
+/* The picker sits inside the links popup, not as a popup of its own. */
+.nv-links-pop .nv-picker {
+  position: static;
+  width: auto;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}

@@ -145,7 +145,7 @@ describe('theatre declares the details: icons, colours, an end time and create-f
 
   test('the Dagplanning view shows time, omschrijving, soort, locatie and status', () => {
     const view = theatre.views.find((v) => v.name === 'Dagplanning')
-    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'status'])
+    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'])
   })
 
   test('an owner sees no dagplanning, so none of its colours or its create', async () => {

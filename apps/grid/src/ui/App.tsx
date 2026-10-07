@@ -1,9 +1,10 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
+import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
 import { filter } from '../grid/layout'
@@ -292,6 +293,33 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     setExportFailed(false)
     exportSheet(view, shown.columns, shown.groups, dated && range.from && range.to ? { from: range.from, to: range.to } : null, title).catch(() => setExportFailed(true))
   }
+  // A link is a row of another dataset, created and deleted there through its writer; then the row it sits on is read again.
+  const repaint = (row: Row) => {
+    if (model) rowOf(model.key, row.id).then((found) => found && store?.replace(found), reloadView)
+  }
+  const refused = (row: Row) => (error: ApiError) => {
+    notify({ message: errorText(error.code, error.message) })
+    repaint(row)
+  }
+  const links: LinkActions = {
+    add: async (field, row, target) => {
+      const link = model?.fields[field]?.link
+      if (!link) return
+      await createRow(link.dataset, { [link.key]: row.id, [link.target]: target }).then(({ row: made, batch }) => {
+        history.push({ batch: Promise.resolve(batch), model: link.dataset, id: made.id })
+        repaint(row)
+      }, refused(row))
+    },
+    // A delete is never undone: its earlier steps leave the history with it.
+    remove: async (field, row, item) => {
+      const link = model?.fields[field]?.link
+      if (!link) return
+      await removeRow(link.dataset, item.id).then(() => {
+        history.forget(link.dataset, item.id)
+        repaint(row)
+      }, refused(row))
+    },
+  }
   const changeDisplay = (table: Table, data: { label?: string; icon?: string }) => {
     setDisplay(table.key, data).then(
       (shown) => setDisplays((was) => ({ ...was, [table.key]: shown })),
@@ -380,7 +408,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
               models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} period={period} onAction={act}
-              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} />
+              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} />
           ) : (
             <Sheet hasView={view !== undefined} dated={dated} result={result} period={period} />
           )}

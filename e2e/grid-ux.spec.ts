@@ -484,7 +484,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
   )
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
-  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Status; a time range with its end muted.
+  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Mensen, Status; a time range with its end muted.
   const heads = await page.locator('thead th').allTextContents()
   expect(heads.map((h) => h.replace(/\s*[↑↓]$/, '').trim())).toEqual([
     '#',
@@ -492,6 +492,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
     'Omschrijving',
     'Soort',
     'Locatie',
+    'Mensen',
     'Status',
   ])
   const lunch = named(page, 'Lunch').first()

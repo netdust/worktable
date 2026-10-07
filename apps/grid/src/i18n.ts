@@ -163,6 +163,8 @@ const strings = {
   onSource: 'Op {source}',
   scopedTo: 'beperkt tot {scope}',
   cancel: 'Annuleren',
+  removeItem: '{name} verwijderen',
+  removeLinkAsk: '{item} van {name} verwijderen?',
   createView: 'Weergave maken',
 }
 

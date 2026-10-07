@@ -1,4 +1,5 @@
 import { Spinner } from '@sakaniui/react'
+import { Check } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
 import { records } from '../../api'
 import { t } from '../../i18n'
@@ -25,6 +26,8 @@ interface Props {
   onClose?: () => void
   /** Delete on an empty search; absent where the value may not be emptied. */
   onClear?: () => void
+  /** A multiselect: which records are picked already; a pick then toggles one. */
+  checked?: (row: Row) => boolean
 }
 
 type Found = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number }
@@ -34,7 +37,7 @@ function ordered(rows: Row[], first: Props['first']): Row[] {
 }
 
 /** A search over one model's records with a listbox under it: ↑↓ move, Enter picks, Escape cancels. */
-export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear }: Props) {
+export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, checked }: Props) {
   const [query, setQuery] = useState(opening)
   const [found, setFound] = useState<Found>({ status: 'loading' })
   const [active, setActive] = useState(0)
@@ -110,10 +113,12 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
             id={`${id}-${row.id}`}
             role="option"
             aria-selected={i === active}
+            aria-checked={checked ? checked(row) : undefined}
             className="nv-pop__option"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onPick(row, 'click')}
           >
+            {checked && <Check size={13} aria-hidden="true" className="nv-picker__check" />}
             {row.title}
           </li>
         ))}

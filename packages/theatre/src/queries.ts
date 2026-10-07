@@ -43,6 +43,16 @@ export const dagplanning = defineQuery({
   scoped: 'productie_id',
   group_facts: dagFacts,
   creates: 'activiteit',
+  links: {
+    mensen: {
+      label: 'Mensen',
+      item: 'Toewijzing',
+      dataset: 'toewijzing',
+      key: 'activiteit_id',
+      target: 'persoon_id',
+      state: 'state',
+    },
+  },
   sql: readFileSync(new URL('./queries/dagplanning.sql', import.meta.url), 'utf8'),
   columns: {
     id: { type: 'integer', label: 'Id' },

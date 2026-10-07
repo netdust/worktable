@@ -2,7 +2,7 @@ import type { Filter, Layout, SortKey } from './grid/layout'
 
 export type FieldType =
   | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date' | 'datetime'
-  | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
+  | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater' | 'links'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'rose' | 'violet' | 'amber' | 'sky' | 'slate' | 'green' | 'teal' | 'grey'
 
@@ -22,6 +22,26 @@ export interface Field {
   writes?: { dataset: string; field: string; key: string }
   /** A value its row may take from elsewhere: `flag` names the column that says where from, `own` the flag's value for the row's own. */
   inherited?: { flag: string; own: string }
+  /** A `links` field: the rows of `dataset` whose `key` is this row's id, each pointing at a `target_dataset` record. */
+  link?: Link
+}
+
+export interface Link {
+  /** The word for one link, in the question before one is removed. */
+  item: string
+  dataset: string
+  key: string
+  target: string
+  target_dataset: string
+  state?: { options: Record<string, string>; tones: Record<string, Tone>; default: string | null }
+}
+
+/** One linked row as a `links` field holds it. */
+export interface LinkItem {
+  id: number
+  target: number | null
+  title: string
+  state: string | null
 }
 
 export interface Model {

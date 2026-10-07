@@ -1,13 +1,13 @@
 import type { Header, Table } from '@tanstack/react-table'
 import {
-  Calendar, CalendarClock, Clock, CornerDownRight, Hash, Link2, List, type LucideIcon, Sigma, SquareCheck, Tag, TextAlignStart, Type,
+  Calendar, CalendarClock, Clock, CornerDownRight, Hash, Link2, List, type LucideIcon, Sigma, SquareCheck, Tag, TextAlignStart, Type, Users,
 } from 'lucide-react'
 import type { Row } from '../types'
 import type { CellKind, Column } from './columns'
 
 const ICON: Record<CellKind, LucideIcon> = {
   title: Type, text: Type, longtext: TextAlignStart, select: Tag, date: Calendar, datetime: CalendarClock, time: Clock,
-  relation: Link2, bool: SquareCheck, number: Hash, lookup: CornerDownRight, rollup: Sigma, other: List,
+  relation: Link2, bool: SquareCheck, number: Hash, lookup: CornerDownRight, rollup: Sigma, links: Users, other: List,
 }
 
 /** The row-number column's width: fixed, so the table's stretch goes to the data columns. */
