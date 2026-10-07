@@ -50,7 +50,7 @@
 5. Kept contracts:
    - `navigation "Views"`;
    - `More actions: <name>`;
-   - opening a view by its name in the rail. The landing view stays `tables[0].views[0]` in today's `byFirstView` order; sections order only the tree. Opening a model by its name also unfolds it. A model node is a `treeitem` (with `aria-expanded`) named by its label alone; its views are buttons inside its own `role=group "View type"`, rendered in the node's wrapper. The e2e helpers never use `getByText`: they click the model's `treeitem` by exact name, then the view button by exact name inside that node's group (skipping the second click when it is already open). So a section label is never a click target, and a view named like its model (10 of 14 seeded views) is never ambiguous.
+   - opening a view by its name in the rail. The landing view stays `tables[0].views[0]` in today's `byFirstView` order; sections order only the tree. Opening a model by its name also unfolds it. A model node is a `treeitem` (with `aria-expanded` and `aria-labelledby` pointing at its label, so its name is the label alone). Inside it sit its row (icon/chevron, label, `+` and `Meer voor …`, carrying the open and fold handlers) and, nested, its views as buttons in a `role=group "View type"`. A click on a view never reaches the row's handler. The sections sit in one `role="tree"` named "Views" inside the `<nav>`. The e2e helpers never use `getByText`: `const node = nav.getByRole('treeitem', { name: model, exact: true })`, click its row, then `node.getByRole('group', { name: 'View type' }).getByRole('button', { name: view, exact: true })`. So a section label is never a click target, and a view named like its model (10 of 14 seeded views) is never ambiguous.
    - the `…` on a model is named `Meer voor <model>`, so `More actions: <view>` stays unique;
    - the add button's name.
 
@@ -173,6 +173,7 @@
   - the landing view is the same as before the tree when sections reorder it;
   - a model opened by name is unfolded;
   - a view named like its model opens twice in a row (the treeitem and the view button never collide);
+  - a click on a view button inside an expanded node opens that view, not the model's last view;
   - the model `treeitem`'s accessible name is its label alone (no fold state, no icon label);
   - hover and focus show the chevron and the tools;
   - name and chevron behave as above, and the open state persists;
@@ -188,7 +189,11 @@
     - Cancel and Escape close it;
   - `…` offers today's actions by editability, and delete keeps its Undo.
 
-  Update the App, Rail and ViewList tests.
+  Update the App, Rail and ViewList tests, among them:
+  - `App.test.tsx`: the `tableEntry` helper (`:47–50`, used at `:77`, `:150`, `:1346`, `:1400`, `:1402`), `:129`, `:283`, the `entry` at `:657`, and every `types()` that uses `getByRole` on the group (`:48`, `:614`, `:712`, `:995`): scope to the node;
+  - `Rail.test.tsx:20` and `:22`;
+  - `aria-current` moves from the model entry to the active view's button (`App.test.tsx:77`);
+  - today's "General" group goes; its tests (`Rail.test.tsx:34–37`, `App.test.tsx:280–283`) are rewritten for sections, with undeclared sources in the final unlabelled section.
 - [ ] Implement. Run the grid tests and the gate. Commit `feat(grid): the sidebar as a tree of models and views, with + and … menus`.
 
 ### Task 5: The title line

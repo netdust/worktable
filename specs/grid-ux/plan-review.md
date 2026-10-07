@@ -70,3 +70,19 @@ Verdict: not ready (1 Blocking, 1 Should fix). All round-2 findings were confirm
 - Test line numbers corrected.
 - The matrix example is added.
 - The model's accessible name is its label alone.
+
+# Plan review: grid-ux (round 4)
+Reviewed-plan: 47a1a6b872817f57d2af4c14313d1ca6c1fdcac0
+Verdict: ready with fixes (0 Blocking, 2 Should fix, 2 Notes). Applied without a further round, since no Blocking finding remained.
+
+## Should fix (applied)
+1. **The tree's markup was not decided.**
+   - The treeitem gets `aria-labelledby` on its label.
+   - The open and fold handlers sit on the row.
+   - The views' group is nested inside the treeitem, and a view click never reaches the row.
+   - The helper locator is spelled out, with a unit test that a view click opens that view.
+2. **The unit-test call sites were not listed.** They are now: `App.test.tsx` `tableEntry`, `entry` and `types()`, and `Rail.test.tsx` `:20` and `:22`. `aria-current` moves to the active view's button.
+
+## Notes (applied)
+- A `role="tree"` named "Views" now wraps the sections.
+- The "General" group goes. Its tests are rewritten for sections, with undeclared sources in the final unlabelled section.
