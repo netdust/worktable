@@ -514,3 +514,54 @@ None.
 - The e2e helpers default the model to the view's name → `e2e/tree.ts:14`, `grid-ux.spec.ts:75`, `step-1.spec.ts:71`, `step-0e.spec.ts:33` → holds (Note)
 - `rail-tree.spec.ts:17-20` uses Voorstellingen as the last node → holds
 - `readable()` → `packages/engine/src/access.ts:48-50` → holds
+
+---
+
+# Plan review — dagplanning (round 5, scoped confirmation)
+Reviewed-plan: 8dc01367474e5b68afedeb851965d06c6a16677d
+Verdict: ready
+
+All four round-4 should-fix findings and all four notes are resolved in source-consistent terms. The edits add nothing an executor would build wrongly without a failing test. Three notes below are execution-time clarifications, not changes the plan needs before Stefan reads it.
+
+## Round 4 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| S4-1 query order | Resolved | Task 0 Files now says the query order is `declared`, "never the `byFirstView` result". `registry.ts:5-7` returns datasets then queries in declaration order. `useSavedViews.ts:15,35` has `declared` in scope next to the `byFirstView` call at `:52`. Step 2 asserts "Dagplanning, Per productie per dag and Voorstellingen, in that order", and Step 6 now asserts the order in e2e. |
+| S4-2 drag/Move, order, last | Resolved | The mechanism is named: `actions.order(view.table, <block keys>)` at `ViewList.tsx:93`, Move at `:51-52`, `listFor` applying `prefs.order[<source>]` per block, and a drop or Move outside the block not offered. Source can do this: `useDragOrder(keys, rows, onOrder)` (`useDragOrder.ts:17`) only picks drop targets from `keys` (`:27-35`), and `moved` returns the list unchanged for a target outside it (`views.ts:135`). `prefs.order` is a record keyed by any string (`useSavedViews.ts:65`). Step 2 now tests a drag across the boundary, Activiteiten reopening Dagplanning, and the delete fallback. jsdom drag tests already exist with a mocked `getBoundingClientRect` (`ViewList.test.tsx:209-234`, `App.test.tsx:1301-1309`), so the new drag test can be written. |
+| S4-3 `item` | Resolved | The `/schema` shape at plan line 188 now has `item`. Task 4 Step 2 asserts `item: 'Toewijzing'`. Links.test (plan :240) and the people-tags e2e (:253) assert the exact text "Toewijzing van <naam> verwijderen?", which matches spec R2 (spec.md:22). |
+| S4-4 Review Focus rows | Resolved | 1→2, 2→2, 3→4, 4→3, 5→5, 7→2 and 4. These match the Test map order: tree, links, theatre, people cell, period. |
+| Note: e2e callers | Resolved | "About 25 edits" is right. The grep finds 10 in grid-ux, 6 in step-1, 2 in step-0e, and 2 in `title-line.spec.ts:11,27`, besides the named lines. |
+| Note: owner-test subject | Resolved | `plat` (`packages/engine/test/fixture.ts:42-48`) is a `defineDataset` with no `owners`, listed in `datasets` (`:155`). `per_project` (`:50-65`) is a query with `owners: { owner: 'project_id' }`. `readable()` (`access.ts:48-50`) makes `plat` unreadable to an owner while `per_project` stays readable, so the test has a real subject. |
+| Note: deleting the open query view | Resolved | `leave` (`useSavedViews.ts:86-90`) is named, and the plan looks the node up through the view. `tableOf(tables, key)` (`tables.ts:54-56`) does this, and the memoised `tables` still holds the view when `leave` runs. The Step 2 test covers it. |
+| Note: SPEC line `label`/`item` | Resolved | spec.md's proposed line now has `{ label, item, dataset, key, target, state? }`, and Task 3 Step 5 says to copy it with both. |
+
+## Blocking
+None.
+
+## Should fix
+None.
+
+## Note
+- **N5-1. The block limit on drag is stated, but the plan does not say how it is built.** Task 0 Files, the Order bullet. `ViewList` builds one `keys` list for the whole node (`ViewList.tsx:89`) and calls `useDragOrder` once (`:94`). There are two ways to limit drops to the pressed view's block:
+  - one `useDragOrder` per block, in a sub-component. Rows are placed with `gridRow: at + 1` (`:123`), and the role=group "holds exactly those buttons", which the e2e counts (`:81-84`). So the offsets and the single group have to survive.
+  - narrowing `keys` to the pressed view's block inside the drag.
+
+  Either passes the Step 2 test. The executor picks one. No plan change is needed.
+- **N5-2. The Move up/down boundary is untested.** Step 2 tests a drag across the boundary but not "Move up" on the first view of a query block. Today that offer depends on the whole-list position (`ViewList.tsx:51-52`). Adding "the first Dagplanning view offers no Move up" to Step 2 would close it. This is optional.
+- **N5-3. The `last` bullet reads like a premise, but it describes a change.** The Prefs bullet says `last` "is keyed by the rail node (`remember` in `useSavedViews.ts:66`)". Today `remember` keys by `view.table` (`:67`), which is the query. The bullet means "becomes keyed by", for example `view.of ?? view.table`. The Step 2 test "clicking Activiteiten after using Dagplanning reopens Dagplanning" fails until it changes, so an executor cannot miss it. Also, `listFor`'s signature (`views.ts:124`, a single `order: string[]`) has to take the order record, or one list per block. Its one caller is `useSavedViews.ts:52`.
+
+## Premises checked
+- Query order comes from `declared` → `registry.ts:5-7`, `useSavedViews.ts:15,35,52` → holds
+- `byFirstView` re-sorts by first view → `tables.ts:46-52` → holds
+- `plat` is a dataset without owners → `fixture.ts:42-48,155` → holds
+- `per_project` is a query with owners → `fixture.ts:50-57,156` → holds
+- An owner cannot read a source without owners → `access.ts:48-50` → holds
+- `ViewList` orders by `table.key`, and the drag/Move lines are as cited → `ViewList.tsx:51-52,89-98` → holds (the plan changes it)
+- `useDragOrder` only drops on targets in its `keys` → `useDragOrder.ts:17,27-35`, `views.ts:134-139` → holds
+- `listFor` takes one order list and filters by `view.table` → `views.ts:124-129` → holds (the plan changes it)
+- `remember` and `lastIn` keys → `useSavedViews.ts:66-67`, `views.ts:149-151` → holds, as the thing changed (N5-3)
+- `leave` looks the node up by `gone.table` → `useSavedViews.ts:86-90` → holds; `tableOf` is available at `tables.ts:54`
+- jsdom drag tests can be written → `ViewList.test.tsx:209-234`, `App.test.tsx:1301` → holds
+- `title-line.spec.ts:11,27` opens Dagplanning → holds
+- Confirm text matches spec R2 → spec.md:22, plan :224, :240, :253 → holds
