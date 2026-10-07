@@ -6,6 +6,7 @@ import { readable, scopeOf, visibleSource } from './access'
 import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, DatasetDecl, Domain } from './declare'
+import { displayRoutes, displaysOf } from './display'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
@@ -123,6 +124,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     const actor = c.get('actor')
     const space = spaceOf(domain, actor)
     const sections = sectionsOf(domain, actor)
+    const displays = displaysOf(sqlite)
     const joinOf = (s: Source): string | undefined => {
       const join = matrixOf(domain, s)?.join
       return join && readable(actor, join) ? join.name : undefined
@@ -134,7 +136,8 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
           s.name,
           {
             kind: s.kind,
-            label: s.label,
+            label: displays.get(s.name)?.label ?? s.label,
+            icon: displays.get(s.name)?.icon ?? null,
             title: typeof s.title === 'string' ? s.title : s.title.else,
             ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
             date: s.date ?? null,
@@ -172,6 +175,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   })
 
   writeRoutes(app, store)
+  displayRoutes(app, store)
   viewRoutes(app, store)
   shareRoutes(app, store)
 

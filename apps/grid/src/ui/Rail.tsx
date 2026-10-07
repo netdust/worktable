@@ -2,10 +2,23 @@ import { ChevronRight, Combine, Plus, Rows3 } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { t } from '../i18n'
 import type { Schema, ViewType } from '../types'
+import { ICONS, iconNamed } from './icons'
 import { type Action, MoreMenu } from './MoreMenu'
 import { RailFoot, type Signed } from './RailFoot'
 import { type Table, sectionsOf, tableOf } from './tables'
-import { type ViewActions, ViewList } from './ViewList'
+import { RenameField, type ViewActions, ViewList } from './ViewList'
+
+/** What a model's ⋯ offers beside folding. */
+export interface ModelActions {
+  /** Why naming and the icon are off for this account; absent when it may change them. */
+  displayBlocked?: string
+  rename: (table: Table, label: string) => void
+  icon: (table: Table, icon: string) => void
+  /** Exports the open view: only the ⋯ of the model holding it offers it. */
+  exportOpen: { run: () => void; blocked?: string }
+}
+
+const MAX_LABEL = 60
 
 interface Props {
   tables: Table[]
@@ -22,11 +35,13 @@ interface Props {
   onNewView?: (table: Table, type: ViewType) => void
   /** Each view's ⋯ and its rename in place. */
   actions?: ViewActions
+  /** A model's ⋯ beyond folding: its name, its icon and the export. */
+  modelActions?: ModelActions
   /** The signed-in account in the foot, with sign out. */
   signed?: Signed
 }
 
-export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, signed }: Props) {
+export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed }: Props) {
   const current = tableOf(tables, active)
   const [open, setOpen] = useOpenModels(current?.key)
   const fold = (table: Table) => setOpen(table.key, !open.has(table.key))
@@ -43,7 +58,7 @@ export function Rail({ tables, sections, active, onSelect, onTable = (table) => 
             {section.label && <p className="nv-tree__label" aria-hidden="true">{section.label}</p>}
             {section.tables.map((table) => (
               <ModelNode key={table.key} table={table} open={open.has(table.key)} onOpen={() => openModel(table)} onFold={() => fold(table)}
-                onNew={onNewView && ((type) => onNewView(table, type))}>
+                onNew={onNewView && ((type) => onNewView(table, type))} actions={modelActions} holdsActive={table === current}>
                 <ViewList table={table} active={active} onSelect={onSelect} actions={actions} />
               </ModelNode>
             ))}
@@ -61,6 +76,9 @@ interface NodeProps {
   onOpen: () => void
   onFold: () => void
   onNew?: (type: ViewType) => void
+  actions?: ModelActions
+  /** The open view is one of its own. */
+  holdsActive: boolean
   /** Its views, shown while it is open. */
   children: ReactNode
 }
@@ -79,14 +97,26 @@ function kinds(table: Table, onNew: (type: ViewType) => void): Action[] {
  * A model and, while open, its views. The treeitem is named by its label alone. Its row carries
  * the open and fold handlers; the views sit beside the row, so a click on one never reaches them.
  */
-function ModelNode({ table, open, onOpen, onFold, onNew, children }: NodeProps) {
+function ModelNode({ table, open, onOpen, onFold, onNew, actions, holdsActive, children }: NodeProps) {
   const label = useId()
   const [hot, setHot] = useState(false)
-  const Icon = table.query ? Combine : Rows3
+  const [renaming, setRenaming] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const Icon = iconNamed(table.icon) ?? (table.query ? Combine : Rows3)
   const leave = (event: FocusEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHot(false)
   }
-  const more: Action[] = [{ label: t(open ? 'fold' : 'unfold'), run: onFold }]
+  const renamed = (name: string | null) => {
+    setRenaming(false)
+    if (name !== null) actions?.rename(table, name)
+  }
+  const fold = { label: t(open ? 'fold' : 'unfold'), run: onFold }
+  const more: Action[] = actions ? [
+    { label: t('renameModel'), run: () => setRenaming(true), blocked: actions.displayBlocked },
+    { label: t('changeIcon'), run: () => setPicking(true), blocked: actions.displayBlocked },
+    { label: t('exportModel'), ...(holdsActive ? actions.exportOpen : { run: () => undefined, blocked: t('exportOpenView') }) },
+    fold,
+  ] : [fold]
   return (
     <div className="nv-node" role="treeitem" aria-expanded={open} aria-labelledby={label}>
       <div className="nv-model" data-hot={hot || undefined}
@@ -94,13 +124,44 @@ function ModelNode({ table, open, onOpen, onFold, onNew, children }: NodeProps) 
         <button type="button" className="nv-model__lead" aria-label={t(open ? 'fold' : 'unfold')} onClick={onFold}>
           {hot ? <ChevronRight size={14} className="nv-model__chevron" aria-hidden="true" /> : <Icon size={15} aria-hidden="true" />}
         </button>
-        <button type="button" className="nv-model__name" id={label} onClick={onOpen}>{table.label}</button>
-        <span className="nv-model__tools">
-          {onNew && <MoreMenu icon={Plus} label={t('addViewTo', { model: table.label })} menu={t('addViewTo', { model: table.label })} placement="bottom-start" actions={kinds(table, onNew)} />}
-          <MoreMenu label={t('moreFor', { model: table.label })} menu={t('moreFor', { model: table.label })} placement="bottom-start" actions={more} />
-        </span>
+        {renaming
+          ? <RenameField value={table.label} label={t('modelName', { model: table.label })} max={MAX_LABEL} onDone={renamed} />
+          : <button type="button" className="nv-model__name" id={label} onClick={onOpen}>{table.label}</button>}
+        {!renaming && (
+          <span className="nv-model__tools">
+            {onNew && <MoreMenu icon={Plus} label={t('addViewTo', { model: table.label })} menu={t('addViewTo', { model: table.label })} placement="bottom-start" actions={kinds(table, onNew)} />}
+            <MoreMenu label={t('moreFor', { model: table.label })} menu={t('moreFor', { model: table.label })} placement="bottom-start" actions={more} />
+          </span>
+        )}
       </div>
+      {picking && actions && (
+        <IconPicker label={t('iconFor', { model: table.label })} current={table.icon} onClose={() => setPicking(false)} onPick={(icon) => {
+          setPicking(false)
+          if (icon !== table.icon) actions.icon(table, icon)
+        }} />
+      )}
       {open && children}
+    </div>
+  )
+}
+
+/** The icon set as a small grid: a click picks, Escape or leaving it closes. */
+function IconPicker({ label, current, onPick, onClose }: { label: string; current: string | undefined; onPick: (icon: string) => void; onClose: () => void }) {
+  const grid = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const pick = (selector: string) => grid.current?.querySelector<HTMLButtonElement>(selector)
+    const first = pick('[aria-pressed="true"]') ?? pick('button')
+    first?.focus()
+  }, [])
+  return (
+    <div ref={grid} className="nv-icons" role="group" aria-label={label}
+      onKeyDown={(event) => event.key === 'Escape' && onClose()}
+      onBlur={(event) => !event.currentTarget.contains(event.relatedTarget as Node | null) && onClose()}>
+      {ICONS.map(({ name, icon: Icon, label: named }) => (
+        <button key={name} type="button" className="nv-icons__pick" aria-label={named} title={named} aria-pressed={name === current} onClick={() => onPick(name)}>
+          <Icon size={16} aria-hidden="true" />
+        </button>
+      ))}
     </div>
   )
 }

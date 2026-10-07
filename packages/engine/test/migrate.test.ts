@@ -111,6 +111,7 @@ describe('migrate', () => {
       'rate_limit',
       'revision',
       'saved_view',
+      'source_display',
     ])
     for (const r of rows) expect(r.hash).toMatch(/^[0-9a-f]{64}$/)
   })

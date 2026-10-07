@@ -107,6 +107,18 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
     status: { none: 401, owner: 403, editor: 403, administrator: 200 },
   },
   {
+    method: 'PUT',
+    path: '/api/sources/taak/display',
+    body: { label: 'Werk', icon: 'star' },
+    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+  },
+  {
+    method: 'PUT',
+    path: '/api/sources/plat/display',
+    body: { label: 'Werk' },
+    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+  },
+  {
     method: 'GET',
     path: `/api/public/views/${PUBLIC_TOKEN}`,
     status: { none: 200, owner: 200, editor: 200, administrator: 200 },

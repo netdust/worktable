@@ -70,6 +70,8 @@ export interface TableDef {
   space?: 'scoped' | 'global'
   /** A query's rows: joined, never created. */
   query?: boolean
+  /** An administrator's pick from the engine's icon set; absent, the tree shows the kind's icon. */
+  icon?: string
   /** What a group's band says of its rows, computed by the grid. */
   facts?: GroupFact[]
   /** A matrix table: the records that join a row to a column, and what they mean. */

@@ -136,6 +136,48 @@
   height: 22px;
 }
 
+#root .nv-model .nv-view__rename {
+  flex: 1;
+  height: 26px;
+}
+
+/* A model's icon picker: the icon set as a small grid under its row. */
+.nv-icons {
+  display: grid;
+  grid-template-columns: repeat(6, 26px);
+  gap: 2px;
+  margin: 2px 0 6px 8px;
+  padding: 5px;
+  width: max-content;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+#root .nv-icons__pick {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-icons__pick:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+#root .nv-icons__pick[aria-pressed="true"] {
+  border-color: var(--color-accent-default);
+  background: var(--color-bg-selected);
+  color: var(--color-fg-default);
+}
+
 /* A model's views, indented under it with a guide line. */
 .nv-node > .nv-rail__types {
   position: relative;

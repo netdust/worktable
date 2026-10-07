@@ -1,5 +1,5 @@
 import { authTables } from './auth-tables'
-import { defineDataset } from './declare'
+import { defineDataset, ICONS } from './declare'
 import { revision } from './revision'
 import { savedView } from './saved-view'
 
@@ -24,6 +24,20 @@ export const batch = defineDataset({
   checks: ['UNIQUE (key)'],
 })
 
-export const engineTables = [savedView, revision, batch, ...authTables]
+// An administrator's display name and icon for a source, laid over its declaration by /schema.
+export const sourceDisplay = defineDataset({
+  name: 'source_display',
+  label: 'Source display',
+  title: 'source',
+  custom: false,
+  columns: {
+    source: { type: 'text', label: 'Source' },
+    label: { type: 'text', label: 'Label', nullable: true },
+    icon: { type: 'text', label: 'Icon', nullable: true, options: Object.fromEntries(ICONS.map((i) => [i, i])) },
+  },
+  checks: ['UNIQUE (source)'],
+})
+
+export const engineTables = [savedView, revision, batch, sourceDisplay, ...authTables]
 
 export const reservedNames = new Set([MIGRATIONS, ...engineTables.map((t) => t.name)])

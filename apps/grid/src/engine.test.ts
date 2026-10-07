@@ -90,6 +90,14 @@ describe('toSchema: space, sections, facts and inherited', () => {
     expect(view).toMatchObject({ space: 'scoped', facts: declared.sources.session.group_facts })
   })
 
+  it("maps an administrator's icon onto its table, and none where the engine serves null", () => {
+    const iconed: EngineSchema = { sources: { ...declared.sources, season: { ...declared.sources.season, icon: 'star' }, session: { ...declared.sources.session, icon: null } } }
+    const schema = toSchema(iconed)
+
+    expect(schema.tables.map((t) => [t.key, t.icon])).toEqual([['season', 'star'], ['session', undefined]])
+    expect('icon' in (schema.tables[1] ?? {})).toBe(false)
+  })
+
   it('maps none of it for a domain that declares none', () => {
     const schema = toSchema(engine)
 

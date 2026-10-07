@@ -54,8 +54,8 @@ function choices(view: View, at: number, count: number, actions: ViewActions, re
 }
 
 /** The name in place: Enter or leaving saves, Escape cancels; an unchanged or blank name renames nothing. */
-function RenameField({ view, onDone }: { view: SavedView; onDone: (name: string | null) => void }) {
-  const [name, setName] = useState(view.label)
+export function RenameField({ value, label, max, onDone }: { value: string; label: string; max: number; onDone: (name: string | null) => void }) {
+  const [name, setName] = useState(value)
   // Enter unmounts the field, and a browser may still send its blur.
   const done = useRef(false)
   const end = (result: string | null) => {
@@ -64,9 +64,9 @@ function RenameField({ view, onDone }: { view: SavedView; onDone: (name: string 
     onDone(result)
   }
   const wanted = name.trim()
-  const finish = () => end(wanted === '' || wanted === view.label ? null : wanted)
+  const finish = () => end(wanted === '' || wanted === value ? null : wanted)
   return (
-    <input className="nv-view__rename" type="text" aria-label={t('rename')} value={name} maxLength={80} autoFocus
+    <input className="nv-view__rename" type="text" aria-label={label} value={name} maxLength={max} autoFocus
       onFocus={(event) => event.target.select()}
       onChange={(event) => setName(event.target.value)}
       onBlur={finish}
@@ -127,7 +127,7 @@ export function ViewList({ table, active, onSelect, actions }: Props) {
               onPointerDown={actions && renaming !== view.key ? (event) => drag.press(view.key, event) : undefined}
               onKeyDown={(event) => onKey(view.key, event)}
               onDoubleClick={() => actions && editable(view) && setRenaming(view.key)}>
-              {renaming === view.key && editable(view) ? <RenameField view={view} onDone={(name) => renamed(view, name)} /> : (
+              {renaming === view.key && editable(view) ? <RenameField value={view.label} label={t('rename')} max={80} onDone={(name) => renamed(view, name)} /> : (
                 <>
                   <SidebarItem
                     icon={view.type === 'matrix' ? Grid3x3 : TableIcon}

@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -1539,5 +1539,83 @@ describe("a dataset's action and the tab's undo history", () => {
     expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('a-1')
     await waitFor(() => expect(reads('speelreeks')).toBe(4))
     expect(api.rowOf).not.toHaveBeenCalled()
+  })
+})
+
+describe("a model's ⋯ in the app", () => {
+  const modelMenu = (model: string) => {
+    fireEvent.click(within(node(model)).getByRole('button', { name: `Meer voor ${model}` }))
+    return screen.getByRole('menu', { name: `Meer voor ${model}` })
+  }
+  const admin = () => api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'administrator', subject: null })
+
+  it('renames a model for an administrator: the engine is asked and the tree follows', async () => {
+    admin()
+    api.setDisplay.mockResolvedValue({ label: 'Werkplan', icon: null })
+    await shell()
+
+    fireEvent.click(within(modelMenu('Planning')).getByRole('menuitem', { name: 'Naam wijzigen' }))
+    const field = within(rail()).getByRole('textbox', { name: 'Nieuwe naam voor Planning' })
+    fireEvent.change(field, { target: { value: 'Werkplan' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+
+    expect(api.setDisplay).toHaveBeenCalledWith('planning', { label: 'Werkplan' })
+    expect(await within(rail()).findByRole('treeitem', { name: 'Werkplan' })).toBeTruthy()
+    expect(within(rail()).queryByRole('treeitem', { name: 'Planning' })).toBeNull()
+  })
+
+  it("changes a model's icon for an administrator, and the tree draws it", async () => {
+    admin()
+    api.setDisplay.mockResolvedValue({ label: 'Planning', icon: 'star' })
+    await shell()
+
+    fireEvent.click(within(modelMenu('Planning')).getByRole('menuitem', { name: 'Icoon wijzigen' }))
+    fireEvent.click(within(within(node('Planning')).getByRole('group', { name: 'Icoon voor Planning' })).getByRole('button', { name: 'Ster' }))
+
+    expect(api.setDisplay).toHaveBeenCalledWith('planning', { icon: 'star' })
+    // At rest, not hovered: a hovered row shows its chevron instead.
+    await waitFor(() => expect(api.setDisplay).toHaveBeenCalled())
+    fireEvent.mouseLeave(node('Planning').querySelector('.nv-model')!)
+    await waitFor(() => expect(node('Planning').querySelector('.nv-model__lead .lucide-star')).not.toBeNull())
+  })
+
+  it('says why a refused change did not happen, and the tree stays as it was', async () => {
+    admin()
+    api.setDisplay.mockRejectedValue({ code: 'bad_display', message: 'label must be 1 to 60 characters' })
+    await shell()
+
+    fireEvent.click(within(modelMenu('Planning')).getByRole('menuitem', { name: 'Naam wijzigen' }))
+    const field = within(rail()).getByRole('textbox', { name: 'Nieuwe naam voor Planning' })
+    fireEvent.change(field, { target: { value: 'Werkplan' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+
+    expect(await screen.findByRole('status', { name: 'label must be 1 to 60 characters' })).toBeTruthy()
+    expect(node('Planning')).toBeTruthy()
+  })
+
+  it('disables the name and the icon for an editor, with the reason', async () => {
+    await shell()
+
+    const off = within(modelMenu('Planning')).getAllByRole('menuitem').filter((item) => item.getAttribute('aria-disabled') === 'true')
+    expect(off.map((item) => item.textContent)).toEqual([
+      'Naam wijzigenAlleen een beheerder kan dit wijzigen',
+      'Icoon wijzigenAlleen een beheerder kan dit wijzigen',
+    ])
+    expect(api.setDisplay).not.toHaveBeenCalled()
+  })
+
+  it('exports the open view with the existing export', async () => {
+    const tabel = { ...calaisSchema.views[0], label: 'Tabel', table: 'planning', table_label: 'Planning' }
+    api.schema.mockResolvedValue({ ...calaisSchema, views: [tabel] })
+    api.rows.mockResolvedValue({ rows: calais, total: calais.length })
+    render(<App />)
+    await screen.findByText('Montage')
+
+    fireEvent.click(within(modelMenu('Planning')).getByRole('menuitem', { name: 'Exporteren' }))
+
+    expect(exporter.exportSheet).toHaveBeenCalledTimes(1)
+    const [view, , , , title] = exporter.exportSheet.mock.calls[0]
+    expect(view).toBe(tabel)
+    expect(title).toBe('Planning')
   })
 })

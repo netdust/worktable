@@ -1,5 +1,22 @@
 import type { FilterInput } from './filter-compile'
 
+/** The generic icons an administrator picks a source's icon from. */
+export const ICONS = [
+  'table',
+  'calendar',
+  'users',
+  'clock',
+  'tag',
+  'pin',
+  'check',
+  'list',
+  'film',
+  'box',
+  'star',
+  'flag',
+] as const
+export type Icon = (typeof ICONS)[number]
+
 export type ColumnType = 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'datetime' | 'json'
 
 export interface ColumnDecl {

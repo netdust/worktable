@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TableDef, View } from '../types'
-import { Rail } from './Rail'
+import { type ModelActions, Rail } from './Rail'
 import { groupTables } from './tables'
 
 const plain: View[] = [{ key: 'planning', label: 'Planning', model: 'activity', table: 'planning' }, { key: 'absences', label: 'Absences', model: 'absence', table: 'absences' }]
@@ -241,5 +241,83 @@ describe('the tree', () => {
     const theme = within(foot).getByRole('group', { name: 'Theme' })
     fireEvent.click(within(theme).getByRole('tab', { name: 'Dark' }))
     expect(root.dataset.theme).toBe('dark')
+  })
+})
+
+describe("a model's ⋯: name, icon, export", () => {
+  const modelActions = (over: Partial<ModelActions> = {}): ModelActions => ({
+    rename: vi.fn(), icon: vi.fn(), exportOpen: { run: vi.fn() }, ...over,
+  })
+  const items = (model: string) => within(menu(`Meer voor ${model}`)).getAllByRole('menuitem')
+  const disabled = (found: HTMLElement[]) => found.filter((item) => item.getAttribute('aria-disabled') === 'true').map((item) => item.textContent)
+
+  it('offers an administrator Naam wijzigen, Icoon wijzigen, Exporteren and the fold', () => {
+    render(<Rail tables={spaced} active="planning" onSelect={() => undefined} modelActions={modelActions()} />)
+
+    const found = items('Planning')
+    expect(found.map((item) => item.textContent)).toEqual(['Naam wijzigen', 'Icoon wijzigen', 'Exporteren', 'Inklappen'])
+    expect(disabled(found)).toEqual([])
+  })
+
+  it('disables the name and the icon, with the reason, for anyone else', () => {
+    render(<Rail tables={spaced} active="planning" onSelect={() => undefined} modelActions={modelActions({ displayBlocked: 'Alleen een beheerder kan dit wijzigen' })} />)
+
+    expect(disabled(items('Planning'))).toEqual([
+      'Naam wijzigenAlleen een beheerder kan dit wijzigen',
+      'Icoon wijzigenAlleen een beheerder kan dit wijzigen',
+    ])
+  })
+
+  it("exports from the ⋯ of the open view's model only", () => {
+    const actions = modelActions()
+    render(<Rail tables={spaced} active="planning" onSelect={() => undefined} modelActions={actions} />)
+
+    expect(disabled(items('Afwezigheden'))).toEqual(['ExporterenOpen eerst een weergave van dit model'])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(within(menu('Meer voor Planning')).getByRole('menuitem', { name: 'Exporteren' }))
+    expect(actions.exportOpen.run).toHaveBeenCalledTimes(1)
+  })
+
+  it('renames in place: Enter sends the trimmed name, Escape sends nothing', () => {
+    const actions = modelActions()
+    render(<Rail tables={spaced} active="planning" onSelect={() => undefined} modelActions={actions} />)
+
+    fireEvent.click(within(menu('Meer voor Planning')).getByRole('menuitem', { name: 'Naam wijzigen' }))
+    const field = within(rail()).getByRole('textbox', { name: 'Nieuwe naam voor Planning' }) as HTMLInputElement
+    expect(field.maxLength).toBe(60)
+    fireEvent.change(field, { target: { value: '  Werkplan ' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(actions.rename).toHaveBeenCalledWith(spaced[0], 'Werkplan')
+
+    fireEvent.click(within(menu('Meer voor Planning')).getByRole('menuitem', { name: 'Naam wijzigen' }))
+    const again = within(rail()).getByRole('textbox', { name: 'Nieuwe naam voor Planning' })
+    fireEvent.change(again, { target: { value: 'Anders' } })
+    fireEvent.keyDown(again, { key: 'Escape' })
+    expect(actions.rename).toHaveBeenCalledTimes(1)
+    expect(within(rail()).queryByRole('textbox')).toBeNull()
+  })
+
+  it('picks an icon from the grid of the set, the current one pressed', () => {
+    const actions = modelActions()
+    const starred = spaced.map((table) => (table.key === 'planning' ? { ...table, icon: 'star' } : table))
+    render(<Rail tables={starred} active="planning" onSelect={() => undefined} modelActions={actions} />)
+
+    fireEvent.click(within(menu('Meer voor Planning')).getByRole('menuitem', { name: 'Icoon wijzigen' }))
+    const grid = within(node('Planning')).getByRole('group', { name: 'Icoon voor Planning' })
+    expect(within(grid).getAllByRole('button')).toHaveLength(12)
+    expect(within(grid).getByRole('button', { name: 'Ster' }).getAttribute('aria-pressed')).toBe('true')
+    expect(document.activeElement).toBe(within(grid).getByRole('button', { name: 'Ster' }))
+
+    fireEvent.click(within(grid).getByRole('button', { name: 'Vlag' }))
+    expect(actions.icon).toHaveBeenCalledWith(starred[0], 'flag')
+    expect(within(node('Planning')).queryByRole('group', { name: 'Icoon voor Planning' })).toBeNull()
+  })
+
+  it('shows a display name as text, never as markup', () => {
+    const marked = spaced.map((table) => (table.key === 'planning' ? { ...table, label: '<b>Werk</b>' } : table))
+    render(<Rail tables={marked} active="planning" onSelect={() => undefined} modelActions={modelActions()} />)
+
+    expect(nameOf('<b>Werk</b>').textContent).toBe('<b>Werk</b>')
+    expect(tree().querySelector('b')).toBeNull()
   })
 })

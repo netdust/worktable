@@ -8,6 +8,7 @@ export interface Table {
   /** The kinds of view it can be shown as. */
   types: ViewType[]
   query?: boolean
+  icon?: string
   views: View[]
 }
 
@@ -25,6 +26,7 @@ export function groupTables(tables: TableDef[], views: View[]): Table[] {
     space: table.space === 'scoped' ? 'scoped' : 'global',
     types: table.types,
     ...(table.query ? { query: true } : {}),
+    ...(table.icon ? { icon: table.icon } : {}),
     views: views.filter((view) => view.table === table.key),
   }))
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, signOut, undoBatch, update, updateView } from './api'
+import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -207,6 +207,25 @@ describe('records()', () => {
       '/api/rows/productie?limit=2&offset=0', '/api/rows/productie?limit=2&offset=2', '/api/rows/productie?limit=2&offset=4',
     ])
     vi.unstubAllEnvs()
+  })
+})
+
+describe('setDisplay()', () => {
+  it('PUTs the display to the source as JSON, and reads /schema afresh afterwards', async () => {
+    fetcher.mockImplementation(async (input) => json(String(input) === '/api/schema' ? engine : { source: 'activiteit', label: 'Werk', icon: 'star', batch_id: 'b1' }))
+    await schema()
+
+    expect(await setDisplay('activiteit', { label: 'Werk', icon: 'star' })).toMatchObject({ label: 'Werk', icon: 'star' })
+    const [, init] = fetcher.mock.calls[1] ?? []
+    expect([String(fetcher.mock.calls[1]?.[0]), init?.method, init?.body]).toEqual(['/api/sources/activiteit/display', 'PUT', JSON.stringify({ label: 'Werk', icon: 'star' })])
+    await schema()
+    expect(urls().filter((url) => url === '/api/schema')).toHaveLength(2)
+  })
+
+  it("rejects with the engine's refusal", async () => {
+    fetcher.mockResolvedValue(json({ code: 'forbidden', message: 'only an administrator may change how a source is shown' }, 403))
+
+    await expect(setDisplay('activiteit', { label: 'Werk' })).rejects.toEqual({ code: 'forbidden', message: 'only an administrator may change how a source is shown' })
   })
 })
 

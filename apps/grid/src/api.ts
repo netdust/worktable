@@ -201,6 +201,13 @@ export async function updateView(view: SavedView, data: { name?: string; arrange
   return savedOf(await request<EngineView>('PATCH', `/views/${view.id}`, {}, { ...rest, ...stored }))
 }
 
+/** An administrator's display name and icon for a source; null gives back the declared one. Answers what is shown now. */
+export async function setDisplay(source: string, data: { label?: string | null; icon?: string | null }): Promise<{ label: string; icon: string | null }> {
+  const shown = await request<{ label: string; icon: string | null }>('PUT', `/sources/${encodeURIComponent(source)}/display`, {}, data)
+  forgetSchema()
+  return shown
+}
+
 export function deleteView(id: number): Promise<unknown> {
   return request('DELETE', `/views/${id}`)
 }

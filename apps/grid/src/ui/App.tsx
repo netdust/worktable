@@ -1,6 +1,6 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, signOut, undoBatch } from '../api'
+import { awayRows, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
@@ -12,11 +12,11 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, ModelAction, Row, Schema, Scope, View, ViewType } from '../types'
+import type { Account, ApiError, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Confirm } from './Confirm'
 import { Filters } from './Filters'
 import { NewViewDialog } from './NewViewDialog'
-import { Rail } from './Rail'
+import { type ModelActions, Rail } from './Rail'
 import type { Signed } from './RailFoot'
 import { readHash, writeHash } from './hash'
 import { createHistory } from './history'
@@ -101,7 +101,7 @@ export function App() {
   }
   return (
     <>
-      <Workspace signed={{ email: session.account.email, onSignOut: signOutNow }} />
+      <Workspace signed={{ email: session.account.email, onSignOut: signOutNow }} role={session.account.role} />
       {session.lapsed && (
         <div className="nv-auth-over" role="dialog" aria-modal="true" aria-label={t('signIn')}>
           <SignIn note={t('sessionLapsed')} />
@@ -111,8 +111,17 @@ export function App() {
   )
 }
 
+type Display = { label: string; icon: string | null }
+
+/** A table as an administrator renamed it or gave it an icon in this visit. */
+function displayed(table: TableDef, display: Display | undefined): TableDef {
+  if (!display) return table
+  const { icon: _, ...rest } = table
+  return { ...rest, label: display.label, ...(display.icon ? { icon: display.icon } : {}) }
+}
+
 /** The shell waits for the served schema: it declares the tables, the saved views come with it. */
-function Workspace({ signed }: { signed: Signed }) {
+function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) {
   const frame = useRef<HTMLDivElement>(null)
   const [served, setServed] = useState<Schema | null>(null)
   const [unserved, setUnserved] = useState<ApiError | null>(null)
@@ -143,6 +152,7 @@ function Workspace({ signed }: { signed: Signed }) {
   // The tab's undo history: it outlives every view's store, so an undo reaches back across a reload or a switch.
   const [history] = useState(() => createHistory(undoBatch))
   const [reloads, setReloads] = useState(0)
+  const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
   useFillViewport(frame)
 
@@ -162,7 +172,7 @@ function Workspace({ signed }: { signed: Signed }) {
   }, [])
 
   const starting = served?.views ?? []
-  const declared = served?.tables ?? []
+  const declared = useMemo(() => (served?.tables ?? []).map((table) => displayed(table, displays[table.key])), [served, displays])
   const current = useRef<string | undefined>(undefined)
   const { load, loadPrefs, tables, busy, create, saveAs, save, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
   const view = tables.flatMap((table) => table.views).find((v) => v.key === activeKey) ?? tables[0]?.views[0] ?? starting[0]
@@ -241,6 +251,18 @@ function Workspace({ signed }: { signed: Signed }) {
     setExportFailed(false)
     exportSheet(view, shown.columns, shown.groups, dated ? range : null, title).catch(() => setExportFailed(true))
   }
+  const changeDisplay = (table: Table, data: { label?: string; icon?: string }) => {
+    setDisplay(table.key, data).then(
+      (shown) => setDisplays((was) => ({ ...was, [table.key]: shown })),
+      (error: ApiError) => notify({ message: errorText(error.code, error.message) }),
+    )
+  }
+  const modelActions: ModelActions = {
+    displayBlocked: role === 'administrator' ? undefined : t('adminOnly'),
+    rename: (table, label) => changeDisplay(table, { label }),
+    icon: (table, icon) => changeDisplay(table, { icon }),
+    exportOpen: { run: exportView, blocked: matrix ? t('matrixNotExported') : grid ? undefined : t('exportNotReady') },
+  }
   const revision = useStoredRevision()
   const modified = useMemo(() => (view ? changed(view) : false), [view, revision])
   const revert = () => {
@@ -280,7 +302,7 @@ function Workspace({ signed }: { signed: Signed }) {
   return (
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
-        onNewView={(table, type) => setAdding({ table, type })} actions={actions} space={space.status === 'ready' && served?.space && (
+        onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={served.models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">

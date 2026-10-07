@@ -48,6 +48,8 @@ export interface EngineSource {
   actions?: ModelAction[]
   /** Served only beside the schema's `space`. */
   space?: 'scoped' | 'global'
+  /** An administrator's pick from the engine's icon set, else null. */
+  icon?: string | null
   group_facts?: GroupFact[]
   columns: Record<string, EngineColumn>
 }
@@ -172,6 +174,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.date ? { date_field: source.date } : {}),
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
+    ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: ['grid'],
   }
