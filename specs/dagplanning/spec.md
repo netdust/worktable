@@ -44,6 +44,16 @@ The third point, "the filter is not working at all" (a Locatie filter in Dagplan
 - "Geen rijen" in an empty result names the period and sits centred in the grid.
 - Source: the quote above; default and presets, Stefan's choice "Date filter, default this week", 2026-10-07.
 
+**R5. A query's views sit under the data model it reads.** The sidebar lists only data models. Each model folds out to its own views, then the views of every query over it, each with the query icon.
+- Theatre: Dagplanning, Per productie per dag and Voorstellingen all sit under Activiteiten. Dagplanning leaves the Planning section, and the other two leave the bottom of the rail.
+- The engine shape: a query declares `of: <dataset>`. Validation refuses an unknown dataset, and a section that lists a query. `/schema` serves `of`.
+- "+ Weergave" on a model makes a view on the model itself. A new view on a query starts as a copy of one of its views (`…` → Kopie maken).
+- Source: Stefan, 2026-10-07: "they are query views of activiteiten en should be listed under the activiteiten tab"; the tree shape: "that schema seems correct yes".
+
+**R6. Speelreeks is shown as Tourstop.** The dataset's label, the add button, the column on an activity, the inherited hint ("via tourstop"), the seeded view and the writers' messages say Tourstop. In Planning, Tourstops comes first.
+- The internal name stays `speelreeks`.
+- Source: Stefan, 2026-10-07: "ok, Tour stop... call it that, speelreeks a bad translation"; "in the sidebar a tourstop comes before activities". Built on this branch before the plan's tasks.
+
 ## Out
 - Changing a Toewijzing's state from Dagplanning: it stays in the matrix (Stefan's choice).
 - Free-text (naam) people added from Dagplanning.
