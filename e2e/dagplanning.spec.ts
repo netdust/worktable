@@ -178,9 +178,33 @@ test('period-chip @e2e', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Alles' })).toHaveCount(0)
 })
 
+// The specs share one database: what this flow made would show up in later ones, so it goes again whatever happens.
 test('people-tags @e2e', async ({ page }) => {
   const api = page.request
-  const title = 'mensen e2e'
+  try {
+    await peopleTags(page)
+  } finally {
+    await cleanUp(api)
+  }
+})
+
+async function cleanUp(api: Api) {
+  const activity = (await rowsOf<{ id: number }>(api, 'activiteit', { omschrijving: PEOPLE_TITLE }))[0]?.id
+  if (activity !== undefined) {
+    for (const t of await rowsOf<{ id: number }>(api, 'toewijzing', { activiteit_id: activity }))
+      await api.delete(`/api/rows/toewijzing/${t.id}`)
+    await api.delete(`/api/rows/activiteit/${activity}`)
+  }
+  const { views } = (await (await api.get('/api/views')).json()) as { views: { id: number; name: string }[] }
+  const copies = views.filter((v) => v.name === 'Dagplanning (kopie)')
+  for (const view of copies) await api.delete(`/api/views/${view.id}`)
+}
+
+const PEOPLE_TITLE = 'mensen e2e'
+
+async function peopleTags(page: Page) {
+  const api = page.request
+  const title = PEOPLE_TITLE
   const activity = await idOf(api, 'activiteit', {
     productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
     soort: 'repetitie',
@@ -263,4 +287,4 @@ test('people-tags @e2e', async ({ page }) => {
   await openView(page, 'Dagplanning (kopie)', 'Activiteiten')
   const heads = (await page.locator('thead th').allTextContents()).map((h) => h.replace(/\s*[↑↓]$/, '').trim())
   expect(heads.indexOf('Mensen')).toBe(heads.indexOf('Locatie') + 1)
-})
+}
