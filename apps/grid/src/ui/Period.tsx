@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Popover } from '@sakaniui/react'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { t } from '../i18n'
@@ -5,7 +6,7 @@ import type { DateWindow } from '../types'
 import { days, formatWindow, iso, parse, shift, step, weekOf } from './Window'
 
 /** The engine reads a matrix over at most this many days. */
-const MATRIX_DAYS = 92
+export const MATRIX_DAYS = 92
 const ICON = 13
 
 interface Props {
@@ -27,12 +28,12 @@ export function Period({ window, onChange, unbounded }: Props) {
   const current = weekOf(new Date())
   const choose = (next: Partial<DateWindow>) => () => onChange(next)
 
-  const edit = (key: 'from' | 'to', value: string) => {
-    if (!range || !parse(value)) return
-    const next = { ...range, [key]: value }
-    if (next.to < next.from || (!unbounded && days(next) > MATRIX_DAYS)) return
-    onChange(next)
-  }
+  const [draft, setDraft] = useState({ from: range?.from ?? current.from, to: range?.to ?? current.to })
+  useEffect(() => setDraft({ from: window.from ?? current.from, to: window.to ?? current.to }), [window.from, window.to])
+  const from = parse(draft.from)
+  const to = parse(draft.to)
+  const valid = from !== null && to !== null && draft.to >= draft.from && (unbounded || days(draft) <= MATRIX_DAYS)
+  const editFrom = (value: string) => setDraft((was) => ({ from: value, to: parse(value) && value > was.to ? value : was.to }))
 
   return (
     <span className="nv-chip nv-chip--set nv-chip--period" role="group" aria-label={t('period')}>
@@ -51,11 +52,12 @@ export function Period({ window, onChange, unbounded }: Props) {
           <div className="nv-filters__field" role="group" aria-label={t('fromTo')}>
             <span className="nv-filters__label">{t('fromTo')}</span>
             <label className="nv-period__day">{t('periodFrom')}
-              <input type="date" value={range?.from ?? current.from} onChange={(event) => edit('from', event.target.value)} />
+              <input type="date" value={draft.from} onChange={(event) => editFrom(event.target.value)} />
             </label>
             <label className="nv-period__day">{t('periodTo')}
-              <input type="date" value={range?.to ?? current.to} onChange={(event) => edit('to', event.target.value)} />
+              <input type="date" value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })} />
             </label>
+            <button type="button" className="nv-filters__option" disabled={!valid} onClick={choose(draft)}>{t('apply')}</button>
             {!unbounded && <span className="nv-filters__label">{t('periodTooLong', { days: MATRIX_DAYS })}</span>}
           </div>
           {unbounded && <button type="button" className="nv-filters__option" onClick={choose({})}>{t('all')}</button>}

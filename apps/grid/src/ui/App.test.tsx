@@ -449,6 +449,16 @@ describe('a matrix view', () => {
     api.records.mockResolvedValue({ rows: [{ id: 5, title: 'Sien', status: 'publish', fields: {} }], total: 1 })
   })
 
+  it('reads the current week when the range it carries is over 92 days, and shows no error', async () => {
+    window.location.hash = '#view=bezetting&from=2026-01-01&to=2026-04-30'
+    render(<App />)
+
+    expect(await screen.findByRole('grid', { name: 'Bezetting' })).toBeTruthy()
+    const [, asked] = api.rows.mock.calls.at(-1) as [unknown, { from: string; to: string }]
+    expect((Date.parse(asked.to) - Date.parse(asked.from)) / 86_400_000).toBe(6)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it("fetches the matrix view's rows and the away view's rows, and shows the matrix", async () => {
     render(<App />)
 

@@ -26,6 +26,7 @@ const strings = {
   periodFrom: 'Van',
   periodTo: 'Tot',
   all: 'Alles',
+  apply: 'Toepassen',
   periodTooLong: 'Hoogstens {days} dagen',
   saved: 'Opgeslagen',
   saving: 'Opslaan…',

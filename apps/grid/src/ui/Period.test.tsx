@@ -92,6 +92,8 @@ describe('the Periode chip', () => {
 
     open()
     fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '2026-11-20' } })
+    expect(window.location.hash).toBe('#from=2026-11-02&to=2026-11-08')
+    fireEvent.click(screen.getByRole('button', { name: 'Toepassen' }))
     expect(window.location.hash).toBe('#from=2026-11-02&to=2026-11-20')
   })
 
@@ -122,12 +124,51 @@ describe('the Periode chip', () => {
     expect(window.location.hash).toBe('#period=all')
   })
 
-  it('refuses a Van–tot over 92 days where the skin is bounded', () => {
-    render(<Harness unbounded={false} />)
+  it('holds Van–tot as a draft: typing reads nothing until Toepassen', () => {
+    render(<Harness />)
 
     open()
-    fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '2027-03-01' } })
-
+    fireEvent.change(screen.getByLabelText('Van'), { target: { value: '2026-11-03' } })
+    fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '2026-11-12' } })
     expect(window.location.hash).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: 'Toepassen' }))
+
+    expect(window.location.hash).toBe('#from=2026-11-03&to=2026-11-12')
+  })
+
+  it('applies a Van–tot typed under Alles', () => {
+    window.location.hash = '#period=all'
+    render(<Harness />)
+
+    open()
+    fireEvent.change(screen.getByLabelText('Van'), { target: { value: '2026-11-03' } })
+    fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '2026-11-12' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Toepassen' }))
+
+    expect(window.location.hash).toBe('#from=2026-11-03&to=2026-11-12')
+  })
+
+  it('moves Tot along when Van is set past it', () => {
+    render(<Harness />)
+
+    open()
+    fireEvent.change(screen.getByLabelText('Van'), { target: { value: '2026-11-20' } })
+
+    expect((screen.getByLabelText('Tot') as HTMLInputElement).value).toBe('2026-11-20')
+  })
+
+  it('disables Toepassen for an empty date, and over 92 days where the skin is bounded', () => {
+    const bounded = render(<Harness unbounded={false} />)
+    open()
+    fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '2027-03-01' } })
+    expect((screen.getByRole('button', { name: 'Toepassen' }) as HTMLButtonElement).disabled).toBe(true)
+    bounded.unmount()
+
+    render(<Harness />)
+    open()
+    fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '' } })
+    expect((screen.getByRole('button', { name: 'Toepassen' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('Tot'), { target: { value: '2027-03-01' } })
+    expect((screen.getByRole('button', { name: 'Toepassen' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })

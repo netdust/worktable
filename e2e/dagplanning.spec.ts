@@ -148,6 +148,16 @@ test('period-chip @e2e', async ({ page }) => {
   await expect(named(page, near)).toHaveCount(1)
   await expect(named(page, far)).toHaveCount(1)
 
+  await value.click()
+  await page.getByLabel('Van', { exact: true }).fill('2026-12-21')
+  await page.getByLabel('Tot', { exact: true }).fill('2027-02-20')
+  await page.getByRole('button', { name: 'Toepassen' }).click()
+  await expect(value).toHaveText('21 dec – 20 feb')
+  await expect(named(page, near)).toHaveCount(1)
+  await value.click()
+  await page.getByRole('button', { name: 'Alles' }).click()
+  await expect(value).toHaveText('Alles')
+
   await openView(page, 'Toewijzingen per activiteit', 'Activiteiten')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen per activiteit')
   await expect(value).toHaveText(/^Week \d+ · /)

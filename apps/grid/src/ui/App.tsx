@@ -31,8 +31,8 @@ import { useFilterNames } from './useFilterNames'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { Period } from './Period'
-import { formatWindow, useWindow, weekOf } from './Window'
+import { MATRIX_DAYS, Period } from './Period'
+import { days, formatWindow, useWindow, weekOf } from './Window'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -203,9 +203,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // Named by the view's own source: a query's view sits under another model's node and keeps the query's name.
   const title = declared.find((table) => table.key === view?.table)?.label ?? t('viewsShown')
   const dated = Boolean(view?.date_field)
-  // A matrix reads one bounded window: under Alles it shows the current week.
+  // A matrix reads one bounded window: under Alles, or over the engine's cap, it shows the current week.
   const unbounded = view?.type !== 'matrix'
-  const range = useMemo(() => (unbounded || picked.from ? picked : weekOf(new Date())), [unbounded, picked])
+  const range = useMemo(() => {
+    const fits = picked.from && picked.to && days({ from: picked.from, to: picked.to }) <= MATRIX_DAYS
+    return unbounded || fits ? picked : weekOf(new Date())
+  }, [unbounded, picked])
   const [space, select] = useSpace(served?.space)
   const scoped = space.status !== 'none' && view?.space === 'scoped'
   // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
