@@ -1,14 +1,27 @@
 import { Button } from '@sakaniui/react'
-import { Plus } from 'lucide-react'
+import { Grid3x3, Lock, Plus, Table as TableIcon } from 'lucide-react'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { ReactNode } from 'react'
-import { fixedCount, t } from '../i18n'
+import { fixedCount, summary, t } from '../i18n'
 import type { StoreState } from '../grid/store'
 import type { DateWindow } from '../types'
 import { WindowControl } from './Window'
 
+export interface Shown {
+  rows: number
+  /** Null where the view is not grouped. */
+  groups: number | null
+}
+
 interface Props {
+  /** The view's name. */
   title: string
+  /** The view's kind, for its icon. */
+  matrix?: boolean
+  /** A view nobody writes: a lock says so. */
+  locked?: boolean
+  /** What the grid shows now; absent while there is no grid. */
+  shown?: Shown | null
   window: DateWindow | null
   onWindow: (value: DateWindow) => void
   search: ReactNode
@@ -67,7 +80,7 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, window, onWindow, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, modified, viewNote, fixed = 0 }: Props) {
+export function Toolbar({ title, matrix, locked, shown, window, onWindow, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, modified, viewNote, fixed = 0 }: Props) {
   const more: Action[] = [
     ...(modified ? [{ label: t('saveAsNew'), run: modified.onSaveAs }, { label: t('revert'), run: modified.onRevert }] : []),
     ...(onExport || exportBlocked ? [{ label: t('export'), run: () => onExport?.(), blocked: exportBlocked }] : []),
@@ -75,7 +88,12 @@ export function Toolbar({ title, window, onWindow, search, saving, addLabel, add
   return (
     // A changed view's actions take room: there, the end may take a second row rather than leave the screen.
     <header className={modified ? 'nv-toolbar nv-toolbar--crowded' : 'nv-toolbar'}>
-      <h1 className="nv-toolbar__title">{title}</h1>
+      <div className="nv-toolbar__name">
+        {matrix ? <Grid3x3 size={16} aria-hidden="true" /> : <TableIcon size={16} aria-hidden="true" />}
+        <h1 className="nv-toolbar__title">{title}</h1>
+        {locked && <span className="nv-toolbar__lock" title={t('readOnlyTitle')}><Lock size={13} aria-label={t('readOnlyTitle')} role="img" /></span>}
+        {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups)}</span>}
+      </div>
       {modified && <ModifiedState modified={modified} />}
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}

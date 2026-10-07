@@ -24,7 +24,7 @@ import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
 import { Toast, useNotice } from './Toast'
 import { type Table, tableOf } from './tables'
-import { Toolbar } from './Toolbar'
+import { type Shown, Toolbar } from './Toolbar'
 import { ViewPanel } from './ViewPanel'
 import { useFilterNames } from './useFilterNames'
 import { useSavedViews } from './useSavedViews'
@@ -120,6 +120,7 @@ function Workspace({ signed }: { signed: Signed }) {
   const [panel, setPanel] = useState<'saveAs' | null>(null)
   const [adding, setAdding] = useState<{ table: Table; type: ViewType } | null>(null)
   const [viewNote, setViewNote] = useState<string | null>(null)
+  const [shown, setShown] = useState<Shown | null>(null)
   const [notice, notify] = useNotice()
   // A revert remounts the matrix, whose picked columns are its own state.
   const [resets, setResets] = useState(0)
@@ -283,7 +284,10 @@ function Workspace({ signed }: { signed: Signed }) {
       )} />
       <main className="nv-main">
         <Toolbar
-          title={title}
+          title={view?.label ?? title}
+          matrix={matrix}
+          locked={view ? !isSaved(view) || !view.editable : false}
+          shown={matrix ? null : shown}
           window={dated ? range : null}
           onWindow={setRange}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
@@ -312,7 +316,7 @@ function Workspace({ signed }: { signed: Signed }) {
               layout={layout} onLayout={setLayout} filters={filters} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
-              emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot}
+              emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
               models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} onAction={act} />
           ) : (
             <Sheet hasView={view !== undefined} dated={dated} result={result} />

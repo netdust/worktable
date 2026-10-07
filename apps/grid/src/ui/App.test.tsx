@@ -112,7 +112,7 @@ describe('App shell', () => {
     expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
   })
 
-  it("titles the toolbar with the active view's label", async () => {
+  it("names the toolbar after the active view", async () => {
     await shell()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
@@ -703,14 +703,14 @@ describe('a table with two views', () => {
       : { rows: [], total: 0 }))
   })
 
-  it("titles the toolbar, the grid and the matrix with the table's label", async () => {
+  it("names the toolbar after the view, and the grid and the matrix after the table's label", async () => {
     render(<App />)
     expect(await screen.findByRole('grid', { name: 'Planning' })).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Tabel' })).toBeTruthy()
 
     fireEvent.click(within(types()).getByRole('button', { name: 'Matrix' }))
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Matrix' })).toBeTruthy()
     await waitFor(() => expect(document.querySelector('table.nv-mx[aria-label="Planning"]')).toBeTruthy())
   })
 
@@ -821,7 +821,7 @@ describe('saved views', () => {
     api.savedViews.mockResolvedValue([calais, { ...calais, key: '43', id: 43, label: 'Ziek', table: 'absences', model: 'absence', date_field: undefined }])
     await shell()
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Calais techniek' })).toBeTruthy()
     await screen.findByText('No rows in this window')
     expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
   })

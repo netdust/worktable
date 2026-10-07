@@ -23,6 +23,19 @@ describe('the toolbar', () => {
     expect(container.querySelector('img')).toBeNull()
   })
 
+  it('says on one line what the view is: its name, a lock where it is read-only, and the summary', () => {
+    const { rerender } = render(<Toolbar {...base} title="Dagplanning" shown={{ rows: 21, groups: 3 }} locked />)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Dagplanning' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeTruthy()
+    expect(screen.getByText('21 rijen · 3 groepen')).toBeTruthy()
+
+    rerender(<Toolbar {...base} title="Mijn week" shown={{ rows: 1, groups: null }} />)
+
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.getByText('1 rij')).toBeTruthy()
+  })
+
   it('has no add button without an add', () => {
     render(<Toolbar {...base} />)
 

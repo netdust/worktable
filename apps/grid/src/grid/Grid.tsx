@@ -38,6 +38,8 @@ export interface GridProps {
   emptyHint?: string
   /** Set to a reader of what is on screen, for the toolbar's export. */
   snapshot?: RefObject<(() => OnScreen) | null>
+  /** Told what is on screen, for the title line's summary. */
+  onShown?: (shown: { rows: number; groups: number | null } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
@@ -60,7 +62,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, models = NO_MODELS, scope = null, spaceModel = null, filters, onAction }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, onAction }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -93,6 +95,13 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       snapshot.current = null
     }
   })
+
+  const shownRows = total(groups)
+  const shownGroups = by ? groups.length : null
+  useEffect(() => {
+    onShown?.({ rows: shownRows, groups: shownGroups })
+  }, [shownRows, shownGroups])
+  useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)
   const keysRef = useRef<KeyState>(initial)

@@ -85,7 +85,7 @@ test.describe('as the owner', () => {
     // Lotte's absence starts in the week of 5 October; the week of 12 October holds only other people's.
     await land(page, '/#from=2026-10-05')
     await pick(page, 'Afwezigheden', 'Beschikbaarheden')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beschikbaarheden')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Afwezigheden')
     await expect(gridRows(page)).toHaveCount(1)
     await expect(gridRows(page).first()).toHaveAttribute('data-title', LOTTE)
     await land(page, WEEK)

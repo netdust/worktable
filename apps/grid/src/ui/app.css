@@ -283,9 +283,45 @@
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
+.nv-toolbar__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-fg-muted);
+}
+
+/* The name gives way before the end does: a refusal's message must stay readable. */
+.nv-toolbar > .nv-toolbar__name {
+  flex: 0 3 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nv-toolbar__name > svg {
+  flex: none;
+}
+
+.nv-toolbar__lock {
+  display: inline-flex;
+  color: var(--color-fg-subtle);
+}
+
+.nv-toolbar__summary {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-fg-subtle);
+  white-space: nowrap;
+}
+
 #root .nv-toolbar__title {
-  margin: 0 8px 0 0;
+  margin: 0;
   padding: 0;
+  min-width: 6ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
