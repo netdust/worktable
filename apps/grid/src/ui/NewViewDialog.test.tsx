@@ -34,7 +34,7 @@ describe('the new view dialog', () => {
     const who = within(dialog()).getByRole('group', { name: 'Wie mag ze aanpassen' })
 
     expect((within(who).getByRole('radio', { name: 'Het team' }) as HTMLInputElement).checked).toBe(true)
-    expect(within(who).getByText('Iedereen in het team ziet ze en kan filters en kolommen aanpassen.')).toBeTruthy()
+    expect(within(who).getByText('Iedereen in het team ziet ze; alleen jij past ze aan, de anderen maken een kopie.')).toBeTruthy()
     fireEvent.click(within(who).getByRole('radio', { name: 'Alleen ik' }))
     expect(within(who).getByText('Alleen jij ziet ze; delen kan later.')).toBeTruthy()
   })

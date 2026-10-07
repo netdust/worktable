@@ -29,7 +29,7 @@ import { type Shown, Toolbar } from './Toolbar'
 import { ViewPanel } from './ViewPanel'
 import { useFilterNames } from './useFilterNames'
 import { useSavedViews } from './useSavedViews'
-import { changed, clearLocal, isSaved, keepLocal, localOf, useStoredRevision } from './views'
+import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
 import { formatWindow, useWindow } from './Window'
 
@@ -341,7 +341,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         <Toolbar
           title={view?.label ?? title}
           matrix={matrix}
-          locked={view ? !isSaved(view) || !view.editable : false}
+          locked={view ? lockOf(view) : null}
           shown={matrix ? null : shown}
           window={dated ? range : null}
           onWindow={setRange}

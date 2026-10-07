@@ -14,6 +14,7 @@ const saved = (id: number, label: string, extra: Partial<SavedView> = {}): Saved
 const own = saved(42, 'Calais techniek')
 const sharedOwn = saved(43, 'Montage', { shared: true })
 const theirs = saved(44, 'Ploeg', { shared: true, mine: false, editable: false, owner: { id: 2, name: 'Jan' } })
+const seeded = saved(47, 'Rooster', { shared: true, mine: false, editable: false, owner: { id: -1, name: '' } })
 const marked = saved(45, '<img src=x onerror=alert(1)>')
 const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', types: ['grid', 'matrix'], views: [tabel, matrix, own, sharedOwn, theirs, marked] }
 
@@ -38,12 +39,16 @@ describe('the views list', () => {
     expect(within(group()).getByRole('button', { name: 'Calais techniek' })).toBeTruthy()
   })
 
-  it("marks a view this user can only copy with a lock, and one's own unshared view with a person", () => {
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} />)
+  it("marks a starting or seeded view with the Standaardweergave lock, a colleague's shared view with its own mark, and one's own unshared view with a person", () => {
+    render(<ViewList table={{ ...table, views: [...table.views, seeded] }} active="planning" onSelect={() => undefined} />)
     const lock = 'Standaardweergave, alleen te kopiëren'
+    const colleague = 'Gedeeld door een collega, alleen te kopiëren'
 
     expect(within(item('Calais techniek')).getByRole('img', { name: 'Alleen voor jou' })).toBeTruthy()
-    for (const name of ['Tabel', 'Matrix', 'Ploeg']) expect(within(item(name)).getByRole('img', { name: lock })).toBeTruthy()
+    for (const name of ['Tabel', 'Matrix', 'Rooster']) expect(within(item(name)).getByRole('img', { name: lock })).toBeTruthy()
+    expect(within(item('Ploeg')).getByRole('img', { name: colleague })).toBeTruthy()
+    expect(within(item('Ploeg')).queryByRole('img', { name: lock })).toBeNull()
+    expect(within(item('Rooster')).queryByRole('img', { name: colleague })).toBeNull()
     expect(within(item('Montage')).queryByRole('img')).toBeNull()
     expect(within(item('Calais techniek')).queryByRole('img', { name: lock })).toBeNull()
   })

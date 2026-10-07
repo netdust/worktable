@@ -1,12 +1,12 @@
 import { SidebarItem } from '@sakaniui/react'
-import { Grid3x3, Lock, Table as TableIcon, UserRound } from 'lucide-react'
+import { Grid3x3, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import type { SavedView, View } from '../types'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { Table } from './tables'
 import { useDragOrder } from './useDragOrder'
-import { isSaved, stepped } from './views'
+import { isSaved, lockOf, stepped } from './views'
 
 /** What a view's ⋯ can do; each is offered only where the user may do it. */
 export interface ViewActions {
@@ -28,14 +28,15 @@ interface Props {
 
 const editable = (view: View): view is SavedView => isSaved(view) && view.editable
 
-/** A view's mark: a lock on one this user can only copy, a person on one's own unshared view. */
+/** A view's mark: a lock on a default, a pair of people on a colleague's, a person on one's own unshared view. */
 function Mark({ view }: { view: View }) {
-  const locked = !editable(view)
-  if (!locked && !(view.mine && !view.shared)) return null
-  const word = t(locked ? 'readOnlyView' : 'mine')
+  const lock = lockOf(view)
+  if (!lock && !(isSaved(view) && view.mine && !view.shared)) return null
+  const word = t(lock === 'standard' ? 'readOnlyView' : lock === 'colleague' ? 'colleagueView' : 'mine')
+  const Icon = lock === 'standard' ? Lock : lock === 'colleague' ? Users : UserRound
   return (
-    <span className={locked ? 'nv-view__mark nv-view__lock' : 'nv-view__mark nv-view__own'} role="img" aria-label={word} title={word}>
-      {locked ? <Lock size={12} aria-hidden="true" /> : <UserRound size={12} aria-hidden="true" />}
+    <span className={lock ? 'nv-view__mark nv-view__lock' : 'nv-view__mark nv-view__own'} role="img" aria-label={word} title={word}>
+      <Icon size={12} aria-hidden="true" />
     </span>
   )
 }
