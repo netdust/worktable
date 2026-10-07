@@ -32,12 +32,14 @@ const guest: LinkItem = { id: 72, target: null, title: 'Gastmuzikant', state: 'i
 const lunch: Row = { id: 5, title: 'Lunch', status: '', fields: { people: [lotte, jan_, guest] } }
 const person = (id: number, title: string): Row => ({ id, title, status: '', fields: {} })
 
+const stores: ReturnType<typeof createStore>[] = []
 let actions: { add: ReturnType<typeof vi.fn<LinkActions['add']>>; remove: ReturnType<typeof vi.fn<LinkActions['remove']>> }
 
 function renderGrid() {
   actions = { add: vi.fn<LinkActions['add']>().mockResolvedValue(), remove: vi.fn<LinkActions['remove']>().mockResolvedValue() }
   const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
   const store = createStore({ model: 'day', rows: [lunch], api })
+  stores.push(store)
   render(
     <Grid model={day} view={view} store={store} writable layout={defaults(view)} onLayout={() => undefined}
       query="" emptyTitle="" models={{ day }} links={actions} />,
@@ -118,6 +120,20 @@ describe('a links cell', () => {
     expect(actions.remove).toHaveBeenCalledWith('people', lunch, jan_)
   })
 
+  it('puts the question in reach of the keyboard: Annuleren has focus, Escape keeps the person, Verwijderen removes', async () => {
+    renderGrid()
+    open()
+    fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annuleren' }))
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(actions.remove).not.toHaveBeenCalled()
+    fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
+    screen.getByRole('button', { name: 'Verwijderen' }).focus()
+    await act(async () => fireEvent.click(document.activeElement as HTMLElement))
+    expect(actions.remove).toHaveBeenCalledWith('people', lunch, lotte)
+  })
+
   it('asks before removing a person who left the default state; Annuleren keeps them', async () => {
     renderGrid()
     open()
@@ -128,6 +144,18 @@ describe('a links cell', () => {
     fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Verwijderen' })))
     expect(actions.remove).toHaveBeenCalledWith('people', lunch, lotte)
+  })
+
+  it('offers no people on a draft row: it has no record to link to yet', async () => {
+    renderGrid()
+    await act(async () => stores[stores.length - 1]?.draft({}, ['title']))
+    const draft = screen.getAllByRole('row').find((r) => r.dataset.title === '') as HTMLElement
+    const headers = screen.getAllByRole('columnheader').map((h) => h.dataset.column)
+    const people = within(draft).getAllByRole('gridcell')[headers.indexOf('people')] as HTMLElement
+    fireEvent.click(people)
+    fireEvent.keyDown(people, { key: 'Enter' })
+    expect(screen.queryByRole('combobox', { name: 'Mensen' })).toBeNull()
+    expect(people.getAttribute('aria-readonly')).toBe('true')
   })
 
   it('is never cleared by Delete, nor offered to sort, group or filter', () => {

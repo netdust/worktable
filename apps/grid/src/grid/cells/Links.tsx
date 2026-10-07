@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { createContext, type MouseEvent, useContext, useState } from 'react'
+import { createContext, type KeyboardEvent, type MouseEvent, useContext, useState } from 'react'
 import { t } from '../../i18n'
 import type { Link, LinkItem, Row } from '../../types'
 import { linksOf } from '../columns'
@@ -58,6 +58,25 @@ function Chosen({ items, link, onRemove }: { items: LinkItem[]; link: Link; onRe
   )
 }
 
+/** Asked before a removal. Annuleren has focus, so the keyboard reaches it; Escape keeps the person, as Annuleren does. */
+function Question({ text, onCancel, onConfirm }: { text: string; onCancel: () => void; onConfirm: () => void }) {
+  const keys = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    onCancel()
+  }
+  return (
+    <div className="nv-pop nv-confirm" role="alertdialog" aria-label={text} onKeyDown={keys}>
+      <p>{text}</p>
+      <div className="nv-confirm__actions">
+        <button type="button" className="nv-btn" ref={(button) => button?.focus()} onClick={onCancel}>{t('cancel')}</button>
+        <button type="button" className="nv-btn nv-btn--danger" onClick={onConfirm}>{t('delete')}</button>
+      </div>
+    </div>
+  )
+}
+
 /** One box: the chosen names, each removable, then a search whose list offers only the others. */
 export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorProps) {
   const actions = useContext(LinksContext)
@@ -73,23 +92,20 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
     else void actions.remove(key, row, item)
   }
   const removable = items.filter((item) => item.target !== null)
-  const question = asking && t('removeLinkAsk', { item: link.item, name: asking.title })
 
   // A click in here would reach the cell, and selecting the cell ends the edit.
   return (
     <div data-editor onClick={(event) => event.stopPropagation()}>
       <LinksCell column={column} row={row} />
       {asking ? (
-        <div className="nv-pop nv-confirm" role="alertdialog" aria-label={question ?? undefined}>
-          <p>{question}</p>
-          <div className="nv-confirm__actions">
-            <button type="button" className="nv-btn" onClick={() => setAsking(null)}>{t('cancel')}</button>
-            <button type="button" className="nv-btn nv-btn--danger" onClick={() => {
-              setAsking(null)
-              void actions.remove(key, row, asking)
-            }}>{t('delete')}</button>
-          </div>
-        </div>
+        <Question
+          text={t('removeLinkAsk', { item: link.item, name: asking.title })}
+          onCancel={() => setAsking(null)}
+          onConfirm={() => {
+            setAsking(null)
+            void actions.remove(key, row, asking)
+          }}
+        />
       ) : (
         <RelationPicker
           model={link.target_dataset}

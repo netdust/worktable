@@ -131,7 +131,7 @@ describe('rows', () => {
       title: 'een',
       custom: { colour: 'rood', labels: ['a', 'b'] },
       lookups: { project_id: { id: 1, title: 'Alfa' } },
-      links: { koppels: [], merken: [] },
+      links: { koppels: [], merken: [], platen: [] },
     })
     expect(body.rows[1].afgerond).toBe(true)
     expect(body.rows[2].custom).toEqual({})

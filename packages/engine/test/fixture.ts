@@ -47,6 +47,8 @@ const taak = defineDataset({
       state: 'stand',
     },
     merken: { label: 'Merken', item: 'Merk', dataset: 'merk', key: 'taak_id', target: 'plat_id' },
+    // An owner reads these koppels, never the plat they point at: only its title (threat 2).
+    platen: { label: 'Platen', item: 'Plat', dataset: 'koppel', key: 'taak_id', target: 'plat_id' },
   },
 })
 
@@ -60,6 +62,7 @@ const koppel = defineDataset({
   columns: {
     taak_id: { type: 'integer', label: 'Taak', relation: 'taak' },
     project_id: { type: 'integer', label: 'Project', relation: 'project', nullable: true },
+    plat_id: { type: 'integer', label: 'Plat', relation: 'plat', nullable: true },
     tekst: { type: 'text', label: 'Tekst' },
     stand: {
       type: 'text',

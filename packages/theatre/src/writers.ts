@@ -210,7 +210,7 @@ export const speelreeksWriter = forPlanners(
     checkSpan(values, ctx)
     return values
   }),
-  'speelreeksen',
+  'tourstops',
 )
 
 const KLEUR = /^#[0-9a-fA-F]{6}$/

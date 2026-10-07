@@ -166,6 +166,14 @@ describe('/schema serves links', () => {
         target: 'plat_id',
         target_dataset: 'plat',
       },
+      platen: {
+        label: 'Platen',
+        item: 'Plat',
+        dataset: 'koppel',
+        key: 'taak_id',
+        target: 'plat_id',
+        target_dataset: 'plat',
+      },
     })
     expect(body.sources.project).not.toHaveProperty('links')
   })
@@ -173,7 +181,7 @@ describe('/schema serves links', () => {
   test('an owner who cannot read the link dataset gets no entry for it (threat 5)', async () => {
     const { body } = await owner('GET', '/api/schema')
     expect(body.sources).not.toHaveProperty('merk')
-    expect(Object.keys(body.sources.taak.links)).toEqual(['koppels'])
+    expect(Object.keys(body.sources.taak.links)).toEqual(['koppels', 'platen'])
   })
 })
 
@@ -192,7 +200,7 @@ describe('/rows serves each row its link rows', () => {
       { id: a, target: 1, title: 'Alfa', state: 'open' },
     ])
     expect(two?.links?.koppels).toEqual([{ id: free, target: null, title: 'los', state: 'open' }])
-    expect(three?.links).toEqual({ koppels: [], merken: [] })
+    expect(three?.links).toEqual({ koppels: [], merken: [], platen: [] })
   })
 
   test('a link without state is served with state null, and no column of the link row or target leaks', async () => {
@@ -218,6 +226,15 @@ describe('/rows serves each row its link rows', () => {
     expect(linkIds(one, 'koppels')).not.toContain(free)
     expect(one?.links).not.toHaveProperty('merken')
     expect(linkIds(rowsOf((await editor('GET', '/api/rows/taak')).body)[0], 'koppels')).toEqual([mine, theirs, free])
+  })
+
+  test("an owner reading a link whose target it cannot read gets that target's title only (threat 2)", async () => {
+    const plat = Number(sqlite.query("INSERT INTO plat (name) VALUES ('Geheim plat') RETURNING id").get()?.id ?? 0)
+    const mine = koppel(sqlite, 1, 1, 'mijn')
+    sqlite.query('UPDATE koppel SET plat_id = ? WHERE id = ?').run(plat, mine)
+    const one = rowsOf((await owner('GET', '/api/rows/taak')).body).find((r) => r.id === 1)
+    expect(one?.links?.platen).toEqual([{ id: mine, target: plat, title: 'Geheim plat', state: null }])
+    expect((await owner('GET', `/api/rows/plat`)).status).toBe(404)
   })
 
   test("a query's rows carry their links by the created dataset's id", async () => {

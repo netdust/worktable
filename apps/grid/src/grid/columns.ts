@@ -1,5 +1,6 @@
 import { locale, t } from '../i18n'
 import type { Field, GroupFact, Link, LinkItem, Model, Row, Tone, View } from '../types'
+import { DRAFT } from './store'
 
 export type CellKind =
   | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'datetime' | 'time' | 'relation' | 'bool' | 'number'
@@ -145,6 +146,11 @@ function dayFromText(text: string): string {
 function optionFromText(options: Record<string, string>, text: string): string {
   const wanted = text.trim().toLowerCase()
   return Object.entries(options).find(([key, label]) => key === text.trim() || label.toLowerCase() === wanted)?.[0] ?? text.trim()
+}
+
+/** A links cell edits only a row that exists: a draft has no record to link to yet. */
+export function editableAt(column: Column, row: Row): boolean {
+  return column.editable && !(column.kind === 'links' && row.id === DRAFT)
 }
 
 /** A `links` field's rows; empty when the engine served none. */

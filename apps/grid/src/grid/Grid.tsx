@@ -4,7 +4,7 @@ import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
 import { RelationContext } from './cells/Relation'
-import { type Column, columnsFor, inDays } from './columns'
+import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
@@ -136,7 +136,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const sheet: Sheet = {
     rows: ordered.length,
     cols: visible.length,
-    editable: (c) => Boolean(visible[c.col]?.editable && ordered[c.row]),
+    editable: (c) => Boolean(visible[c.col] && ordered[c.row] && editableAt(visible[c.col] as Column, ordered[c.row] as Row)),
     // A links cell is changed in its editor only: Delete never clears it.
     required: (c) => Boolean(visible[c.col]?.required || visible[c.col]?.kind === 'links'),
     toggles: (c) => visible[c.col]?.kind === 'bool',
