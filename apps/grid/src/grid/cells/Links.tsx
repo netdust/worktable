@@ -24,14 +24,30 @@ function pillOf(item: LinkItem, link: Link | undefined): string {
   return tone ? `nv-pill nv-pill--${tone}` : 'nv-pill'
 }
 
-function Tags({ items, link, onRemove }: { items: LinkItem[]; link?: Link; onRemove?: (item: LinkItem) => void }) {
+/** The names on one line, each in its state's colour; what does not fit ends in an ellipsis, and the title holds them all. */
+export function LinksCell({ column, row }: CellProps) {
+  const items = linksOf(row, column.field ?? column.id)
+  const all = items.map((item) => item.title).join(', ')
   return (
-    <ul className="nv-tags">
+    <span className="nv-names" title={all || undefined}>
+      {items.map((item, i) => (
+        <span key={item.id}>
+          {i > 0 && ', '}
+          <span className={pillOf(item, column.link)}>{item.title}</span>
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function Chosen({ items, link, onRemove }: { items: LinkItem[]; link: Link; onRemove: (item: LinkItem) => void }) {
+  return (
+    <ul className="nv-chosen">
       {items.map((item) => (
         <li key={item.id} className={pillOf(item, link)} aria-label={item.title}>
           {item.title}
-          {onRemove && item.target !== null && (
-            <button type="button" className="nv-tags__remove" aria-label={t('removeItem', { name: item.title })}
+          {item.target !== null && (
+            <button type="button" className="nv-chosen__remove" aria-label={t('removeItem', { name: item.title })}
               onMouseDown={keepFocus} onClick={() => onRemove(item)}>
               <X size={11} aria-hidden="true" />
             </button>
@@ -42,10 +58,7 @@ function Tags({ items, link, onRemove }: { items: LinkItem[]; link?: Link; onRem
   )
 }
 
-export function LinksCell({ column, row }: CellProps) {
-  return <Tags items={linksOf(row, column.field ?? column.id)} link={column.link} />
-}
-
+/** One box: the chosen names, each removable, then a search whose list offers only the others. */
 export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorProps) {
   const actions = useContext(LinksContext)
   const [asking, setAsking] = useState<LinkItem | null>(null)
@@ -59,18 +72,16 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
     if (link.state && item.state !== null && item.state !== link.state.default) setAsking(item)
     else void actions.remove(key, row, item)
   }
-  const linked = (target: number) => items.find((item) => item.target === target)
+  const removable = items.filter((item) => item.target !== null)
+  const question = asking && t('removeLinkAsk', { item: link.item, name: asking.title })
 
-  // The chosen ones sit atop the search, inside the popup: the cell's own tags stay as they are, under it.
   // A click in here would reach the cell, and selecting the cell ends the edit.
   return (
-    <>
+    <div data-editor onClick={(event) => event.stopPropagation()}>
       <LinksCell column={column} row={row} />
-      <div className="nv-pop nv-links-pop" data-editor onClick={(event) => event.stopPropagation()}>
-      <Tags items={items} link={link} onRemove={drop} />
-      {asking && (
-        <div className="nv-pop nv-confirm" role="alertdialog" aria-label={t('removeLinkAsk', { item: link.item, name: asking.title })} onMouseDown={keepFocus}>
-          <p>{t('removeLinkAsk', { item: link.item, name: asking.title })}</p>
+      {asking ? (
+        <div className="nv-pop nv-confirm" role="alertdialog" aria-label={question ?? undefined}>
+          <p>{question}</p>
           <div className="nv-confirm__actions">
             <button type="button" className="nv-btn" onClick={() => setAsking(null)}>{t('cancel')}</button>
             <button type="button" className="nv-btn nv-btn--danger" onClick={() => {
@@ -79,21 +90,22 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
             }}>{t('delete')}</button>
           </div>
         </div>
+      ) : (
+        <RelationPicker
+          model={link.target_dataset}
+          label={column.label}
+          query={editing.mode === 'enter' ? editing.draft : ''}
+          before={<Chosen items={items} link={link} onRemove={drop} />}
+          hide={(record) => items.some((item) => item.target === record.id)}
+          onPick={(record) => void actions.add(key, row, record.id)}
+          onClear={() => {
+            const last = removable[removable.length - 1]
+            if (last) drop(last)
+          }}
+          onCancel={onCancel}
+          onClose={onClose}
+        />
       )}
-      <RelationPicker
-        model={link.target_dataset}
-        label={column.label}
-        query={editing.mode === 'enter' ? editing.draft : ''}
-        checked={(record) => linked(record.id) !== undefined}
-        onPick={(record) => {
-          const had = linked(record.id)
-          if (had) drop(had)
-          else void actions.add(key, row, record.id)
-        }}
-        onCancel={onCancel}
-        onClose={onClose}
-      />
-      </div>
-    </>
+    </div>
   )
 }

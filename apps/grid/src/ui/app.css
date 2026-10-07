@@ -2302,26 +2302,55 @@
   padding: 0 4px;
 }
 
-/* A links cell: one pill per linked row, toned by its state; a free-text one muted. */
-.nv-tags {
+/* A links editor: one box holding the chosen names, each removable, and the search after them. */
+.nv-picker__box {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
+  margin: 0 0 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+}
+
+.nv-picker__box:focus-within {
+  border-color: var(--color-accent-default);
+}
+
+#root .nv-picker__box .nv-picker__input {
+  flex: 1 1 80px;
+  width: auto;
+  min-width: 80px;
+  height: 22px;
   margin: 0;
-  padding: 0;
+  padding: 0 4px;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+
+.nv-chosen {
+  display: contents;
   list-style: none;
 }
 
-.nv-pill--muted {
+.nv-chosen .nv-pill {
+  height: 22px;
+  padding: 0 4px 0 8px;
+}
+
+.nv-chosen .nv-pill--muted {
+  padding-right: 8px;
   font-style: italic;
 }
 
-.nv-tags__remove {
+.nv-chosen__remove {
   display: inline-grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
-  margin-right: -3px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -2330,16 +2359,8 @@
   cursor: pointer;
 }
 
-.nv-tags__remove:hover {
+.nv-chosen__remove:hover {
   background: color-mix(in srgb, currentColor 18%, transparent);
-}
-
-.nv-picker__check {
-  margin-right: 6px;
-}
-
-.nv-pop__option[aria-checked="false"] .nv-picker__check {
-  visibility: hidden;
 }
 
 .nv-confirm {
@@ -2357,19 +2378,26 @@
   gap: 6px;
 }
 
-.nv-links-pop {
-  width: 272px;
+/* A links cell: the names as coloured text on one line, the state's tone without the pill. */
+.nv-names {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.nv-links-pop > .nv-tags {
-  margin-bottom: 6px;
-}
-
-/* The picker sits inside the links popup, not as a popup of its own. */
-.nv-links-pop .nv-picker {
-  position: static;
-  width: auto;
+.nv-grid .nv-names .nv-pill {
+  display: inline;
+  height: auto;
   padding: 0;
-  border: 0;
-  box-shadow: none;
+  background: none;
+  font-size: inherit;
+}
+
+.nv-grid .nv-names .nv-pill::before {
+  content: none;
+}
+
+.nv-grid .nv-names .nv-pill:not([class*="nv-pill--"]) {
+  color: var(--color-fg-default);
 }

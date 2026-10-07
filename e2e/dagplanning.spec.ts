@@ -195,62 +195,66 @@ test('people-tags @e2e', async ({ page }) => {
   await openDagplanning(page)
 
   const people = async () => cellOf(page, title, 'Mensen')
-  const tags = async () => (await people()).locator('.nv-tags li')
+  const names = async () => (await people()).locator('.nv-names')
   const assigned = async () =>
     (await rowsOf<{ persoon_id: number | null }>(api, 'toewijzing', { activiteit_id: activity }))
       .map((t) => t.persoon_id)
       .sort()
+  const option = (name: string) => page.getByRole('option', { name })
+  const openPeople = async () => {
+    await (await people()).click()
+    await (await people()).press('Enter')
+  }
 
-  // A row shows its people, toned by their state.
-  await expect(await tags()).toHaveText(['Bram De Wilde'])
-  await expect((await tags()).first()).toHaveClass(/nv-pill--ok/)
+  // A row shows its people as coloured names on one line.
+  await expect(await names()).toHaveText('Bram De Wilde')
+  await expect((await names()).locator('.nv-pill--ok')).toHaveText('Bram De Wilde')
 
-  // Picking a person adds them as uitgenodigd; the list stays open.
-  const cell = await people()
-  await cell.click()
-  await cell.press('Enter')
+  // One box: the chosen names, then the search; the list offers only the others. Picking adds as uitgenodigd and keeps the box open.
+  await openPeople()
   const search = page.getByRole('combobox', { name: 'Mensen' })
+  const chosen = page.locator('.nv-picker .nv-chosen li')
+  await expect(chosen).toHaveText(['Bram De Wilde'])
+  await expect(option('Bram De Wilde')).toHaveCount(0)
   await search.fill('Noor')
-  await page.getByRole('option', { name: 'Noor Claes' }).click()
-  await expect(page.locator('.nv-links-pop .nv-tags li', { hasText: 'Noor Claes' })).toHaveClass(/nv-pill--warn/)
+  await option('Noor Claes').click()
+  await expect(chosen).toHaveText(['Bram De Wilde', 'Noor Claes'])
+  await expect(chosen.filter({ hasText: 'Noor Claes' })).toHaveClass(/nv-pill--warn/)
   await expect(search).toBeVisible()
   expect(await assigned()).toEqual([bram, noor].sort())
 
   // Undo takes the add back (the history is per page: before any reload); add again, and a reload keeps it.
   await search.press('Escape')
-  await cell.press('Control+z')
-  await expect(await tags()).toHaveText(['Bram De Wilde'])
+  await (await people()).press('Control+z')
+  await expect(await names()).toHaveText('Bram De Wilde')
   await expect.poll(assigned).toEqual([bram])
-  // The undo read the view again: the cell takes focus anew.
-  await (await people()).click()
-  await (await people()).press('Enter')
+  await openPeople()
   await search.fill('Noor')
-  await page.getByRole('option', { name: 'Noor Claes' }).click()
+  await option('Noor Claes').click()
   await expect.poll(assigned).toEqual([bram, noor].sort())
   await page.reload()
-  await expect(await tags()).toHaveText(['Bram De Wilde', 'Noor Claes'])
+  await expect(await names()).toHaveText('Bram De Wilde, Noor Claes')
 
-  // × on an uitgenodigd tag removes it without a question.
-  await (await people()).click()
-  await (await people()).press('Enter')
-  await page.getByRole('button', { name: 'Noor Claes verwijderen' }).click()
+  // Backspace in the empty search removes the last name; an uitgenodigd one without a question.
+  await openPeople()
+  await search.press('Backspace')
   await expect.poll(assigned).toEqual([bram])
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
 
-  // × on a bevestigd tag asks first; Annuleren keeps it.
+  // × on a bevestigd name asks first; Annuleren keeps it.
   await page.getByRole('button', { name: 'Bram De Wilde verwijderen' }).click()
   await expect(page.getByRole('alertdialog')).toContainText('Toewijzing van Bram De Wilde verwijderen?')
   await page.getByRole('button', { name: 'Annuleren' }).click()
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
   expect(await assigned()).toEqual([bram])
 
-  // A stale pick: the same person was assigned elsewhere meanwhile; the writer refuses, and the tags read again.
+  // A stale pick: the same person was assigned elsewhere meanwhile; the writer refuses, and the row reads again.
   await idOf(api, 'toewijzing', { activiteit_id: activity, persoon_id: sam })
-  await page.getByRole('combobox', { name: 'Mensen' }).fill('Sam')
-  await page.getByRole('option', { name: 'Sam Peeters' }).click()
+  await search.fill('Sam')
+  await option('Sam Peeters').click()
   await expect(page.getByRole('status', { name: 'Deze persoon is al toegewezen aan deze activiteit.' })).toBeVisible()
   await expect.poll(assigned).toEqual([bram, sam].sort())
-  await page.getByRole('combobox', { name: 'Mensen' }).press('Escape')
+  await search.press('Escape')
 
   // A copy of the view keeps Mensen after Locatie.
   await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()

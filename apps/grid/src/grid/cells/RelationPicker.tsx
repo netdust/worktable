@@ -1,6 +1,5 @@
 import { Spinner } from '@sakaniui/react'
-import { Check } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { records } from '../../api'
 import { t } from '../../i18n'
 import type { Row } from '../../types'
@@ -26,8 +25,10 @@ interface Props {
   onClose?: () => void
   /** Delete on an empty search; absent where the value may not be emptied. */
   onClear?: () => void
-  /** A multiselect: which records are picked already; a pick then toggles one. */
-  checked?: (row: Row) => boolean
+  /** Shown in the search box before the input: a multiselect's chosen records. */
+  before?: ReactNode
+  /** Records left out of the list, such as those chosen already. */
+  hide?: (row: Row) => boolean
 }
 
 type Found = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number }
@@ -37,7 +38,7 @@ function ordered(rows: Row[], first: Props['first']): Row[] {
 }
 
 /** A search over one model's records with a listbox under it: ↑↓ move, Enter picks, Escape cancels. */
-export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, checked }: Props) {
+export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, before, hide }: Props) {
   const [query, setQuery] = useState(opening)
   const [found, setFound] = useState<Found>({ status: 'loading' })
   const [active, setActive] = useState(0)
@@ -64,7 +65,7 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
     }
   }, [model, query])
 
-  const rows = found.status === 'ready' ? found.rows : []
+  const rows = found.status === 'ready' ? (hide ? found.rows.filter((row) => !hide(row)) : found.rows) : []
 
   const keys = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -85,27 +86,31 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
     event.stopPropagation()
   }
 
+  const field = (
+      <input
+          ref={input}
+          className="nv-picker__input"
+          role="combobox"
+          aria-label={label}
+          aria-expanded="true"
+          aria-controls={`${id}-list`}
+          aria-activedescendant={rows[active] ? `${id}-${rows[active].id}` : undefined}
+          aria-autocomplete="list"
+          placeholder={`${label}…`}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setActive(0)
+            setFound({ status: 'loading' })
+          }}
+          onKeyDown={keys}
+          onBlur={onClose}
+        />
+  )
+
   return (
     <div className="nv-pop nv-picker" data-editor>
-      <input
-        ref={input}
-        className="nv-picker__input"
-        role="combobox"
-        aria-label={label}
-        aria-expanded="true"
-        aria-controls={`${id}-list`}
-        aria-activedescendant={rows[active] ? `${id}-${rows[active].id}` : undefined}
-        aria-autocomplete="list"
-        placeholder={`${label}…`}
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value)
-          setActive(0)
-          setFound({ status: 'loading' })
-        }}
-        onKeyDown={keys}
-        onBlur={onClose}
-      />
+      {before ? <div className="nv-picker__box">{before}{field}</div> : field}
       <ul id={`${id}-list`} role="listbox" aria-label={label} className="nv-picker__list" onMouseDown={(event) => event.preventDefault()}>
         {rows.map((row, i) => (
           <li
@@ -113,19 +118,17 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
             id={`${id}-${row.id}`}
             role="option"
             aria-selected={i === active}
-            aria-checked={checked ? checked(row) : undefined}
             className="nv-pop__option"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onPick(row, 'click')}
           >
-            {checked && <Check size={13} aria-hidden="true" className="nv-picker__check" />}
             {row.title}
           </li>
         ))}
       </ul>
       {found.status === 'loading' && <Spinner size="sm" />}
       {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
-      {found.status === 'ready' && found.total > rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
+      {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
     </div>
   )
 }
