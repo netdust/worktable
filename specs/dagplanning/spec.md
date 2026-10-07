@@ -19,14 +19,14 @@ The third point, "the filter is not working at all" (a Locatie filter in Dagplan
 - Each tag shows the person's name and is coloured by the Toewijzing's state (the state column's own tones: uitgenodigd amber, bevestigd green, geweigerd and geannuleerd red).
 - Editing the cell opens a multiselect dropdown of people with a search. Picking a person creates a Toewijzing for that activity through the Toewijzing writer, in its default state (uitgenodigd). The tag's × removes that Toewijzing through the writer, as a delete.
 - The writer's refusals stand and show as any write refusal does, for example the same person twice on one activity.
-- Adding a person is one batch that one undo takes back. Removing is final, as every delete is (docs/SPEC.md, Revision). Removing a person whose state is not uitgenodigd first asks "Toewijzing van <naam> verwijderen?", because adding them again starts at uitgenodigd.
+- Adding a person is one batch that one undo takes back. Removing is final, as every delete is (docs/SPEC.md, Revision). Removing a person whose state is not uitgenodigd first asks "Toewijzing van <naam> verwijderen?" (the word Toewijzing comes from the link's declared `item`), because adding them again starts at uitgenodigd.
 - Source for the last point: Stefan's choice "No undo; confirm when not 'uitgenodigd'", 2026-10-07.
 - State changes stay in the Toewijzingen matrix.
 - A Toewijzing with only a free-text naam and no persoon is not a person. It shows as a grey tag with its naam and has no ×.
 - Source: the quote above; tag content, Stefan's choice "Name + status colour", 2026-10-07.
 
 **R3. The engine shape behind R2 is generic.** A query or dataset may declare a link column:
-- `links: { dataset, key, target, state? }`: the rows of `dataset` whose `key` column equals this row's id.
+- `links: { label, item, dataset, key, target, state? }` (`item`: the word for one link, used in the grid's question before removing one): the rows of `dataset` whose `key` column equals this row's id.
 - Each is served as `{ id, target, title, state }`. `title` is the target's title, or the link row's own title when it has no target.
 - The engine reads them for a page of rows in one query per link column. It reads them through the caller's scope on the link dataset and through the target's title rule. An owner sees only the link rows its scope allows, and only the titles of their targets.
 - Writes are not new. The grid creates and deletes link rows with the existing `POST /rows/<dataset>` and `DELETE /rows/<dataset>/:id`.
@@ -45,7 +45,8 @@ The third point, "the filter is not working at all" (a Locatie filter in Dagplan
 - Source: the quote above; default and presets, Stefan's choice "Date filter, default this week", 2026-10-07.
 
 **R5. A query's views sit under the data model it reads.** The sidebar lists only data models. Each model folds out to its own views, then the views of every query over it, each with the query icon.
-- Theatre: Dagplanning, Per productie per dag and Voorstellingen all sit under Activiteiten. Dagplanning leaves the Planning section, and the other two leave the bottom of the rail.
+- Theatre: Dagplanning, Per productie per dag and Voorstellingen all sit under Activiteiten, in that order.
+- A query without `of` stays a node of its own (fiche's query is one). A query's own label and icon are no longer reachable from the rail: the model's `…` menu acts on the model. Dagplanning leaves the Planning section, and the other two leave the bottom of the rail.
 - The engine shape: a query declares `of: <dataset>`. Validation refuses an unknown dataset, and a section that lists a query. `/schema` serves `of`.
 - "+ Weergave" on a model makes a view on the model itself. A new view on a query starts as a copy of one of its views (`…` → Kopie maken).
 - Source: Stefan, 2026-10-07: "they are query views of activiteiten en should be listed under the activiteiten tab"; the tree shape: "that schema seems correct yes".

@@ -238,3 +238,160 @@ There is one Blocking finding and it needs a one-line fix. All of round 1's find
 - Seeded views pass the saved-view rules → `packages/theatre/test/theatre.test.ts:24` → holds; it will also check `mensen` once Task 3 lands
 - `state` is an allowed engine word → `scripts/vocabulary-allow.txt:7` → holds
 - docs/SPEC.md working tree already has the period line → `git diff docs/SPEC.md` → does not hold (S-new-5)
+
+---
+
+# Plan review — dagplanning (round 3)
+Reviewed-plan: c44b053a14a7191711bd9b3b28ed4666703eb9d9
+Verdict: not ready
+
+All of round 2's findings are fixed except one, and that one now disagrees with the spec. The blocking finding is in Task 0: it names `toSchema` as the place to change, but the code that puts views under a model node is elsewhere. Done as written, the query views either disappear or get saved on the wrong source. The fix is a small rewrite of Task 0's Files and Interfaces.
+
+## Round 2 findings
+
+| # | Status | Evidence in this plan |
+|---|---|---|
+| B-new-1 | Resolved | The confirm is now a new popover inside `Links.tsx`. Links.test covers both buttons: Verwijderen calls `onRemove` and Annuleren does not. |
+| S-new-1 | Resolved | `fieldsOf` (`engine.ts:227`) is named. Step 1b has the vitest round trip. The e2e reopens the saved copy. |
+| S-new-2 | Resolved | The fixture gets two links: one over an owned join (Threat 1, asserted by id) and one with no owner column (Threat 5). |
+| S-new-3 | Resolved | Undo comes before the reload. The duplicate is a stale row created through the API (`checkAssignee`). |
+| S-new-4 | Resolved | The step no longer counts rows. It checks that the chip reads the current week and that no error shows. |
+| S-new-5 | Resolved | Task 2 Step 6b adds the period line to the `docs/SPEC.md` working-tree diff, unstaged. |
+| S-new-6 | Resolved | `/schema` `links[name].state` serves `default`, and Task 4 Step 2 asserts it. Task 3 Step 1 asserts options and tones only. That is fine. |
+| N-new-1 | Resolved | The "Geen rijen in deze week" hits are listed. |
+| N-new-2 | Resolved | `Matrix.tsx:383` is named, and the chip is passed as its own prop. |
+| N-new-3 | Resolved | The add is pushed with `id: linkId`, and × calls `history.forget`. |
+| N-new-4 | Resolved, but now contradicts the spec | See S3-4 below. |
+| N-new-5 | Mostly resolved | "sort and group on it are 400" sits under the views test, but does not say it is `POST /views`. |
+| N-new-6, 7, 8 | Resolved | Van–tot is capped at 92 days, export gets `null` under Alles, the files are named. |
+| N-new-9 | Open (acceptable) | The write reply still carries no `links`. This is harmless for Dagplanning. |
+
+## Blocking
+
+**B3-1. Task 0 changes the wrong part of the grid. The grid puts views under a model by `view.table`, and `view.table` is also the source a saved view is written to.**
+- **What the plan says:** Task 0 Files: "`apps/grid/src/engine.ts` (`toSchema`: a query with `of` adds its tables to that model's entry instead of its own)". Interfaces: "each view keeps its own `model` (the query) for reads and writes".
+- **What the source says:**
+  - `toSchema` (`apps/grid/src/engine.ts:191-200`) builds a flat `tables: TableDef[]` with one entry per source. A `models[name]` entry is a `Model` holding fields, so there is no "model's entry" of tables to add to.
+  - The tree is built afterwards in `useSavedViews.ts:52`: `groupTables(byFirstView(declared, …))`.
+    - `groupTables` assigns a view by `view.table === table.key` (`apps/grid/src/ui/tables.ts:30`).
+    - `listFor` then rebuilds each table's list with `saved.filter((view) => view.table === table.key)` (`apps/grid/src/ui/views.ts:125`).
+  - `view.table` comes from `toSavedViews`: `table: view.source` (`engine.ts:300`). It is the source that saved-view writes use:
+    - `createView` and `updateView` call `sourceOf(view.table)` (`api.ts:192,198`).
+    - `duplicate` and `saveAs` send `table: from.table` (`useSavedViews.ts:134,154`).
+- **What goes wrong:**
+  - If `toSchema` drops the query's TableDef, `groupTables` and `listFor` drop its views and they vanish from the rail.
+  - If `view.table` is changed to `activiteit` instead, Kopie maken and Save write a Dagplanning arrangement onto `activiteit`.
+  - Step 2's Kopie maken test would catch the second case, but the plan points the executor at the wrong code to change.
+- **Smallest change to Task 0:**
+  - `toSchema`/`tableDefOf` only carry `of` onto `TableDef`.
+  - The grouping goes in `apps/grid/src/ui/tables.ts` `groupTables` and `apps/grid/src/ui/views.ts` `listFor`: a table also takes the views whose table's `of` is its key, its own views first, then each query's in declared order.
+  - `view.table` stays the query.
+  - Add `apps/grid/src/ui/tables.test.ts` to the Test map row ("Query `of` and the tree"). It already tests `groupTables` and `sectionsOf`.
+  - Drop "`apps/grid/src/space.ts` if sections are read there". `space.ts` is the space selector. Sections are read in `tables.ts:35` `sectionsOf`.
+
+## Should fix
+
+**S3-1. A query view would be titled with its model's label: the Dagplanning grid would be labelled "Activiteiten".**
+- **Where:** Task 0 does not mention it.
+- **Source:**
+  - `apps/grid/src/ui/App.tsx:202`: `const title = tableOf(tables, view?.key)?.label`.
+  - That title becomes the grid's `aria-label` (`grid/Grid.tsx:301`, `title ?? view.label`), the Matrix title and the export's sheet title (`App.tsx:284`, `export/download.ts:20`).
+  - Once Dagplanning sits under Activiteiten, `tableOf` returns Activiteiten.
+  - `e2e/step-0d.spec.ts:210` waits for `getByRole('grid', { name: 'Dagplanning' })` and would time out.
+- **Smallest change:** Task 0 sets `title` from the view's own source label (`models[view.model].label`, or `view.table_label`), not from the rail node. Add one App.test assertion that a query view's grid is named by the query.
+
+**S3-2. The list of e2e callers to update is incomplete.**
+- **Where:** Task 0 Test/Step 6 greps only `openView(page, 'Dagplanning'`, `openModel(page, 'Dagplanning'` and `pick(page, 'Dagplanning'`.
+- **Callers it misses, all of which default the model to the view's name or name the old node:**
+  - `e2e/step-0a.spec.ts:119`: `openView(page, 'Per productie per dag')`.
+  - `e2e/step-0b.spec.ts:122,141`: `open(page, 'Dagplanning')`.
+  - `e2e/step-0c.spec.ts:169`: `open(page, 'Voorstellingen')`.
+  - `e2e/step-0d.spec.ts:210`: `open(page, 'Dagplanning', …)`.
+  - `e2e/step-0d.spec.ts:330`: `modelNode(page, 'Dagplanning')` toBeVisible.
+  - `e2e/grid-ux.spec.ts:510`: `modelNode(page, 'Dagplanning')`, the R10.5 font check.
+  - `e2e/rail-tree.spec.ts:17-20`: `tree-scrolls-in-rail` uses `modelNode(page, 'Voorstellingen')` as the last node and clicks "Weergave toevoegen aan Voorstellingen".
+- **Smallest change:**
+  - Grep for the three view names with any helper: `open(`, `openView(`, `pick(`, `modelNode(`.
+  - Name these lines in the plan.
+  - Give `tree-scrolls-in-rail` a new last node (Sjablonen).
+
+**S3-3. The new "no query in a section" rule breaks the engine's space fixture, and the plan does not list it.**
+- **Where:** Task 0 Step 1: "a section that lists a query is refused".
+- **Source:**
+  - `packages/engine/test/fixtures/space-domain.ts:52,76-78` declares `job_room` as a query and lists it in section `Work`.
+  - `packages/engine/test/declarations.test.ts:51` ("the fixture passes") and `:134-137` (`sections: [{ label: 'Work', sources: ['job_room', 'job'] }]`) would both fail.
+- **Smallest change:** add `space-domain.ts` and those two assertions to Task 0's Files. `job_room` comes out of the section and gains `of: 'job'`, which also gives the `/schema` `of` test a generic subject.
+
+**S3-4. The confirm's wording contradicts spec R2.**
+- **Where:** Task 4 App.tsx bullet: "<link label> van <titel> verwijderen?".
+- **What goes wrong:**
+  - Theatre's link label is `Mensen` (Task 4 Files), so the question reads "Mensen van Jan verwijderen?".
+  - Spec R2 fixes the text as "Toewijzing van <naam> verwijderen?".
+  - The link dataset's served label is `Toewijzingen` (`packages/theatre/src/datasets.ts:155`), so that does not produce the spec's text either.
+  - The grid has no site-strings channel: `/schema` serves no `strings` (`packages/engine/src/app.ts:176`).
+- **Smallest change:** put the wording to Stefan before Task 4. Either:
+  - (a) accept the generic "<titel> verwijderen?" or "Mensen van <titel> …", or
+  - (b) `LinkDecl` gains an `item` word (theatre: `Toewijzing`), served and used in the sentence.
+- Do not let the executor resolve it alone.
+
+**S3-5. The order of the three query views is stated two ways.**
+- **The two statements:**
+  - Interfaces: "each `of` query's views in the declared query order".
+  - Step 2: "Activiteiten's views end with Dagplanning, Per productie per dag and Voorstellingen".
+- **Source:** theatre declares `queries: [productieDag, dagplanning, voorstellingen]` (`packages/theatre/src/index.ts:32`). The declared order is therefore Per productie per dag, Dagplanning, Voorstellingen.
+- **Smallest change:** either fix Step 2's expected order, or reorder `queries` in theatre's `index.ts` as part of Task 0.
+
+**S3-6. The owner fallback has no grid test, and serving `of` the way `creates` is served would remove the need for it.**
+- **Where:** Step 4: "A query whose `of` dataset the caller cannot read shows its views under a model node of its own". Interfaces: `of: string | null` is always served.
+- **Source:**
+  - `createsOf` (`packages/engine/src/app.ts:99-102`) serves `creates` only when the caller can read the target, so `/schema` never names a dataset the caller cannot read.
+  - In theatre the fallback cannot be reached: no theatre query declares `owners`, so an owner reads none of them (`access.ts:48-49`). It only matters in the engine fixture (`per_project`, owners on `project_id`).
+  - Step 2 has no grid test for the fallback.
+- **Smallest change:**
+  - Serve `of` only when `readable(actor, of)`, like `createsOf`.
+  - Step 1's owner test becomes "an owner who cannot read the `of` dataset gets no `of`, and still reads the query".
+  - The grid then needs no fallback branch: no `of` means its own node, as today.
+
+## Note
+
+- **N3-1. Per-table prefs are keyed by `view.table`, but the tree is now keyed by the model.**
+  - `remember` writes `prefs.last[view.table]`, i.e. `last['dagplanning']` (`useSavedViews.ts:66-67`).
+  - `lastIn` reads `last[table.key]`, i.e. `last['activiteit']` (`views.ts:149-150`). Clicking Activiteiten after using Dagplanning therefore opens a model view, not Dagplanning.
+  - Drag-reordering is saved under `order['activiteit']` and can interleave query views with model views, against R5's "its own views, then the views of every query".
+  - Any stored `order['dagplanning']` is orphaned.
+  - Needs a ruling at execution: either key `last` by the rail node, or accept it. Either block drags across the boundary, or let the user's order win.
+- **N3-2. Queries without `of`.** `of?:` is optional. Fiche's `zichtbare_fiches` (`packages/fiche/src/queries.ts:5`) stays its own rail node, so "the sidebar lists only data models" (R5) holds for theatre only. That is consistent with `fiche-renders-as-before`, but one sentence in Task 0 saying so would prevent a ruling.
+- **N3-3. A query's own rename and icon become unreachable.** The model `…` menu on Activiteiten renames and re-icons `activiteit` (`App.tsx:286-295`, `changeDisplay(table.key)`), which is correct for the model. No menu reaches a query's display name any more. That is acceptable under R5, but nothing states it.
+- **N3-4. `of` naming a query.** "Validation refuses an unknown dataset": the test should also refuse `of` naming a query (or itself), not only a missing name.
+- **N3-5. Working tree.** R6 is now committed (`63f3b6f`), so the plan's "R6 is done before Task 0" holds. The working tree now holds an unrelated, uncommitted engine change: `packages/engine/src/seed-missing.ts` `removeUndeclared`, plus its test. It is in no task. Stage Task 0's paths explicitly so it is not swept in.
+- **N3-6. These already work with the right grouping:** the space switcher, the new-view dialog and the landing view.
+  - Each saved view keeps its own source's `space` (`toSavedViews` spreads `tableDefOf(view.source)`, `engine.ts:297`), so a query view's scope is unchanged.
+  - `+ Weergave` uses the Activiteiten table's `space` and `types`, which matches R5's "a view on the model itself".
+  - The landing view stays Planning: the first seeded view, `seed.ts:170`, and `tables[0].views[0]`.
+  - Export from the Activiteiten `…` exports the open query view (`holdsActive`), but under the wrong title until S3-1 is fixed.
+  - The query icon can come from `view.query`, which `tableDefOf` sets (`engine.ts:180`).
+
+## Premises checked
+- `toSchema` has a per-model entry that tables are added to → `apps/grid/src/engine.ts:191-200` → does not hold (B3-1)
+- Views are grouped by `view.table` → `apps/grid/src/ui/tables.ts:30`, `apps/grid/src/ui/views.ts:125` → holds; the plan does not name either file (B3-1)
+- `view.table` is the saved view's source for create, update and copy → `apps/grid/src/api.ts:192,198`, `useSavedViews.ts:134,154` → holds; it must stay the query
+- `byFirstView` and the landing view → `tables.ts:46-52`, `App.tsx:192`, `seed.ts:170` (Planning first) → holds, landing unchanged
+- Sections are read in `space.ts` → `apps/grid/src/space.ts` (space selector only); sections are read in `tables.ts:35` → does not hold (B3-1)
+- The rail's model node icon comes from `table.query` → `Rail.tsx:105` → holds; `ViewList.tsx:134` uses only Grid3x3/Table, and `View.query` is present (`engine.ts:180`) → holds
+- The model `…` menu's rename, icon and export apply to `table.key` and the open view → `Rail.tsx:114-117`, `App.tsx:286-297` → holds (N3-3)
+- The engine refuses unknown and duplicate section sources only → `packages/engine/src/validate.ts:235-243` → holds; the plan adds the query rule
+- `/schema` filters sections by readability → `app.ts:76-84` → holds
+- `/schema` hides `creates` from a caller who cannot read the target → `app.ts:99-102` → holds (S3-6)
+- `QueryDecl` has no `of` yet → `packages/engine/src/declare.ts:90-104` → holds
+- Theatre's Planning section lists `dagplanning` → `packages/theatre/src/index.ts:48` → holds
+- Theatre's declared query order → `index.ts:32` → productie_dag, dagplanning, voorstellingen (S3-5)
+- No theatre query declares owners → `packages/theatre/src/queries.ts` → holds; the owner fallback is fixture-only (S3-6)
+- The engine space fixture lists a query in a section → `packages/engine/test/fixtures/space-domain.ts:52,78` → holds; it breaks under the new rule (S3-3)
+- The theatre sections test → `packages/theatre/test/grid-ux.test.ts:42-50` → holds; the plan lists it
+- The grid title comes from the rail node → `App.tsx:202`, `Grid.tsx:301` → holds; it changes for query views (S3-1)
+- The e2e helper `openView` defaults the model to the view's name → `e2e/tree.ts:14` → holds; the callers are listed in S3-2
+- `rail-tree.spec.ts` uses Voorstellingen as the last node → `e2e/rail-tree.spec.ts:17-20` → holds; it breaks (S3-2)
+- Fiche declares a query → `packages/fiche/src/queries.ts:5` → holds (N3-2)
+- R6 is done before Task 0 → commit `63f3b6f` → holds
+- The toewijzing dataset's label → `packages/theatre/src/datasets.ts:155` (`Toewijzingen`) → not the spec's "Toewijzing" (S3-4)
+- `/schema` serves site strings → `app.ts:176` → does not hold (S3-4)

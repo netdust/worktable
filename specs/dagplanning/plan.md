@@ -49,7 +49,7 @@
 ## Test map
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 | --- | --- | --- | --- |
-| Query `of` and the tree | `GET /api/schema`, `validateDomain`, the rail | integration · `packages/engine/test/declarations.test.ts` · `bun test packages/engine`; unit · `apps/grid/src/ui/Rail.test.tsx`, `apps/grid/src/engine.test.ts` · `cd apps/grid && bunx vitest run` | query-views-under-model |
+| Query `of` and the tree | `GET /api/schema`, `validateDomain`, the rail | integration · `packages/engine/test/declarations.test.ts` · `bun test packages/engine`; unit · `apps/grid/src/ui/tables.test.ts`, `ui/Rail.test.tsx`, `ui/App.test.tsx`, `engine.test.ts` · `cd apps/grid && bunx vitest run` | query-views-under-model |
 | Engine `links` | `GET /api/schema`, `GET /api/rows/:source`, `validateDomain` | integration · `packages/engine/test/links.test.ts` (new) · `bun test packages/engine` | none, proven by people-tags |
 | Theatre Dagplanning declarations | `PATCH /api/rows/dagplanning/:id`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/writer.test.ts` (`describe('dagplanning')`, :220) · `bun test packages/theatre` | edit-dagplanning, locatie-own-and-back |
 | People cell | render, picker | unit · `apps/grid/src/grid/cells/Links.test.tsx` (new) · `cd apps/grid && bunx vitest run` | people-tags |
@@ -71,16 +71,31 @@
 **Files:**
 - Modify: `packages/engine/src/declare.ts` (`of?: string` on `QueryDecl`), `packages/engine/src/validate.ts`, `packages/engine/src/app.ts` (`/schema` serves `of`).
 - Modify: `packages/theatre/src/queries.ts` (`of: 'activiteit'` on all three queries); `packages/theatre/src/index.ts` (the Planning section loses `dagplanning`).
-- Modify: `apps/grid/src/engine.ts` (`toSchema`: a query with `of` adds its tables to that model's entry instead of its own), `apps/grid/src/ui/Rail.tsx` / `ViewList.tsx` (a query view shows the query icon), `apps/grid/src/space.ts` if sections are read there.
-- Test: `packages/engine/test/declarations.test.ts`, `packages/theatre/test/grid-ux.test.ts` (sections), `apps/grid/src/ui/Rail.test.tsx`, `apps/grid/src/engine.test.ts`, `e2e/tree.ts` callers that open Dagplanning as a model (`openView(page, 'Dagplanning')` becomes `openView(page, 'Dagplanning', 'Activiteiten')`; grep `openView(page, 'Dagplanning'`, `openModel(page, 'Dagplanning'`, `pick(page, 'Dagplanning'`).
+- Modify (grid):
+  - `apps/grid/src/engine.ts` `toSchema` / `tableDefOf`: only carry `of` onto `TableDef`. `view.table` stays the query: it is the source every saved-view write uses (`api.ts:192,198`, `useSavedViews.ts:134,154`).
+  - `apps/grid/src/ui/tables.ts` `groupTables` (:30) and `apps/grid/src/ui/views.ts` `listFor` (:125): a table also takes the views whose table's `of` is its key, its own views first, then each query's in declared order. A table with `of` gets no node of its own.
+  - `apps/grid/src/ui/App.tsx:202`: the grid's title comes from the view's own source label (`models[view.model].label`), not from the rail node, so a query view's grid, matrix and export stay named by the query.
+  - `apps/grid/src/ui/ViewList.tsx` (:134): a view with `view.query` shows the query icon.
+  - Prefs: `last` is keyed by the rail node (`remember` in `useSavedViews.ts:66`), so Activiteiten reopens Dagplanning after it was used. Drag-reordering stays inside a block: a model's own views, or one query's views.
+- Modify (engine fixture): `packages/engine/test/fixtures/space-domain.ts:52,76-78`: `job_room` leaves section `Work` and gains `of: 'job'`; update `packages/engine/test/declarations.test.ts:51,134-137`.
+- Modify (theatre): `packages/theatre/src/index.ts:32`: `queries: [dagplanning, productieDag, voorstellingen]`, so the declared order is the tree's.
+- Test: `packages/engine/test/declarations.test.ts`, `packages/theatre/test/grid-ux.test.ts` (sections), `apps/grid/src/ui/tables.test.ts` (`groupTables`, `sectionsOf`), `apps/grid/src/ui/Rail.test.tsx`, `apps/grid/src/ui/App.test.tsx` (title), `apps/grid/src/engine.test.ts`.
+- E2E callers that open a query as a model, each now under Activiteiten (grep the three names with `open(`, `openView(`, `pick(`, `modelNode(`):
+  - `e2e/step-0a.spec.ts:119` `openView(page, 'Per productie per dag')`;
+  - `e2e/step-0b.spec.ts:122,141` `open(page, 'Dagplanning')`;
+  - `e2e/step-0c.spec.ts:169` `open(page, 'Voorstellingen')`;
+  - `e2e/step-0d.spec.ts:210` `open(page, 'Dagplanning', …)` and `:330` `modelNode(page, 'Dagplanning')`;
+  - `e2e/grid-ux.spec.ts:510` `modelNode(page, 'Dagplanning')` (the font check moves to the Activiteiten node);
+  - `e2e/rail-tree.spec.ts:17-20` `tree-scrolls-in-rail`: its last node becomes Sjablonen;
+  - every other hit of the grep.
 
 **Interfaces:**
-- Produces: `/schema` `sources[q].of: string | null` for a query. In the grid, a model's views are its own tables' views, then each `of` query's views in the declared query order; each view keeps its own `model` (the query) for reads and writes.
+- Produces: `/schema` `sources[q].of` for a query, served only when the caller can read that dataset (as `createsOf` serves `creates`, `app.ts:99`); otherwise absent, and the grid shows the query as a node of its own, as today. In the grid, a model's views are its own tables' views, then each `of` query's views in the declared query order; each view keeps its own `model` (the query) for reads and writes.
 
-- [ ] Step 1: Engine tests: `of` naming an unknown dataset is refused; a section listing a query is refused; `/schema` serves `of`; an owner who cannot read the `of` dataset still reads a query it may read (the query stays its own source: `of` only places it).
-- [ ] Step 2: Grid tests: the rail lists no query as a model; Activiteiten's views end with Dagplanning, Per productie per dag and Voorstellingen, each with the query icon; opening one reads `/rows/<query>`; "+ Weergave" on Activiteiten makes a view on `activiteit`; Kopie maken on a query view makes a view on the query.
+- [ ] Step 1: Engine tests: `of` naming an unknown dataset, a query, or itself is refused; a section listing a query is refused; `/schema` serves `of` (on the fixture's `job_room`); an owner who cannot read the `of` dataset gets no `of` and still reads the query.
+- [ ] Step 2: Grid tests: the rail lists no query with `of` as a node; Activiteiten's views end with Dagplanning, Per productie per dag and Voorstellingen, in that order, each with the query icon; opening one reads `/rows/<query>` and the grid is named by the query; "+ Weergave" on Activiteiten makes a view on `activiteit`; Kopie maken on a query view makes a view on the query; a query without `of` keeps its own node.
 - [ ] Step 3: Run them. Expected: FAIL.
-- [ ] Step 4: Implement. A query whose `of` dataset the caller cannot read shows its views under a model node of its own, as today (the fallback keeps an owner's rail correct).
+- [ ] Step 4: Implement.
 - [ ] Step 5: Run them. Expected: PASS.
 - [ ] Step 6: E2E `query-views-under-model @e2e` in `e2e/rail-tree.spec.ts`: Activiteiten folds out to its views then the three query views; Dagplanning opens from there; no query sits at the bottom of the rail. Update the callers listed above.
 - [ ] Step 7: `bun run gate` exits 0. Commit `feat: a query's views sit under the data model it reads`.
@@ -166,7 +181,7 @@
 
 **Interfaces:**
 - Produces:
-  - `interface LinkDecl { label: string; dataset: string; key: string; target: string; state?: string }`.
+  - `interface LinkDecl { label: string; item: string; dataset: string; key: string; target: string; state?: string }`. `/schema` serves `item` with the link.
   - `/schema`: `sources[s].links = { [name]: { label, dataset, target, target_dataset, state?: { options, tones, default } } }`. The grid knows the state column's default from it.
   - `/rows/:source`: each row gains `links: { [name]: { id: number; target: number | null; title: string; state: string | null }[] }`, ordered by link row id.
   - `linksOf(db, domain, source, ids, actor): Map<number, Record<string, LinkRow[]>>`.
@@ -180,7 +195,7 @@
     - a `state` that is not an options column;
     - a link name that clashes with a column;
     - a column named `links`.
-  - `POST /views` and `PATCH /views/:id` accept a link name in `visible_fields`; a public view's rows leave it out; sort and group on it are 400.
+  - `POST /views` and `PATCH /views/:id` accept a link name in `visible_fields`; a public view's rows leave it out; `POST /views` with `sort: ['<link>']` or `group_by: '<link>'` is 400, and so is `GET /rows` sorting or grouping on it.
   - `/schema` serves `links` with the target dataset and the state's options and tones. An owner who cannot read the link dataset gets no `links` entry.
   - `/rows` serves each row's link rows. A soft-deleted link row is absent. A link row without a target has `target: null` and its own title.
   - Each link entry's keys are exactly `id, target, title, state`; no column of the target or the link row leaks. `title` is the target's title (`lookups[target]?.title`), else the link row's own title.
@@ -195,7 +210,7 @@
 ### Task 4: People as tags in Dagplanning (R2)
 
 **Files:**
-- Modify: `packages/theatre/src/queries.ts` (dagplanning `links: { mensen: { label: 'Mensen', dataset: 'toewijzing', key: 'activiteit_id', target: 'persoon_id', state: 'state' } }`).
+- Modify: `packages/theatre/src/queries.ts` (dagplanning `links: { mensen: { label: 'Mensen', item: 'Toewijzing', dataset: 'toewijzing', key: 'activiteit_id', target: 'persoon_id', state: 'state' } }`).
   - Pick the `key` check from Task 3 that holds here: Dagplanning's `id` is the activity's id and `creates: 'activiteit'`.
   - Add `mensen` to the seeded Dagplanning view's visible fields in `packages/theatre/src/seed.ts`, after Locatie. `--seed-missing` brings system views up to date (option b).
   - Update the tests that pin those fields: `packages/theatre/test/seed-missing.test.ts:14` (`DAGPLANNING`, and assert `mensen` lands), `packages/theatre/test/grid-ux.test.ts:138`, and the header list at `e2e/grid-ux.spec.ts:486-493` (Mensen after Locatie).
@@ -203,7 +218,7 @@
   - `apps/grid/src/engine.ts`, `types.ts`: a links column becomes a field of type `links`.
   - `apps/grid/src/grid/columns.ts`.
   - `apps/grid/src/grid/cells/Links.tsx` (new), `cells/index.tsx`.
-  - `apps/grid/src/ui/App.tsx`: add through `create` in `api.ts`, pushed to the history like other creates; remove through `remove`, which is final (a delete batch is never undone) and not pushed. Removing a link whose state is not the state column's default first asks with a new small confirm popover inside `Links.tsx`, anchored on the tag: "<link label> van <titel> verwijderen?" with Verwijderen and Annuleren. The sentence is built from the served link label, so the grid holds no domain word. Then the row is re-read.
+  - `apps/grid/src/ui/App.tsx`: add through `create` in `api.ts`, pushed to the history like other creates; remove through `remove`, which is final (a delete batch is never undone) and not pushed. Removing a link whose state is not the state column's default first asks with a new small confirm popover inside `Links.tsx`, anchored on the tag: "<item> van <titel> verwijderen?" with Verwijderen and Annuleren, where `item` is the link's declared word for one link (theatre: `Toewijzing`), so the grid holds no domain word. Then the row is re-read.
   - The add is pushed to the history with `id: linkId`; a × on that link calls `history.forget(dataset, linkId)`, as `grid/store.ts` does for a row delete.
   - `apps/grid/src/engine.ts` `fieldsOf` (:227) includes the source's link names, so `toStoredView` / `fromStoredView` keep `mensen` in `visible_fields` and its order.
   - `apps/grid/src/grid/columns.ts`: a links column is not sortable or groupable, and `grid/filter.ts` `filterFields` leaves it out.
