@@ -50,7 +50,8 @@
 5. Kept contracts:
    - `navigation "Views"`;
    - `More actions: <name>`;
-   - opening a view by its name in the rail: clicking a model's name opens its first view, and `getByText(name).first()` still lands on it;
+   - opening a view by its name in the rail. The landing view stays `tables[0].views[0]` in today's `byFirstView` order; sections order only the tree. Opening a model by its name also unfolds it. The e2e helpers click rail buttons by role and exact name inside `navigation "Views"`, never `getByText`, so a section label ("Planning") is never a click target.
+   - the `…` on a model is named `Meer voor <model>`, so `More actions: <view>` stays unique;
    - the add button's name.
 
    Changed deliberately:
@@ -107,7 +108,7 @@
 - On a query column: `ColumnDecl.inherited?: { flag: string; own: string }`. Validation refuses it on a dataset column, and refuses a flag that is not a column of the same query.
 - What `/schema` serves:
   - `space: { model, field }`, only when the domain declares a space and the caller can read it (`readable`). Every `scoped` column must have the same name, which is `field`.
-  - `sections`, as declared;
+  - `sections`, each listing only the sources the caller can read; an empty section is dropped;
   - per source, `space: 'scoped' | 'global'` (only when a space is served) and `group_facts`;
   - columns carry `inherited`.
 
@@ -119,11 +120,12 @@
     - a section naming an unknown source, or a source listed twice;
     - a fact naming an unknown column;
     - `inherited` on a dataset column, or with an unknown flag.
-  - `/schema` serves each declaration. An owner's `/schema` has no `space` when the owner cannot read the space dataset. A domain without the declarations serves none of them, and fiche is unchanged.
+  - `/schema` serves each declaration. An owner's `/schema` has no `space` when the owner cannot read the space dataset, and its sections list only readable sources, with empty sections dropped.
+  - The engine test fixture domain uses neither theatre nor fiche words (`titel`, `gemeente`, `postcode` …), because the vocabulary check scans the engine's tests too. A domain without the declarations serves none of them, and fiche is unchanged.
   - Theatre declares:
     - `space: productie`;
     - `scoped: productie_id` on activiteit, speelreeks, dagplanning and productie_dag;
-    - the sections of spec R2, with names and order invented and approval pending;
+    - the sections of spec R2, with names and order invented and approval pending. The source keys are `dagplanning`, `activiteit`, `speelreeks`, `toewijzing` and `beschikbaarheid` (its node reads "Beschikbaarheden"), then `productie`, `persoon` and `organisatie`, then `rol` and `sjabloon`.
     - the two facts on dagplanning and activiteit;
     - `inherited` on `dagplanning.locatie_id`.
 - [ ] Write the proposed `docs/SPEC.md` lines (Skin needs row, the sidebar paragraph) as an uncommitted diff, for Stefan to see.
@@ -160,14 +162,16 @@
   - `MoreMenu.tsx`: an icon prop, reused for `+` and `…`;
   - `App.tsx`: the `+ View` panel is replaced by the dialog;
   - `i18n.ts` and `app.css`;
-  - e2e `open`/`pick` helpers, only if a flow breaks.
+  - the e2e `open`/`pick` helpers in step-0a, 0b, 0d, 0e and step-1 (a decided step, not only if a flow breaks): they click a button by role and exact name inside `navigation "Views"`. A view under another model passes its model, which the helper opens first (for example `open(page, 'Optie of bevestigd', 'Activiteiten')`). `e2e/step-0e.spec.ts:101` counts tree buttons, not text.
 - Create: `apps/grid/src/ui/NewViewDialog.tsx` and its test.
 
 **Behaviour:**
-- Clicking a model's name opens it and shows its first or last-used view (`openTable` and `Prefs.last` stay). Clicking the chevron that replaces the icon on hover or focus folds or unfolds it. On a first visit the active view's model is open.
+- Clicking a model's name opens it, unfolds it, and shows its first or last-used view (`openTable` and `Prefs.last` stay). Clicking the chevron that replaces the icon on hover or focus folds or unfolds it without changing the view. On a first visit the active view's model is open. The landing view is unchanged: `tables[0].views[0]` in `byFirstView` order.
 - Open state is stored per browser.
 - The open model's views sit in `role=group` named `View type`. Tests that expect a single such group keep one model open.
 - [ ] Tests:
+  - the landing view is the same as before the tree when sections reorder it;
+  - a model opened by name is unfolded;
   - hover and focus show the chevron and the tools;
   - name and chevron behave as above, and the open state persists;
   - the active view is highlighted;
@@ -190,7 +194,7 @@
 - Modify `apps/grid/src/ui/Toolbar.tsx` and `App.tsx`. The `h1` becomes the view name. The line holds the view kind's icon, the name, a lock with its tooltip on a read-only view, and the summary "N rijen · M groepen". The export title stays the source label (`App.tsx:252`).
 - Tests:
   - `Toolbar.test.tsx`;
-  - update the `h1` assertions in `App.test.tsx` (`:85`, `:93`, `:116`, `:148`, `:629`) and `e2e/step-0e.spec.ts:87`.
+  - update every `heading level 1` assertion in `App.test.tsx` (among them `:85`, `:93`, `:116`, `:148`, `:629`, `:633`, `:744`), rewrite the test titled "titles the toolbar … with the table's label" for the view name, and update `e2e/step-0e.spec.ts:87`.
 
 - [ ] Implement. Run the grid tests and the gate. Commit `feat(grid): the title line names the view`.
 

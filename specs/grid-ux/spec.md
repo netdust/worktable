@@ -31,7 +31,7 @@ Source: "the project selector top left is gone. here we should be able to select
 - **Opening and folding:** clicking a model's name opens it and shows its first (or last-used) view, as clicking a table does today; clicking the chevron that replaces the icon on hover folds or unfolds it without changing the view (ruling, 2026-10-07: it keeps the NocoDB behaviour and every existing "open a view by its name" path). On a first visit the active view's model is open.
 - **Sections:** the domain declares `sections: [{ label, sources: [...] }]`, which fixes both the section order and the source order inside each; sources it does not list sit in a final, unlabelled section.
   - Theatre:
-    - Planning: Dagplanning, Activiteiten, Speelreeksen, Toewijzingen, Afwezigheden;
+    - Planning: Dagplanning, Activiteiten, Speelreeksen, Toewijzingen, Beschikbaarheden;
     - Gegevens: Producties, Personen, Organisaties;
     - Instellingen: Rollen, Sjablonen.
   - Undeclared sources go under one section without a label.

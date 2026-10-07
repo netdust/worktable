@@ -30,3 +30,24 @@ Verdict: not ready (2 Blocking, 11 Should fix). Every finding was applied in the
 - The matrix is out of the band changes, and grid CSS is scoped under `.nv-grid`.
 - `openTable` and `Prefs.last` stay, because clicking a model's name uses them.
 - New strings are Dutch (ruling).
+
+# Plan review: grid-ux (round 2)
+Reviewed-plan: cffacc9159efbb0f62aa8d649b9e85e9baca6f8c
+Verdict: not ready (1 Blocking, 3 Should fix). All 13 round-1 findings were confirmed fixed. Every round-2 finding was applied below.
+
+## Blocking (applied)
+- **The "Planning" section label and folded models broke the e2e "open a view by its name" path.**
+  - The landing view stays `tables[0].views[0]` in today's `byFirstView` order.
+  - Opening a model by its name also unfolds it.
+  - The e2e helpers click rail buttons by role and exact name inside `navigation "Views"`, and are given the model for a view under another model.
+  - step-0e:101 counts buttons.
+  - Review Focus 5 is reworded, and a model's `…` is named `Meer voor <model>`.
+
+## Should fix (applied)
+1. **`sections` exposed sources an owner cannot read.** Sections now list only readable sources and drop empty ones, with an owner test.
+2. **Task 5's list of `h1` assertions was incomplete.** It now covers every `heading level 1` assertion, including `:633` and `:744`, and rewrites the label test.
+3. **Neither the landing view nor the label collision had a unit test.** Task 4 now has both.
+
+## Notes (applied)
+- The source key is `beschikbaarheid`, whose node reads "Beschikbaarheden". The spec is corrected.
+- The engine fixture domain avoids fiche words too.
