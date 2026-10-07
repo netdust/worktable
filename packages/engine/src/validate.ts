@@ -1,4 +1,4 @@
-import type { ColumnDecl, DatasetDecl, Domain, QueryDecl } from './declare'
+import { type ColumnDecl, type DatasetDecl, type Domain, ICONS, type QueryDecl, TONES } from './declare'
 import { reservedNames } from './engine-tables'
 import { sourceOf, sourcesOf, writerOf } from './registry'
 
@@ -42,6 +42,30 @@ function checkTones(source: DatasetDecl | QueryDecl): void {
         throw new DomainError(source.name, key, `${column} has a tone for "${key}", which is not one of its options`)
       }
     }
+    for (const tone of Object.values(decl.tones)) {
+      if (!(TONES as readonly string[]).includes(tone)) {
+        throw new DomainError(source.name, tone, `${column} has tone "${tone}", not one of ${TONES.join(', ')}`)
+      }
+    }
+  }
+}
+
+function checkIcon(source: DatasetDecl | QueryDecl): void {
+  const icon = source.icon
+  if (icon !== undefined && !(ICONS as readonly string[]).includes(icon)) {
+    throw new DomainError(source.name, icon, `icon "${icon}" is not one of ${ICONS.join(', ')}`)
+  }
+}
+
+function checkCreates(domain: Domain, query: QueryDecl): void {
+  const dataset = query.creates
+  if (dataset === undefined) return
+  if (!domain.datasets.some((d) => d.name === dataset) || !writerOf(domain, dataset)?.create) {
+    throw new DomainError(
+      query.name,
+      dataset,
+      `creates "${dataset}", which is not a dataset with a writer that creates`,
+    )
   }
 }
 
@@ -238,6 +262,7 @@ export function validateDomain(domain: Domain): void {
     checkRelations(domain, source)
     checkOwners(source)
     checkTones(source)
+    checkIcon(source)
     checkFacts(source)
     checkInherited(source)
   }
@@ -251,6 +276,7 @@ export function validateDomain(domain: Domain): void {
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {
+    checkCreates(domain, query)
     for (const [column, decl] of Object.entries(query.columns)) {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }

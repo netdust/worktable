@@ -36,7 +36,7 @@ test.describe('the model menu as an administrator', () => {
 
     await (await modelMenu(page, open)).getByRole('menuitem', { name: 'Icoon wijzigen' }).click()
     const icons = modelNode(page, open).getByRole('group', { name: `Icoon voor ${open}` })
-    await expect(icons.getByRole('button')).toHaveCount(12)
+    await expect(icons.getByRole('button')).toHaveCount(14)
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/icons.png`, clip: { x: 0, y: 0, width: 520, height: 400 } })
     await page.keyboard.press('Escape')
     await expect(icons).toHaveCount(0)

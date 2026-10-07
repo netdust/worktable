@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TableDef, View } from '../types'
 import { type ModelActions, Rail } from './Rail'
+import { ICONS } from './icons'
 import { groupTables } from './tables'
 
 const plain: View[] = [{ key: 'planning', label: 'Planning', model: 'activity', table: 'planning' }, { key: 'absences', label: 'Absences', model: 'absence', table: 'absences' }]
@@ -304,7 +305,7 @@ describe("a model's ⋯: name, icon, export", () => {
 
     fireEvent.click(within(menu('Meer voor Planning')).getByRole('menuitem', { name: 'Icoon wijzigen' }))
     const grid = within(node('Planning')).getByRole('group', { name: 'Icoon voor Planning' })
-    expect(within(grid).getAllByRole('button')).toHaveLength(12)
+    expect(within(grid).getAllByRole('button')).toHaveLength(ICONS.length)
     expect(within(grid).getByRole('button', { name: 'Ster' }).getAttribute('aria-pressed')).toBe('true')
     expect(document.activeElement).toBe(within(grid).getByRole('button', { name: 'Ster' }))
 

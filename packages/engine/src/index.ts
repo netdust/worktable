@@ -9,14 +9,16 @@ export type {
   DatasetDecl,
   Domain,
   GroupFact,
+  Icon,
   MatrixDecl,
   Owners,
   QueryDecl,
   SavedViewSeed,
+  Tone,
   WriteContext,
   Writer,
 } from './declare'
-export { defineDataset, defineQuery } from './declare'
+export { defineDataset, defineQuery, ICONS, TONES } from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'
 export { FilterCompileError, filterCompile } from './filter-compile'
 export { type ImportResult, importExport, type Refusal, readExportFile } from './import'

@@ -85,6 +85,11 @@ export function displayRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): vo
     const patch = patchOf(await bodyOf(c))
     const batch_id = sqlite.transaction(() => save(sqlite, source.name, patch, actor)).immediate()
     const shown = displaysOf(sqlite).get(source.name)
-    return c.json({ source: source.name, label: shown?.label ?? source.label, icon: shown?.icon ?? null, batch_id })
+    return c.json({
+      source: source.name,
+      label: shown?.label ?? source.label,
+      icon: shown?.icon ?? source.icon ?? null,
+      batch_id,
+    })
   })
 }

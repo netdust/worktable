@@ -4,7 +4,7 @@ export type FieldType =
   | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date' | 'datetime'
   | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
 
-export type Tone = 'ok' | 'warn' | 'bad'
+export type Tone = 'ok' | 'warn' | 'bad' | 'rose' | 'violet' | 'amber' | 'sky' | 'slate' | 'green' | 'teal' | 'grey'
 
 export interface Field {
   type: FieldType

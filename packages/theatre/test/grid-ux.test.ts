@@ -66,3 +66,82 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     for (const s of Object.values(body.sources) as Schema[]) expect(s.space).toBeUndefined()
   })
 })
+
+const SOORT_TONES = {
+  voorstelling: 'rose',
+  repetitie: 'violet',
+  opbouw: 'amber',
+  afbouw: 'amber',
+  reis: 'sky',
+  overnachting: 'slate',
+  maaltijd: 'green',
+  vergadering: 'teal',
+  andere: 'grey',
+}
+const STATUS_TONES = { optie: 'warn', bevestigd: 'ok', geannuleerd: 'bad' }
+
+describe('theatre declares the details: icons, colours, an end time and create-from-query', () => {
+  test('every source declares a default icon, as in the prototype', async () => {
+    const icons = Object.fromEntries(
+      Object.entries((await schemaAs('editor')).sources).map(([name, s]) => [name, (s as Schema).icon]),
+    )
+    expect(icons).toEqual({
+      organisatie: 'pin',
+      productie: 'tag',
+      speelreeks: 'film',
+      activiteit: 'calendar',
+      persoon: 'user',
+      toewijzing: 'users',
+      beschikbaarheid: 'clock',
+      rol: 'check',
+      sjabloon: 'list',
+      productie_dag: 'table',
+      dagplanning: 'query',
+      voorstellingen: 'table',
+    })
+  })
+
+  test('soort carries a colour per option on activiteit and dagplanning, with the same labels', async () => {
+    const { sources } = await schemaAs('editor')
+    expect(sources.activiteit.columns.soort.tones).toEqual(SOORT_TONES)
+    expect(sources.dagplanning.columns.soort.tones).toEqual(SOORT_TONES)
+    expect(sources.dagplanning.columns.soort.options).toEqual(sources.activiteit.columns.soort.options)
+  })
+
+  test('speelreeks status is coloured like activiteit status, and dagplanning status carries them through writes', async () => {
+    const { sources } = await schemaAs('editor')
+    expect(sources.speelreeks.columns.status.tones).toEqual(STATUS_TONES)
+    expect(sources.activiteit.columns.status.tones).toEqual(STATUS_TONES)
+    expect(sources.dagplanning.columns.status.tones).toEqual(STATUS_TONES)
+    expect(sources.dagplanning.columns.status.options).toEqual(sources.activiteit.columns.status.options)
+  })
+
+  test('dagplanning serves its end time and creates an activiteit', async () => {
+    const { sources } = await schemaAs('editor')
+    expect(sources.dagplanning.columns.eind_at).toMatchObject({ type: 'datetime', nullable: true })
+    expect(sources.dagplanning.creates).toBe('activiteit')
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, theatre)
+    seedDomain(sqlite, theatre)
+    const rows = sqlite
+      .query(
+        'SELECT d.eind_at AS got, a.eind_at AS want FROM dagplanning d JOIN activiteit a ON a.id = d.activiteit_id',
+      )
+      .all() as { got: unknown; want: unknown }[]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const { got, want } of rows) expect(got).toBe(want)
+    expect(rows.some((r) => r.got !== null)).toBe(true)
+  })
+
+  test('the Dagplanning view shows time, omschrijving, soort, locatie and status', () => {
+    const view = theatre.views.find((v) => v.name === 'Dagplanning')
+    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'status'])
+  })
+
+  test('an owner sees no dagplanning, so none of its colours or its create', async () => {
+    const { sources } = await schemaAs('owner')
+    expect(sources.dagplanning).toBeUndefined()
+    expect(sources.activiteit).toBeUndefined()
+    expect(sources.persoon.icon).toBe('user')
+  })
+})

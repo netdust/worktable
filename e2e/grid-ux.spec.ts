@@ -105,6 +105,14 @@ async function shownIn(page: Page, label: string): Promise<string[]> {
   return [...new Set(values)].sort()
 }
 
+/** The space condition on the rows request `act` makes for a source. */
+async function scopeAsked(page: Page, source: string, act: () => Promise<void>): Promise<unknown> {
+  const asked = page.waitForRequest((req) => new URL(req.url()).pathname === `/api/rows/${source}`)
+  await act()
+  const filter = new URL((await asked).url()).searchParams.get('filter')
+  return filter ? JSON.parse(filter).productie_id : undefined
+}
+
 async function switchTo(page: Page, from: string, to: string) {
   await page.getByRole('button', { name: from, exact: true }).click()
   await page.getByRole('listbox', { name: 'Producties' }).getByRole('option', { name: to, exact: true }).click()
@@ -146,19 +154,23 @@ test('switch-production @e2e', async ({ page }) => {
   await expect((await filterMenu(page)).getByRole('button', { name: /^Productie:/ })).toHaveCount(0)
   await closeFilterMenu(page)
 
-  await pick(page, 'Dagplanning')
+  // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
+  const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
+  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning'))).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
-  await expect.poll(() => shownIn(page, 'Productie')).toEqual(['Nachtwacht'])
 
   // Kept in this browser: a reload still works in Nachtwacht.
-  await page.reload()
-  await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
-  await pick(page, 'Dagplanning')
+  const reload = async () => {
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
+    await pick(page, 'Dagplanning')
+  }
+  expect(await scopeAsked(page, 'dagplanning', reload)).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
-  await expect.poll(() => shownIn(page, 'Productie')).toEqual(['Nachtwacht'])
 
+  const scoped = await gridRows(page).count()
   await switchTo(page, 'Nachtwacht', 'Alle producties')
-  await expect.poll(async () => (await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
+  await expect.poll(() => gridRows(page).count()).toBeGreaterThan(scoped)
   await pick(page, 'Planning', 'Activiteiten')
   await expect.poll(async () => (await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
   await page.reload()

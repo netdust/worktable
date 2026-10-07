@@ -5,9 +5,11 @@ import {
   type DatasetDecl,
   type Domain,
   DomainError,
+  type Icon,
   migrate,
   type QueryDecl,
   seedDomain,
+  TONES,
   validateDomain,
 } from '../src'
 import { domain as plain } from './fixture'
@@ -179,5 +181,126 @@ describe('tones', () => {
     const domain = withTones({ a: 'ok', b: 'bad' }, { a: 'A', b: 'B' })
     expect(() => validateDomain(domain)).not.toThrow()
     expect((await schemaOf(domain, 'editor')).sources.job.columns.name.tones).toEqual({ a: 'ok', b: 'bad' })
+  })
+})
+
+describe('the tone palette', () => {
+  const withTone = (tone: string) => {
+    const columns = { ...dataset('job').columns }
+    columns.kind = { ...columns.kind, tones: { main: tone } } as ColumnDecl
+    return withDataset('job', { columns })
+  }
+
+  test('every palette tone validates', () => {
+    for (const tone of TONES) expect(() => validateDomain(withTone(tone))).not.toThrow()
+  })
+
+  test('a tone outside the palette is refused', () => {
+    expect(refused(withTone('purple'))).toEqual(['job', 'purple'])
+  })
+})
+
+describe('a declared default icon', () => {
+  test('an icon outside the generic set is refused, on a dataset or a query', () => {
+    expect(refused(withDataset('job', { icon: 'rocket' as Icon }))).toEqual(['job', 'rocket'])
+    expect(refused(withQuery('job_room', { icon: 'rocket' as Icon }))).toEqual(['job_room', 'rocket'])
+  })
+
+  test('/schema serves the declared icon, and an administrator choice wins over it', async () => {
+    const domain = withDataset('job', { icon: 'flag' })
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, domain)
+    seedDomain(sqlite, domain)
+    const app = testEngine(sqlite, domain)
+    const admin = await signIn(app, 'administrator')
+    const headers = { host: '127.0.0.1:4310', cookie: admin, 'content-type': 'application/json' }
+    const sources = async () => ((await (await app.request('/api/schema', { headers })).json()) as Schema).sources
+    const put = (icon: string | null) =>
+      app.request('/api/sources/job/display', { method: 'PUT', headers, body: JSON.stringify({ icon }) })
+
+    expect((await sources()).job.icon).toBe('flag')
+    expect((await sources()).room.icon).toBeNull()
+    expect(await (await put('star')).json()).toMatchObject({ icon: 'star' })
+    expect((await sources()).job.icon).toBe('star')
+    expect(await (await put(null)).json()).toMatchObject({ icon: 'flag' })
+    expect((await sources()).job.icon).toBe('flag')
+  })
+})
+
+// A query over job that writes room's state and may create a room or a job.
+function withStates(over: Partial<QueryDecl> = {}): Domain {
+  const state: ColumnDecl = {
+    type: 'text',
+    label: 'State',
+    default: 'open',
+    options: { open: 'Open', shut: 'Shut' },
+    tones: { open: 'ok', shut: 'bad' },
+  }
+  const room = dataset('room')
+  const writes = { dataset: 'room', field: 'state', key: 'room_id' }
+  const jobState: QueryDecl = {
+    kind: 'query',
+    name: 'job_state',
+    label: 'Job states',
+    title: 'name',
+    owners: { owner: 'member_id' },
+    creates: 'room',
+    sql: `SELECT j.id, j.name, j.member_id, j.room_id, r.state, r.state AS own_state
+          FROM job j LEFT JOIN room r ON r.id = j.room_id WHERE j.deleted_at IS NULL`,
+    columns: {
+      id: { type: 'integer', label: 'Id' },
+      name: { type: 'text', label: 'Name' },
+      member_id: { type: 'integer', label: 'Member', nullable: true, relation: 'member' },
+      room_id: { type: 'integer', label: 'Room', nullable: true },
+      state: { type: 'text', label: 'State', nullable: true, writes },
+      own_state: { type: 'text', label: 'Own state', nullable: true, options: { open: 'Up', shut: 'Down' }, writes },
+    },
+    ...over,
+  }
+  const same = { create: (v: Body) => v, update: (v: Body) => v }
+  return {
+    ...spaced,
+    datasets: spaced.datasets.map((d) => (d.name === 'room' ? { ...room, columns: { ...room.columns, state } } : d)),
+    queries: [...spaced.queries, jobState],
+    writers: { room: same, job: same },
+  }
+}
+
+describe('creates on a query', () => {
+  test('the fixture passes', () => expect(() => validateDomain(withStates())).not.toThrow())
+
+  test('creates naming no dataset, a query, or a dataset without a writer that creates is refused', () => {
+    expect(refused(withStates({ creates: 'ghost' }))).toEqual(['job_state', 'ghost'])
+    expect(refused(withStates({ creates: 'job_room' }))).toEqual(['job_state', 'job_room'])
+    expect(refused(withStates({ creates: 'team' }))).toEqual(['job_state', 'team'])
+    const noCreate = { ...withStates(), writers: { room: { update: (v: Body) => v } } }
+    expect(refused(noCreate)).toEqual(['job_state', 'room'])
+  })
+
+  test('/schema serves creates to a caller who can read the dataset, never to one who cannot', async () => {
+    expect((await schemaOf(withStates(), 'editor')).sources.job_state.creates).toBe('room')
+    expect((await schemaOf(withStates(), 'owner')).sources.job_state.creates).toBeUndefined()
+    expect((await schemaOf(withStates({ creates: 'job' }), 'owner')).sources.job_state.creates).toBe('job')
+    expect((await schemaOf(spaced, 'editor')).sources.job_room.creates).toBeUndefined()
+  })
+})
+
+describe('a mapped query column', () => {
+  test('takes its target column options and tones', async () => {
+    const columns = (await schemaOf(withStates(), 'editor')).sources.job_state.columns
+    expect(columns.state.options).toEqual({ open: 'Open', shut: 'Shut' })
+    expect(columns.state.tones).toEqual({ open: 'ok', shut: 'bad' })
+  })
+
+  test('that declares its own options keeps them and takes no tones', async () => {
+    const columns = (await schemaOf(withStates(), 'editor')).sources.job_state.columns
+    expect(columns.own_state.options).toEqual({ open: 'Up', shut: 'Down' })
+    expect(columns.own_state.tones).toBeUndefined()
+  })
+
+  test('takes nothing from a target the caller cannot read', async () => {
+    const columns = (await schemaOf(withStates(), 'owner')).sources.job_state.columns
+    expect(columns.state.options).toBeUndefined()
+    expect(columns.state.tones).toBeUndefined()
   })
 })

@@ -14,8 +14,14 @@ export const ICONS = [
   'box',
   'star',
   'flag',
+  'user',
+  'query',
 ] as const
 export type Icon = (typeof ICONS)[number]
+
+/** The generic palette a column colours its options from. */
+export const TONES = ['ok', 'warn', 'bad', 'rose', 'violet', 'amber', 'sky', 'slate', 'green', 'teal', 'grey'] as const
+export type Tone = (typeof TONES)[number]
 
 export type ColumnType = 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'datetime' | 'json'
 
@@ -26,7 +32,7 @@ export interface ColumnDecl {
   default?: string | number | boolean | null
   options?: Record<string, string>
   /** A tone per option key, for the grid to colour the option. */
-  tones?: Record<string, 'ok' | 'warn' | 'bad'>
+  tones?: Record<string, Tone>
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }
@@ -75,6 +81,8 @@ export interface DatasetDecl {
   /** The relation column that points at the domain's space. */
   scoped?: string
   group_facts?: GroupFact[]
+  /** The icon the grid shows until an administrator picks one. */
+  icon?: Icon
 }
 
 export interface QueryDecl {
@@ -88,6 +96,9 @@ export interface QueryDecl {
   owners?: Owners
   scoped?: string
   group_facts?: GroupFact[]
+  icon?: Icon
+  /** The dataset a new row from this query is created in. */
+  creates?: string
 }
 
 export interface SavedViewSeed {

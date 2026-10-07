@@ -118,10 +118,9 @@ async function dayGroups(page: Page) {
   const cols = {
     start: await columnIndex(page, 'Start'),
     locatie: await columnIndex(page, 'Locatie'),
-    bron: await columnIndex(page, 'Locatie van'),
   }
   return page.locator('tbody tr').evaluateAll((trs, c) => {
-    const groups: { title: string; start: string; locatie: string; bron: string }[][] = []
+    const groups: { title: string; start: string; locatie: string }[][] = []
     for (const tr of trs) {
       if (tr.classList.contains('nv-group')) groups.push([])
       if (!tr.classList.contains('nv-tr')) continue
@@ -130,7 +129,6 @@ async function dayGroups(page: Page) {
         title: tr.getAttribute('data-title') ?? '',
         start: text(c.start),
         locatie: text(c.locatie),
-        bron: text(c.bron),
       })
     }
     return groups
@@ -235,12 +233,8 @@ test('apply-template @e2e', async ({ page }) => {
   expect(groups).toHaveLength(4)
   groups.forEach((rows, n) => {
     const [, m, d] = days[n].split('-')
-    const want = PATTERN.map(
-      ([title, tijd]) => `${title}|${tijd ? `${d}/${m} ${tijd}` : ''}|${VENUE}via Speelreeks|Speelreeks`,
-    )
-    expect(rows.map((r) => `${r.title}|${r.start.replace(/^\S+ /, '')}|${r.locatie}|${r.bron}`).sort()).toEqual(
-      want.sort(),
-    )
+    const want = PATTERN.map(([title, tijd]) => `${title}|${tijd ? `${d}/${m} ${tijd}` : ''}|${VENUE}via Speelreeks`)
+    expect(rows.map((r) => `${r.title}|${r.start.replace(/^\S+ /, '')}|${r.locatie}`).sort()).toEqual(want.sort())
   })
 
   // One undo, from a cell of Dagplanning, removes the 28.
@@ -437,13 +431,14 @@ test('dagplanning-locatie-van @e2e', async ({ page }) => {
 
   await land(page, `/#from=${week}`)
   await pick(page, 'Dagplanning')
-  const seen = async (title: string) => [
-    await (await cellOf(page, named(page, title), 'Locatie')).textContent(),
-    await (await cellOf(page, named(page, title), 'Locatie van')).textContent(),
-  ]
-  expect(await seen('bron geerfd')).toEqual([`${VENUE}via Speelreeks`, 'Speelreeks'])
-  expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'Eigen'])
-  expect(await seen('bron geen')).toEqual(['', ''])
+  // "Locatie van" left the default view (R10); the grid shows the venue, the query still serves where it comes from.
+  const seen = async (title: string) => {
+    const [row] = await rowsOf<Values>(api, 'dagplanning', { omschrijving: title })
+    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), row.locatie_bron ?? null]
+  }
+  expect(await seen('bron geerfd')).toEqual([`${VENUE}via Speelreeks`, 'speelreeks'])
+  expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'eigen'])
+  expect(await seen('bron geen')).toEqual(['', null])
 
   // Resolved, not stored: the inheriting activity holds no venue of its own.
   const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'bron geerfd' })
