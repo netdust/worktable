@@ -146,7 +146,7 @@ export function ViewList({ table, active, onSelect, actions }: Props) {
           <div className="nv-views__menus">
             {views.map((view, at) => renaming !== view.key && (
               <div key={view.key} className={view.key === active ? 'nv-view__menu nv-view__menu--active' : 'nv-view__menu'} style={{ gridRow: at + 1 }}>
-                <MoreMenu label={`${t('moreActions')}: ${view.label}`} placement="bottom-start" actions={choices(view, at, views.length, actions, () => setRenaming(view.key), (step) => move(view.key, step))} />
+                <MoreMenu label={`${t('moreActions')}: ${view.label}`} hint={`${t('moreActionsShown')}: ${view.label}`} placement="bottom-start" actions={choices(view, at, views.length, actions, () => setRenaming(view.key), (step) => move(view.key, step))} />
               </div>
             ))}
           </div>

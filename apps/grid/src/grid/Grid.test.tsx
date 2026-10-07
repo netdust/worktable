@@ -735,14 +735,18 @@ describe('the toolbar over the grid', () => {
     // A chip asks the server again: the grid comes back once the rows do.
     await screen.findByRole('grid')
     expect(within(bar()).getByRole('button', { name: 'Filter Status wissen' })).toBeTruthy()
-    const said = (control: HTMLElement) => visibleText(control).match(/\p{L}/u) !== null || control.getAttribute('title') === control.getAttribute('aria-label')
+    const said = (control: HTMLElement) => {
+      const title = control.getAttribute('title')
+      return visibleText(control).match(/\p{L}/u) !== null || (title !== null && title === control.getAttribute('aria-label'))
+    }
+    expect(said(Object.assign(document.createElement('button'), { textContent: '×' })), 'a bare icon button says nothing').toBe(false)
     for (const control of within(bar()).getAllByRole('button')) {
       expect(said(control), control.outerHTML).toBe(true)
     }
 
     // The one icon button, ⋯ (Stefan, 2026-10-03: menus when it gets crowded), says its word on hover.
     const more = within(toolbar()).getByRole('button', { name: 'More actions' })
-    expect(more.getAttribute('title')).toBe('More actions')
+    expect(more.getAttribute('title')).toBe('Meer acties')
     const controls = within(toolbar()).getAllByRole('button').filter((control) => control !== more)
     expect(controls.length).toBeGreaterThan(3)
     for (const control of controls) {

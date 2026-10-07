@@ -76,6 +76,12 @@ describe("a view's actions", () => {
     expect(group().contains(menuOf('Calais techniek'))).toBe(false)
   })
 
+  it('says its ⋯ in Dutch on hover, while its accessible name stays the kept contract', () => {
+    render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
+
+    expect(menuOf('Montage').getAttribute('title')).toBe('Meer acties: Montage')
+  })
+
   it('offers copy, rename, share, Omhoog, Omlaag and delete on an own view', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 

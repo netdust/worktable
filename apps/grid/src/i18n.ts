@@ -2,6 +2,7 @@ import type { ApiError } from './types'
 
 const strings = {
   views: 'Views',
+  viewsShown: 'Weergaven',
   noViews: 'Geen weergaven',
   noViewsHint: 'Bewaar een weergave op een bron om ze hier te zien.',
   noRows: 'Geen rijen',
@@ -93,6 +94,8 @@ const strings = {
   readOnlyView: 'Standaardweergave, alleen te kopiëren',
   readOnlyTitle: 'Standaardweergave: maak een kopie om aan te passen',
   moreActions: 'More actions',
+  moreActionsShown: 'Meer acties',
+  views_shown: 'Weergaven',
   rename: 'Nieuwe naam',
   duplicate: 'Kopie maken',
   renameView: 'Naam wijzigen',

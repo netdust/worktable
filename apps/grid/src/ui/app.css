@@ -1301,10 +1301,14 @@
   font-size: 12.5px;
 }
 
-/* The prototype's cells: values muted at 16px, the title the one strong word, a time's end quiet. */
+.nv-grid:not(.nv-mx) {
+  line-height: 1.4;
+}
+
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 16px;
+  font-size: 13.5px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1319,7 +1323,6 @@
 .nv-grid:not(.nv-mx) .nv-pill {
   height: auto;
   padding: 1px 8px;
-  line-height: normal;
   font-weight: 500;
 }
 
@@ -1615,7 +1618,7 @@
 
 .nv-grid .nv-group__date {
   color: var(--color-fg-muted);
-  font-size: 16px;
+  font-size: 13.5px;
   font-weight: 400;
 }
 

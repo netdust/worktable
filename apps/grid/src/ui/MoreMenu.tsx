@@ -19,9 +19,11 @@ type Placement = 'bottom-start' | 'bottom-end'
  * `icon` and `menu` (the menu's name) make it another trigger, such as a `+`.
  * The menu opens in a layer over the page, so no scrolling box it sits in clips it.
  */
-export function MoreMenu({ actions, label = t('moreActions'), placement = 'bottom-end', icon: Icon = Ellipsis, menu = t('moreActions') }: {
+export function MoreMenu({ actions, label = t('moreActions'), hint = label === t('moreActions') ? t('moreActionsShown') : label, placement = 'bottom-end', icon: Icon = Ellipsis, menu = t('moreActions') }: {
   actions: Action[]
   label?: string
+  /** What hovering it says; the label stays the accessible name. */
+  hint?: string
   placement?: Placement
   icon?: LucideIcon
   menu?: string
@@ -37,7 +39,7 @@ export function MoreMenu({ actions, label = t('moreActions'), placement = 'botto
   }
   return (
     <span className="nv-menu">
-      <button ref={trigger} type="button" className="nv-more" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={at !== null}
+      <button ref={trigger} type="button" className="nv-more" aria-label={label} title={hint} aria-haspopup="menu" aria-expanded={at !== null}
         onClick={toggle}>
         <Icon size={16} aria-hidden="true" />
       </button>

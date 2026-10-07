@@ -78,7 +78,7 @@ Source: Stefan: "this also is not good, dagplanner shouldn't drop like that" (20
 - **Rows:** default height 40px.
 - **Density setting:** Compact (32px), Normaal (40px) and Ruim (46px), in the rail foot beside the theme, kept per browser.
 - **Lines and header:**
-  - no vertical lines between body cells;
+  - subtle vertical dividers between cells, and a leading row-number column on every table view (Stefan, 2026-10-07: "the row numbering and the cell dividers really make it more readable"; this reverses the earlier "no vertical lines");
   - the header is light, with an icon per field type;
   - only a select column keyed `status` is a tinted pill;
   - other selects show a colored dot (ruling, 2026-10-07: a domain-free rule; tones stay as today).
@@ -178,5 +178,6 @@ From the side-by-side comparison of the prototype and the tool:
   - the space (`space: { dataset }` on the domain, `scoped: <column>` per source);
   - `sections` on the domain;
   - `group_facts` per source;
-  - `inherited` per query column.
+  - `inherited` per query column;
+  - `new_label` per dataset: the grid's words for adding a row, served while the dataset keeps its declared name.
 - **Delivery/grid paragraph:** the sidebar is a tree of sources and their views, with a production switcher.

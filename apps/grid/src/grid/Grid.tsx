@@ -11,7 +11,7 @@ import { useFolded } from './hooks'
 import { GridBar } from './GridBar'
 import { type BodyActions, GridBody } from './GridBody'
 import { GridFoot } from './GridFoot'
-import { GridHeader } from './GridHeader'
+import { GridHeader, NUMBER_WIDTH } from './GridHeader'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
 import { DRAFT, type Store } from './store'
@@ -58,8 +58,6 @@ export interface GridProps {
 
 const NO_MODELS: Record<string, Model> = {}
 
-/** The row-number column's width, as `.nv-num` sets it. */
-const NUMBER_WIDTH = 44
 
 /** Only a cell or its editor drives the sheet; a header, Open or Dismiss button keeps its own keys. */
 function fromCell(target: EventTarget): boolean {

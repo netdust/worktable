@@ -199,7 +199,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   useEffect(() => {
     if (settled && view && view.key !== activeKey) setActive(view.key)
   }, [settled, view?.key, activeKey])
-  const title = tableOf(tables, view?.key)?.label ?? t('views')
+  const title = tableOf(tables, view?.key)?.label ?? t('viewsShown')
   const dated = Boolean(view?.date_field)
   const [space, select] = useSpace(served?.space)
   const scoped = space.status !== 'none' && view?.space === 'scoped'
