@@ -5,7 +5,7 @@ Branch `feature/grid-ux`, from main after step 1. The design is `design/grid-pro
 ## Requirements
 
 ### R1. The production switcher (an engine `space`)
-- **Engine:** a domain may declare `space: { dataset }`, the dataset whose records split the work (theatre: `productie`). A dataset or query may declare `scoped: '<relation column>'`, the column that points at the space (theatre: `productie_id` on `activiteit`, `speelreeks`, `dagplanning` and `productie_dag`). Validation refuses a `scoped` column that is not a relation to the space dataset, and scoped columns that do not all share one name. `/schema` serves `space: { model, field }` (only to a caller who can read the space dataset; an owner who cannot gets no space), and per source `space: 'scoped' | 'global'`. The engine never filters by space: the grid adds `{ <field>: <id> }` to the rows filter it already sends. A space is a view filter, not access control.
+- **Engine:** a domain may declare `space: { dataset }`, the dataset whose records split the work (theatre: `productie`). A dataset or query may declare `scoped: '<relation column>'`, the column that points at the space (theatre: `productie_id` on `activiteit`, `speelreeks`, `dagplanning` and `productie_dag`). Validation refuses a `scoped` column that is not a relation to the space dataset, and scoped columns that do not all share one name. `/schema` serves `space: { model, field }` (only to a caller who can read the space dataset; an owner who cannot gets no space), and per source `space: 'scoped' | 'global'`. The engine never filters by space: the grid adds `{ <field>: <id> }` to the rows filter it already sends. A space is a view filter, not access control: a space narrows what a planner sees and never limits what they may read (Stefan, 2026-10-07).
 - **Grid:** the rail's top-left shows the switcher, using the existing `SpaceSelect` and `useSpace`:
   - the selected production's name and a dot;
   - a searchable list of the space's records;
@@ -55,7 +55,7 @@ Source: "the project selector top left is gone. here we should be able to select
   - the accessible names `navigation "Views"` and `More actions: <name>`;
   - the rail foot: account, sign out, theme, and the density setting from R4.
 
-Source: Stefan's NocoDB references (2026-10-07): "the datamodel has a tree of views, rolling over the datamodel reveals + and ... menu"; "in nocodb, the icon becomes the collapse arrow on rollover". The theatre section names and order are invented (approval pending).
+Source: Stefan's NocoDB references (2026-10-07): "the datamodel has a tree of views, rolling over the datamodel reveals + and ... menu"; "in nocodb, the icon becomes the collapse arrow on rollover". The theatre section names and order are a draft pending Stefan's approval (2026-10-07).
 
 ### R3. The title line
 - One line:
@@ -102,6 +102,8 @@ A source may declare `group_facts`: a short list of facts the grid computes from
 - `{ kind: 'first', column, where: { <column>: <value> }, label }`: the earliest value of `column` among the rows matching `where`;
 - `{ kind: 'count', where?, label }`: how many rows match;
 - `{ kind: 'empty', column, label }`: how many rows have no value in `column`.
+
+When the read limit cut off the rows (the response's total exceeds the rows loaded), a group the cut may have shortened shows "…" for each fact instead of a number (Stefan, 2026-10-07).
 
 The grid renders the facts in the band, skipping any that come out empty or zero:
 - a `first` fact as "● label value";

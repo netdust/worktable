@@ -24,6 +24,7 @@
 - A space is a view filter, never access control. The rows route is not changed. The owner scope (`scopeOf`) is a separate concept and stays as it is.
 - New UI text is Dutch. Existing English strings stay; Dutch chrome is on the step 0 parity checklist (ruling: new strings are Dutch even beside English ones).
 - Fixtures are invented. No font or asset is loaded from a third-party host. The prototype's Google `<link>` is never copied.
+- Before each commit, run `bun scripts/check-export-terms.ts` on the staged diff and commit only when it reports no export term (Stefan, 2026-10-07). The section names and order are a draft pending Stefan's approval.
 - The gate stays green at the end of every task. A step is done when its gate passes in a real browser. Nothing is merged or pushed without Stefan.
 
 ## Architecture notes
@@ -221,6 +222,7 @@
   - e2e that read `tr.nv-group` text: read `.nv-group__label`.
 - Tests:
   - `group.test.ts`:
+    - a group the read limit may have cut short (the rows' `total` exceeds the rows loaded, and the group holds the last loaded row) shows "…" for each fact, not a number;
     - `first` with `where`, including a case giving "20:00", and none matching;
     - `count`;
     - `empty`, skipped when zero.
