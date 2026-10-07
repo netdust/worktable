@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: an app shell — production switcher and a tree of data models and their views on the left, the grid on the right, grouped by plandag. */
+/* Layout: an app shell — production switcher and the data models on the left; the selected model's views in a panel (or as tabs); the grid on the right, grouped by plandag. */
 /* Token names follow apps/grid/src/ui/theme.css so the values can move into the grid unchanged. */
 :root {
   --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -84,7 +84,10 @@ button { font: inherit; color: inherit }
 :focus-visible { outline: 2px solid var(--color-accent-default); outline-offset: 1px }
 .icon { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round }
 
-.app { display: grid; grid-template-columns: 268px minmax(0, 1fr); height: 100%; }
+.app { display: grid; grid-template-columns: 240px 220px minmax(0, 1fr); height: 100%; }
+:root[data-viewsnav="tabs"] .app { grid-template-columns: 240px minmax(0, 1fr) }
+:root[data-viewsnav="tabs"] .vpane { display: none }
+:root:not([data-viewsnav="tabs"]) .vtabs { display: none }
 
 /* ---------- sidebar ---------- */
 .side { background: var(--color-bg-sidebar); border-right: 1px solid var(--color-border-default); display: flex; flex-direction: column; min-height: 0 }
@@ -103,13 +106,13 @@ button { font: inherit; color: inherit }
 .node { position: relative }
 .model { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 2px; border-radius: var(--radius-sm); cursor: pointer; user-select: none }
 .model:hover { background: var(--color-bg-hover) }
+.model.active { background: var(--color-bg-selected); color: var(--color-accent-default) }
+.model.active .glyph { color: var(--color-accent-default) }
 .lead { width: 20px; height: 20px; display: grid; place-items: center; position: relative; flex: none }
 .lead > * { position: absolute; display: grid; place-items: center }
 .model .glyph { color: var(--color-fg-muted) }
 .chev { color: var(--color-fg-muted); opacity: 0; transition: transform .12s }
 .node.open > .model .chev { transform: rotate(90deg) }
-.model:hover .chev, .model:focus-visible .chev { opacity: 1 }
-.model:hover .glyph, .model:focus-visible .glyph { opacity: 0 }
 .model .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500 }
 .model .count { font: 11px var(--font-mono); color: var(--color-fg-subtle) }
 .hover-tools { display: none; gap: 2px }
@@ -127,6 +130,26 @@ button { font: inherit; color: inherit }
 .view .lock { color: var(--color-fg-subtle) }
 .view .vtools { display: none }
 .view:hover .vtools { display: flex }
+/* ---------- the selected model's views ---------- */
+.vpane { background: var(--color-bg-sidebar); border-right: 1px solid var(--color-border-default); display: flex; flex-direction: column; min-height: 0 }
+.vpane-head { display: flex; align-items: center; gap: 8px; padding: 16px 12px 6px; font-weight: 600 }
+.vpane-head .glyph { color: var(--color-fg-muted) }
+.vpane-head .count { margin-left: auto; font: 11px var(--font-mono); color: var(--color-fg-subtle); font-weight: 400 }
+.vpane-list { overflow: auto; flex: 1; padding: 0 8px 12px }
+.vpane .section-label { padding: 12px 6px 4px }
+.vpane .hint { margin: 0 6px 6px; font-size: 11.5px; color: var(--color-fg-subtle); line-height: 1.35 }
+.vpane-add { margin: 8px; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: 1px dashed var(--color-border-default); border-radius: var(--radius-sm); background: transparent; color: var(--color-fg-muted); cursor: pointer }
+.vpane-add:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
+.view .kind { font-size: 10.5px; color: var(--color-fg-subtle); border: 1px solid var(--color-border-default); border-radius: 999px; padding: 0 6px; line-height: 16px }
+.vtabs { display: flex; align-items: flex-end; gap: 2px; padding: 8px 14px 0; background: var(--color-bg-sidebar); border-bottom: 1px solid var(--color-border-default); overflow-x: auto }
+.vtab { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius-sm) var(--radius-sm) 0 0; background: transparent; color: var(--color-fg-muted); cursor: pointer; white-space: nowrap; margin-bottom: -1px }
+.vtab:hover { color: var(--color-fg-default); background: var(--color-bg-hover) }
+.vtab.active { background: var(--color-bg-surface); border-color: var(--color-border-default); color: var(--color-fg-default); font-weight: 500 }
+.vtab .lock, .vtab .kind { color: var(--color-fg-subtle) }
+.vtab .kind { font-size: 10.5px }
+.vtab-sep { width: 1px; height: 18px; background: var(--color-border-default); margin: 0 6px 7px }
+.vtab-add { width: 30px; justify-content: center; padding: 0 }
+.title .crumb { color: var(--color-fg-muted); font-size: 13px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px }
 .side-foot { border-top: 1px solid var(--color-border-default); padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted) }
 .avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--color-accent-subtle); color: var(--color-accent-default); display: grid; place-items: center; font-weight: 600; font-size: 11px }
 
@@ -332,7 +355,10 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-widt
     <div class="side-foot"><span class="avatar">PL</span><span>planner@example.test</span></div>
   </aside>
 
+  <aside class="vpane" id="vpane" aria-label="Weergaven"></aside>
+
   <main class="main">
+    <nav class="vtabs" id="vtabs" aria-label="Weergaven"></nav>
     <header class="top">
       <div class="title" id="crumbs"></div>
       <span class="spacer"></span>
@@ -348,6 +374,7 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-widt
 
 <div class="tweaks" id="tweaks">
   <h3>Bijstellen <button class="tool" id="tw-min" aria-label="Inklappen"><svg class="icon"><use href="#i-down"/></svg></button></h3>
+  <label class="row">Weergaven<div class="seg" data-key="viewsnav"><button data-v="pane" class="on">Paneel</button><button data-v="tabs">Tabbladen</button></div></label>
   <label class="row">Rijhoogte<div class="seg" data-key="density"><button data-v="compact">Compact</button><button data-v="normal" class="on">Normaal</button><button data-v="roomy">Ruim</button></div></label>
   <label class="row">Indeling<div class="seg" data-key="layout"><button data-v="table" class="on">Tabel</button><button data-v="columns">Dagkolommen</button></div></label>
   <label class="row">Dagkop<div class="seg" data-key="groups"><button data-v="band" class="on">Band</button><button data-v="line">Lijn</button></div></label>
@@ -370,8 +397,10 @@ const PRODUCTIES = [
 ]
 const SKINS = { grid: ['grid', 'Grid'], matrix: ['matrix', 'Matrix'], calendar: ['cal', 'Kalender'], list: ['list', 'Lijst'], board: ['board', 'Bord'] }
 const MODELS = [
-  { section: 'Planning', key: 'dagplanning', label: 'Dagplanning', glyph: 'query', count: 28, query: true, views: [{ name: 'Dagplanning', skin: 'grid', lock: true }, { name: 'Mijn week', skin: 'grid', personal: true }] },
-  { section: 'Planning', key: 'activiteit', label: 'Activiteiten', glyph: 'cal', count: 246, views: [{ name: 'Planning', skin: 'grid', lock: true }, { name: 'Optie of bevestigd', skin: 'grid', lock: true }, { name: 'Kalender', skin: 'calendar' }] },
+  { section: 'Planning', key: 'activiteit', label: 'Activiteiten', glyph: 'cal', count: 246, views: [
+    { name: 'Dagplanning', skin: 'grid', lock: true, query: true }, { name: 'Mijn week', skin: 'grid', personal: true, query: true },
+    { name: 'Planning', skin: 'grid', lock: true }, { name: 'Optie of bevestigd', skin: 'grid', lock: true }, { name: 'Kalender', skin: 'calendar' },
+    { name: 'Per productie per dag', skin: 'grid', lock: true, query: true }, { name: 'Voorstellingen', skin: 'grid', lock: true, query: true }] },
   { section: 'Planning', key: 'speelreeks', label: 'Speelreeksen', glyph: 'film', count: 3, views: [{ name: 'Speelreeksen', skin: 'grid', lock: true }] },
   { section: 'Planning', key: 'toewijzing', label: 'Toewijzingen', glyph: 'users', count: 508, views: [{ name: 'Toewijzingen', skin: 'grid', lock: true }, { name: 'Wie speelt wanneer', skin: 'matrix' }] },
   { section: 'Planning', key: 'beschikbaarheid', label: 'Afwezigheden', glyph: 'clock', count: 12, views: [{ name: 'Afwezigheden', skin: 'grid', lock: true }] },
@@ -399,7 +428,7 @@ const order = (r) => (r.start ? r.start : r.soort === 'overnachting' ? '99' : '0
 ROWS.sort((a, b) => DAYS.findIndex((x) => x[0] === a.day) - DAYS.findIndex((x) => x[0] === b.day) || order(a).localeCompare(order(b)))
 
 // ---------- state ----------
-const state = { shut: new Set(), layout: 'table', space: 'nw', open: new Set(['dagplanning', 'activiteit']), view: ['dagplanning', 0], sel: -1 }
+const state = { shut: new Set(), layout: 'table', space: 'nw', view: ['activiteit', 0], last: {}, sel: -1 }
 const store = { get: (k) => { try { return localStorage.getItem('wt-proto-' + k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem('wt-proto-' + k, v) } catch {} } }
 
 // ---------- sidebar ----------
@@ -407,33 +436,48 @@ function renderTree() {
   let html = '', section = ''
   for (const m of MODELS) {
     if (m.section !== section) { section = m.section; html += `<div class="section-label">${section}</div>` }
-    const open = state.open.has(m.key)
-    html += `<div class="node ${open ? 'open' : ''}" data-model="${m.key}">
-      <div class="model" role="treeitem" aria-expanded="${open}" tabindex="0">
-        <span class="lead"><span class="glyph">${icon(m.glyph)}</span><span class="chev">${icon('chev')}</span></span>
+    const active = state.view[0] === m.key
+    html += `<div class="node" data-model="${m.key}">
+      <div class="model ${active ? 'active' : ''}" role="treeitem" aria-selected="${active}" tabindex="0">
+        <span class="lead"><span class="glyph">${icon(m.glyph)}</span></span>
         <span class="name">${esc(m.label)}</span><span class="count">${m.count}</span>
-        <span class="hover-tools"><button class="tool" data-act="more" aria-label="Meer voor ${esc(m.label)}">${icon('dots')}</button><button class="tool" data-act="add" aria-label="Weergave toevoegen aan ${esc(m.label)}">${icon('plus')}</button></span>
-      </div>
-      <div class="views" role="group">${m.views.map((v, i) => {
-        const active = state.view[0] === m.key && state.view[1] === i
-        return `<div class="view ${active ? 'active' : ''}" data-view="${i}" tabindex="0">${icon(SKINS[v.skin][0])}<span class="vname">${esc(v.name)}</span>
-          ${v.lock ? `<span class="lock" title="Standaardweergave, alleen te kopiëren">${icon('lock')}</span>` : v.personal ? `<span class="lock" title="Alleen voor jou">${icon('user')}</span>` : ''}
-          <span class="vtools"><button class="tool" data-act="vmore" aria-label="Meer">${icon('dots')}</button></span></div>`
-      }).join('')}</div></div>`
+        <span class="hover-tools"><button class="tool" data-act="more" aria-label="Meer voor ${esc(m.label)}">${icon('dots')}</button></span>
+      </div></div>`
   }
   $('#tree').innerHTML = html
 }
 
+const viewBadge = (v) => v.lock ? `<span class="lock" title="Standaardweergave, alleen te kopiëren">${icon('lock')}</span>` : v.personal ? `<span class="lock" title="Alleen voor jou">${icon('user')}</span>` : ''
+const viewGlyph = (v) => icon(v.query ? 'query' : SKINS[v.skin][0])
+
+// The selected model's views: its own, then those computed from it by a query.
+function renderViews() {
+  const m = MODELS.find((x) => x.key === state.view[0])
+  const row = (v, i) => `<div class="view ${state.view[1] === i ? 'active' : ''}" data-view="${i}" tabindex="0">${viewGlyph(v)}<span class="vname">${esc(v.name)}</span>${viewBadge(v)}
+    <span class="vtools"><button class="tool" data-act="vmore" aria-label="Meer acties: ${esc(v.name)}">${icon('dots')}</button></span></div>`
+  const own = m.views.map((v, i) => [v, i]).filter(([v]) => !v.query), computed = m.views.map((v, i) => [v, i]).filter(([v]) => v.query)
+  $('#vpane').innerHTML = `<div class="vpane-head"><span class="glyph">${icon(m.glyph)}</span>${esc(m.label)}<span class="count">${m.views.length}</span></div>
+    <div class="vpane-list"><div class="section-label">Weergaven</div>${own.map(([v, i]) => row(v, i)).join('')}
+    ${computed.length ? `<div class="section-label">Berekend</div><p class="hint">Een vaste query over ${esc(m.label.toLowerCase())}; kolommen die terugschrijven zijn bewerkbaar.</p>${computed.map(([v, i]) => row(v, i)).join('')}` : ''}</div>
+    <button class="vpane-add" data-act="add">${icon('plus')}Nieuwe weergave</button>`
+  const tab = ([v, i]) => `<button class="vtab ${state.view[1] === i ? 'active' : ''}" data-view="${i}">${viewGlyph(v)}${esc(v.name)}${viewBadge(v)}</button>`
+  $('#vtabs').innerHTML = own.map(tab).join('') + (computed.length ? `<span class="vtab-sep" title="Berekend"></span>${computed.map(tab).join('')}` : '')
+    + `<button class="vtab vtab-add" data-act="add" aria-label="Nieuwe weergave">${icon('plus')}</button>`
+}
+
+function pickView(i) { state.view = [state.view[0], i]; state.last[state.view[0]] = i; renderViews(); renderMain() }
 $('#tree').addEventListener('click', (e) => {
   const node = e.target.closest('.node'); if (!node) return
   const m = MODELS.find((x) => x.key === node.dataset.model)
+  if (e.target.closest('[data-act="more"]')) return modelMenu(e.target.closest('.tool'), m)
+  state.view = [m.key, state.last[m.key] ?? 0]; renderTree(); renderViews(); renderMain()
+})
+for (const el of ['#vpane', '#vtabs']) $(el).addEventListener('click', (e) => {
+  const m = MODELS.find((x) => x.key === state.view[0])
   const act = e.target.closest('[data-act]')?.dataset.act
-  if (act === 'add') return addMenu(e.target.closest('.tool'), m)
-  if (act === 'more') return modelMenu(e.target.closest('.tool'), m)
+  if (act === 'add') return addMenu(e.target.closest('[data-act]'), m)
   if (act === 'vmore') return viewMenu(e.target.closest('.tool'), m, +e.target.closest('.view').dataset.view)
-  const view = e.target.closest('.view')
-  if (view) { state.view = [m.key, +view.dataset.view]; renderTree(); renderMain(); return }
-  if (e.target.closest('.model')) { state.open.has(m.key) ? state.open.delete(m.key) : state.open.add(m.key); renderTree() }
+  const v = e.target.closest('[data-view]'); if (v) pickView(+v.dataset.view)
 })
 
 // ---------- popovers ----------
@@ -454,7 +498,7 @@ document.addEventListener('mousedown', (e) => { if (popEl && !popEl.contains(e.t
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePop(); closeDialog() } })
 
 function addMenu(anchor, m) {
-  const items = [['grid', 'Grid'], ['matrix', 'Matrix', m.key !== 'toewijzing'], ['calendar', 'Kalender', m.query && m.key !== 'dagplanning'], ['list', 'Lijst'], ['board', 'Bord', true]]
+  const items = [['grid', 'Grid'], ['matrix', 'Matrix', m.key !== 'toewijzing'], ['calendar', 'Kalender'], ['list', 'Lijst'], ['board', 'Bord', true]]
   const pop = openPop(anchor, `<div class="pop-head">Nieuwe weergave op ${esc(m.label)}</div>` + items.map(([k, label, off]) =>
     `<button class="pop-item" data-skin="${k}" ${off ? 'disabled' : ''}>${icon(SKINS[k][0])}${label}${off ? `<span class="soon">${k === 'board' ? 'later' : 'n.v.t.'}</span>` : ''}</button>`).join(''), { align: 'right' })
   pop.addEventListener('click', (e) => { const b = e.target.closest('[data-skin]'); if (b && !b.disabled) { closePop(); viewDialog(m, b.dataset.skin) } })
@@ -512,7 +556,7 @@ function viewDialog(m, skin, name) {
   $('#nv-form', dlg).addEventListener('submit', (e) => {
     e.preventDefault()
     m.views.push({ name: input.value.trim() || SKINS[skin][1], skin, personal: $('#nv-personal', dlg).checked })
-    state.open.add(m.key); state.view = [m.key, m.views.length - 1]; closeDialog(); renderTree(); renderMain()
+    closeDialog(); pickView(m.views.length - 1)
   })
 }
 
@@ -522,7 +566,7 @@ function renderMain() {
   const p = PRODUCTIES.find((x) => x.id === state.space)
   const shown = ROWS.filter((r) => state.space === 'all' || r.prod === state.space)
   const optie = shown.filter((r) => r.status === 'optie').length
-  $('#crumbs').innerHTML = `<span class="tglyph">${icon(SKINS[v.skin][0])}</span><h1>${esc(v.name)}</h1>${v.lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
+  $('#crumbs').innerHTML = `<span class="tglyph">${viewGlyph(v)}</span><span class="crumb">${esc(m.label)} ${icon('chev')}</span><h1>${esc(v.name)}</h1>${v.lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
     <span class="sum">${shown.length} activiteiten · ${new Set(shown.map((r) => r.day)).size} dagen</span>${optie ? `<span class="insight"><b>${optie}</b> nog in optie</span>` : ''}`
   const scoped = state.space !== 'all'
   $('#bar').innerHTML = `${scoped ? `<span class="chip set">${icon('tag')}Productie is ${esc(p.titel)}</span>` : ''}
@@ -533,9 +577,9 @@ function renderMain() {
 
 function renderGrid(m, v) {
   $('#grid').hidden = state.layout === 'columns'; $('#board').hidden = state.layout !== 'columns'
-  if (state.layout === 'columns' && (m.key === 'dagplanning' || m.key === 'activiteit')) return renderBoard()
-  if (m.key !== 'dagplanning' && m.key !== 'activiteit') {
-    $('#grid').innerHTML = `<tbody><tr><td style="height:220px;text-align:center;color:var(--color-fg-subtle);white-space:normal">Deze weergave is in het prototype niet uitgewerkt. Kies Dagplanning of Activiteiten.</td></tr></tbody>`
+  if (state.layout === 'columns' && m.key === 'activiteit') return renderBoard()
+  if (m.key !== 'activiteit') {
+    $('#grid').innerHTML = `<tbody><tr><td style="height:220px;text-align:center;color:var(--color-fg-subtle);white-space:normal">Deze weergave is in het prototype niet uitgewerkt. Kies Activiteiten.</td></tr></tbody>`
     $('#rows').textContent = ''; return
   }
   const scoped = state.space !== 'all'
@@ -615,8 +659,8 @@ function applyTweak(key, v) {
   store.set(key, v)
 }
 document.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) applyTweak(seg.dataset.key, b.dataset.v) }))
-for (const key of ['density', 'groups', 'zebra', 'theme', 'layout', 'lines']) { const v = store.get(key); if (v) applyTweak(key, v) }
+for (const key of ['viewsnav', 'density', 'groups', 'zebra', 'theme', 'layout', 'lines']) { const v = store.get(key); if (v) applyTweak(key, v) }
 $('#tw-min').onclick = () => $('#tweaks').classList.toggle('min')
 
-renderSpace(); renderTree(); renderMain()
+renderSpace(); renderTree(); renderViews(); renderMain()
 </script>

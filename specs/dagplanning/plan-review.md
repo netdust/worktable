@@ -116,3 +116,125 @@ Verdict: not ready
 - RelationPicker can be reused for the person search → `grid/cells/RelationPicker.tsx:37` (single-pick `onPick`) → holds as a base; multi-pick is new work, as the plan says
 - Fiche has dated sources → `packages/fiche/src` → does not hold (S6)
 - `api.ts:89` `rows()` accepts `{}` → `api.ts:88-93` → holds
+
+---
+
+# Plan review — dagplanning (round 2)
+Reviewed-plan: 2238ac39be3e84a40c6e3c04a068b58997652c33
+Verdict: not ready
+
+There is one Blocking finding and it needs a one-line fix. All of round 1's findings are resolved or close to it. The new findings come from the round-2 edits: the confirm, the saved-view round trip, the undo step order and the matrix under Alles.
+
+## Round 1 findings
+
+| # | Status | Evidence in the new plan |
+|---|---|---|
+| B1 | Resolved, with one new problem (B-new-1) | × is final and not pushed. Add is pushed. A tag not in the default state asks first. Review Focus 3 and the people-tags e2e match Stefan's ruling and spec R2. But the "existing `Confirm`" it relies on does not exist (see below). |
+| B2 | Partly resolved | Engine side is fixed: `views.ts` visible_fields accepts a link name, `publicRows` skips it, `params.ts` sort/group stay 400. The grid side is still open: `toStoredView`/`fromStoredView` drop the link, so the "saves" check passes without proving the link is kept (S-new-1). |
+| S1 | Resolved | Threat 4 and Task 3 Step 1 state the rule for a dataset and for a query (`creates`, the key's relation equals `creates`, the id promise). Both denials are tested. |
+| S2 | Resolved | `fromHash` honours `to` and falls back to `weekOf(from)`. `period=all` gives `{}`. `shiftMonth` steps a month. `formatWindow` gets month, range and Alles labels. The step unit comes from the window's shape. All of it is tested in Period.test Step 1. |
+| S3 | Mostly resolved | The listed lines are correct (grid-ux:482, step-0e:93, step-1:260, the from-only fallback). One gap: see N-new-1. |
+| S4 | Resolved | Interfaces says a matrix under Alles reads and shows the current week. The e2e opens Toewijzingen after Alles. The e2e's "shows rows" check is clock-dependent (S-new-4). |
+| S5 | Resolved | `seed-missing.test.ts:14`, `grid-ux.test.ts:138` and `e2e/grid-ux.spec.ts:486-493` are listed, with Mensen after Locatie. |
+| S6 | Resolved | Review Focus 6 is corrected. `toHaveCount(0)` is added to `fiche-renders-as-before` (`e2e/grid-ux.spec.ts:640`). |
+| S7 | Resolved | The query-count claim is replaced by "600 parents, two chunks". A test asserts the link entry's keys are exactly `id, target, title, state`. |
+| N1 | Partly resolved | GridBar is named. The matrix's bar is placed at `App.tsx:371`, but it renders in `apps/grid/src/matrix/Matrix.tsx:383` (`{filters}`). See N-new-2. |
+| N2 | Resolved | Row 2 names `writer.test.ts` `describe('dagplanning')` (:220). |
+| N3 | Resolved | `links` joins `OVERWRITTEN`. Title is `lookups[target]?.title`, else the row's own title. |
+| N4 | Resolved | The cells alternative and its rejection are in Simplest design, and the reason holds (`params.ts:118-123`). |
+
+## Blocking
+
+**B-new-1. "The existing `Confirm`" is the magic-link sign-in screen, not a confirm dialog.**
+- Plan, Task 4 Files (App.tsx bullet) says: "first asks 'Toewijzing van <titel> verwijderen?' with the existing `Confirm`".
+- In the source, `apps/grid/src/ui/Confirm.tsx:14` is `Confirm({ token, onSignedIn })`. It calls `consumeLink(token)` and renders a sign-in button. `App.tsx:94` mounts it only for `#/auth/<token>`.
+- The grid has no question dialog. The only delete confirmation is the two-press `DeleteRow` in `apps/grid/src/grid/Grid.tsx:318-336` ("Verwijderen", then "Zeker?").
+- The people-tags e2e needs a question with an Annuleren button ("Annuleren keeps it"), and nothing in the grid provides one.
+- Smallest change: in Task 4, add a new small confirm, for example a Popover anchored on the tag with the question, "Verwijderen" and "Annuleren". Name its file, or put it inside `Links.tsx`. Drop "existing `Confirm`". Links.test already drives it through `onConfirm`, so add one test that Annuleren does not call `onRemove`.
+
+## Should fix
+
+**S-new-1. The grid's saved-view round trip drops the link column, so Review Focus 7 passes without proving "kept in a saved view" (R3).**
+- Plan: Task 4 "`apps/grid/src/engine.ts`, `types.ts`: a links column becomes a field of type `links`". Review Focus 7 and e2e Step 6: "save a copy of the view showing Mensen: it saves".
+- Source:
+  - `apps/grid/src/engine.ts:227` has `fieldsOf = Object.keys(source.columns)…`. The plan serves links under `sources[s].links`, not `columns`.
+  - `toStoredView` (:275-277) keeps only ids in `fieldsOf`, so `mensen` never reaches `visible_fields`. The POST succeeds because the link name was never sent.
+  - `fromStoredView` (:237-239) drops `mensen` from `order` and never marks it hidden. So the seeded view's `…'locatie_id', 'mensen', 'status'` order is lost, and the grid-ux header assertion (Mensen after Locatie) will not hold.
+- Smallest change, in Task 4:
+  - Name `engine.ts:227` `fieldsOf`: it includes the source's link names.
+  - Add a vitest in `apps/grid/src/engine.test.ts` that `toStoredView`/`fromStoredView` round-trip `mensen`, both shown in place and hidden.
+  - Extend the e2e step: reopen the saved copy and see Mensen where it was saved.
+
+**S-new-2. Owner denial (Threat 1) and the `/schema` omission (Threat 5) cannot both be proven with the one fixture link the plan describes.**
+- Plan: Task 3 Test, "`taak` gaining a `helpers` link over a new generic join dataset such as `hulp` (`taak_id`, `project_id` target, `state`)". Step 1 asks for an owner who sees only its own link rows (Threat 1), and for "an owner who cannot read the link dataset gets no `links` entry" (Threat 5).
+- Source: `packages/engine/src/access.ts:48-49` makes `readable` false for an owner on a dataset without `owners`. `scopeOf` (:58-64) then gives `'none'`.
+  - If `hulp` declares `owners: { owner: 'project_id' }`, Threat 5's test has nothing to deny.
+  - If it does not, Threat 1's test returns zero rows and passes without proving anything.
+- Smallest change: the fixture declares two links. One is over an owned join (`owners: { owner: 'project_id' }`) for Threat 1; that test asserts the owner's own link row is present and another project's row is absent, by id. The other is over a dataset with no owner column, for Threat 5.
+
+**S-new-3. Two steps in the people-tags e2e cannot run as written.**
+- "add a person; … reload; it stays; undo; the added tag is gone" (Task 4 Step 6). The undo history lives in `useState` (`apps/grid/src/ui/App.tsx:167`, `createHistory` in `ui/history.ts`). A page reload empties it, so the undo after a reload has nothing to undo.
+  - Fix: undo before the page reload, then re-add and reload to show the tag persists.
+- "adding the same person twice shows the writer's refusal". The picker shows a linked person checked, and unchecking it calls `onRemove` (Step 1), so the UI cannot send a duplicate.
+  - Fix: create the same Toewijzing through the API after the page has loaded (a stale row), then pick that person. The refusal comes from `checkAssignee` (`packages/theatre/src/writers.ts:136-138`).
+
+**S-new-4. "It shows rows for the current week" depends on the real date.**
+- Plan: Task 2 Step 6, "open the Toewijzingen matrix: it shows rows for the current week".
+- Source: the seed is on fixed dates (`packages/theatre/src/seed.ts:33-40`, 2026-10-12…), and every e2e lands on a fixed `#from=`. No spec controls the clock (no `page.clock` in `e2e/`).
+- Smallest change: either freeze the page clock in the seeded week (`page.clock.setFixedTime('2026-10-14')`) before picking Alles, or assert the chip reads the current week and no error shows, without counting rows.
+
+**S-new-5. The period's proposed docs/SPEC.md line has no task.**
+- The spec lists two proposed SPEC lines: the `links` one and the Skin needs / Sidebar period-chip one.
+- Only Task 3 Step 5 adds lines, and only the `links` ones. The current working-tree diff of `docs/SPEC.md` holds neither period line.
+- Smallest change: Task 2 gets a step that adds the period line to the `docs/SPEC.md` working-tree diff, unstaged.
+
+**S-new-6. The grid cannot know which state is "the default" from the served link shape.**
+- Plan: Task 3 Interfaces `/schema` `links[name].state?: { options, tones }`. Task 4 confirms "whose state is not the state column's default".
+- Source: the default is declared on the link dataset's column (`packages/theatre/src/datasets.ts:178`, `default: 'uitgenodigd'`), and the planned `state` object leaves it out.
+- Smallest change: serve `default` in `links[name].state`, and assert it in Task 3 Step 1 and Task 4 Step 2.
+
+## Note
+
+- **N-new-1. The grep list misses the empty-state text in unit tests.** Task 2's "Tests to update" greps `nv-window`, `Vorige week`, `Volgende week` and `formatWindow`. Renaming `noRowsInWindow` (`i18n.ts:9`) also breaks about 45 `findByText('Geen rijen in deze week')` in `apps/grid/src/ui/App.test.tsx`, plus `Window.test.tsx:116,124`, `Grid.test.tsx:38,176,184` and `SignIn.test.tsx:138`. Add that string to the grep list.
+- **N-new-2. Matrix bar location.** The matrix's bar renders `{filters}` at `apps/grid/src/matrix/Matrix.tsx:383`, not in `App.tsx`. Since `filters` is `null` when there are no filterable fields (`App.tsx:276`), name `Matrix.tsx` in Task 2's Files, or pass the chip as its own prop.
+- **N-new-3. Undo after ×.** If a tag added in this tab is then removed with ×, the next undo hits the add's batch. `planUndo` then answers 409 `changed_since` on `deleted_at` (`packages/engine/src/writes.ts:496`). Push the add with `id: linkId` and call `history.forget(dataset, linkId)` on ×. This matches what `grid/store.ts` does for a row delete.
+- **N-new-4. Domain word in the grid.** "Toewijzing van <titel> verwijderen?" would hard-code a domain word in `apps/grid/src/i18n.ts`, and the grid holds none today. Build the sentence from the link dataset's served label, or the link's `label`, plus the title.
+- **N-new-5. View sort/group scope.** `views.ts` `hasColumn` (:39) is shared by `columnsOf` for `sort` and `visible_fields` and by `groupOf`. Make Task 3's views test assert that `POST /views` with `sort: ['<link>']` or `group_by: '<link>'` is 400. Otherwise widening `hasColumn` itself would store a view whose every read is 400 `bad_sort`.
+- **N-new-6. Van–tot in a matrix.** A Van–tot range longer than 92 days is 400 `window_too_wide` for a matrix (`params.ts:121-123`). The spec is silent, so this needs a ruling at execution: cap Van–tot when the skin is not `unbounded`, or clamp in the matrix read.
+- **N-new-7. Export under Alles.** `useWindow` becoming `Partial` touches `exportSheet`/`xlsx.ts` `fileName`/`sheetName` (`DateWindow | null`) through `App.tsx:284`. Under Alles, pass `null`, which gives the window-less file name. One line in Task 2 avoids a ruling at typecheck time.
+- **N-new-8. Unnamed test files.** Task 2's `period-chip` e2e and Task 4 Step 2's theatre test do not name a file. Use `e2e/dagplanning.spec.ts` and `packages/theatre/test/writer.test.ts` `describe('dagplanning')`.
+- **N-new-9. Write reply has no links.** The dataset write reply (`writes.ts:398` `rowOf`) carries no `links`. That is harmless for Dagplanning: query writes are read again through `GET /rows` (`apps/grid/src/api.ts:149-160`). A future dataset with links would lose its tags until the next read after an edit.
+
+## Premises checked
+- `views.ts` `hasColumn` accepts only columns and `id`, used for visible_fields, sort and group → `packages/engine/src/views.ts:39-40,103-114` → holds (the plan changes it)
+- `publicRows` builds columns from `visible_fields` → `views.ts:345` → holds
+- sort/group on a non-column is 400 → `params.ts:69-70,94-108` → holds
+- Matrix read without a window is 400 `window_required` and is capped at 92 days → `params.ts:118-123` → holds
+- `OVERWRITTEN` holds title and revision → `validate.ts:85-88` → holds
+- `checkCreates` only checks the dataset has a create writer → `validate.ts:65-75` → holds; the plan adds the id promise
+- toewijzing.activiteit_id relates to `activiteit` = Dagplanning `creates` → `datasets.ts:174`, `queries.ts:43` → holds
+- `cellsOf` pattern (chunks of 500, `deleted_at`, scope, `inArray`, `withLookups`) → `rows.ts:116-149` → holds
+- `/rows` route adds cells only on `cells=1` → `app.ts:180-195` → holds
+- `scopeOf`/`readable` for an owner → `access.ts:47-64` → holds (S-new-2)
+- `isReadonly` = readonly, or a query column without writes → `apps/grid/src/engine.ts:106-107` → holds, so dropping `readonly` on `locatie_id` is needed and correct
+- `updateThrough` reads the query row again after a write → `apps/grid/src/api.ts:149-160` → holds (Locatie's grey flag comes back)
+- `writesActiviteit` key `activiteit_id` → `queries.ts:33` → holds
+- Toewijzing state default `uitgenodigd` and its tones → `datasets.ts:175-188` → holds (not served in links, S-new-6)
+- Duplicate person refused by the writer → `writers.ts:136-138` → holds
+- A delete batch is not undoable; undoing a create deletes the row → `writes.ts:469-473,488-496` → holds (the B1 ruling matches)
+- "the existing `Confirm`" is a confirm dialog → `apps/grid/src/ui/Confirm.tsx:14` → does not hold (B-new-1)
+- The undo history outlives a page reload → `App.tsx:166-167` (useState) → does not hold (S-new-3)
+- `fromHash` reads only `from` → `apps/grid/src/ui/Window.tsx:60-63` → holds; the plan widens it
+- `shift` steps by days → `Window.tsx:30-34` → holds; `shiftMonth` is added
+- `rows()`/`rowsQuery` pass `{}` through → `api.ts:89-94`, `engine.ts:356-370` → holds
+- `newRow` takes `DateWindow | null` → `apps/grid/src/grid/newRow.ts:24-26` → holds; the plan widens it
+- The scope chip is in GridBar → `apps/grid/src/grid/GridBar.tsx:34` → holds
+- The matrix bar is in `App.tsx:371` → `apps/grid/src/matrix/Matrix.tsx:383` → does not hold exactly (N-new-2)
+- `filters` is null without filterable fields → `App.tsx:276-278` → holds
+- The links field survives the grid's stored-view translation → `apps/grid/src/engine.ts:227,237-239,275-277` → does not hold (S-new-1)
+- `filterFields` and `GROUPABLE` are by field type → `grid/filter.ts:35-43`, `GridBar.tsx:23` → holds
+- `RelationPicker` is single-pick over `records(model)` → `grid/cells/RelationPicker.tsx:37` → holds
+- Cited test lines: `seed-missing.test.ts:14`, `grid-ux.test.ts:138`, `writer.test.ts:220`, `e2e/grid-ux.spec.ts:482,486-493,640`, `step-0e.spec.ts:93`, `step-1.spec.ts:260` → hold
+- Seeded views pass the saved-view rules → `packages/theatre/test/theatre.test.ts:24` → holds; it will also check `mensen` once Task 3 lands
+- `state` is an allowed engine word → `scripts/vocabulary-allow.txt:7` → holds
+- docs/SPEC.md working tree already has the period line → `git diff docs/SPEC.md` → does not hold (S-new-5)
