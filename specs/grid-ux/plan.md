@@ -319,7 +319,8 @@
 - the rail and tree CSS (hierarchy, icons);
 - the toolbar and filter bar (chips; the scope chip; the scoped column hidden; the title tile; the week control);
 - the inherited tag;
-- `+ Nieuw` on a query with `creates`.
+- `+ Nieuw` on a query with `creates`;
+- the rail foot: the key hints fold into one "Sneltoetsen" item, and theme and density sit in one compact row, so the tree keeps its height (seen in the dark gate screenshot: the tree was cut after Gegevens at 720px).
 - Tests:
   - unit tests per item;
   - an e2e check at 1440×900, in Dutch, that Dagplanning on an applied speeldag shows "13:00–14:00", "Maaltijd" with its colour, "Productie is Nachtwacht" when scoped, and "Nieuwe activiteit" creating a row;
