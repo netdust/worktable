@@ -60,6 +60,16 @@ export interface MatrixDecl {
   away?: { dataset: string; across: string; label: string; end: string }
 }
 
+/** The rows of `dataset` whose `key` column is this row's id; `item` is the word for one of them. */
+export interface LinkDecl {
+  label: string
+  item: string
+  dataset: string
+  key: string
+  target: string
+  state?: string
+}
+
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
@@ -85,6 +95,7 @@ export interface DatasetDecl {
   icon?: Icon
   /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
   new_label?: string
+  links?: Record<string, LinkDecl>
 }
 
 export interface QueryDecl {
@@ -103,6 +114,7 @@ export interface QueryDecl {
   creates?: string
   /** The dataset this query reads: the grid lists its views under that dataset. */
   of?: string
+  links?: Record<string, LinkDecl>
 }
 
 export interface SavedViewSeed {
@@ -167,6 +179,7 @@ function assertIdentifier(what: string, name: string): void {
 function assertNames(d: Omit<DatasetDecl | QueryDecl, 'kind'>): void {
   assertIdentifier('name', d.name)
   for (const column of Object.keys(d.columns)) assertIdentifier('column', column)
+  for (const link of Object.keys(d.links ?? {})) assertIdentifier('link', link)
 }
 
 export function defineDataset(d: Omit<DatasetDecl, 'kind'>): DatasetDecl {

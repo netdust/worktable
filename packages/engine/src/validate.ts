@@ -94,6 +94,7 @@ function checkOwners(source: DatasetDecl | QueryDecl): void {
 const OVERWRITTEN = [
   ['title', 'the computed row title'],
   ['revision', 'the write reply'],
+  ['links', "the row's link rows"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -114,6 +115,26 @@ function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
         column,
         `${column} relates to "${target.name}", whose title is through a relation`,
       )
+    }
+  }
+}
+
+// The key points back at the source's own rows: the dataset itself, or the dataset a query creates.
+function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
+  for (const [name, link] of Object.entries(source.links ?? {})) {
+    const at = (bad: string, message: string): DomainError =>
+      new DomainError(source.name, bad, `link ${name} ${message}`)
+    const linked = domain.datasets.find((d) => d.name === link.dataset)
+    if (!linked) throw at(link.dataset, `reads undeclared dataset "${link.dataset}"`)
+    if (declared(source, name)) throw at(name, 'has the name of a column')
+    const own = source.kind === 'dataset' ? source.name : source.creates
+    if (own === undefined) throw at(name, 'is on a query that declares no creates')
+    if (linked.columns[link.key]?.relation !== own)
+      throw at(link.key, `key "${link.key}" is not a relation to "${own}"`)
+    if (!linked.columns[link.target]?.relation)
+      throw at(link.target, `target "${link.target}" is not a relation column`)
+    if (link.state !== undefined && !linked.columns[link.state]?.options) {
+      throw at(link.state, `state "${link.state}" is not an options column`)
     }
   }
 }
@@ -282,6 +303,7 @@ export function validateDomain(domain: Domain): void {
     checkIcon(source)
     checkFacts(source)
     checkInherited(source)
+    checkLinks(domain, source)
   }
   checkSpace(domain)
   checkSections(domain)

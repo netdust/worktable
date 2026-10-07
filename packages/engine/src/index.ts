@@ -10,6 +10,7 @@ export type {
   Domain,
   GroupFact,
   Icon,
+  LinkDecl,
   MatrixDecl,
   Owners,
   QueryDecl,
@@ -24,6 +25,7 @@ export { FilterCompileError, filterCompile } from './filter-compile'
 export { type ImportResult, importExport, type Refusal, readExportFile } from './import'
 export { migrate, seedDomain } from './migrate'
 export { MigrationError } from './migration-error'
+export type { LinkRow } from './rows'
 export { savedView } from './saved-view'
 export { tableOf } from './tables'
 export { DomainError, validateDomain } from './validate'

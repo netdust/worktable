@@ -1,8 +1,8 @@
 import { and, asc, count, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import type { Scope } from './access'
-import type { DatasetDecl, Domain, MatrixDecl } from './declare'
+import { readable, type Scope, scopeOf } from './access'
+import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
 import { filterWhere } from './filter'
 import type { RowsParams } from './params'
 import { type Source, sourceOf } from './registry'
@@ -117,17 +117,11 @@ export function matrixOf(domain: Domain, source: Source): { join: DatasetDecl; m
   return join?.matrix ? { join, matrix: join.matrix } : null
 }
 
-export function cellsOf(
-  db: BunSQLiteDatabase,
-  domain: Domain,
-  { join, matrix }: NonNullable<ReturnType<typeof matrixOf>>,
-  downIds: number[],
-  scope: Scope,
-): Map<number, EngineRow[]> {
-  const table = tableOf(join)
+// The live rows of `dataset` whose `key` is one of `ids`, in the caller's scope, read in chunks.
+function pointingAt(db: BunSQLiteDatabase, dataset: DatasetDecl, key: string, ids: number[], scope: Scope): Raw[] {
+  const table = tableOf(dataset)
   const raws: Raw[] = []
-  for (let i = 0; i < downIds.length; i += CHUNK) {
-    const ids = downIds.slice(i, i + CHUNK)
+  for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = db
       .select()
       .from(table)
@@ -135,16 +129,67 @@ export function cellsOf(
         and(
           isNull(columnOf(table, 'deleted_at')),
           scopeWhere(table, scope),
-          inArray(columnOf(table, matrix.down), ids),
+          inArray(columnOf(table, key), ids.slice(i, i + CHUNK)),
         ),
       )
       .orderBy(asc(columnOf(table, 'id')))
       .all() as Raw[]
     raws.push(...chunk)
   }
+  return raws
+}
+
+export function cellsOf(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  { join, matrix }: NonNullable<ReturnType<typeof matrixOf>>,
+  downIds: number[],
+  scope: Scope,
+): Map<number, EngineRow[]> {
+  const raws = pointingAt(db, join, matrix.down, downIds, scope)
   const cells = new Map<number, EngineRow[]>(downIds.map((id) => [id, []]))
   withLookups(db, domain, join, raws).forEach((row, i) => {
     cells.get((raws[i] as Raw)[matrix.down] as number)?.push(row)
   })
   return cells
+}
+
+export interface LinkRow {
+  id: number
+  target: number | null
+  title: string
+  state: string | null
+}
+
+// Only these four leave: no other column of the link row or of its target.
+function linkOf(row: EngineRow, link: LinkDecl): LinkRow {
+  const target = row[link.target]
+  const state = link.state === undefined ? null : row[link.state]
+  return {
+    id: row.id,
+    target: typeof target === 'number' ? target : null,
+    title: row.lookups[link.target]?.title ?? row.title,
+    state: typeof state === 'string' ? state : null,
+  }
+}
+
+// Read through the caller's scope on the link dataset; a link dataset the caller cannot read is left out.
+export function linksOf(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  source: Source,
+  ids: number[],
+  actor: Actor,
+): Map<number, Record<string, LinkRow[]>> {
+  const links = new Map<number, Record<string, LinkRow[]>>(ids.map((id) => [id, {}]))
+  for (const [name, link] of Object.entries(source.links ?? {})) {
+    const linked = domain.datasets.find((d) => d.name === link.dataset)
+    if (!linked || !readable(actor, linked)) continue
+    for (const id of ids) (links.get(id) as Record<string, LinkRow[]>)[name] = []
+    const raws = pointingAt(db, linked, link.key, ids, scopeOf(actor, linked))
+    withLookups(db, domain, linked, raws).forEach((row, i) => {
+      links.get((raws[i] as Raw)[link.key] as number)?.[name]?.push(linkOf(row, link))
+    })
+  }
+  return links
 }

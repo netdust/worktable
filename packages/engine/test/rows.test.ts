@@ -131,6 +131,7 @@ describe('rows', () => {
       title: 'een',
       custom: { colour: 'rood', labels: ['a', 'b'] },
       lookups: { project_id: { id: 1, title: 'Alfa' } },
+      links: { koppels: [], merken: [] },
     })
     expect(body.rows[1].afgerond).toBe(true)
     expect(body.rows[2].custom).toEqual({})
@@ -251,7 +252,16 @@ describe('rows', () => {
   test('schema lists every declared source and no saved views: GET /api/views serves those', async () => {
     const { status, body } = await get('/api/schema')
     expect(status).toBe(200)
-    expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'note', 'per_project', 'note_lijst'])
+    expect(Object.keys(body.sources)).toEqual([
+      'project',
+      'taak',
+      'plat',
+      'note',
+      'koppel',
+      'merk',
+      'per_project',
+      'note_lijst',
+    ])
     expect(body.sources.taak).toMatchObject({ kind: 'dataset', label: 'Taken', title: 'description', date: 'day' })
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })
     expect(body.sources.project.date).toBeNull()

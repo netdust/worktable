@@ -5,11 +5,11 @@ import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
 import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
-import type { Actor, ColumnDecl, DatasetDecl, Domain } from './declare'
+import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { cellsOf, matrixOf, readRows } from './rows'
+import { cellsOf, linksOf, matrixOf, readRows } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import {
@@ -105,6 +105,29 @@ function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string } {
   return target && readable(actor, target) ? { of: target.name } : {}
 }
 
+function servedLink({ label, item, dataset, key, target, state }: LinkDecl, linked: DatasetDecl) {
+  const column = state === undefined ? undefined : linked.columns[state]
+  const options = column && { options: column.options, tones: column.tones ?? {}, default: column.default ?? null }
+  return {
+    label,
+    item,
+    dataset,
+    key,
+    target,
+    target_dataset: linked.columns[target]?.relation,
+    ...(options ? { state: options } : {}),
+  }
+}
+
+// A link is served only to a reader of its dataset (threat 5).
+function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Record<string, unknown> } {
+  const served = Object.entries(source.links ?? {}).flatMap(([name, link]) => {
+    const linked = domain.datasets.find((d) => d.name === link.dataset)
+    return linked && readable(actor, linked) ? [[name, servedLink(link, linked)] as const] : []
+  })
+  return served.length ? { links: Object.fromEntries(served) } : {}
+}
+
 export interface EngineOptions {
   port: number
   appUrl?: string
@@ -168,6 +191,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),
             ...ofOf(domain, s, actor),
+            ...servedLinks(domain, s, actor),
             ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
               ? { new_label: s.new_label }
               : {}),
@@ -190,15 +214,15 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     const found = params.cells ? matrixOf(domain, source) : null
     if (params.cells && !found) throw new ApiError(400, 'no_matrix', `"${name}" is not the down source of a matrix`)
     const read = readRows(db, domain, source, params, scopeOf(actor, source))
-    if (!found) return c.json(read)
-    const cells = cellsOf(
-      db,
-      domain,
-      found,
-      read.rows.map((r) => r.id),
-      scopeOf(actor, found.join),
-    )
-    return c.json({ ...read, rows: read.rows.map((r) => ({ ...r, cells: cells.get(r.id) })) })
+    const ids = read.rows.map((r) => r.id)
+    const links = source.links ? linksOf(db, domain, source, ids, actor) : null
+    const cells = found ? cellsOf(db, domain, found, ids, scopeOf(actor, found.join)) : null
+    const rows = read.rows.map((r) => ({
+      ...r,
+      ...(links ? { links: links.get(r.id) } : {}),
+      ...(cells ? { cells: cells.get(r.id) } : {}),
+    }))
+    return c.json({ ...read, rows })
   })
 
   writeRoutes(app, store)
