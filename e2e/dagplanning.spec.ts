@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { openView } from './tree'
+import { state } from './auth'
+import { shot } from './shots'
+import { modelNode, openView } from './tree'
 
 const WEEK = '2026-12-21'
 const VENUE = 'Theater Het Anker'
@@ -95,6 +97,7 @@ test('edit-dagplanning @e2e', async ({ page }) => {
   await expect(await cellOf(page, 'dagplanning bewerkt', 'Soort')).toHaveText('Opbouw')
   const [stored] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'dagplanning bewerkt' })
   expect(stored).toMatchObject({ soort: 'opbouw', omschrijving: 'dagplanning bewerkt' })
+  await shot(page, 'edit-dagplanning')
 })
 
 test('locatie-own-and-back @e2e', async ({ page }) => {
@@ -121,12 +124,14 @@ test('locatie-own-and-back @e2e', async ({ page }) => {
   await pickRelation(await cell(), page, 'Loods', OTHER_VENUE)
   await expect((await cell()).locator('.nv-cell__text')).toHaveText(OTHER_VENUE)
   await expect((await cell()).locator('.nv-via, .nv-inherited')).toHaveCount(0)
+  await shot(page, 'locatie-own')
 
   const clear = await cell()
   await clear.click()
   await clear.press('Delete')
   await expect((await cell()).locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
   await expect((await cell()).locator('.nv-via')).toHaveText('via tourstop')
+  await shot(page, 'locatie-via-tourstop')
   const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'locatie eigen en terug' })
   expect(held.locatie_id ?? null).toBeNull()
 })
@@ -162,8 +167,10 @@ test('period-chip @e2e', async ({ page }) => {
   await value.click()
   await page.getByLabel('Van', { exact: true }).fill('2026-12-21')
   await page.getByLabel('Tot', { exact: true }).fill('2027-02-20')
+  await shot(page, 'period-menu')
   await page.getByRole('button', { name: 'Toepassen' }).click()
   await expect(value).toHaveText('21 dec – 20 feb')
+  await shot(page, 'period-chip')
   await expect(named(page, near)).toHaveCount(1)
   await value.click()
   await page.getByRole('button', { name: 'Alles' }).click()
@@ -277,6 +284,7 @@ async function peopleTags(page: Page) {
   await search.fill('Sam')
   await option('Sam Peeters').click()
   await expect(page.getByRole('status', { name: 'Deze persoon is al toegewezen aan deze activiteit.' })).toBeVisible()
+  await shot(page, 'people-tags')
   await expect.poll(assigned).toEqual([bram, sam].sort())
   await search.press('Escape')
 
@@ -288,3 +296,386 @@ async function peopleTags(page: Page) {
   const heads = (await page.locator('thead th').allTextContents()).map((h) => h.replace(/\s*[↑↓]$/, '').trim())
   expect(heads.indexOf('Mensen')).toBe(heads.indexOf('Locatie') + 1)
 }
+
+// The shake-out's edges: the people cell's colours and overflow, the removal question by keyboard, the draft row, Tourstop.
+
+type Assigned = { persoon_id: number | null; naam?: string | null; state: string }
+
+async function withActivity(page: Page, title: string, start: string, flow: (activity: number) => Promise<void>) {
+  const api = page.request
+  const activity = await idOf(api, 'activiteit', {
+    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
+    soort: 'repetitie',
+    datum: WEEK,
+    start_at: `${WEEK}T${start}`,
+    omschrijving: title,
+  })
+  try {
+    await flow(activity)
+  } finally {
+    for (const t of await rowsOf<{ id: number }>(api, 'toewijzing', { activiteit_id: activity }))
+      await api.delete(`/api/rows/toewijzing/${t.id}`)
+    await api.delete(`/api/rows/activiteit/${activity}`)
+  }
+}
+
+const personId = (api: Api, name: string) => idByName(api, 'persoon', 'weergavenaam', name)
+
+test('people-colours-and-overflow @e2e', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  const api = page.request
+  const title = 'mensen kleuren e2e'
+  await withActivity(page, title, '09:00', async (activity) => {
+    const states: [string, string][] = [
+      ['Bram De Wilde', 'bevestigd'],
+      ['Noor Claes', 'uitgenodigd'],
+      ['Sam Peeters', 'geweigerd'],
+      ['Lotte Verhaegen', 'geannuleerd'],
+    ]
+    for (const [name, state] of states)
+      await idOf(api, 'toewijzing', { activiteit_id: activity, persoon_id: await personId(api, name), state })
+    await idOf(api, 'toewijzing', { activiteit_id: activity, naam: 'Gastregisseur', state: 'bevestigd' })
+    await openDagplanning(page)
+
+    const cell = await cellOf(page, title, 'Mensen')
+    const names = cell.locator('.nv-names')
+    const all = 'Bram De Wilde, Noor Claes, Sam Peeters, Lotte Verhaegen, Gastregisseur'
+    await expect(names).toHaveText(all)
+    await expect(names).toHaveAttribute('title', all)
+    await expect(names.locator('.nv-pill--ok')).toHaveText(['Bram De Wilde'])
+    await expect(names.locator('.nv-pill--warn')).toHaveText(['Noor Claes'])
+    await expect(names.locator('.nv-pill--bad')).toHaveText(['Sam Peeters', 'Lotte Verhaegen'])
+    await expect(names.locator('.nv-pill--muted')).toHaveText(['Gastregisseur'])
+    const colour = (name: string) =>
+      names.locator('.nv-pill', { hasText: name }).evaluate((el) => getComputedStyle(el).color)
+    const [green, amber, red, grey] = await Promise.all(
+      ['Bram De Wilde', 'Noor Claes', 'Sam Peeters', 'Gastregisseur'].map(colour),
+    )
+    expect(new Set([green, amber, red, grey]).size).toBe(4)
+    expect(await colour('Lotte Verhaegen')).toBe(red)
+
+    // One line, cut with an ellipsis: the names overflow their box, which neither wraps nor grows the row.
+    const box = await names.evaluate((el) => {
+      const style = getComputedStyle(el)
+      return {
+        overflow: el.scrollWidth > el.clientWidth,
+        ellipsis: style.textOverflow,
+        wrap: style.whiteSpace,
+        height: el.getBoundingClientRect().height,
+        line: Number.parseFloat(style.lineHeight) || 20,
+      }
+    })
+    expect(box.overflow).toBe(true)
+    expect(box.ellipsis).toBe('ellipsis')
+    expect(box.wrap).toBe('nowrap')
+    expect(box.height).toBeLessThanOrEqual(box.line * 1.5)
+    const rowHeight = (await named(page, title).boundingBox())?.height ?? 0
+    expect(rowHeight).toBeLessThanOrEqual(46)
+    await shot(page, 'people-cell')
+
+    // The box: every chosen name, a × only for a person; the list offers none of them.
+    await cell.click()
+    await cell.press('Enter')
+    const chosen = page.locator('.nv-picker .nv-chosen li')
+    await expect(chosen).toHaveText(['Bram De Wilde', 'Noor Claes', 'Sam Peeters', 'Lotte Verhaegen', 'Gastregisseur'])
+    await expect(chosen.filter({ hasText: 'Gastregisseur' }).getByRole('button')).toHaveCount(0)
+    await expect(page.locator('.nv-picker .nv-chosen__remove')).toHaveCount(4)
+    for (const [name] of states) await expect(page.getByRole('option', { name })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: 'Mensen' })).toBeFocused()
+    await shot(page, 'people-box')
+    await page.getByRole('combobox', { name: 'Mensen' }).press('Escape')
+    await expect(page.getByRole('combobox', { name: 'Mensen' })).toHaveCount(0)
+  })
+})
+
+async function openPeopleOf(page: Page, title: string): Promise<Locator> {
+  const cell = await cellOf(page, title, 'Mensen')
+  await cell.click()
+  await cell.press('Enter')
+  const search = page.getByRole('combobox', { name: 'Mensen' })
+  await expect(search).toBeFocused()
+  return search
+}
+
+/** One activity with Bram De Wilde bevestigd on it, Dagplanning open, and the question asked by Backspace. */
+async function withQuestion(
+  page: Page,
+  title: string,
+  start: string,
+  flow: (activity: number, search: Locator) => Promise<void>,
+) {
+  const api = page.request
+  await withActivity(page, title, start, async (activity) => {
+    await idOf(api, 'toewijzing', {
+      activiteit_id: activity,
+      persoon_id: await personId(api, 'Bram De Wilde'),
+      state: 'bevestigd',
+    })
+    await openDagplanning(page)
+    const search = await openPeopleOf(page, title)
+    await search.press('Backspace')
+    await expect(page.getByRole('alertdialog')).toContainText('Toewijzing van Bram De Wilde verwijderen?')
+    await flow(activity, search)
+  })
+}
+
+const assignedTo = async (api: Api, activity: number) =>
+  (await rowsOf<Assigned>(api, 'toewijzing', { activiteit_id: activity })).map((t) => t.persoon_id)
+
+test('removal-question-by-keyboard @e2e', async ({ page }) => {
+  const api = page.request
+  const bram = await personId(api, 'Bram De Wilde')
+  await withQuestion(page, 'mensen vraag e2e', '11:00', async (activity, search) => {
+    const question = page.getByRole('alertdialog')
+    const cancel = question.getByRole('button', { name: 'Annuleren' })
+
+    // Backspace on a confirmed last name asks; the question holds the keyboard on Annuleren.
+    await expect(cancel).toBeFocused()
+    await shot(page, 'removal-question')
+
+    // Escape keeps the person, and the search has the keyboard again.
+    await page.keyboard.press('Escape')
+    await expect(question).toHaveCount(0)
+    await expect(search).toBeFocused()
+    expect(await assignedTo(api, activity)).toEqual([bram])
+    await expect(page.locator('.nv-picker .nv-chosen li')).toHaveText(['Bram De Wilde'])
+
+    // Space on the focused Annuleren keeps them too.
+    await search.press('Backspace')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Space')
+    await expect(question).toHaveCount(0)
+    await expect(search).toBeFocused()
+    expect(await assignedTo(api, activity)).toEqual([bram])
+
+    // The × asks as well; Verwijderen removes, and that is final: Ctrl+Z does not bring them back.
+    await page.getByRole('button', { name: 'Bram De Wilde verwijderen' }).click()
+    await question.getByRole('button', { name: 'Verwijderen' }).click()
+    await expect.poll(() => assignedTo(api, activity)).toEqual([])
+    await expect(page.locator('.nv-picker .nv-chosen li')).toHaveCount(0)
+    await search.press('Escape')
+    await (await cellOf(page, 'mensen vraag e2e', 'Mensen')).press('Control+z')
+    await page.waitForTimeout(500)
+    expect(await assignedTo(api, activity)).toEqual([])
+    await expect((await cellOf(page, 'mensen vraag e2e', 'Mensen')).locator('.nv-names')).toHaveText('')
+  })
+})
+
+// Bug: Enter on the focused Annuleren reaches the grid, which closes the box and commits the people cell as a value; the store refuses it and marks the cell.
+test('removal-question-enter-on-annuleren @e2e', async ({ page }) => {
+  test.fail()
+  const api = page.request
+  const writes: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'PATCH') writes.push(new URL(req.url()).pathname)
+  })
+  await withQuestion(page, 'mensen enter e2e', '12:00', async (activity, search) => {
+    await expect(page.getByRole('alertdialog').getByRole('button', { name: 'Annuleren' })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('alertdialog')).toHaveCount(0)
+    expect(await assignedTo(api, activity)).toEqual([await personId(api, 'Bram De Wilde')])
+    await page.waitForTimeout(500)
+    expect(writes).toEqual([])
+    await expect(page.locator('td.nv-td--error')).toHaveCount(0, { timeout: 1000 })
+    await expect(search).toBeFocused({ timeout: 1000 })
+  })
+})
+
+// Bug: Tab on the question moves the grid's cell and closes the box; Verwijderen is never reached by the keyboard.
+test('removal-question-tab-to-verwijderen @e2e', async ({ page }) => {
+  test.fail()
+  await withQuestion(page, 'mensen tab e2e', '13:00', async () => {
+    const question = page.getByRole('alertdialog')
+    await page.keyboard.press('Tab')
+    await expect(question.getByRole('button', { name: 'Verwijderen' })).toBeFocused({ timeout: 1000 })
+  })
+})
+
+// Bug: the question's buttons carry nv-btn and nv-btn--danger, which no stylesheet defines: browser buttons in Arial, Verwijderen like Annuleren.
+test('removal-question-buttons-styled @e2e', async ({ page }) => {
+  test.fail()
+  await withQuestion(page, 'mensen knoppen e2e', '14:00', async () => {
+    const question = page.getByRole('alertdialog')
+    const style = (name: string) =>
+      question.getByRole('button', { name }).evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { font: s.fontFamily, background: s.backgroundColor, border: s.borderTopStyle }
+      })
+    const [cancel, remove] = [await style('Annuleren'), await style('Verwijderen')]
+    expect(cancel.font).toMatch(/^"?IBM Plex Sans/)
+    expect(cancel.border).not.toBe('outset')
+    expect(remove.background).not.toBe(cancel.background)
+  })
+})
+
+// Bug: at 1280 wide the people box runs past the viewport's right edge.
+test('people-box-fits-at-1280 @e2e', async ({ page }) => {
+  test.fail()
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const api = page.request
+  await withActivity(page, 'mensen breedte e2e', '16:00', async (activity) => {
+    for (const name of ['Bram De Wilde', 'Noor Claes', 'Sam Peeters', 'Lotte Verhaegen'])
+      await idOf(api, 'toewijzing', {
+        activiteit_id: activity,
+        persoon_id: await personId(api, name),
+        state: 'bevestigd',
+      })
+    await openDagplanning(page)
+    await openPeopleOf(page, 'mensen breedte e2e')
+    const box = await page
+      .locator('.nv-pop.nv-picker')
+      .evaluate((el) => ({ right: el.getBoundingClientRect().right, width: innerWidth }))
+    await shot(page, 'people-box-1280')
+    expect(box.right).toBeLessThanOrEqual(box.width)
+  })
+})
+
+// A draft row never reaches Dagplanning: + Nieuw there creates the activity at once, so its Mensen links to a real record.
+test('new-row-people @e2e', async ({ page }) => {
+  const api = page.request
+  const posts: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && new URL(req.url()).pathname.startsWith('/api/rows/'))
+      posts.push(new URL(req.url()).pathname)
+  })
+  await openDagplanning(page)
+  const add = page.getByRole('button', { name: 'Nieuwe activiteit' })
+  await expect(add).toBeDisabled()
+  await expect(add).toHaveAttribute('title', 'Kies eerst Productie')
+
+  await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
+  await page.getByRole('option', { name: 'Nachtwacht', exact: true }).click()
+  let made: number | undefined
+  try {
+    const created = page.waitForResponse(
+      (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/activiteit',
+    )
+    await add.click()
+    const response = await created
+    expect(response.status()).toBe(201)
+    made = ((await response.json()) as { id: number }).id
+    await expect(page.locator('tbody tr.nv-tr--draft')).toHaveCount(0)
+
+    const [row] = await rowsOf<{ id: number; omschrijving: string | null }>(api, 'activiteit', { id: made })
+    expect(row?.id).toBe(made)
+    await page.waitForLoadState('networkidle')
+    const index = await columnIndex(page, 'Mensen')
+    const cell = page.locator('tbody tr.nv-tr[data-title=""]').first().locator('td').nth(index)
+    await expect(cell).not.toHaveAttribute('aria-readonly', 'true')
+    await cell.click()
+    await cell.press('Enter')
+    await page.getByRole('combobox', { name: 'Mensen' }).fill('Noor')
+    await page.getByRole('option', { name: 'Noor Claes' }).click()
+    await expect
+      .poll(async () => (await rowsOf<Assigned>(api, 'toewijzing', { activiteit_id: made })).map((t) => t.persoon_id))
+      .toEqual([await personId(api, 'Noor Claes')])
+    await shot(page, 'new-row-people')
+    expect(posts.filter((p) => p === '/api/rows/toewijzing')).toHaveLength(1)
+    await page.getByRole('combobox', { name: 'Mensen' }).press('Escape')
+  } finally {
+    if (made !== undefined) {
+      for (const t of await rowsOf<{ id: number }>(api, 'toewijzing', { activiteit_id: made }))
+        await api.delete(`/api/rows/toewijzing/${t.id}`)
+      await api.delete(`/api/rows/activiteit/${made}`)
+    }
+    await page.getByRole('button', { name: 'Nachtwacht', exact: true }).click()
+    await page.getByRole('option', { name: 'Alle producties', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
+  }
+})
+
+test('tourstop-first-in-planning @e2e', async ({ page }) => {
+  await page.goto('/#from=2026-10-12')
+  const planning = page.getByRole('tree', { name: 'Views' }).getByRole('group', { name: 'Planning', exact: true })
+  const models = planning.getByRole('treeitem')
+  await expect(models.first()).toHaveAccessibleName('Tourstops')
+  const order = await models.evaluateAll((items) =>
+    items.map((i) => i.querySelector('.nv-model__name')?.textContent?.trim()),
+  )
+  expect(order).toEqual(['Tourstops', 'Activiteiten', 'Toewijzingen', 'Beschikbaarheden'])
+
+  await openView(page, 'Tourstops')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tourstops')
+  await expect(page.getByRole('button', { name: 'Nieuwe tourstop' })).toBeVisible()
+  const words = await page.locator('.nv-rail, thead, .nv-toolbar').allInnerTexts()
+  expect(words.join(' ')).not.toMatch(/speelreeks/i)
+  await shot(page, 'tourstops')
+
+  const schema = (await (await page.request.get('/api/schema')).json()) as {
+    sources: Record<string, { label: string; columns: Record<string, { label: string }> }>
+  }
+  expect(schema.sources.speelreeks?.label).toBe('Tourstops')
+  expect(schema.sources.activiteit?.columns.speelreeks_id?.label).toBe('Tourstop')
+  await expect(modelNode(page, 'Speelreeksen')).toHaveCount(0)
+})
+
+test('period-empty-result @e2e', async ({ page }) => {
+  await page.goto('/#from=2030-01-07')
+  await page.reload()
+  await openView(page, 'Dagplanning', 'Activiteiten')
+  const chip = page.getByRole('group', { name: 'Periode' })
+  await expect(chip.locator('.nv-chip__value')).toHaveText('Week 2 · 7–13 jan')
+  const empty = page.locator('.nv-center').getByText('Geen rijen in deze periode', { exact: true })
+  await expect(empty).toBeVisible()
+  await expect(page.locator('.nv-center')).toContainText('Week 2 · 7–13 jan')
+
+  // Centred in the grid's room, across and down.
+  const [room, text] = await Promise.all([page.locator('.nv-center').boundingBox(), empty.boundingBox()])
+  const middle = (b: { x: number; y: number; width: number; height: number } | null) =>
+    b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : { x: 0, y: 0 }
+  expect(Math.abs(middle(room).x - middle(text).x)).toBeLessThan(4)
+  expect(Math.abs(middle(room).y - middle(text).y)).toBeLessThan(40)
+  await shot(page, 'period-empty')
+
+  // The chip still steps from an empty period.
+  await chip.getByRole('button', { name: 'Volgende periode' }).click()
+  await expect(chip.locator('.nv-chip__value')).toHaveText('Week 3 · 14–20 jan')
+})
+
+// Bug: a double-click on an option adds twice; the second is refused, so a person added once reads as a failed add.
+test('people-double-pick @e2e', async ({ page }) => {
+  test.fail()
+  const api = page.request
+  const posts: number[] = []
+  page.on('response', (res) => {
+    if (res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/toewijzing')
+      posts.push(res.status())
+  })
+  await withActivity(page, 'mensen dubbel e2e', '17:00', async (activity) => {
+    await openDagplanning(page)
+    const search = await openPeopleOf(page, 'mensen dubbel e2e')
+    await search.fill('Noor')
+    await page.getByRole('option', { name: 'Noor Claes' }).dblclick()
+    await expect.poll(() => assignedTo(api, activity)).toEqual([await personId(api, 'Noor Claes')])
+    await page.waitForTimeout(800)
+    await shot(page, 'people-double-pick')
+    expect(posts).toEqual([201])
+    await expect(page.getByRole('status', { name: 'Deze persoon is al toegewezen aan deze activiteit.' })).toHaveCount(
+      0,
+      {
+        timeout: 1000,
+      },
+    )
+  })
+})
+
+test.describe('as the owner', () => {
+  test.use({ storageState: state('owner') })
+
+  test('owner-has-no-dagplanning @e2e', async ({ page }) => {
+    const api = page.request
+    expect((await api.get('/api/rows/dagplanning')).status()).toBe(404)
+    const schema = (await (await api.get('/api/schema')).json()) as { sources: Record<string, unknown> }
+    expect(Object.keys(schema.sources)).not.toContain('dagplanning')
+    const someone = await api.post('/api/rows/toewijzing', { data: { activiteit_id: 1, persoon_id: 2 } })
+    expect(someone.status()).toBe(403)
+
+    await page.goto('/#from=2026-10-12')
+    const tree = page.getByRole('tree', { name: 'Views' })
+    await expect(tree.getByRole('treeitem').first()).toBeVisible()
+    await expect(tree.getByRole('button', { name: 'Dagplanning', exact: true })).toHaveCount(0)
+    await expect(modelNode(page, 'Activiteiten')).toHaveCount(0)
+    await expect(modelNode(page, 'Tourstops')).toHaveCount(0)
+    await shot(page, 'owner-no-dagplanning')
+  })
+})
