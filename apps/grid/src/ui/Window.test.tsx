@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { formatWindow, shift, useWindow, weekOf, WindowControl } from './Window'
+import { formatWindow, isoWeek, shift, useWindow, weekOf, WindowControl } from './Window'
 
 const api = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), update: vi.fn(), create: vi.fn(), savedViews: () => Promise.resolve([]),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined,
@@ -39,18 +39,25 @@ describe('the week window', () => {
     expect(shift({ from: '2026-05-04', to: '2026-05-10' }, -7)).toEqual({ from: '2026-04-27', to: '2026-05-03' })
   })
 
+  it('numbers the week as ISO does: week 1 holds the first Thursday', () => {
+    expect(isoWeek(new Date(2026, 10, 2))).toBe(45)
+    expect(isoWeek(new Date(2026, 0, 1))).toBe(1)
+    expect(isoWeek(new Date(2027, 0, 3))).toBe(53)
+    expect(isoWeek(new Date(2027, 0, 4))).toBe(1)
+  })
+
   it("names the month in the admin locale, once when the week stays in it", () => {
-    expect(formatWindow({ from: '2026-05-18', to: '2026-05-24' })).toBe('Week 18 – 24 mei')
-    expect(formatWindow({ from: '2026-04-27', to: '2026-05-03' })).toBe('Week 27 apr – 3 mei')
+    expect(formatWindow({ from: '2026-05-18', to: '2026-05-24' })).toBe('Week 21 · 18–24 mei')
+    expect(formatWindow({ from: '2026-04-27', to: '2026-05-03' })).toBe('Week 18 · 27 apr–3 mei')
   })
 
   it('crosses a year boundary with both months named', () => {
-    expect(formatWindow({ from: '2026-12-28', to: '2027-01-03' })).toBe('Week 28 dec – 3 jan')
+    expect(formatWindow({ from: '2026-12-28', to: '2027-01-03' })).toBe('Week 53 · 28 dec–3 jan')
   })
 
   it('follows an English admin locale', () => {
     document.documentElement.lang = 'en-GB'
-    expect(formatWindow({ from: '2026-05-18', to: '2026-05-24' })).toBe('Week 18 – 24 May')
+    expect(formatWindow({ from: '2026-05-18', to: '2026-05-24' })).toBe('Week 21 · 18–24 May')
   })
 })
 
@@ -58,18 +65,18 @@ describe('WindowControl', () => {
   it('defaults to the current Monday to Sunday', () => {
     render(<Harness />)
 
-    expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
+    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
   })
 
   it('next and previous move it by seven days and keep it in the hash', () => {
     render(<Harness />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Volgende week' }))
-    expect(screen.getByText('Week 25 – 31 mei')).toBeTruthy()
+    expect(screen.getByText('Week 22 · 25–31 mei')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Vorige week' }))
     fireEvent.click(screen.getByRole('button', { name: 'Vorige week' }))
-    expect(screen.getByText('Week 11 – 17 mei')).toBeTruthy()
+    expect(screen.getByText('Week 20 · 11–17 mei')).toBeTruthy()
     expect(window.location.hash).toBe('#from=2026-05-11&to=2026-05-17')
   })
 
@@ -78,7 +85,7 @@ describe('WindowControl', () => {
 
     render(<Harness />)
 
-    expect(screen.getByText('Week 1 – 7 jun')).toBeTruthy()
+    expect(screen.getByText('Week 23 · 1–7 jun')).toBeTruthy()
   })
 
   it('a hash that is not a date falls back to the current week', () => {
@@ -86,7 +93,7 @@ describe('WindowControl', () => {
 
     render(<Harness />)
 
-    expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
+    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
   })
 
   it('picking a day shows its week', () => {
@@ -94,7 +101,7 @@ describe('WindowControl', () => {
 
     fireEvent.change(screen.getByLabelText('Kies een dag'), { target: { value: '2026-07-02' } })
 
-    expect(screen.getByText('Week 29 jun – 5 jul')).toBeTruthy()
+    expect(screen.getByText('Week 27 · 29 jun–5 jul')).toBeTruthy()
   })
 })
 
@@ -107,12 +114,12 @@ describe('App and the window', () => {
     render(<App />)
 
     await screen.findByText('Geen rijen in deze week')
-    expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
+    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
     expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-18', to: '2026-05-24' }, null, expect.any(Object))
 
     fireEvent.click(screen.getByRole('button', { name: 'Volgende week' }))
 
-    expect(screen.getByText('Week 25 – 31 mei')).toBeTruthy()
+    expect(screen.getByText('Week 22 · 25–31 mei')).toBeTruthy()
     await vi.waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-25', to: '2026-05-31' }, null, expect.any(Object)))
     await screen.findByText('Geen rijen in deze week')
   })

@@ -89,7 +89,7 @@ export function Toolbar({ title, matrix, locked, shown, window, onWindow, search
     // A changed view's actions take room: there, the end may take a second row rather than leave the screen.
     <header className={modified ? 'nv-toolbar nv-toolbar--crowded' : 'nv-toolbar'}>
       <div className="nv-toolbar__name">
-        {matrix ? <Grid3x3 size={16} aria-hidden="true" /> : <TableIcon size={16} aria-hidden="true" />}
+        <span className="nv-toolbar__glyph" aria-hidden="true">{matrix ? <Grid3x3 size={16} /> : <TableIcon size={16} />}</span>
         <h1 className="nv-toolbar__title">{title}</h1>
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t('readOnlyTitle')} title={t('readOnlyTitle')}><Lock size={13} aria-hidden="true" /></span>}
         {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups)}</span>}

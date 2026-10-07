@@ -233,6 +233,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   )
   const [named, waiting] = useFilterNames(model, fields, layout?.filters ?? [])
 
+  const scopeChip = scope && model && space.status === 'ready' && space.selected
+    ? t('scopeIs', { field: model.fields[scope.field]?.label ?? '', value: space.selected.title })
+    : null
+
   const plan = model && view ? newRow(model, view, dated ? range : null, new Date(), scope ?? null) : null
   const addBlocked = !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
   const add = () => {
@@ -340,7 +344,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
-              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} onAction={act}
+              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} />
           ) : (
             <Sheet hasView={view !== undefined} dated={dated} result={result} />

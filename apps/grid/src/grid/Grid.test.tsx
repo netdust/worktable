@@ -21,7 +21,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -35,8 +35,8 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     }
     return (
       <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
-        query={options.query ?? ''} emptyTitle="Geen rijen in deze week" emptyHint="Week 18 – 24 mei" filters={options.filters}
-        cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} />
+        query={options.query ?? ''} emptyTitle="Geen rijen in deze week" emptyHint="Week 21 · 18–24 mei" filters={options.filters}
+        cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
     )
   }
   return { store, ...render(<Harness />) }
@@ -113,6 +113,27 @@ describe('the sheet', () => {
     expect(headers()).toContain('location')
   })
 
+  it('heads the bar with a tinted scope chip nobody removes, then the group, the sort, the columns', () => {
+    const { container } = renderGrid(calais, { scope: { field: 'location', id: 12 }, scopeChip: 'Locatie is Le Grenier' })
+    const chips = [...container.querySelectorAll('.nv-bar .nv-chip')]
+
+    expect(chips.map((c) => c.textContent)).toEqual(['Locatie is Le Grenier', 'Groep: datum', 'Datum ↑, Start ↑', 'Kolommen'])
+    expect(chips[0].className).toContain('nv-chip--set')
+    expect(chips[0].tagName).toBe('SPAN')
+    expect(chips[0].querySelector('button')).toBeNull()
+  })
+
+  it('regroups from the group chip and turns the sort from its chip', () => {
+    renderGrid()
+    fireEvent.click(screen.getByRole('button', { name: 'Groep: datum' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Groeperen' })).getByRole('button', { name: 'Soort' }))
+    expect(saved?.group).toBe('kind')
+    expect(screen.getByRole('button', { name: 'Groep: soort' }).className).toContain('nv-chip--set')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Datum ↑, Start ↑' }))
+    expect(saved?.sort).toEqual([{ id: 'date', desc: true }, { id: 'start', desc: false }])
+  })
+
   it('shows the title where the view puts it', () => {
     renderGrid(calais, { layout: { ...defaults(planning), order: ['date', 'start', 'kind', 'title'] } })
     expect(headers().slice(0, 3)).toEqual(['start', 'kind', 'title'])
@@ -153,7 +174,7 @@ describe('the sheet', () => {
     renderGrid([])
 
     expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
-    expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
+    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
   })
 
   it('keeps the arrangement bar, an active filter chip with it, above an empty window (R10)', () => {
@@ -706,16 +727,17 @@ describe('the toolbar over the grid', () => {
     window.location.hash = ''
   })
 
-  it('labels every toolbar and bar control with a visible word, a filter chip included', async () => {
+  it('labels every toolbar and bar control with a visible word, or an icon that says its word on hover (the ⋯, the week steps, a chip\'s ×)', async () => {
     render(<App />)
     await screen.findByText('18 mei')
-    fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
     // A chip asks the server again: the grid comes back once the rows do.
     await screen.findByRole('grid')
     expect(within(bar()).getByRole('button', { name: 'Filter Status wissen' })).toBeTruthy()
+    const said = (control: HTMLElement) => visibleText(control).match(/\p{L}/u) !== null || control.getAttribute('title') === control.getAttribute('aria-label')
     for (const control of within(bar()).getAllByRole('button')) {
-      expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
+      expect(said(control), control.outerHTML).toBe(true)
     }
 
     // The one icon button, ⋯ (Stefan, 2026-10-03: menus when it gets crowded), says its word on hover.
@@ -724,11 +746,11 @@ describe('the toolbar over the grid', () => {
     const controls = within(toolbar()).getAllByRole('button').filter((control) => control !== more)
     expect(controls.length).toBeGreaterThan(3)
     for (const control of controls) {
-      expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
+      expect(said(control), control.outerHTML).toBe(true)
     }
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }).getAttribute('placeholder')).toBe('Zoeken')
-    expect(within(toolbar()).getByText('Vorige')).toBeTruthy()
-    expect(within(toolbar()).getByText('Volgende')).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Vorige week' })).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Volgende week' })).toBeTruthy()
     expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
   })
 
@@ -802,9 +824,9 @@ describe('the toolbar over the grid', () => {
     await screen.findByText('18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    expect(within(toolbar()).getByText('Vorige')).toBeTruthy()
-    expect(within(toolbar()).queryByRole('button', { name: '+ Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Kolommen', '+ Filter'])
+    expect(within(toolbar()).getByRole('group', { name: 'Week 21 · 18–24 mei' }).textContent).toBe('Week 21 · 18–24 mei')
+    expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
+    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Groep: datum', 'Datum ↑, Start ↑', 'Kolommen', 'Filter'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
@@ -871,7 +893,7 @@ describe('the toolbar over the grid', () => {
     render(<App />)
     await screen.findByText('18 mei')
 
-    fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
     await screen.findByRole('grid')
 

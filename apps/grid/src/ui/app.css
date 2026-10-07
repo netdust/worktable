@@ -31,10 +31,9 @@
 .nv-rail {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   min-width: 0;
   min-height: 0;
-  padding: 14px 10px;
+  padding: 0;
   background: var(--color-bg-sidebar);
   border-right: 1px solid var(--color-border-subtle);
 }
@@ -44,8 +43,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  margin: 0 -4px;
-  padding: 0 4px 12px;
+  padding: 2px 8px 16px;
 }
 
 /* The sources no section lists, set apart from the last labelled one. */
@@ -68,9 +66,9 @@
 .nv-model {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   height: 30px;
-  padding: 0 2px;
+  padding: 0 4px 0 2px;
   border-radius: var(--radius-sm);
   color: var(--color-fg-default);
   font-size: 13.5px;
@@ -92,8 +90,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border-radius: var(--radius-sm);
   color: var(--color-fg-muted);
@@ -200,6 +198,8 @@
   height: 28px;
   min-height: 28px;
   gap: 7px;
+  padding-top: 0;
+  padding-bottom: 0;
   padding-left: 6px;
   color: var(--color-fg-muted);
   font-size: 13.5px;
@@ -344,16 +344,29 @@
   flex-wrap: nowrap;
   min-width: 0;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--color-border-subtle);
+  gap: 14px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
 }
 
 .nv-toolbar__name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   color: var(--color-fg-muted);
+}
+
+/* The view's icon in its tile, beside the 19px name. */
+.nv-toolbar__glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
 }
 
 /* The name reads whole; the summary beside it is the first to give way, so a refusal's message stays readable too. */
@@ -374,12 +387,16 @@
 }
 
 .nv-toolbar__summary {
-  font-size: 12px;
   flex: 0 100 auto;
   min-width: 0;
+  padding: 2px 9px;
   overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
-  color: var(--color-fg-subtle);
   white-space: nowrap;
 }
 
@@ -391,7 +408,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
+  font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-fg-default);
@@ -433,9 +450,9 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: auto -6px 0;
-  padding: 8px 4px 0;
-  border-top: 1px solid var(--color-border-subtle);
+  margin-top: auto;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-default);
   color: var(--color-fg-subtle);
   font-size: 12px;
 }
@@ -527,20 +544,78 @@
 .nv-window {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
-.nv-chip {
+/* The week as one bordered control: ‹ Week 45 · 2–8 nov ›. */
+.nv-window__nav {
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 999px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+}
+
+#root .nv-window__step {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-window__step:hover {
+  background: var(--color-bg-hover);
   color: var(--color-fg-default);
-  font-weight: 500;
+}
+
+.nv-window__week {
+  padding: 0 8px;
+  color: var(--color-fg-default);
+  font-size: 13.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* One chip style for the bar: outlined, tinted once it is set. */
+#root .nv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  line-height: 1.4;
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#root button.nv-chip {
+  cursor: pointer;
+}
+
+#root button.nv-chip:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-fg-default);
+}
+
+#root .nv-chip--set,
+#root button.nv-chip--set:hover {
+  border-color: transparent;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
 }
 
 .nv-day {
@@ -636,20 +711,16 @@
   gap: 6px;
 }
 
-.nv-chip--filter {
-  gap: 6px;
+#root .nv-chip--filter {
   padding-right: 4px;
-  color: var(--color-fg-muted);
-  font-weight: 400;
 }
 
 .nv-chip--filter b {
-  color: var(--color-fg-default);
+  color: inherit;
   font-weight: 500;
 }
 
-#root .nv-chip__remove,
-#root .nv-chip--add {
+#root .nv-chip__remove {
   font: inherit;
   cursor: pointer;
   background: none;
@@ -670,11 +741,6 @@
   color: var(--color-fg-default);
 }
 
-#root .nv-chip--add {
-  border-style: dashed;
-  color: var(--color-fg-subtle);
-  font-weight: 400;
-}
 
 .nv-filters__menu {
   display: flex;
@@ -728,13 +794,18 @@
 /* At its narrowest the placeholder still reads whole beside the icon and ⌘K. */
 .nv-search {
   position: relative;
-  flex: 0 1 164px;
+  flex: 0 1 226px;
   min-width: 150px;
 }
 
 /* The placeholder must read whole beside the ⌘K hint. */
 #root .nv-search input {
   font-size: 13px;
+}
+
+#root .nv-search [class*="_input--sm"] {
+  min-height: 0;
+  padding: 3px 8px;
 }
 
 .nv-toolbar__end > :not(.nv-search):not(.nv-save) {
@@ -750,7 +821,7 @@
 /* The rail's space: the record being worked in, or every record, and its searchable list. */
 .nv-space {
   position: relative;
-  margin-bottom: 10px;
+  margin: 12px 10px 10px;
 }
 
 #root .nv-space__button {
@@ -881,10 +952,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  padding: 5px 16px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-subtle);
+  gap: 8px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
   color: var(--color-fg-subtle);
   font-size: 12px;
 }
@@ -892,33 +963,6 @@
 .nv-bar b {
   color: var(--color-fg-muted);
   font-weight: 500;
-}
-
-.nv-bar__group {
-  display: flex;
-  align-items: center;
-}
-
-#root .nv-bar__group > * {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-}
-
-#root .nv-bar__group label {
-  margin: 0;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-#root .nv-bar__group [role="combobox"] {
-  min-width: 110px;
-  min-height: 0;
-  height: 24px;
-  padding-top: 0;
-  padding-bottom: 0;
-  font-size: 12px;
 }
 
 #root .nv-bar__button {
@@ -963,6 +1007,7 @@
 
 .nv-bar__count {
   margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .nv-body {
@@ -1201,6 +1246,7 @@
 .nv-grid:not(.nv-mx) .nv-td {
   box-sizing: border-box;
   height: var(--row-h, 40px);
+  padding: 0 12px;
 }
 
 .nv-grid:not(.nv-mx) .nv-td,
@@ -1235,11 +1281,12 @@
   padding-left: 12px;
 }
 
-.nv-grid:not(.nv-mx) .nv-th.nv-first .nv-th__sort {
-  padding-left: 12px;
+#root .nv-grid:not(.nv-mx) .nv-th__sort {
+  padding: 7px 12px;
 }
 
 .nv-grid:not(.nv-mx) .nv-th {
+  box-sizing: border-box;
   height: 34px;
   border-bottom-color: var(--color-border-default);
   font-weight: 400;
@@ -1254,10 +1301,10 @@
   font-size: 12.5px;
 }
 
-/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. */
+/* The prototype's cells: values muted at 16px, the title the one strong word, a time's end quiet. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 13.5px;
+  font-size: 16px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1270,6 +1317,9 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-pill {
+  height: auto;
+  padding: 1px 8px;
+  line-height: normal;
   font-weight: 500;
 }
 
@@ -1488,6 +1538,7 @@
 }
 
 .nv-grid .nv-group--fold th {
+  box-sizing: border-box;
   height: 32px;
   border-bottom: 1px solid var(--color-border-default);
   background: var(--color-band);
@@ -1564,6 +1615,7 @@
 
 .nv-grid .nv-group__date {
   color: var(--color-fg-muted);
+  font-size: 16px;
   font-weight: 400;
 }
 

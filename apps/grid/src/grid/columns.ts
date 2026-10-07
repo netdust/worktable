@@ -45,7 +45,7 @@ const WIDTH: Record<CellKind, number> = {
 }
 
 /** Room for a value and its "via" tag side by side. */
-const INHERITED_WIDTH = 250
+const INHERITED_WIDTH = 290
 
 const TIME = /^(\d{1,2})(?:[:.h]?(\d{2}))?$/
 

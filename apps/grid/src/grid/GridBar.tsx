@@ -1,9 +1,10 @@
-import { Checkbox, Popover, Select } from '@sakaniui/react'
+import { Checkbox, Popover } from '@sakaniui/react'
+import { ArrowUpDown, Columns3, Rows2, Tag } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { rowCount, t } from '../i18n'
 import type { Model } from '../types'
 import type { Column } from './columns'
-import { group, hide, type Layout, orderOf, reorder, show } from './layout'
+import { group, hide, type Layout, orderOf, reorder, show, sort } from './layout'
 
 interface Props {
   model: Model
@@ -11,36 +12,51 @@ interface Props {
   layout: Layout
   onLayout: (layout: Layout) => void
   count: number
-  /** The filter chips and "+ Filter", after the columns. */
+  /** The filter chips and the Filter chip, after the columns. */
   filters?: ReactNode
+  /** The selected space as the scope chip reads it: "Productie is Nachtwacht"; it cannot be removed. */
+  scope?: string | null
 }
 
 const GROUPABLE = ['date', 'select', 'relation']
+const ICON = 13
 
-/** The sheet's arrangement, under the toolbar: what it is grouped and sorted by, which columns show, what it is filtered on. */
-export function GridBar({ model, columns, layout, onLayout, count, filters }: Props) {
+/** The sheet's arrangement, under the toolbar, as one row of chips: the scope, the group, the sort, the columns, the filters. */
+export function GridBar({ model, columns, layout, onLayout, count, filters, scope = null }: Props) {
   const label = (id: string) => columns.find((c) => c.id === id)?.label ?? model.fields[id]?.label ?? id
-  const options = [
-    { value: '', label: t('none') },
-    ...Object.entries(model.fields).filter(([, f]) => GROUPABLE.includes(f.type)).map(([key, f]) => ({ value: key, label: f.label })),
-  ]
+  const groupable = Object.entries(model.fields).filter(([, f]) => GROUPABLE.includes(f.type))
+  const [first, ...rest] = layout.sort
 
   return (
     <div className="nv-bar">
-      <div className="nv-bar__group">
-        <Select size="sm" label={t('groupBy')} options={options} value={layout.group ?? ''}
-          onChange={(value) => onLayout(group(layout, value === '' ? null : value))} />
-      </div>
-      {layout.sort.length > 0 && (
-        <span className="nv-bar__text">
-          {t('sortedBy')} <b>{layout.sort.map((s) => label(s.id) + (s.desc ? ' ↓' : '')).join(', ')}</b>
-        </span>
+      {scope && <span className="nv-chip nv-chip--set nv-chip--scope"><Tag size={ICON} aria-hidden="true" />{scope}</span>}
+      <Popover placement="bottom-start" trigger={
+        <button type="button" className={layout.group ? 'nv-chip nv-chip--set' : 'nv-chip'}>
+          <Rows2 size={ICON} aria-hidden="true" />
+          {layout.group ? t('groupOn', { field: label(layout.group).toLocaleLowerCase() }) : t('groupBy')}
+        </button>
+      }>
+        <div className="nv-filters__menu" role="group" aria-label={t('groupBy')}>
+          {[['', t('none')] as const, ...groupable.map(([key, f]) => [key, f.label] as const)].map(([key, word]) => (
+            <button key={key} type="button" className="nv-filters__option" aria-pressed={(layout.group ?? '') === key}
+              onClick={() => onLayout(group(layout, key === '' ? null : key))}>
+              {word}
+            </button>
+          ))}
+        </div>
+      </Popover>
+      {first && (
+        <button type="button" className="nv-chip nv-chip--set" title={t('sortedBy')}
+          onClick={() => onLayout(sort(layout, [{ ...first, desc: !first.desc }, ...rest]))}>
+          <ArrowUpDown size={ICON} aria-hidden="true" />
+          {[first, ...rest].map((s) => `${model.fields[s.id]?.label ?? label(s.id)} ${s.desc ? '↓' : '↑'}`).join(', ')}
+        </button>
       )}
-      <Popover trigger={<button type="button" className="nv-bar__button">{t('columns')}</button>} placement="bottom-start">
+      <Popover trigger={<button type="button" className="nv-chip"><Columns3 size={ICON} aria-hidden="true" />{t('columns')}</button>} placement="bottom-start">
         <ColumnsMenu columns={columns} layout={layout} onLayout={onLayout} />
       </Popover>
       {filters}
-      <span className="nv-bar__text nv-bar__count"><b>{rowCount(count)}</b></span>
+      <span className="nv-bar__count">{rowCount(count)}</span>
     </div>
   )
 }

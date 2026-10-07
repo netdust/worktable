@@ -101,7 +101,7 @@ test('planning-status-filter', async ({ page }) => {
   expect(new Set(await columnTexts(page, 'Status'))).toEqual(new Set(['Bevestigd']))
 
   await page.getByRole('button', { name: 'Filter Status wissen' }).click()
-  await page.getByRole('button', { name: '+ Filter' }).click()
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   const request = page.waitForRequest((r) => {
     const url = new URL(r.url())
     return url.pathname === '/api/rows/activiteit' && (url.searchParams.get('filter') ?? '').includes('optie')

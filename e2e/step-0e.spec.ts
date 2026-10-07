@@ -115,7 +115,7 @@ test('seeded-view-read-only', async ({ page }) => {
 
   await page.goto(WEEK)
   await pick(page, 'Planning', 'Activiteiten')
-  await page.getByRole('button', { name: '+ Filter' }).click()
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
   const toolbar = page.locator('.nv-toolbar')
   await expect(toolbar.getByText('· gewijzigd')).toBeVisible()

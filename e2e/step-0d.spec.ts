@@ -190,7 +190,7 @@ test('view-saved-after-reload', async ({ page }) => {
   await expect.poll(async () => (await head.boundingBox())?.width as number).toBeGreaterThan(before + 30)
   const widened = await head.evaluate((th) => (th as HTMLElement).style.width)
 
-  await page.getByRole('button', { name: '+ Filter' }).click()
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
   await page.getByRole('button', { name: 'More actions', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }).click()
@@ -273,7 +273,7 @@ test('in-filter-applies', async ({ page }) => {
   }
   expect(new Set(await statuses())).toEqual(new Set(['Optie', 'Bevestigd']))
 
-  await page.getByRole('button', { name: '+ Filter' }).click()
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   await page.getByRole('button', { name: 'Status: Optie' }).click()
   await expect(row(page, 'vergadering Gent')).toHaveCount(0)
   await expect(row(page, 'overnachting Brugge')).toBeVisible()
@@ -300,7 +300,7 @@ test('relation-beyond-page', async ({ page }) => {
       asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
   await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
-  await page.getByRole('button', { name: '+ Filter' }).click()
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   for (const titel of titels) {
     await expect(page.getByRole('button', { name: `Productie: ${titel}` })).toBeVisible()
   }

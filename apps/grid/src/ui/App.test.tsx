@@ -379,14 +379,14 @@ describe('the production space', () => {
     api.rows.mockResolvedValue({ rows: activities, total: 1 })
     render(<App />)
     await screen.findByText('Montage')
-    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
     expect(screen.getByRole('group', { name: 'Productie' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
 
     await choose('Alle producties', 'Glimworm')
     await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 7 }, expect.any(Object)))
     await screen.findByText('Montage')
-    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
 
     expect(screen.getByRole('group', { name: 'Status' })).toBeTruthy()
     expect(screen.queryByRole('group', { name: 'Productie' })).toBeNull()
@@ -615,9 +615,9 @@ describe('a matrix view with the table\'s filters', () => {
   it('offers the table\'s filter fields on the matrix in the bar after + Column, not in the toolbar', async () => {
     render(<App />)
 
-    await screen.findByRole('button', { name: '+ Filter' })
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['+ Kolom', '+ Filter'])
-    expect(within(screen.getByRole('banner')).queryByRole('button', { name: '+ Filter' })).toBeNull()
+    await screen.findByRole('button', { name: 'Filter' })
+    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['+ Kolom', 'Filter'])
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Filter' })).toBeNull()
   })
 
   it('keeps the bar and its chip when the filter leaves no row, so the chip can be taken off', async () => {
@@ -1409,7 +1409,7 @@ describe('writes on the engine', () => {
     await screen.findByText('opbouw Gent')
     await waitFor(() => expect(api.records).toHaveBeenCalledWith('productie', ''))
 
-    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
 
     const options = within(screen.getByRole('group', { name: 'Productie' })).getAllByRole('button')
     await waitFor(() => expect(options.map((o) => o.textContent)).toEqual(['De Kersentuin', 'Wachten op Godot']))

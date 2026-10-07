@@ -120,7 +120,7 @@ async function switchTo(page: Page, from: string, to: string) {
 }
 
 async function filterMenu(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: '+ Filter' }).click()
+  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   return page.locator('.nv-filters__menu')
 }
 
@@ -148,7 +148,11 @@ test('switch-production @e2e', async ({ page }) => {
   await page.getByRole('option', { name: 'Nachtwacht', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
 
-  // Under the scope every row is Nachtwacht's: the Productie column is hidden (R10.7).
+  // Under the scope every row is Nachtwacht's: a tinted chip says so and cannot be removed, and the Productie column is hidden (R10.7).
+  const scopeChip = page.locator('.nv-bar .nv-chip--scope')
+  await expect(scopeChip).toHaveText('Productie is Nachtwacht')
+  await expect(scopeChip).toHaveClass(/nv-chip--set/)
+  await expect(scopeChip.getByRole('button')).toHaveCount(0)
   await expect(page.locator('thead th', { hasText: 'Productie' })).toHaveCount(0)
   await expect(gridRows(page).first()).toBeVisible()
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toHaveCount(0)
@@ -170,7 +174,9 @@ test('switch-production @e2e', async ({ page }) => {
   await expect(gridRows(page).first()).toBeVisible()
 
   const scoped = await gridRows(page).count()
+  await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveText('Productie is Nachtwacht')
   await switchTo(page, 'Nachtwacht', 'Alle producties')
+  await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveCount(0)
   await expect.poll(() => gridRows(page).count()).toBeGreaterThan(scoped)
   await pick(page, 'Planning', 'Activiteiten')
   await expect.poll(async () => (await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
