@@ -27,7 +27,7 @@ async function open(page: Page, view: string, model = view) {
 }
 
 async function dropStatusFilter(page: Page) {
-  await page.getByRole('button', { name: 'Remove filter Status' }).click()
+  await page.getByRole('button', { name: 'Filter Status wissen' }).click()
 }
 
 async function activiteit(page: Page, omschrijving: string): Promise<Activiteit> {
@@ -159,7 +159,7 @@ test('day-line-move', async ({ page }) => {
   expect(before.start_at).toBe('2026-10-12T14:00')
   expect(before.plandag).toBe('2026-10-12')
   await open(page, 'Planning', 'Activiteiten')
-  expect(await sectionOf(page, name)).toContain('October 12')
+  expect(await sectionOf(page, name)).toContain('12 oktober')
 
   await typeInto(await cell(page, name, 'Einde'), '2026-10-13T08:00')
   await expect.poll(async () => (await activiteit(page, name)).eind_at).toBe('2026-10-13T08:00')
@@ -167,11 +167,11 @@ test('day-line-move', async ({ page }) => {
   await typeInto(await cell(page, name, 'Start'), '2026-10-13T03:30')
   await expect.poll(async () => (await activiteit(page, name)).start_at).toBe('2026-10-13T03:30')
   expect((await activiteit(page, name)).plandag).toBe('2026-10-12')
-  expect(await sectionOf(page, name)).toContain('October 12')
+  expect(await sectionOf(page, name)).toContain('12 oktober')
 
   await typeInto(await cell(page, name, 'Start'), '2026-10-13T06:00')
   await expect.poll(async () => (await activiteit(page, name)).plandag).toBe('2026-10-13')
-  await expect.poll(() => sectionOf(page, name)).toContain('October 13')
+  await expect.poll(() => sectionOf(page, name)).toContain('13 oktober')
 
   const fields = (await revisions(page, before.id)).map((revision) => revision.field)
   expect(fields).toContain('start_at')

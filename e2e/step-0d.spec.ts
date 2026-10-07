@@ -134,7 +134,7 @@ test('matrix-away-mark', async ({ page }) => {
   await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
   const away = await spot(page, 'vergadering Antwerpen', 'Noor Claes')
   await expect(away).toHaveClass(/nv-mx__away/)
-  await expect(away).toHaveAttribute('aria-label', /Away: Familiefeest/)
+  await expect(away).toHaveAttribute('aria-label', /Afwezig: Familiefeest/)
   await expect(await spot(page, 'vergadering Antwerpen', 'Bram De Wilde')).not.toHaveClass(/nv-mx__away/)
 })
 
@@ -193,9 +193,9 @@ test('view-saved-after-reload', async ({ page }) => {
   await page.getByRole('button', { name: '+ Filter' }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
   await page.getByRole('button', { name: 'More actions', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Save as new view' }).click()
-  await page.getByLabel('Name').fill(name)
-  await page.getByLabel('Name').press('Enter')
+  await page.getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }).click()
+  await page.getByLabel('Naam').fill(name)
+  await page.getByLabel('Naam').press('Enter')
 
   await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
   await page.reload()
@@ -205,7 +205,7 @@ test('view-saved-after-reload', async ({ page }) => {
 })
 
 test('view-delete-undo', async ({ page }) => {
-  const copy = 'Dagplanning (copy)'
+  const copy = 'Dagplanning (kopie)'
   expect((await views(page)).map((v) => v.name)).not.toContain(copy)
   await open(page, 'Dagplanning', page.getByRole('grid', { name: 'Dagplanning' }))
   await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
@@ -222,7 +222,10 @@ test('view-delete-undo', async ({ page }) => {
   expect((await deleted).status()).toBe(200)
 
   const restored = page.waitForResponse((res) => res.url().endsWith(`/api/views/${made?.id}/restore`))
-  await page.getByRole('status', { name: 'View removed' }).getByRole('button', { name: 'Undo' }).click()
+  await page
+    .getByRole('status', { name: 'Weergave verwijderd' })
+    .getByRole('button', { name: 'Ongedaan maken' })
+    .click()
   expect((await restored).status()).toBe(200)
   await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
   expect((await views(page)).find((v) => v.name === copy)?.id).toBe(made?.id)
@@ -253,7 +256,7 @@ test('person-to-name', async ({ page }) => {
 test('datetime-shown', async ({ page }) => {
   await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
   const start = page.locator('tbody td [data-value="2026-10-14T00:30"]').first()
-  await expect(start).toHaveText(/^Wed 14\/10 00:30$/)
+  await expect(start).toHaveText(/^wo 14\/10 00:30$/)
   await expect(start).not.toContainText('T')
 })
 
@@ -282,7 +285,7 @@ test('new-without-title', async ({ page }) => {
   const created: string[] = []
   page.on('request', (req) => req.method() === 'POST' && created.push(req.url()))
   await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
-  await page.getByRole('button', { name: 'New Activiteiten' }).click()
+  await page.getByRole('button', { name: 'Nieuw Activiteiten' }).click()
   await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
   expect(created).toEqual([])
 })

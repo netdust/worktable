@@ -87,7 +87,7 @@ describe('the link', () => {
     render(<App />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Aanmelden' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Next week' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Volgende week' }))
     expect(new URLSearchParams(window.location.hash.slice(1)).get('from')).toBeTruthy()
 
     expect(window.location.href).not.toContain(TOKEN)
@@ -99,7 +99,7 @@ describe('the link', () => {
 
   it.each([
     ['the sign-in form', () => api.me.mockRejectedValue({ code: 'unauthenticated', message: 'Sign in first' }), 'Stuur me een link'],
-    ['the grid', () => api.me.mockResolvedValue(account), 'Next week'],
+    ['the grid', () => api.me.mockResolvedValue(account), 'Volgende week'],
   ])('a link pasted into a tab already showing %s opens the confirm screen', async (_, session, shown) => {
     session()
     api.consumeLink.mockResolvedValue(account)
@@ -135,8 +135,8 @@ describe('a lapsed session', () => {
 
   it('a 401 shows sign-in over the grid and keeps the unsaved new row', async () => {
     render(<App />)
-    await screen.findByText('No rows in this window')
-    fireEvent.click(screen.getByRole('button', { name: 'New Activiteit' }))
+    await screen.findByText('Geen rijen in deze week')
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Activiteit' }))
     expect(draft()).toBeTruthy()
 
     act(() => lapse())

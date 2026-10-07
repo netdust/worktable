@@ -174,7 +174,7 @@ describe('columnsFor', () => {
 
   it('reads a pasted toggle text back as a boolean', () => {
     const paid = byId({ ...planning, columns: undefined }).paid
-    expect(['No', 'no', '0', 'false', ''].map(paid.fromText)).toEqual([false, false, false, false, false])
-    expect(['Yes', 'YES', '1', 'true'].map(paid.fromText)).toEqual([true, true, true, true])
+    expect(['Nee', 'nee', '0', 'false', ''].map(paid.fromText)).toEqual([false, false, false, false, false])
+    expect(['Ja', 'JA', '1', 'true'].map(paid.fromText)).toEqual([true, true, true, true])
   })
 })

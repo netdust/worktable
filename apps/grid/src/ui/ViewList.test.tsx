@@ -149,13 +149,13 @@ describe("a view's actions", () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
 
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Calais techniek/ }))
-    const name = screen.getByRole('textbox', { name: 'Rename' }) as HTMLInputElement
+    const name = screen.getByRole('textbox', { name: 'Nieuwe naam' }) as HTMLInputElement
     expect(name.value).toBe('Calais techniek')
     fireEvent.change(name, { target: { value: 'Calais licht' } })
     fireEvent.keyDown(name, { key: 'Enter' })
 
     expect(run.rename).toHaveBeenCalledWith(own, 'Calais licht')
-    expect(screen.queryByRole('textbox', { name: 'Rename' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Nieuwe naam' })).toBeNull()
   })
 
   it('cancels a rename on Escape, and renames nothing unchanged or blank', () => {
@@ -163,13 +163,13 @@ describe("a view's actions", () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
 
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Calais techniek/ }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Rename' }), { target: { value: 'Calais licht' } })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rename' }), { key: 'Escape' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { target: { value: 'Calais licht' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { key: 'Escape' })
     expect(within(group()).getByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
 
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Calais techniek/ }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Rename' }), { target: { value: '   ' } })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rename' }), { key: 'Enter' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { target: { value: '   ' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { key: 'Enter' })
     expect(run.rename).not.toHaveBeenCalled()
   })
 
@@ -178,7 +178,7 @@ describe("a view's actions", () => {
 
     fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Naam wijzigen' }))
 
-    expect((screen.getByRole('textbox', { name: 'Rename' }) as HTMLInputElement).value).toBe('Calais techniek')
+    expect((screen.getByRole('textbox', { name: 'Nieuwe naam' }) as HTMLInputElement).value).toBe('Calais techniek')
   })
 
   it('renames nothing in place on a starting view or on another\'s shared view', () => {
@@ -187,7 +187,7 @@ describe("a view's actions", () => {
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Tabel/ }))
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Ploeg/ }))
 
-    expect(screen.queryByRole('textbox', { name: 'Rename' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Nieuwe naam' })).toBeNull()
   })
 })
 

@@ -236,11 +236,11 @@ describe('the tree', () => {
     render(<Rail tables={groupTables(plainTables, plain)} active="planning" onSelect={() => undefined} />)
     const foot = within(rail()).getByRole('contentinfo')
 
-    for (const hint of ['move', 'edit', 'cancel', 'Undo', 'search and jump']) expect(within(foot).getByText(hint)).toBeTruthy()
+    for (const hint of ['bewegen', 'bewerken', 'annuleren', 'Ongedaan maken', 'zoeken en springen']) expect(within(foot).getByText(hint)).toBeTruthy()
     for (const key of ['Esc', '⌘Z', '⌘K']) expect(within(foot).getByText(key)).toBeTruthy()
 
-    const theme = within(foot).getByRole('group', { name: 'Theme' })
-    fireEvent.click(within(theme).getByRole('tab', { name: 'Dark' }))
+    const theme = within(foot).getByRole('group', { name: 'Thema' })
+    fireEvent.click(within(theme).getByRole('tab', { name: 'Donker' }))
     expect(root.dataset.theme).toBe('dark')
   })
 })

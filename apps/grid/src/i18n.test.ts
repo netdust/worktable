@@ -5,7 +5,7 @@ afterEach(() => setStrings(undefined))
 
 describe('t()', () => {
   it('reads English until the site says otherwise', () => {
-    expect(t('saved')).toBe('Saved')
+    expect(t('saved')).toBe('Opgeslagen')
   })
 
   it("reads the site's words once they are set, English for any key left out", () => {
@@ -13,14 +13,14 @@ describe('t()', () => {
 
     expect(t('saved')).toBe('Opgeslagen')
     expect(rowCount(3)).toBe('3 rijen')
-    expect(t('previous')).toBe('Previous')
+    expect(t('previous')).toBe('Vorige')
   })
 
   it('ignores an unknown key and an empty or non-string word', () => {
     setStrings({ toString: 'x', saved: '', next: 7 } as unknown as Record<string, string>)
 
-    expect(t('saved')).toBe('Saved')
-    expect(t('next')).toBe('Next')
+    expect(t('saved')).toBe('Opgeslagen')
+    expect(t('next')).toBe('Volgende')
   })
 })
 

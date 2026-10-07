@@ -38,7 +38,7 @@ describe('groupRows', () => {
   it('puts rows without a day last, under a named section', () => {
     const groups = groupRows([withField(calais[0], 'date', ''), calais[1]], columns.date)
 
-    expect(groups.map((g) => g.label)).toEqual(['Maandag 18 mei', 'No value'])
+    expect(groups.map((g) => g.label)).toEqual(['Maandag 18 mei', 'Geen waarde'])
   })
 
   it("groups a select by its option label, in the options' declared order", () => {

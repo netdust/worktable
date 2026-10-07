@@ -90,7 +90,7 @@ test.describe('as the owner', () => {
     await expect(gridRows(page).first()).toHaveAttribute('data-title', LOTTE)
     await land(page, WEEK)
     await pick(page, 'Afwezigheden', 'Beschikbaarheden')
-    await expect(page.getByText('No rows in this window')).toBeVisible()
+    await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
     expect((await rows(editor, 'beschikbaarheid')).some((r) => r.persoon_id !== 1)).toBe(true)
 
     // Another person's row by id, and a view on a dataset the owner cannot read, show nothing.
@@ -118,27 +118,27 @@ test('seeded-view-read-only', async ({ page }) => {
   await page.getByRole('button', { name: '+ Filter' }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
   const toolbar = page.locator('.nv-toolbar')
-  await expect(toolbar.getByText('· modified')).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+  await expect(toolbar.getByText('· gewijzigd')).toBeVisible()
+  await expect(toolbar.getByRole('button', { name: 'Opslaan', exact: true })).toBeDisabled()
 
   await page.getByRole('button', { name: 'More actions', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Save as new view' }).click()
-  await page.getByLabel('Name').fill(name)
-  await page.getByLabel('Name').press('Enter')
+  await page.getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }).click()
+  await page.getByLabel('Naam').fill(name)
+  await page.getByLabel('Naam').press('Enter')
   await expect.poll(async () => (await views(page.request)).find((v) => v.name === name)?.mine).toBe(true)
   const copy = (await views(page.request)).find((v) => v.name === name) as SavedView
   expect(JSON.stringify(copy.filters)).toContain('productie_id')
 
-  await page.getByRole('button', { name: 'Remove filter Productie' }).click()
-  await expect(toolbar.getByRole('button', { name: 'Save', exact: true })).toBeEnabled()
-  await toolbar.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.getByRole('button', { name: 'Filter Productie wissen' }).click()
+  await expect(toolbar.getByRole('button', { name: 'Opslaan', exact: true })).toBeEnabled()
+  await toolbar.getByRole('button', { name: 'Opslaan', exact: true }).click()
   await expect
     .poll(async () => JSON.stringify((await views(page.request)).find((v) => v.id === copy.id)?.filters))
     .not.toContain('productie_id')
 
   await page.reload()
   await pick(page, name, 'Activiteiten')
-  await expect(toolbar.getByText('· modified')).toHaveCount(0)
+  await expect(toolbar.getByText('· gewijzigd')).toHaveCount(0)
   await expect(page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' })).toHaveCount(0)
 })
 
@@ -204,7 +204,7 @@ async function createActivity(page: Page, title: string): Promise<Record<string,
   const posted = page.waitForRequest(
     (req) => req.method() === 'POST' && new URL(req.url()).pathname === '/api/rows/activiteit',
   )
-  await page.getByRole('button', { name: 'New Activiteiten' }).click()
+  await page.getByRole('button', { name: 'Nieuw Activiteiten' }).click()
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
   await page.getByRole('option', { name: 'Nachtwacht' }).click()
   const body = (await posted).postDataJSON() as Record<string, unknown>

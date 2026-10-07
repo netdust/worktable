@@ -181,7 +181,7 @@ describe('the matrix', () => {
     const montage = screen.getByRole('row', { name: /Montage/ })
 
     expect(within(montage).getByRole('gridcell', { name: /Sien.*Bevestigd/ }).textContent).toContain('✓')
-    const lieve = within(montage).getByRole('gridcell', { name: /Lieve.*Note: komt later/ })
+    const lieve = within(montage).getByRole('gridcell', { name: /Lieve.*Notitie: komt later/ })
     expect(lieve.textContent).toContain('?')
     expect(lieve.querySelector('.nv-mx__dot')).not.toBeNull()
   })
@@ -189,10 +189,10 @@ describe('the matrix', () => {
   it('shades a cell where the person is away, with the reason, and warns when they are on it', () => {
     render(<Matrix {...props} />)
 
-    const planned = within(screen.getByRole('row', { name: /Montage/ })).getByRole('gridcell', { name: /Away: Examen/ })
-    expect(planned.getAttribute('aria-label')).toContain('Away and assigned')
+    const planned = within(screen.getByRole('row', { name: /Montage/ })).getByRole('gridcell', { name: /Afwezig: Examen/ })
+    expect(planned.getAttribute('aria-label')).toContain('Afwezig en toegewezen')
     expect(planned.classList.contains('nv-mx__away')).toBe(true)
-    const free = within(screen.getByRole('row', { name: /Leeg/ })).getByRole('gridcell', { name: /Away: Examen/ })
+    const free = within(screen.getByRole('row', { name: /Leeg/ })).getByRole('gridcell', { name: /Afwezig: Examen/ })
     expect(free.getAttribute('aria-label')).not.toContain('assigned')
     expect(free.classList.contains('nv-mx__away')).toBe(true)
   })
@@ -215,7 +215,7 @@ describe('the matrix', () => {
 
   it('opens no floating layer: no dialog, no popover', async () => {
     const { container } = render(<Matrix {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Column' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
     await screen.findByRole('button', { name: 'Marit' })
 
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -224,7 +224,7 @@ describe('the matrix', () => {
 
   it('adds an empty column from the picker, and keeps it for the next visit', async () => {
     const { unmount } = render(<Matrix {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Column' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Marit' }))
     expect(api.records).toHaveBeenCalledWith('person', '')
 
@@ -246,7 +246,7 @@ const strip = (container: HTMLElement, key: string) => container.querySelector<H
 describe('the matrix arrangement', () => {
   it('hides a record column and its count through the strip, and shows it again from the same list', () => {
     const { container } = render(<Held />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Column' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
 
     fireEvent.click(strip(container, 'record:5'))
 
@@ -255,7 +255,7 @@ describe('the matrix arrangement', () => {
     expect(counts()).toEqual(['1', '1'])
     expect(within(screen.getByRole('row', { name: /Repetitie/ })).getByTestId('row-count').textContent).toBe('2')
     expect(within(screen.getByTestId('total')).getByTestId('row-count').textContent).toBe('3')
-    expect(strip(container, 'record:5').textContent).toBe('Show')
+    expect(strip(container, 'record:5').textContent).toBe('Tonen')
 
     fireEvent.click(strip(container, 'record:5'))
 
@@ -266,7 +266,7 @@ describe('the matrix arrangement', () => {
 
   it('hides a name column and shows it again, the same way', () => {
     const { container } = render(<Held />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Column' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
 
     fireEvent.click(strip(container, 'name:lieve'))
 
@@ -279,7 +279,7 @@ describe('the matrix arrangement', () => {
   it('hands the layout on with the column hidden, under its key', () => {
     const onLayout = vi.fn()
     const { container } = render(<Matrix {...props} onLayout={onLayout} />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Column' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
 
     fireEvent.click(strip(container, 'name:lieve'))
 
@@ -292,7 +292,7 @@ describe('the matrix arrangement', () => {
 
     expect(screen.queryByRole('row', { name: /Repetitie/ })).toBeNull()
     expect(headers()).toEqual(['Activiteit', 'Sien', 'Sien', 'Lieve', '✓Bevestigd'])
-    fireEvent.click(screen.getByRole('button', { name: '+ Column' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
     expect(strip(container, 'record:6')).not.toBeNull()
   })
 
@@ -307,11 +307,11 @@ describe('the matrix arrangement', () => {
     const rows = week.map((row) => ({ ...row, fields: { ...row.fields, kind: 'show' } }))
     render(<Matrix {...props} rows={rows} layout={{ ...layout, filters: [{ field: 'kind', value: 'build' }] }} />)
 
-    expect(screen.getByText('No rows match the search or filters')).toBeTruthy()
+    expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
     expect(screen.queryByText('Geen rijen')).toBeNull()
     cleanup()
     render(<Matrix {...props} rows={rows} query="zzz" />)
-    expect(screen.getByText('No rows match the search or filters')).toBeTruthy()
+    expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
   })
 
   it('regroups the rows by the layout\'s group', () => {

@@ -86,7 +86,7 @@ test('fiche-edits', async ({ page }) => {
 
 async function pressDelete(page: Page, view: string, title: string) {
   await open(page, view)
-  await row(page, title).getByRole('button', { name: 'Open' }).click()
+  await row(page, title).getByRole('button', { name: 'Openen' }).click()
   await page.getByRole('button', { name: 'Verwijderen' }).click()
   const answered = page.waitForResponse((res) => res.request().method() === 'DELETE')
   await page.getByRole('button', { name: 'Zeker?' }).click()

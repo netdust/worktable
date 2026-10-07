@@ -55,23 +55,23 @@ async function sections(page: Page): Promise<Section[]> {
 }
 
 const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  'januari',
+  'februari',
+  'maart',
+  'april',
+  'mei',
+  'juni',
+  'juli',
+  'augustus',
+  'september',
+  'oktober',
+  'november',
+  'december',
 ]
 
-/** "Tuesday, October 13" to 2026-10-13: the headers carry no year, the window is in 2026. */
+/** "Dinsdag 13 oktober" to 2026-10-13: the headers carry no year, the window is in 2026. */
 function iso(day: string): string {
-  const [, month, date] = /, (\w+) (\d+)$/.exec(day) ?? []
+  const [, date, month] = /(\d+) (\w+)$/.exec(day) ?? []
   return `2026-${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}-${date.padStart(2, '0')}`
 }
 
@@ -91,8 +91,8 @@ test('planning-grouped-sorted', async ({ page }) => {
   }
 
   const tuesday = found.find((section) => iso(section.day) === '2026-10-13')
-  expect(tuesday?.starts).toContain('Wed 14/10 00:30')
-  expect(found.find((section) => iso(section.day) === '2026-10-14')?.starts).not.toContain('Wed 14/10 00:30')
+  expect(tuesday?.starts).toContain('wo 14/10 00:30')
+  expect(found.find((section) => iso(section.day) === '2026-10-14')?.starts).not.toContain('wo 14/10 00:30')
 })
 
 test('planning-status-filter', async ({ page }) => {
@@ -100,7 +100,7 @@ test('planning-status-filter', async ({ page }) => {
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   expect(new Set(await columnTexts(page, 'Status'))).toEqual(new Set(['Bevestigd']))
 
-  await page.getByRole('button', { name: 'Remove filter Status' }).click()
+  await page.getByRole('button', { name: 'Filter Status wissen' }).click()
   await page.getByRole('button', { name: '+ Filter' }).click()
   const request = page.waitForRequest((r) => {
     const url = new URL(r.url())

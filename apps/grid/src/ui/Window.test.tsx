@@ -64,11 +64,11 @@ describe('WindowControl', () => {
   it('next and previous move it by seven days and keep it in the hash', () => {
     render(<Harness />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next week' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Volgende week' }))
     expect(screen.getByText('Week 25 – 31 mei')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Previous week' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Previous week' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vorige week' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vorige week' }))
     expect(screen.getByText('Week 11 – 17 mei')).toBeTruthy()
     expect(window.location.hash).toBe('#from=2026-05-11&to=2026-05-17')
   })
@@ -92,7 +92,7 @@ describe('WindowControl', () => {
   it('picking a day shows its week', () => {
     render(<Harness />)
 
-    fireEvent.change(screen.getByLabelText('Pick a day'), { target: { value: '2026-07-02' } })
+    fireEvent.change(screen.getByLabelText('Kies een dag'), { target: { value: '2026-07-02' } })
 
     expect(screen.getByText('Week 29 jun – 5 jul')).toBeTruthy()
   })
@@ -106,14 +106,14 @@ describe('App and the window', () => {
     api.schema.mockResolvedValue({ models: {}, tables, views: [planning], writable: {} })
     render(<App />)
 
-    await screen.findByText('No rows in this window')
+    await screen.findByText('Geen rijen in deze week')
     expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
     expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-18', to: '2026-05-24' }, null, expect.any(Object))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next week' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Volgende week' }))
 
     expect(screen.getByText('Week 25 – 31 mei')).toBeTruthy()
     await vi.waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-25', to: '2026-05-31' }, null, expect.any(Object)))
-    await screen.findByText('No rows in this window')
+    await screen.findByText('Geen rijen in deze week')
   })
 })

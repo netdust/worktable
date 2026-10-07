@@ -35,7 +35,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     }
     return (
       <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
-        query={options.query ?? ''} emptyTitle="No rows in this window" emptyHint="Week 18 – 24 mei" filters={options.filters}
+        query={options.query ?? ''} emptyTitle="Geen rijen in deze week" emptyHint="Week 18 – 24 mei" filters={options.filters}
         cut={options.cut} onShown={options.onShown} />
     )
   }
@@ -86,7 +86,7 @@ describe('the sheet', () => {
     expect(screen.queryByTestId('group-foot')).toBeNull()
 
     const total = screen.getByTestId('total')
-    expect(total.textContent).toContain('Total · 6 rows')
+    expect(total.textContent).toContain('Totaal · 6 rijen')
     expect(within(total).getByText('47')).toBeTruthy()
   })
 
@@ -102,9 +102,9 @@ describe('the sheet', () => {
   it('marks a required cell only while it is empty', () => {
     renderGrid([{ ...calais[2], fields: { ...calais[2].fields, kind: '' } }])
 
-    expect(within(cell('Lunch bistrot', 'kind')).getByText('Required')).toBeTruthy()
-    expect(within(cell('Lunch bistrot', 'status')).queryByText('Required')).toBeNull()
-    expect(within(cell('Lunch bistrot', 'place')).queryByText('Required')).toBeNull()
+    expect(within(cell('Lunch bistrot', 'kind')).getByText('Verplicht')).toBeTruthy()
+    expect(within(cell('Lunch bistrot', 'status')).queryByText('Verplicht')).toBeNull()
+    expect(within(cell('Lunch bistrot', 'place')).queryByText('Verplicht')).toBeNull()
   })
 
   it('hides the date column while the sections carry the day, and brings it back for another grouping', () => {
@@ -119,7 +119,7 @@ describe('the sheet', () => {
   it('names the window when it is empty', () => {
     renderGrid([])
 
-    expect(screen.getByText('No rows in this window')).toBeTruthy()
+    expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
     expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
   })
 
@@ -127,7 +127,7 @@ describe('the sheet', () => {
     renderGrid([], { filters: <button type="button">Productie: Calais ×</button> })
 
     expect(screen.getByRole('button', { name: 'Productie: Calais ×' })).toBeTruthy()
-    expect(screen.getByText('No rows in this window')).toBeTruthy()
+    expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
   })
 
   it('renders a stored value with markup as its characters, never as an element (threat 8)', () => {
@@ -146,7 +146,7 @@ describe('the sheet', () => {
 
     cleanup()
     renderGrid(calais, { query: 'zzz' })
-    expect(screen.getByText('No rows match the search or filters')).toBeTruthy()
+    expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
   })
 
   it('keeps the rows a filter chip asks for', () => {
@@ -208,7 +208,7 @@ describe('editing', () => {
     expect(within(refused).getByRole('alert').textContent).toContain('A title is required.')
     expect(refused.getAttribute('aria-invalid')).toBe('true')
 
-    fireEvent.click(within(refused).getByRole('button', { name: 'Dismiss' }))
+    fireEvent.click(within(refused).getByRole('button', { name: 'Negeren' }))
     expect(within(cell('Montage', 'title')).queryByRole('alert')).toBeNull()
   })
 
@@ -355,7 +355,7 @@ describe('editing', () => {
     expect(seen).toHaveBeenCalled()
 
     fireEvent.click(cell('Montage', 'place'))
-    const opens = screen.getAllByRole('button', { name: 'Open' })
+    const opens = screen.getAllByRole('button', { name: 'Openen' })
     expect(opens.filter((b) => b.tabIndex === 0).map((b) => b.closest('tr')?.dataset.title)).toEqual(['Montage'])
   })
 
@@ -371,7 +371,7 @@ describe('editing', () => {
     expect(api.update).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
 
-    const open = within(cell('Montage', 'title')).getByRole('button', { name: 'Open' })
+    const open = within(cell('Montage', 'title')).getByRole('button', { name: 'Openen' })
     expect(fireEvent.keyDown(open, { key: 'Enter' })).toBe(true)
     expect(screen.queryByRole('textbox')).toBeNull()
 
@@ -386,8 +386,8 @@ describe('editing', () => {
   it('moves a column from the Columns menu with words', () => {
     renderGrid()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Start: move right' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kolommen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start: naar rechts' }))
 
     expect(headers().slice(0, 3)).toEqual(['title', 'end', 'start'])
     expect(saved?.order.slice(0, 4)).toEqual(['title', 'date', 'end', 'start'])
@@ -497,7 +497,7 @@ describe('the group bands', () => {
     expect(band('Dinsdag 19 mei').querySelector('.nv-group__count')?.textContent).toBe('2')
     expect(band('Dinsdag 19 mei').querySelector('.nv-group__totals')?.textContent).toContain('24')
     const total = screen.getByTestId('total')
-    expect(total.textContent).toContain('Total · 6 rows')
+    expect(total.textContent).toContain('Totaal · 6 rijen')
     expect(within(total).getByText('47')).toBeTruthy()
     expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3 })
   })
@@ -543,17 +543,17 @@ describe('the drawer', () => {
     const noted = { ...calais[2], fields: { ...calais[2].fields, notes: 'Twee veggie\nEén glutenvrij' } }
     renderGrid([noted])
 
-    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Open' }))
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
 
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
     expect(within(drawer).getByText('Notities')).toBeTruthy()
     expect(within(drawer).getByText(/Twee veggie/).textContent).toBe('Twee veggie\nEén glutenvrij')
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }))
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
     expect(screen.queryByRole('complementary')).toBeNull()
   })
 
   const openDrawer = (title: string) => {
-    fireEvent.click(within(cell(title, 'title')).getByRole('button', { name: 'Open' }))
+    fireEvent.click(within(cell(title, 'title')).getByRole('button', { name: 'Openen' }))
     return screen.getByRole('complementary', { name: title })
   }
   const deletable: Model = { ...activity, deletable: true }
@@ -586,7 +586,7 @@ describe('the drawer', () => {
   it('leaving the drawer resets Zeker? to Verwijderen', () => {
     renderGrid(calais, { model: deletable })
     fireEvent.click(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Verwijderen' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sluiten' }))
 
     const again = openDrawer('Lunch bistrot')
     expect(within(again).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
@@ -680,7 +680,7 @@ describe('the toolbar over the grid', () => {
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
     // A chip asks the server again: the grid comes back once the rows do.
     await screen.findByRole('grid')
-    expect(within(bar()).getByRole('button', { name: 'Remove filter Status' })).toBeTruthy()
+    expect(within(bar()).getByRole('button', { name: 'Filter Status wissen' })).toBeTruthy()
     for (const control of within(bar()).getAllByRole('button')) {
       expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
     }
@@ -693,10 +693,10 @@ describe('the toolbar over the grid', () => {
     for (const control of controls) {
       expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
     }
-    expect(within(toolbar()).getByRole('searchbox', { name: 'Search' }).getAttribute('placeholder')).toBe('Search')
-    expect(within(toolbar()).getByText('Previous')).toBeTruthy()
-    expect(within(toolbar()).getByText('Next')).toBeTruthy()
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Saved')
+    expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }).getAttribute('placeholder')).toBe('Zoeken')
+    expect(within(toolbar()).getByText('Vorige')).toBeTruthy()
+    expect(within(toolbar()).getByText('Volgende')).toBeTruthy()
+    expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
   })
 
   it('shows a refused delete in the toolbar as the Dutch in-use sentence', async () => {
@@ -705,7 +705,7 @@ describe('the toolbar over the grid', () => {
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
-    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Open' }))
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
     fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
     await act(async () => {
@@ -729,7 +729,7 @@ describe('the toolbar over the grid', () => {
       type(editor(), 'Enter')
     })
 
-    expect(within(toolbar()).getByRole('status').textContent).toBe('Not saved: Een activiteit heeft een <b>naam</b> nodig')
+    expect(within(toolbar()).getByRole('status').textContent).toBe('Niet opgeslagen: Een activiteit heeft een <b>naam</b> nodig')
     expect(within(cell('Montage', 'title')).getByRole('alert').textContent).toContain('Een activiteit heeft een <b>naam</b> nodig')
     expect(document.querySelector('.nv-td b')).toBeNull()
   })
@@ -738,14 +738,14 @@ describe('the toolbar over the grid', () => {
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' }))
     await act(async () => {
       fireEvent.blur(editor())
     })
 
     expect(remote.create).not.toHaveBeenCalled()
     const draft = screen.getAllByRole('row').find((r) => r.classList.contains('nv-tr--draft'))!
-    expect(within(within(draft).getAllByRole('gridcell')[0]).getByText('Required')).toBeTruthy()
+    expect(within(within(draft).getAllByRole('gridcell')[0]).getByText('Verplicht')).toBeTruthy()
   })
 
   it('keeps a refusal whole in the DOM however narrow the toolbar', async () => {
@@ -760,7 +760,7 @@ describe('the toolbar over the grid', () => {
     })
 
     const status = within(toolbar()).getByRole('status')
-    expect(status.textContent).toBe(`Not saved: ${long}`)
+    expect(status.textContent).toBe(`Niet opgeslagen: ${long}`)
     expect(status.getAttribute('title')).toBe(long)
   })
 
@@ -769,13 +769,13 @@ describe('the toolbar over the grid', () => {
     await screen.findByText('Maandag 18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    expect(within(toolbar()).getByText('Previous')).toBeTruthy()
+    expect(within(toolbar()).getByText('Vorige')).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: '+ Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Columns', '+ Filter'])
-    expect(within(toolbar()).getByRole('searchbox', { name: 'Search' })).toBeTruthy()
-    expect(within(toolbar()).getByRole('button', { name: 'New Activiteit' })).toBeTruthy()
+    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Kolommen', '+ Filter'])
+    expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
-    expect(screen.queryByRole('status', { name: 'Changed' })).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Gewijzigd' })).toBeNull()
   })
 
   it('offers undo in a toast after a change', async () => {
@@ -788,12 +788,12 @@ describe('the toolbar over the grid', () => {
       type(cell('Montage', 'place'), 'Delete')
     })
 
-    const toast = screen.getByRole('status', { name: 'Changed' })
+    const toast = screen.getByRole('status', { name: 'Gewijzigd' })
     expect(toast.textContent).toContain('⌘Z')
     remote.undoBatch.mockResolvedValueOnce('u1')
     remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
-      fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }))
+      fireEvent.click(within(toast).getByRole('button', { name: 'Ongedaan maken' }))
     })
     expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
     expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
@@ -817,7 +817,7 @@ describe('the toolbar over the grid', () => {
     })
 
     await act(async () => {
-      fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+      fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
     })
 
     expect(remote.updateView).toHaveBeenCalled()
@@ -846,7 +846,7 @@ describe('the toolbar over the grid', () => {
     expect(within(bar()).getByText('Optie', { selector: 'b' })).toBeTruthy()
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)).toEqual(['Présentation interne'])
 
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Remove filter Status' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter Status wissen' }))
     await screen.findByRole('grid')
     expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [] }))
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title)).toHaveLength(6)
@@ -860,10 +860,10 @@ describe('the toolbar over the grid', () => {
 
     fireEvent.click(cell('Montage', 'place'))
     type(cell('Montage', 'place'), 'Delete')
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Saving…')
+    expect(within(toolbar()).getByRole('status').textContent).toContain('Opslaan…')
 
     await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' }))
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Saved')
+    expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
 
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
     fireEvent.doubleClick(cell('Montage', 'title'))
@@ -871,12 +871,12 @@ describe('the toolbar over the grid', () => {
     await act(async () => {
       type(editor(), 'Enter')
     })
-    expect(within(toolbar()).getByRole('status').textContent).toBe('Not saved: A title is required.')
+    expect(within(toolbar()).getByRole('status').textContent).toBe('Niet opgeslagen: A title is required.')
 
     remote.undoBatch.mockResolvedValueOnce('u1')
     remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('status', { name: 'Changed' })).getByRole('button', { name: 'Undo' }))
+      fireEvent.click(within(screen.getByRole('status', { name: 'Gewijzigd' })).getByRole('button', { name: 'Ongedaan maken' }))
     })
     expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
     expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
@@ -887,7 +887,7 @@ describe('the toolbar over the grid', () => {
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' }))
 
     const tuesday = screen.getAllByRole('row')
     const header = tuesday.findIndex((r) => r.querySelector('.nv-group__label')?.textContent === 'Dinsdag 19 mei')
@@ -901,7 +901,7 @@ describe('the toolbar over the grid', () => {
 
     fireEvent.click(cell('Lunch bistrot', 'kind'))
     fireEvent.keyDown(cell('Lunch bistrot', 'kind'), { key: 'Delete' })
-    const search = within(toolbar()).getByRole('searchbox', { name: 'Search' })
+    const search = within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })
     search.focus()
     fireEvent.change(search, { target: { value: 'lu' } })
 
@@ -916,7 +916,7 @@ describe('the toolbar over the grid', () => {
 
     fireEvent.click(cell('Lunch bistrot', 'place'))
     fireEvent.keyDown(cell('Lunch bistrot', 'place'), { key: 'x' })
-    const search = within(toolbar()).getByRole('searchbox', { name: 'Search' })
+    const search = within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })
     await act(async () => {
       search.focus()
     })
@@ -929,8 +929,8 @@ describe('the toolbar over the grid', () => {
     render(<App />)
     await screen.findByText('Maandag 18 mei')
 
-    fireEvent.change(within(toolbar()).getByRole('searchbox', { name: 'Search' }), { target: { value: 'afwez' } })
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Go to Afwezigheden' }))
+    fireEvent.change(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }), { target: { value: 'afwez' } })
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Naar Afwezigheden' }))
 
     expect(screen.getByRole('heading', { level: 1, name: 'Afwezigheden' })).toBeTruthy()
   })
@@ -969,7 +969,7 @@ describe('a new row the writer refuses', () => {
     remote.create.mockRejectedValueOnce({ code: 'person_or_name', message: 'A person or a name is required.' })
     render(<App />)
     await screen.findByText('Bert op Lunch')
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
     const montage = await screen.findByRole('option', { name: 'Montage' })
     await act(async () => {
       fireEvent.click(montage)
@@ -992,7 +992,7 @@ describe('a new row the writer refuses', () => {
   it('+ Nieuwe twice focuses the existing draft', async () => {
     await refusedOnce()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
 
     expect(drafts()).toHaveLength(1)
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Persoon' }))
@@ -1001,11 +1001,11 @@ describe('a new row the writer refuses', () => {
   it('+ Nieuwe on a draft nothing was written to starts it again', async () => {
     render(<App />)
     await screen.findByText('Bert op Lunch')
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
     fireEvent.blur(screen.getByRole('combobox', { name: 'Activiteit' }))
     expect(screen.queryByRole('combobox', { name: 'Activiteit' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
 
     expect(drafts()).toHaveLength(1)
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Activiteit' }))
@@ -1027,7 +1027,7 @@ describe('a new row the writer refuses', () => {
     render(<App />)
     await screen.findByText('Bert op Lunch')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
     screen.getByRole('combobox', { name: 'Activiteit' })
     const montage = await screen.findByRole('option', { name: 'Montage' })
     await act(async () => {
@@ -1083,7 +1083,7 @@ describe('a new record with a required relation', () => {
     render(<App />)
     await screen.findAllByText('Bert')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
     const picker = screen.getByRole('combobox', { name: 'Persoon' })
     expect(remote.create).not.toHaveBeenCalled()
     fireEvent.click(await screen.findByRole('option', { name: 'Ann' }))
@@ -1101,7 +1101,7 @@ describe('a new record with a required relation', () => {
     await screen.findByText('Bert')
     expect(screen.queryByRole('columnheader', { name: /Persoon/ })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
     screen.getByRole('combobox', { name: 'Persoon' })
     fireEvent.click(await screen.findByRole('option', { name: 'Ann' }))
     await act(async () => undefined)
@@ -1113,7 +1113,7 @@ describe('a new record with a required relation', () => {
     render(<App />)
     await screen.findAllByText('Bert')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
     fireEvent.blur(screen.getByRole('combobox', { name: 'Persoon' }))
 
     expect(screen.queryByRole('combobox', { name: 'Persoon' })).toBeNull()

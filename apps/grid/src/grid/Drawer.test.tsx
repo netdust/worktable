@@ -33,11 +33,11 @@ describe('the drawer', () => {
 
   it('focuses its close button on a row change by default', () => {
     const { rerender } = render(<Drawer row={row(1, 'a')} columns={columns} onClose={() => undefined} />)
-    expect(document.activeElement?.textContent).toBe('Close')
+    expect(document.activeElement?.textContent).toBe('Sluiten')
 
     ;(document.activeElement as HTMLElement).blur()
     rerender(<Drawer row={row(2, 'b')} columns={columns} onClose={() => undefined} />)
-    expect(document.activeElement?.textContent).toBe('Close')
+    expect(document.activeElement?.textContent).toBe('Sluiten')
   })
 
   it('leaves focus where it was when focusOnOpen is false', () => {
@@ -69,7 +69,7 @@ describe('the drawer', () => {
 
     rerender(<Drawer row={row(2, 'Montage')} columns={columns} onClose={() => undefined} />)
 
-    expect(document.activeElement?.textContent).toBe('Close')
+    expect(document.activeElement?.textContent).toBe('Sluiten')
   })
 
   it('closes on Escape', () => {

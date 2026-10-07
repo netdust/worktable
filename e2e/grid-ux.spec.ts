@@ -266,7 +266,7 @@ test('create-team-and-personal-view @e2e', async ({ page }) => {
 })
 
 test('copy-rename-delete-view @e2e', async ({ page }) => {
-  const copy = 'Speelreeksen (copy)'
+  const copy = 'Speelreeksen (kopie)'
   const renamed = 'Reeksen e2e hernoemd'
   await page.goto('/')
   await pick(page, 'Speelreeksen')
@@ -279,8 +279,8 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
 
   await page.getByRole('button', { name: `More actions: ${copy}` }).click()
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
-  await page.getByRole('textbox', { name: 'Rename' }).fill(renamed)
-  await page.getByRole('textbox', { name: 'Rename' }).press('Enter')
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(renamed)
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
   await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(1)
   await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(0)
   await expect.poll(async () => (await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
@@ -295,7 +295,10 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
   expect((await views(page.request)).some((v) => v.id === made.id)).toBe(false)
 
   const restored = page.waitForResponse((res) => new URL(res.url()).pathname === `/api/views/${made.id}/restore`)
-  await page.getByRole('status', { name: 'View removed' }).getByRole('button', { name: 'Undo' }).click()
+  await page
+    .getByRole('status', { name: 'Weergave verwijderd' })
+    .getByRole('button', { name: 'Ongedaan maken' })
+    .click()
   expect((await restored).status()).toBe(200)
   await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(1)
   expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
@@ -407,11 +410,11 @@ test('dark-and-density @e2e', async ({ page }) => {
   await pick(page, 'Planning', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
   const root = page.locator('#root')
-  const theme = page.getByRole('group', { name: 'Theme' })
+  const theme = page.getByRole('group', { name: 'Thema' })
   const density = page.getByRole('group', { name: 'Dichtheid' })
 
   const light = await root.evaluate((el) => getComputedStyle(el).backgroundColor)
-  await theme.getByRole('tab', { name: 'Dark' }).click()
+  await theme.getByRole('tab', { name: 'Donker' }).click()
   await expect(root).toHaveAttribute('data-theme', 'dark')
   await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(light)
   const dark = await root.evaluate((el) => getComputedStyle(el).backgroundColor)
@@ -432,8 +435,8 @@ test('dark-and-density @e2e', async ({ page }) => {
   expect(await root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(dark)
   await expect.poll(async () => Math.round(await rowHeight(page))).toBe(46)
   await expect(density.getByRole('tab', { name: 'Ruim' })).toHaveAttribute('aria-selected', 'true')
-  await expect(theme.getByRole('tab', { name: 'Dark' })).toHaveAttribute('aria-selected', 'true')
+  await expect(theme.getByRole('tab', { name: 'Donker' })).toHaveAttribute('aria-selected', 'true')
 
-  await theme.getByRole('tab', { name: 'Light' }).click()
+  await theme.getByRole('tab', { name: 'Licht' }).click()
   await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(light)
 })

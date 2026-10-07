@@ -147,7 +147,7 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
   const created = page.waitForResponse(
     (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/speelreeks',
   )
-  await page.getByRole('button', { name: 'New Speelreeksen' }).click()
+  await page.getByRole('button', { name: 'Nieuw Speelreeksen' }).click()
   await page.getByRole('textbox', { name: 'Naam' }).fill(naam)
   await page.getByRole('textbox', { name: 'Naam' }).press('Enter')
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
@@ -176,7 +176,7 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
 
 /** The drawer's action: the Sjabloon picked, then the button; answers the action's reply. */
 async function applyInDrawer(page: Page, naam: string) {
-  await named(page, naam).getByRole('button', { name: 'Open' }).click()
+  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
   const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
   await action.getByRole('button', { name: /^Sjabloon: / }).click()
   await page.getByRole('combobox', { name: 'Sjabloon' }).fill('speeldag')
@@ -247,7 +247,7 @@ test('apply-template @e2e', async ({ page }) => {
 
   await page.reload()
   await pick(page, 'Dagplanning')
-  await expect(page.getByText('No rows in this window')).toBeVisible()
+  await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
   await expect(gridRows(page)).toHaveCount(0)
 })
 
@@ -277,7 +277,7 @@ test('speelreeks-delete-in-use @e2e', async ({ page }) => {
 
   await page.goto('/')
   await pick(page, 'Speelreeksen')
-  await named(page, naam).getByRole('button', { name: 'Open' }).click()
+  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
   await page.getByRole('button', { name: 'Verwijderen' }).click()
   const answered = page.waitForResponse((res) => res.request().method() === 'DELETE')
   await page.getByRole('button', { name: 'Zeker?' }).click()
@@ -403,7 +403,7 @@ test('sjablonen-read-only @e2e', async ({ page }) => {
   await page.goto('/')
   await pick(page, 'Sjablonen')
   await expect(page.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'New Sjablonen' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Nieuw Sjablonen' })).toBeDisabled()
   const row = named(page, SJABLOON)
   for (const label of ['Naam', 'Items']) {
     const cell = await cellOf(page, row, label)
@@ -450,7 +450,7 @@ test('apply-double-submit @e2e', async ({ page }) => {
   const id = await speelreeks(page.request, naam, '2026-12-14', '2026-12-15')
   await page.goto('/')
   await pick(page, 'Speelreeksen')
-  await named(page, naam).getByRole('button', { name: 'Open' }).click()
+  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
   const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
   await action.getByRole('button', { name: /^Sjabloon: / }).click()
   await page.getByRole('combobox', { name: 'Sjabloon' }).fill('speeldag')
