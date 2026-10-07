@@ -26,7 +26,8 @@
 ## Simplest design
 - The simplest way to show people would be a SQL `group_concat` of names in the Dagplanning view. It gives read-only text: no state colour, no per-tag ×, and no id to delete. It does not meet R2.
 - The next simplest is a `links` declaration read the way `cellsOf` reads matrix cells. It adds no write route, because the grid reuses `POST /rows/<dataset>` and `DELETE /rows/<dataset>/:id`, so the writers, the undo and the refusals stay as they are. This plan uses it.
-- For the period, the simplest design keeps the existing window state and hash. Only its control moves, and the presets are functions over `weekOf`/`shift` in `Window.tsx`.
+- Serving the matrix's `cells` on Dagplanning would reuse `cellsOf` with no new declaration. It is rejected because cells need a bounded window of at most 92 days (`params.ts:118-123`), which rules out Alles, and because it would tie people to a matrix declaration.
+- For the period, the simplest design keeps the existing window state and hash and widens them: `fromHash` honours a `to`, `period=all` means no window, and a month step is one new helper beside `shift`.
 
 ## Threat model
 **Assets:**
@@ -38,7 +39,7 @@
 1. **An owner (person account) reads other people's assignments through a links column on a source they can read.** Mitigation: links are read with `scopeOf(actor, linkDataset)` (`packages/engine/src/rows.ts`, `linksOf`), as `cellsOf` does. An owner gets only its own link rows, and a source that declares no owner column gives `'none'`.
 2. **A caller sees a link title for a target they cannot read.** Mitigation: the title comes from `withLookups`' title rule, as for any relation lookup: the target's title only, never its row.
 3. **A planner adds or removes assignments past the writer's rules, for example a duplicate person or a role a writer reserves.** Mitigation: no new route. The grid uses `POST`/`DELETE /rows/toewijzing`, which run `toewijzingWriter` and the delete order (scope, writer, in-use).
-4. **A declaration names a link dataset or column that does not exist, or a key that is not a relation back to the source.** Mitigation: `validateDomain` refuses it before anything is written (`packages/engine/src/validate.ts`).
+4. **A declaration names a link dataset or column that does not exist, or a key that is not a relation back to the source.** Mitigation: `validateDomain` refuses it before anything is written (`packages/engine/src/validate.ts`). On a dataset, the key's relation must be that dataset. On a query, the query must declare `creates`, and the key's relation must be that dataset. A query declaring `creates` promises that its `id` is that dataset's id; a query that breaks the promise attaches the wrong rows, but still only rows the caller's scope on the link dataset allows.
 5. **`/schema` reveals a links column whose dataset the caller cannot read.** Mitigation: `servedLinks` serves a link only when `readable(actor, linkDataset)`.
 
 **Deferrals:** none.
@@ -47,17 +48,18 @@
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 | --- | --- | --- | --- |
 | Engine `links` | `GET /api/schema`, `GET /api/rows/:source`, `validateDomain` | integration · `packages/engine/test/links.test.ts` (new) · `bun test packages/engine` | none, proven by people-tags |
-| Theatre Dagplanning declarations | `PATCH /api/rows/dagplanning/:id`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/dagplanning.test.ts` (new or the existing theatre test file for queries) · `bun test packages/theatre` | edit-dagplanning, locatie-own-and-back |
+| Theatre Dagplanning declarations | `PATCH /api/rows/dagplanning/:id`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/writer.test.ts` (`describe('dagplanning')`, :220) · `bun test packages/theatre` | edit-dagplanning, locatie-own-and-back |
 | People cell | render, picker | unit · `apps/grid/src/grid/cells/Links.test.tsx` (new) · `cd apps/grid && bunx vitest run` | people-tags |
 | Period chip | render, `rows()` window | unit · `apps/grid/src/ui/Period.test.tsx` (new), `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | period-chip |
 
 ## Review Focus
 1. Threat 1: an owner reading a source with a links column gets only its own link rows. Test map row 1, asserting the denial on another person's row.
 2. Threat 5: `/schema` omits a links column for a caller who cannot read its dataset. Test map row 1.
-3. A link row soft-deleted elsewhere vanishes from the tags on the next read, and undoing the delete brings it back. Test map row 3, and the people-tags flow's undo step.
+3. A link row soft-deleted elsewhere vanishes from the tags on the next read. Removing a tag is final; removing one whose state is not the default asks first. Adding is undone by one undo. Test map row 3 and the people-tags flow.
 4. Clearing Dagplanning's Locatie writes null to the activity and shows the speelreeks' venue grey again. It never writes the speelreeks. Test map row 2.
 5. The period: a matrix never offers Alles; a reload keeps the chosen period; Volgende week from a week across New Year lands on the right ISO week. Test map row 4.
-6. Fiche (no links, but dated sources) renders the Periode chip and nothing else new. The fiche e2e.
+6. Fiche declares no date and no links: it renders no Periode chip and nothing else new. The `fiche-renders-as-before` e2e (`e2e/grid-ux.spec.ts:640`) asserts the chip's absence.
+7. A saved Dagplanning arrangement that shows Mensen saves (no 400). Mensen offers no sort, group or filter. Test map rows 1 and 3.
 
 ---
 
@@ -65,7 +67,7 @@
 
 **Files:**
 - Modify: `packages/theatre/src/queries.ts:35-73` (dagplanning columns).
-- Test: the theatre query test file, at `PATCH /api/rows/dagplanning/:id`. Use the existing helpers in `packages/theatre/test`; create `dagplanning.test.ts` if none fits.
+- Test: `packages/theatre/test/writer.test.ts`, in `describe('dagplanning')` (:220), at `PATCH /api/rows/dagplanning/:id`.
 - E2E: `e2e/dagplanning.spec.ts` (new).
 
 **Interfaces:**
@@ -90,18 +92,26 @@
   - `apps/grid/src/ui/Toolbar.tsx`: remove `WindowControl`.
   - `apps/grid/src/ui/Window.tsx`: keep the helpers; the control's markup moves into Period.
   - `apps/grid/src/ui/App.tsx`: pass the window to the filter bar.
-  - `apps/grid/src/ui/Filters.tsx` or the filter bar container: render the chip first.
+  - `apps/grid/src/grid/GridBar.tsx` (beside the scope chip, :34) and the matrix's bar in `App.tsx` (:371): render the chip first. It renders even when the source has no filterable field (`filters` is `null` at `App.tsx:277` then).
+  - `apps/grid/src/ui/Window.tsx`: `fromHash` honours a valid `to >= from` and falls back to `weekOf(from)` when `to` is absent, so every e2e landing `/#from=<date>` keeps meaning that week. `period=all` gives `{}`. Add `shiftMonth`. `formatWindow` gains a month label ("oktober 2026"), a range label ("12 okt – 3 nov") and "Alles". `useWindow` becomes `Partial<DateWindow>`.
+  - `apps/grid/src/grid/newRow.ts:26`: falls back to today under `{}`.
   - `apps/grid/src/i18n.ts`, `apps/grid/src/ui/app.css`.
   - The empty state's markup and CSS: centre it in the sheet.
-- Test: the e2e specs that drive the week control. Grep `nv-window`, `Vorige week`, `Volgende week` and `formatWindow` in `e2e/` and update the selectors.
+- Tests to update:
+  - `e2e/grid-ux.spec.ts:482` (`.nv-window__week`);
+  - `e2e/step-0e.spec.ts:93` and `e2e/step-1.spec.ts:260` ("Geen rijen in deze week" becomes "Geen rijen in deze periode");
+  - `apps/grid/src/ui/Window.test.tsx`, `apps/grid/src/grid/Grid.test.tsx`;
+  - any other hit of `nv-window`, `Vorige week`, `Volgende week` and `formatWindow` in `e2e/` and `apps/grid/src`.
+- The `/#from=<date>` landings in every spec stay as they are (the from-only fallback).
 
 **Interfaces:**
 - Consumes: `DateWindow`, `weekOf`, `shift` and `formatWindow` from `Window.tsx`; the hash keys `from`/`to` in `hash.ts`.
-- Produces: `Period({ window, onChange, unbounded }: { window: Partial<DateWindow>; onChange: (w: Partial<DateWindow>) => void; unbounded: boolean })`. `unbounded` is true only for the table skin. Alles sets `{}`, and `rows()` sends no `from`/`to`; check `api.ts:89` accepts that.
+- Produces: `Period({ window, onChange, unbounded }: { window: Partial<DateWindow>; onChange: (w: Partial<DateWindow>) => void; unbounded: boolean })`. `unbounded` is true only for the table skin. Alles sets `{}`, and `rows()` sends no `from`/`to`; `api.ts:89` and `rowsQuery` (`grid/engine.ts:367`) already pass `{}` through. A matrix under `{}` reads and shows the current week, because a matrix read without a window is 400 `window_required` (`params.ts:118`).
 
 - [ ] Step 1: Vitest `Period.test.tsx`:
   - The chip reads "Periode Week 45 · 2–8 nov" and has no remove button.
-  - ‹ and › shift by 7 days, by a month under Deze maand, and by the span under Van–tot.
+  - ‹ and › shift by 7 days for a Mon–Sun window, by a calendar month for a 1st-to-last window (31 jan → february, whole month), and by the span for any other range.
+  - `fromHash`: `#from=2026-10-14` gives that Mon–Sun week; `#from=2026-10-01&to=2026-10-31` stays a month; `#period=all` gives `{}`.
   - Deze week, Volgende week, Deze maand and Van–tot set the right window. Use a fixed date that crosses New Year: from 2026-12-28, Volgende week is ISO week 1 of 2027.
   - Alles is present when `unbounded` and absent otherwise.
   - Alles shows "Alles" and hides ‹ ›.
@@ -109,7 +119,7 @@
 - [ ] Step 3: Run them. Expected: FAIL.
 - [ ] Step 4: Implement. Under Alles the hash holds `period=all`, so a reload keeps it. The empty state reads "Geen rijen in deze periode" with the period, centred in the sheet.
 - [ ] Step 5: Run them. Expected: PASS.
-- [ ] Step 6: E2E `period-chip @e2e`: step forward with ›, pick Deze maand, reload (the period stays), pick Alles in Dagplanning (rows from several weeks). In the Toewijzingen matrix the menu has no Alles.
+- [ ] Step 6: E2E `period-chip @e2e`: step forward with ›, pick Deze maand, reload (the period stays), pick Alles in Dagplanning (rows from several weeks), then open the Toewijzingen matrix: it shows rows for the current week, no error, and its menu has no Alles. Add `toHaveCount(0)` for the chip to `fiche-renders-as-before`.
 - [ ] Step 7: `bun run gate` exits 0. Commit `feat(grid): the period is a filter chip; the week control leaves the toolbar`.
 
 ### Task 3: The engine's `links` shape (R3)
@@ -120,6 +130,9 @@
   - `packages/engine/src/validate.ts`, `packages/engine/src/rows.ts` (`linksOf`).
   - `packages/engine/src/app.ts`: `/schema` and `/rows/:source`.
   - `packages/engine/src/index.ts`: exports.
+  - `packages/engine/src/views.ts`: `hasColumn` (:39) accepts a declared link name in `visible_fields`; `publicRows` (:345) leaves link keys out.
+  - `packages/engine/src/params.ts`: sort and group on a link name stay 400 (`bad_sort`/`bad_group`); a test pins it.
+  - `packages/engine/src/validate.ts`: `links` joins the overwritten row keys (`OVERWRITTEN`, :85), so no column may be named `links`.
 - Test: `packages/engine/test/links.test.ts` (new). Extend `packages/engine/test/fixture.ts` with a generic link, for example `taak` gaining a `helpers` link over a new generic join dataset such as `hulp` (`taak_id`, `project_id` target, `state` with tones). Keep `bun run check`'s vocabulary clean.
 
 **Interfaces:**
@@ -130,11 +143,20 @@
   - `linksOf(db, domain, source, ids, actor): Map<number, Record<string, LinkRow[]>>`.
 
 - [ ] Step 1: Write the tests:
-  - `validateDomain` refuses: a link dataset that does not exist; a `key` that is not a relation to the declaring source (for a query, to the dataset its `id` names, through `creates` or the key's relation target; pick the check that holds for both kinds and state it in the error); a `target` that is not a relation column; a `state` that is not an options column; a link name that clashes with a column.
+  - `validateDomain` refuses, each with a test:
+    - a link dataset that does not exist;
+    - on a dataset, a `key` whose relation is not that dataset;
+    - on a query, a links declaration without `creates`, and a `key` whose relation is not the `creates` dataset;
+    - a `target` that is not a relation column;
+    - a `state` that is not an options column;
+    - a link name that clashes with a column;
+    - a column named `links`.
+  - `POST /views` and `PATCH /views/:id` accept a link name in `visible_fields`; a public view's rows leave it out; sort and group on it are 400.
   - `/schema` serves `links` with the target dataset and the state's options and tones. An owner who cannot read the link dataset gets no `links` entry.
   - `/rows` serves each row's link rows. A soft-deleted link row is absent. A link row without a target has `target: null` and its own title.
+  - Each link entry's keys are exactly `id, target, title, state`; no column of the target or the link row leaks. `title` is the target's title (`lookups[target]?.title`), else the link row's own title.
   - Owner denial: an owner account reading a source with links sees only link rows in its own scope. Another person's row on the same parent is absent, asserted by id.
-  - One query per link column per page, not one per row. Assert through a counted `db` wrapper or a large page whose timing is not asserted, whichever the existing tests already use; otherwise assert the result for 300 parents.
+  - 600 parents (two chunks of 500) each get their own link rows, none missing or misplaced.
 - [ ] Step 2: Run `bun test packages/engine`. Expected: FAIL.
 - [ ] Step 3: Implement, following `cellsOf`: read in chunks with `isNull(deleted_at)`, `scopeWhere(scopeOf(actor, linkDataset))` and `inArray(key, ids)`. Titles come through `withLookups`.
 - [ ] Step 4: Run `bun test packages/engine`. Expected: PASS. `bun run check` exits 0 (vocabulary).
@@ -147,11 +169,13 @@
 - Modify: `packages/theatre/src/queries.ts` (dagplanning `links: { mensen: { label: 'Mensen', dataset: 'toewijzing', key: 'activiteit_id', target: 'persoon_id', state: 'state' } }`).
   - Pick the `key` check from Task 3 that holds here: Dagplanning's `id` is the activity's id and `creates: 'activiteit'`.
   - Add `mensen` to the seeded Dagplanning view's visible fields in `packages/theatre/src/seed.ts`, after Locatie. `--seed-missing` brings system views up to date (option b).
+  - Update the tests that pin those fields: `packages/theatre/test/seed-missing.test.ts:14` (`DAGPLANNING`, and assert `mensen` lands), `packages/theatre/test/grid-ux.test.ts:138`, and the header list at `e2e/grid-ux.spec.ts:486-493` (Mensen after Locatie).
 - Modify:
   - `apps/grid/src/engine.ts`, `types.ts`: a links column becomes a field of type `links`.
   - `apps/grid/src/grid/columns.ts`.
   - `apps/grid/src/grid/cells/Links.tsx` (new), `cells/index.tsx`.
-  - `apps/grid/src/ui/App.tsx`: create and delete through `create`/`remove` in `api.ts`, pushed to the history like other writes, then the row re-read.
+  - `apps/grid/src/ui/App.tsx`: add through `create` in `api.ts`, pushed to the history like other creates; remove through `remove`, which is final (a delete batch is never undone) and not pushed. Removing a link whose state is not the state column's default first asks "Toewijzing van <titel> verwijderen?" with the existing `Confirm`. Then the row is re-read.
+  - `apps/grid/src/grid/columns.ts`: a links column is not sortable or groupable, and `grid/filter.ts` `filterFields` leaves it out.
   - `apps/grid/src/i18n.ts`, `app.css`.
 - Test: `apps/grid/src/grid/cells/Links.test.tsx`, `packages/theatre/test` (the declaration is served), `e2e/dagplanning.spec.ts`.
 
@@ -164,6 +188,8 @@
   - A null-target tag has no ×.
   - Picking an unchecked person calls `onAdd(personId)`; × calls `onRemove(linkId)`.
   - An already-linked person shows checked, and unchecking it calls `onRemove` with its link id.
+  - Removing a tag whose state is not the default calls `onConfirm` first; removing an uitgenodigd one does not.
+  - The column offers no sort and no group, and the filter menu does not list it.
   - Keyboard: Enter opens the editor, Escape closes it.
 - [ ] Step 2: Theatre integration: `/schema` dagplanning has `links.mensen` with target_dataset `persoon` and the state tones. `/rows/dagplanning` lists a seeded activity's toewijzingen.
 - [ ] Step 3: Run them. Expected: FAIL.
@@ -173,7 +199,9 @@
   - a row shows its seeded people as tags;
   - add a person; the tag appears amber (uitgenodigd);
   - reload; it stays;
-  - remove it with ×; it is gone;
-  - undo; it is back;
+  - undo; the added tag is gone; add it again;
+  - remove it with ×; it is gone, without a question (uitgenodigd);
+  - × on a bevestigd tag asks first; Annuleren keeps it;
+  - save a copy of the view showing Mensen: it saves;
   - adding the same person twice shows the writer's refusal.
 - [ ] Step 7: `bun run gate` exits 0. Commit `feat: people on an activity as tags in Dagplanning, added and removed through the Toewijzing writer`.

@@ -18,7 +18,9 @@ The third point, "the filter is not working at all" (a Locatie filter in Dagplan
 **R2. People as tags.** Dagplanning shows a "Mensen" column. It holds one tag per person assigned to the activity: a live Toewijzing that has a persoon.
 - Each tag shows the person's name and is coloured by the Toewijzing's state (the state column's own tones: uitgenodigd amber, bevestigd green, geweigerd and geannuleerd red).
 - Editing the cell opens a multiselect dropdown of people with a search. Picking a person creates a Toewijzing for that activity through the Toewijzing writer, in its default state (uitgenodigd). The tag's × removes that Toewijzing through the writer, as a delete.
-- The writer's refusals stand and show as any write refusal does, for example the same person twice on one activity. Each add or remove is one batch that one undo takes back.
+- The writer's refusals stand and show as any write refusal does, for example the same person twice on one activity.
+- Adding a person is one batch that one undo takes back. Removing is final, as every delete is (docs/SPEC.md, Revision). Removing a person whose state is not uitgenodigd first asks "Toewijzing van <naam> verwijderen?", because adding them again starts at uitgenodigd.
+- Source for the last point: Stefan's choice "No undo; confirm when not 'uitgenodigd'", 2026-10-07.
 - State changes stay in the Toewijzingen matrix.
 - A Toewijzing with only a free-text naam and no persoon is not a person. It shows as a grey tag with its naam and has no ×.
 - Source: the quote above; tag content, Stefan's choice "Name + status colour", 2026-10-07.
@@ -28,13 +30,17 @@ The third point, "the filter is not working at all" (a Locatie filter in Dagplan
 - Each is served as `{ id, target, title, state }`. `title` is the target's title, or the link row's own title when it has no target.
 - The engine reads them for a page of rows in one query per link column. It reads them through the caller's scope on the link dataset and through the target's title rule. An owner sees only the link rows its scope allows, and only the titles of their targets.
 - Writes are not new. The grid creates and deletes link rows with the existing `POST /rows/<dataset>` and `DELETE /rows/<dataset>/:id`.
+- On a dataset, `key` must be a relation to that dataset. On a query, the query must declare `creates`, and `key` must be a relation to that dataset: a query that declares `creates` promises that its `id` is the id of a row of that dataset.
+- A link column is shown and kept in a saved view like a column. It is not sortable, groupable or filterable, and a published view leaves it out.
 - The engine knows no domain word for this. Theatre declares `mensen: links { dataset: toewijzing, key: activiteit_id, target: persoon_id, state: state }` on Dagplanning.
 - Source: invented, to meet R2 without a domain word in the engine; approval pending with this spec.
 
 **R4. The period is a filter.** The week control leaves the toolbar. Every source with a date column gets a "Periode" chip in the filter bar. It is always there and cannot be removed, the way the scope chip cannot.
 - The chip shows the current period and has ‹ › to step. Its menu offers Deze week, Volgende week, Deze maand, Alles and Van–tot (two dates).
 - The default is the current week. Alles is offered only in the table skin; the matrix needs a bounded period.
-- The period stays in the URL as today (`from`, `to`), so a reload keeps it. It is not saved in a view.
+- The period stays in the URL (`from`, `to`, or `period=all`), so a reload keeps it. A URL with only `from` still means that week. The period is not saved in a view.
+- ‹ › steps by the period's shape: a week by a week, a calendar month by a month, any other range by its length.
+- A matrix opened while the period is Alles shows the current week.
 - "Geen rijen" in an empty result names the period and sits centred in the grid.
 - Source: the quote above; default and presets, Stefan's choice "Date filter, default this week", 2026-10-07.
 
@@ -45,5 +51,5 @@ The third point, "the filter is not working at all" (a Locatie filter in Dagplan
 - A filter builder with operators (contains, before, …). Not asked for.
 
 ## Proposed docs/SPEC.md lines (shown to Stefan before commit)
-- Query row and Dataset row: "may declare `links: { dataset, key, target, state? }`: a column holding the rows of `dataset` whose `key` is this row's id, served as `{ id, target, title, state }`, read through the caller's scope on that dataset. They are written with that dataset's own create and delete."
+- Query row and Dataset row: "may declare `links: { dataset, key, target, state? }`: a column holding the rows of `dataset` whose `key` is this row's id, served as `{ id, target, title, state }`, read through the caller's scope on that dataset. They are written with that dataset's own create and delete. On a query, `key` must relate to the dataset the query `creates`, and a query that declares `creates` promises that its `id` is that dataset's id. A link is shown and saved in a view like a column, never sorted, grouped, filtered or published."
 - Skin needs / Sidebar: "the period is a filter chip over the declared date column, with the window in the URL; Alles only where the skin allows an unbounded read."
