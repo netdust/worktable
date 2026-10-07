@@ -162,6 +162,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),
+            ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
+              ? { new_label: s.new_label }
+              : {}),
             writable: isWritable(domain, s),
             deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
             actions: actionsOn(domain, s.name),

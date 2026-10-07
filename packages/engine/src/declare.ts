@@ -83,6 +83,8 @@ export interface DatasetDecl {
   group_facts?: GroupFact[]
   /** The icon the grid shows until an administrator picks one. */
   icon?: Icon
+  /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
+  new_label?: string
 }
 
 export interface QueryDecl {

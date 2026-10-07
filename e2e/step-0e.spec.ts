@@ -204,7 +204,7 @@ async function createActivity(page: Page, title: string): Promise<Record<string,
   const posted = page.waitForRequest(
     (req) => req.method() === 'POST' && new URL(req.url()).pathname === '/api/rows/activiteit',
   )
-  await page.getByRole('button', { name: 'Nieuw Activiteiten' }).click()
+  await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
   await page.getByRole('option', { name: 'Nachtwacht' }).click()
   const body = (await posted).postDataJSON() as Record<string, unknown>

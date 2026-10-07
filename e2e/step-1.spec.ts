@@ -156,7 +156,7 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
   const created = page.waitForResponse(
     (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/speelreeks',
   )
-  await page.getByRole('button', { name: 'Nieuw Speelreeksen' }).click()
+  await page.getByRole('button', { name: 'Nieuwe speelreeks' }).click()
   await page.getByRole('textbox', { name: 'Naam' }).fill(naam)
   await page.getByRole('textbox', { name: 'Naam' }).press('Enter')
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
@@ -413,7 +413,7 @@ test('sjablonen-read-only @e2e', async ({ page }) => {
   await page.goto('/')
   await pick(page, 'Sjablonen')
   await expect(page.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Nieuw Sjablonen' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Nieuw sjabloon' })).toBeDisabled()
   const row = named(page, SJABLOON)
   for (const label of ['Naam', 'Items']) {
     const cell = await cellOf(page, row, label)

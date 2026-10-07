@@ -227,6 +227,31 @@ describe('a declared default icon', () => {
   })
 })
 
+describe("a dataset's words for a new row", () => {
+  test('a blank or overlong new_label is refused', () => {
+    expect(refused(withDataset('job', { new_label: ' ' }))).toEqual(['job', ' '])
+    expect(refused(withDataset('job', { new_label: 'x'.repeat(61) }))).toEqual(['job', 'x'.repeat(61)])
+  })
+
+  test('/schema serves it until an administrator renames the dataset', async () => {
+    const domain = withDataset('job', { new_label: 'New job' })
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, domain)
+    seedDomain(sqlite, domain)
+    const app = testEngine(sqlite, domain)
+    const admin = await signIn(app, 'administrator')
+    const headers = { host: '127.0.0.1:4310', cookie: admin, 'content-type': 'application/json' }
+    const sources = async () => ((await (await app.request('/api/schema', { headers })).json()) as Schema).sources
+    const put = (label: string) =>
+      app.request('/api/sources/job/display', { method: 'PUT', headers, body: JSON.stringify({ label }) })
+
+    expect((await sources()).job.new_label).toBe('New job')
+    expect((await sources()).room.new_label).toBeUndefined()
+    expect((await put('Tasks')).status).toBe(200)
+    expect((await sources()).job.new_label).toBeUndefined()
+  })
+})
+
 // A query over job that writes room's state and may create a room or a job.
 function withStates(over: Partial<QueryDecl> = {}): Domain {
   const state: ColumnDecl = {

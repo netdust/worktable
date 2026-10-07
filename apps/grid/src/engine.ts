@@ -50,6 +50,10 @@ export interface EngineSource {
   space?: 'scoped' | 'global'
   /** An administrator's pick from the engine's icon set, else null. */
   icon?: string | null
+  /** A query's new rows are created in this dataset. */
+  creates?: string
+  /** The words of the button that adds a row, while the dataset keeps its declared name. */
+  new_label?: string
   group_facts?: GroupFact[]
   columns: Record<string, EngineColumn>
 }
@@ -148,6 +152,8 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.title_via ? { title_derived: true } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.deletable ? { deletable: true } : {}),
+    ...(source.creates ? { creates: source.creates } : {}),
+    ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(source.actions?.length ? { actions: source.actions } : {}),
     fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
   }

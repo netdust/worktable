@@ -57,6 +57,14 @@ function checkIcon(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+const MAX_NEW_LABEL = 60
+
+function checkNewLabel(dataset: DatasetDecl): void {
+  const label = dataset.new_label
+  if (label === undefined || (typeof label === 'string' && label.trim() !== '' && label.length <= MAX_NEW_LABEL)) return
+  throw new DomainError(dataset.name, String(label), `new_label must be words of 1 to ${MAX_NEW_LABEL} characters`)
+}
+
 function checkCreates(domain: Domain, query: QueryDecl): void {
   const dataset = query.creates
   if (dataset === undefined) return
@@ -272,6 +280,7 @@ export function validateDomain(domain: Domain): void {
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
+    checkNewLabel(dataset)
     checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }

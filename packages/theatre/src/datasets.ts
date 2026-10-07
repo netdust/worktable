@@ -39,6 +39,7 @@ const statussen = {
 export const organisatie = defineDataset({
   name: 'organisatie',
   label: 'Organisaties',
+  new_label: 'Nieuwe organisatie',
   icon: 'pin',
   title: 'naam',
   custom: true,
@@ -68,6 +69,7 @@ export const organisatie = defineDataset({
 export const productie = defineDataset({
   name: 'productie',
   label: 'Producties',
+  new_label: 'Nieuwe productie',
   icon: 'tag',
   title: 'titel',
   custom: true,
@@ -89,6 +91,7 @@ export const productie = defineDataset({
 export const activiteit = defineDataset({
   name: 'activiteit',
   label: 'Activiteiten',
+  new_label: 'Nieuwe activiteit',
   icon: 'calendar',
   title: 'omschrijving',
   date: 'plandag',
@@ -123,6 +126,7 @@ export const activiteit = defineDataset({
 export const persoon = defineDataset({
   name: 'persoon',
   label: 'Personen',
+  new_label: 'Nieuwe persoon',
   icon: 'user',
   title: 'weergavenaam',
   custom: true,
@@ -149,6 +153,7 @@ export const persoon = defineDataset({
 export const toewijzing = defineDataset({
   name: 'toewijzing',
   label: 'Toewijzingen',
+  new_label: 'Nieuwe toewijzing',
   icon: 'users',
   title: { via: 'persoon_id', else: 'naam' },
   custom: true,
@@ -190,6 +195,7 @@ export const toewijzing = defineDataset({
 export const beschikbaarheid = defineDataset({
   name: 'beschikbaarheid',
   label: 'Beschikbaarheden',
+  new_label: 'Nieuwe beschikbaarheid',
   icon: 'clock',
   title: { via: 'persoon_id', else: 'reden' },
   date: 'start_at',
@@ -207,6 +213,7 @@ export const beschikbaarheid = defineDataset({
 export const rol = defineDataset({
   name: 'rol',
   label: 'Rollen',
+  new_label: 'Nieuwe rol',
   icon: 'check',
   title: 'naam',
   custom: true,
@@ -228,6 +235,7 @@ export const rol = defineDataset({
 export const speelreeks = defineDataset({
   name: 'speelreeks',
   label: 'Speelreeksen',
+  new_label: 'Nieuwe speelreeks',
   icon: 'film',
   title: 'naam',
   custom: true,
@@ -250,6 +258,7 @@ export const speelreeks = defineDataset({
 export const sjabloon = defineDataset({
   name: 'sjabloon',
   label: 'Sjablonen',
+  new_label: 'Nieuw sjabloon',
   icon: 'list',
   title: 'naam',
   custom: true,

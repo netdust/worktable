@@ -37,6 +37,10 @@ export interface Model {
   query?: boolean
   /** Its writer deletes: the drawer offers Verwijderen. */
   deletable?: boolean
+  /** A query whose `+ Nieuw` creates a row in this model. */
+  creates?: string
+  /** The words of `+ Nieuw` ("Nieuwe activiteit"), while the model keeps its declared name. */
+  new_label?: string
   /** What the drawer offers to run on one of its records. */
   actions?: ModelAction[]
   fields: Record<string, Field>

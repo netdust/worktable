@@ -57,6 +57,7 @@ const strings = {
   densityNormal: 'Normaal',
   densityRoomy: 'Ruim',
   needsFields: 'Heeft {fields} nodig: maak het aan vanuit het record',
+  pickFirst: 'Kies eerst {fields}',
   export: 'Exporteren',
   exportFailed: 'Exporteren mislukt',
   allSpace: 'Alle {label}',

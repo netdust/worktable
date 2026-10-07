@@ -5,6 +5,7 @@ import { modelNode, openModel, openView } from './tree'
 const FOLD_WEEK = '2027-03-01'
 const FACTS_WEEK = '2027-03-08'
 const INHERIT_WEEK = '2027-03-15'
+const DETAILS_WEEK = '2027-03-22'
 const SEED_WEEK = '2026-10-12'
 const VENUE = 'Theater Het Anker'
 const OWN_VENUE = 'Repetitiekot De Loods'
@@ -457,4 +458,62 @@ test('dark-and-density @e2e', async ({ page }) => {
 
   await theme.getByRole('tab', { name: 'Licht' }).click()
   await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(light)
+})
+
+test('dagplanning-details @e2e', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await speeldagen(page.request, 'Speelreeks e2e details', DETAILS_WEEK)
+  await land(page, `/#from=${DETAILS_WEEK}`)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
+  await switchTo(page, 'Alle producties', 'Nachtwacht')
+  await pick(page, 'Dagplanning')
+  await expect(gridRows(page)).toHaveCount(28)
+
+  // R10.9: one bordered week control with the ISO week.
+  await expect(page.locator('.nv-window__week')).toHaveText('Week 12 · 22–28 mrt')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
+
+  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Status; a time range with its end muted.
+  const heads = await page.locator('thead th').allTextContents()
+  expect(heads.map((h) => h.replace(/\s*[↑↓]$/, '').trim())).toEqual([
+    '#',
+    'Tijd',
+    'Omschrijving',
+    'Soort',
+    'Locatie',
+    'Status',
+  ])
+  const lunch = named(page, 'Lunch').first()
+  await expect(lunch.locator('td').nth(1)).toHaveText('13:00–14:00')
+  await expect(lunch.locator('.nv-time__end')).toHaveText('–14:00')
+  await expect(named(page, 'Overnachting').first().locator('.nv-blank')).toHaveText('zonder tijd')
+
+  // R10.3: Maaltijd in its colour, status pills toned.
+  const soort = lunch.locator('td').nth(3).locator('.nv-dot')
+  await expect(soort).toHaveText('Maaltijd')
+  expect(await soort.evaluate((el) => getComputedStyle(el, '::before').backgroundColor)).toBe('rgb(47, 138, 87)')
+  await expect(lunch.locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
+
+  // R10.7: the scope chip.
+  await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveText('Productie is Nachtwacht')
+
+  // R10.5: a model reads stronger than its views.
+  const node = modelNode(page, 'Dagplanning')
+  await expect(node.locator('.nv-model__name')).toHaveCSS('font-weight', '500')
+  const view = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: 'Dagplanning', exact: true })
+  await expect(view).toHaveCSS('font-size', '13.5px')
+  expect(Math.round((await view.boundingBox())?.height ?? 0)).toBe(28)
+  await shot(page, 'details')
+
+  // R10.10: + Nieuw on the query creates an activity, and the query reads again.
+  const created = page.waitForResponse(
+    (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/activiteit',
+  )
+  await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
+  expect((await created).status()).toBe(201)
+  await expect(gridRows(page)).toHaveCount(29)
+
+  // The compact rail foot keeps the whole tree in view at 720px.
+  await page.setViewportSize({ width: 1440, height: 720 })
+  await expect(modelNode(page, 'Sjablonen').locator('.nv-model__name')).toBeInViewport()
 })

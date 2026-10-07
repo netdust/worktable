@@ -1,18 +1,18 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
 import { filter } from '../grid/layout'
-import { newRow } from '../grid/newRow'
+import { type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
+import type { Account, ApiError, DateWindow, Model, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Confirm } from './Confirm'
 import { Filters } from './Filters'
 import { NewViewDialog } from './NewViewDialog'
@@ -120,6 +120,20 @@ function displayed(table: TableDef, display: Display | undefined): TableDef {
   return { ...rest, label: display.label, ...(display.icon ? { icon: display.icon } : {}) }
 }
 
+/** The models as an administrator renamed their tables in this visit: a label over the served one. */
+function renamed(models: Schema['models'], tables: TableDef[], displays: Record<string, Display>): Schema['models'] {
+  const labels = new Map(tables.flatMap((table) => (displays[table.key] ? [[table.model, displays[table.key].label] as const] : [])))
+  return Object.fromEntries(Object.entries(models).map(([key, model]) => {
+    const label = labels.get(key)
+    if (!label || label === model.label) return [key, model]
+    const { new_label: _, ...rest } = model
+    return [key, { ...rest, label }]
+  }))
+}
+
+/** `+ Nieuw`'s words: the model's own while it keeps its name, else "Nieuw" and its name. */
+const newLabel = (model: Model | undefined): string => model?.new_label ?? [t('new'), model?.label].filter(Boolean).join(' ')
+
 /** The shell waits for the served schema: it declares the tables, the saved views come with it. */
 function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) {
   const frame = useRef<HTMLDivElement>(null)
@@ -214,7 +228,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     // By key, and by what the server applies (filters, sort, group): a width or a hidden column stays in the browser.
   }, [settled, view?.key, dated, range, scopeId, asks, reloads])
 
-  const model = view ? served?.models[view.model] : undefined
+  const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
+  const model = view ? models[view.model] : undefined
   const writable = view ? served?.writable[view.model] === true : false
   const loaded = result.status === 'ready' && model ? result.rows : null
   const matrix = view?.type === 'matrix'
@@ -237,13 +252,26 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     ? t('scopeIs', { field: model.fields[scope.field]?.label ?? '', value: space.selected.title })
     : null
 
-  const plan = model && view ? newRow(model, view, dated ? range : null, new Date(), scope ?? null) : null
-  const addBlocked = !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
+  const plan = model && view && !model.creates ? newRow(model, view, dated ? range : null, new Date(), scope ?? null) : null
+  const target = model?.creates ? models[model.creates] : undefined
+  const made = target ? madeFrom(target, served?.tables ?? [], dated ? range : null, space.status === 'ready' ? space.scope : null) : null
+  const addBlocked = target ? createBlocked(target, made, served?.writable[target.key] === true)
+    : !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
   const add = () => {
+    if (target && made && !('missing' in made)) return void createThrough(target.key, made.fields)
     if (!store || !model || !plan || 'missing' in plan) return
     if (plan.needs.length === 0) void store.create(plan.fields)
     else store.draft(plan.fields, plan.needs, plan.offers)
   }
+  // A query's new row goes to the dataset it creates in; the query then reads again, and one undo takes the row back.
+  const createThrough = (dataset: string, fields: Record<string, unknown>) =>
+    createRow(dataset, fields).then(
+      ({ batch }) => {
+        history.push({ batch: Promise.resolve(batch), model: dataset, id: null })
+        reloadView()
+      },
+      (error: ApiError) => notify({ message: errorText(error.code, error.message) }),
+    )
 
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
@@ -307,7 +335,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions} space={space.status === 'ready' && served?.space && (
-        <SpaceSelect label={served.models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
+        <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">
         <Toolbar
@@ -319,7 +347,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onWindow={setRange}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
-          addLabel={[t('new'), model?.label].filter(Boolean).join(' ')}
+          addLabel={newLabel(target ?? model)}
           addBlocked={addBlocked}
           onAdd={matrix ? undefined : add}
           onExport={grid ? exportView : undefined}
@@ -338,13 +366,13 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         <div className="nv-work">
         <section className="nv-sheet">
           {matrix && model && view && result.status === 'ready' && cells && layout ? (
-            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={served?.models ?? {}} rows={cellsState.rows} query={query} away={result.away}
+            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t('noRowsInWindow')} emptyHint={formatWindow(range)} store={cells} writable={joinWritable}
               layout={layout} onLayout={setLayout} filters={filters} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
-              models={served?.models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} />
           ) : (
             <Sheet hasView={view !== undefined} dated={dated} result={result} />
@@ -363,6 +391,21 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       )}
     </div>
   )
+}
+
+/** What a query's `+ Nieuw` creates in its dataset: that dataset's own new row, on the window's day and in the selected space. */
+function madeFrom(target: Model, tables: TableDef[], window: DateWindow | null, scope: Scope | null): NewRow {
+  const table = tables.find((t) => t.model === target.key)
+  const view: View = { key: target.key, label: target.label, table: target.key, model: target.key, ...(table?.date_field ? { date_field: table.date_field } : {}) }
+  return newRow(target, view, window, new Date(), table?.space === 'scoped' ? scope : null)
+}
+
+/** Why a query's `+ Nieuw` is off: its dataset is read-only, or a row there still needs what only a pick gives. */
+function createBlocked(target: Model, made: NewRow | null, writable: boolean): string | null {
+  if (!writable || !made) return t('readOnly')
+  if ('missing' in made) return t('needsFields', { fields: made.missing.join(', ') })
+  const asked = made.needs.filter((key) => key !== 'title').map((key) => target.fields[key]?.label ?? key)
+  return asked.length > 0 ? t('pickFirst', { fields: asked.join(', ') }) : null
 }
 
 function Sheet({ hasView, dated, result }: { hasView: boolean; dated: boolean; result: Rows }) {

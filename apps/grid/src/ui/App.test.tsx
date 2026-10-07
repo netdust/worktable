@@ -1415,6 +1415,43 @@ describe('writes on the engine', () => {
     await waitFor(() => expect(options.map((o) => o.textContent)).toEqual(['De Kersentuin', 'Wachten op Godot']))
   })
 
+  describe('a query that creates in a dataset', () => {
+    const creating = (target: Partial<Schema['models'][string]>): Schema => ({
+      ...engineSchema,
+      models: {
+        ...engineSchema.models,
+        activiteit: { ...engineSchema.models.activiteit, title_required: false, new_label: 'Nieuwe activiteit', ...target },
+        dagplanning: { ...engineSchema.models.dagplanning, creates: 'activiteit' },
+      },
+    })
+
+    it("names its + Nieuw after the dataset's words, creates the row there and reads the query again", async () => {
+      api.schema.mockResolvedValue(creating({ fields: {} }))
+      api.create.mockResolvedValue({ row: { id: 9, title: '', status: '', fields: {} }, batch: 'b9' })
+      window.location.hash = '#view=dagplanning'
+      render(<App />)
+      await screen.findByText('opbouw Gent')
+      const reads = api.rows.mock.calls.length
+
+      const button = screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+      await act(async () => fireEvent.click(button))
+
+      expect(api.create).toHaveBeenCalledWith('activiteit', {})
+      await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+    })
+
+    it('waits for a pick the dataset needs, and says which', async () => {
+      api.schema.mockResolvedValue(creating({}))
+      window.location.hash = '#view=dagplanning'
+      render(<App />)
+      await screen.findByText('opbouw Gent')
+
+      expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
+      expect(screen.getByText('Kies eerst Productie')).toBeTruthy()
+    })
+  })
+
   it('+ New is blocked on a query view', async () => {
     window.location.hash = '#view=dagplanning'
     render(<App />)
@@ -1562,6 +1599,7 @@ describe("a model's ⋯ in the app", () => {
     expect(api.setDisplay).toHaveBeenCalledWith('planning', { label: 'Werkplan' })
     expect(await within(rail()).findByRole('treeitem', { name: 'Werkplan' })).toBeTruthy()
     expect(within(rail()).queryByRole('treeitem', { name: 'Planning' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Nieuw Werkplan' })).toBeTruthy()
   })
 
   it("changes a model's icon for an administrator, and the tree draws it", async () => {

@@ -285,7 +285,7 @@ test('new-without-title', async ({ page }) => {
   const created: string[] = []
   page.on('request', (req) => req.method() === 'POST' && created.push(req.url()))
   await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
-  await page.getByRole('button', { name: 'Nieuw Activiteiten' }).click()
+  await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
   await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
   expect(created).toEqual([])
 })
