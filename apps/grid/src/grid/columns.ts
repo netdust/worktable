@@ -1,5 +1,5 @@
 import { locale, t } from '../i18n'
-import type { Field, Model, Row, View } from '../types'
+import type { Field, Model, Row, Tone, View } from '../types'
 
 export type CellKind =
   | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'datetime' | 'time' | 'relation' | 'bool' | 'number'
@@ -19,6 +19,7 @@ export interface Column {
   align: 'start' | 'end'
   width: number
   options?: Record<string, string>
+  tones?: Record<string, Tone>
   /** A relation's target model; single relations are picked in the cell. */
   relation?: { model: string; multiple: boolean }
   value: (row: Row) => unknown
@@ -154,6 +155,7 @@ function fieldColumn(key: string, field: Field, writable: boolean, model: Model)
   column.required = field.required
   column.editable = writable && !field.readonly && (EDITABLE.includes(kind) || (kind === 'relation' && field.relation?.multiple === false))
   column.options = field.options
+  column.tones = field.tones
   column.relation = field.relation
 
   if (kind === 'select') {

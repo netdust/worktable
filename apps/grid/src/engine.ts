@@ -1,5 +1,5 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
-import type { DateWindow, Field, FieldType, GroupFact, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, View } from './types'
+import type { DateWindow, Field, FieldType, GroupFact, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -8,6 +8,7 @@ export interface EngineColumn {
   nullable?: boolean
   default?: unknown
   options?: Record<string, string>
+  tones?: Record<string, Tone>
   /** The dataset its integer points at. */
   relation?: string
   readonly?: true
@@ -122,6 +123,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     required: !column.nullable && column.default === undefined,
     fact: false,
     ...(column.options ? { options: column.options } : {}),
+    ...(column.tones ? { tones: column.tones } : {}),
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),

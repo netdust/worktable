@@ -8,6 +8,8 @@ export interface ColumnDecl {
   nullable?: boolean
   default?: string | number | boolean | null
   options?: Record<string, string>
+  /** A tone per option key, for the grid to colour the option. */
+  tones?: Record<string, 'ok' | 'warn' | 'bad'>
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }

@@ -159,3 +159,25 @@ describe('/schema serves the declarations', () => {
     }
   })
 })
+
+describe('tones', () => {
+  const withTones = (tones: Record<string, 'ok' | 'warn' | 'bad'>, options?: Record<string, string>) => {
+    const columns = { ...dataset('job').columns }
+    columns.name = { ...columns.name, ...(options ? { options } : {}), tones } as ColumnDecl
+    return withDataset('job', { columns })
+  }
+
+  test('a tone on a column without options is refused', () => {
+    expect(refused(withTones({ a: 'ok' }))).toEqual(['job', 'name'])
+  })
+
+  test('a tone for an unknown option is refused', () => {
+    expect(refused(withTones({ ghost: 'ok' }, { a: 'A' }))).toEqual(['job', 'ghost'])
+  })
+
+  test('declared tones validate and /schema serves them', async () => {
+    const domain = withTones({ a: 'ok', b: 'bad' }, { a: 'A', b: 'B' })
+    expect(() => validateDomain(domain)).not.toThrow()
+    expect((await schemaOf(domain, 'editor')).sources.job.columns.name.tones).toEqual({ a: 'ok', b: 'bad' })
+  })
+})

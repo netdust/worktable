@@ -40,3 +40,24 @@ describe('a select cell', () => {
     expect(container.textContent).toBe('Maaltijd')
   })
 })
+
+describe('a select cell with declared tones', () => {
+  const declared = { ...column('status'), options: { alpha: 'Alpha', beta: 'Beta', confirmed: 'Confirmed' }, tones: { alpha: 'bad' as const, beta: 'ok' as const } }
+  const pill = (status: string) => render(<SelectCell column={declared} row={at(status)} />).container.querySelector('.nv-pill')?.className
+
+  it('colours the pill by the declared tone', () => {
+    expect(pill('alpha')).toBe('nv-pill nv-pill--bad')
+    expect(pill('beta')).toBe('nv-pill nv-pill--ok')
+  })
+
+  it('lets a declared tone win over the built-in English defaults', () => {
+    const over = { ...declared, tones: { confirmed: 'bad' as const } }
+    const { container } = render(<SelectCell column={over} row={at('confirmed')} />)
+    expect(container.querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--bad')
+  })
+
+  it('keeps an undeclared option neutral', () => {
+    const none = { ...declared, options: { gamma: 'Gamma' } }
+    expect(render(<SelectCell column={none} row={at('gamma')} />).container.querySelector('.nv-pill')?.className).toBe('nv-pill')
+  })
+})

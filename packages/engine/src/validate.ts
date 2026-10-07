@@ -33,6 +33,18 @@ function checkTitle(source: DatasetDecl | QueryDecl): void {
   if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
 }
 
+function checkTones(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.tones) continue
+    if (!decl.options) throw new DomainError(source.name, column, `${column} declares tones but has no options`)
+    for (const key of Object.keys(decl.tones)) {
+      if (!Object.hasOwn(decl.options, key)) {
+        throw new DomainError(source.name, key, `${column} has a tone for "${key}", which is not one of its options`)
+      }
+    }
+  }
+}
+
 function checkOwners(source: DatasetDecl | QueryDecl): void {
   const column = source.owners?.owner
   if (column === undefined || column === 'id' || source.columns[column]?.relation) return
@@ -225,6 +237,7 @@ export function validateDomain(domain: Domain): void {
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
     checkOwners(source)
+    checkTones(source)
     checkFacts(source)
     checkInherited(source)
   }

@@ -11,7 +11,7 @@ export function SelectCell({ column, row }: CellProps) {
   const Icon = iconOf(option)
   if (Icon) return <span className="nv-kind"><Icon size={13} aria-hidden="true" />{text}</span>
   const shape = column.id === 'status' ? 'nv-pill' : 'nv-dot'
-  const tone = toneOf(option)
+  const tone = toneOf(option, column.tones)
   return <span className={tone ? `${shape} ${shape}--${tone}` : shape}>{text}</span>
 }
 

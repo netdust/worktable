@@ -4,12 +4,16 @@ export type FieldType =
   | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date' | 'datetime'
   | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
 
+export type Tone = 'ok' | 'warn' | 'bad'
+
 export interface Field {
   type: FieldType
   label: string
   required: boolean
   fact: boolean
   options?: Record<string, string>
+  /** A tone per option key; an option not listed falls back to the built-in defaults. */
+  tones?: Record<string, Tone>
   relation?: { model: string; multiple: boolean }
   description?: string
   /** Shown, never written: a readonly column, or a query column no writer takes. */

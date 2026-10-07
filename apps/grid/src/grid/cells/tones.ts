@@ -1,6 +1,8 @@
 import { BedDouble, Car, Coffee, Drama, Hammer, type LucideIcon, Mic, Music, UtensilsCrossed, Wrench } from 'lucide-react'
 
-export type Tone = 'ok' | 'warn' | 'bad'
+import type { Tone } from '../../types'
+
+export type { Tone }
 
 /**
  * What an option key means, in the common words of planning: settled, pending
@@ -18,8 +20,9 @@ const ICONS: Record<string, LucideIcon> = {
   show: Drama, meal: UtensilsCrossed, overnight: BedDouble, free: Coffee,
 }
 
-export function toneOf(option: string): Tone | null {
-  return TONES[option] ?? null
+/** A tone the column declares wins over the built-in defaults. */
+export function toneOf(option: string, declared?: Record<string, Tone>): Tone | null {
+  return declared?.[option] ?? TONES[option] ?? null
 }
 
 export function iconOf(option: string): LucideIcon | null {
