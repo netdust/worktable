@@ -42,7 +42,7 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
   test('an editor gets the sections in their draft order', async () => {
     const body = await schemaAs('editor')
     expect(body.sections).toEqual([
-      { label: 'Planning', sources: ['dagplanning', 'activiteit', 'speelreeks', 'toewijzing', 'beschikbaarheid'] },
+      { label: 'Planning', sources: ['speelreeks', 'dagplanning', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
       { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
       { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
     ])

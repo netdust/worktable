@@ -8,7 +8,7 @@ import theatre from '../src'
 
 const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
-const STEP_ONE = ['Speelreeksen', 'Rollen', 'Sjablonen']
+const STEP_ONE = ['Tourstops', 'Rollen', 'Sjablonen']
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
 const PRE_DETAILS_DAGPLANNING = ['productie', 'soort', 'start_at', 'status', 'locatie_id', 'locatie_bron']
 const DAGPLANNING = ['start_at', 'omschrijving', 'soort', 'locatie_id', 'status']

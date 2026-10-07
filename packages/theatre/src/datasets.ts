@@ -100,7 +100,7 @@ export const activiteit = defineDataset({
   group_facts: dagFacts,
   columns: {
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
-    speelreeks_id: { type: 'integer', label: 'Speelreeks', nullable: true, relation: 'speelreeks' },
+    speelreeks_id: { type: 'integer', label: 'Tourstop', nullable: true, relation: 'speelreeks' },
     soort: { type: 'text', label: 'Soort', ...soorten },
     omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
     datum: { type: 'date', label: 'Datum' },
@@ -234,8 +234,8 @@ export const rol = defineDataset({
 
 export const speelreeks = defineDataset({
   name: 'speelreeks',
-  label: 'Speelreeksen',
-  new_label: 'Nieuwe speelreeks',
+  label: 'Tourstops',
+  new_label: 'Nieuwe tourstop',
   icon: 'film',
   title: 'naam',
   custom: true,

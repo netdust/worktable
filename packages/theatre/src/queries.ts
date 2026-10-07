@@ -67,7 +67,7 @@ export const dagplanning = defineQuery({
       label: 'Locatie van',
       nullable: true,
       readonly: true,
-      options: { eigen: 'Eigen', speelreeks: 'Speelreeks' },
+      options: { eigen: 'Eigen', speelreeks: 'Tourstop' },
     },
   },
 })

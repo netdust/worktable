@@ -277,7 +277,7 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['titel', 'seizoen', 'status', 'organisatie_id'],
   },
   {
-    name: 'Speelreeksen',
+    name: 'Tourstops',
     source_type: 'dataset',
     source: 'speelreeks',
     skin: 'table',

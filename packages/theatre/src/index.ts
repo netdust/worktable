@@ -45,7 +45,7 @@ const theatre: Domain = {
   space: { dataset: 'productie' },
   // Section names and order are a draft, pending Stefan's approval.
   sections: [
-    { label: 'Planning', sources: ['dagplanning', 'activiteit', 'speelreeks', 'toewijzing', 'beschikbaarheid'] },
+    { label: 'Planning', sources: ['speelreeks', 'dagplanning', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
     { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
     { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
   ],

@@ -105,14 +105,14 @@ describe('the Speelreeks writer refuses', () => {
   test('a reeks of 32 days, the default cap', () =>
     refused(
       editor('POST', '/api/rows/speelreeks', { ...REEKS, start_datum: '2026-11-01', eind_datum: '2026-12-02' }),
-      'Een speelreeks duurt hoogstens 31 dagen.',
+      'Een tourstop duurt hoogstens 31 dagen.',
     ))
 
   test('a reeks longer than the own organisation sets', () => {
     sqlite.run(`UPDATE organisatie SET parameters = '{"dag_grens_uur":5,"max_speelreeks_dagen":10}' WHERE id = 1`)
     return refused(
       editor('POST', '/api/rows/speelreeks', { ...REEKS, start_datum: '2026-11-01', eind_datum: '2026-11-11' }),
-      'Een speelreeks duurt hoogstens 10 dagen.',
+      'Een tourstop duurt hoogstens 10 dagen.',
     )
   })
 
@@ -120,7 +120,7 @@ describe('the Speelreeks writer refuses', () => {
     const id = await reeks()
     await refused(
       editor('PATCH', `/api/rows/speelreeks/${id}`, { eind_datum: '2026-12-02' }),
-      'Een speelreeks duurt hoogstens 31 dagen.',
+      'Een tourstop duurt hoogstens 31 dagen.',
     )
   })
 })
@@ -140,7 +140,7 @@ describe('a Speelreeks longer than a lowered cap', () => {
     sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":10}' WHERE id = 1`)
     await refused(
       editor('PATCH', `/api/rows/speelreeks/${id}`, { eind_datum: '2026-11-19' }),
-      'Een speelreeks duurt hoogstens 10 dagen.',
+      'Een tourstop duurt hoogstens 10 dagen.',
     )
   })
 })
@@ -150,7 +150,7 @@ describe('the Speelreeks ceiling', () => {
     sqlite.run(`UPDATE organisatie SET parameters = '{"max_speelreeks_dagen":100000}' WHERE id = 1`)
     return refused(
       editor('POST', '/api/rows/speelreeks', { ...REEKS, start_datum: '2026-01-01', eind_datum: '2027-01-02' }),
-      'Een speelreeks duurt hoogstens 366 dagen.',
+      'Een tourstop duurt hoogstens 366 dagen.',
     )
   })
 
