@@ -406,7 +406,7 @@ test.describe('as the administrator', () => {
 test('sjablonen-read-only @e2e', async ({ page }) => {
   await page.goto('/')
   await pick(page, 'Sjablonen')
-  await expect(page.getByText('This list is read-only')).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New Sjablonen' })).toBeDisabled()
   const row = named(page, SJABLOON)
   for (const label of ['Naam', 'Items']) {

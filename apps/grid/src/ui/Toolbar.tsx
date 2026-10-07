@@ -91,7 +91,7 @@ export function Toolbar({ title, matrix, locked, shown, window, onWindow, search
       <div className="nv-toolbar__name">
         {matrix ? <Grid3x3 size={16} aria-hidden="true" /> : <TableIcon size={16} aria-hidden="true" />}
         <h1 className="nv-toolbar__title">{title}</h1>
-        {locked && <span className="nv-toolbar__lock" title={t('readOnlyTitle')}><Lock size={13} aria-label={t('readOnlyTitle')} role="img" /></span>}
+        {locked && <span className="nv-toolbar__lock" role="img" aria-label={t('readOnlyTitle')} title={t('readOnlyTitle')}><Lock size={13} aria-hidden="true" /></span>}
         {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups)}</span>}
       </div>
       {modified && <ModifiedState modified={modified} />}
@@ -103,7 +103,7 @@ export function Toolbar({ title, matrix, locked, shown, window, onWindow, search
         {saving && <SaveState state={saving} />}
         {exportNote && <span className="nv-toolbar__note" role="alert">{exportNote}</span>}
         {more.length > 0 && <MoreMenu actions={more} />}
-        {onAdd && addBlocked && <span className="nv-toolbar__note">{addBlocked}</span>}
+        {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note">{addBlocked}</span>}
         {onAdd && (
           <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} disabled={addBlocked !== null} onClick={onAdd}>
             {addLabel}
