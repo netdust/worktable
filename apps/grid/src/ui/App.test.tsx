@@ -627,7 +627,7 @@ describe('a matrix view with the table\'s filters', () => {
     render(<App />)
 
     expect(await screen.findByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter Locatie wissen' }))
+    fireEvent.click(await within(bar()).findByRole('button', { name: 'Filter Locatie wissen' }))
 
     expect(await screen.findByRole('row', { name: /Repetitie/ })).toBeTruthy()
   })
