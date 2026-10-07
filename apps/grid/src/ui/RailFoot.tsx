@@ -1,5 +1,5 @@
 import { Kbd, SegmentedControl } from '@sakaniui/react'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { t } from '../i18n'
 import { ThemeToggle } from './Theme'
 
@@ -47,16 +47,27 @@ function DensityToggle() {
   )
 }
 
-/** The keys the sheet answers to, the viewer's theme and density, and who is signed in. */
+const KEYS = [['↑↓←→', 'hintMove'], ['↵', 'hintEdit'], ['Esc', 'hintCancel'], ['⌘Z', 'undo'], ['⌘K', 'hintSearch']] as const
+
+/** The keys the sheet answers to, folded into one item; the viewer's theme and density on one row; who is signed in. */
 export function RailFoot({ signed }: { signed?: Signed }) {
   return (
     <footer className="nv-rail__foot">
-      <span><Kbd>↑↓←→</Kbd> <span>{t('hintMove')}</span></span>
-      <span><Kbd>↵</Kbd> <span>{t('hintEdit')}</span> · <Kbd>Esc</Kbd> <span>{t('hintCancel')}</span></span>
-      <span><Kbd>⌘Z</Kbd> <span>{t('undo')}</span></span>
-      <span><Kbd>⌘K</Kbd> <span>{t('hintSearch')}</span></span>
-      <ThemeToggle />
-      <DensityToggle />
+      <details className="nv-keys">
+        <summary>{t('shortcuts')}</summary>
+        <dl className="nv-keys__list">
+          {KEYS.map(([key, word]) => (
+            <Fragment key={key}>
+              <dt><Kbd>{key}</Kbd></dt>
+              <dd>{t(word)}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      </details>
+      <div className="nv-rail__looks">
+        <ThemeToggle />
+        <DensityToggle />
+      </div>
       {signed && (
         <span className="nv-rail__account">
           <span className="nv-rail__email">{signed.email}</span>

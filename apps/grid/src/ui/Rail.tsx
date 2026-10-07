@@ -129,8 +129,8 @@ function ModelNode({ table, open, onOpen, onFold, onNew, actions, holdsActive, c
           : <button type="button" className="nv-model__name" id={label} onClick={onOpen}>{table.label}</button>}
         {!renaming && (
           <span className="nv-model__tools">
-            {onNew && <MoreMenu icon={Plus} label={t('addViewTo', { model: table.label })} menu={t('addViewTo', { model: table.label })} placement="bottom-start" actions={kinds(table, onNew)} />}
             <MoreMenu label={t('moreFor', { model: table.label })} menu={t('moreFor', { model: table.label })} placement="bottom-start" actions={more} />
+            {onNew && <MoreMenu icon={Plus} label={t('addViewTo', { model: table.label })} menu={t('addViewTo', { model: table.label })} placement="bottom-start" actions={kinds(table, onNew)} />}
           </span>
         )}
       </div>

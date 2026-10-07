@@ -230,11 +230,15 @@ describe('the tree', () => {
     expect(within(rail()).queryByRole('button', { name: /^Weergave toevoegen/ })).toBeNull()
   })
 
-  it('carries the keyboard hints and the theme in its foot', () => {
+  it('folds the keyboard hints into one Sneltoetsen item and keeps theme and density on one row in its foot', () => {
     const root = Object.assign(document.createElement('div'), { id: 'root' })
     document.body.append(root)
     render(<Rail tables={groupTables(plainTables, plain)} active="planning" onSelect={() => undefined} />)
     const foot = within(rail()).getByRole('contentinfo')
+    const keys = within(foot).getByText('Sneltoetsen').closest('details')
+    expect(keys?.open).toBe(false)
+    const looks = foot.querySelector('.nv-rail__looks')
+    expect(looks && within(looks as HTMLElement).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Thema', 'Dichtheid'])
 
     for (const hint of ['bewegen', 'bewerken', 'annuleren', 'Ongedaan maken', 'zoeken en springen']) expect(within(foot).getByText(hint)).toBeTruthy()
     for (const key of ['Esc', '⌘Z', '⌘K']) expect(within(foot).getByText(key)).toBeTruthy()

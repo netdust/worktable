@@ -21,7 +21,7 @@
 
 .nv-app {
   display: grid;
-  grid-template-columns: 216px 1fr;
+  grid-template-columns: 268px 1fr;
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
@@ -72,6 +72,8 @@
   height: 30px;
   padding: 0 2px;
   border-radius: var(--radius-sm);
+  color: var(--color-fg-default);
+  font-size: 13.5px;
 }
 
 .nv-model:hover {
@@ -181,7 +183,7 @@
 /* A model's views, indented under it with a guide line. */
 .nv-node > .nv-rail__types {
   position: relative;
-  padding: 1px 0 4px 22px;
+  padding: 1px 0 4px 26px;
 }
 
 .nv-node > .nv-rail__types::before {
@@ -193,7 +195,29 @@
   border-left: 1px solid var(--color-border-default);
 }
 
-#root .nv-views [aria-current="page"] {
+/* A view reads quieter than its model: the same size, regular, muted; the open one in the accent. */
+#root .nv-views .nv-view > button {
+  height: 28px;
+  min-height: 28px;
+  gap: 7px;
+  padding-left: 6px;
+  color: var(--color-fg-muted);
+  font-size: 13.5px;
+  font-weight: 400;
+}
+
+#root .nv-views .nv-view > button:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+#root .nv-views .nv-view > button svg {
+  width: 14px;
+  height: 14px;
+}
+
+#root .nv-views [aria-current="page"],
+#root .nv-views .nv-view > button[aria-current="page"] {
   background: var(--color-bg-selected);
   color: var(--color-accent-default);
   font-weight: 500;
@@ -404,19 +428,56 @@
 }
 
 
-/* The rail's foot: the sheet's keys, then the theme. */
+/* The rail's foot, compact so the tree keeps its height: the keys behind one item, theme and density on one row, the account. */
 .nv-rail__foot {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: auto;
-  padding: 12px 8px 0;
+  margin: auto -6px 0;
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--color-border-subtle);
   color: var(--color-fg-subtle);
   font-size: 12px;
 }
 
-.nv-theme {
-  margin-top: 6px;
+.nv-rail__looks {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+#root .nv-rail__looks .nv-theme > * {
+  gap: 0;
+  padding: 2px;
+}
+
+#root .nv-rail__looks .nv-theme [role="tab"] {
+  padding: 2px 3px;
+  font-size: 10.5px;
+}
+
+.nv-keys > summary {
+  width: max-content;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.nv-keys > summary:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+.nv-keys__list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 8px;
+  margin: 6px 4px 2px;
+}
+
+.nv-keys__list dd {
+  margin: 0;
 }
 
 #root .nv-theme [role="tab"] {

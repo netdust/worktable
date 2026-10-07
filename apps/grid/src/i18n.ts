@@ -68,6 +68,7 @@ const strings = {
   hintEdit: 'bewerken',
   hintCancel: 'annuleren',
   hintSearch: 'zoeken en springen',
+  shortcuts: 'Sneltoetsen',
   changed: 'Gewijzigd',
   addColumn: '+ Kolom',
   hideColumn: 'Verbergen',
