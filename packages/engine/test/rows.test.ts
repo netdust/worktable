@@ -204,6 +204,15 @@ describe('rows', () => {
     expect(inText.body.total).toBe(1)
   })
 
+  // The grid's yes/no chip sends '1' for yes and '' for no.
+  test('a yes/no filter sent as text matches the stored boolean', async () => {
+    const yes = await filtered('taak', { afgerond: true })
+    const no = await filtered('taak', { afgerond: false })
+    expect((await filtered('taak', { afgerond: { $eq: '1' } })).body.total).toBe(yes.body.total)
+    expect((await filtered('taak', { afgerond: { $eq: '' } })).body.total).toBe(no.body.total)
+    expect(no.body.total).toBeGreaterThan(0)
+  })
+
   test('rows with deleted_at set are not returned', async () => {
     sqlite.run("UPDATE taak SET deleted_at = '2026-10-13' WHERE id = 1")
     const { body } = await rows('taak')
