@@ -5,7 +5,7 @@ import { savedView } from './saved-view'
 
 export const MIGRATIONS = '_migrations'
 
-export const BATCH_KINDS = { write: 'write', action: 'action', undo: 'undo', import: 'import' } as const
+export const BATCH_KINDS = { write: 'write', action: 'action', undo: 'undo', import: 'import', seed: 'seed' } as const
 export type BatchKind = keyof typeof BATCH_KINDS
 
 // Keyed by the UUID that revision.batch_id holds; undone_by is the key of the batch that undid it.

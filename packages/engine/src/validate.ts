@@ -154,6 +154,17 @@ function checkActions(domain: Domain): void {
   }
 }
 
+// A config seed never points at demo rows.
+function checkConfig(domain: Domain, dataset: DatasetDecl): void {
+  if (!dataset.config) return
+  for (const [column, decl] of Object.entries(dataset.columns)) {
+    const target = domain.datasets.find((d) => d.name === decl.relation)
+    if (target && !target.config) {
+      throw new DomainError(dataset.name, column, `${column} relates to "${target.name}", which is not config`)
+    }
+  }
+}
+
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
     if (reservedNames.has(source.name)) {
@@ -168,6 +179,7 @@ export function validateDomain(domain: Domain): void {
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
+    checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {

@@ -1,0 +1,255 @@
+import { Database } from 'bun:sqlite'
+import { describe, expect, test } from 'bun:test'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { type Domain, DomainError, defineDataset, migrate, validateDomain } from '../src'
+import { seedMissing } from '../src/seed-missing'
+import { SYSTEM_OWNER } from '../src/views'
+import { contents, send } from './fixture'
+import seedDomain from './fixtures/seed-domain'
+import { signIn, testEngine } from './sign-in'
+
+const TABLES = ['project', 'taak', 'plat', 'note', 'badge', 'kit', 'saved_view', 'revision', 'batch']
+
+const everything = (sqlite: Database) => Object.fromEntries(TABLES.map((t) => [t, contents(sqlite, t)]))
+
+// A migrated database that already holds real (non-config) rows and no seeds.
+function existingDb(): Database {
+  const sqlite = new Database(':memory:')
+  migrate(sqlite, seedDomain)
+  sqlite.run("INSERT INTO project (name) VALUES ('Echt')")
+  sqlite.run("INSERT INTO plat (name) VALUES ('echt')")
+  return sqlite
+}
+
+function insertView(sqlite: Database, owner: number, name: string, source: string, visible: string[]): number {
+  const sql = `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
+               VALUES (?, 'dataset', ?, 'table', '{}', '[]', NULL, ?, ?, 1)`
+  return Number(sqlite.query(sql).run(name, source, JSON.stringify(visible), owner).lastInsertRowid)
+}
+
+const viewsNamed = (sqlite: Database, name: string) =>
+  sqlite.query('SELECT * FROM saved_view WHERE name = ? ORDER BY id').all(name) as Record<string, unknown>[]
+
+describe('seedMissing: config rows', () => {
+  test('a config dataset is seeded when its table is empty, and a non-config dataset is skipped', () => {
+    const sqlite = existingDb()
+    const before = everything(sqlite)
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.datasets).toEqual({
+      project: 'not config',
+      taak: 'not config',
+      plat: 'not config',
+      note: 'not config',
+      badge: 2,
+      kit: 1,
+    })
+    const after = everything(sqlite)
+    for (const table of ['project', 'taak', 'plat', 'note']) expect(after[table]).toEqual(before[table])
+    expect((after.badge as { name: string }[]).map((r) => r.name)).toEqual(['gold', 'silver'])
+    expect(after.kit).toMatchObject([{ name: 'starter', badge_id: 1 }])
+  })
+
+  test('a config table holding rows, or only a deleted row, counts as filled and is skipped', () => {
+    const sqlite = existingDb()
+    sqlite.run("INSERT INTO badge (name, size, maker) VALUES ('oud', 3, 'x')")
+    sqlite.run("INSERT INTO kit (name, badge_id, deleted_at) VALUES ('oud', 1, '2026-01-01T00:00:00Z')")
+    const before = { badge: contents(sqlite, 'badge'), kit: contents(sqlite, 'kit') }
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.datasets).toMatchObject({ badge: 'has rows', kit: 'has rows' })
+    expect({ badge: contents(sqlite, 'badge'), kit: contents(sqlite, 'kit') }).toEqual(before)
+  })
+
+  test('every row goes through its writer as the system owner, with the administrator role', () => {
+    const sqlite = existingDb()
+    seedMissing(sqlite, seedDomain)
+    const badges = sqlite.query('SELECT name, size, maker FROM badge ORDER BY id').all()
+    // size is readonly and derived: the seeded 99 is cut and the writer's length is stored.
+    expect(badges).toEqual([
+      { name: 'gold', size: 4, maker: `${SYSTEM_OWNER}:administrator` },
+      { name: 'silver', size: 6, maker: `${SYSTEM_OWNER}:administrator` },
+    ])
+    const actors = sqlite.query("SELECT DISTINCT actor_id FROM revision WHERE entity IN ('badge', 'kit')").all()
+    expect(actors).toEqual([{ actor_id: SYSTEM_OWNER }])
+  })
+
+  test('validation refuses a config dataset whose relation points at a non-config dataset', () => {
+    const bad = defineDataset({
+      name: 'kit',
+      label: 'Kits',
+      title: 'name',
+      custom: false,
+      config: true,
+      columns: {
+        name: { type: 'text', label: 'Name' },
+        project_id: { type: 'integer', label: 'Project', relation: 'project' },
+      },
+    })
+    const domain: Domain = { ...seedDomain, datasets: [...seedDomain.datasets.filter((d) => d.name !== 'kit'), bad] }
+    expect(() => validateDomain(domain)).toThrow(DomainError)
+    expect(() => validateDomain(domain)).toThrow(/project_id relates to "project", which is not config/)
+  })
+})
+
+describe('seedMissing: one seed batch', () => {
+  test('rows and views are written under one batch of kind seed, by the system owner', () => {
+    const sqlite = existingDb()
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.batch).toMatch(/^[0-9a-f-]{36}$/)
+    expect(contents(sqlite, 'batch')).toMatchObject([{ key: report.batch, kind: 'seed', actor_id: SYSTEM_OWNER }])
+    const batches = sqlite.query('SELECT DISTINCT batch_id FROM revision').all()
+    expect(batches).toEqual([{ batch_id: report.batch }])
+    const entities = sqlite.query('SELECT DISTINCT entity FROM revision ORDER BY entity').all()
+    expect(entities).toEqual([{ entity: 'badge' }, { entity: 'kit' }, { entity: 'saved_view' }])
+  })
+
+  test('POST /batches/:key/undo refuses a seed batch with 422 not_undoable', async () => {
+    const sqlite = existingDb()
+    const { batch } = seedMissing(sqlite, seedDomain)
+    const app = testEngine(sqlite, seedDomain)
+    const asAdmin = send(app, await signIn(app))
+    const before = everything(sqlite)
+    const res = await asAdmin('POST', `/api/batches/${batch}/undo`, { body: '{}' })
+    expect({ status: res.status, code: res.body.code }).toEqual({ status: 422, code: 'not_undoable' })
+    expect(everything(sqlite)).toEqual(before)
+  })
+
+  test('a second run writes nothing and records no batch', () => {
+    const sqlite = existingDb()
+    seedMissing(sqlite, seedDomain)
+    const before = everything(sqlite)
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report).toEqual({
+      datasets: {
+        project: 'not config',
+        taak: 'not config',
+        plat: 'not config',
+        note: 'not config',
+        badge: 'has rows',
+        kit: 'has rows',
+      },
+      views: { added: 0, updated: 0, present: 2 },
+      batch: null,
+    })
+    expect(everything(sqlite)).toEqual(before)
+  })
+})
+
+describe('seedMissing: views', () => {
+  test('a seeded view is added only when no live view with that name and source exists', () => {
+    const sqlite = existingDb()
+    const theirs = insertView(sqlite, 7, 'Open', 'taak', ['day'])
+    insertView(sqlite, 7, 'Badges', 'plat', ['name'])
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.views).toEqual({ added: 1, updated: 0, present: 1 })
+    expect(viewsNamed(sqlite, 'Open').map((v) => v.id)).toEqual([theirs])
+    const badges = viewsNamed(sqlite, 'Badges')
+    expect(badges.map((v) => [v.source, v.owner_id, v.shared])).toEqual([
+      ['plat', 7, 1],
+      ['badge', SYSTEM_OWNER, 1],
+    ])
+    expect(JSON.parse(badges[1]?.visible_fields as string)).toEqual(['name', 'size'])
+  })
+
+  test('a view owned by anyone else is left alone, even when it differs from the declaration', () => {
+    const sqlite = existingDb()
+    insertView(sqlite, 7, 'Open', 'taak', ['day'])
+    const before = viewsNamed(sqlite, 'Open')
+    seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+  })
+
+  test('a system-owned view is brought up to its current declaration, and revised', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
+    const report = seedMissing(sqlite, seedDomain)
+    expect(report.views).toEqual({ added: 1, updated: 1, present: 0 })
+    const [open] = viewsNamed(sqlite, 'Open')
+    expect(open).toMatchObject({
+      id,
+      owner_id: SYSTEM_OWNER,
+      visible_fields: '["description"]',
+      filters: '{"status":"open"}',
+      sort: '["start_at"]',
+      group_by: 'day',
+    })
+    const revised = sqlite
+      .query("SELECT field, old, new, actor_id, batch_id FROM revision WHERE entity = 'saved_view' AND record_id = ?")
+      .all(id) as Record<string, unknown>[]
+    expect(revised.map((r) => r.field).sort()).toEqual(['filters', 'group_by', 'sort', 'visible_fields'])
+    expect(revised.every((r) => r.actor_id === SYSTEM_OWNER && r.batch_id === report.batch)).toBe(true)
+  })
+})
+
+const SERVE = join(import.meta.dir, '..', 'src', 'serve.ts')
+const fixtureDomain = (file: string) => join(import.meta.dir, 'fixtures', file)
+
+async function cli(domainFile: string, db: string, ...args: string[]) {
+  const proc = Bun.spawn(['bun', SERVE, '--domain', fixtureDomain(domainFile), '--db', db, ...args], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const code = await proc.exited
+  return { code, out: await new Response(proc.stdout).text(), err: await new Response(proc.stderr).text() }
+}
+
+function existingFile(): string {
+  const db = join(mkdtempSync(join(tmpdir(), 'wt-seed-missing-')), 'db.sqlite')
+  const sqlite = new Database(db, { create: true })
+  migrate(sqlite, seedDomain)
+  sqlite.run("INSERT INTO project (name) VALUES ('Echt')")
+  sqlite.close()
+  return db
+}
+
+function fileContents(db: string) {
+  const sqlite = new Database(db)
+  const all = everything(sqlite)
+  sqlite.close()
+  return all
+}
+
+describe('serve.ts --seed-missing', () => {
+  test('seeds what is missing, logs counts only and exits 0 without serving', async () => {
+    const db = existingFile()
+    const result = await cli('seed-domain.ts', db, '--seed-missing')
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('seed-missing: badge 2 rows')
+    expect(result.out).toContain('seed-missing: kit 1 row\n')
+    expect(result.out).toContain('seed-missing: project skipped (not config)')
+    expect(result.out).toContain('seed-missing: views 2 added, 0 updated, 0 present')
+    expect(result.out).not.toContain('gold')
+    expect(result.out).not.toContain('listening')
+    expect(fileContents(db).badge).toHaveLength(2)
+  }, 20_000)
+
+  test('a second run writes nothing and logs only skips', async () => {
+    const db = existingFile()
+    await cli('seed-domain.ts', db, '--seed-missing')
+    const before = fileContents(db)
+    const result = await cli('seed-domain.ts', db, '--seed-missing')
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('seed-missing: badge skipped (has rows)')
+    expect(result.out).toContain('seed-missing: views 0 added, 0 updated, 2 present')
+    expect(fileContents(db)).toEqual(before)
+  }, 20_000)
+
+  test('one refused row writes nothing, and the command exits 1 naming the dataset and the row', async () => {
+    const db = existingFile()
+    const before = fileContents(db)
+    const result = await cli('seed-refusal-domain.ts', db, '--seed-missing')
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('seed-missing refused: badge row 2: a badge may not be called bad')
+    expect(fileContents(db)).toEqual(before)
+  }, 20_000)
+
+  test('is refused together with --fresh, and the file is left as it was', async () => {
+    const db = existingFile()
+    const before = fileContents(db)
+    const result = await cli('seed-domain.ts', db, '--seed-missing', '--fresh')
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('--seed-missing cannot be combined with --fresh')
+    expect(fileContents(db)).toEqual(before)
+  }, 20_000)
+})

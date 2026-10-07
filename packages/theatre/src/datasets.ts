@@ -178,6 +178,7 @@ export const rol = defineDataset({
   label: 'Rollen',
   title: 'naam',
   custom: true,
+  config: true,
   columns: {
     naam: { type: 'text', label: 'Naam' },
     categorie: {
@@ -217,6 +218,7 @@ export const sjabloon = defineDataset({
   label: 'Sjablonen',
   title: 'naam',
   custom: true,
+  config: true,
   columns: {
     naam: { type: 'text', label: 'Naam' },
     items: { type: 'json', label: 'Items' },

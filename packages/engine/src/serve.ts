@@ -9,6 +9,7 @@ import { importExport, readExportFile } from './import'
 import { migrate, seedDomain } from './migrate'
 import { MigrationError } from './migration-error'
 import { ApiError } from './params'
+import { SeedRefused, seedLines, seedMissing } from './seed-missing'
 
 const { values } = parseArgs({
   options: {
@@ -29,6 +30,7 @@ const { values } = parseArgs({
     as: { type: 'string' },
     report: { type: 'string' },
     'accept-report': { type: 'boolean', default: false },
+    'seed-missing': { type: 'boolean', default: false },
   },
 })
 
@@ -43,11 +45,19 @@ if (!values.domain || !values.db) {
       '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
       '   | --disable-account <email>]\n' +
-      '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]',
+      '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]\n' +
+      '  [--seed-missing]',
   )
 }
 if (values.import && (values['create-admin'] || values['create-account'] || values['disable-account'])) {
   fail('--import cannot be combined with --create-admin, --create-account or --disable-account: run them one at a time')
+}
+if (values['seed-missing'] && values.fresh) fail('--seed-missing cannot be combined with --fresh')
+if (
+  values['seed-missing'] &&
+  (values.import || values['create-admin'] || values['create-account'] || values['disable-account'])
+) {
+  fail('--seed-missing cannot be combined with --import or an account command: run them one at a time')
 }
 // The Host allowlist names these two; any other address would need a mailer, and 0e has none.
 if (!['127.0.0.1', 'localhost'].includes(values.hostname)) {
@@ -156,7 +166,19 @@ function runImportCommand(): number | null {
   }
 }
 
-const code = runAccountCommand() ?? runImportCommand()
+function runSeedMissingCommand(): number | null {
+  if (!values['seed-missing']) return null
+  try {
+    for (const line of seedLines(seedMissing(sqlite, domain))) console.log(line)
+    return 0
+  } catch (err) {
+    if (!(err instanceof SeedRefused)) throw err
+    console.error(`seed-missing refused: ${err.message}`)
+    return 1
+  }
+}
+
+const code = runAccountCommand() ?? runImportCommand() ?? runSeedMissingCommand()
 if (code !== null) {
   sqlite.close()
   process.exit(code)

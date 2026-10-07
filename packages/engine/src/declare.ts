@@ -41,6 +41,8 @@ export interface DatasetDecl {
   custom: boolean
   matrix?: MatrixDecl
   owners?: Owners
+  /** Its seed rows are configuration, not demo data: --seed-missing writes them into an existing database. */
+  config?: boolean
   /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
   checks?: string[]
 }
