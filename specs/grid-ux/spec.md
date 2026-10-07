@@ -147,6 +147,23 @@ A model's `…` menu holds Naam wijzigen, Icoon wijzigen, Exporteren and In-/Uit
 
 Source: Stefan, 2026-10-07: "that ... menu should hold rename, change icon, duplicate, export... stuff like that"; "agreed, option a, add task 10".
 
+### R10. The details pass (Stefan, 2026-10-07: "its the details, colors, icons etc…")
+From the side-by-side comparison of the prototype and the tool:
+1. **Dutch throughout.** The page language is `nl`, so dates read "maandag 2 november", "ma 02/11" and "Week 45 · 2–8 nov". The grid's default strings are Dutch (Vorige/Volgende, Zoeken, Groeperen, Kolommen, rijen, Totaal …).
+2. **Time ranges.** In a day group a timed row shows `13:00–14:00` in monospace with the end muted. An untimed row shows a dashed "zonder tijd" pill. `dagplanning` gains `eind_at`.
+3. **Soort.** It shows its label with a coloured square. A column may declare a colour per option from a fixed, generic palette (the same mechanism as Task 9's tones). Theatre colours each soort as in the prototype. A query column that writes to a dataset column takes that column's tones, so Dagplanning's status pills are coloured too.
+4. **Dagplanning's default columns.** In order: #, Tijd, Omschrijving, Soort, Locatie, Status. Productie and "Locatie van" are hidden. On an existing database the system view is brought up to date by `--seed-missing`.
+5. **The tree.**
+   - A model reads stronger than its views: model 13.5px weight 500; view 13.5px weight 400, muted, 28px rows.
+   - Every model has its own icon. A source may declare a default icon from the generic set, and an administrator's choice (Task 10) wins.
+6. **The filter bar.** One chip style, with icons, tinted when set: "Groep: plandag", "Start ↑", "Kolommen", "Filter".
+7. **Scope chip.** When a production is selected, a tinted chip that cannot be removed reads "<Space label> is <name>" (theatre: "Productie is Nachtwacht"), and the scoped column is hidden. This reverses the plan's earlier "strip the chip" (Stefan, 2026-10-07).
+8. **The "via" tag** is lower-case ("via speelreeks") and never clipped. "Locatie van" leaves the default view.
+9. **Title and week navigator.**
+   - The h1 is 19px, with the view icon in a 30px tile.
+   - The week navigator is one bordered control: "‹ Week 45 · 2–8 nov ›".
+10. **Create from a query.** A query may declare `creates: '<dataset>'`. Its `+ Nieuw` then creates a row in that dataset ("Nieuwe activiteit"), and the query reloads (Stefan, 2026-10-07).
+
 ## Out
 - The Dagkolommen layout (a column per day). It waits until Stefan has used the new table (2026-10-07: "Not now, table first").
 - Per-model row counts in the tree.

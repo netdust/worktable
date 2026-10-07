@@ -289,3 +289,39 @@
     - a rename and an icon change update the tree;
     - Exporteren calls the existing export for the open view.
 - [ ] Implement, RED first for the denials. Run the tests and the gate. Commit `feat: an administrator renames a model or changes its icon; the model menu exports`.
+
+### Task 11a (Stefan 2026-10-07): details — engine and theatre declarations (spec R10)
+**Files:**
+- Engine:
+  - `ColumnDecl.tones` accepts the generic palette `ok | warn | bad | rose | violet | amber | sky | slate | green | teal | grey` (extends Task 9);
+  - a mapped query column (`writes`) takes its target column's `options` and `tones` in `/schema`;
+  - a source may declare `icon` (from Task 10's generic set; an administrator's `source_display.icon` wins);
+  - a query may declare `creates: '<dataset>'`, validated as a dataset with a writer and served.
+- Theatre:
+  - `dagplanning` gains `eind_at` (SQL plus a column) and labelled `soort` options;
+  - `activiteit.soort` and `dagplanning.soort` declare a colour per soort, as in the prototype;
+  - every source declares a default icon;
+  - `dagplanning` declares `creates: 'activiteit'`;
+  - the seeded "Dagplanning" view's `visible_fields` and order become `start_at`, `omschrijving`, `soort`, `locatie_id`, `status`, with `productie` and `locatie_bron` hidden.
+- Tests (engine and theatre):
+  - validation of each new key;
+  - `/schema` serves them, and an owner never sees what they cannot read;
+  - the mapped status column on dagplanning carries tones;
+  - `--seed-missing` updates the system Dagplanning view.
+- [ ] Implement, RED first. Run the gate. Commit `feat: default icons, a colour palette, create-from-query; Dagplanning carries its end time`.
+
+### Task 11b (Stefan 2026-10-07): details — the grid (spec R10)
+**Files:**
+- `apps/grid/index.html` (`lang="nl"`);
+- `i18n.ts`: the default strings become Dutch; existing tests are updated for the new labels, and the e2e selectors that name English labels ("Next week", "Previous week", "Group by", "New <model>", "Remove filter …") are updated in the same commit;
+- `grid/columns.ts` and `cells`: a time range in a day group, and the "zonder tijd" pill;
+- `Select`: palette colours, with dots and pills;
+- the rail and tree CSS (hierarchy, icons);
+- the toolbar and filter bar (chips; the scope chip; the scoped column hidden; the title tile; the week control);
+- the inherited tag;
+- `+ Nieuw` on a query with `creates`.
+- Tests:
+  - unit tests per item;
+  - an e2e check at 1440×900, in Dutch, that Dagplanning on an applied speeldag shows "13:00–14:00", "Maaltijd" with its colour, "Productie is Nachtwacht" when scoped, and "Nieuwe activiteit" creating a row;
+  - a screenshot side-by-side with the prototype, taken by the controller after the task.
+- [ ] Implement. Run the gate three times. Commit (may split) `feat(grid): the details pass — Dutch, time ranges, colours, icons, chips, title`.
