@@ -8,7 +8,7 @@ test.use({ storageState: state('admin'), viewport: { width: 1280, height: 800 } 
 test('title-line-reads-in-full @e2e', async ({ page }) => {
   await page.goto('/#from=2026-10-12')
   await page.reload()
-  await openView(page, 'Dagplanning')
+  await openView(page, 'Dagplanning', 'Activiteiten')
   const title = page.getByRole('heading', { level: 1, name: 'Dagplanning' })
   await expect(title).toBeVisible()
   await expect(page.getByText(/^\d+ rijen · \d+ groepen$/)).toBeVisible()
@@ -24,7 +24,7 @@ test('title-line-reads-in-full @e2e', async ({ page }) => {
 test('title-line-fits-at-1280 @e2e', async ({ page }) => {
   await page.goto('/#from=2026-10-12')
   await page.reload()
-  await openView(page, 'Dagplanning')
+  await openView(page, 'Dagplanning', 'Activiteiten')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   const toolbar = page.locator('header.nv-toolbar')
   await expect(page.getByRole('button', { name: 'Nieuwe activiteit' })).toBeInViewport({ ratio: 1, timeout: 2000 })

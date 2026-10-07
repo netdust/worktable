@@ -77,6 +77,13 @@ function checkCreates(domain: Domain, query: QueryDecl): void {
   }
 }
 
+function checkOf(domain: Domain, query: QueryDecl): void {
+  const dataset = query.of
+  if (dataset !== undefined && !domain.datasets.some((d) => d.name === dataset)) {
+    throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
+  }
+}
+
 function checkOwners(source: DatasetDecl | QueryDecl): void {
   const column = source.owners?.owner
   if (column === undefined || column === 'id' || source.columns[column]?.relation) return
@@ -236,7 +243,9 @@ function checkSections(domain: Domain): void {
   const seen = new Set<string>()
   for (const { label, sources } of domain.sections ?? []) {
     for (const name of sources) {
-      if (!sourceOf(domain, name)) throw new DomainError(label, name, `section lists unknown source "${name}"`)
+      const source = sourceOf(domain, name)
+      if (!source) throw new DomainError(label, name, `section lists unknown source "${name}"`)
+      if (source.kind === 'query') throw new DomainError(label, name, `section lists query "${name}"; only datasets`)
       if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
       seen.add(name)
     }
@@ -286,6 +295,7 @@ export function validateDomain(domain: Domain): void {
   }
   for (const query of domain.queries) {
     checkCreates(domain, query)
+    checkOf(domain, query)
     for (const [column, decl] of Object.entries(query.columns)) {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }

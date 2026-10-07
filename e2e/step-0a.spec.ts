@@ -116,7 +116,7 @@ test('planning-status-filter', async ({ page }) => {
 test('query-view-loads', async ({ page }) => {
   await page.goto(WEEK)
   const response = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/rows/productie_dag')
-  await openView(page, 'Per productie per dag')
+  await openView(page, 'Per productie per dag', 'Activiteiten')
   expect((await response).status()).toBe(200)
 
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()

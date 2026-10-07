@@ -24,7 +24,7 @@ import { Search } from './Search'
 import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
 import { Toast, useNotice } from './Toast'
-import { type Table, tableOf } from './tables'
+import type { Table } from './tables'
 import { type Shown, Toolbar } from './Toolbar'
 import { ViewPanel } from './ViewPanel'
 import { useFilterNames } from './useFilterNames'
@@ -199,7 +199,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   useEffect(() => {
     if (settled && view && view.key !== activeKey) setActive(view.key)
   }, [settled, view?.key, activeKey])
-  const title = tableOf(tables, view?.key)?.label ?? t('viewsShown')
+  // Named by the view's own source: a query's view sits under another model's node and keeps the query's name.
+  const title = declared.find((table) => table.key === view?.table)?.label ?? t('viewsShown')
   const dated = Boolean(view?.date_field)
   const [space, select] = useSpace(served?.space)
   const scoped = space.status !== 'none' && view?.space === 'scoped'

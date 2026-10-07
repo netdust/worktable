@@ -18,16 +18,22 @@ export interface Section {
   tables: Table[]
 }
 
-/** The declared tables in their order, each with its views; a table without a view is kept, `+` makes its first. */
+/**
+ * The declared tables in their order, each with its views; a table without a view is kept, `+` makes its first.
+ * A query read `of` a table gets no node: its views follow that table's own, in the declared query order.
+ */
 export function groupTables(tables: TableDef[], views: View[]): Table[] {
-  return tables.map((table): Table => ({
+  const keys = new Set(tables.map((table) => table.key))
+  const under = (table: TableDef) => table.of !== undefined && keys.has(table.of)
+  const viewsOf = (key: string) => views.filter((view) => view.table === key)
+  return tables.filter((table) => !under(table)).map((table): Table => ({
     key: table.key,
     label: table.label,
     space: table.space === 'scoped' ? 'scoped' : 'global',
     types: table.types,
     ...(table.query ? { query: true } : {}),
     ...(table.icon ? { icon: table.icon } : {}),
-    views: views.filter((view) => view.table === table.key),
+    views: [table, ...tables.filter((query) => query.of === table.key)].flatMap((source) => viewsOf(source.key)),
   }))
 }
 
@@ -43,8 +49,8 @@ export function sectionsOf(tables: Table[], served: Schema['sections'] = []): Se
 }
 
 /** The tables in the order their first view comes, the rest as declared after them: the engine declares every source, the saved views say which the rail starts with. */
-export function byFirstView(tables: TableDef[], views: View[]): TableDef[] {
-  const first = (table: TableDef) => {
+export function byFirstView<T extends { key: string }>(tables: T[], views: View[]): T[] {
+  const first = (table: T) => {
     const at = views.findIndex((view) => view.table === table.key)
     return at < 0 ? views.length : at
   }

@@ -158,14 +158,14 @@ test('switch-production @e2e', async ({ page }) => {
 
   // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
   const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
-  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning'))).toEqual(nachtwacht)
+  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning', 'Activiteiten'))).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
 
   // Kept in this browser: a reload still works in Nachtwacht.
   const reload = async () => {
     await page.reload()
     await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
-    await pick(page, 'Dagplanning')
+    await pick(page, 'Dagplanning', 'Activiteiten')
   }
   expect(await scopeAsked(page, 'dagplanning', reload)).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
@@ -183,7 +183,7 @@ test('switch-production @e2e', async ({ page }) => {
 
 test('tree-fold-and-hover @e2e', async ({ page }) => {
   await land(page, `/#from=${SEED_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   const node = modelNode(page, 'Tourstops')
   const row = node.locator('.nv-model')
   const tools = row.locator('.nv-model__tools')
@@ -325,7 +325,7 @@ const facts = (band: Locator) => band.locator('.nv-group__fact')
 test('fold-day-band @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e vouwen', FOLD_WEEK)
   await land(page, `/#from=${FOLD_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   // Row numbers lead every row, and subtle dividers stand between the cells (Stefan, 2026-10-07).
@@ -346,7 +346,7 @@ test('fold-day-band @e2e', async ({ page }) => {
 
   // Kept per view in this browser.
   await page.reload()
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(bands(page)).toHaveCount(4)
   await expect(bands(page).first()).toHaveAttribute('aria-expanded', 'false')
   await expect(gridRows(page)).toHaveCount(21)
@@ -362,7 +362,7 @@ test('fold-day-band @e2e', async ({ page }) => {
 test('band-facts @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e feiten', FACTS_WEEK)
   await land(page, `/#from=${FACTS_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   for (const band of await bands(page).all()) {
@@ -391,7 +391,7 @@ test('inherited-venue @e2e', async ({ page }) => {
   }
 
   await land(page, `/#from=${INHERIT_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(29)
   const locatie = await columnIndex(page, 'Locatie')
 
@@ -475,7 +475,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
   await land(page, `/#from=${DETAILS_WEEK}`)
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
   await switchTo(page, 'Alle producties', 'Nachtwacht')
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
 
   // R10.9: one bordered week control with the ISO week.
@@ -507,7 +507,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
   await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveText('Productie is Nachtwacht')
 
   // R10.5: a model reads stronger than its views.
-  const node = modelNode(page, 'Dagplanning')
+  const node = modelNode(page, 'Activiteiten')
   await expect(node.locator('.nv-model__name')).toHaveCSS('font-weight', '500')
   const view = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: 'Dagplanning', exact: true })
   await expect(view).toHaveCSS('font-size', '13.5px')
@@ -687,7 +687,7 @@ test.describe
     test('read-limit-cut @e2e', async ({ page }) => {
       expect(ids).toHaveLength(MAX_READ + 1)
       await land(page, `/#from=${CUT_WEEK}`)
-      await pick(page, 'Dagplanning')
+      await pick(page, 'Dagplanning', 'Activiteiten')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
@@ -700,7 +700,7 @@ test.describe
     // Shake-out row 19: the bar's count and the grid's foot say 5000+ like the title line.
     test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
       await land(page, `/#from=${CUT_WEEK}`)
-      await pick(page, 'Dagplanning')
+      await pick(page, 'Dagplanning', 'Activiteiten')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen`)

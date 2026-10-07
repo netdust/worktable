@@ -6,6 +6,7 @@ const count = (label: string) => ({ type: 'integer' as const, label })
 
 export const productieDag = defineQuery({
   name: 'productie_dag',
+  of: 'activiteit',
   label: 'Per productie per dag',
   icon: 'table',
   title: 'productie',
@@ -34,6 +35,7 @@ const writesActiviteit = (field: string) => ({ dataset: 'activiteit', field, key
 
 export const dagplanning = defineQuery({
   name: 'dagplanning',
+  of: 'activiteit',
   label: 'Dagplanning',
   icon: 'query',
   title: 'omschrijving',
@@ -74,6 +76,7 @@ export const dagplanning = defineQuery({
 
 export const voorstellingen = defineQuery({
   name: 'voorstellingen',
+  of: 'activiteit',
   label: 'Voorstellingen',
   icon: 'table',
   title: 'productie',

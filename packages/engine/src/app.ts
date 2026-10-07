@@ -100,6 +100,11 @@ function createsOf(domain: Domain, source: Source, actor: Actor): { creates?: st
   return target && readable(actor, target) ? { creates: target.name } : {}
 }
 
+function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string } {
+  const target = source.kind === 'query' && source.of ? sourceOf(domain, source.of) : null
+  return target && readable(actor, target) ? { of: target.name } : {}
+}
+
 export interface EngineOptions {
   port: number
   appUrl?: string
@@ -162,6 +167,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),
+            ...ofOf(domain, s, actor),
             ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
               ? { new_label: s.new_label }
               : {}),

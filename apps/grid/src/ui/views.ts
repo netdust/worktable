@@ -120,12 +120,22 @@ export function currentOf(view: View): Arrangement {
   return localOf(view) ?? arrangementOf(view)
 }
 
-/** A table's views: the starting ones, then its saved ones by creation, re-ordered by `order`; the rest after it. */
-export function listFor(table: Table, saved: SavedView[], order: string[]): View[] {
-  const all: View[] = [...table.views.filter((view) => !isSaved(view)), ...saved.filter((view) => view.table === table.key)]
+/** A list's block: a source's starting views, then its saved ones by creation, re-ordered by `order`; the rest after it. */
+function blockOf(starting: View[], saved: SavedView[], order: string[]): View[] {
+  const all = [...starting, ...saved]
   const named = order.map((key) => all.find((view) => view.key === key)).filter((view): view is View => view !== undefined)
   const first = [...new Set(named)]
   return [...first, ...all.filter((view) => !first.includes(view))]
+}
+
+/** A table's views: its own block, then each query's; each in the order kept for its own source. */
+export function listFor(table: Table, saved: SavedView[], order: Record<string, string[]>): View[] {
+  const sources = [...new Set([table.key, ...table.views.map((view) => view.table)])]
+  return sources.flatMap((source) => blockOf(
+    table.views.filter((view) => !isSaved(view) && view.table === source),
+    saved.filter((view) => view.table === source),
+    order[source] ?? [],
+  ))
 }
 
 export type Edge = 'before' | 'after'

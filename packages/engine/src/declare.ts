@@ -101,6 +101,8 @@ export interface QueryDecl {
   icon?: Icon
   /** The dataset a new row from this query is created in. */
   creates?: string
+  /** The dataset this query reads: the grid lists its views under that dataset. */
+  of?: string
 }
 
 export interface SavedViewSeed {

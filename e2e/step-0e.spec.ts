@@ -416,7 +416,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   }
 
   await land(page, WEEK)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   const row = () => named(page, 'dagplanning undo e2e')
   const moved = patchOf(page, 'activiteit')
   await typeInto(await cellOf(page, row(), 'Tijd'), '2026-10-15T20:00')
@@ -430,7 +430,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
 
   await page.reload()
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
   expect(await datumOf()).toBe('2026-10-13')
 })

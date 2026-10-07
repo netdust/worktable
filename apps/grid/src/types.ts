@@ -74,6 +74,8 @@ export interface TableDef {
   space?: 'scoped' | 'global'
   /** A query's rows: joined, never created. */
   query?: boolean
+  /** The dataset a query reads: its views sit under that table in the rail. */
+  of?: string
   /** An administrator's pick from the engine's icon set; absent, the tree shows the kind's icon. */
   icon?: string
   /** What a group's band says of its rows, computed by the grid. */

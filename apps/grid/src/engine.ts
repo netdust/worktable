@@ -52,6 +52,8 @@ export interface EngineSource {
   icon?: string | null
   /** A query's new rows are created in this dataset. */
   creates?: string
+  /** The dataset a query reads; served only to a caller who can read it. */
+  of?: string
   /** The words of the button that adds a row, while the dataset keeps its declared name. */
   new_label?: string
   group_facts?: GroupFact[]
@@ -178,6 +180,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.date ? { date_field: source.date } : {}),
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
+    ...(source.of ? { of: source.of } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: ['grid'],

@@ -108,6 +108,22 @@ describe('toSchema: space, sections, facts and inherited', () => {
   })
 })
 
+describe('toSchema: a query over a dataset', () => {
+  const over: EngineSchema = { sources: { ...engine.sources, productie_dag: { ...engine.sources.productie_dag, of: 'activiteit' } } }
+
+  it("carries `of` onto the query's table and its saved views, and keeps the view's table and model the query", () => {
+    const table = toSchema(over).tables.find((t) => t.key === 'productie_dag')
+    const [view] = toSavedViews([views[1]], over.sources)
+
+    expect(table?.of).toBe('activiteit')
+    expect([view.of, view.table, view.model]).toEqual(['activiteit', 'productie_dag', 'productie_dag'])
+  })
+
+  it('carries no `of` where the engine serves none', () => {
+    expect(toSchema(engine).tables.map((t) => t.of)).toEqual([undefined, undefined, undefined])
+  })
+})
+
 describe('toSchema', () => {
   it("maps a dataset's columns to model fields by type", () => {
     const fields = toSchema(engine).models.activiteit.fields

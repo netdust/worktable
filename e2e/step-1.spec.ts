@@ -235,7 +235,7 @@ test('apply-template @e2e', async ({ page }) => {
   }
 
   await page.keyboard.press('Escape')
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   // Grouped by plandag: one group a day, each the whole pattern at its times, the venue the Speelreeks's.
   const groups = await dayGroups(page)
@@ -256,7 +256,7 @@ test('apply-template @e2e', async ({ page }) => {
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: reeks?.id })).toHaveLength(0)
 
   await page.reload()
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
   await expect(gridRows(page)).toHaveCount(0)
 })
@@ -335,7 +335,7 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   const startOf = async () => (await rowsOf<Values>(page.request, 'activiteit', { id }))[0].start_at
 
   await land(page, `/#from=${UNDO_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   const savedA = patchOf(page, 'activiteit')
   await typeInto(await cellOf(page, named(page, omschrijving), 'Tijd'), `${datum}T10:00`)
   expect((await savedA).status()).toBe(200)
@@ -343,7 +343,7 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   const other = await browser.newContext({ baseURL: THEATRE.app, storageState: state('admin') })
   const b = await other.newPage()
   await land(b, `/#from=${UNDO_WEEK}`)
-  await pick(b, 'Dagplanning')
+  await pick(b, 'Dagplanning', 'Activiteiten')
   const savedB = patchOf(b, 'activiteit')
   await typeInto(await cellOf(b, named(b, omschrijving), 'Tijd'), `${datum}T11:00`)
   expect((await savedB).status()).toBe(200)
@@ -359,7 +359,7 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   await expect(page.getByText('Start is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
 
   await page.reload()
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(await cellOf(page, named(page, omschrijving), 'Tijd')).toHaveText('11:00')
   expect(await startOf()).toBe(`${datum}T11:00`)
 })
@@ -440,7 +440,7 @@ test('dagplanning-locatie-van @e2e', async ({ page }) => {
   await idOf(api, 'activiteit', { ...base, omschrijving: 'bron geen' })
 
   await land(page, `/#from=${week}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   // "Locatie van" left the default view (R10); the grid shows the venue, the query still serves where it comes from.
   const seen = async (title: string) => {
     const [row] = await rowsOf<Values>(api, 'dagplanning', { omschrijving: title })
@@ -482,7 +482,7 @@ async function appliedInDagplanning(page: Page, naam: string, week: string, days
   await pick(page, 'Tourstops')
   expect((await applyInDrawer(page, naam)).status()).toBe(201)
   await page.keyboard.press('Escape')
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await (await cellOf(page, gridRows(page).first(), 'Soort')).click()
   return id
 }

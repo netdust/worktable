@@ -207,7 +207,7 @@ test('view-saved-after-reload', async ({ page }) => {
 test('view-delete-undo', async ({ page }) => {
   const copy = 'Dagplanning (kopie)'
   expect((await views(page)).map((v) => v.name)).not.toContain(copy)
-  await open(page, 'Dagplanning', page.getByRole('grid', { name: 'Dagplanning' }))
+  await open(page, 'Dagplanning', page.getByRole('grid', { name: 'Dagplanning' }), 'Activiteiten')
   await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
@@ -327,7 +327,7 @@ test.describe('foreign-view-hidden', () => {
     await page.goto(WEEK)
     const nav = page.getByRole('navigation', { name: 'Views' })
     await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toBeVisible()
-    await expect(modelNode(page, 'Dagplanning')).toBeVisible()
+    await expect(modelNode(page, 'Activiteiten')).toBeVisible()
     await expect(nav.getByRole('button', { name })).toHaveCount(0)
     await expect(page.getByText(name)).toHaveCount(0)
   })

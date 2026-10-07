@@ -2,7 +2,7 @@ import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'rea
 import { createView, deleteView, restoreView, savePrefs, savedViews, updateView } from '../api'
 import { errorText, t } from '../i18n'
 import type { ApiError, Prefs, SavedView, TableDef, View, ViewType } from '../types'
-import { byFirstView, type Table, groupTables } from './tables'
+import { byFirstView, type Table, groupTables, tableOf } from './tables'
 import type { Notice } from './Toast'
 import { arrangementOf, blank, clearIfSent, copyKept, currentOf, forget, isSaved, keepLocal, lastIn, listFor, localOf, toStored } from './views'
 
@@ -49,7 +49,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   }, [prefs])
 
   const tables: Table[] = useMemo(
-    () => groupTables(byFirstView(declared, [...starting, ...saved]), [...starting, ...saved]).map((table) => ({ ...table, views: listFor(table, saved, prefs.order[table.key] ?? []) })),
+    () => byFirstView(groupTables(declared, [...starting, ...saved]), [...starting, ...saved]).map((table) => ({ ...table, views: listFor(table, saved, prefs.order) })),
     [declared, starting, saved, prefs.order],
   )
 
@@ -63,8 +63,11 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     setPrefs(change)
   }
   const order = (table: string, keys: string[]) => changePrefs((current) => ({ ...current, order: { ...current.order, [table]: keys } }))
-  const remember = (view: View) =>
-    changePrefs((current) => (current.last[view.table] === view.key ? current : { ...current, last: { ...current.last, [view.table]: view.key } }))
+  /** Kept by the rail node the view sits under: a query's view under the table it reads. */
+  const remember = (view: View) => {
+    const node = view.of ?? view.table
+    changePrefs((current) => (current.last[node] === view.key ? current : { ...current, last: { ...current.last, [node]: view.key } }))
+  }
   /** A click on a table: the view last used there, else the first in this user's order. */
   const openTable = (table: Table) => {
     const view = lastIn(table, prefs.last)
@@ -81,11 +84,11 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     open(created.key)
   }
   const startingOf = (table: string, type: ViewType) =>
-    tables.find((t) => t.key === table)?.views.find((v) => !isSaved(v) && (v.type ?? 'grid') === type)
-  /** When the open view goes: the next of its table, else the first of any. */
+    tables.flatMap((t) => t.views).find((v) => !isSaved(v) && v.table === table && (v.type ?? 'grid') === type)
+  /** When the open view goes: the next under its rail node, else the first of any. */
   const leave = (gone: View, to?: View) => {
     if (active.current !== gone.key) return
-    const next = to ?? tables.find((t) => t.key === gone.table)?.views.find((v) => v.key !== gone.key) ?? tables[0]?.views[0]
+    const next = to ?? tableOf(tables, gone.key)?.views.find((v) => v.key !== gone.key) ?? tables[0]?.views[0]
     if (next) open(next.key)
   }
   const refresh = () => savedViews().then(setSaved, () => undefined)

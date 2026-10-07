@@ -326,3 +326,39 @@ describe("a model's ⋯: name, icon, export", () => {
     expect(tree().querySelector('b')).toBeNull()
   })
 })
+
+describe("a query's views under its model", () => {
+  const def = (key: string, label: string, extra: Partial<TableDef> = {}): TableDef => ({ key, label, model: key, types: ['grid'], ...extra })
+  const v = (key: string, label: string, table: string, extra: Partial<View> = {}): View => ({ key, label, model: table, table, ...extra })
+  const query = { query: true, of: 'activiteit' }
+  const tables = groupTables([
+    def('activiteit', 'Activiteiten'),
+    def('dagplanning', 'Dagplanning', query),
+    def('productie_dag', 'Per productie per dag', query),
+    def('voorstellingen', 'Voorstellingen', query),
+    def('losse', 'Losse query', { query: true }),
+  ], [
+    v('voorstellingen', 'Voorstellingen', 'voorstellingen', query),
+    v('activiteiten', 'Activiteiten', 'activiteit'),
+    v('dag', 'Dagplanning', 'dagplanning', query),
+    v('pdag', 'Per productie per dag', 'productie_dag', query),
+    v('los', 'Losse query', 'losse', { query: true }),
+  ])
+
+  it('lists no query with `of` as a node; its views end the model\'s list in the declared order, each with the query icon', () => {
+    render(<Rail tables={tables} active="activiteiten" onSelect={() => undefined} />)
+
+    expect(models(tree())).toEqual(['Activiteiten', 'Losse query'])
+    expect(within(views('Activiteiten')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Activiteiten', 'Dagplanning', 'Per productie per dag', 'Voorstellingen'])
+    for (const name of ['Dagplanning', 'Per productie per dag', 'Voorstellingen']) {
+      expect(view('Activiteiten', name).querySelector('.lucide-combine')).toBeTruthy()
+    }
+    expect(view('Activiteiten', 'Activiteiten').querySelector('.lucide-combine')).toBeNull()
+  })
+
+  it('keeps a query without `of` as a node of its own', () => {
+    render(<Rail tables={tables} active="los" onSelect={() => undefined} />)
+
+    expect(within(views('Losse query')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Losse query'])
+  })
+})

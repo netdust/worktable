@@ -115,12 +115,12 @@ describe('validateDomain refuses a bad space, section, fact or inherited column'
   })
 })
 
-async function schemaOf(domain: Domain, role: 'owner' | 'editor'): Promise<Schema> {
+async function schemaOf(domain: Domain, role: 'owner' | 'editor', owner = 'member'): Promise<Schema> {
   const sqlite = new Database(':memory:')
   migrate(sqlite, domain)
   seedDomain(sqlite, domain)
   const app = testEngine(sqlite, domain)
-  const subject = role === 'owner' ? { dataset: 'member', id: 1 } : null
+  const subject = role === 'owner' ? { dataset: owner, id: 1 } : null
   const cookie = await signIn(app, role, subject)
   const res = await app.request('/api/schema', { headers: { host: '127.0.0.1:4310', cookie } })
   expect(res.status).toBe(200)
@@ -132,7 +132,7 @@ describe('/schema serves the declarations', () => {
     const body = await schemaOf(spaced, 'editor')
     expect(body.space).toEqual({ model: 'team', field: 'team_id' })
     expect(body.sections).toEqual([
-      { label: 'Work', sources: ['job_room', 'job'] },
+      { label: 'Work', sources: ['job'] },
       { label: 'Setup', sources: ['team', 'room'] },
     ])
     const space = Object.fromEntries(Object.entries(body.sources).map(([name, s]) => [name, (s as Schema).space]))
@@ -307,6 +307,36 @@ describe('creates on a query', () => {
     expect((await schemaOf(withStates(), 'owner')).sources.job_state.creates).toBeUndefined()
     expect((await schemaOf(withStates({ creates: 'job' }), 'owner')).sources.job_state.creates).toBe('job')
     expect((await schemaOf(spaced, 'editor')).sources.job_room.creates).toBeUndefined()
+  })
+})
+
+describe('of on a query', () => {
+  const plainWith = (over: Partial<QueryDecl>): Domain => ({
+    ...plain,
+    queries: plain.queries.map((q) => (q.name === 'per_project' ? { ...q, ...over } : q)),
+  })
+
+  test('of naming an unknown dataset, a query, or the query itself is refused', () => {
+    expect(refused(withQuery('job_room', { of: 'ghost' }))).toEqual(['job_room', 'ghost'])
+    expect(refused(withStates({ of: 'job_room' }))).toEqual(['job_state', 'job_room'])
+    expect(refused(withQuery('job_room', { of: 'job_room' }))).toEqual(['job_room', 'job_room'])
+  })
+
+  test('a section listing a query is refused', () => {
+    expect(refused({ ...spaced, sections: [{ label: 'X', sources: ['job', 'job_room'] }] })).toEqual(['X', 'job_room'])
+  })
+
+  test('/schema serves of', async () => {
+    expect((await schemaOf(spaced, 'editor')).sources.job_room.of).toBe('job')
+    expect((await schemaOf(spaced, 'editor')).sources.job.of).toBeUndefined()
+  })
+
+  test('an owner who cannot read the of dataset gets no of, and still reads the query', async () => {
+    const body = await schemaOf(plainWith({ of: 'plat' }), 'owner', 'project')
+    expect(body.sources.per_project).toBeDefined()
+    expect(body.sources.per_project.of).toBeUndefined()
+    expect((await schemaOf(plainWith({ of: 'plat' }), 'editor', 'project')).sources.per_project.of).toBe('plat')
+    expect((await schemaOf(plainWith({ of: 'taak' }), 'owner', 'project')).sources.per_project.of).toBe('taak')
   })
 })
 

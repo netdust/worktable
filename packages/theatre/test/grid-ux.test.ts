@@ -39,14 +39,24 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     for (const s of Object.values(body.sources) as Schema[]) expect(['scoped', 'global']).toContain(s.space)
   })
 
-  test('an editor gets the sections in their draft order', async () => {
+  test('an editor gets the sections in their draft order, with no query in them', async () => {
     const body = await schemaAs('editor')
     expect(body.sections).toEqual([
-      { label: 'Planning', sources: ['speelreeks', 'dagplanning', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
+      { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
       { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
       { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
     ])
     expect(body.sources.beschikbaarheid.label).toBe('Beschikbaarheden')
+  })
+
+  test('the three queries read activiteit, declared in the order the tree shows them', async () => {
+    const body = await schemaAs('editor')
+    const queries = Object.entries(body.sources).filter(([, s]) => (s as Schema).kind === 'query')
+    expect(queries.map(([name, s]) => [name, (s as Schema).of])).toEqual([
+      ['dagplanning', 'activiteit'],
+      ['productie_dag', 'activiteit'],
+      ['voorstellingen', 'activiteit'],
+    ])
   })
 
   test('dagplanning and activiteit carry the two facts; the venue is inherited from locatie_bron', async () => {
