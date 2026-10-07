@@ -1278,9 +1278,9 @@ describe("a saved view's actions", () => {
   it('moves a view up and down the list', async () => {
     await opened()
 
-    choose('Montage', 'Move up')
+    choose('Montage', 'Omhoog')
     expect(names()).toEqual(['Planning', 'Montage', 'Calais techniek'])
-    choose('Montage', 'Move down')
+    choose('Montage', 'Omlaag')
     expect(names()).toEqual(['Planning', 'Calais techniek', 'Montage'])
   })
 

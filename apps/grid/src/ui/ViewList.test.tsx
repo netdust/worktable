@@ -76,10 +76,10 @@ describe("a view's actions", () => {
     expect(group().contains(menuOf('Calais techniek'))).toBe(false)
   })
 
-  it('offers copy, rename, share, move up and down and delete on an own view', () => {
+  it('offers copy, rename, share, Omhoog, Omlaag and delete on an own view', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Calais techniek')).toEqual(['Kopie maken', 'Naam wijzigen', 'Delen met het team', 'Move up', 'Move down', 'Verwijderen'])
+    expect(choices('Calais techniek')).toEqual(['Kopie maken', 'Naam wijzigen', 'Delen met het team', 'Omhoog', 'Omlaag', 'Verwijderen'])
   })
 
   it('offers unshare on an own shared view', () => {
@@ -107,10 +107,10 @@ describe("a view's actions", () => {
     const first: Table = { ...table, views: [own, tabel, sharedOwn] }
     render(<ViewList table={first} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Calais techniek')).not.toContain('Move up')
+    expect(choices('Calais techniek')).not.toContain('Omhoog')
     cleanup()
     render(<ViewList table={first} active="planning" onSelect={() => undefined} actions={actions()} />)
-    expect(choices('Montage')).not.toContain('Move down')
+    expect(choices('Montage')).not.toContain('Omlaag')
   })
 
   it('runs the chosen action on its view', () => {
@@ -119,7 +119,7 @@ describe("a view's actions", () => {
 
     fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Kopie maken' }))
     expect(run.duplicate).toHaveBeenCalledWith(own)
-    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Move up' }))
+    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Omhoog' }))
     expect(run.order).toHaveBeenCalledWith('planning', ['planning', '42', 'bezetting', '43', '44', '45'])
     fireEvent.click(within(open('Montage')).getByRole('menuitem', { name: 'Niet meer delen' }))
     expect(run.share).toHaveBeenCalledWith(sharedOwn, false)

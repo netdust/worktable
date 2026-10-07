@@ -22,6 +22,7 @@
 .nv-app {
   display: grid;
   grid-template-columns: 216px 1fr;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
   border-left: 1px solid var(--color-border-subtle);
@@ -32,15 +33,19 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  min-height: 0;
   padding: 14px 10px;
   background: var(--color-bg-sidebar);
   border-right: 1px solid var(--color-border-subtle);
 }
 
-/* The tree: sections of models, each folding open on its views. It never scrolls: a scroll box would clip the + and ⋯ menus. */
+/* The tree: sections of models, each folding open on its views. It scrolls between the switcher and the foot; its menus open in a layer above it. */
 .nv-tree {
   flex: 1;
-  padding-bottom: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px 12px;
 }
 
 /* The sources no section lists, set apart from the last labelled one. */
@@ -1666,14 +1671,10 @@
   white-space: normal;
 }
 
-/* The popover only places the menu: the menu draws its own frame. */
-#root .nv-menu [role="dialog"] {
-  width: auto;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
+/* An open menu's layer: placed from its trigger, above every scrolling box; the menu draws its own frame. */
+.nv-menu__layer {
+  position: fixed;
+  z-index: 40;
 }
 
 #root .nv-view__menu .nv-more {
@@ -1872,6 +1873,11 @@
   .nv-rail {
     border-right: 0;
     border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .nv-tree {
+    flex: none;
+    max-height: 30vh;
   }
 
   .nv-toolbar {

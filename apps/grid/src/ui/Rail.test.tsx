@@ -195,6 +195,18 @@ describe('the tree', () => {
     expect(within(menu('Weergave toevoegen aan Afwezigheden')).queryByRole('menuitem', { name: 'Matrix' })).toBeNull()
   })
 
+  it("opens a model's menus outside the tree, so its scrolling never clips them, and closes them when it scrolls", () => {
+    render(<Rail tables={spaced} active="planning" onSelect={() => undefined} onNewView={() => undefined} />)
+
+    const kinds = menu('Weergave toevoegen aan Planning')
+    expect(tree().contains(kinds)).toBe(false)
+    expect(document.body.contains(kinds)).toBe(true)
+    fireEvent.scroll(tree())
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    expect(tree().contains(menu('Meer voor Planning'))).toBe(false)
+  })
+
   it('keeps a source without views as a node, and its + asks for its first view', () => {
     const onNewView = vi.fn()
     render(<Rail tables={spaced} active="planning" onSelect={() => undefined} onNewView={onNewView} />)
