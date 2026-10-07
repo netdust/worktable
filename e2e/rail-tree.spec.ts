@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { shot } from './shots'
 import { modelNode } from './tree'
 
-test('tree-scrolls-in-rail', async ({ page }) => {
+test('tree-scrolls-in-rail @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 })
   await page.goto('/#from=2026-10-12')
   const tree = page.getByRole('tree', { name: 'Views' })
@@ -19,4 +20,5 @@ test('tree-scrolls-in-rail', async ({ page }) => {
   const menu = page.getByRole('menu', { name: 'Weergave toevoegen aan Voorstellingen' })
   await expect(menu.getByRole('menuitem', { name: 'Grid' })).toBeInViewport({ ratio: 1 })
   expect(await tree.evaluate((el, m) => el.contains(m), await menu.elementHandle())).toBe(false)
+  await shot(page, 'tree-scrolled-menu')
 })

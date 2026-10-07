@@ -1,4 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { state } from './auth'
+import { shot } from './shots'
 import { modelNode, openModel, openView } from './tree'
 
 // One empty week per flow that applies a speeldag, so no flow sees another's rows.
@@ -9,12 +11,6 @@ const DETAILS_WEEK = '2027-03-22'
 const SEED_WEEK = '2026-10-12'
 const VENUE = 'Theater Het Anker'
 const OWN_VENUE = 'Repetitiekot De Loods'
-
-// The shake-out's screenshots, one per surface, only when asked for.
-const SHOTS = process.env.GRID_UX_SHOTS
-const shot = async (target: Page | Locator, name: string) => {
-  if (SHOTS) await target.screenshot({ path: `${SHOTS}/grid-ux-gate-${name}.png` })
-}
 
 type Api = Page['request']
 type Values = Record<string, unknown>
@@ -200,7 +196,7 @@ test('tree-fold-and-hover @e2e', async ({ page }) => {
   await expect(tools).toHaveCSS('opacity', '1')
   await expect(row.getByRole('button', { name: 'Weergave toevoegen aan Speelreeksen' })).toBeVisible()
   await expect(row.getByRole('button', { name: 'Meer voor Speelreeksen' })).toBeVisible()
-  await shot(page.getByRole('navigation', { name: 'Views' }), 'tree-hover')
+  await shot(page, 'tree-hover')
 
   // The chevron folds and unfolds; the view stays Dagplanning.
   const views = node.getByRole('group', { name: 'View type' })
@@ -262,6 +258,7 @@ test('create-team-and-personal-view @e2e', async ({ page }) => {
 
   await newView(page, 'Activiteiten', own, 'Alleen ik')
   await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+  await shot(page, 'views-created')
 
   const held = await views(page.request)
   expect(held.find((v) => v.name === team)).toMatchObject({ shared: true, mine: true })
@@ -285,6 +282,14 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
   await expect.poll(async () => (await views(page.request)).find((v) => v.name === copy)?.mine).toBe(true)
   const made = (await views(page.request)).find((v) => v.name === copy) as SavedView
 
+  // A blank name renames nothing.
+  await page.getByRole('button', { name: `More actions: ${copy}` }).click()
+  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('   ')
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+  await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(1)
+  expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(copy)
+
   await page.getByRole('button', { name: `More actions: ${copy}` }).click()
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(renamed)
@@ -300,6 +305,7 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
   expect((await deleted).status()).toBe(200)
   await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(0)
+  await shot(page, 'view-deleted')
   expect((await views(page.request)).some((v) => v.id === made.id)).toBe(false)
 
   const restored = page.waitForResponse((res) => new URL(res.url()).pathname === `/api/views/${made.id}/restore`)
@@ -336,6 +342,7 @@ test('fold-day-band @e2e', async ({ page }) => {
   await expect(first.locator('.nv-group__count')).toHaveText('7')
   await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
   await expect(bands(page).nth(1)).toHaveAttribute('aria-expanded', 'true')
+  await shot(page, 'fold-day-band')
 
   // Kept per view in this browser.
   await page.reload()
@@ -362,6 +369,8 @@ test('band-facts @e2e', async ({ page }) => {
     await expect(band.locator('.nv-group__count')).toHaveText('7')
     await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
   }
+  await expect(page.getByText('28 rijen · 4 groepen')).toBeVisible()
+  await shot(page, 'band-facts')
 })
 
 test('inherited-venue @e2e', async ({ page }) => {
@@ -520,3 +529,184 @@ test('dagplanning-details @e2e', async ({ page }) => {
   expect(foot).toBeLessThan(120)
   expect(tree).toBeGreaterThan(480)
 })
+
+// The shake-out's edges: the flows above on their denied actor, re-entry, concurrency and boundary.
+
+const CUT_WEEK = '2027-04-05'
+const MAX_READ = 5000
+
+async function addViewDialog(page: Page, model: string): Promise<Locator> {
+  const row = modelNode(page, model).locator('.nv-model')
+  await row.hover()
+  await row.getByRole('button', { name: `Weergave toevoegen aan ${model}` }).click()
+  await page
+    .getByRole('menu', { name: `Weergave toevoegen aan ${model}` })
+    .getByRole('menuitem', { name: 'Grid' })
+    .click()
+  return page.getByRole('dialog', { name: 'Nieuwe gridweergave' })
+}
+
+test('new-view-blank-and-double-submit @e2e', async ({ page }) => {
+  const name = 'Dubbel e2e weergave'
+  await page.goto('/')
+  await pick(page, 'Speelreeksen')
+  const posts: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/views') posts.push(req.url())
+  })
+
+  // Escape leaves without a view.
+  let dialog = await addViewDialog(page, 'Speelreeksen')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+
+  // A blank name cannot be made.
+  dialog = await addViewDialog(page, 'Speelreeksen')
+  await dialog.getByRole('textbox', { name: 'Naam' }).fill('   ')
+  await expect(dialog.getByRole('button', { name: 'Weergave maken' })).toBeDisabled()
+  await dialog.getByRole('textbox', { name: 'Naam' }).press('Enter')
+  await expect(dialog).toBeVisible()
+
+  // A double click makes one view.
+  await dialog.getByRole('textbox', { name: 'Naam' }).fill(name)
+  await dialog.getByRole('button', { name: 'Weergave maken' }).dblclick()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
+  await page.waitForTimeout(500)
+  expect(posts).toHaveLength(1)
+  expect((await views(page.request)).filter((v) => v.name === name)).toHaveLength(1)
+  await expect(viewRow(page, 'Speelreeksen', name)).toHaveCount(1)
+  await shot(page, 'view-double-submit')
+})
+
+test('colleague-shared-view @e2e', async ({ page, browser }) => {
+  const name = 'Collega e2e weergave'
+  const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('admin') })
+  const theirs = await admin.newPage()
+  await theirs.goto('/')
+  await pick(theirs, 'Speelreeksen')
+  await newView(theirs, 'Speelreeksen', name, 'Het team')
+  const made = (await views(theirs.request)).find((v) => v.name === name) as SavedView
+  await admin.close()
+
+  // The editor sees it shared by a colleague: a people mark, never the default's lock.
+  await page.goto('/')
+  await pick(page, name, 'Speelreeksen')
+  const mark = viewRow(page, 'Speelreeksen', name).getByRole('img')
+  await expect(mark).toHaveAccessibleName('Gedeeld door een collega, alleen te kopiëren')
+  await expect(page.locator('.nv-toolbar__lock')).toHaveAccessibleName(
+    'Gedeeld door een collega: maak een kopie om aan te passen',
+  )
+  await expect(viewRow(page, 'Speelreeksen', name).getByRole('img', { name: /^Standaardweergave/ })).toHaveCount(0)
+  // The seeded default keeps its lock.
+  await expect(
+    viewRow(page, 'Speelreeksen', 'Speelreeksen').getByRole('img', { name: 'Standaardweergave, alleen te kopiëren' }),
+  ).toBeVisible()
+  await shot(page, 'colleague-view')
+
+  // Denied: the editor may copy it, never rename or delete it, and the engine refuses both.
+  await page.getByRole('button', { name: `More actions: ${name}` }).click()
+  const items = page.getByRole('menuitem')
+  await expect(items.filter({ hasText: 'Kopie maken' })).toHaveCount(1)
+  await expect(items.filter({ hasText: 'Naam wijzigen' })).toHaveCount(0)
+  await expect(items.filter({ hasText: 'Verwijderen' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  const patched = await page.request.patch(`/api/views/${made.id}`, { data: { name: 'Overgenomen' } })
+  expect([403, 404]).toContain(patched.status())
+  const removed = await page.request.delete(`/api/views/${made.id}`)
+  expect([403, 404]).toContain(removed.status())
+  expect((await views(page.request)).find((v) => v.id === made.id)).toMatchObject({ name, mine: false, shared: true })
+})
+
+test.describe('without the space', () => {
+  test.use({ storageState: state('owner') })
+
+  test('owner-has-no-switcher @e2e', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('listbox', { name: 'Producties' })).toHaveCount(0)
+    const schema = await page.request.get('/api/schema')
+    expect(schema.status()).toBe(200)
+    expect((await schema.json()).space ?? null).toBeNull()
+    await shot(page, 'owner-no-switcher')
+  })
+})
+
+test.describe('a domain without the new shapes', () => {
+  test.use({ storageState: state('fiche-editor'), baseURL: 'http://127.0.0.1:5175' })
+
+  test('fiche-renders-as-before @e2e', async ({ page }) => {
+    await page.goto('/')
+    const tree = page.getByRole('tree', { name: 'Views' })
+    await expect(tree).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Alle /, exact: false })).toHaveCount(0)
+    await expect(page.locator('.nv-chip--scope')).toHaveCount(0)
+    await expect(page.locator('.nv-group__fact')).toHaveCount(0)
+    await expect(page.locator('.nv-via')).toHaveCount(0)
+    await shot(page, 'fiche-as-before')
+  })
+})
+
+test.describe
+  .serial('past the read limit', () => {
+    const ids: number[] = []
+
+    // One more activity than the engine reads in a week of its own: two on the Monday, the rest on the Tuesday.
+    test.beforeAll(async ({ browser }) => {
+      test.setTimeout(300_000)
+      const context = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('editor') })
+      const api = context.request
+      const productie_id = await idByName(api, 'productie', 'titel', 'Zomerstorm')
+      const tuesday = plusDays(CUT_WEEK, 1)
+      const days = [CUT_WEEK, CUT_WEEK, ...Array.from({ length: MAX_READ - 1 }, () => tuesday)]
+      for (let at = 0; at < days.length; at += 50) {
+        const made = await Promise.all(
+          days
+            .slice(at, at + 50)
+            .map((datum, i) =>
+              idOf(api, 'activiteit', { productie_id, soort: 'repetitie', datum, omschrijving: `Grens e2e ${at + i}` }),
+            ),
+        )
+        ids.push(...made)
+      }
+      await context.close()
+    })
+
+    test.afterAll(async ({ browser }) => {
+      test.setTimeout(300_000)
+      const context = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('editor') })
+      for (let at = 0; at < ids.length; at += 50) {
+        await Promise.all(ids.slice(at, at + 50).map((id) => context.request.delete(`/api/rows/activiteit/${id}`)))
+      }
+      await context.close()
+    })
+
+    test('read-limit-cut @e2e', async ({ page }) => {
+      expect(ids).toHaveLength(MAX_READ + 1)
+      await land(page, `/#from=${CUT_WEEK}`)
+      await pick(page, 'Dagplanning')
+      await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
+      await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
+      await expect(bands(page).nth(1).locator('.nv-group__count')).toHaveText(`${MAX_READ - 2}+`)
+      await expect(facts(bands(page).first())).toHaveText(['2 zonder tijd'])
+      await expect(facts(bands(page).nth(1))).toContainText(['… zonder tijd'])
+      await shot(page, 'read-limit-cut')
+    })
+
+    // Shake-out row 17: the bar's count and the grid's foot still read an exact 5000 beside the title line's 5000+.
+    test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
+      test.fail()
+      await land(page, `/#from=${CUT_WEEK}`)
+      await pick(page, 'Dagplanning')
+      await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
+      await expect(page.locator('.nv-bar__count')).not.toHaveText(`${MAX_READ} rijen`, { timeout: 2000 })
+      await expect(page.locator('tfoot td.nv-first')).not.toHaveText(`Totaal · ${MAX_READ} rijen`, {
+        timeout: 2000,
+      })
+    })
+  })

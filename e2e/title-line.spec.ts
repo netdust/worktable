@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { state } from './auth'
+import { shot } from './shots'
 import { openView } from './tree'
 
 test.use({ storageState: state('admin'), viewport: { width: 1280, height: 800 } })
@@ -16,5 +17,17 @@ test('title-line-reads-in-full @e2e', async ({ page }) => {
     clientWidth: el.clientWidth,
   }))
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
-  await page.locator('header.nv-toolbar').screenshot({ path: process.env.TITLE_SHOT ?? 'test-results/title-line.png' })
+  await shot(page, 'title-line')
+})
+
+// Shake-out row 18: at 1280px Dagplanning's toolbar is 47px wider than its room; "Nieuwe activiteit" runs off the window.
+test('title-line-fits-at-1280 @e2e', async ({ page }) => {
+  test.fail()
+  await page.goto('/#from=2026-10-12')
+  await page.reload()
+  await openView(page, 'Dagplanning')
+  await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
+  const toolbar = page.locator('header.nv-toolbar')
+  await expect(page.getByRole('button', { name: 'Nieuwe activiteit' })).toBeInViewport({ ratio: 1, timeout: 2000 })
+  expect(await toolbar.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
 })

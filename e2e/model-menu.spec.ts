@@ -1,10 +1,10 @@
 import { expect, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
+import { shot } from './shots'
 import { modelNode } from './tree'
 
 const MODEL = 'Organisaties'
 const RENAMED = 'Adresboek'
-const SHOTS = process.env.MODEL_MENU_SHOTS
 
 const modelMenu = async (page: Page, model: string) => {
   const node = modelNode(page, model)
@@ -29,7 +29,7 @@ test.describe('the model menu as an administrator', () => {
     const open = 'Activiteiten'
     const menu = await modelMenu(page, open)
     await expect(menu.getByRole('menuitem')).toHaveText(['Naam wijzigen', 'Icoon wijzigen', 'Exporteren', 'Inklappen'])
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/menu.png`, clip: { x: 0, y: 0, width: 520, height: 400 } })
+    await shot(page, 'model-menu')
     const download = page.waitForEvent('download')
     await menu.getByRole('menuitem', { name: 'Exporteren' }).click()
     expect((await download).suggestedFilename()).toMatch(/\.xlsx$/)
@@ -37,7 +37,7 @@ test.describe('the model menu as an administrator', () => {
     await (await modelMenu(page, open)).getByRole('menuitem', { name: 'Icoon wijzigen' }).click()
     const icons = modelNode(page, open).getByRole('group', { name: `Icoon voor ${open}` })
     await expect(icons.getByRole('button')).toHaveCount(14)
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/icons.png`, clip: { x: 0, y: 0, width: 520, height: 400 } })
+    await shot(page, 'model-menu-icons')
     await page.keyboard.press('Escape')
     await expect(icons).toHaveCount(0)
   })
@@ -67,6 +67,7 @@ test.describe('the model menu as an administrator', () => {
     const node = modelNode(page, RENAMED)
     await page.mouse.move(900, 700)
     await expect(node.locator('.nv-model__lead .lucide-star')).toBeVisible()
+    await shot(page, 'model-renamed')
   })
 })
 
@@ -84,6 +85,7 @@ test.describe('the model menu as an editor', () => {
       )
     }
     await expect(menu.getByText(reason)).toHaveCount(2)
+    await shot(page, 'model-menu-editor')
     const refused = await page.request.put(`${THEATRE.app}/api/sources/organisatie/display`, { data: { label: 'X' } })
     expect(refused.status()).toBe(403)
   })
