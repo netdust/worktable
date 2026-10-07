@@ -212,6 +212,28 @@ describe('App shell', () => {
   })
 })
 
+describe('the density setting', () => {
+  afterEach(() => document.getElementById('root')?.remove())
+
+  it('sets data-density on the root from the rail foot, and keeps it when the app renders again', async () => {
+    const root = Object.assign(document.createElement('div'), { id: 'root' })
+    document.body.append(root)
+    await shell()
+    const density = () => within(within(rail()).getByRole('contentinfo')).getByRole('group', { name: 'Dichtheid' })
+
+    expect(root.dataset.density).toBe('normal')
+    fireEvent.click(within(density()).getByRole('tab', { name: 'Compact' }))
+    expect(root.dataset.density).toBe('compact')
+
+    cleanup()
+    root.removeAttribute('data-density')
+    await shell()
+
+    expect(root.dataset.density).toBe('compact')
+    expect(within(density()).getByRole('tab', { name: 'Compact' }).getAttribute('aria-selected')).toBe('true')
+  })
+})
+
 describe('the production space', () => {
   const production = { key: 'production', label: 'Productie', title_label: 'Titel', title_readonly: false, fields: {} }
   const spaced: Schema = {

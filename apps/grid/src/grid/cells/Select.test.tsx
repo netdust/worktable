@@ -10,7 +10,7 @@ const at = (status: string, kind = 'meal') => ({ ...calais[2], fields: { ...cala
 afterEach(cleanup)
 
 describe('a select cell', () => {
-  it('is a pill toned by what its option means: confirmed green, an option amber, cancelled red', () => {
+  it('is a pill toned by what its option means in a column keyed status: confirmed green, an option amber, cancelled red', () => {
     const tone = (status: string) => render(<SelectCell column={column('status')} row={at(status)} />).container.querySelector('.nv-pill')?.className
 
     expect(tone('confirmed')).toContain('nv-pill--ok')
@@ -18,10 +18,18 @@ describe('a select cell', () => {
     expect(tone('cancelled')).toContain('nv-pill--bad')
   })
 
+  it('is a dot in its tone, never a pill, in any other select column', () => {
+    const other = { ...column('status'), id: 'state' }
+    const { container } = render(<SelectCell column={other} row={at('cancelled')} />)
+
+    expect(container.querySelector('.nv-pill')).toBeNull()
+    expect(container.querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--bad')
+  })
+
   it('leaves an option without a meaning neutral', () => {
     const { container } = render(<SelectCell column={column('settled_by')} row={{ ...calais[2], fields: { ...calais[2].fields, settled_by: 'company' } }} />)
 
-    expect(container.querySelector('.nv-pill')?.className).toBe('nv-pill')
+    expect(container.querySelector('.nv-dot')?.className).toBe('nv-dot')
     expect(container.textContent).toBe('Gezelschap')
   })
 

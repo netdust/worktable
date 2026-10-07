@@ -1,9 +1,22 @@
 /* What Sakani does not lay out: the rail / toolbar / sheet frame of the mockup. Every class carries nv-. */
 #root {
+  --row-h: 40px;
   font: 13px/1.45 var(--font-sans);
   color: var(--color-fg-default);
   background: var(--color-bg-surface);
   -webkit-font-smoothing: antialiased;
+}
+
+#root[data-density="compact"] {
+  --row-h: 32px;
+}
+
+#root[data-density="normal"] {
+  --row-h: 40px;
+}
+
+#root[data-density="roomy"] {
+  --row-h: 46px;
 }
 
 .nv-app {
@@ -20,7 +33,7 @@
   gap: 6px;
   min-width: 0;
   padding: 14px 10px;
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-sidebar);
   border-right: 1px solid var(--color-border-subtle);
 }
 
@@ -697,6 +710,33 @@
   color: var(--color-danger-fg);
 }
 
+.nv-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nv-dot::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-fg-subtle);
+}
+
+.nv-dot--ok::before {
+  background: var(--color-success-fg);
+}
+
+.nv-dot--warn::before {
+  background: var(--color-warning-fg);
+}
+
+.nv-dot--bad::before {
+  background: var(--color-danger-fg);
+}
+
 .nv-kind {
   display: inline-flex;
   align-items: center;
@@ -719,6 +759,36 @@
   text-overflow: ellipsis;
   vertical-align: middle;
   cursor: default;
+}
+
+/* The grid's own look (the prototype's): taller rows by density, no vertical lines, a light header. The matrix keeps its own. */
+.nv-grid:not(.nv-mx) .nv-td {
+  height: var(--row-h, 40px);
+}
+
+.nv-grid:not(.nv-mx) .nv-first {
+  border-right: 0;
+}
+
+.nv-grid:not(.nv-mx) .nv-th {
+  height: 34px;
+  border-bottom-color: var(--color-border-default);
+  font-weight: 400;
+}
+
+.nv-grid:not(.nv-mx) .nv-tr:hover .nv-td {
+  background: var(--color-bg-hover);
+}
+
+.nv-grid:not(.nv-mx) .nv-cell__tabular {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.nv-th__icon {
+  margin-right: 6px;
+  vertical-align: -2px;
+  color: var(--color-fg-subtle);
 }
 
 .nv-end {

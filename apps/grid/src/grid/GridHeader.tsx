@@ -1,12 +1,21 @@
 import type { Header, Table } from '@tanstack/react-table'
+import {
+  Calendar, CalendarClock, Clock, CornerDownRight, Hash, Link2, List, type LucideIcon, Sigma, SquareCheck, Tag, TextAlignStart, Type,
+} from 'lucide-react'
 import type { Row } from '../types'
-import type { Column } from './columns'
+import type { CellKind, Column } from './columns'
+
+const ICON: Record<CellKind, LucideIcon> = {
+  title: Type, text: Type, longtext: TextAlignStart, select: Tag, date: Calendar, datetime: CalendarClock, time: Clock,
+  relation: Link2, bool: SquareCheck, number: Hash, lookup: CornerDownRight, rollup: Sigma, other: List,
+}
 
 const ARROW = { asc: ' ↑', desc: ' ↓' } as const
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const
 
 function HeaderCell({ header, column, first }: { header: Header<Row, unknown>; column: Column; first: boolean }) {
   const sorted = header.column.getIsSorted()
+  const Icon = ICON[column.kind]
   return (
     <th
       data-column={column.id}
@@ -15,6 +24,7 @@ function HeaderCell({ header, column, first }: { header: Header<Row, unknown>; c
       aria-sort={sorted ? ARIA_SORT[sorted] : undefined}
     >
       <button type="button" className="nv-th__sort" onClick={header.column.getToggleSortingHandler()}>
+        <Icon className="nv-th__icon" size={13} aria-hidden="true" />
         {column.label}
         {sorted && <span aria-hidden="true">{ARROW[sorted]}</span>}
       </button>

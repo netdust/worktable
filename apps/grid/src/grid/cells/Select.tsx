@@ -3,15 +3,16 @@ import { t } from '../../i18n'
 import type { CellProps, EditorProps } from './props'
 import { iconOf, toneOf } from './tones'
 
-/** A kind reads as its icon and word; any other option as a pill toned by what it means. */
+/** A kind reads as its icon and word; a column keyed `status` as a pill toned by what it means; any other option as a dot in that tone. */
 export function SelectCell({ column, row }: CellProps) {
   const text = column.text(row)
   if (text === '') return null
   const option = column.edit(row)
   const Icon = iconOf(option)
   if (Icon) return <span className="nv-kind"><Icon size={13} aria-hidden="true" />{text}</span>
+  const shape = column.id === 'status' ? 'nv-pill' : 'nv-dot'
   const tone = toneOf(option)
-  return <span className={tone ? `nv-pill nv-pill--${tone}` : 'nv-pill'}>{text}</span>
+  return <span className={tone ? `${shape} ${shape}--${tone}` : shape}>{text}</span>
 }
 
 function choices(options: Record<string, string>, required: boolean): [string, string][] {
