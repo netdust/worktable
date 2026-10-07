@@ -5,12 +5,12 @@ Branch `feature/grid-ux`, from main after step 1. The design is `design/grid-pro
 ## Requirements
 
 ### R1. The production switcher (an engine `space`)
-- **Engine:** a domain may declare `space: { dataset }`, the dataset whose records split the work (theatre: `productie`). A dataset or query may declare `scoped: '<relation column>'`, the column that points at the space (theatre: `productie_id` on `activiteit`, `speelreeks`, `dagplanning` and `productie_dag`). Validation refuses a `scoped` column that is not a relation to the space dataset. `/schema` serves `space: { model, field }`, and per source `space: 'scoped' | 'global'`. The engine never filters by space: the grid adds `{ <field>: <id> }` to the rows filter it already sends. A space is a view filter, not access control.
+- **Engine:** a domain may declare `space: { dataset }`, the dataset whose records split the work (theatre: `productie`). A dataset or query may declare `scoped: '<relation column>'`, the column that points at the space (theatre: `productie_id` on `activiteit`, `speelreeks`, `dagplanning` and `productie_dag`). Validation refuses a `scoped` column that is not a relation to the space dataset, and scoped columns that do not all share one name. `/schema` serves `space: { model, field }` (only to a caller who can read the space dataset; an owner who cannot gets no space), and per source `space: 'scoped' | 'global'`. The engine never filters by space: the grid adds `{ <field>: <id> }` to the rows filter it already sends. A space is a view filter, not access control.
 - **Grid:** the rail's top-left shows the switcher, using the existing `SpaceSelect` and `useSpace`:
   - the selected production's name and a dot;
   - a searchable list of the space's records;
   - "Alle producties", which removes the scope.
-- **Remembering:** the selection is kept per browser, as `useSpace` already does.
+- **Remembering:** the selection is kept per browser. Nothing stored means "Alle producties": the switcher never narrows on its own (ruling, 2026-10-07).
 - **Scoped views:**
   - they show only the selected production's rows;
   - the scoped column's filter chip is hidden;
@@ -28,7 +28,8 @@ Source: "the project selector top left is gone. here we should be able to select
     - a lock for a read-only (seeded) view;
     - a person icon for one's own unshared view.
   - The active view is highlighted.
-- **Sections:** a source may declare `section: '<label>'`, and the tree groups by it, in declaration order.
+- **Opening and folding:** clicking a model's name opens it and shows its first (or last-used) view, as clicking a table does today; clicking the chevron that replaces the icon on hover folds or unfolds it without changing the view (ruling, 2026-10-07: it keeps the NocoDB behaviour and every existing "open a view by its name" path). On a first visit the active view's model is open.
+- **Sections:** the domain declares `sections: [{ label, sources: [...] }]`, which fixes both the section order and the source order inside each; sources it does not list sit in a final, unlabelled section.
   - Theatre:
     - Planning: Dagplanning, Activiteiten, Speelreeksen, Toewijzingen, Afwezigheden;
     - Gegevens: Producties, Personen, Organisaties;
@@ -79,8 +80,8 @@ Source: Stefan: "this also is not good, dagplanner shouldn't drop like that" (20
 - **Lines and header:**
   - no vertical lines between body cells;
   - the header is light, with an icon per field type;
-  - only the status-like select is a tinted pill;
-  - other selects show a colored dot.
+  - only a select column keyed `status` is a tinted pill;
+  - other selects show a colored dot (ruling, 2026-10-07: a domain-free rule; tones stay as today).
 
 Source: Stefan's references and "i don't need everything to be a pill button like here, but its a good example" (2026-10-07). Self-hosted Plex: Stefan's choice (2026-10-07).
 
@@ -146,7 +147,7 @@ Existing gates stay green, with their selectors updated where the markup changed
 ## `docs/SPEC.md` lines (proposed, committed after Stefan sees the diff)
 - **Skin needs row:**
   - the space (`space: { dataset }` on the domain, `scoped: <column>` per source);
-  - `section` per source;
+  - `sections` on the domain;
   - `group_facts` per source;
   - `inherited` per query column.
 - **Delivery/grid paragraph:** the sidebar is a tree of sources and their views, with a production switcher.
