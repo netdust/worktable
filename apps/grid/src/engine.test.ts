@@ -51,6 +51,55 @@ const views: EngineView[] = [
   },
 ]
 
+describe('toSchema: space, sections, facts and inherited', () => {
+  const declared: EngineSchema = {
+    sources: {
+      season: { kind: 'dataset', label: 'Seizoenen', title: 'name', date: null, space: 'global', columns: { name: { type: 'text', label: 'Naam' } } },
+      session: {
+        kind: 'query', label: 'Sessies', title: 'name', date: 'day', space: 'scoped',
+        group_facts: [{ kind: 'count', label: 'sessies' }, { kind: 'empty', column: 'room', label: 'zonder zaal' }],
+        columns: {
+          name: { type: 'text', label: 'Naam' },
+          day: { type: 'date', label: 'Dag' },
+          season_id: { type: 'integer', label: 'Seizoen', relation: 'season' },
+          room: { type: 'text', label: 'Zaal', inherited: { flag: 'room_from', own: 'self' } },
+          room_from: { type: 'text', label: 'Zaal van', options: { self: 'Eigen', block: 'Blok' } },
+        },
+      },
+    },
+    space: { model: 'season', field: 'season_id' },
+    sections: [{ label: 'Werk', sources: ['session'] }],
+  }
+
+  it('maps the space, the sections, each table\'s space and facts, and a column\'s inherited', () => {
+    const schema = toSchema(declared)
+
+    expect(schema.space).toEqual({ model: 'season', field: 'season_id' })
+    expect(schema.sections).toEqual([{ label: 'Werk', sources: ['session'] }])
+    expect(schema.tables.map((t) => [t.key, t.space, t.facts])).toEqual([
+      ['season', 'global', undefined],
+      ['session', 'scoped', declared.sources.session.group_facts],
+    ])
+    expect(schema.models.session.fields.room.inherited).toEqual({ flag: 'room_from', own: 'self' })
+    expect(schema.models.session.fields.room_from.inherited).toBeUndefined()
+  })
+
+  it('carries the table\'s space and facts onto its saved views', () => {
+    const [view] = toSavedViews([{ ...views[0], id: 5, source: 'session', source_type: 'query', filters: {}, sort: [], visible_fields: [] }], declared.sources)
+
+    expect(view).toMatchObject({ space: 'scoped', facts: declared.sources.session.group_facts })
+  })
+
+  it('maps none of it for a domain that declares none', () => {
+    const schema = toSchema(engine)
+
+    expect('space' in schema).toBe(false)
+    expect('sections' in schema).toBe(false)
+    expect(schema.tables.some((t) => 'space' in t || 'facts' in t)).toBe(false)
+    expect(Object.values(schema.models).flatMap((m) => Object.values(m.fields)).some((f) => 'inherited' in f)).toBe(false)
+  })
+})
+
 describe('toSchema', () => {
   it("maps a dataset's columns to model fields by type", () => {
     const fields = toSchema(engine).models.activiteit.fields

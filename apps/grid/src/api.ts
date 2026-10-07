@@ -1,4 +1,4 @@
-import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
 import type { Account, ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
@@ -85,10 +85,11 @@ export function schema(): Promise<Schema> {
   return engineSchema().then(toSchema)
 }
 
-/** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope has no route yet: no space is served. */
-export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>, window: Partial<DateWindow>, _scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
+/** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope is one more filter. */
+export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
   const title = titleColumn(await sourceOf(view.model))
-  const query: Query = layout ? rowsQuery(view, layout, window, title) : { ...window }
+  const scoped = { ...view, fixed: withScope(view.fixed ?? {}, scope) }
+  const query: Query = layout ? rowsQuery(scoped, layout, window, title) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
   return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
 }
 

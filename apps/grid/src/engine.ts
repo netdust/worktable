@@ -1,5 +1,5 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
-import type { DateWindow, Field, FieldType, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, StoredArrangement, TableDef, View } from './types'
+import type { DateWindow, Field, FieldType, GroupFact, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -13,6 +13,7 @@ export interface EngineColumn {
   readonly?: true
   /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
   writes?: { dataset: string; field: string; key: string }
+  inherited?: { flag: string; own: string }
 }
 
 /** A join dataset's matrix: down and across are its relation columns, cell an options column. */
@@ -44,6 +45,9 @@ export interface EngineSource {
   writable?: boolean
   deletable?: boolean
   actions?: ModelAction[]
+  /** Served only beside the schema's `space`. */
+  space?: 'scoped' | 'global'
+  group_facts?: GroupFact[]
   columns: Record<string, EngineColumn>
 }
 
@@ -70,6 +74,9 @@ export interface EngineView extends EngineArrangement {
 
 export interface EngineSchema {
   sources: Record<string, EngineSource>
+  /** Served only to a caller who can read the space's dataset. */
+  space?: Space
+  sections?: { label: string; sources: string[] }[]
 }
 
 export interface EngineRow {
@@ -118,6 +125,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
+    ...(declared.inherited ? { inherited: declared.inherited } : {}),
   }
 }
 
@@ -157,7 +165,13 @@ function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): Matr
 }
 
 function tableDefOf(name: string, source: EngineSource, sources: Sources): TableDef {
-  const table: TableDef = { key: name, label: source.label, model: name, ...(source.date ? { date_field: source.date } : {}), types: ['grid'] }
+  const table: TableDef = {
+    key: name, label: source.label, model: name,
+    ...(source.date ? { date_field: source.date } : {}),
+    ...(source.space ? { space: source.space } : {}),
+    ...(source.group_facts ? { facts: source.group_facts } : {}),
+    types: ['grid'],
+  }
   const matrix = source.matrix_join ? sources[source.matrix_join]?.matrix : undefined
   if (!source.matrix_join || !matrix) return table
   return { ...table, types: ['grid', 'matrix'], join: joinOf(source.matrix_join, matrix), ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
@@ -170,6 +184,8 @@ export function toSchema(s: EngineSchema): Schema {
     tables: Object.entries(s.sources).map(([name, source]) => tableDefOf(name, source, s.sources)),
     views: [],
     writable: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, source.writable === true])),
+    ...(s.space ? { space: s.space } : {}),
+    ...(s.sections ? { sections: s.sections } : {}),
   }
 }
 
@@ -228,6 +244,13 @@ function mergeFilters(chips: Filter[], fixed: Record<string, unknown>): Record<s
     merged[field] = isObject(kept) ? { ...kept, $eq: value } : { $eq: value }
   }
   return merged
+}
+
+/** The selected space record narrows the rows as a fixed filter would, beside any other condition on its column. */
+export function withScope(fixed: Record<string, unknown>, scope: Scope | null): Record<string, unknown> {
+  if (!scope) return fixed
+  const kept = fixed[scope.field]
+  return { ...fixed, [scope.field]: isObject(kept) ? { ...kept, $eq: scope.id } : { $eq: scope.id } }
 }
 
 /**

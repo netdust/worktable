@@ -31,7 +31,7 @@ import { changed, clearLocal, isSaved, keepLocal, localOf, useStoredRevision } f
 import { useFillViewport } from './viewport'
 import { formatWindow, useWindow } from './Window'
 
-type Rows = { status: 'loading' } | { status: 'unscoped' } | { status: 'ready'; rows: Row[]; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
+type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
 /** A matrix's column titles: the live records of the model its join points at. */
 async function titlesOf(view: View, served: Schema | null): Promise<Map<number, string>> {
@@ -174,18 +174,17 @@ function Workspace({ signed }: { signed: Signed }) {
   const dated = Boolean(view?.date_field)
   const [space, select] = useSpace(served?.space)
   const scoped = space.status !== 'none' && view?.space === 'scoped'
-  // undefined: the space is still loading; null: this view is not scoped.
+  // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
   const scope: Scope | null | undefined = !scoped ? null : space.status === 'ready' ? space.scope : undefined
   const scopeId = scope === undefined ? undefined : scope?.id ?? null
   const [stored, setLayout] = useLayout(view)
-  const spaceField = scoped && served?.space ? served.space.field : undefined
+  const spaceField = scope?.field
   // A chip saved before the view was scoped would filter on what the scope already decides.
   const layout = stored && spaceField ? { ...stored, filters: stored.filters.filter((f) => f.field !== spaceField) } : stored
   const asks = layout ? JSON.stringify([layout.filters, layout.sort, layout.group]) : ''
 
   useEffect(() => {
     if (!settled || !view || scope === undefined) return
-    if (scoped && scope === null) return setResult({ status: 'unscoped' })
     let live = true
     setResult({ status: 'loading' })
     const asked = dated ? range : {}
@@ -277,7 +276,7 @@ function Workspace({ signed }: { signed: Signed }) {
   return (
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} active={view?.key} onSelect={setActiveKey} onTable={openTable} onNewView={view ? () => setPanel('new') : undefined} actions={actions} space={space.status === 'ready' && served?.space && (
-        <SpaceSelect label={served.models[served.space.model]?.label ?? ''} model={served.space.model} selected={space.selected} onSelect={select} />
+        <SpaceSelect label={served.models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">
         <Toolbar
@@ -330,7 +329,6 @@ function Workspace({ signed }: { signed: Signed }) {
 function Sheet({ hasView, dated, result }: { hasView: boolean; dated: boolean; result: Rows }) {
   if (!hasView) return <div className="nv-center"><EmptyState type="no-data" title={t('noViews')} description={t('noViewsHint')} /></div>
   if (result.status === 'loading') return <div className="nv-center"><Spinner /></div>
-  if (result.status === 'unscoped') return <div className="nv-center"><EmptyState type="no-data" title={t('chooseSpace')} /></div>
   return (
     <div className="nv-center">
       <EmptyState

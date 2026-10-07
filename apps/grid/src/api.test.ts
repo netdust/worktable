@@ -105,6 +105,19 @@ describe('rows()', () => {
     expect(url.searchParams.get('to')).toBe('2026-10-18')
   })
 
+  it('merges the scope into the fixed filters, beside a fixed condition on its column', async () => {
+    const fixed = { ...planning, fixed: { productie_id: { $ne: 2 }, status: { $in: ['optie'] } } }
+
+    await rows(fixed, {}, { field: 'productie_id', id: 7 }, defaults(planning))
+    await rows(planning, {}, { field: 'productie_id', id: 7 })
+
+    const filters = urls().slice(1).map((u) => JSON.parse(new URL(u, 'http://grid.test').searchParams.get('filter') ?? ''))
+    expect(filters).toEqual([
+      { productie_id: { $ne: 2, $eq: 7 }, status: { $in: ['optie'] } },
+      { productie_id: { $eq: 7 } },
+    ])
+  })
+
   it('sends only the window without a layout, and nothing for a view without one', async () => {
     await rows(planning, { from: '2026-10-12', to: '2026-10-18' })
     await rows(planning, {})

@@ -403,56 +403,93 @@
   right: 0;
 }
 
-/* The rail's space: the record being worked in, and its picker. */
+/* The rail's space: the record being worked in, or every record, and its searchable list. */
 .nv-space {
   position: relative;
   margin-bottom: 10px;
 }
 
-#root .nv-space__name {
-  margin: 4px 0 0;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 #root .nv-space__button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 6px 8px;
-  border: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
-  background: none;
+  background: var(--color-bg-surface);
   color: var(--color-fg-default);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.nv-space__button:hover {
-  background: var(--color-bg-muted);
+#root .nv-space__button:hover {
+  border-color: var(--color-border-strong);
 }
 
-.nv-space__button svg {
-  margin-left: auto;
+.nv-space__button > svg {
   color: var(--color-fg-subtle);
   flex: none;
+}
+
+.nv-space__mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-default);
+  color: var(--color-fg-on-accent);
+  font-size: 12px;
+  font-weight: 600;
+  flex: none;
+}
+
+.nv-space__mark--all {
+  background: var(--color-fg-muted);
+}
+
+.nv-space__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.nv-space__text strong {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nv-space__text small {
+  color: var(--color-fg-subtle);
+  font-size: 11.5px;
 }
 
 .nv-space__dot {
   width: 8px;
   height: 8px;
+  margin-right: 10px;
   border-radius: 50%;
   background: var(--color-accent-default);
   flex: none;
 }
 
-.nv-space .nv-picker {
-  top: 100%;
+.nv-space__dot--all {
+  background: var(--color-fg-muted);
+}
+
+.nv-space .nv-space__pop {
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
+}
+
+#root .nv-space__option.is-active:not([aria-selected="true"]) {
+  background: var(--color-bg-hover);
 }
 
 .nv-rail__section {

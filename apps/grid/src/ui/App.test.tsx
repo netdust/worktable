@@ -235,7 +235,7 @@ describe('the density setting', () => {
 })
 
 describe('the production space', () => {
-  const production = { key: 'production', label: 'Productie', title_label: 'Titel', title_readonly: false, fields: {} }
+  const production = { key: 'production', label: 'Producties', title_label: 'Titel', title_readonly: false, fields: {} }
   const spaced: Schema = {
     models: {
       activity: {
@@ -274,28 +274,51 @@ describe('the production space', () => {
     api.records.mockResolvedValue({ rows: productions, total: 2 })
   })
 
-  it('heads the rail with the first production and lists the others in its selector', async () => {
+  /** The switcher's button: its name is the selected record's, or "Alle producties". */
+  const switcher = (name: string) => within(rail()).findByRole('button', { name })
+  const choose = async (from: string, to: string) => {
+    fireEvent.click(await switcher(from))
+    fireEvent.click(await within(rail()).findByRole('option', { name: to }))
+  }
+
+  it('heads the rail with every production, and lists them after "Alle producties" in a searchable list', async () => {
     await shell()
 
-    expect(await within(rail()).findByRole('heading', { level: 2, name: 'Glimworm' })).toBeTruthy()
-    fireEvent.click(within(rail()).getByRole('button', { name: 'Glimworm' }))
+    fireEvent.click(await switcher('Alle producties'))
     const options = await within(rail()).findAllByRole('option')
-    expect(options.map((o) => o.textContent)).toEqual(['Glimworm', 'Wat de uil zag'])
+    expect(options.map((o) => o.textContent)).toEqual(['Alle producties', 'Glimworm', 'Wat de uil zag'])
+    expect(options[0].getAttribute('aria-selected')).toBe('true')
     expect(api.records).toHaveBeenCalledWith('production', '')
+
+    fireEvent.change(within(rail()).getByRole('combobox', { name: 'Producties zoeken' }), { target: { value: 'uil' } })
+    expect(within(rail()).getAllByRole('option').map((o) => o.textContent)).toEqual(['Wat de uil zag'])
   })
 
-  it('asks a scoped view for the selected production\'s rows, and again when it changes', async () => {
+  it('asks a scoped view for every row under "Alle producties", for the chosen production\'s once switched, and for every row again', async () => {
     await shell()
-    await within(rail()).findByRole('heading', { level: 2, name: 'Glimworm' })
     await screen.findByText('No rows in this window')
-    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 7 }, expect.any(Object))
+    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), null, expect.any(Object))
 
-    fireEvent.click(within(rail()).getByRole('button', { name: 'Glimworm' }))
-    fireEvent.click(await within(rail()).findByRole('option', { name: 'Wat de uil zag' }))
+    await choose('Alle producties', 'Wat de uil zag')
+    expect(await switcher('Wat de uil zag')).toBeTruthy()
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object)))
 
-    expect(within(rail()).getByRole('heading', { level: 2, name: 'Wat de uil zag' })).toBeTruthy()
-    await screen.findByText('No rows in this window')
-    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object))
+    await choose('Wat de uil zag', 'Alle producties')
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), null, expect.any(Object)))
+    expect(window.localStorage.getItem(key())).toBe('all')
+  })
+
+  it('pre-fills a new row with the chosen production', async () => {
+    const titled = { ...spaced, models: { ...spaced.models, activity: { ...spaced.models.activity, title_readonly: true } } }
+    api.schema.mockResolvedValue(titled)
+    api.create.mockResolvedValue({ row: { id: 2, title: '', status: 'publish', fields: { production: [9], status: 'confirmed' } }, batch: 'b1' })
+    window.localStorage.setItem(key(), '9')
+    await shell()
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object)))
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Activiteit' }))
+
+    await waitFor(() => expect(api.create).toHaveBeenCalledWith('activity', expect.objectContaining({ production: [9] })))
   })
 
   it('lists a global view under General and asks it for every row', async () => {
@@ -308,11 +331,17 @@ describe('the production space', () => {
     expect(api.rows).toHaveBeenLastCalledWith(spaced.views[1], {}, null, expect.any(Object))
   })
 
-  it('offers no filter on the production in a scoped view', async () => {
+  it('offers a filter on the production under "Alle producties", and none once one is chosen', async () => {
     api.rows.mockResolvedValue({ rows: activities, total: 1 })
     render(<App />)
     await screen.findByText('Montage')
+    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
+    expect(screen.getByRole('group', { name: 'Productie' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
 
+    await choose('Alle producties', 'Glimworm')
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 7 }, expect.any(Object)))
+    await screen.findByText('Montage')
     fireEvent.click(screen.getByRole('button', { name: '+ Filter' }))
 
     expect(screen.getByRole('group', { name: 'Status' })).toBeTruthy()
@@ -321,24 +350,23 @@ describe('the production space', () => {
 
   it('keeps the selection across a remount, per site', async () => {
     const first = await shell()
-    fireEvent.click(await within(rail()).findByRole('button', { name: 'Glimworm' }))
-    fireEvent.click(await within(rail()).findByRole('option', { name: 'Wat de uil zag' }))
+    await choose('Alle producties', 'Wat de uil zag')
     await screen.findByText('No rows in this window')
     first.unmount()
 
     expect(window.localStorage.getItem(key())).toBe('9')
     await shell()
-    expect(await within(rail()).findByRole('heading', { level: 2, name: 'Wat de uil zag' })).toBeTruthy()
-    await screen.findByText('No rows in this window')
-    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object))
+    expect(await switcher('Wat de uil zag')).toBeTruthy()
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), { field: 'production', id: 9 }, expect.any(Object)))
   })
 
-  it('asks for a production when there is none, and loads no rows for a scoped view', async () => {
+  it('never asks to choose: with no production at all a scoped view loads every row', async () => {
     api.records.mockResolvedValue({ rows: [], total: 0 })
     await shell()
 
-    expect(await within(screen.getByRole('main')).findByText('Choose where to work')).toBeTruthy()
-    expect(api.rows).not.toHaveBeenCalled()
+    await screen.findByText('No rows in this window')
+    expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), null, expect.any(Object))
+    expect(await switcher('Alle producties')).toBeTruthy()
   })
 })
 
@@ -620,7 +648,7 @@ describe('a table with two views', () => {
   const schema: Schema = {
     models: {
       ...served.models,
-      production: { key: 'production', label: 'Productie', title_label: 'Titel', title_readonly: false, fields: {} },
+      production: { key: 'production', label: 'Producties', title_label: 'Titel', title_readonly: false, fields: {} },
       assignment: {
         key: 'assignment', label: 'Toewijzing', title_label: 'Titel', title_readonly: false,
         fields: { person: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false } } },
@@ -658,7 +686,7 @@ describe('a table with two views', () => {
 
   it("keeps the week and the production when switching the table's view", async () => {
     await shell()
-    fireEvent.click(await within(rail()).findByRole('button', { name: 'Glimworm' }))
+    fireEvent.click(await within(rail()).findByRole('button', { name: 'Alle producties' }))
     fireEvent.click(await within(rail()).findByRole('option', { name: 'Wat de uil zag' }))
     await screen.findByRole('grid', { name: 'Planning' })
     await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(tabel, week, { field: 'production', id: 9 }, expect.any(Object)))
@@ -668,7 +696,7 @@ describe('a table with two views', () => {
     const hash = () => new URLSearchParams(window.location.hash.slice(1))
     await waitFor(() => expect(api.rows).toHaveBeenCalledWith(matrix, week, { field: 'production', id: 9 }, expect.any(Object)))
     expect([hash().get('view'), hash().get('from'), hash().get('to')]).toEqual(['bezetting', '2026-05-18', '2026-05-24'])
-    expect(within(rail()).getByRole('heading', { level: 2, name: 'Wat de uil zag' })).toBeTruthy()
+    expect(within(rail()).getByRole('button', { name: 'Wat de uil zag' })).toBeTruthy()
 
     fireEvent.click(within(types()).getByRole('button', { name: 'Tabel' }))
     await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(tabel, week, { field: 'production', id: 9 }, expect.any(Object)))

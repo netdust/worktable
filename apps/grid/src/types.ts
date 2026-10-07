@@ -16,6 +16,8 @@ export interface Field {
   readonly?: boolean
   /** A query column's write: to `dataset`'s `field`, on the record the row's `key` names. */
   writes?: { dataset: string; field: string; key: string }
+  /** A value its row may take from elsewhere: `flag` names the column that says where from, `own` the flag's value for the row's own. */
+  inherited?: { flag: string; own: string }
 }
 
 export interface Model {
@@ -62,6 +64,8 @@ export interface TableDef {
   sort?: string[]
   /** `scoped`: its rows are the selected space record's; `global`: beside any space. */
   space?: 'scoped' | 'global'
+  /** What a group's band says of its rows, computed by the grid. */
+  facts?: GroupFact[]
   /** A matrix table: the records that join a row to a column, and what they mean. */
   join?: MatrixJoin
   /** A matrix table: the table whose rows say which columns are away when. */
@@ -181,9 +185,17 @@ export interface Schema {
   writable: Record<string, boolean>
   /** The relation that scopes a view, and the model it points at; null when the site configured none. */
   space?: Space | null
+  /** The tree's sections, in order; the sources each lists, in order. */
+  sections?: { label: string; sources: string[] }[]
   /** The site's words for the app's own strings, by `i18n.ts` key. */
   strings?: Record<string, string>
 }
+
+/** A fact the grid computes from a group's rows. */
+export type GroupFact =
+  | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
+  | { kind: 'count'; where?: Record<string, unknown>; label: string }
+  | { kind: 'empty'; column: string; label: string }
 
 export interface Space {
   field: string
