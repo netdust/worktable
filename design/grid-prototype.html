@@ -1,0 +1,622 @@
+<title>Worktable Planning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an app shell — production switcher and a tree of data models and their views on the left, the grid on the right, grouped by plandag. */
+/* Token names follow apps/grid/src/ui/theme.css so the values can move into the grid unchanged. */
+:root {
+  --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --color-bg-canvas: #eef0f3;
+  --color-bg-surface: #ffffff;
+  --color-bg-subtle: #f6f7f9;
+  --color-bg-muted: #eceff3;
+  --color-bg-sidebar: #f7f8fa;
+  --color-bg-hover: #eef2f7;
+  --color-bg-selected: #e6eef8;
+  --color-fg-default: #1b2128;
+  --color-fg-muted: #4f5964;
+  --color-fg-subtle: #8a939d;
+  --color-fg-on-accent: #ffffff;
+  --color-border-subtle: #e7eaee;
+  --color-border-default: #d9dee4;
+  --color-border-strong: #c4cbd3;
+  --color-accent-default: #2563ab;
+  --color-accent-hover: #1d4f8c;
+  --color-accent-subtle: #e6eef8;
+  --color-success-fg: #1e7a45;
+  --color-success-bg: #e2f2e8;
+  --color-warning-fg: #8f6100;
+  --color-warning-bg: #fbefd2;
+  --color-danger-fg: #b0302f;
+  --color-danger-bg: #f8e1e1;
+  --color-band: #f1f3f6;
+  --color-bg-card: #ffffff;
+  --color-bg-column: #f3f4f7;
+  --shadow-pop: 0 8px 28px rgba(20, 30, 45, .16), 0 1px 3px rgba(20, 30, 45, .1);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --row-h: 40px;
+  /* soort, one hue each */
+  --s-voorstelling: #c2416b;
+  --s-repetitie: #6d4fc2;
+  --s-opbouw: #b7791f;
+  --s-afbouw: #a0612a;
+  --s-reis: #2b7bb9;
+  --s-overnachting: #5b6675;
+  --s-maaltijd: #2f8a57;
+  --s-vergadering: #138a8a;
+  --s-andere: #7a838d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg-canvas: #0e0f11; --color-bg-surface: #16171a; --color-bg-subtle: #1b1c20; --color-bg-muted: #24262b;
+    --color-bg-sidebar: #0b0c0e; --color-bg-hover: #222429; --color-bg-selected: #1f2b3d; --color-bg-card: #202126; --color-bg-column: #16171a;
+    --color-fg-default: #ececf0; --color-fg-muted: #a4a7b0; --color-fg-subtle: #6c707a; --color-fg-on-accent: #ffffff;
+    --color-border-subtle: #24262b; --color-border-default: #2c2e34; --color-border-strong: #3a3d44;
+    --color-accent-default: #5b9be0; --color-accent-hover: #7db0e8; --color-accent-subtle: #1c2b3d;
+    --color-success-fg: #6cc893; --color-success-bg: #173324; --color-warning-fg: #e2b54f; --color-warning-bg: #352a12;
+    --color-danger-fg: #ee8a89; --color-danger-bg: #3a1c1c; --color-band: #1a1b1f;
+    --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg-canvas: #0e0f11; --color-bg-surface: #16171a; --color-bg-subtle: #1b1c20; --color-bg-muted: #24262b;
+  --color-bg-sidebar: #0b0c0e; --color-bg-hover: #222429; --color-bg-selected: #1f2b3d; --color-bg-card: #202126; --color-bg-column: #16171a;
+  --color-fg-default: #ececf0; --color-fg-muted: #a4a7b0; --color-fg-subtle: #6c707a; --color-fg-on-accent: #ffffff;
+  --color-border-subtle: #24262b; --color-border-default: #2c2e34; --color-border-strong: #3a3d44;
+  --color-accent-default: #5b9be0; --color-accent-hover: #7db0e8; --color-accent-subtle: #1c2b3d;
+  --color-success-fg: #6cc893; --color-success-bg: #173324; --color-warning-fg: #e2b54f; --color-warning-bg: #352a12;
+  --color-danger-fg: #ee8a89; --color-danger-bg: #3a1c1c; --color-band: #1a1b1f;
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+  color-scheme: dark;
+}
+:root[data-density="compact"] { --row-h: 32px }
+:root[data-density="roomy"] { --row-h: 46px }
+
+* { box-sizing: border-box }
+html, body { height: 100% }
+body { background: var(--color-bg-canvas); color: var(--color-fg-default); font: 13.5px/1.4 var(--font-sans); }
+button { font: inherit; color: inherit }
+:focus-visible { outline: 2px solid var(--color-accent-default); outline-offset: 1px }
+.icon { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round }
+
+.app { display: grid; grid-template-columns: 268px minmax(0, 1fr); height: 100%; }
+
+/* ---------- sidebar ---------- */
+.side { background: var(--color-bg-sidebar); border-right: 1px solid var(--color-border-default); display: flex; flex-direction: column; min-height: 0 }
+.brand { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; font-size: 12px; color: var(--color-fg-subtle); letter-spacing: .04em; text-transform: uppercase }
+.brand b { color: var(--color-fg-default); letter-spacing: 0; text-transform: none; font-size: 13px }
+.space { margin: 6px 10px 10px; position: relative }
+.space-btn { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); cursor: pointer; text-align: left }
+.space-btn:hover { border-color: var(--color-border-strong) }
+.space-mark { width: 28px; height: 28px; border-radius: var(--radius-sm); display: grid; place-items: center; font-weight: 600; font-size: 12px; color: var(--color-fg-on-accent); background: var(--space-color, var(--color-accent-default)); flex: none }
+.space-text { display: flex; flex-direction: column; min-width: 0; flex: 1 }
+.space-text strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.space-text small { color: var(--color-fg-subtle); font-size: 11.5px }
+
+.tree { overflow: auto; flex: 1; padding: 2px 8px 16px }
+.section-label { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-fg-subtle) }
+.node { position: relative }
+.model { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 2px; border-radius: var(--radius-sm); cursor: pointer; user-select: none }
+.model:hover { background: var(--color-bg-hover) }
+.lead { width: 20px; height: 20px; display: grid; place-items: center; position: relative; flex: none }
+.lead > * { position: absolute; display: grid; place-items: center }
+.model .glyph { color: var(--color-fg-muted) }
+.chev { color: var(--color-fg-muted); opacity: 0; transition: transform .12s }
+.node.open > .model .chev { transform: rotate(90deg) }
+.model:hover .chev, .model:focus-visible .chev { opacity: 1 }
+.model:hover .glyph, .model:focus-visible .glyph { opacity: 0 }
+.model .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500 }
+.model .count { font: 11px var(--font-mono); color: var(--color-fg-subtle) }
+.hover-tools { display: none; gap: 2px }
+.model:hover .hover-tools, .model.menu-open .hover-tools { display: flex }
+.model:hover .count, .model.menu-open .count { display: none }
+.tool { width: 22px; height: 22px; display: grid; place-items: center; border: 0; background: transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--color-fg-muted) }
+.tool:hover { background: var(--color-bg-muted); color: var(--color-fg-default) }
+.views { display: none; padding: 1px 0 4px 26px; position: relative }
+.views::before { content: ""; position: absolute; left: 13px; top: 0; bottom: 6px; border-left: 1px solid var(--color-border-default) }
+.node.open > .views { display: block }
+.view { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px; border-radius: var(--radius-sm); cursor: pointer; color: var(--color-fg-muted) }
+.view:hover { background: var(--color-bg-hover); color: var(--color-fg-default) }
+.view.active { background: var(--color-bg-selected); color: var(--color-accent-default); font-weight: 500 }
+.view .vname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.view .lock { color: var(--color-fg-subtle) }
+.view .vtools { display: none }
+.view:hover .vtools { display: flex }
+.side-foot { border-top: 1px solid var(--color-border-default); padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted) }
+.avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--color-accent-subtle); color: var(--color-accent-default); display: grid; place-items: center; font-weight: 600; font-size: 11px }
+
+/* ---------- popovers & dialog ---------- */
+.pop { position: fixed; z-index: 40; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: 4px; min-width: 200px }
+.pop-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; background: transparent; border-radius: var(--radius-sm); cursor: pointer; text-align: left }
+.pop-item:hover:not([disabled]) { background: var(--color-bg-hover) }
+.pop-item[disabled] { color: var(--color-fg-subtle); cursor: default }
+.pop-item .soon { margin-left: auto; font-size: 10.5px; color: var(--color-fg-subtle); text-transform: uppercase; letter-spacing: .05em }
+.pop-item.danger { color: var(--color-danger-fg) }
+.pop-sep { height: 1px; background: var(--color-border-subtle); margin: 4px 2px }
+.pop-head { padding: 6px 10px 4px; font-size: 11px; color: var(--color-fg-subtle); text-transform: uppercase; letter-spacing: .06em; font-weight: 600 }
+.pop-search { width: 100%; padding: 7px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-subtle); margin-bottom: 4px; font: inherit; color: inherit }
+.pop-item .dot { width: 8px; height: 8px; border-radius: 50% }
+.pop-item .meta { margin-left: auto; color: var(--color-fg-subtle); font-size: 11.5px }
+.pop-item.current { font-weight: 600 }
+
+.scrim { position: fixed; inset: 0; z-index: 50; background: rgba(15, 20, 28, .35); display: grid; place-items: center; padding: 16px }
+.dialog { width: min(440px, 100%); background: var(--color-bg-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); padding: 20px; display: grid; gap: 16px }
+.dialog h2 { margin: 0; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px }
+.field { display: grid; gap: 6px }
+.field > span { font-size: 12px; font-weight: 600; color: var(--color-fg-muted) }
+.input, .select { width: 100%; padding: 8px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); font: inherit; color: inherit }
+.input:focus, .select:focus { outline: 2px solid var(--color-accent-default); outline-offset: -1px; border-color: transparent }
+.choices { display: flex; flex-wrap: wrap; gap: 6px }
+.choice { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); cursor: pointer }
+.choice input { accent-color: var(--color-accent-default) }
+.choice:has(input:checked) { border-color: var(--color-accent-default); background: var(--color-accent-subtle) }
+.hint { font-size: 12px; color: var(--color-fg-subtle); margin: 0 }
+.actions { display: flex; justify-content: flex-end; gap: 8px }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border-default); background: var(--color-bg-surface); cursor: pointer; white-space: nowrap }
+.btn:hover { border-color: var(--color-border-strong); background: var(--color-bg-subtle) }
+.btn.primary { background: var(--color-accent-default); border-color: var(--color-accent-default); color: var(--color-fg-on-accent) }
+.btn.primary:hover { background: var(--color-accent-hover) }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--color-fg-muted) }
+.btn.ghost:hover { background: var(--color-bg-hover); color: var(--color-fg-default) }
+
+/* ---------- main ---------- */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0 }
+.top { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border-default); padding: 10px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap }
+.crumbs { display: flex; align-items: center; gap: 6px; color: var(--color-fg-subtle); font-size: 12.5px; min-width: 0 }
+.crumbs b { color: var(--color-fg-default); font-size: 15px; font-weight: 600 }
+.crumbs .sep { opacity: .6 }
+.top .spacer { flex: 1 }
+.weeknav { display: flex; align-items: center; gap: 2px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 2px }
+.weeknav .btn { border: 0; padding: 4px 8px }
+.weeknav .week { padding: 0 8px; font-weight: 600; font-variant-numeric: tabular-nums }
+.search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 5px 8px; color: var(--color-fg-subtle); min-width: 160px }
+.search input { border: 0; background: transparent; outline: 0; font: inherit; color: var(--color-fg-default); width: 100% }
+kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-default); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; color: var(--color-fg-subtle) }
+
+.bar { padding: 8px 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface) }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--color-border-default); color: var(--color-fg-muted); font-size: 12.5px; background: var(--color-bg-surface); cursor: pointer }
+.chip:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
+.chip.set { border-color: transparent; background: var(--color-accent-subtle); color: var(--color-accent-default) }
+.bar .rows { margin-left: auto; color: var(--color-fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums }
+
+.gridwrap { flex: 1; overflow: auto; min-height: 0 }
+table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 900px; background: var(--color-bg-surface) }
+.grid th { position: sticky; top: 0; z-index: 3; background: var(--color-bg-surface); text-align: left; font-weight: 400; font-size: 12px; color: var(--color-fg-subtle); height: 34px; padding: 0 12px; border-bottom: 1px solid var(--color-border-default); white-space: nowrap }
+.grid th .ticon { display: inline-flex; vertical-align: -3px; margin-right: 6px; color: var(--color-fg-subtle) }
+.grid th.num, .grid td.num { width: 44px; text-align: right; padding-right: 10px; color: var(--color-fg-subtle); font: 11.5px var(--font-mono) }
+.grid th:first-child, .grid td:first-child { position: sticky; left: 0; z-index: 2; background: inherit }
+.grid th:first-child { z-index: 4 }
+.grid td { height: var(--row-h); padding: 0 12px; border-bottom: 1px solid var(--color-border-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; background: var(--color-bg-surface) }
+.grid tbody tr.row:hover td { background: var(--color-bg-hover) }
+.grid tbody tr.row.sel td { background: var(--color-bg-selected) }
+:root[data-lines="on"] .grid td, :root[data-lines="on"] .grid th { border-right: 1px solid var(--color-border-subtle) }
+:root[data-zebra="on"] .grid tbody tr.row:nth-child(even of .row) td { background: var(--color-bg-subtle) }
+.grid td.cell-focus { outline: 2px solid var(--color-accent-default); outline-offset: -2px }
+
+/* group band: the day is the unit of planning, so it reads first */
+.grid tr.group td { position: sticky; top: 34px; z-index: 2; height: 32px; background: var(--color-band); border-bottom: 1px solid var(--color-border-default); padding: 0 12px }
+.group-in { display: flex; align-items: center; gap: 8px }
+.grid tr.group { cursor: pointer }
+.grid tr.group:hover td { background: var(--color-bg-muted) }
+.group-chev { display: inline-grid; color: var(--color-fg-subtle); transition: transform .12s; transform: rotate(90deg) }
+.grid tr.group.shut .group-chev { transform: none }
+.group-fact { color: var(--color-fg-muted); font-size: 12px }
+.group-fact b { color: var(--color-fg-default); font-weight: 500; font-variant-numeric: tabular-nums }
+.group-fact i { font-style: normal; color: var(--s-voorstelling) }
+.group-day { font-weight: 600; font-size: 13px }
+.group-total { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--color-fg-muted); font-size: 12px }
+.group-date { color: var(--color-fg-muted); font-variant-numeric: tabular-nums }
+.group-count { font: 11px var(--font-mono); color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 0 6px }
+:root[data-groups="line"] .grid tr.group td { background: var(--color-bg-surface); border-top: 0; height: 44px; vertical-align: bottom; padding-bottom: 6px }
+:root[data-groups="line"] .group-day { font-size: 15px }
+
+.time { font: 12.5px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-fg-default) }
+.time .end { color: var(--color-fg-subtle) }
+.allday { font-size: 11.5px; color: var(--color-fg-subtle); border: 1px dashed var(--color-border-strong); border-radius: 999px; padding: 1px 8px }
+.title-cell { font-weight: 500; color: var(--color-fg-default) }
+.grid td { color: var(--color-fg-muted) }
+.soort { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px }
+.soort i { width: 8px; height: 8px; border-radius: 2px }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500 }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor }
+.pill.optie { color: var(--color-warning-fg); background: var(--color-warning-bg) }
+.pill.bevestigd { color: var(--color-success-fg); background: var(--color-success-bg) }
+.pill.geannuleerd { color: var(--color-danger-fg); background: var(--color-danger-bg) }
+.inherited { color: var(--color-fg-subtle); font-style: italic }
+.inherited .via { font-style: normal; font-size: 11px; margin-left: 6px; border: 1px solid var(--color-border-default); border-radius: 3px; padding: 0 4px }
+.crew { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums }
+.crew .meter { width: 42px; height: 5px; border-radius: 3px; background: var(--color-bg-muted); overflow: hidden }
+.crew .meter b { display: block; height: 100%; background: var(--color-success-fg) }
+.muted { color: var(--color-fg-subtle) }
+.prod-tag { display: inline-flex; align-items: center; gap: 6px }
+.prod-tag i { width: 6px; height: 14px; border-radius: 2px }
+
+.foot { background: var(--color-bg-subtle); border-top: 1px solid var(--color-border-default); padding: 6px 18px; font-size: 12px; color: var(--color-fg-subtle); display: flex; gap: 16px }
+
+/* ---------- title ---------- */
+.title { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.title .tglyph { width: 30px; height: 30px; border-radius: var(--radius-md); background: var(--color-bg-muted); display: grid; place-items: center; color: var(--color-fg-default) }
+.title h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap }
+.title .sum { font-size: 12px; color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; white-space: nowrap }
+.lockmark { color: var(--color-fg-subtle); display: inline-flex }
+.insight { font-size: 12px; color: var(--color-fg-muted) }
+.insight b { color: var(--color-warning-fg); font-weight: 600 }
+
+/* ---------- day columns (board-like) ---------- */
+.board { display: flex; gap: 12px; padding: 14px 18px; align-items: flex-start; min-width: max-content }
+.col { width: 268px; background: var(--color-bg-column); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: 10px; display: grid; gap: 8px }
+.col-head { display: flex; align-items: center; gap: 8px; padding: 2px 2px 0 }
+.col-label { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: 12.5px; background: var(--color-accent-subtle); color: var(--color-accent-default) }
+.col-count { font: 11px var(--font-mono); color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 1px 6px }
+.col-head .tool { margin-left: auto }
+.col-sum { font-size: 12px; color: var(--color-fg-muted); padding: 0 2px 2px; font-variant-numeric: tabular-nums }
+.card { background: var(--color-bg-card); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 7px; cursor: pointer }
+.card:hover { border-color: var(--color-border-strong) }
+.card.sel { outline: 2px solid var(--color-accent-default); outline-offset: -1px }
+.card-kind { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-fg-muted) }
+.card-kind i { width: 8px; height: 8px; border-radius: 2px }
+.card-title { font-weight: 600; font-size: 14px; line-height: 1.3 }
+.card-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--color-fg-muted); align-items: center }
+.card-facts span { display: inline-flex; align-items: center; gap: 5px }
+.card-facts .icon { width: 14px; height: 14px; color: var(--color-fg-subtle) }
+.card-foot { display: flex; align-items: center; gap: 8px }
+.card-foot .crew { margin-left: auto; font-size: 12px; color: var(--color-fg-muted) }
+.card.untimed { border-style: dashed }
+.col-add { display: flex; align-items: center; gap: 6px; color: var(--color-fg-subtle); font-size: 12.5px; padding: 4px 2px; border: 0; background: transparent; cursor: pointer }
+.col-add:hover { color: var(--color-fg-default) }
+
+/* ---------- tweak panel ---------- */
+.tweaks { position: fixed; right: 16px; bottom: 16px; z-index: 30; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); padding: 12px; display: grid; gap: 10px; width: 240px; font-size: 12.5px }
+.tweaks h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-fg-subtle); display: flex; justify-content: space-between; align-items: center }
+.seg { display: flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden }
+.seg button { flex: 1; border: 0; background: transparent; padding: 4px 6px; cursor: pointer; font-size: 12px }
+.seg button.on { background: var(--color-accent-subtle); color: var(--color-accent-default); font-weight: 600 }
+.tweaks label.row { display: grid; gap: 4px }
+.tweaks.min > :not(h3) { display: none }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr }
+  .side { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--color-border-default) }
+  .tweaks { display: none }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="12.5" cy="8" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M6 6.5V13"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6h12M2 9.5h12M6.5 2.5v11"/></symbol>
+  <symbol id="i-matrix" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.8v2.4M11 1.8v2.4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 16 16"><path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.7" cy="4" r=".8" fill="currentColor"/><circle cx="2.7" cy="8" r=".8" fill="currentColor"/><circle cx="2.7" cy="12" r=".8" fill="currentColor"/></symbol>
+  <symbol id="i-board" viewBox="0 0 16 16"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></symbol>
+  <symbol id="i-query" viewBox="0 0 16 16"><path d="M3 4.5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2z"/><path d="M3 4.5v7c0 1.1 2.2 2 5 2"/><path d="M13 4.5v3"/><circle cx="12" cy="11.5" r="2"/><path d="M13.5 13l1.2 1.2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.3 2.7-3.5 5-3.5s4.2 1.2 5 3.5"/></symbol>
+  <symbol id="i-users" viewBox="0 0 16 16"><circle cx="6" cy="6" r="2.2"/><path d="M2 13c.6-2 2-3 4-3s3.4 1 4 3"/><circle cx="11.2" cy="5.5" r="1.8"/><path d="M11 9.2c1.6 0 2.7.8 3.2 2.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L13.5 13.5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.5 3.5h11L9.5 8.5v4l-3 1.5v-5.5z"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 16 16"><path d="M5 3v10M2.5 10.5L5 13l2.5-2.5M11 13V3M8.5 5.5L11 3l2.5 2.5"/></symbol>
+  <symbol id="i-group" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4" rx="1"/><rect x="2" y="9.5" width="12" height="4" rx="1"/></symbol>
+  <symbol id="i-cols" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11M10 2.5v11"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 16 16"><path d="M3 4h10M8 4v9"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 16 16"><path d="M2.5 8.5V3a.5.5 0 01.5-.5h5.5l5 5-6 6z"/><circle cx="5.5" cy="5.5" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 16 16"><path d="M8 14s4.5-4.2 4.5-7.5a4.5 4.5 0 00-9 0C3.5 9.8 8 14 8 14z"/><circle cx="8" cy="6.5" r="1.6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8.2l1.7 1.6 3.3-3.4"/></symbol>
+  <symbol id="i-film" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 3v10M11 3v10M2 6h3M2 10h3M11 6h3M11 10h3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/><circle cx="6" cy="4" r="1.3" fill="var(--color-bg-surface)"/><circle cx="10" cy="8" r="1.3" fill="var(--color-bg-surface)"/><circle cx="5" cy="12" r="1.3" fill="var(--color-bg-surface)"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="side" aria-label="Navigatie">
+    <div class="brand"><b>Worktable</b> · Gezelschap Lantaarn</div>
+    <div class="space">
+      <button class="space-btn" id="space-btn" aria-haspopup="menu">
+        <span class="space-mark" id="space-mark">NW</span>
+        <span class="space-text"><strong id="space-name">Nachtwacht</strong><small id="space-meta">2026–2027 · ontwikkeling</small></span>
+        <svg class="icon"><use href="#i-down"/></svg>
+      </button>
+    </div>
+    <nav class="tree" id="tree"></nav>
+    <div class="side-foot"><span class="avatar">PL</span><span>planner@example.test</span></div>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <div class="title" id="crumbs"></div>
+      <span class="spacer"></span>
+      <div class="weeknav" id="weeknav"><button class="btn" aria-label="Vorige week"><svg class="icon"><use href="#i-left"/></svg></button><span class="week">Week 45 · 2–8 nov</span><button class="btn" aria-label="Volgende week"><svg class="icon"><use href="#i-right"/></svg></button></div>
+      <label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="q" placeholder="Zoeken"><kbd>⌘K</kbd></label>
+      <button class="btn primary"><svg class="icon"><use href="#i-plus"/></svg>Nieuwe activiteit</button>
+    </header>
+    <div class="bar" id="bar"></div>
+    <div class="gridwrap" id="wrap"><table class="grid" id="grid"></table><div class="board" id="board" hidden></div></div>
+    <div class="foot"><span>↑↓←→ bewegen</span><span>↵ bewerken</span><span>⌘Z ongedaan maken</span><span>Opgeslagen</span></div>
+  </main>
+</div>
+
+<div class="tweaks" id="tweaks">
+  <h3>Bijstellen <button class="tool" id="tw-min" aria-label="Inklappen"><svg class="icon"><use href="#i-down"/></svg></button></h3>
+  <label class="row">Rijhoogte<div class="seg" data-key="density"><button data-v="compact">Compact</button><button data-v="normal" class="on">Normaal</button><button data-v="roomy">Ruim</button></div></label>
+  <label class="row">Indeling<div class="seg" data-key="layout"><button data-v="table" class="on">Tabel</button><button data-v="columns">Dagkolommen</button></div></label>
+  <label class="row">Dagkop<div class="seg" data-key="groups"><button data-v="band" class="on">Band</button><button data-v="line">Lijn</button></div></label>
+  <label class="row">Rasterlijnen<div class="seg" data-key="lines"><button data-v="off" class="on">Uit</button><button data-v="on">Aan</button></div></label>
+  <label class="row">Zebrarijen<div class="seg" data-key="zebra"><button data-v="off" class="on">Uit</button><button data-v="on">Aan</button></div></label>
+  <label class="row">Thema<div class="seg" data-key="theme"><button data-v="auto" class="on">Auto</button><button data-v="light">Licht</button><button data-v="dark">Donker</button></div></label>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s)
+const icon = (id) => `<svg class="icon"><use href="#i-${id}"/></svg>`
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+
+// ---------- invented example data ----------
+const PRODUCTIES = [
+  { id: 'all', titel: 'Alle producties', meta: 'het hele seizoen', mark: '∗', color: 'var(--color-fg-muted)' },
+  { id: 'nw', titel: 'Nachtwacht', meta: '2026–2027 · ontwikkeling', mark: 'NW', color: '#2563ab' },
+  { id: 'kt', titel: 'De Kersentuin', meta: '2026–2027 · actief', mark: 'KT', color: '#c2416b' },
+  { id: 'zs', titel: 'Zomerstorm', meta: '2025–2026 · archief', mark: 'ZS', color: '#7a838d' },
+]
+const SKINS = { grid: ['grid', 'Grid'], matrix: ['matrix', 'Matrix'], calendar: ['cal', 'Kalender'], list: ['list', 'Lijst'], board: ['board', 'Bord'] }
+const MODELS = [
+  { section: 'Planning', key: 'dagplanning', label: 'Dagplanning', glyph: 'query', count: 28, query: true, views: [{ name: 'Dagplanning', skin: 'grid', lock: true }, { name: 'Mijn week', skin: 'grid', personal: true }] },
+  { section: 'Planning', key: 'activiteit', label: 'Activiteiten', glyph: 'cal', count: 246, views: [{ name: 'Planning', skin: 'grid', lock: true }, { name: 'Optie of bevestigd', skin: 'grid', lock: true }, { name: 'Kalender', skin: 'calendar' }] },
+  { section: 'Planning', key: 'speelreeks', label: 'Speelreeksen', glyph: 'film', count: 3, views: [{ name: 'Speelreeksen', skin: 'grid', lock: true }] },
+  { section: 'Planning', key: 'toewijzing', label: 'Toewijzingen', glyph: 'users', count: 508, views: [{ name: 'Toewijzingen', skin: 'grid', lock: true }, { name: 'Wie speelt wanneer', skin: 'matrix' }] },
+  { section: 'Planning', key: 'beschikbaarheid', label: 'Afwezigheden', glyph: 'clock', count: 12, views: [{ name: 'Afwezigheden', skin: 'grid', lock: true }] },
+  { section: 'Gegevens', key: 'productie', label: 'Producties', glyph: 'tag', count: 3, views: [{ name: 'Producties', skin: 'grid', lock: true }] },
+  { section: 'Gegevens', key: 'persoon', label: 'Personen', glyph: 'user', count: 15, views: [{ name: 'Personen', skin: 'grid', lock: true }] },
+  { section: 'Gegevens', key: 'organisatie', label: 'Organisaties', glyph: 'pin', count: 22, views: [{ name: 'Organisaties', skin: 'grid', lock: true }] },
+  { section: 'Instellingen', key: 'rol', label: 'Rollen', glyph: 'check', count: 4, views: [{ name: 'Rollen', skin: 'grid', lock: true }] },
+  { section: 'Instellingen', key: 'sjabloon', label: 'Sjablonen', glyph: 'list', count: 1, views: [{ name: 'Sjablonen', skin: 'grid', lock: true }] },
+]
+const SOORT = { voorstelling: 'Voorstelling', repetitie: 'Repetitie', opbouw: 'Opbouw', afbouw: 'Afbouw', reis: 'Reis', overnachting: 'Overnachting', maaltijd: 'Maaltijd', vergadering: 'Vergadering', andere: 'Andere' }
+const DAYS = [['Maandag', '2 november'], ['Dinsdag', '3 november'], ['Woensdag', '4 november']]
+const DAYPATTERN = [
+  ['13:00', '14:00', 'Lunch', 'maaltijd'], ['14:00', '17:30', 'Voorbereiding', 'repetitie'], ['17:30', '18:30', 'Diner', 'maaltijd'],
+  ['18:30', '20:00', 'Voorbereiding avond', 'repetitie'], ['20:00', '21:15', 'Voorstelling', 'voorstelling'], ['21:15', '22:15', 'Afwas', 'andere'], [null, null, 'Overnachting', 'overnachting'],
+]
+const ROWS = []
+DAYS.forEach(([day, date], d) => {
+  DAYPATTERN.forEach(([s, e, t, k], i) => ROWS.push({ day, date, prod: 'nw', start: s, end: e, title: t, soort: k, venue: 'Zaal De Spiegel', inherited: true, status: d === 0 || k !== 'voorstelling' ? 'optie' : 'bevestigd', crew: [k === 'voorstelling' ? 6 : 3, k === 'voorstelling' ? 7 : 4] }))
+  ROWS.push({ day, date, prod: 'kt', start: '10:00', end: '13:00', title: 'Doorloop akte 2', soort: 'repetitie', venue: 'Repetitiekot De Loods', inherited: false, status: 'bevestigd', crew: [5, 5] })
+  if (d === 1) ROWS.push({ day, date, prod: 'kt', start: '09:00', end: '11:30', title: 'Rit naar Brugge', soort: 'reis', venue: null, inherited: false, status: 'bevestigd', crew: [2, 2] })
+  if (d === 2) ROWS.push({ day, date, prod: 'kt', start: '15:00', end: '16:00', title: 'Productieoverleg', soort: 'vergadering', venue: 'Gezelschap Lantaarn', inherited: false, status: 'optie', crew: [1, 3] })
+})
+// untimed rows close the day: an overnight stay belongs at the end, not the top
+const order = (r) => (r.start ? r.start : r.soort === 'overnachting' ? '99' : '00')
+ROWS.sort((a, b) => DAYS.findIndex((x) => x[0] === a.day) - DAYS.findIndex((x) => x[0] === b.day) || order(a).localeCompare(order(b)))
+
+// ---------- state ----------
+const state = { shut: new Set(), layout: 'table', space: 'nw', open: new Set(['dagplanning', 'activiteit']), view: ['dagplanning', 0], sel: -1 }
+const store = { get: (k) => { try { return localStorage.getItem('wt-proto-' + k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem('wt-proto-' + k, v) } catch {} } }
+
+// ---------- sidebar ----------
+function renderTree() {
+  let html = '', section = ''
+  for (const m of MODELS) {
+    if (m.section !== section) { section = m.section; html += `<div class="section-label">${section}</div>` }
+    const open = state.open.has(m.key)
+    html += `<div class="node ${open ? 'open' : ''}" data-model="${m.key}">
+      <div class="model" role="treeitem" aria-expanded="${open}" tabindex="0">
+        <span class="lead"><span class="glyph">${icon(m.glyph)}</span><span class="chev">${icon('chev')}</span></span>
+        <span class="name">${esc(m.label)}</span><span class="count">${m.count}</span>
+        <span class="hover-tools"><button class="tool" data-act="more" aria-label="Meer voor ${esc(m.label)}">${icon('dots')}</button><button class="tool" data-act="add" aria-label="Weergave toevoegen aan ${esc(m.label)}">${icon('plus')}</button></span>
+      </div>
+      <div class="views" role="group">${m.views.map((v, i) => {
+        const active = state.view[0] === m.key && state.view[1] === i
+        return `<div class="view ${active ? 'active' : ''}" data-view="${i}" tabindex="0">${icon(SKINS[v.skin][0])}<span class="vname">${esc(v.name)}</span>
+          ${v.lock ? `<span class="lock" title="Standaardweergave, alleen te kopiëren">${icon('lock')}</span>` : v.personal ? `<span class="lock" title="Alleen voor jou">${icon('user')}</span>` : ''}
+          <span class="vtools"><button class="tool" data-act="vmore" aria-label="Meer">${icon('dots')}</button></span></div>`
+      }).join('')}</div></div>`
+  }
+  $('#tree').innerHTML = html
+}
+
+$('#tree').addEventListener('click', (e) => {
+  const node = e.target.closest('.node'); if (!node) return
+  const m = MODELS.find((x) => x.key === node.dataset.model)
+  const act = e.target.closest('[data-act]')?.dataset.act
+  if (act === 'add') return addMenu(e.target.closest('.tool'), m)
+  if (act === 'more') return modelMenu(e.target.closest('.tool'), m)
+  if (act === 'vmore') return viewMenu(e.target.closest('.tool'), m, +e.target.closest('.view').dataset.view)
+  const view = e.target.closest('.view')
+  if (view) { state.view = [m.key, +view.dataset.view]; renderTree(); renderMain(); return }
+  if (e.target.closest('.model')) { state.open.has(m.key) ? state.open.delete(m.key) : state.open.add(m.key); renderTree() }
+})
+
+// ---------- popovers ----------
+let popEl = null
+function closePop() { popEl?.remove(); popEl = null; document.querySelectorAll('.menu-open').forEach((x) => x.classList.remove('menu-open')) }
+function openPop(anchor, html, { align = 'left' } = {}) {
+  closePop()
+  popEl = document.createElement('div'); popEl.className = 'pop'; popEl.setAttribute('role', 'menu'); popEl.innerHTML = html
+  document.body.append(popEl)
+  const r = anchor.getBoundingClientRect(), w = popEl.offsetWidth, h = popEl.offsetHeight
+  let left = align === 'right' ? r.right + 6 : r.left, top = align === 'right' ? r.top - 4 : r.bottom + 6
+  left = Math.min(left, innerWidth - w - 8); top = Math.min(top, innerHeight - h - 8)
+  Object.assign(popEl.style, { left: left + 'px', top: top + 'px' })
+  anchor.closest('.model')?.classList.add('menu-open')
+  return popEl
+}
+document.addEventListener('mousedown', (e) => { if (popEl && !popEl.contains(e.target) && !e.target.closest('[data-act],#space-btn')) closePop() })
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePop(); closeDialog() } })
+
+function addMenu(anchor, m) {
+  const items = [['grid', 'Grid'], ['matrix', 'Matrix', m.key !== 'toewijzing'], ['calendar', 'Kalender', m.query && m.key !== 'dagplanning'], ['list', 'Lijst'], ['board', 'Bord', true]]
+  const pop = openPop(anchor, `<div class="pop-head">Nieuwe weergave op ${esc(m.label)}</div>` + items.map(([k, label, off]) =>
+    `<button class="pop-item" data-skin="${k}" ${off ? 'disabled' : ''}>${icon(SKINS[k][0])}${label}${off ? `<span class="soon">${k === 'board' ? 'later' : 'n.v.t.'}</span>` : ''}</button>`).join(''), { align: 'right' })
+  pop.addEventListener('click', (e) => { const b = e.target.closest('[data-skin]'); if (b && !b.disabled) { closePop(); viewDialog(m, b.dataset.skin) } })
+}
+function modelMenu(anchor, m) {
+  openPop(anchor, `<button class="pop-item">${icon('cols')}Velden bekijken</button><button class="pop-item">${icon('sliders')}Rechten</button><div class="pop-sep"></div><button class="pop-item">${icon('table')}Alle weergaven inklappen</button>`, { align: 'right' })
+}
+function viewMenu(anchor, m, i) {
+  const v = m.views[i]
+  const pop = openPop(anchor, `<button class="pop-item" data-a="dup">${icon('grid')}Kopie maken</button>
+    <button class="pop-item" ${v.lock ? 'disabled' : ''}>${icon('text')}Naam wijzigen</button>
+    <button class="pop-item" ${v.lock ? 'disabled' : ''}>${icon('users')}Delen met het team</button>
+    <div class="pop-sep"></div><button class="pop-item danger" ${v.lock ? 'disabled' : ''}>Verwijderen</button>`, { align: 'right' })
+  pop.addEventListener('click', (e) => { if (e.target.closest('[data-a="dup"]')) { closePop(); viewDialog(m, v.skin, v.name + ' (kopie)') } })
+}
+
+$('#space-btn').addEventListener('click', (e) => {
+  if (popEl) return closePop()
+  const pop = openPop(e.currentTarget, `<input class="pop-search" id="space-q" placeholder="Productie zoeken"><div class="pop-head">Producties</div>
+    ${PRODUCTIES.map((p) => `<button class="pop-item ${p.id === state.space ? 'current' : ''}" data-space="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.titel)}<span class="meta">${esc(p.meta)}</span></button>`).join('')}`)
+  pop.style.width = e.currentTarget.offsetWidth + 'px'
+  $('#space-q', pop).focus()
+  $('#space-q', pop).addEventListener('input', (ev) => pop.querySelectorAll('[data-space]').forEach((b) => (b.hidden = !b.textContent.toLowerCase().includes(ev.target.value.toLowerCase()))))
+  pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-space]'); if (b) { state.space = b.dataset.space; closePop(); renderSpace(); renderMain() } })
+})
+function renderSpace() {
+  const p = PRODUCTIES.find((x) => x.id === state.space)
+  $('#space-name').textContent = p.titel; $('#space-meta').textContent = p.meta; $('#space-mark').textContent = p.mark
+  $('#space-mark').style.setProperty('--space-color', p.color)
+}
+
+// ---------- create view dialog ----------
+let dlg = null
+function closeDialog() { dlg?.remove(); dlg = null }
+function viewDialog(m, skin, name) {
+  closeDialog()
+  dlg = document.createElement('div'); dlg.className = 'scrim'
+  const extra = skin === 'calendar' ? `<label class="field"><span>Datum</span><select class="select" id="nv-date"><option>Plandag</option><option>Datum</option><option>Start</option></select></label>`
+    : skin === 'matrix' ? `<label class="field"><span>Kolommen</span><select class="select" id="nv-across"><option>Personen</option></select></label>` : ''
+  dlg.innerHTML = `<form class="dialog" id="nv-form" role="dialog" aria-modal="true" aria-labelledby="nv-title">
+    <h2 id="nv-title">${icon(SKINS[skin][0])}Nieuwe ${SKINS[skin][1].toLowerCase()}weergave</h2>
+    <label class="field"><span>Naam</span><input class="input" id="nv-name" value="${esc(name || SKINS[skin][1])}" required></label>
+    <div class="field"><span>Wie mag ze aanpassen</span><div class="choices">
+      <label class="choice"><input type="radio" name="nv-who" id="nv-shared" value="shared" checked>${icon('users')}Het team</label>
+      <label class="choice"><input type="radio" name="nv-who" id="nv-personal" value="personal">${icon('user')}Alleen ik</label>
+    </div><p class="hint" id="nv-hint">Iedereen in het team ziet ze en kan filters en kolommen aanpassen.</p></div>
+    ${extra}
+    <p class="hint">Op <b>${esc(m.label)}</b>${state.space !== 'all' ? ` · beperkt tot <b>${esc(PRODUCTIES.find((p) => p.id === state.space).titel)}</b>` : ''}</p>
+    <div class="actions"><button type="button" class="btn" id="nv-cancel">Annuleren</button><button class="btn primary">Weergave maken</button></div></form>`
+  document.body.append(dlg)
+  const input = $('#nv-name', dlg); input.focus(); input.select()
+  dlg.addEventListener('change', () => { $('#nv-hint', dlg).textContent = $('#nv-personal', dlg).checked ? 'Alleen jij ziet ze; delen kan later.' : 'Iedereen in het team ziet ze en kan filters en kolommen aanpassen.' })
+  $('#nv-cancel', dlg).onclick = closeDialog
+  dlg.addEventListener('mousedown', (e) => { if (e.target === dlg) closeDialog() })
+  $('#nv-form', dlg).addEventListener('submit', (e) => {
+    e.preventDefault()
+    m.views.push({ name: input.value.trim() || SKINS[skin][1], skin, personal: $('#nv-personal', dlg).checked })
+    state.open.add(m.key); state.view = [m.key, m.views.length - 1]; closeDialog(); renderTree(); renderMain()
+  })
+}
+
+// ---------- main ----------
+function renderMain() {
+  const m = MODELS.find((x) => x.key === state.view[0]), v = m.views[state.view[1]]
+  const p = PRODUCTIES.find((x) => x.id === state.space)
+  const shown = ROWS.filter((r) => state.space === 'all' || r.prod === state.space)
+  const optie = shown.filter((r) => r.status === 'optie').length
+  $('#crumbs').innerHTML = `<span class="tglyph">${icon(SKINS[v.skin][0])}</span><h1>${esc(v.name)}</h1>${v.lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
+    <span class="sum">${shown.length} activiteiten · ${new Set(shown.map((r) => r.day)).size} dagen</span>${optie ? `<span class="insight"><b>${optie}</b> nog in optie</span>` : ''}`
+  const scoped = state.space !== 'all'
+  $('#bar').innerHTML = `${scoped ? `<span class="chip set">${icon('tag')}Productie is ${esc(p.titel)}</span>` : ''}
+    <span class="chip">${icon('filter')}Filter</span><span class="chip set">${icon('group')}Groep: plandag</span><span class="chip set">${icon('sort')}Start ↑</span><span class="chip">${icon('cols')}Kolommen</span>
+    <span class="rows" id="rows"></span>`
+  renderGrid(m, v)
+}
+
+function renderGrid(m, v) {
+  $('#grid').hidden = state.layout === 'columns'; $('#board').hidden = state.layout !== 'columns'
+  if (state.layout === 'columns' && (m.key === 'dagplanning' || m.key === 'activiteit')) return renderBoard()
+  if (m.key !== 'dagplanning' && m.key !== 'activiteit') {
+    $('#grid').innerHTML = `<tbody><tr><td style="height:220px;text-align:center;color:var(--color-fg-subtle);white-space:normal">Deze weergave is in het prototype niet uitgewerkt. Kies Dagplanning of Activiteiten.</td></tr></tbody>`
+    $('#rows').textContent = ''; return
+  }
+  const scoped = state.space !== 'all'
+  const q = $('#q').value.toLowerCase()
+  const rows = ROWS.filter((r) => (!scoped || r.prod === state.space) && (!q || r.title.toLowerCase().includes(q)))
+  const prodCol = !scoped
+  const head = `<thead><tr><th class="num">#</th><th>${icon('clock')}Tijd</th><th>${icon('text')}Omschrijving</th><th>${icon('tag')}Soort</th>${prodCol ? `<th>${icon('film')}Productie</th>` : ''}<th>${icon('pin')}Locatie</th><th>${icon('check')}Status</th><th>${icon('users')}Bezetting</th></tr></thead>`
+  const span = prodCol ? 8 : 7
+  let body = '', day = '', n = 0
+  rows.forEach((r, i) => {
+    if (r.day !== day) {
+      day = r.day
+      const inDay = rows.filter((x) => x.day === day)
+      const shut = state.shut.has(day)
+      const shows = inDay.filter((x) => x.soort === 'voorstelling'), untimed = inDay.filter((x) => !x.start).length
+      const facts = [shows.length === 1 ? `<i>●</i> voorstelling <b>${shows[0].start}</b>` : shows.length ? `<i>●</i> <b>${shows.length}</b> voorstellingen` : '', untimed ? `<b>${untimed}</b> zonder tijd` : ''].filter(Boolean).join(' · ')
+      body += `<tr class="group ${shut ? 'shut' : ''}" data-day="${day}" tabindex="0" aria-expanded="${!shut}"><td colspan="${span}"><div class="group-in"><span class="group-chev">${icon('chev')}</span><span class="group-day">${r.day}</span><span class="group-date">${r.date}</span><span class="group-count">${inDay.length}</span>${facts ? `<span class="group-fact">${facts}</span>` : ''}<span class="group-total">bezetting ${inDay.reduce((a, x) => a + x.crew[0], 0)}/${inDay.reduce((a, x) => a + x.crew[1], 0)}</span></div></td></tr>`
+    }
+    n++
+    if (state.shut.has(day)) return
+    const prod = PRODUCTIES.find((p) => p.id === r.prod)
+    const time = r.start ? `<span class="time">${r.start}<span class="end">–${r.end}</span></span>` : `<span class="allday">zonder tijd</span>`
+    const venue = !r.venue ? `<span class="muted">—</span>` : r.inherited ? `<span class="inherited" title="Overgenomen van de speelreeks">${esc(r.venue)}<span class="via">via speelreeks</span></span>` : esc(r.venue)
+    const [have, need] = r.crew
+    body += `<tr class="row ${state.sel === i ? 'sel' : ''}" data-i="${i}"><td class="num">${n}</td><td>${time}</td><td class="title-cell">${esc(r.title)}</td>
+      <td><span class="soort"><i style="background:var(--s-${r.soort})"></i>${SOORT[r.soort]}</span></td>
+      ${prodCol ? `<td><span class="prod-tag"><i style="background:${prod.color}"></i>${esc(prod.titel)}</span></td>` : ''}
+      <td>${venue}</td><td><span class="pill ${r.status}">${r.status}</span></td>
+      <td><span class="crew"><span class="meter"><b style="width:${(have / need) * 100}%"></b></span>${have}/${need}</span></td></tr>`
+  })
+  $('#grid').innerHTML = head + `<tbody>${body || `<tr><td colspan="${span}" style="height:160px;text-align:center;color:var(--color-fg-subtle)">Geen activiteiten in deze week voor deze productie.</td></tr>`}</tbody>`
+  $('#rows').textContent = `${rows.length} rijen`
+}
+function renderBoard() {
+  const scoped = state.space !== 'all', q = $('#q').value.toLowerCase()
+  const rows = ROWS.filter((r) => (!scoped || r.prod === state.space) && (!q || r.title.toLowerCase().includes(q)))
+  $('#board').innerHTML = DAYS.map(([day, date]) => {
+    const inDay = rows.filter((r) => r.day === day)
+    const timed = inDay.filter((r) => r.start).length, need = inDay.reduce((a, r) => a + r.crew[1], 0), have = inDay.reduce((a, r) => a + r.crew[0], 0)
+    return `<section class="col"><div class="col-head"><span class="col-label">${icon('cal')}${day} ${date.split(' ')[0]}</span><span class="col-count">${inDay.length}</span><button class="tool" aria-label="Activiteit toevoegen">${icon('plus')}</button></div>
+      <div class="col-sum">${timed} met tijd · ${inDay.length - timed} zonder · bezetting ${have}/${need}</div>
+      ${inDay.map((r) => {
+        const i = ROWS.indexOf(r), prod = PRODUCTIES.find((p) => p.id === r.prod)
+        const venue = !r.venue ? '' : `<span class="${r.inherited ? 'inherited' : ''}">${icon('pin')}${esc(r.venue)}</span>`
+        return `<article class="card ${r.start ? '' : 'untimed'} ${state.sel === i ? 'sel' : ''}" data-i="${i}">
+          <div class="card-kind"><i style="background:var(--s-${r.soort})"></i>${SOORT[r.soort]}${scoped ? '' : ` · ${esc(prod.titel)}`}</div>
+          <div class="card-title">${esc(r.title)}</div>
+          <div class="card-facts"><span>${icon('clock')}${r.start ? `<span class="time">${r.start}<span class="end">–${r.end}</span></span>` : 'zonder tijd'}</span>${venue}</div>
+          <div class="card-foot"><span class="pill ${r.status}">${r.status}</span><span class="crew"><span class="meter"><b style="width:${(r.crew[0] / r.crew[1]) * 100}%"></b></span>${r.crew[0]}/${r.crew[1]}</span></div></article>`
+      }).join('') || '<p class="hint">Niets gepland.</p>'}
+      <button class="col-add">${icon('plus')}Activiteit toevoegen</button></section>`
+  }).join('')
+  $('#rows').textContent = `${rows.length} rijen`
+}
+$('#board').addEventListener('click', (e) => {
+  const c = e.target.closest('.card'); if (!c) return
+  state.sel = +c.dataset.i; document.querySelectorAll('.card.sel').forEach((x) => x.classList.remove('sel')); c.classList.add('sel')
+})
+function toggleDay(tr) { const d = tr.dataset.day; state.shut.has(d) ? state.shut.delete(d) : state.shut.add(d); renderMain(); $(`tr.group[data-day="${d}"]`)?.focus() }
+$('#grid').addEventListener('keydown', (e) => { const g = e.target.closest('tr.group'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleDay(g) } })
+$('#grid').addEventListener('click', (e) => {
+  const g = e.target.closest('tr.group'); if (g) return toggleDay(g)
+  const tr = e.target.closest('tr.row'); if (!tr) return
+  document.querySelectorAll('.cell-focus').forEach((x) => x.classList.remove('cell-focus'))
+  state.sel = +tr.dataset.i; document.querySelectorAll('tr.row.sel').forEach((x) => x.classList.remove('sel')); tr.classList.add('sel')
+  e.target.closest('td')?.classList.add('cell-focus')
+})
+$('#q').addEventListener('input', () => renderMain())
+
+// ---------- tweaks ----------
+const root = document.documentElement
+function applyTweak(key, v) {
+  if (key === 'theme') v === 'auto' ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', v)
+  else if (key === 'layout') { state.layout = v; renderMain() }
+  else root.setAttribute('data-' + key, v)
+  document.querySelectorAll(`.seg[data-key="${key}"] button`).forEach((b) => b.classList.toggle('on', b.dataset.v === v))
+  store.set(key, v)
+}
+document.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) applyTweak(seg.dataset.key, b.dataset.v) }))
+for (const key of ['density', 'groups', 'zebra', 'theme', 'layout', 'lines']) { const v = store.get(key); if (v) applyTweak(key, v) }
+$('#tw-min').onclick = () => $('#tweaks').classList.toggle('min')
+
+renderSpace(); renderTree(); renderMain()
+</script>
