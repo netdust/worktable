@@ -234,8 +234,8 @@ describe('App shell', () => {
 
     const factOf = (day: string) => [...document.querySelectorAll('tr.nv-group')]
       .find((b) => b.querySelector('.nv-group__label')?.textContent === day)?.querySelector('.nv-group__fact')?.textContent
-    expect(factOf('Monday, May 18')).toBe('1 maaltijd')
-    expect(factOf('Wednesday, May 20')).toBe('… maaltijd')
+    expect(factOf('Monday May 18')).toBe('1 maaltijd')
+    expect(factOf('Wednesday May 20')).toBe('… maaltijd')
   })
 
   it('says so when the export fails', async () => {

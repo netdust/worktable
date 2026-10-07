@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { Model, Row, Saved, SavedView, Schema, View } from '../types'
+import type { Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
@@ -21,14 +21,14 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; onShown?: (shown: { rows: number; groups: number | null } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
   }
   const store = createStore({ model: 'activity', rows, api })
   function Harness() {
-    const [layout, setLayout] = useState(options.layout ?? defaults(planning))
+    const [layout, setLayout] = useState(options.layout ?? defaults(options.view ?? planning))
     const change = (next: Layout) => {
       saved = next
       setLayout(next)
@@ -36,7 +36,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     return (
       <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
         query={options.query ?? ''} emptyTitle="Geen rijen in deze week" emptyHint="Week 18 – 24 mei" filters={options.filters}
-        cut={options.cut} onShown={options.onShown} />
+        cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} />
     )
   }
   return { store, ...render(<Harness />) }
@@ -79,7 +79,7 @@ describe('the sheet', () => {
 
     expect(container.querySelector('thead')?.classList.contains('nv-grid__head')).toBe(true)
     expect(headers()).toEqual(['title', 'start', 'end', 'kind', 'status', 'location', 'place', 'settled_by', 'rollups.confirmed'])
-    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).every((r) => r.firstElementChild?.classList.contains('nv-first'))).toBe(true)
+    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).every((r) => r.children[1]?.classList.contains('nv-first'))).toBe(true)
 
     expect(labels()).toEqual(['Maandag 18 mei', 'Dinsdag 19 mei', 'Woensdag 20 mei'])
     expect(bands().map((b) => b.querySelector('.nv-group__count')?.textContent)).toEqual(['3', '2', '1'])
@@ -88,6 +88,39 @@ describe('the sheet', () => {
     const total = screen.getByTestId('total')
     expect(total.textContent).toContain('Totaal · 6 rijen')
     expect(within(total).getByText('47')).toBeTruthy()
+  })
+
+  it('numbers the rows it shows, top to bottom across the groups, and skips a folded group', () => {
+    const { container } = renderGrid()
+    const numbers = () => [...container.querySelectorAll('tbody tr.nv-tr')].map((tr) => tr.firstElementChild?.textContent)
+
+    expect(numbers()).toEqual(['1', '2', '3', '4', '5', '6'])
+    expect(container.querySelector('tbody tr.nv-tr .nv-num')?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector('thead .nv-num')?.textContent).toBe('#')
+    fireEvent.click(bands()[0])
+    expect(numbers()).toEqual(['1', '2', '3'])
+    expect(screen.getAllByRole('gridcell').some((c) => c.classList.contains('nv-num'))).toBe(false)
+    fireEvent.click(bands()[0])
+    expect(numbers()).toHaveLength(6)
+  })
+
+  it("hides the scoped column under a scope: every row would hold the same record", () => {
+    renderGrid(calais, { scope: { field: 'location', id: 12 } })
+    expect(headers()).not.toContain('location')
+    cleanup()
+
+    renderGrid()
+    expect(headers()).toContain('location')
+  })
+
+  it('shows the title where the view puts it', () => {
+    renderGrid(calais, { layout: { ...defaults(planning), order: ['date', 'start', 'kind', 'title'] } })
+    expect(headers().slice(0, 3)).toEqual(['start', 'kind', 'title'])
+  })
+
+  it('shows the label of a stored view in the sheet', () => {
+    renderGrid()
+    expect(within(screen.getAllByRole('columnheader')[0]).getByRole('button').textContent).toBe('Titel')
   })
 
   it('shows a select as its option label and a relation as the looked-up title', () => {
@@ -675,7 +708,7 @@ describe('the toolbar over the grid', () => {
 
   it('labels every toolbar and bar control with a visible word, a filter chip included', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
     fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
     // A chip asks the server again: the grid comes back once the rows do.
@@ -703,7 +736,7 @@ describe('the toolbar over the grid', () => {
     remote.schema.mockResolvedValue({ ...schema, models: { activity: { ...schema.models.activity, deletable: true } } })
     remote.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced by Toewijzingen (2)', by: [{ label: 'Toewijzingen', count: 2 }, { label: 'Personen', count: 1 }] })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
@@ -721,7 +754,7 @@ describe('the toolbar over the grid', () => {
     remote.schema.mockResolvedValue({ ...schema, strings: { 'error.title_required': 'Een activiteit heeft een <b>naam</b> nodig' } })
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.doubleClick(cell('Montage', 'title'))
     fireEvent.change(editor(), { target: { value: '' } })
@@ -736,7 +769,7 @@ describe('the toolbar over the grid', () => {
 
   it('a click away from an empty new title sends nothing', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' }))
     await act(async () => {
@@ -752,7 +785,7 @@ describe('the toolbar over the grid', () => {
     const long = 'Deze persoon staat al op deze activiteit en kan er geen tweede keer op'
     remote.update.mockRejectedValueOnce({ code: 'duplicate_assignment', message: long })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
@@ -766,7 +799,7 @@ describe('the toolbar over the grid', () => {
 
   it('is one row of title, week, search and + New, with no theme or undo in it; the chips sit in the bar beneath (Stefan, 2026-10-03)', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
     expect(within(toolbar()).getByText('Vorige')).toBeTruthy()
@@ -781,7 +814,7 @@ describe('the toolbar over the grid', () => {
   it('offers undo in a toast after a change', async () => {
     remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
@@ -810,7 +843,7 @@ describe('the toolbar over the grid', () => {
     remote.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['kind'], group: 'date' } })
     remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
       type(cell('Montage', 'place'), 'Delete')
@@ -836,7 +869,7 @@ describe('the toolbar over the grid', () => {
 
   it('adds a filter chip from + Filter and removes it with its ×', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
@@ -856,7 +889,7 @@ describe('the toolbar over the grid', () => {
     let answer!: (saved: Saved) => void
     remote.update.mockReturnValueOnce(new Promise<Saved>((resolve) => (answer = resolve)))
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
     type(cell('Montage', 'place'), 'Delete')
@@ -885,7 +918,7 @@ describe('the toolbar over the grid', () => {
 
   it("+ New opens a row at the top of today's group with its title in edit", async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' }))
 
@@ -897,7 +930,7 @@ describe('the toolbar over the grid', () => {
 
   it('keeps focus in the search while the rows it filters move under the active cell', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Lunch bistrot', 'kind'))
     fireEvent.keyDown(cell('Lunch bistrot', 'kind'), { key: 'Delete' })
@@ -912,7 +945,7 @@ describe('the toolbar over the grid', () => {
   it('commits an open editor when focus leaves for the search, and leaves focus there', async () => {
     remote.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, place: 'x' } }, batch: 'b1' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Lunch bistrot', 'place'))
     fireEvent.keyDown(cell('Lunch bistrot', 'place'), { key: 'x' })
@@ -927,7 +960,7 @@ describe('the toolbar over the grid', () => {
 
   it('jumps to a view from the search', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.change(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }), { target: { value: 'afwez' } })
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Naar Afwezigheden' }))
@@ -1128,5 +1161,47 @@ describe('a new record with a required relation', () => {
     expect(draft()).toBeUndefined()
     expect(remote.create).not.toHaveBeenCalled()
     await act(async () => undefined)
+  })
+})
+
+describe('a day plan', () => {
+  const field = { required: false, fact: false }
+  const plan: Model = {
+    key: 'plan', label: 'Plan', title_label: 'Wat', title_readonly: false,
+    fields: {
+      day: { ...field, type: 'date', label: 'Dag' },
+      from: { ...field, type: 'datetime', label: 'Start' },
+      until: { ...field, type: 'datetime', label: 'Einde' },
+      kind: { ...field, type: 'select', label: 'Soort', options: { spel: 'Spel', maal: 'Maal' }, tones: { spel: 'rose', maal: 'green' } },
+    },
+  }
+  const view: View = {
+    key: 'plan', label: 'Plan', table: 'plan', model: 'plan', type: 'grid', date_field: 'day', columns: ['day', 'from', 'until', 'kind'], hidden: ['until'],
+    sort: ['from'], group: 'day',
+    facts: [{ kind: 'first', column: 'from', where: { kind: 'spel' }, label: 'spel' }, { kind: 'empty', column: 'from', label: 'geen uur' }],
+  }
+  const at = (id: number, title: string, from: string | null, until: string | null, kind: string): Row =>
+    ({ id, title, status: '', fields: { day: '2026-11-02', from, until, kind } })
+  const rows = [at(1, 'Lunch', '2026-11-02T13:00', '2026-11-02T14:00', 'maal'), at(2, 'Spel', '2026-11-02T20:00', null, 'spel'), at(3, 'Nacht', null, null, 'maal')]
+
+  it("reads a moment as its time, the end muted, under Tijd; an empty one as the view's empty fact", () => {
+    renderGrid(rows, { model: plan, view })
+    const time = cell('Lunch', 'from')
+
+    expect(screen.getByRole('columnheader', { name: /Tijd/ })).toBeTruthy()
+    expect(headers()).not.toContain('until')
+    expect(time.textContent).toBe('13:00–14:00')
+    expect(time.querySelector('.nv-time__end')?.textContent).toBe('–14:00')
+    expect(cell('Spel', 'from').textContent).toBe('20:00')
+    expect(cell('Nacht', 'from').querySelector('.nv-blank')?.textContent).toBe('geen uur')
+  })
+
+  it('colours an option by its tone and the band by its day, its date and its toned facts', () => {
+    renderGrid(rows, { model: plan, view })
+
+    expect(cell('Lunch', 'kind').querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--green')
+    expect(bands()[0].querySelector('.nv-group__day')?.textContent).toBe('Maandag')
+    expect(bands()[0].querySelector('.nv-group__date')?.textContent).toBe('2 november')
+    expect(bands()[0].querySelector('.nv-group__fact i')?.className).toBe('nv-tone--rose')
   })
 })

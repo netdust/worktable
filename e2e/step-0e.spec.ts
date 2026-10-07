@@ -419,7 +419,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   await pick(page, 'Dagplanning')
   const row = () => named(page, 'dagplanning undo e2e')
   const moved = patchOf(page, 'activiteit')
-  await typeInto(await cellOf(page, row(), 'Start'), '2026-10-15T20:00')
+  await typeInto(await cellOf(page, row(), 'Tijd'), '2026-10-15T20:00')
   await (await moved).response()
   await expect.poll(datumOf).toBe('2026-10-15')
 
@@ -427,10 +427,10 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+z')
   expect((await undone).status()).toBe(200)
   await expect.poll(datumOf).toBe('2026-10-13')
-  await expect(await cellOf(page, row(), 'Start')).toHaveText('')
+  await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
 
   await page.reload()
   await pick(page, 'Dagplanning')
-  await expect(await cellOf(page, row(), 'Start')).toHaveText('')
+  await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
   expect(await datumOf()).toBe('2026-10-13')
 })

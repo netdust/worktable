@@ -192,7 +192,7 @@ describe('writes', () => {
     expect(toEngineData({ start_at: '' }, source, writes.sources)).toEqual({ start_at: null })
   })
 
-  it("a mapped query column takes its target's options and relation, unless it declares its own", () => {
+  it("a mapped query column reads the options the engine serves on it, and its target's relation", () => {
     const own: EngineSchema = {
       ...writes,
       sources: {
@@ -210,8 +210,8 @@ describe('writes', () => {
     const fields = toSchema(own).models.dagplanning.fields
     const status = columnsFor(toSchema(own).models.dagplanning, { key: 'd', label: 'd', table: 'dagplanning', model: 'dagplanning' }, true).find((c) => c.id === 'status')
 
-    expect(fields.status).toMatchObject({ type: 'select', options: { optie: 'Optie', bevestigd: 'Bevestigd' } })
-    expect(status?.text?.({ id: 40, title: '', status: '', fields: { status: 'optie' } })).toBe('Optie')
+    expect(fields.status).toMatchObject({ type: 'text' })
+    expect(status?.text?.({ id: 40, title: '', status: '', fields: { status: 'optie' } })).toBe('optie')
     expect(fields.soort).toMatchObject({ type: 'select', options: { reis: 'Reis' } })
     expect(fields.productie_id).toMatchObject({ type: 'relation', relation: { model: 'productie', multiple: false } })
   })
@@ -251,7 +251,7 @@ describe('toSavedViews', () => {
     expect(planning.arrangement.sort).toEqual([{ id: 'start_at', desc: false }])
     expect(planning.arrangement.group).toBe('plandag')
     expect(planning.arrangement.hidden).toEqual(['plandag', 'uren', 'betaald', 'extra'])
-    expect(planning.arrangement.order).toEqual(['productie_id', 'soort', 'start_at', 'status'])
+    expect(planning.arrangement.order).toEqual(['title', 'productie_id', 'soort', 'start_at', 'status'])
   })
 
   it("Planning's SavedView has key '1', label 'Planning', table 'activiteit', date_field 'plandag', and the engine's owner flags", () => {
@@ -297,6 +297,16 @@ describe('an arrangement on the wire', () => {
       visible_fields: ['omschrijving', 'productie_id', 'soort', 'start_at', 'status'],
     })
     expect(fromStoredView({ ...planning, ...stored }, activiteit)).toEqual({ arrangement, fixed })
+  })
+
+  it('keeps the title column where the view stores it, through a read and a save', () => {
+    const later = { ...planning, visible_fields: ['start_at', 'omschrijving', 'soort', 'status'] }
+    const { arrangement, fixed } = fromStoredView(later, activiteit)
+
+    expect(arrangement.order).toEqual(['start_at', 'title', 'soort', 'status'])
+    expect(toStoredView(arrangement, fixed, activiteit).visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'status'])
+    const moved = { ...arrangement, order: ['soort', 'start_at', 'title', 'status'] }
+    expect(toStoredView(moved, fixed, activiteit).visible_fields).toEqual(['soort', 'start_at', 'omschrijving', 'status'])
   })
 
   it('keeps a reorder and drops what only the grid keeps: widths, picks, matrix keys, lookups and the title id', () => {

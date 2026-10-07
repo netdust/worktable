@@ -12,6 +12,7 @@ const strings = {
   new: 'Nieuw',
   readOnly: 'Deze lijst is alleen-lezen',
   week: 'Week',
+  time: 'Tijd',
   previous: 'Vorige',
   next: 'Volgende',
   previousWeek: 'Vorige week',

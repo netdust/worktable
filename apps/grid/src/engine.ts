@@ -107,13 +107,11 @@ type Sources = Record<string, EngineSource>
 /** The column the grid's `title` stands for; none for a title through a relation. */
 export const titleColumn = (source: EngineSource): string | null => (source.title_via ? null : source.title)
 
-/** A mapped query column reads as its target column, unless it declares its own options or relation. */
+/** The engine serves a mapped query column with its target's options and tones; only the relation is read off the target here. */
 function asTarget(column: EngineColumn, sources: Sources): EngineColumn {
   const target = column.writes ? sources[column.writes.dataset]?.columns[column.writes.field] : undefined
-  if (!target) return column
-  const options = column.options ?? target.options
-  const relation = column.relation ?? target.relation
-  return { ...column, ...(options ? { options } : {}), ...(relation ? { relation } : {}) }
+  const relation = column.relation ?? target?.relation
+  return relation ? { ...column, relation } : column
 }
 
 function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources): Field {
@@ -230,9 +228,10 @@ export function fromStoredView(view: EngineArrangement, source: EngineSource): {
   })
   const fields = fieldsOf(source)
   const { chips, fixed } = splitFilters(view.filters)
+  const order = view.visible_fields.map((key) => columnId(source, key)).filter((id) => id === 'title' || fields.includes(id))
   const arrangement = {
     hidden: fields.filter((key) => !view.visible_fields.includes(key)),
-    order: view.visible_fields.filter((key) => fields.includes(key)),
+    order: order.includes('title') ? order : ['title', ...order],
     widths: [],
     sort,
     filters: chips,
@@ -260,15 +259,16 @@ export function withScope(fixed: Record<string, unknown>, scope: Scope | null): 
 }
 
 /**
- * The arrangement as the engine stores it. `visible_fields` is the title column, then the shown fields in their order:
+ * The arrangement as the engine stores it. `visible_fields` is the shown columns in their order, the title column where it stands (first when it was never moved):
  * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks and matrix keys stay in the browser; lookup, rollup and custom (`custom` JSON) columns are not stored,
  * so hiding or reordering one is lost on save. Custom fields come with Field, step 5.
  */
 export function toStoredView(arrangement: StoredArrangement, fixed: Record<string, unknown>, source: EngineSource): EngineArrangement {
   const title = titleColumn(source)
   const fields = fieldsOf(source)
-  const kept = arrangement.order.filter((id) => fields.includes(id))
-  const shown = [...kept, ...fields.filter((id) => !kept.includes(id))].filter((id) => !arrangement.hidden.includes(id))
+  const kept = arrangement.order.filter((id) => fields.includes(id) || (id === 'title' && title !== null))
+  const placed = kept.includes('title') || title === null ? kept : ['title', ...kept]
+  const shown = [...placed, ...fields.filter((id) => !placed.includes(id))].filter((id) => !arrangement.hidden.includes(id))
   const group = arrangement.group === null ? null : engineColumn(arrangement.group, title)
   return {
     filters: mergeFilters(arrangement.filters, fixed),
@@ -277,7 +277,7 @@ export function toStoredView(arrangement: StoredArrangement, fixed: Record<strin
       return column === null ? [] : [desc ? `-${column}` : column]
     }),
     group_by: group,
-    visible_fields: [...(title ? [title] : []), ...shown],
+    visible_fields: shown.map((id) => (id === 'title' ? title ?? id : id)),
   }
 }
 

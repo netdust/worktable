@@ -3,7 +3,7 @@ import { type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNod
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { RelationContext } from './cells/Relation'
-import { type Column, columnsFor } from './columns'
+import { type Column, columnsFor, inDays } from './columns'
 import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
@@ -56,6 +56,9 @@ export interface GridProps {
 
 const NO_MODELS: Record<string, Model> = {}
 
+/** The row-number column's width, as `.nv-num` sets it. */
+const NUMBER_WIDTH = 44
+
 /** Only a cell or its editor drives the sheet; a header, Open or Dismiss button keeps its own keys. */
 function fromCell(target: EventTarget): boolean {
   return target instanceof Element && (target.matches('td[data-cell]') || target.closest('[data-editor]') !== null)
@@ -69,13 +72,20 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
-  const columns = useMemo(() => {
+  const declared = useMemo(() => {
     const declared = columnsFor(model, view, writable, models)
     const absent = wanted.filter((need) => !declared.some((c) => c.field === need))
     if (absent.length === 0) return declared
     return [...declared, ...columnsFor(model, { ...view, columns: absent, lookups: {}, rollups: {} }, writable, models).filter((c) => c.field !== 'title')]
   }, [model, view, writable, models, wanted])
   const every = useMemo(() => columnsFor(model, { ...view, columns: undefined }, false, models), [model, view, models])
+  const by: Column | undefined = layout.group ? every.find((c) => c.id === layout.group) : undefined
+  const day = by?.kind === 'date' ? by.id : null
+  const hidden = layout.hidden.join()
+  const columns = useMemo(
+    () => (day ? inDays(declared, model, day, view.facts, declared.map((c) => c.id).filter((id) => !layout.hidden.includes(id))) : declared),
+    [declared, model, day, view.facts, hidden],
+  )
   const byId = useMemo(() => new Map(columns.map((c) => [c.id, c])), [columns])
 
   const drafts = useMemo(() => state.rows.filter((r) => r.id === DRAFT), [state.rows])
@@ -83,9 +93,9 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     () => filterRows(state.rows.filter((r) => r.id !== DRAFT), layout.filters, query),
     [state.rows, layout.filters, query],
   )
-  const by: Column | undefined = layout.group ? every.find((c) => c.id === layout.group) : undefined
-  // Grouped by a day, each section names it: the column would repeat it on every row.
-  const table = useGridTable(columns, shown, layout, onLayout, by?.kind === 'date' ? [by.id] : [], wanted)
+  // Grouped by a day, each section names it; under a scope every row holds the same record: either column would repeat it on every row.
+  const unshown = [...(day ? [day] : []), ...(scope ? [scope.field] : [])]
+  const table = useGridTable(columns, shown, layout, onLayout, unshown, wanted)
   const visible = table.getVisibleLeafColumns().map((c) => byId.get(c.id)!)
   const groups = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by, { facts: view.facts ?? [], columns: every, cut })
   const [folded, fold] = useFolded(view.key, by?.id ?? null)
@@ -288,7 +298,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       ) : (
       <div className="nv-body">
         <div className="nv-scroll">
-          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + NUMBER_WIDTH }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
             <GridHeader table={table} byId={byId} />
             <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
               emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />

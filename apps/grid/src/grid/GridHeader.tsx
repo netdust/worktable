@@ -38,6 +38,7 @@ export function GridHeader({ table, byId }: { table: Table<Row>; byId: Map<strin
     <thead className="nv-grid__head">
       {table.getHeaderGroups().map((group) => (
         <tr key={group.id}>
+          <th className="nv-th nv-num" aria-hidden="true">#</th>
           {group.headers.map((header, i) => (
             <HeaderCell key={header.id} header={header} column={byId.get(header.column.id)!} first={i === 0} />
           ))}

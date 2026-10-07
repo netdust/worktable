@@ -148,7 +148,8 @@ test('switch-production @e2e', async ({ page }) => {
   await page.getByRole('option', { name: 'Nachtwacht', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
 
-  await expect.poll(() => shownIn(page, 'Productie')).toEqual(['Nachtwacht'])
+  // Under the scope every row is Nachtwacht's: the Productie column is hidden (R10.7).
+  await expect(page.locator('thead th', { hasText: 'Productie' })).toHaveCount(0)
   await expect(gridRows(page).first()).toBeVisible()
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toHaveCount(0)
   await expect((await filterMenu(page)).getByRole('button', { name: /^Productie:/ })).toHaveCount(0)
@@ -314,12 +315,17 @@ test('fold-day-band @e2e', async ({ page }) => {
   await pick(page, 'Dagplanning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
+  // Row numbers lead every row, and subtle dividers stand between the cells (Stefan, 2026-10-07).
+  await expect(gridRows(page).first().locator('td').first()).toHaveText('1')
+  await expect(gridRows(page).nth(7).locator('td').first()).toHaveText('8')
+  await expect(gridRows(page).first().locator('td').nth(2)).not.toHaveCSS('border-right-width', '0px')
 
   const first = bands(page).first()
   await expect(first).toHaveAttribute('aria-expanded', 'true')
   await first.click()
   await expect(first).toHaveAttribute('aria-expanded', 'false')
   await expect(gridRows(page)).toHaveCount(21)
+  await expect(gridRows(page).first().locator('td').first()).toHaveText('1')
   await expect(first.locator('.nv-group__count')).toHaveText('7')
   await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
   await expect(bands(page).nth(1)).toHaveAttribute('aria-expanded', 'true')
@@ -378,7 +384,13 @@ test('inherited-venue @e2e', async ({ page }) => {
   for (const tr of await inherited.all()) {
     const cell = tr.locator('td').nth(locatie)
     await expect(cell.locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
-    await expect(cell.locator('.nv-via')).toHaveText('via Speelreeks')
+    await expect(cell.locator('.nv-via')).toHaveText('via speelreeks')
+    // Never clipped: the venue gives way, the tag keeps its full width.
+    const fits = await cell.locator('.nv-via').evaluate((tag) => {
+      const td = tag.closest('td')?.getBoundingClientRect()
+      return tag.scrollWidth <= tag.clientWidth && td !== undefined && tag.getBoundingClientRect().right <= td.right
+    })
+    expect(fits).toBe(true)
     await expect(cell.locator('.nv-inherited')).toHaveCSS('font-style', 'italic')
   }
 

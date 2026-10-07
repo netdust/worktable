@@ -42,6 +42,16 @@
   --color-danger-fg: #b0302f;
   --color-danger-bg: #f8e1e1;
 
+  /* The generic palette a column colours its options from (the prototype's soort hues). */
+  --tone-rose: #c2416b;
+  --tone-violet: #6d4fc2;
+  --tone-amber: #b7791f;
+  --tone-sky: #2b7bb9;
+  --tone-slate: #5b6675;
+  --tone-green: #2f8a57;
+  --tone-teal: #138a8a;
+  --tone-grey: #7a838d;
+
   --shadow-pop: 0 8px 28px rgba(20, 30, 45, 0.16), 0 1px 3px rgba(20, 30, 45, 0.1);
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -84,6 +94,14 @@
     --color-warning-bg: #352a12;
     --color-danger-fg: #ee8a89;
     --color-danger-bg: #3a1c1c;
+    --tone-rose: #e27d9d;
+    --tone-violet: #a691ea;
+    --tone-amber: #dcaa52;
+    --tone-sky: #6cb0e3;
+    --tone-slate: #9ba5b3;
+    --tone-green: #6cc893;
+    --tone-teal: #52c3c3;
+    --tone-grey: #a4a7b0;
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
   }
@@ -124,6 +142,14 @@
   --color-warning-bg: #352a12;
   --color-danger-fg: #ee8a89;
   --color-danger-bg: #3a1c1c;
+  --tone-rose: #e27d9d;
+  --tone-violet: #a691ea;
+  --tone-amber: #dcaa52;
+  --tone-sky: #6cb0e3;
+  --tone-slate: #9ba5b3;
+  --tone-green: #6cc893;
+  --tone-teal: #52c3c3;
+  --tone-grey: #a4a7b0;
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }

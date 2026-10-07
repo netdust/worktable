@@ -1,5 +1,5 @@
 import { locale, t } from '../i18n'
-import type { GroupFact, Row } from '../types'
+import type { GroupFact, Row, Tone } from '../types'
 import type { Column } from './columns'
 import { DRAFT } from './store'
 
@@ -8,11 +8,15 @@ export interface Fact {
   kind: GroupFact['kind']
   label: string
   value: string
+  /** The tone of the option a `first` fact looks for, where its column declares one. */
+  tone?: Tone
 }
 
 export interface Group {
   key: string
   label: string
+  /** A day's group: its label as the weekday and the date. */
+  day?: { weekday: string; date: string }
   rows: Row[]
   count: number
   facts: Fact[]
@@ -68,12 +72,30 @@ function valueOf(fact: GroupFact, rows: Row[], band: Band, by: Column): string {
   return first ? shown(first, fact.column, band, by) : ''
 }
 
+function toneOf(fact: GroupFact, band: Band): Tone | undefined {
+  if (fact.kind !== 'first') return undefined
+  const [key, wanted] = Object.entries(fact.where)[0] ?? []
+  return key === undefined ? undefined : band.columns.find((c) => c.id === key)?.tones?.[String(wanted)]
+}
+
 function factsOf(key: string, rows: Row[], band: Band, by: Column): Fact[] {
   const cut = band.cut !== null && keyOf(band.cut, by) === key
   const real = rows.filter((row) => row.id !== DRAFT)
   return band.facts
-    .map((fact) => ({ kind: fact.kind, label: fact.label, value: cut ? UNCUT : valueOf(fact, real, band, by) }))
+    .map((fact) => {
+      const tone = toneOf(fact, band)
+      return { kind: fact.kind, label: fact.label, value: cut ? UNCUT : valueOf(fact, real, band, by), ...(tone ? { tone } : {}) }
+    })
     .filter((fact) => fact.value !== '' && (fact.kind === 'first' || fact.value !== '0'))
+}
+
+/** "Maandag" and "2 november": the band sets the weekday apart from the date. */
+export function dayParts(iso: string): { weekday: string; date: string } {
+  const [y, m, d] = iso.split('-').map(Number)
+  const at = new Date(y, m - 1, d)
+  const weekday = new Intl.DateTimeFormat(locale(), { weekday: 'long' }).format(at)
+  const date = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'long' }).format(at)
+  return { weekday: weekday.charAt(0).toUpperCase() + weekday.slice(1), date }
 }
 
 export function dayLabel(iso: string): string {
@@ -107,7 +129,7 @@ export function groupRows(rows: Row[], by: Column | undefined, band?: Band): Gro
   const groups = new Map<string, Group>()
   for (const row of rows) {
     const key = keyOf(row, by)
-    const group = groups.get(key) ?? { key, label: labelOf(key, row, by), rows: [], count: 0, facts: [] }
+    const group = groups.get(key) ?? { key, label: labelOf(key, row, by), rows: [], count: 0, facts: [], ...(by.kind === 'date' && key !== '' ? { day: dayParts(key) } : {}) }
     group.rows.push(row)
     group.count++
     groups.set(key, group)

@@ -1,4 +1,4 @@
-import { t } from '../../i18n'
+import { locale, t } from '../../i18n'
 import { BoolCell } from './Bool'
 import { DateCell, DateEditor, DateTimeEditor } from './Date'
 import { NumberCell, NumberEditor } from './Number'
@@ -14,7 +14,7 @@ export function Display(props: CellProps & { onToggle: () => void }) {
   return (
     <span className="nv-inherited">
       <Value {...props} />
-      <span className="nv-via">{t('via')} {via}</span>
+      <span className="nv-via">{t('via')} {via.toLocaleLowerCase(locale())}</span>
     </span>
   )
 }

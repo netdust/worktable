@@ -1,5 +1,5 @@
 import { locale, t } from '../i18n'
-import type { Field, Model, Row, Tone, View } from '../types'
+import type { Field, GroupFact, Model, Row, Tone, View } from '../types'
 
 export type CellKind =
   | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'datetime' | 'time' | 'relation' | 'bool' | 'number'
@@ -27,6 +27,10 @@ export interface Column {
   text: (row: Row) => string
   /** For an inherited value, the flag column's option label saying where it comes from; empty when the row's own. */
   via?: (row: Row) => string
+  /** In a day group, a moment's time and the muted end of its range; null when it holds none. */
+  range?: (row: Row) => { start: string; end: string } | null
+  /** What an empty cell says, from the view's facts (a band counting what this column leaves empty). */
+  blank?: string
   /** What an editor opens with. */
   edit: (row: Row) => string
   /** What a write sends for what was typed. */
@@ -39,6 +43,9 @@ const WIDTH: Record<CellKind, number> = {
   title: 240, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 170,
   bool: 80, number: 90, lookup: 170, rollup: 90, other: 140,
 }
+
+/** Room for a value and its "via" tag side by side. */
+const INHERITED_WIDTH = 250
 
 const TIME = /^(\d{1,2})(?:[:.h]?(\d{2}))?$/
 
@@ -182,7 +189,10 @@ function fieldColumn(key: string, field: Field, writable: boolean, model: Model)
     column.edit = (row) => firstId(row.fields[key])
     column.parse = (draft) => (draft === '' ? [] : [Number(draft)])
   }
-  if (field.inherited) column.via = viaOf(field.inherited, model.fields[field.inherited.flag])
+  if (field.inherited) {
+    column.via = viaOf(field.inherited, model.fields[field.inherited.flag])
+    column.width = INHERITED_WIDTH
+  }
   if (kind === 'other') column.text = (row) => (Array.isArray(row.fields[key]) ? String((row.fields[key] as unknown[]).length) : scalar(row.fields[key]))
 
   return column
@@ -233,4 +243,42 @@ export function columnsFor(model: Model, view: View, writable = true, models: Re
     ...lookupColumns(model, view, shown, models),
     ...rollupColumns(view),
   ]
+}
+
+const clock = (stored: string): string => MOMENT.exec(stored)?.slice(4, 6).join(':') ?? ''
+
+/** A moment's end: the datetime field declared right after it, when the view does not show that one itself. */
+function endOf(column: Column, model: Model, shown: string[]): string | null {
+  const keys = Object.keys(model.fields)
+  const next = keys[keys.indexOf(column.id) + 1]
+  return next && model.fields[next]?.type === 'datetime' && !shown.includes(next) ? next : null
+}
+
+/**
+ * Grouped by a day, a moment on its row's day reads as its time, with the end of its range after it:
+ * "13:00–14:00". A moment on another day keeps its date. An empty one says what the view's facts call it.
+ */
+export function inDays(columns: Column[], model: Model, day: string, facts: GroupFact[] = [], shown: string[] = columns.map((c) => c.id)): Column[] {
+  return columns.map((column) => {
+    if (column.kind !== 'datetime') return column
+    const end = endOf(column, model, shown)
+    const blank = facts.find((fact) => fact.kind === 'empty' && fact.column === column.id)?.label
+    const range = (row: Row) => {
+      const stored = scalar(row.fields[column.id])
+      if (!MOMENT.test(stored)) return null
+      const start = stored.slice(0, 10) === scalar(row.fields[day]) ? clock(stored) : formatMoment(stored)
+      const until = end ? clock(scalar(row.fields[end])) : ''
+      return { start, end: until === '' ? '' : `–${until}` }
+    }
+    return {
+      ...column,
+      label: end ? t('time') : column.label,
+      range,
+      text: (row) => {
+        const found = range(row)
+        return found ? found.start + found.end : column.text(row)
+      },
+      ...(blank ? { blank } : {}),
+    }
+  })
 }

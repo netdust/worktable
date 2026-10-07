@@ -89,7 +89,7 @@ function GridCell({ row, column, cell, keys, error, actions }: {
 }
 
 function FactText({ fact }: { fact: Fact }) {
-  if (fact.kind === 'first') return <span className="nv-group__fact"><i aria-hidden="true">●</i> {fact.label} <span className="nv-group__num">{fact.value}</span></span>
+  if (fact.kind === 'first') return <span className="nv-group__fact"><i className={fact.tone ? `nv-tone--${fact.tone}` : undefined} aria-hidden="true">●</i> {fact.label} <span className="nv-group__num">{fact.value}</span></span>
   return <span className="nv-group__fact"><span className="nv-group__num">{fact.value}</span> {fact.label}</span>
 }
 
@@ -102,12 +102,14 @@ function Band({ group, columns, open, onFold }: { group: Group; columns: Column[
   }
   return (
     <tr className="nv-group nv-group--fold" tabIndex={0} aria-expanded={open} onClick={onFold} onKeyDown={onKeyDown}>
-      <th role="rowheader" colSpan={columns.length}>
+      <th role="rowheader" colSpan={columns.length + 1}>
         <span className="nv-group__in">
           <span className="nv-group__chevron" aria-hidden="true">
             <svg viewBox="0 0 16 16" width="12" height="12"><path d="M6 4l4 4-4 4" /></svg>
           </span>
-          <span className="nv-group__label">{group.label}</span>
+          <span className="nv-group__label">
+            {group.day ? <><span className="nv-group__day">{group.day.weekday}</span> <span className="nv-group__date">{group.day.date}</span></> : group.label}
+          </span>
           <span className="nv-group__count">{group.count}</span>
           {group.facts.map((fact) => <FactText key={`${fact.kind}:${fact.label}`} fact={fact} />)}
           {Object.keys(totals).length > 0 && (
@@ -129,7 +131,7 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
     <tbody>
       {emptyText && (
         <tr>
-          <td className="nv-first nv-td--empty" colSpan={columns.length}>{emptyText}</td>
+          <td className="nv-first nv-td--empty" colSpan={columns.length + 1}>{emptyText}</td>
         </tr>
       )}
       {groups.map((group) => (
@@ -139,6 +141,7 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
             const r = index++
             return (
               <tr key={row.id} data-title={row.title} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
+                <td className="nv-td nv-num" aria-hidden="true">{r + 1}</td>
                 {columns.map((column, c) => (
                   <GridCell key={column.id} row={row} column={column} cell={{ row: r, col: c }} keys={keys}
                     error={column.field ? errors[cellKey(row.id, column.field)] : undefined} actions={actions} />

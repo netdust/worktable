@@ -1035,8 +1035,69 @@
   flex: none;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: var(--color-fg-subtle);
+  border-radius: 2px;
+  background: var(--tone, var(--color-fg-subtle));
+}
+
+/* The palette's hues; ok, warn and bad keep the status tokens below. */
+.nv-tone--rose,
+.nv-dot--rose,
+.nv-pill--rose {
+  --tone: var(--tone-rose);
+}
+
+.nv-tone--violet,
+.nv-dot--violet,
+.nv-pill--violet {
+  --tone: var(--tone-violet);
+}
+
+.nv-tone--amber,
+.nv-dot--amber,
+.nv-pill--amber {
+  --tone: var(--tone-amber);
+}
+
+.nv-tone--sky,
+.nv-dot--sky,
+.nv-pill--sky {
+  --tone: var(--tone-sky);
+}
+
+.nv-tone--slate,
+.nv-dot--slate,
+.nv-pill--slate {
+  --tone: var(--tone-slate);
+}
+
+.nv-tone--green,
+.nv-dot--green,
+.nv-pill--green {
+  --tone: var(--tone-green);
+}
+
+.nv-tone--teal,
+.nv-dot--teal,
+.nv-pill--teal {
+  --tone: var(--tone-teal);
+}
+
+.nv-tone--grey,
+.nv-dot--grey,
+.nv-pill--grey {
+  --tone: var(--tone-grey);
+}
+
+.nv-pill--rose,
+.nv-pill--violet,
+.nv-pill--amber,
+.nv-pill--sky,
+.nv-pill--slate,
+.nv-pill--green,
+.nv-pill--teal,
+.nv-pill--grey {
+  background: color-mix(in srgb, var(--tone) 14%, var(--color-bg-surface));
+  color: var(--tone);
 }
 
 .nv-dot--ok::before {
@@ -1075,14 +1136,46 @@
   cursor: default;
 }
 
-/* The grid's own look (the prototype's): taller rows by density, no vertical lines, a light header. The matrix keeps its own. */
+/* The grid's own look (the prototype's): taller rows by density, subtle dividers, a light header. The matrix keeps its own. */
 .nv-grid:not(.nv-mx) .nv-td {
   box-sizing: border-box;
   height: var(--row-h, 40px);
 }
 
+.nv-grid:not(.nv-mx) .nv-td,
+.nv-grid:not(.nv-mx) .nv-th {
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+/* The row numbers: frozen at the left with the first column, never a cell the keys reach. */
+.nv-grid:not(.nv-mx) .nv-num.nv-num {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 44px;
+  padding: 0 10px 0 0;
+  color: var(--color-fg-subtle);
+  font: 11.5px var(--font-mono);
+  text-align: right;
+}
+
+.nv-grid:not(.nv-mx) .nv-th.nv-num {
+  z-index: 3;
+}
+
+.nv-grid__foot td.nv-num {
+  z-index: 3;
+  padding: 0;
+}
+
 .nv-grid:not(.nv-mx) .nv-first {
-  border-right: 0;
+  left: 44px;
+  padding-left: 12px;
+}
+
+.nv-grid:not(.nv-mx) .nv-th.nv-first .nv-th__sort {
+  padding-left: 12px;
 }
 
 .nv-grid:not(.nv-mx) .nv-th {
@@ -1098,6 +1191,41 @@
 .nv-grid:not(.nv-mx) .nv-cell__tabular {
   font-family: var(--font-mono);
   font-size: 12.5px;
+}
+
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. */
+.nv-grid:not(.nv-mx) .nv-td {
+  color: var(--color-fg-muted);
+  font-size: 13.5px;
+}
+
+.nv-grid:not(.nv-mx) .nv-cell__title {
+  color: var(--color-fg-default);
+  font-weight: 500;
+}
+
+.nv-grid:not(.nv-mx) .nv-dot {
+  font-size: 12.5px;
+}
+
+.nv-grid:not(.nv-mx) .nv-pill {
+  font-weight: 500;
+}
+
+.nv-time {
+  color: var(--color-fg-default);
+}
+
+.nv-time__end {
+  color: var(--color-fg-subtle);
+}
+
+.nv-blank {
+  padding: 1px 8px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-fg-subtle);
+  font-size: 11.5px;
 }
 
 .nv-th__icon {
@@ -1364,7 +1492,18 @@
 
 .nv-grid .nv-group__fact i {
   font-style: normal;
-  color: var(--color-accent-default);
+  color: var(--tone, var(--color-accent-default));
+}
+
+.nv-grid .nv-group__fact + .nv-group__fact::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--color-fg-subtle);
+}
+
+.nv-grid .nv-group__date {
+  color: var(--color-fg-muted);
+  font-weight: 400;
 }
 
 .nv-grid .nv-group__num {
@@ -2052,16 +2191,24 @@
   }
 }
 
+/* The value gives way before its tag: the tag is never clipped. */
 .nv-inherited {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
   color: var(--color-fg-subtle);
   font-style: italic;
 }
+.nv-inherited > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .nv-via {
   flex: none;
+  white-space: nowrap;
   font-style: normal;
   font-size: 11px;
   border: 1px solid var(--color-border-default);

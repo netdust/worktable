@@ -19,11 +19,11 @@ const show = (row: Row) => render(<Display column={column} row={row} onToggle={(
 afterEach(cleanup)
 
 describe('an inherited cell', () => {
-  it('reads muted with the flag option label when the value comes from elsewhere', () => {
+  it('reads muted with the flag option label, in lower case, when the value comes from elsewhere', () => {
     const c = show(at('series'))
 
     expect(c.querySelector('.nv-inherited')).not.toBeNull()
-    expect(c.querySelector('.nv-via')?.textContent).toBe('via Series')
+    expect(c.querySelector('.nv-via')?.textContent).toBe('via series')
     expect(c.textContent).toContain('Hall')
   })
 
