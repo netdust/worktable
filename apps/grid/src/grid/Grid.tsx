@@ -50,6 +50,8 @@ export interface GridProps {
   filters?: ReactNode
   /** The scope chip's words, "Productie is Nachtwacht"; null when the view is not scoped. */
   scopeChip?: string | null
+  /** The Periode chip of a dated source. */
+  period?: ReactNode
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
   /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
@@ -68,7 +70,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, period = null, onAction, cut = null }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -290,7 +292,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   return (
     <RelationContext.Provider value={{ models, scope, spaceModel }}>
     <div className="nv-frame">
-      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
+      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} period={period} />
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState type="no-data" title={emptyTitle} description={emptyHint} />

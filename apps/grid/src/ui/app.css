@@ -541,49 +541,6 @@
   opacity: 0.7;
 }
 
-.nv-window {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* The week as one bordered control: ‹ Week 45 · 2–8 nov ›. */
-.nv-window__nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-}
-
-#root .nv-window__step {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--color-fg-muted);
-  cursor: pointer;
-}
-
-#root .nv-window__step:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-fg-default);
-}
-
-.nv-window__week {
-  padding: 0 8px;
-  color: var(--color-fg-default);
-  font-size: 13.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* One chip style for the bar: outlined, tinted once it is set. */
 #root .nv-chip {
   display: inline-flex;
@@ -618,36 +575,41 @@
   color: var(--color-accent-default);
 }
 
-.nv-day {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  color: var(--color-fg-muted);
-  font-size: 12px;
+/* The Periode chip: its name, ‹ the period › — the period opens the menu. */
+#root .nv-chip--period {
+  padding-right: 4px;
 }
 
-#root .nv-day input {
-  width: 30px;
-  height: 26px;
+#root .nv-chip__step,
+#root .nv-chip__value {
+  display: inline-grid;
+  place-items: center;
   padding: 0 4px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--radius-sm);
   background: none;
-  color: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
 }
 
-.nv-day input:hover {
-  border-color: var(--color-border-subtle);
+#root .nv-chip__value {
+  font-weight: 600;
 }
 
-.nv-day input::-webkit-datetime-edit {
-  display: none;
+#root .nv-chip__step:hover,
+#root .nv-chip__value:hover {
+  background: var(--color-bg-hover);
 }
 
-.nv-day input::-webkit-calendar-picker-indicator {
-  margin: 0;
-  cursor: pointer;
+.nv-period__day {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 8px;
+  color: var(--color-fg-muted);
+  font-size: 12.5px;
 }
 
 .nv-sheet {

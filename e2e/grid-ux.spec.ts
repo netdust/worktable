@@ -478,8 +478,10 @@ test('dagplanning-details @e2e', async ({ page }) => {
   await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
 
-  // R10.9: one bordered week control with the ISO week.
-  await expect(page.locator('.nv-window__week')).toHaveText('Week 12 · 22–28 mrt')
+  // R10.9 and R4: the Periode chip in the bar, with the ISO week.
+  await expect(page.getByRole('group', { name: 'Periode' }).locator('.nv-chip__value')).toHaveText(
+    'Week 12 · 22–28 mrt',
+  )
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
   // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Status; a time range with its end muted.
@@ -644,6 +646,7 @@ test.describe('a domain without the new shapes', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Alle /, exact: false })).toHaveCount(0)
     await expect(page.locator('.nv-chip--scope')).toHaveCount(0)
+    await expect(page.getByRole('group', { name: 'Periode' })).toHaveCount(0)
     await expect(page.locator('.nv-group__fact')).toHaveCount(0)
     await expect(page.locator('.nv-via')).toHaveCount(0)
     await shot(page, 'fiche-as-before')

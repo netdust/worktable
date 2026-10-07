@@ -38,6 +38,8 @@ export interface MatrixProps {
   onLayout: (layout: Layout) => void
   /** The filter chips, shown in the bar after "+ Column". */
   filters?: ReactNode
+  /** The Periode chip. */
+  period?: ReactNode
 }
 
 /** A cell by its row's id and its column's key, so it survives a repaint. */
@@ -138,7 +140,7 @@ function Cell({ view, models, cell, column, away, date, state }: {
 }
 
 /** Rows by day, one column per record or name, and what each has on a row; typed into like a sheet. */
-export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters }: MatrixProps) {
+export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters, period = null }: MatrixProps) {
   const [picked, setPicked] = useState(() => loadPicked(view))
   const [picking, setPicking] = useState(false)
   // A column stays for the visit once shown: removing its last cell must not pull it from under the cursor.
@@ -377,6 +379,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   return (
     <div className="nv-frame">
       <div className="nv-bar">
+        {period}
         <b>{model?.label ?? view.label}</b>
         <span>{rowCount(rows.length)}</span>
         <button type="button" className="nv-bar__button" aria-expanded={picking} onClick={() => setPicking(!picking)}>{t('addColumn')}</button>

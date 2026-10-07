@@ -90,7 +90,7 @@ test.describe('as the owner', () => {
     await expect(gridRows(page).first()).toHaveAttribute('data-title', LOTTE)
     await land(page, WEEK)
     await pick(page, 'Afwezigheden', 'Beschikbaarheden')
-    await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
+    await expect(page.getByText('Geen rijen in deze periode')).toBeVisible()
     expect((await rows(editor, 'beschikbaarheid')).some((r) => r.persoon_id !== 1)).toBe(true)
 
     // Another person's row by id, and a view on a dataset the owner cannot read, show nothing.

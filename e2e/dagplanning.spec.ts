@@ -119,3 +119,40 @@ test('locatie-own-and-back @e2e', async ({ page }) => {
   const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'locatie eigen en terug' })
   expect(held.locatie_id ?? null).toBeNull()
 })
+
+test('period-chip @e2e', async ({ page }) => {
+  const api = page.request
+  const productie = await idByName(api, 'productie', 'titel', 'Nachtwacht')
+  const [near, far] = ['periode in december', 'periode in februari']
+  await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: WEEK, omschrijving: near })
+  await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: '2027-02-15', omschrijving: far })
+  await openDagplanning(page)
+
+  const chip = page.getByRole('group', { name: 'Periode' })
+  const value = chip.locator('.nv-chip__value')
+  await expect(value).toHaveText('Week 52 · 21–27 dec')
+  await chip.getByRole('button', { name: 'Volgende periode' }).click()
+  await expect(value).toHaveText('Week 53 · 28 dec–3 jan')
+
+  await value.click()
+  await page.getByRole('button', { name: 'Deze maand' }).click()
+  await expect(value).toHaveText(/^[a-z]+ \d{4}$/)
+  const month = await value.innerText()
+  await page.reload()
+  await expect(value).toHaveText(month)
+
+  await value.click()
+  await page.getByRole('button', { name: 'Alles' }).click()
+  await expect(value).toHaveText('Alles')
+  await expect(chip.getByRole('button', { name: 'Volgende periode' })).toHaveCount(0)
+  await expect(named(page, near)).toHaveCount(1)
+  await expect(named(page, far)).toHaveCount(1)
+
+  await openView(page, 'Toewijzingen per activiteit', 'Activiteiten')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen per activiteit')
+  await expect(value).toHaveText(/^Week \d+ · /)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await value.click()
+  await expect(page.getByRole('button', { name: 'Deze maand' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Alles' })).toHaveCount(0)
+})

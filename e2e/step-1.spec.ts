@@ -257,7 +257,7 @@ test('apply-template @e2e', async ({ page }) => {
 
   await page.reload()
   await pick(page, 'Dagplanning', 'Activiteiten')
-  await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
+  await expect(page.getByText('Geen rijen in deze periode')).toBeVisible()
   await expect(gridRows(page)).toHaveCount(0)
 })
 

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Toolbar } from './Toolbar'
 
-const base = { title: 'Planning', window: null, onWindow: () => undefined, search: null, addLabel: 'Nieuw Activiteit', addBlocked: null }
+const base = { title: 'Planning', search: null, addLabel: 'Nieuw Activiteit', addBlocked: null }
 
 afterEach(cleanup)
 
