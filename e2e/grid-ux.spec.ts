@@ -697,16 +697,13 @@ test.describe
       await shot(page, 'read-limit-cut')
     })
 
-    // Shake-out row 17: the bar's count and the grid's foot still read an exact 5000 beside the title line's 5000+.
+    // Shake-out row 19: the bar's count and the grid's foot say 5000+ like the title line.
     test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
-      test.fail()
       await land(page, `/#from=${CUT_WEEK}`)
       await pick(page, 'Dagplanning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
-      await expect(page.locator('.nv-bar__count')).not.toHaveText(`${MAX_READ} rijen`, { timeout: 2000 })
-      await expect(page.locator('tfoot td.nv-first')).not.toHaveText(`Totaal · ${MAX_READ} rijen`, {
-        timeout: 2000,
-      })
+      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen`)
+      await expect(page.locator('tfoot td.nv-first')).toHaveText(`Totaal · ${MAX_READ}+ rijen`)
     })
   })
