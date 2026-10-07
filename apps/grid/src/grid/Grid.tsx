@@ -290,7 +290,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   return (
     <RelationContext.Provider value={{ models, scope, spaceModel }}>
     <div className="nv-frame">
-      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} filters={filters} scope={scopeChip} />
+      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState type="no-data" title={emptyTitle} description={emptyHint} />
@@ -302,7 +302,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridHeader table={table} byId={byId} />
             <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
               emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
-            <GridFoot columns={visible} count={total(groups) - drafts.length} sums={sums(shown, visible)} />
+            <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
         {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions}

@@ -12,6 +12,8 @@ interface Props {
   layout: Layout
   onLayout: (layout: Layout) => void
   count: number
+  /** The read limit cut the rows: the count is what loaded. */
+  cut?: boolean
   /** The filter chips and the Filter chip, after the columns. */
   filters?: ReactNode
   /** The selected space as the scope chip reads it: "Productie is Nachtwacht"; it cannot be removed. */
@@ -22,7 +24,7 @@ const GROUPABLE = ['date', 'select', 'relation']
 const ICON = 13
 
 /** The sheet's arrangement, under the toolbar, as one row of chips: the scope, the group, the sort, the columns, the filters. */
-export function GridBar({ model, columns, layout, onLayout, count, filters, scope = null }: Props) {
+export function GridBar({ model, columns, layout, onLayout, count, cut = false, filters, scope = null }: Props) {
   const label = (id: string) => columns.find((c) => c.id === id)?.label ?? model.fields[id]?.label ?? id
   const groupable = Object.entries(model.fields).filter(([, f]) => GROUPABLE.includes(f.type))
   const [first, ...rest] = layout.sort
@@ -56,7 +58,7 @@ export function GridBar({ model, columns, layout, onLayout, count, filters, scop
         <ColumnsMenu columns={columns} layout={layout} onLayout={onLayout} />
       </Popover>
       {filters}
-      <span className="nv-bar__count">{rowCount(count)}</span>
+      <span className="nv-bar__count">{rowCount(count, cut)}</span>
     </div>
   )
 }

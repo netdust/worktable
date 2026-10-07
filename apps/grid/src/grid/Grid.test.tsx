@@ -532,6 +532,13 @@ describe('the group bands', () => {
     expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: true })
   })
 
+  it('says N+ rijen in the bar and the foot when the read limit cut the rows', () => {
+    renderGrid(calais, { view: declared, cut: calais[5] })
+
+    expect(document.querySelector('.nv-bar__count')?.textContent).toBe('6+ rijen')
+    expect(screen.getByTestId('total').textContent).toContain('Totaal · 6+ rijen')
+  })
+
   it('keeps … on the group the last loaded row was in while the search hides that row', () => {
     const koffie: Row = { ...calais[5], id: 107, title: 'Ochtendkoffie', fields: { ...calais[5].fields, kind: 'travel' } }
     renderGrid([...calais, koffie], { view: declared, cut: calais[5], query: 'koffie' })

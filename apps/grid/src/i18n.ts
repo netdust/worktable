@@ -214,13 +214,14 @@ export function inUse(by: { label: string; count: number }[]): string {
   return t('inUse', { by: named.length === 0 ? last : `${named.join(', ')} ${t('and')} ${last}` })
 }
 
-export function rowCount(n: number): string {
-  return n === 1 ? t('row') : t('rows', { n })
+/** "21 rijen"; "5000+ rijen" where the read limit cut the rows. */
+export function rowCount(n: number, cut = false): string {
+  return cut ? t('rows', { n: `${n}+` }) : n === 1 ? t('row') : t('rows', { n })
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */
 export function summary(rows: number, groups: number | null, cut = false): string {
-  const said = [cut ? `${rows}+ rijen` : rows === 1 ? '1 rij' : `${rows} rijen`]
+  const said = [rowCount(rows, cut)]
   if (groups !== null) said.push(groups === 1 ? '1 groep' : `${groups} groepen`)
   return said.join(' · ')
 }
