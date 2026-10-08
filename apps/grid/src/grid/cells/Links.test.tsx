@@ -98,7 +98,7 @@ describe('a links cell', () => {
     renderGrid()
     open()
     expect(await screen.findByText('Geen resultaten')).toBeTruthy()
-    expect(screen.queryByText(/Meer resultaten/)).toBeNull()
+    expect(screen.queryByText(/Nog \d+ meer/)).toBeNull()
   })
 
   it('adds a person picked from the list, and keeps the box open', async () => {

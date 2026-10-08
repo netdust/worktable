@@ -89,7 +89,7 @@ const strings = {
   spaceCount: '{count} {label}',
   searchSpace: '{label} zoeken',
   noMatches: 'Geen resultaten',
-  moreResults: 'Meer resultaten: verfijn je zoekopdracht',
+  moreResults: 'Nog {n} meer: verfijn je zoekopdracht',
   viewType: 'View type',
   matrix: 'Matrix',
   hintMove: 'bewegen',

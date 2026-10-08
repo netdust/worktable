@@ -150,7 +150,7 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
             </ListBox>
             {found.status === 'loading' && <Spinner size="sm" />}
             {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
-            {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
+            {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults', { n: found.total - found.rows.length })}</p>}
           </div>
         </Pop>
       </ComboBox>

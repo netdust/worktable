@@ -102,12 +102,12 @@ describe('the relation picker', () => {
   })
 
   it('shows at most 50 and says how many more', async () => {
-    remote.records.mockResolvedValue({ rows: Array.from({ length: 60 }, (_, i) => org(100 + i, `Zaal ${i}`)), total: 80 })
+    remote.records.mockResolvedValue({ rows: Array.from({ length: 53 }, (_, i) => org(100 + i, `Zaal ${i}`)), total: 53 })
     renderGrid()
     open()
 
     expect(await titles()).toHaveLength(50)
-    expect(screen.getByText('Meer resultaten: verfijn je zoekopdracht')).toBeTruthy()
+    expect(screen.getByText('Nog 3 meer: verfijn je zoekopdracht')).toBeTruthy()
   })
 
   it('says when nothing matches', async () => {
