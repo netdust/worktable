@@ -74,7 +74,7 @@ afterEach(() => {
 /** The builder's rows; with none yet, one is added so its field list can be read. */
 async function builderRows(): Promise<HTMLElement[]> {
   fireEvent.click(screen.getByRole('button', { name: /^Filter\s*\d*$/ }))
-  if (!screen.queryByRole('group', { name: /^Voorwaarde/ })) fireEvent.click(screen.getByRole('button', { name: 'Voorwaarde toevoegen' }))
+  if (screen.queryAllByRole('group', { name: /^Voorwaarde/ }).length === 0) fireEvent.click(screen.getByRole('button', { name: 'Voorwaarde toevoegen' }))
   return screen.findAllByRole('group', { name: /^Voorwaarde/ })
 }
 const fieldList = (row: HTMLElement) => {
@@ -1855,6 +1855,23 @@ describe('a link that carries conditions', () => {
 
     await waitFor(() => expect(api.rows.mock.calls.at(-1)?.[3]).toMatchObject({ filters: two, join: 'or' }))
     expect(params().get('j')).toBeNull()
+  })
+
+  it('reads the rows again when only the join changes', async () => {
+    const two = [{ field: 'status', op: 'in', values: ['option'] }, { field: 'kind', op: 'in', values: ['show'] }]
+    const status = { type: 'select' as const, label: 'Status', options: { option: 'Optie' } }
+    const kind = { type: 'select' as const, label: 'Soort', options: { show: 'Voorstelling' } }
+    api.schema.mockResolvedValue({ ...served, models: { ...served.models, activity: { ...served.models.activity, fields: { status, kind } } } })
+    api.rows.mockResolvedValue({ rows: [{ id: 1, title: 'Montage', status: 'publish', fields: { status: 'option', kind: 'show' } }], total: 1 })
+    window.location.hash = link('planning', two)
+    await shell()
+    await waitFor(() => expect(lastFilters()).toEqual(two))
+
+    const [, second] = await builderRows()
+    fireEvent.click(within(second as HTMLElement).getByRole('button', { name: /^Verbinding:/ }))
+    fireEvent.click(within(within(second as HTMLElement).getByRole('listbox', { name: 'Verbinding' })).getByRole('option', { name: 'Of' }))
+
+    await waitFor(() => expect(api.rows.mock.calls.at(-1)?.[3]).toMatchObject({ join: 'or' }))
   })
 
   it("replaces the view's own date condition with the linked one, never beside it", async () => {

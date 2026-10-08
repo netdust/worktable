@@ -265,7 +265,6 @@ test('datetime-shown', async ({ page }) => {
 
 test('in-filter-applies', async ({ page }) => {
   await open(page, 'Optie of bevestigd', row(page, 'vergadering Gent'), 'Activiteiten')
-  await expect(page.locator('.nv-toolbar')).toContainText('+ 1 vaste filter')
   await expect(row(page, 'vergadering Gent')).toBeVisible()
   await expect(row(page, 'voorstelling Kortrijk')).toHaveCount(0)
   const statuses = async () => {
@@ -276,9 +275,15 @@ test('in-filter-applies', async ({ page }) => {
   }
   expect(new Set(await statuses())).toEqual(new Set(['Optie', 'Bevestigd']))
 
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Status is Optie of Bevestigd'])
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText([
+    'Plandag tussen 2026-10-12 en 2026-10-18',
+    'Status is Optie of Bevestigd',
+  ])
   await addCondition(page, 'Status', 'Optie')
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Status is Optie'])
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText([
+    'Plandag tussen 2026-10-12 en 2026-10-18',
+    'Status is Optie',
+  ])
   await expect(row(page, 'vergadering Gent')).toHaveCount(0)
   await expect(row(page, 'overnachting Brugge')).toBeVisible()
   expect(new Set(await statuses())).toEqual(new Set(['Optie']))

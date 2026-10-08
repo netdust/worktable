@@ -7,7 +7,7 @@ import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
-import { complete, isDate, type Kind, put, readConditions, windowOf } from '../grid/conditions'
+import { complete, isDate, joinOf, type Kind, put, readConditions, windowOf } from '../grid/conditions'
 import { type Layout, withFilters } from '../grid/layout'
 import { type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
@@ -229,7 +229,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     const filters = linked.reduce((all, condition) => put(all, condition, kind), layout.filters)
     storeLayout({ ...withFilters(layout, filters), join: j === 'or' ? 'or' : undefined })
   }, [settled, view?.key, layout === null])
-  const asks = layout ? JSON.stringify([layout.filters, layout.sort, layout.group]) : ''
+  const asks = layout ? JSON.stringify([layout.filters, joinOf(layout.filters, layout.join), layout.sort, layout.group]) : ''
   // The period is the condition on the view's date column: its days, for a matrix, a new row and the export.
   const dateCondition = layout && view?.date_field ? layout.filters.find((f) => f.field === view.date_field && isDate(f.op) && complete(f)) : undefined
   const conditionDays = useMemo(() => windowOf(dateCondition, new Date()), [JSON.stringify(dateCondition)])

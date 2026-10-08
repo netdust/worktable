@@ -157,6 +157,7 @@ test('switch-production @e2e', async ({ page }) => {
   // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
   const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
   expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning', 'Activiteiten'))).toEqual(nachtwacht)
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', SEED_WEEK)
   await expect(gridRows(page).first()).toBeVisible()
 
   // Kept in this browser: a reload still works in Nachtwacht.

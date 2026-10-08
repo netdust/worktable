@@ -50,14 +50,15 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
-  const [shift, setShift] = useState(0)
-  // The panel opens under its button and moves left as far as it must to stay on screen.
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null)
+  // The panel stands under its button, kept on screen; the chips before the button grow as one types, so it is placed on every render.
   useLayoutEffect(() => {
     if (!open || !panel.current || !root.current) return
-    const left = root.current.getBoundingClientRect().left
-    const over = left + panel.current.offsetWidth - (window.innerWidth - EDGE)
-    setShift(over > 0 ? Math.max(-over, EDGE - left) : 0)
-  }, [open, filters.length])
+    const button = root.current.getBoundingClientRect()
+    const left = Math.max(EDGE, Math.min(button.left, window.innerWidth - EDGE - panel.current.offsetWidth))
+    const next = { top: button.bottom + 8, left }
+    if (at?.top !== next.top || at?.left !== next.left) setAt(next)
+  })
   useEffect(() => {
     if (!open) return
     const away = (event: MouseEvent) => {
@@ -95,7 +96,7 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
             <ListFilter size={13} aria-hidden="true" />{t('addFilter')}
             {shown.length > 0 && <span className="nv-chip__count">{shown.length}</span>}
           </button>
-          {open && <div className="nv-fb-panel" ref={panel} style={{ left: shift }}><FilterBuilder fields={fields} filters={filters} join={join} onChange={onChange} onJoin={onJoin} /></div>}
+          {open && <div className="nv-fb-panel" ref={panel} style={at ?? { visibility: 'hidden' }}><FilterBuilder fields={fields} filters={filters} join={join} onChange={onChange} onJoin={onJoin} /></div>}
         </div>
       )}
     </div>

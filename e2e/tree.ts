@@ -37,7 +37,10 @@ export async function openWeek(page: Page, view: string, model: string, field: s
   const key = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view') as string
   await page.goto(weekLink(key, field, monday))
   await page.reload()
-  await expect.poll(() => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('f')).toBeNull()
+  // The landing waits for the saved views; under a full run's load that can take a while.
+  await expect
+    .poll(() => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('f'), { timeout: 15_000 })
+    .toBeNull()
 }
 
 /** Adds "<field> is <value>" through the filter builder: a new condition, its field, then the value from its list. */

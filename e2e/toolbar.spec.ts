@@ -92,8 +92,8 @@ test('filter-builder @e2e', async ({ page }) => {
 
     const chips = page.locator('.nv-bar .nv-chip--filter')
     await expect(chips).toHaveText([
-      'Status is Bevestigd',
       'Plandag tussen 2031-03-03 en 2031-03-09',
+      'Status is Bevestigd',
       'Soort is Repetitie of Opbouw',
       'Omschrijving bevat “zaal”',
     ])
@@ -106,8 +106,8 @@ test('filter-builder @e2e', async ({ page }) => {
     await expect(named(page, titles[2] as string)).toHaveCount(1)
     await page.reload()
     await expect(chips).toHaveText([
-      'Status is Bevestigd',
       'Plandag tussen 2031-03-03 en 2031-03-09',
+      'Status is Bevestigd',
       'Omschrijving bevat “zaal”',
     ])
     await expect(named(page, titles[2] as string)).toHaveCount(1)

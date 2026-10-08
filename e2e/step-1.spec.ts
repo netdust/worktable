@@ -195,7 +195,8 @@ async function applyInDrawer(page: Page, naam: string) {
 test('apply-template @e2e', async ({ page }) => {
   const naam = 'Speelreeks e2e Spiegel'
   const days = [0, 1, 2, 3].map((n) => plusDays(APPLY_WEEK, n))
-  await page.goto('/')
+  // Landed first: the week's condition stays with Dagplanning, and the tab's undo lives as long as this page.
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', APPLY_WEEK)
   await createInGrid(page, naam, days[0], days[3])
   const reeks = (await rowsOf<{ id: number; naam: string }>(page.request, 'speelreeks')).find((r) => r.naam === naam)
   expect(reeks).toBeDefined()
@@ -228,7 +229,7 @@ test('apply-template @e2e', async ({ page }) => {
   }
 
   await page.keyboard.press('Escape')
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', APPLY_WEEK)
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   // Grouped by plandag: one group a day, each the whole pattern at its times, the venue the Speelreeks's.
   const groups = await dayGroups(page)
@@ -467,12 +468,12 @@ test('apply-double-submit @e2e', async ({ page }) => {
 
 /** Applies the Sjabloon from the drawer and opens Dagplanning on the week, a cell focused for the keyboard. */
 async function appliedInDagplanning(page: Page, naam: string, week: string, days: number): Promise<number> {
-  await page.goto('/')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', week)
   const id = await speelreeks(page.request, naam, week, plusDays(week, days - 1))
   await pick(page, 'Tourstops')
   expect((await applyInDrawer(page, naam)).status()).toBe(201)
   await page.keyboard.press('Escape')
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', week)
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await (await cellOf(page, gridRows(page).first(), 'Soort')).click()
   return id
 }
