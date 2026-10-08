@@ -1,155 +1,125 @@
-# Plan review: react-aria (third review)
-Reviewed-plan: c5807d2d97ca1a11723db0fa9f999a724e3515f5 specs/react-aria/plan.md
-Verdict: not ready
+# Plan review: react-aria (fourth review)
+Reviewed-plan: 4e9ef7b8ac2fa778ff28959b28d3bea4b565a5f7 specs/react-aria/plan.md
+Verdict: ready with fixes
 
 ## Summary
 
-The revision fixed the old B1 in the places it named, and fixed S2 to S7 and N1 to N5. Four mechanisms you asked about check out in source:
-- **`isKeyboardDismissDisabled` lets Escape through.** `useOverlay.mjs:60-68` returns `false`, and `createKeyboardShortcutHandler.mjs` turns `false` into `continuePropagation`.
-- **A Popover inside a DatePicker honours it.** DatePicker's `PopoverContext` value (`DatePicker.mjs:141-146`) sets only trigger, triggerRef, placement and clearContexts. Local props win, and `usePopover.mjs:28-35` hands the prop to `useOverlay`.
-- **Escape gets past the calendar.** `useCalendarGrid.mjs:39-43` returns `false`, so Escape continues. Escape from a calendar day or a TextArea in `Pop` now reaches `<table onKeyDown>` once.
-- **Date segments let Enter through.** `useDateSegment.mjs:125-136` binds only Backspace, Delete and Mod+a.
+I checked the revision against react-aria 3.53.0, react-aria-components 1.22.0 and react-stately 3.51.0. I unpacked react-stately into the scratchpad to check the focus-ordering question.
 
-Two things the plan relies on do not hold:
-- A RAC ListBox swallows Escape too, and `onKeyDownCapture` on a RAC component is thrown away.
-- The ListBox's `onAction` does not fire on a click in the normal case.
+The fixes for B1 to B3 hold:
+- **Escape (B1):** a ListBox with `selectionMode="none"` lets Escape through to the sheet.
+- **Click (B3):** a click on an option fires `onAction`.
+- **Typeahead and arrows** still work with no selection mode.
+- **Programmatic focus moves RAC's focused key.** An effect that focuses an option element sets the focused key, and the ListBox's own focus handler does not override it.
+- **The wrapper sees option focus.** `onFocusCapture` on a plain wrapper div fires when an option takes focus.
+- **Capture handlers (B2):** they now sit on plain elements, as the general rule says.
 
-All three Blocking findings are in Task 2. The ComboBox key handling in Task 3 needs to be spelled out.
+The fixes for S1 to S4 and N1 to N4 are in the plan.
+
+The revision broke one thing: Task 2's tests still expect `aria-selected`, which `selectionMode="none"` no longer renders (S1). Separately, the ListBox lets ↑ and ↓ through at the edge of the list, which writes the cell (S2).
 
 ## Blocking
 
-**B1. The select ListBox swallows Escape. The plan's Escape rule leaves it out.**
-- **Plan:** Task 1 Interfaces says "Two parts would otherwise swallow it": the to-one ComboBox and the removal question. Task 2 Step 3 opens the ListBox "with `selectedKeys`".
-- **Source:** `react-aria/dist/private/selection/useSelectableCollection.mjs:186-191, 254`. The default `escapeKeyBehavior` is `'clearSelection'`. When `selectedKeys.size !== 0` and `disallowEmptySelection` is off, Escape clears the selection and returns `undefined`, which stops propagation.
-- **Effect:** the selection is never empty here (the current option, or `''` for leeg), so Escape never reaches `keys.ts:91`. Task 2's new test "Escape in the select listbox writes nothing" and Review Focus 3 fail.
-- **Fix:** give the ListBox `escapeKeyBehavior="none"` (a ListBox prop, `useListBox.d.ts:20`), or `selectionMode="none"` (see B3). Name the ListBox as a third part in the Task 1 Escape rule.
-
-**B2. `onKeyDownCapture` placed on a RAC component is dropped at runtime.**
-- **Plan:**
-  - Task 2 Step 3: "An `onKeyDownCapture` on the ListBox turns Enter and Tab … into `onCommit`".
-  - Task 1 Interfaces: "the to-one `ComboBox` (an `onKeyDownCapture` that calls `onCancel`)".
-- **Source:**
-  - RAC `ListBox.mjs:229-233` spreads only `filterDOMProps(props, {global: true})`. RAC `ComboBox.mjs:180` and `Popover.mjs:183` do the same.
-  - `react-aria/dist/private/utils/filterDOMProps.mjs` keeps a `…Capture` prop only when its base name is in `globalEvents`. That list has click, pointer, touch, mouse, scroll, wheel, animation and transition events, but no key events.
-  - So `onKeyDownCapture` on `ListBox`, `ComboBox` or `Pop` never reaches the DOM.
-  - The N2 premise ("usePress consumes Enter before any bubbling handler") still holds, so a capture handler is the right tool. It just has to sit on a real element.
-- **Fix:**
-  - Task 2: put the capture on a plain `<div>` that wraps the ListBox inside `Pop`.
-  - Task 3: put it on the RAC `Input`, which spreads its props (`Input.mjs:52-53`), or on a wrapping `<div>`.
-
-**B3. On a filled cell, a click on an option never reaches `onAction`.**
-- **Plan:** Task 2 Step 3: "a click arrives through `onAction` as `onCommit(key, 'stay')`", together with `selectionMode="single"` and `selectedKeys`.
-- **Source:** `useSelectableItem.mjs:114-118`. A ListBox defaults to `selectionBehavior: 'toggle'`. Then `hasPrimaryAction = allowsActions && (!allowsSelection || manager.isEmpty)`, and `hasSecondaryAction` needs `'replace'`.
-- **Effect:** with a selection present, `hasAction` is false and a click only toggles the selection (`:178`). `onAction` never fires, and with a controlled `selectedKeys` and no `onSelectionChange` the click does nothing. Task 2's "an option click commits once and stays" fails.
-- **Smallest change, pick one:**
-  - **(a)** `selectionMode="none"` plus `onAction`. A click fires the action and Escape passes, which also fixes B1. The current option is then marked by a class or `data-current` instead of `aria-selected`, and the test "the current option is marked" is adjusted to match.
-  - **(b)** Keep single selection, commit the click from `onSelectionChange`, and add `escapeKeyBehavior="none"`.
+None.
 
 ## Should fix
 
-**S1. Task 3 Step 3: the Escape capture must stop propagation.**
+**S1. Task 2's tests still assert `aria-selected`, and `selectionMode="none"` removes it.**
+- **Plan:**
+  - Task 2 Step 1: "the current option is marked" (`aria-selected`).
+  - Task 2 Step 1: the existing "picks a select from its listbox by letter and Enter" "passes against the new markup".
+  - Task 2 Step 3 says the current option carries `data-current` and that the test asserts it.
 - **Source:**
-  - When the search is empty, or a record is selected, `useComboBox.mjs:165-171` lets Escape continue to the table.
-  - A capture that calls `onCancel` without stopping the event means a second Escape reaches `Grid.tsx` `onKeyDown`. By then `editing` is already null, because `set` updates `keysRef` synchronously (`Grid.tsx:182-193`).
-  - On a draft row, that branch calls `store.discard()` and throws away the whole new row.
-  - Today `RelationPicker.tsx:93-103` stops the event.
-- **Fix:** "calls `onCancel` and stops propagation". Add the test "Escape in the to-one picker of a draft row keeps the draft row".
+  - `react-aria/dist/private/listbox/useOption.mjs:39`: `'aria-selected': state.selectionManager.selectionMode !== 'none' ? isSelected : undefined`. With no selection mode, no option has `aria-selected`.
+  - `apps/grid/src/grid/Grid.test.tsx:294`: `within(listbox).getByRole('option', { selected: true })`. This throws when no option is selected.
+  - `Grid.test.tsx:296` fires Enter on the `listbox` element itself, not on the focused option.
+- **Effect:** Step 1 contradicts Step 3. The existing test cannot pass unchanged.
+- **Fix:**
+  - In Step 1, change "(`aria-selected`)" to "(`data-current`)".
+  - Name the rewrite of `Grid.test.tsx:294-296`: the opening letter's option is `document.activeElement` (text `Voorstelling`), and Enter is fired on that element.
 
-**S2. Task 3 says nothing about Tab, or about Enter right after typing.**
-- **Tab:** `useComboBox.mjs:141-161` commits and then continues Tab to the table.
-  - `keys.ts` then runs `commit(cell, editing.draft, 'right')`.
-  - In enter mode the draft is the opening letter (`Relation.tsx:32`), so Tab would write the letter as the relation value.
-  - Today Tab calls `onClose` and is stopped (`RelationPicker.tsx:95-96`).
-- **Enter:** RAC hands the ListBox `autoFocus: state.focusStrategy || true` (`useComboBox.mjs:397`). With `true`, no item is focused until ↓ (`useSelectableCollection.mjs:377-392`).
-  - Today `rows[0]` is active, so Enter after typing picks the first match.
-  - Under RAC, Enter right after a search picks nothing. That is a behaviour change under R7, and "Enter picks the active record and writes once" depends on it.
-- **Fix:** Step 3 should say the Input keeps today's Tab handling (`onClose`, stopped). It should also say how the first record becomes active after a search, or record a `Ruling:`. Add a Grid-seam test "Tab in the to-one picker writes nothing".
-
-**S3. Task 1 Step 3 still has the old Enter rule.**
-- Step 3 (line 111) says "While a segment is empty, Enter is stopped".
-- Interfaces (line 78) says "only while some segments, not all, are empty".
-- The e2e flows at `step-0e.spec.ts:279-290, 371-393` clear every segment and expect `{ start_at: null }`, so Step 3 as written breaks them. The previous S1 is only half fixed.
-- **Fix:** Step 3 says "while some segments, not all, are empty".
-
-**S4. "The calendar starts on Monday: first column header is `ma`" fails as built.**
-- `useCalendarGrid.mjs:93` formats weekdays with `props.weekdayStyle || 'narrow'`, and RAC passes `weekdayStyle` through (`Calendar.mjs:201`).
-- In nl, narrow is `M` and short is `ma` (checked with Intl).
-- **Fix:** Step 3 sets `weekdayStyle="short"` on the `CalendarGrid`.
+**S2. ↑ at the first option, or ↓ at the last, now writes the cell and moves.**
+- **Plan:** Task 2 Step 3 lets the ListBox handle arrows. The wrapper's capture takes only Enter and Tab.
+- **Source:**
+  - `react-aria/dist/private/selection/useSelectableCollection.mjs:85-106`: when there is no next key and `shouldFocusWrap` is off, `arrowDown` and `arrowUp` return `false`, so the key propagates.
+  - `apps/grid/src/grid/keys.ts:97-100`: when the editor was opened by a letter (`mode === 'enter'`), an arrow writes `editing.draft` and moves the cell.
+  - Today `Select.tsx:47-48, 57-58` clamps ↑ and ↓ and stops them.
+- **Effect:** a select opened by a letter, with ↑ pressed on "leeg" or ↓ on the last option, writes the cell and moves away. That is an R7 change, and no test covers it.
+- **Fix:** the wrapper also stops ↑ and ↓ that bubble back out of the ListBox (a bubble-phase `onKeyDown` on the same div is enough). Add the Grid-seam test "↑ on the first option keeps the select open and writes nothing".
 
 ## Note
 
-- **N1. Task 2 opens on `startAt`.** `autoFocus` focuses the first selected key (`useSelectableCollection.mjs:383-388`), and RAC 1.22 ListBox has no focused-key prop. When the letter's option differs from the current one, Step 3 has to name how focus gets there, for example focusing that option's element in an effect. Otherwise "the listbox opens on the option the opening letter picks" fails.
-- **N2. Leaving a select writes the stored value, not the highlighted option.** Today `SelectEditor` drafts on every highlight move (`Select.tsx:42-44`), so leaving commits the highlighted option. The ListBox in Step 3 drafts nothing on focus moves, so leaving writes the stored value. This is a small R7 change; draft on focus change, or record a ruling.
-- **N3. A standalone `Pop` needs a `triggerRef` and `isOpen`.** Tasks 2, 4 (Question) and 6 (long text) use one. `EditorProps` carries no cell ref (`props.ts`), so each editor needs its own anchor element. Task 2 says "triggerRef the cell"; Tasks 4 and 6 do not say.
-- **N4. Task 1 Files says "the five specs' own `typeInto`".** Five specs do define `typeInto` (0b, 0c, 0d, 0e, 1), but 0c and 0d type no dates (`step-0c:73,81`, `step-0d:250`). Only the three listed need `fillDate`. The wording should say three.
+**N1. A calendar day click may drop focus to the body.**
+- `Pop` holds the `Calendar` with no `Dialog`. RAC `Popover.mjs` has no FocusScope or restoreFocus, and a non-modal popover is not a dialog (`Popover.mjs:123-137`).
+- When a day click closes the date popover, the focused calendar cell unmounts and focus falls to the body. Then either `onLeave` commits or later keys miss the table.
+- Task 1's own test "a calendar day click commits the date once … the edit stays open" will show this. Likely fixes: put a RAC `Dialog` inside `Pop` (its FocusScope returns focus to the calendar button), or refocus a segment from the calendar's change handler.
+
+**N2. Task 2's focus effect may run before the options exist.**
+- The opening effect needs the option elements to be in the DOM. RAC builds its collection in a separate render pass, so on the first effect the element may not exist yet.
+- "the listbox opens on the option the opening letter picks" will catch it. A retry once the element appears (for example a ref callback on the `startAt` item) is the likely shape.
+
+**N3. Task 3's wrapper handles only three keys.**
+- **Delete and Backspace:** the wrapper's capture lists Escape, Tab and Enter, but Step 1 tests "Delete in an empty search clears", and Task 4 tests "Backspace … removes the last chip". Today `RelationPicker.tsx:98-99` does this with `onClear` and stops the key. Under RAC, nothing stops it, and in the table it is just ignored (`keys.ts` editingKey), so `onClear` never runs. The same wrapper should take it.
+- **Enter with no focused option:**
+  - It should keep today's guard against picking from a stale list while the search is loading (`RelationPicker.tsx:92-93`).
+  - It should act only when the target is the `Input`. In Task 4 the chips sit inside the wrapper, so Enter on a chip's remove button would otherwise pick the first record.
+  - With virtual focus, "no focused option" means the input has no `aria-activedescendant`.
+
+**N4. Tab needs `preventDefault`, not only stopping.**
+- Task 2 Step 3 says the wrapper turns Tab into a commit "and stops" it. Today's handler also calls `preventDefault` (`Select.tsx:57`). Without it the browser moves focus too, which can land outside the grid and trigger a leave.
 
 ## Premises checked
 
-**Escape and the overlays**
-- `Pop` `isKeyboardDismissDisabled` lets Escape propagate → `overlays/useOverlay.mjs:60-68` + `interactions/createKeyboardShortcutHandler.mjs` (false → continuePropagation) → holds
-- `isKeyboardDismissDisabled` is a RAC Popover prop → `usePopover.d.ts:39`, RAC `Popover.d.ts:7` → holds
-- A Popover inside a DatePicker honours it → `DatePicker.mjs:141-146` (context sets no dismiss prop), `Popover.mjs:43` useContextProps, `usePopover.mjs:28-35` → holds
-- Escape from a calendar day reaches the sheet → `useCalendarGrid.mjs:39-43` returns false → holds
-- Escape from a select ListBox reaches the sheet → `useSelectableCollection.mjs:186-191, 254` → does not hold (B1)
-- ComboBox swallows Escape while the search holds text → `useComboBox.mjs:165-171` → holds (the plan handles it; S1 on stopping)
+**Select ListBox with `selectionMode="none"`**
+- A click fires `onAction` → `useSelectableItem.mjs:114-118` (no selection, so a primary action), `:185-186`; `useOption.mjs:57, 68` → holds
+- Enter fires `onAction` → `useSelectableItem.mjs:185, 307-309` → holds (the plan stops Enter in the capture first anyway)
+- Escape propagates → `useSelectableCollection.mjs:186-192` (selected keys empty, so `false`, so the key continues) → holds
+- Typeahead still works → `useTypeSelect.mjs:49-62`, merged at `useSelectableCollection.mjs:450-455`, not tied to the selection mode → holds
+- Arrows move focus → `useSelectableCollection.mjs:85-106` and the item's focus effect at `useSelectableItem.mjs:68-75` → holds, but the key propagates at the list's edges (S2)
+- Focusing an option element in code moves the focused key → `useSelectableItem.mjs:92-93` item `onFocus`; react-stately `useMultipleSelectionState.mjs:27-31, 70-77` updates the key synchronously, so the collection's `onFocus` (`useSelectableCollection.mjs:293`) does not override it → holds
+- `onFocusCapture` on a plain wrapper sees option focus → the wrapper is the option's parent in both the DOM and the React tree → holds
+- `aria-selected` still marks an option → `useOption.mjs:39` → does not hold (S1)
+- `data-current` reaches the option element → `useOption.mjs:77` filterDOMProps keeps `data-*` → holds
+- Space does not commit → `isActionKey` is Enter only (`useSelectableItem.mjs:307`) → holds
+- A non-modal `Pop` does not steal focus on mount → `Popover.mjs:123-137` (not a dialog, so no autofocus) → holds
 
-**Capture handlers and clicks**
-- `onKeyDownCapture` on a RAC ListBox or ComboBox reaches the DOM → `ListBox.mjs:229-233`, `ComboBox.mjs:180`, `filterDOMProps.mjs` globalEvents → does not hold (B2)
-- usePress consumes Enter on an option (the reason for the capture) → holds per the second review; a capture on a plain wrapper element sees it first
-- A click on an option fires `onAction` with single selection → `useSelectableItem.mjs:114-118, 178` → does not hold when a key is selected (B3)
-- Popover passes `onClick`, `onDoubleClick` and `data-editor` to the DOM → `filterDOMProps` globalEvents and `data-*` → holds
+**Capture handlers on plain elements**
+- Key events are dropped from RAC components → `filterDOMProps.mjs:38-77` (globalEvents has no key events) → holds; the plan's rule is correct
+- `DatePicker` and `TimeField` take `onKeyDown` for the Enter stop → `useDatePicker.mjs:103-105` (on the group) and `useDateField.mjs:148` → holds either way
+- Task 3 wrapper around the field sees the input's keys before `useComboBox` → the input sits inside the plain div → holds
+- The removal question is outside the picker's wrapper → `Links.tsx:110-139` (Question replaces the picker) → holds
 
-**Date and calendar behaviour**
-- Enter in a date segment propagates → `useDateSegment.mjs:125-136` → holds
-- The calendar shows `ma` as its first header → `useCalendarGrid.mjs:93` (narrow default gives `M`) → does not hold without `weekdayStyle="short"` (S4)
+**Revised Task 1 points**
+- Step 3's Enter rule now matches Interfaces ("some segments, not all") → plan line 113 → holds
+- `weekdayStyle="short"` gives `ma` → `useCalendarGrid.mjs:93` → holds
+- Three e2e specs call `fillDate` → plan line 64 → holds
+- A day click keeps the edit open → RAC Popover has no focus restore without a `Dialog` → unverified at runtime (N1)
 
-**ComboBox Enter and Tab**
-- ComboBox Enter stops propagation (no double write) → `useComboBox.mjs:114-138` → holds
-- ComboBox Tab stays in the picker → `useComboBox.mjs:141-161` continues propagation → does not hold (S2)
-- Enter picks the first record after a search → `useComboBox.mjs:397` (`autoFocus: true`) → does not hold (S2)
-
-**Grid and editor wiring**
-- A second Escape after cancel is harmless → `Grid.tsx:182-193, 266-270` (draft row discarded) → does not hold unless the capture stops it (S1)
-- `cancel` dispatches Escape → `Grid.tsx:248` → holds
-- `onLeave` commits the draft → `Grid.tsx:234-244` → holds
-- `Links.tsx:62-70` (Question owns keys) and `:106-108` (click stop) → holds
-- `EditorProps` unchanged, with `onCommit`, `onLeave`, `onCancel` and `onClose` → `cells/props.ts` → holds
-- `App.tsx:152` `notify`, `:466` the Grid → holds (S5 resolved)
-
-**Tests, setup and fixtures**
-- `Grid.test.tsx:303, 353, 377` named in Task 1 → holds (S3 resolved)
-- `Grid.test.tsx:286` select by letter and Enter; `:649-725` Zeker? → holds
-- e2e step-0e 270-290 and 371-393 rewritten → holds (S1's 385-389 covered)
-- `locale()` at `i18n.ts:259-266` falls back to `'en'` under jsdom; `Providers` + `renderNl` give the seam → holds (S6 resolved)
-- `main.tsx` exports nothing, so `Providers` is extracted → holds
-- `test-setup.ts` exists as the vitest setupFile → `vite.config` `setupFiles` → holds
-
-**Packages, exports and docs**
-- RAC 1.22.0 pins `react-aria` 3.53.0; the plan now pins it exactly → holds (N1 resolved)
-- `UNSAFE_PortalProvider` exported from `react-aria` → `dist/exports/PortalProvider` → holds
-- Switch `excludeFromTabOrder` → `AriaToggleProps` extends `FocusableDOMProps` → holds
-- `docs/SPEC.md` names React Aria → `SPEC.md:37` → holds (no task needed)
-- The field-contract date row and component budget are already updated → `field-contract.md:38, 46-50` → holds
+**Sheet wiring**
+- `keys.ts:91-100`: Escape cancels; an arrow in enter mode writes → holds (S2)
+- `Grid.tsx:66-68` `fromCell` via `[data-editor]` on `Pop` → holds
+- `Grid.tsx:263-270`: a second Escape on a draft row discards it; Task 3 now stops the first → holds
+- `EditorProps` has `onCommit`, `onDraft`, `onLeave`, `onCancel` and `onClose` → `cells/props.ts:11-24` → holds
 
 ## The cut
-One plan for one spec, one feature. The first review's judgement stands.
+
+One plan for one spec, one feature. The judgement of earlier reviews stands.
 
 ## Files
+
+The plan and the files the findings cite:
 - /home/ntdst/Sites/worktable/specs/react-aria/plan.md
-- /home/ntdst/Sites/worktable/specs/react-aria/plan-review.md
-- /home/ntdst/Sites/worktable/apps/grid/src/grid/Grid.tsx
-- /home/ntdst/Sites/worktable/apps/grid/src/grid/keys.ts
+- /home/ntdst/Sites/worktable/apps/grid/src/grid/Grid.test.tsx (:286-300)
+- /home/ntdst/Sites/worktable/apps/grid/src/grid/keys.ts (:91-100)
 - /home/ntdst/Sites/worktable/apps/grid/src/grid/cells/Select.tsx
 - /home/ntdst/Sites/worktable/apps/grid/src/grid/cells/RelationPicker.tsx
-- /home/ntdst/Sites/worktable/apps/grid/src/grid/cells/Relation.tsx
 
-React Aria sources are under /tmp/claude-1000/-home-ntdst-Sites-worktable/06225491-7288-42da-ac3a-20327873f390/scratchpad/pkgs/:
-- react-aria-3.53.0/package/dist/private/selection/useSelectableCollection.mjs
+React Aria and react-stately sources, under `/tmp/claude-1000/-home-ntdst-Sites-worktable/06225491-7288-42da-ac3a-20327873f390/scratchpad/pkgs/`:
 - react-aria-3.53.0/package/dist/private/selection/useSelectableItem.mjs
-- react-aria-3.53.0/package/dist/private/utils/filterDOMProps.mjs
-- react-aria-3.53.0/package/dist/private/combobox/useComboBox.mjs
-- react-aria-3.53.0/package/dist/private/calendar/useCalendarGrid.mjs
-- react-aria-components-1.22.0/package/dist/private/ListBox.mjs
-- react-aria-components-1.22.0/package/dist/private/DatePicker.mjs
+- react-aria-3.53.0/package/dist/private/selection/useSelectableCollection.mjs
+- react-aria-3.53.0/package/dist/private/selection/useTypeSelect.mjs
+- react-aria-3.53.0/package/dist/private/listbox/useOption.mjs
+- react-aria-components-1.22.0/package/dist/private/Popover.mjs
+- stately/x/package/dist/private/selection/useMultipleSelectionState.mjs (react-stately 3.51.0)
 
-Earlier reviews are in git: the first at `git show 8231620:specs/react-aria/plan-review.md`, the second at `git show f1bb05f:specs/react-aria/plan-review.md`.
+Earlier reviews are in git: the first at `git show 8231620:specs/react-aria/plan-review.md`, the second at `git show f1bb05f:…`, the third at `git show 04266ab:…`.
