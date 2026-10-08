@@ -81,6 +81,21 @@ describe('the new view dialog', () => {
     expect(props.onSubmit).not.toHaveBeenCalled()
   })
 
+  it('closes on a press on the dimmed page, not on one inside the dialog', () => {
+    const props = show()
+    fireEvent.mouseDown(name())
+    expect(props.onClose).not.toHaveBeenCalled()
+
+    const scrim = dialog().closest('.nv-scrim')!
+    for (const type of ['pointerDown', 'mouseDown', 'pointerUp', 'mouseUp', 'click'] as const) fireEvent[type](scrim)
+    expect(props.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens with the name selected', () => {
+    show()
+    expect(document.activeElement).toBe(name())
+  })
+
   it("says a refusal in the site's words and stays open", async () => {
     setStrings({ 'error.views_bad_name': 'Geef de weergave een naam van 1 tot 80 tekens' })
     const props = show({ onSubmit: vi.fn().mockRejectedValue({ code: 'views_bad_name', message: 'A name of 1 to 80 characters.' }) })

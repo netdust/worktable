@@ -1,4 +1,4 @@
-import { Button } from 'react-aria-components'
+import { Button, Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { Grid3x3, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { useId, useState } from 'react'
 import { errorText, t } from '../i18n'
@@ -39,43 +39,46 @@ export function NewViewDialog({ source, type, scope, onSubmit, onClose }: Props)
   }
 
   return (
-    <div className="nv-scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <form className="nv-dialog" role="dialog" aria-modal="true" aria-labelledby={title}
-        onKeyDown={(event) => event.key === 'Escape' && onClose()}
-        onSubmit={(event) => {
-          event.preventDefault()
-          submit()
-        }}>
-        <h2 id={title} className="nv-dialog__title"><Icon size={16} aria-hidden="true" />{t('newViewOf', { kind: kindOf(type).toLowerCase() })}</h2>
-        <div className="nv-dialog__field">
-          <label htmlFor={field}>{t('newViewName')}</label>
-          <input id={field} className="nv-dialog__input" type="text" value={name} maxLength={80} autoFocus autoComplete="off"
-            onFocus={(event) => event.target.select()} onChange={(event) => setName(event.target.value)} />
-        </div>
-        <fieldset className="nv-dialog__field">
-          <legend>{t('whoEdits')}</legend>
-          <div className="nv-dialog__choices">
-            <label className="nv-dialog__choice">
-              <input type="radio" name="who" checked={shared} onChange={() => setShared(true)} />
-              <Users size={14} aria-hidden="true" />{t('team')}
-            </label>
-            <label className="nv-dialog__choice">
-              <input type="radio" name="who" checked={!shared} onChange={() => setShared(false)} />
-              <UserRound size={14} aria-hidden="true" />{t('onlyMe')}
-            </label>
-          </div>
-          <p className="nv-dialog__hint">{t(shared ? 'teamHint' : 'onlyMeHint')}</p>
-        </fieldset>
-        <p className="nv-dialog__hint">
-          {t('onSource', { source })}
-          {scope !== null && ` · ${t('scopedTo', { scope })}`}
-        </p>
-        {refusal && <p className="nv-dialog__refusal" role="alert">{refusal}</p>}
-        <div className="nv-dialog__actions">
-          <Button className="nv-button nv-button--secondary nv-button--sm" type="button" onPress={onClose}>{t('cancel')}</Button>
-          <Button className="nv-button nv-button--primary nv-button--sm" type="submit" isDisabled={!ready}>{t('createView')}</Button>
-        </div>
-      </form>
-    </div>
+    <ModalOverlay className="nv-scrim" isOpen isDismissable onOpenChange={(open) => !open && onClose()}>
+      <Modal>
+        <Dialog className="nv-dialog" aria-labelledby={title}>
+          <form className="nv-dialog__form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submit()
+            }}>
+            <h2 id={title} className="nv-dialog__title"><Icon size={16} aria-hidden="true" />{t('newViewOf', { kind: kindOf(type).toLowerCase() })}</h2>
+            <div className="nv-dialog__field">
+              <label htmlFor={field}>{t('newViewName')}</label>
+              <input id={field} className="nv-dialog__input" type="text" value={name} maxLength={80} autoFocus autoComplete="off"
+                onFocus={(event) => event.target.select()} onChange={(event) => setName(event.target.value)} />
+            </div>
+            <fieldset className="nv-dialog__field">
+              <legend>{t('whoEdits')}</legend>
+              <div className="nv-dialog__choices">
+                <label className="nv-dialog__choice">
+                  <input type="radio" name="who" checked={shared} onChange={() => setShared(true)} />
+                  <Users size={14} aria-hidden="true" />{t('team')}
+                </label>
+                <label className="nv-dialog__choice">
+                  <input type="radio" name="who" checked={!shared} onChange={() => setShared(false)} />
+                  <UserRound size={14} aria-hidden="true" />{t('onlyMe')}
+                </label>
+              </div>
+              <p className="nv-dialog__hint">{t(shared ? 'teamHint' : 'onlyMeHint')}</p>
+            </fieldset>
+            <p className="nv-dialog__hint">
+              {t('onSource', { source })}
+              {scope !== null && ` · ${t('scopedTo', { scope })}`}
+            </p>
+            {refusal && <p className="nv-dialog__refusal" role="alert">{refusal}</p>}
+            <div className="nv-dialog__actions">
+              <Button className="nv-button nv-button--secondary nv-button--sm" type="button" onPress={onClose}>{t('cancel')}</Button>
+              <Button className="nv-button nv-button--primary nv-button--sm" type="submit" isDisabled={!ready}>{t('createView')}</Button>
+            </div>
+          </form>
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
   )
 }

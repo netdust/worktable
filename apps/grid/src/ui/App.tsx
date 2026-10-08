@@ -1,3 +1,4 @@
+import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -109,9 +110,13 @@ export function App() {
     <>
       <Workspace signed={{ email: session.account.email, onSignOut: signOutNow }} role={session.account.role} />
       {session.lapsed && (
-        <div className="nv-auth-over" role="dialog" aria-modal="true" aria-label={t('signIn')}>
-          <SignIn note={t('sessionLapsed')} />
-        </div>
+        <ModalOverlay className="nv-auth-over" isOpen isKeyboardDismissDisabled>
+          <Modal>
+            <Dialog aria-label={t('signIn')}>
+              <SignIn note={t('sessionLapsed')} />
+            </Dialog>
+          </Modal>
+        </ModalOverlay>
       )}
     </>
   )

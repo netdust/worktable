@@ -77,4 +77,17 @@ describe('the share menu', () => {
 
     expect(screen.getByRole('dialog', { name: 'Publiceren' }).textContent).toContain('Publiceren kan alleen op een berekende weergave.')
   })
+
+  it('closes on its close button, and not on Escape', async () => {
+    const run = vi.fn().mockResolvedValue('tok-3')
+    render(<Share onExcel={vi.fn()} link={() => ''} onCopied={vi.fn()} publish={{ isPublic: false, run }} />)
+    const item = within(open()).getByRole('menuitem', { name: 'Publiceren' })
+    await act(async () => fireEvent.click(item))
+
+    const dialog = screen.getByRole('dialog', { name: 'Publiceren' })
+    fireEvent.keyDown(within(dialog).getByRole('textbox', { name: 'Publiek adres' }), { key: 'Escape' })
+    expect(screen.getByRole('dialog', { name: 'Publiceren' })).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sluiten' }))
+    expect(screen.queryByRole('dialog', { name: 'Publiceren' })).toBeNull()
+  })
 })

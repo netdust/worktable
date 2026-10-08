@@ -130,7 +130,7 @@ describe('the link', () => {
 })
 
 describe('a lapsed session', () => {
-  const draft = () => screen.getAllByRole('row').find((row) => row.classList.contains('nv-tr--draft'))
+  const draft = () => screen.getAllByRole('row', { hidden: true }).find((row) => row.classList.contains('nv-tr--draft'))
 
   it('a 401 shows sign-in over the grid and keeps the unsaved new row', async () => {
     render(<App />)
@@ -149,6 +149,21 @@ describe('a lapsed session', () => {
     })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Aanmelden' })).toBeNull())
     expect(draft()).toBeTruthy()
+  })
+
+  it('does not close on Escape, nor on a press on the dimmed page', async () => {
+    render(<App />)
+    await screen.findByText('Geen rijen')
+    act(() => lapse())
+
+    const dialog = screen.getByRole('dialog', { name: 'Aanmelden' })
+    fireEvent.keyDown(within(dialog).getByRole('textbox', { name: 'E-mailadres' }), { key: 'Escape' })
+    const scrim = dialog.closest('.nv-auth-over')!
+    fireEvent.pointerDown(scrim)
+    fireEvent.pointerUp(scrim)
+    fireEvent.click(scrim)
+
+    expect(screen.getByRole('dialog', { name: 'Aanmelden' })).toBeTruthy()
   })
 
   it('shows sign-in when there is no session at all', async () => {

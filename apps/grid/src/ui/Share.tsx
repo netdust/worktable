@@ -1,4 +1,4 @@
-import { Button } from 'react-aria-components'
+import { Button, Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { Share2, X } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../i18n'
@@ -55,31 +55,35 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
     <>
       <MoreMenu actions={actions} icon={Share2} label={t('shareMenu')} menu={t('shareMenu')} />
       {dialog && (
-        <div className="nv-share" role="dialog" aria-label={t('publish')}>
-          <button type="button" className="nv-share__close" aria-label={t('close')} title={t('close')} onClick={() => setDialog(null)}>
-            <X size={14} aria-hidden="true" />
-          </button>
-          {dialog.step === 'ask' && (
-            <>
-              <p>{t('publishAgain')}</p>
-              <div className="nv-share__actions">
-                <Button className="nv-button nv-button--ghost nv-button--sm" onPress={() => setDialog(null)}>{t('cancel')}</Button>
-                <Button className="nv-button nv-button--primary nv-button--sm" onPress={go}>{t('publishNew')}</Button>
-              </div>
-            </>
-          )}
-          {dialog.step === 'busy' && <p>{t('publishing')}</p>}
-          {dialog.step === 'refused' && <p role="alert">{dialog.message}</p>}
-          {dialog.step === 'done' && (
-            <>
-              <p>{t('publishedOnce')}</p>
-              <div className="nv-share__address">
-                <input type="text" readOnly aria-label={t('publicAddress')} value={dialog.address} onFocus={(event) => event.target.select()} />
-                <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => void copy(dialog.address)}>{t('copy')}</Button>
-              </div>
-            </>
-          )}
-        </div>
+        <ModalOverlay className="nv-share-over" isOpen isKeyboardDismissDisabled>
+          <Modal>
+            <Dialog className="nv-share" aria-label={t('publish')}>
+              <button type="button" className="nv-share__close" aria-label={t('close')} title={t('close')} onClick={() => setDialog(null)}>
+                <X size={14} aria-hidden="true" />
+              </button>
+              {dialog.step === 'ask' && (
+                <>
+                  <p>{t('publishAgain')}</p>
+                  <div className="nv-share__actions">
+                    <Button className="nv-button nv-button--ghost nv-button--sm" onPress={() => setDialog(null)}>{t('cancel')}</Button>
+                    <Button className="nv-button nv-button--primary nv-button--sm" onPress={go}>{t('publishNew')}</Button>
+                  </div>
+                </>
+              )}
+              {dialog.step === 'busy' && <p>{t('publishing')}</p>}
+              {dialog.step === 'refused' && <p role="alert">{dialog.message}</p>}
+              {dialog.step === 'done' && (
+                <>
+                  <p>{t('publishedOnce')}</p>
+                  <div className="nv-share__address">
+                    <input type="text" readOnly aria-label={t('publicAddress')} value={dialog.address} onFocus={(event) => event.target.select()} />
+                    <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => void copy(dialog.address)}>{t('copy')}</Button>
+                  </div>
+                </>
+              )}
+            </Dialog>
+          </Modal>
+        </ModalOverlay>
       )}
     </>
   )

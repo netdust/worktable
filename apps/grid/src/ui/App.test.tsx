@@ -992,6 +992,20 @@ describe('saved views', () => {
     expect(api.createView).not.toHaveBeenCalled()
   })
 
+  it('Escape closes the new-view dialog and focus returns to its trigger', async () => {
+    render(<App />)
+    await screen.findByText('Geen rijen')
+
+    const trigger = within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Planning' })
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
+    expect(document.activeElement).toBe(within(screen.getByRole('dialog')).getByRole('textbox', { name: 'Naam' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('says nothing of a view this browser has not changed', async () => {
     window.location.hash = '#view=42'
     api.savedViews.mockResolvedValue([calais])

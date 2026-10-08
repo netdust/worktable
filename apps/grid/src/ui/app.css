@@ -235,13 +235,17 @@
 }
 
 .nv-dialog {
-  display: grid;
-  gap: 16px;
   width: min(440px, 100%);
   padding: 20px;
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-pop);
+  outline: none;
+}
+
+.nv-dialog__form {
+  display: grid;
+  gap: 16px;
 }
 
 .nv-dialog__title {
@@ -3620,9 +3624,14 @@
   color: var(--color-fg-default);
 }
 
+#root .nv-share-over {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
 #root .nv-share {
   position: fixed;
-  z-index: 60;
   top: 56px;
   right: 16px;
   display: flex;
@@ -3636,6 +3645,7 @@
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
   color: var(--color-fg-default);
   font-size: 13px;
+  outline: none;
 }
 
 #root .nv-share p {
