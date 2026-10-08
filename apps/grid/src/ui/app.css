@@ -1058,12 +1058,14 @@
 }
 
 .nv-space .nv-space__pop {
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  width: var(--trigger-width);
 }
 
-#root .nv-space__option.is-active:not([aria-selected="true"]) {
+.nv-space__option {
+  outline: none;
+}
+
+#root .nv-space__option[data-focused]:not([aria-selected="true"]) {
   background: var(--color-bg-hover);
 }
 
@@ -3507,8 +3509,15 @@
 }
 
 #root .nv-pick__option:hover,
+#root .nv-pick__option[data-focus-visible],
 #root .nv-fb__list > li:hover {
   background: var(--color-bg-hover);
+}
+
+#root .nv-pick__panel,
+#root .nv-pick__list,
+#root .nv-pick__option {
+  outline: none;
 }
 
 #root .nv-pick__option svg {
@@ -3542,7 +3551,6 @@
 
 #root .nv-fb__box input,
 #root .nv-fb__text,
-#root .nv-fb__between input,
 #root .nv-fb__related input {
   flex: 1;
   min-width: 48px;
@@ -3564,6 +3572,17 @@
 #root .nv-fb__between {
   gap: 6px;
   padding: 0 10px;
+}
+
+#root .nv-fb__date {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 48px;
+  height: 26px;
+  color: var(--color-fg-default);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 #root .nv-fb__menu {

@@ -1,5 +1,9 @@
-import { Calendar, CalendarClock, CircleChevronDown, Link2, type LucideIcon, Plus, SquareCheck, Trash2, Type, X } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { Calendar, CalendarClock, CalendarDays, CircleChevronDown, Link2, type LucideIcon, Plus, SquareCheck, Trash2, Type, X } from 'lucide-react'
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { UNSAFE_PortalProvider } from 'react-aria'
+import { Button, DatePicker, Dialog, Group, Popover } from 'react-aria-components'
+import { Month, Segments } from '../grid/cells/Date'
+import { fromDate, toDate } from '../grid/cells/dates'
 import { type Filter, isDate, type Join, type Kind, type Op, put } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { records } from '../api'
@@ -102,10 +106,10 @@ function Value({ field, condition, onChange }: { field: FilterField; condition: 
   if (condition.op === 'between') {
     const [from = '', to = ''] = condition.values
     return (
-      <span className="nv-fb__value nv-fb__between">
-        <input type="date" aria-label={t('fromDay')} value={from} onChange={(event) => onChange([event.target.value, to])} />
-        <input type="date" aria-label={t('toDay')} value={to} onChange={(event) => onChange([from, event.target.value])} />
-      </span>
+      <Between>
+        <Day label={t('fromDay')} value={from} onChange={(next) => onChange([next, to])} />
+        <Day label={t('toDay')} value={to} onChange={(next) => onChange([from, next])} />
+      </Between>
     )
   }
   if (field.kind === 'text') {
@@ -121,6 +125,31 @@ function Value({ field, condition, onChange }: { field: FilterField; condition: 
   return field.relation
     ? <Related field={field} values={condition.values} onChange={onChange} />
     : <Choices field={field} values={condition.values} onChange={onChange} />
+}
+
+/** The range's calendars open inside it, so the builder counts a press on them as its own. */
+function Between({ children }: { children: ReactNode }) {
+  const root = useRef<HTMLSpanElement>(null)
+  return (
+    <span className="nv-fb__value nv-fb__between" ref={root}>
+      <UNSAFE_PortalProvider getContainer={() => root.current}>{children}</UNSAFE_PortalProvider>
+    </span>
+  )
+}
+
+/** One end of a range: typed in Dutch segments or picked on a calendar, drafted as YYYY-MM-DD. */
+function Day({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <DatePicker aria-label={label} className="nv-fb__date" value={toDate(value)} onChange={(day) => onChange(fromDate(day))} shouldForceLeadingZeros>
+      <Group className="nv-datefield__group">
+        <Segments />
+        <Button className="nv-datefield__open"><CalendarDays size={14} aria-hidden="true" /></Button>
+      </Group>
+      <Popover className="nv-pop" placement="bottom start" offset={4}>
+        <Dialog className="nv-calendar__dialog"><Month /></Dialog>
+      </Popover>
+    </DatePicker>
+  )
 }
 
 /** The chosen values, each with its ×, and a search after them; the list below holds only what is not chosen. */

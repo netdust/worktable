@@ -1,5 +1,7 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderNl, typeKeys } from '../test-setup'
 import type { Filter, Join } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { Filters } from './Filters'
@@ -156,7 +158,8 @@ describe('the join', () => {
   const status: Filter = { field: 'status', op: 'in', values: ['optie'] }
   const tekst: Filter = { field: 'omschrijving', op: 'like', values: ['zaal'] }
   const week: Filter = { field: 'plandag', op: 'week', values: [] }
-  const words = () => screen.getAllByRole('group', { name: /^Voorwaarde/ }).map((r) => r.querySelector('.nv-fb__join')?.textContent)
+  // The join's picker also holds React Aria's hidden native select, whose options are text too: its word is the button's.
+  const words = () => screen.getAllByRole('group', { name: /^Voorwaarde/ }).map((r) => (r.querySelector('.nv-fb__join .nv-pick__text') ?? r.querySelector('.nv-fb__join'))?.textContent)
 
   it('is chosen on the second row, En or Of, and the rows after it say the same word', () => {
     bar([soort, status, tekst], 'or')
@@ -178,5 +181,127 @@ describe('the join', () => {
   it('says "of" between the chips the join holds over', () => {
     bar([week, soort, status], 'or')
     expect([...document.querySelectorAll('.nv-filters > *')].map((c) => c.textContent)).toEqual(['Plandag deze week', 'Soort is Reis', 'of', 'Status is Optie', 'Filter3'])
+  })
+})
+
+/** The builder holding its own filters, as the toolbar does, so each typed segment builds on the last. */
+function Held({ start }: { start: Filter[] }) {
+  const [filters, setFilters] = useState(start)
+  return <Filters fields={fields} filters={filters} onChange={(next) => {
+    changed = next
+    setFilters(next)
+  }} onJoin={() => undefined} />
+}
+
+describe('the range of "ligt tussen"', () => {
+  const ranged = (from: string, to: string) => {
+    changed = null
+    renderNl(<Held start={[{ field: 'plandag', op: 'between', values: [from, to] }]} />)
+    open()
+  }
+  const end = (name: string) => within(within(row(0)).getByRole('group', { name })).getAllByRole('spinbutton')
+
+  it('shows Dutch dates and drafts YYYY-MM-DD for both ends', () => {
+    ranged('2026-12-21', '2026-12-27')
+    expect(end('Van').map((s) => s.textContent)).toEqual(['21', '12', '2026'])
+    expect(end('Tot').map((s) => s.textContent)).toEqual(['27', '12', '2026'])
+
+    end('Van')[0].focus()
+    typeKeys('14')
+    expect(changed).toEqual([{ field: 'plandag', op: 'between', values: ['2026-12-14', '2026-12-27'] }])
+    end('Tot')[0].focus()
+    typeKeys('31')
+    expect(changed).toEqual([{ field: 'plandag', op: 'between', values: ['2026-12-14', '2026-12-31'] }])
+  })
+
+  it('drafts a reversed range as typed', () => {
+    ranged('2026-12-21', '2026-12-27')
+    end('Tot')[0].focus()
+    typeKeys('07')
+    expect(changed).toEqual([{ field: 'plandag', op: 'between', values: ['2026-12-21', '2026-12-07'] }])
+  })
+
+  it('starts empty, in Dutch placeholders', () => {
+    ranged('', '')
+    expect(end('Van').map((s) => s.textContent)).toEqual(['dd', 'mm', 'jjjj'])
+  })
+})
+
+describe('a picker', () => {
+  const button = (at: HTMLElement, label: string) => within(at).getByRole('button', { name: new RegExp(`^${label}:`) })
+
+  it('closes on Escape without closing the builder', () => {
+    bar([{ field: 'plandag', op: 'week', values: [] }])
+    open()
+    const list = listOf(row(0), 'Vergelijking')
+    fireEvent.keyDown(within(list).getAllByRole('option')[0], { key: 'Escape' })
+    expect(within(row(0)).queryByRole('listbox')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Voorwaarde toevoegen' })).toBeTruthy()
+  })
+
+  /** What a mouse does: down, up, click. */
+  const press = (target: HTMLElement) => {
+    fireEvent.pointerDown(target, { button: 0, pointerType: 'mouse' })
+    fireEvent.mouseDown(target, { button: 0 })
+    fireEvent.pointerUp(target, { button: 0, pointerType: 'mouse' })
+    fireEvent.mouseUp(target, { button: 0 })
+    fireEvent.click(target, { button: 0 })
+  }
+
+  it('closes on a press elsewhere in the builder, which still reaches its target', async () => {
+    bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }])
+    open()
+    listOf(row(0), 'Vergelijking')
+    press(screen.getByRole('button', { name: 'Voorwaarde toevoegen' }))
+    await waitFor(() => expect(within(row(0)).queryByRole('listbox')).toBeNull())
+    expect(changed?.length).toBe(2)
+  })
+
+  it('closes on a second press on its button', async () => {
+    bar([{ field: 'plandag', op: 'week', values: [] }])
+    open()
+    listOf(row(0), 'Vergelijking')
+    press(button(row(0), 'Vergelijking'))
+    await waitFor(() => expect(within(row(0)).queryByRole('listbox')).toBeNull())
+  })
+
+  it('closes its search on one Escape, with text typed in it', () => {
+    bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }])
+    open()
+    listOf(row(0), 'Veld')
+    const search = within(row(0)).getByRole('searchbox', { name: 'Veld zoeken' })
+    fireEvent.change(search, { target: { value: 'sta' } })
+    fireEvent.keyDown(search, { key: 'Escape' })
+    expect(within(row(0)).queryByRole('listbox')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Voorwaarde toevoegen' })).toBeTruthy()
+    expect(changed).toBeNull()
+  })
+
+  it('writes nothing when its current value is picked again', () => {
+    bar([{ field: 'plandag', op: 'week', values: [] }])
+    open()
+    fireEvent.click(within(listOf(row(0), 'Vergelijking')).getByRole('option', { name: 'is deze week' }))
+    expect(changed).toBeNull()
+    expect(within(row(0)).queryByRole('listbox')).toBeNull()
+  })
+
+  it('writes nothing from a letter or an arrow on its closed button', () => {
+    bar([{ field: 'plandag', op: 'week', values: [] }])
+    open()
+    const closed = button(row(0), 'Vergelijking')
+    closed.focus()
+    for (const key of ['l', 'ArrowRight', 'ArrowLeft']) fireEvent.keyDown(closed, { key })
+    expect(changed).toBeNull()
+  })
+
+  it('picks the first match of its search with Enter', () => {
+    bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }])
+    open()
+    listOf(row(0), 'Veld')
+    const search = within(row(0)).getByRole('searchbox', { name: 'Veld zoeken' })
+    expect(document.activeElement).toBe(search)
+    fireEvent.change(search, { target: { value: 'so' } })
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(changed).toEqual([{ field: 'soort', op: 'in', values: [] }])
   })
 })

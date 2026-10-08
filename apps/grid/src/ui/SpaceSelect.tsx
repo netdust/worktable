@@ -1,8 +1,11 @@
 import { ChevronsUpDown } from 'lucide-react'
-import { type KeyboardEvent, useId, useState } from 'react'
+import { type FocusEvent, useContext, useId, useRef, useState } from 'react'
+import { UNSAFE_PortalProvider } from 'react-aria'
+import { Autocomplete, Button, Input, ListBox, ListBoxItem, Popover, Select, SelectStateContext, TextField } from 'react-aria-components'
 import { t } from '../i18n'
 import type { Choice } from '../space'
 import type { Row } from '../types'
+import { FirstMatch, holds, Outside } from './Pick'
 
 interface Props {
   /** The space model's word, plural. */
@@ -21,88 +24,64 @@ const markOf = (title: string): string =>
 
 /** The rail's top: the record being worked in, or every record, and a searchable list that changes it. */
 export function SpaceSelect({ label, records, selected, onSelect }: Props) {
-  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [active, setActive] = useState(0)
+  const root = useRef<HTMLDivElement>(null)
   const id = useId()
   const all = t('allSpace', { label: label.toLocaleLowerCase() })
-  const wanted = query.trim().toLocaleLowerCase()
   const options = [{ choice: 'all', title: all } as Option, ...records.map((r): Option => ({ choice: r.id, title: r.title }))]
-    .filter((o) => o.title.toLocaleLowerCase().includes(wanted))
-
-  const close = () => {
-    setOpen(false)
-    setQuery('')
-    setActive(0)
-  }
-  const pick = (choice: Choice) => {
-    onSelect(choice)
-    close()
-  }
-  const keys = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      setActive((i) => Math.max(0, Math.min(options.length - 1, i + (event.key === 'ArrowDown' ? 1 : -1))))
-    } else if (event.key === 'Enter') {
-      if (options[active]) pick(options[active].choice)
-    } else if (event.key === 'Escape') {
-      close()
-    } else {
-      return
-    }
-    event.preventDefault()
-  }
-  const current = selected?.id ?? 'all'
+  const none = !options.some((o) => holds(o.title, query))
 
   return (
-    <div className="nv-space">
-      <button type="button" className="nv-space__button" aria-haspopup="listbox" aria-expanded={open} aria-labelledby={`${id}-name`}
-        onMouseDown={(event) => open && event.preventDefault()} onClick={() => (open ? close() : setOpen(true))}>
-        <span className={`nv-space__mark${selected ? '' : ' nv-space__mark--all'}`} aria-hidden="true">{selected ? markOf(selected.title) : '∗'}</span>
-        <span className="nv-space__text">
-          <strong id={`${id}-name`}>{selected?.title ?? all}</strong>
-          <small>{selected ? label : t('spaceCount', { count: records.length, label: label.toLocaleLowerCase() })}</small>
-        </span>
-        <ChevronsUpDown size={14} aria-hidden="true" />
-      </button>
-      {open && (
-        <div className="nv-pop nv-space__pop">
-          <input
-            // biome-ignore lint/a11y/noAutofocus: the list opens to be searched
-            autoFocus
-            className="nv-picker__input"
-            role="combobox"
-            aria-label={t('searchSpace', { label })}
-            aria-expanded="true"
-            aria-controls={`${id}-list`}
-            aria-activedescendant={options[active] ? `${id}-${options[active].choice}` : undefined}
-            aria-autocomplete="list"
-            placeholder={`${t('searchSpace', { label })}…`}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setActive(0)
-            }}
-            onKeyDown={keys}
-            onBlur={close}
-          />
-          <ul id={`${id}-list`} role="listbox" aria-label={label} className="nv-picker__list" onMouseDown={(event) => event.preventDefault()}>
-            {options.map((option, i) => (
-              <li
-                key={option.choice}
-                id={`${id}-${option.choice}`}
-                role="option"
-                aria-selected={option.choice === current}
-                className={`nv-pop__option nv-space__option${i === active ? ' is-active' : ''}`}
-                onClick={() => pick(option.choice)}
-              >
-                <span className={`nv-space__dot${option.choice === 'all' ? ' nv-space__dot--all' : ''}`} aria-hidden="true" />
-                {option.title}
-              </li>
-            ))}
-          </ul>
-          {options.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
-        </div>
-      )}
+    <div className="nv-space" ref={root}>
+      {/* The list opens inside the switcher, under its button. */}
+      <UNSAFE_PortalProvider getContainer={() => root.current}>
+        <Select aria-label={label} selectedKey={selected?.id ?? 'all'} onSelectionChange={(key) => key !== null && onSelect(key as Choice)}
+          onOpenChange={(open) => open || setQuery('')}>
+          <Button className="nv-space__button" aria-labelledby={`${id}-name`}>
+            <span className={`nv-space__mark${selected ? '' : ' nv-space__mark--all'}`} aria-hidden="true">{selected ? markOf(selected.title) : '∗'}</span>
+            <span className="nv-space__text">
+              <strong id={`${id}-name`}>{selected?.title ?? all}</strong>
+              <small>{selected ? label : t('spaceCount', { count: records.length, label: label.toLocaleLowerCase() })}</small>
+            </span>
+            <ChevronsUpDown size={14} aria-hidden="true" />
+          </Button>
+          <Popover isNonModal className="nv-pop nv-space__pop" placement="bottom start" offset={4}>
+            <Outside>
+              <FirstMatch texts={options.map((o) => [o.choice, o.title])}>
+                <Autocomplete inputValue={query} onInputChange={setQuery} filter={holds}>
+                  <Search label={label} />
+                  <ListBox aria-label={label} aria-labelledby="" className="nv-picker__list">
+                    {options.map((option) => (
+                      <ListBoxItem key={option.choice} id={option.choice} textValue={option.title} className="nv-pop__option nv-space__option">
+                        <span className={`nv-space__dot${option.choice === 'all' ? ' nv-space__dot--all' : ''}`} aria-hidden="true" />
+                        {option.title}
+                      </ListBoxItem>
+                    ))}
+                  </ListBox>
+                </Autocomplete>
+              </FirstMatch>
+              {none && <p className="nv-picker__note">{t('noMatches')}</p>}
+            </Outside>
+          </Popover>
+        </Select>
+      </UNSAFE_PortalProvider>
+    </div>
+  )
+}
+
+/** The list's search; leaving it for anything outside the list closes the list. */
+function Search({ label }: { label: string }) {
+  const state = useContext(SelectStateContext)
+  const leave = (event: FocusEvent) => {
+    const next = event.relatedTarget
+    if (!(next instanceof Node && event.currentTarget.closest('.nv-space__pop')?.contains(next))) state?.close()
+  }
+  return (
+    <div onBlur={leave}>
+      <TextField aria-label={t('searchSpace', { label })}>
+        {/* biome-ignore lint/a11y/noAutofocus: the list opens to be searched */}
+        <Input autoFocus className="nv-picker__input" role="combobox" aria-expanded="true" placeholder={`${t('searchSpace', { label })}…`} />
+      </TextField>
     </div>
   )
 }

@@ -94,6 +94,19 @@ export function Segments() {
   return <DateInput className="nv-datefield__input">{(segment) => <DateSegment segment={segment} className="nv-datefield__segment" />}</DateInput>
 }
 
+export function Month() {
+  return (
+    <Calendar className="nv-calendar">
+      <header className="nv-calendar__head">
+        <Button slot="previous"><ChevronLeft size={14} aria-hidden="true" /></Button>
+        <Heading />
+        <Button slot="next"><ChevronRight size={14} aria-hidden="true" /></Button>
+      </header>
+      <CalendarGrid weekdayStyle="short">{(date) => <CalendarCell date={date} className="nv-calendar__day" />}</CalendarGrid>
+    </Calendar>
+  )
+}
+
 export function DateEditor(props: EditorProps) {
   return <PickerEditor {...props} reads={toDate} writes={fromDate} granularity="day" />
 }
@@ -133,14 +146,7 @@ function PickerEditor<T extends DateValue>({ reads, writes, granularity, ...prop
         <Pop placement="bottom start">
           {/* Focusable, so a press on the calendar's heading or padding keeps focus inside the editor. */}
           <Dialog className="nv-calendar__dialog">
-            <Calendar className="nv-calendar">
-              <header className="nv-calendar__head">
-                <Button slot="previous"><ChevronLeft size={14} aria-hidden="true" /></Button>
-                <Heading />
-                <Button slot="next"><ChevronRight size={14} aria-hidden="true" /></Button>
-              </header>
-              <CalendarGrid weekdayStyle="short">{(date) => <CalendarCell date={date} className="nv-calendar__day" />}</CalendarGrid>
-            </Calendar>
+            <Month />
           </Dialog>
         </Pop>
       </DatePicker>

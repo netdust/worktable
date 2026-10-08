@@ -348,6 +348,45 @@ describe('the production space', () => {
     expect(within(rail()).getAllByRole('option').map((o) => o.textContent)).toEqual(['Wat de uil zag'])
   })
 
+  const search = () => within(rail()).getByRole('combobox', { name: 'Producties zoeken' })
+
+  it('picks with the keyboard in the switcher: Enter takes the first match, ↓ the next', async () => {
+    await shell()
+    fireEvent.click(await switcher('Alle producties'))
+    fireEvent.change(search(), { target: { value: 'uil' } })
+    fireEvent.keyDown(search(), { key: 'Enter' })
+    expect(await switcher('Wat de uil zag')).toBeTruthy()
+    expect(within(rail()).queryByRole('listbox')).toBeNull()
+
+    fireEvent.click(await switcher('Wat de uil zag'))
+    expect(document.activeElement).toBe(search())
+    fireEvent.keyDown(search(), { key: 'ArrowDown' })
+    fireEvent.keyDown(search(), { key: 'Enter' })
+    expect(await switcher('Glimworm')).toBeTruthy()
+  })
+
+  it('closes the switcher on Escape, and on leaving its search, choosing nothing', async () => {
+    await shell()
+    fireEvent.click(await switcher('Alle producties'))
+    fireEvent.change(search(), { target: { value: 'glim' } })
+    fireEvent.keyDown(search(), { key: 'Escape' })
+    await waitFor(() => expect(within(rail()).queryByRole('listbox')).toBeNull())
+
+    fireEvent.click(await switcher('Alle producties'))
+    expect(search().getAttribute('value') ?? (search() as HTMLInputElement).value).toBe('')
+    fireEvent.blur(search(), { relatedTarget: document.body })
+    await waitFor(() => expect(within(rail()).queryByRole('listbox')).toBeNull())
+    expect(await switcher('Alle producties')).toBeTruthy()
+  })
+
+  it('says so when nothing in the switcher matches', async () => {
+    await shell()
+    fireEvent.click(await switcher('Alle producties'))
+    fireEvent.change(search(), { target: { value: 'zzz' } })
+    expect(within(rail()).queryAllByRole('option')).toHaveLength(0)
+    expect(within(rail()).getByText('Geen resultaten')).toBeTruthy()
+  })
+
   it('asks a scoped view for every row under "Alle producties", for the chosen production\'s once switched, and for every row again', async () => {
     await shell()
     await screen.findByText('Geen rijen')
