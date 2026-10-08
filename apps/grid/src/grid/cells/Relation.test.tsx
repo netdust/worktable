@@ -192,4 +192,15 @@ describe('the open button of a to-one cell', () => {
 
     expect(opener('Lunch bistrot')).toBeNull()
   })
+
+  it('joins the tab order only on the active cell, and is still pressable there', () => {
+    renderGrid()
+    const button = (title: string) => within(cell(title, 'location')).getByRole('button', { name: /^Open / })
+    expect(button('Lunch bistrot').tabIndex).toBe(-1)
+
+    fireEvent.click(cell('Lunch bistrot', 'location'))
+
+    expect(button('Lunch bistrot').tabIndex).toBe(0)
+    expect(button('Montage').tabIndex).toBe(-1)
+  })
 })

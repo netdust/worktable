@@ -60,7 +60,7 @@ function GridCell({ row, column, cell, keys, error, actions }: {
         <Editor column={column} row={row} editing={keys.editing} onDraft={actions.draft} onCommit={actions.commit} onLeave={actions.leave}
           onPick={actions.pick} onCancel={actions.cancel} onClose={actions.close} />
       ) : (
-        <Display column={column} row={row} onToggle={() => actions.toggle(cell)} />
+        <Display column={column} row={row} active={active} onToggle={() => actions.toggle(cell)} />
       )}
       {column.required && column.editable && !editing && column.text(row) === '' && (
         <span className="nv-td__missing" title={t('required')}><span className="nv-sr">{t('required')}</span></span>

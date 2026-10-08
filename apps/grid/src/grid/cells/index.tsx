@@ -9,7 +9,7 @@ import { SelectCell, SelectEditor } from './Select'
 import { InputEditor, LongTextEditor, TextCell } from './Text'
 import { TimeCell, TimeEditor } from './Time'
 
-export function Display(props: CellProps & { onToggle: () => void }) {
+export function Display(props: CellProps & { onToggle: () => void; active?: boolean }) {
   const via = props.column.via?.(props.row)
   if (!via) return <Value {...props} />
   return (
@@ -20,7 +20,7 @@ export function Display(props: CellProps & { onToggle: () => void }) {
   )
 }
 
-function Value({ column, row, onToggle }: CellProps & { onToggle: () => void }) {
+function Value({ column, row, onToggle, active }: CellProps & { onToggle: () => void; active?: boolean }) {
   switch (column.kind) {
     case 'select':
       return <SelectCell column={column} row={row} />
@@ -30,7 +30,7 @@ function Value({ column, row, onToggle }: CellProps & { onToggle: () => void }) 
     case 'time':
       return <TimeCell column={column} row={row} />
     case 'relation':
-      return <RelationCell column={column} row={row} />
+      return <RelationCell column={column} row={row} active={active} />
     case 'links':
       return <LinksCell column={column} row={row} />
     case 'bool':

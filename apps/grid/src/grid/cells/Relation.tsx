@@ -12,7 +12,8 @@ export const RelationContext = createContext<{
   openRelated?: (model: string, id: number) => void
 }>({ models: {}, scope: null, spaceModel: null })
 
-export function RelationCell({ column, row }: CellProps) {
+/** The open button joins the tab order only on the active cell, as the grid's roving focus has it. */
+export function RelationCell({ column, row, active = false }: CellProps & { active?: boolean }) {
   const { models, openRelated } = useContext(RelationContext)
   const target = column.relation?.model
   const id = Number(column.edit(row))
@@ -22,7 +23,7 @@ export function RelationCell({ column, row }: CellProps) {
     <>
       <span className="nv-cell__text">{title}</span>
       {openable && (
-        <Button className="nv-related" aria-label={t('openRecord', { title })} onPress={() => openRelated(target, id)}>
+        <Button className="nv-related" excludeFromTabOrder={!active} aria-label={t('openRecord', { title })} onPress={() => openRelated(target, id)}>
           <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3h7v7M13 3 5 11" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
         </Button>
       )}
