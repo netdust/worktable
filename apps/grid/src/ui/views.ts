@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { joinOf } from '../grid/conditions'
 import { clearKept, clearLayout, defaults, type Layout, save, saveKept, storedKept, storedLayout, storedRevision, subscribeStored } from '../grid/layout'
 import { savePicked } from '../matrix/columns'
 import type { Arrangement, SavedView, StoredArrangement, View } from '../types'
@@ -23,7 +24,8 @@ export function toStored(arrangement: Arrangement): StoredArrangement {
     order: arrangement.order,
     widths: Object.entries(arrangement.widths).map(([id, width]) => ({ id, width })),
     sort: arrangement.sort.map(({ id, desc }) => ({ id, desc })),
-    filters: arrangement.filters.map(({ field, value }) => ({ field, value })),
+    filters: arrangement.filters.map(({ field, op, values }) => ({ field, op, values: [...values] })),
+    ...(joinOf(arrangement.filters, arrangement.join) === 'or' ? { join: 'or' as const } : {}),
     group: arrangement.group,
     picked: arrangement.picked,
   }
@@ -77,7 +79,7 @@ export function storeLayout(view: View, layout: Layout): void {
 function comparable(a: Arrangement): string {
   return JSON.stringify([
     [...a.hidden].sort(), a.order, Object.entries(a.widths).sort(([x], [y]) => x.localeCompare(y)),
-    a.sort.map(({ id, desc }) => [id, desc]), a.filters.map(({ field, value }) => [field, value]), a.group, [...a.picked].sort((x, y) => x - y),
+    a.sort.map(({ id, desc }) => [id, desc]), a.filters.map(({ field, op, values }) => [field, op, values]), joinOf(a.filters, a.join), a.group, [...a.picked].sort((x, y) => x - y),
   ])
 }
 

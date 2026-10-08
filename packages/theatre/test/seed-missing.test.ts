@@ -93,6 +93,10 @@ test('an existing system Dagplanning view is brought up to the details pass colu
   const result = await seedMissing(db)
   expect(result.code).toBe(0)
   expect(result.out).toContain('seed-missing: view "Dagplanning" (dagplanning) updated')
-  const [view] = read(db, "SELECT visible_fields FROM saved_view WHERE name = 'Dagplanning' AND deleted_at IS NULL")
+  const [view] = read(
+    db,
+    "SELECT visible_fields, filters FROM saved_view WHERE name = 'Dagplanning' AND deleted_at IS NULL",
+  )
   expect(JSON.parse(view?.visible_fields as string)).toEqual(DAGPLANNING)
+  expect(JSON.parse(view?.filters as string)).toEqual({ plandag: { $period: 'week' } })
 }, 30_000)

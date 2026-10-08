@@ -79,7 +79,7 @@ describe('the link', () => {
     expect(await screen.findByRole('navigation', { name: 'Views' })).toBeTruthy()
   })
 
-  it('after consume the token is gone from the location and the history before the grid writes its hash', async () => {
+  it('after consume the token is gone from the location and the history once the grid shows', async () => {
     window.history.replaceState(null, '', `/#/auth/${TOKEN}`)
     api.consumeLink.mockResolvedValue(account)
     const replaced = vi.spyOn(window.history, 'replaceState')
@@ -87,11 +87,7 @@ describe('the link', () => {
     render(<App />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Aanmelden' }))
-    // The chip first stands in the loading sheet and then in the grid: press until the hash holds it.
-    await waitFor(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }))
-      expect(new URLSearchParams(window.location.hash.slice(1)).get('from')).toBeTruthy()
-    })
+    await screen.findByText('Geen rijen')
 
     expect(window.location.href).not.toContain(TOKEN)
     const urls = replaced.mock.calls.map(([, , url]) => String(url))
@@ -102,7 +98,7 @@ describe('the link', () => {
 
   it.each([
     ['the sign-in form', () => api.me.mockRejectedValue({ code: 'unauthenticated', message: 'Sign in first' }), 'Stuur me een link'],
-    ['the grid', () => api.me.mockResolvedValue(account), 'Volgende periode'],
+    ['the grid', () => api.me.mockResolvedValue(account), 'Afmelden'],
   ])('a link pasted into a tab already showing %s opens the confirm screen', async (_, session, shown) => {
     session()
     api.consumeLink.mockResolvedValue(account)
@@ -138,7 +134,7 @@ describe('a lapsed session', () => {
 
   it('a 401 shows sign-in over the grid and keeps the unsaved new row', async () => {
     render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
+    await screen.findByText('Geen rijen')
     fireEvent.click(screen.getByRole('button', { name: 'Nieuw Activiteit' }))
     expect(draft()).toBeTruthy()
 

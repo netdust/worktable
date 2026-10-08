@@ -4,7 +4,7 @@ import { modelNode, openView } from './tree'
 
 test('tree-scrolls-in-rail @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 })
-  await page.goto('/#from=2026-10-12')
+  await page.goto('/')
   const tree = page.getByRole('tree', { name: 'Views' })
   await expect(modelNode(page, 'Activiteiten')).toHaveAttribute('aria-expanded', 'true')
 
@@ -24,7 +24,7 @@ test('tree-scrolls-in-rail @e2e', async ({ page }) => {
 })
 
 test('query-views-under-model @e2e', async ({ page }) => {
-  await page.goto('/#from=2026-10-12')
+  await page.goto('/')
   const node = modelNode(page, 'Activiteiten')
   await expect(node).toHaveAttribute('aria-expanded', 'true')
   const names = node.getByRole('group', { name: 'View type' }).getByRole('button')
@@ -40,6 +40,6 @@ test('query-views-under-model @e2e', async ({ page }) => {
   await openView(page, 'Dagplanning', 'Activiteiten')
   expect((await rows).status()).toBe(200)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
-  await expect(page.getByRole('grid', { name: 'Dagplanning' })).toBeVisible()
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag deze week'])
   await shot(page, 'query-views-under-model')
 })

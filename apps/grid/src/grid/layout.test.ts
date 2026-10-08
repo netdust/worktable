@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { planning } from './calais.test.data'
-import { defaults, filter, group, hide, type Layout, readStored, reorder, resize, save, show, sort, storedLayout, writeStored } from './layout'
+import { defaults, withFilters, group, hide, type Layout, readStored, reorder, resize, save, show, sort, storedLayout, writeStored } from './layout'
 
 class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem'> {
   items = new Map<string, string>()
@@ -56,11 +56,9 @@ describe('the column state', () => {
     expect(resize(defaults(planning), 'title', 4).widths).toEqual({ title: 48 })
   })
 
-  it('sets a filter per field, replaces it, and removes it with null', () => {
-    const one = filter(defaults(planning), 'status', 'option')
-    const two = filter(one, 'location', '12')
-    expect(filter(two, 'status', 'confirmed').filters).toEqual([{ field: 'status', value: 'confirmed' }, { field: 'location', value: '12' }])
-    expect(filter(two, 'status', null).filters).toEqual([{ field: 'location', value: '12' }])
+  it('holds the conditions it is given', () => {
+    const conditions = [{ field: 'status', op: 'in' as const, values: ['option'] }, { field: 'location', op: 'empty' as const, values: [] }]
+    expect(withFilters(defaults(planning), conditions).filters).toEqual(conditions)
   })
 })
 
@@ -71,7 +69,7 @@ describe('persistence', () => {
     layout = reorder(layout, 'kind', 1, ['title', 'date', 'kind'])
     layout = resize(layout, 'title', 280)
     layout = sort(layout, [{ id: 'title', desc: true }])
-    layout = filter(layout, 'status', 'option')
+    layout = withFilters(layout, [{ field: 'status', op: 'in', values: ['option'] }])
     layout = group(layout, 'kind')
 
     save(planning, layout, storage)
@@ -90,10 +88,10 @@ describe('persistence', () => {
   })
 
   it('keeps nothing for what an older build or a hand wrote there', () => {
-    memory.setItem('ntdst-views/layout/v1/planning', '{"hidden":"place","sort":[{"id":3}]}')
+    memory.setItem('ntdst-views/layout/v2/planning', '{"hidden":"place","sort":[{"id":3}]}')
     expect(storedLayout(planning, storage)).toBeNull()
 
-    memory.setItem('ntdst-views/layout/v1/planning', 'not json')
+    memory.setItem('ntdst-views/layout/v2/planning', 'not json')
     expect(storedLayout(planning, storage)).toBeNull()
   })
 

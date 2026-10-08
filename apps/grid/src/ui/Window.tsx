@@ -1,4 +1,3 @@
-import { useCallback, useState } from 'react'
 import { t } from '../i18n'
 import type { DateWindow } from '../types'
 
@@ -67,13 +66,6 @@ export function days(window: DateWindow): number {
   return from && to ? Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1 : 0
 }
 
-/** One step back or forward: a week, a calendar month, or the span of any other range. */
-export function step(window: DateWindow, direction: 1 | -1): DateWindow {
-  if (isWeek(window)) return shift(window, 7 * direction)
-  if (isMonth(window)) return shiftMonth(window, direction)
-  return shift(window, days(window) * direction)
-}
-
 /** The ISO week number: the week holding the year's first Thursday is week 1. */
 export function isoWeek(date: Date): number {
   const thursday = addDays(date, 3 - ((date.getDay() + 6) % 7))
@@ -93,33 +85,5 @@ export function formatWindow(window: Partial<DateWindow>): string {
   return `${t('week')} ${isoWeek(from)} · ${start}–${to.getDate()} ${monthName(to)}`
 }
 
-function fromHash(): Partial<DateWindow> {
-  const params = new URLSearchParams(window.location.hash.slice(1))
-  if (params.get('period') === 'all') return {}
-  const from = parse(params.get('from') ?? '')
-  const to = parse(params.get('to') ?? '')
-  if (from && to && to >= from) return { from: iso(from), to: iso(to) }
-  return weekOf(from ?? new Date())
-}
-
-function toHash(value: Partial<DateWindow>): void {
-  const params = new URLSearchParams(window.location.hash.slice(1))
-  params.delete('from')
-  params.delete('to')
-  params.delete('period')
-  if (value.from && value.to) {
-    params.set('from', value.from)
-    params.set('to', value.to)
-  } else params.set('period', 'all')
-  window.history.replaceState(null, '', `#${params.toString()}`)
-}
-
-/** The window lives in the URL hash so a reload keeps it; `{}` is every day. */
-export function useWindow(): [Partial<DateWindow>, (value: Partial<DateWindow>) => void] {
-  const [value, setValue] = useState(fromHash)
-  const set = useCallback((next: Partial<DateWindow>) => {
-    toHash(next)
-    setValue(next)
-  }, [])
-  return [value, set]
-}
+/** The longest window a matrix reads: the engine refuses a wider one. */
+export const MATRIX_DAYS = 92

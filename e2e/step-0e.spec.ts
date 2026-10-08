@@ -1,8 +1,7 @@
 import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test'
 import { ACCOUNTS, requestAndOpenLink, state, THEATRE } from './auth'
-import { openModel, openView } from './tree'
+import { addCondition, openModel, openView, openWeek } from './tree'
 
-const WEEK = '/#from=2026-10-12'
 const LOTTE = 'Lotte Verhaegen'
 
 interface SavedView {
@@ -74,7 +73,7 @@ test.describe('as the owner', () => {
     expect(own.length).toBeGreaterThan(0)
     expect(other).toBeDefined()
 
-    await page.goto(WEEK)
+    await page.goto('/')
     await pick(page, 'Toewijzingen')
     await expect(gridRows(page)).toHaveCount(own.length)
     for (const title of await gridRows(page).evaluateAll((trs) => trs.map((tr) => tr.getAttribute('data-title')))) {
@@ -83,13 +82,11 @@ test.describe('as the owner', () => {
     expect((await rows(page.request, 'toewijzing')).map((r) => r.id)).toEqual(own)
 
     // Lotte's absence starts in the week of 5 October; the week of 12 October holds only other people's.
-    await land(page, '/#from=2026-10-05')
-    await pick(page, 'Afwezigheden', 'Beschikbaarheden')
+    await openWeek(page, 'Afwezigheden', 'Beschikbaarheden', 'start_at', '2026-10-05')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Afwezigheden')
     await expect(gridRows(page)).toHaveCount(1)
     await expect(gridRows(page).first()).toHaveAttribute('data-title', LOTTE)
-    await land(page, WEEK)
-    await pick(page, 'Afwezigheden', 'Beschikbaarheden')
+    await openWeek(page, 'Afwezigheden', 'Beschikbaarheden', 'start_at', '2026-10-12')
     await expect(page.getByText('Geen rijen in deze periode')).toBeVisible()
     expect((await rows(editor, 'beschikbaarheid')).some((r) => r.persoon_id !== 1)).toBe(true)
 
@@ -113,10 +110,9 @@ test('seeded-view-read-only', async ({ page }) => {
   const patched = await page.request.patch(`/api/views/${seeded?.id}`, { data: { name: 'Mijn planning' } })
   expect(patched.status()).toBe(403)
 
-  await page.goto(WEEK)
+  await page.goto('/')
   await pick(page, 'Planning', 'Activiteiten')
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
-  await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
+  await addCondition(page, 'Productie', 'Nachtwacht')
   const toolbar = page.locator('.nv-toolbar')
   // The seeded view keeps the change in this browser: no save word, nothing sent.
   await expect(toolbar.getByText(/gewijzigd|Opslaan|Opgeslagen/)).toHaveCount(0)
@@ -168,7 +164,7 @@ test('public-view-by-token', async () => {
 })
 
 test('session-less-401', async ({ page, context }) => {
-  await page.goto(WEEK)
+  await page.goto('/')
   await pick(page, 'Planning', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
 
@@ -245,7 +241,7 @@ const undoOf = (page: Page) =>
   )
 
 test('untimed-activity', async ({ page }) => {
-  await page.goto(WEEK)
+  await page.goto('/')
   await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
 
@@ -307,7 +303,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
   }
 
   test('undo-time-on-untimed', async ({ page }) => {
-    await page.goto(WEEK)
+    await page.goto('/')
     await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'undo tijd e2e')).datum as string
     const later = plusDays(datum, 2)
@@ -328,7 +324,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
   })
 
   test('undo-day-line-move', async ({ page }) => {
-    await page.goto(WEEK)
+    await page.goto('/')
     await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'undo nacht e2e')).datum as string
     const row = () => named(page, 'undo nacht e2e')
@@ -374,7 +370,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
   })
 
   test('clear-start-segment-by-segment', async ({ page }) => {
-    await page.goto(WEEK)
+    await page.goto('/')
     await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'wis per deel e2e')).datum as string
     const row = () => named(page, 'wis per deel e2e')
@@ -404,7 +400,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
 })
 
 test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
-  await page.goto(WEEK)
+  await page.goto('/')
   const productie = (
     (await (await page.request.get('/api/rows/productie?limit=50')).json()) as { rows: { id: number }[] }
   ).rows[0].id
@@ -418,8 +414,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
     return ((await found.json()) as { rows: { datum: string }[] }).rows[0].datum
   }
 
-  await land(page, WEEK)
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
   const row = () => named(page, 'dagplanning undo e2e')
   const moved = patchOf(page, 'activiteit')
   await typeInto(await cellOf(page, row(), 'Tijd'), '2026-10-15T20:00')

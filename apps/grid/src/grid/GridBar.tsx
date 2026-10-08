@@ -18,21 +18,18 @@ interface Props {
   filters?: ReactNode
   /** The selected space as the scope chip reads it: "Productie is Nachtwacht"; it cannot be removed. */
   scope?: string | null
-  /** The Periode chip: first in the bar, always there on a dated source. */
-  period?: ReactNode
 }
 
 const GROUPABLE = ['date', 'select', 'relation']
 const ICON = 13
 
 /** The sheet's arrangement, under the toolbar: the scope, the group and the filters as chips; the count and Kolommen at the end. The sort shows in its column header. */
-export function GridBar({ model, columns, layout, onLayout, count, cut = false, filters, scope = null, period = null }: Props) {
+export function GridBar({ model, columns, layout, onLayout, count, cut = false, filters, scope = null }: Props) {
   const label = (id: string) => columns.find((c) => c.id === id)?.label ?? model.fields[id]?.label ?? id
   const groupable = Object.entries(model.fields).filter(([, f]) => GROUPABLE.includes(f.type))
 
   return (
     <div className="nv-bar">
-      {period}
       {scope && <span className="nv-chip nv-chip--set nv-chip--scope"><Tag size={ICON} aria-hidden="true" />{scope}</span>}
       <Popover placement="bottom-start" trigger={
         <button type="button" className={layout.group ? 'nv-chip nv-chip--set' : 'nv-chip'}>

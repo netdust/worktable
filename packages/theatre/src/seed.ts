@@ -191,7 +191,7 @@ export const views: SavedViewSeed[] = [
     source_type: 'query',
     source: 'dagplanning',
     skin: 'table',
-    filters: {},
+    filters: { plandag: { $period: 'week' } },
     sort: ['start_at'],
     group_by: 'plandag',
     visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'],

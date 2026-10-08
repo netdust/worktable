@@ -89,7 +89,7 @@ export function schema(): Promise<Schema> {
 export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
   const title = titleColumn(await sourceOf(view.model))
   const scoped = { ...view, fixed: withScope(view.fixed ?? {}, scope) }
-  const query: Query = layout ? rowsQuery(scoped, layout, window, title) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
+  const query: Query = layout ? rowsQuery(scoped, layout, window, title, await sourceOf(view.model)) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
   return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
 }
 

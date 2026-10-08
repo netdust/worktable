@@ -38,8 +38,6 @@ export interface MatrixProps {
   onLayout: (layout: Layout) => void
   /** The filter chips, shown in the bar after "+ Column". */
   filters?: ReactNode
-  /** The Periode chip. */
-  period?: ReactNode
 }
 
 /** A cell by its row's id and its column's key, so it survives a repaint. */
@@ -140,13 +138,13 @@ function Cell({ view, models, cell, column, away, date, state }: {
 }
 
 /** Rows by day, one column per record or name, and what each has on a row; typed into like a sheet. */
-export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters, period = null }: MatrixProps) {
+export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters }: MatrixProps) {
   const [picked, setPicked] = useState(() => loadPicked(view))
   const [picking, setPicking] = useState(false)
   // A column stays for the visit once shown: removing its last cell must not pull it from under the cursor.
   const kept = useRef<number[]>([])
   const keptNames = useRef<MatrixColumn[]>([])
-  const rows = useMemo(() => filterRows(windowRows, layout.filters, query), [windowRows, layout.filters, query])
+  const rows = useMemo(() => filterRows(windowRows, query), [windowRows, query])
   const everyColumn = useMemo(() => {
     const built = buildColumns(view, windowRows, titles, [...picked, ...kept.current], keptNames.current)
     kept.current = built.flatMap((column) => (column.id ? [column.id] : []))
@@ -379,7 +377,6 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   return (
     <div className="nv-frame">
       <div className="nv-bar">
-        {period}
         <b>{model?.label ?? view.label}</b>
         <span>{rowCount(rows.length)}</span>
         <button type="button" className="nv-bar__button" aria-expanded={picking} onClick={() => setPicking(!picking)}>{t('addColumn')}</button>
@@ -387,8 +384,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
       </div>
       {picking && <ColumnPicker model={models[join.model]?.fields[join.column_field]?.relation?.model ?? ''} taken={everyColumn.flatMap((c) => (c.id ? [c.id] : []))} onPick={pick}
         columns={everyColumn} hidden={layout.hidden} onToggle={toggle} />}
-      {windowRows.length === 0 ? <div className="nv-center"><EmptyState type="no-data" title={emptyTitle} description={emptyHint} /></div>
-        : rows.length === 0 ? <div className="nv-center"><EmptyState type="no-data" title={t('noRowsMatch')} /></div> : (
+      {windowRows.length === 0 ? <div className="nv-center"><EmptyState type="no-data" title={emptyTitle} description={emptyHint ?? ''} /></div>
+        : rows.length === 0 ? <div className="nv-center"><EmptyState type="no-data" title={t('noRowsMatch')} description="" /></div> : (
       <div className="nv-body" ref={bodyRef} onMouseDownCapture={onSecondClick} onClickCapture={onSecondClick}>
         <div className="nv-scroll nv-mx__scroll">
           <table ref={tableRef} role="grid" aria-label={title ?? view.label} aria-readonly={editable ? undefined : true} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}

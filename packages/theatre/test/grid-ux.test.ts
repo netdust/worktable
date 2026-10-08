@@ -148,6 +148,10 @@ describe('theatre declares the details: icons, colours, an end time and create-f
     expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'])
   })
 
+  test('the Dagplanning view starts on this week: its period is a condition on plandag', () => {
+    expect(theatre.views.find((v) => v.name === 'Dagplanning')?.filters).toEqual({ plandag: { $period: 'week' } })
+  })
+
   test('an owner sees no dagplanning, so none of its colours or its create', async () => {
     const { sources } = await schemaAs('owner')
     expect(sources.dagplanning).toBeUndefined()

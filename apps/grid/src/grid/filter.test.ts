@@ -11,13 +11,24 @@ const bijloke: Row = {
 const rows = [...calais, bijloke]
 
 describe('filterFields', () => {
-  it('offers the select, relation and toggle fields with their options; relations from the rows held', () => {
+  it('offers every field with its kind: choices, relations from the rows held, toggles, dates and texts', () => {
     const fields = Object.fromEntries(filterFields(activity, rows).map((f) => [f.field, f]))
 
-    expect(Object.keys(fields)).toEqual(['kind', 'status', 'location', 'settled_by', 'paid'])
+    expect(Object.keys(fields)).toEqual(['date', 'start', 'end', 'kind', 'status', 'location', 'place', 'settled_by', 'notes', 'paid'])
+    expect([fields.date.kind, fields.place.kind, fields.status.kind, fields.paid.kind]).toEqual(['date', 'text', 'choice', 'bool'])
     expect(fields.status.options).toEqual([['confirmed', 'Bevestigd'], ['option', 'Optie'], ['cancelled', 'Geannuleerd']])
     expect(fields.location).toMatchObject({ label: 'Locatie', options: [['9', 'Bijloke, Gent'], ['12', 'Le Grenier, Calais']] })
     expect(fields.paid.options).toEqual([['1', 'Ja'], ['', 'Nee']])
+  })
+  it("drops a text column that repeats a relation's label: a query's title column beside the relation it names", () => {
+    const model = {
+      key: 'dag', label: 'Dag', title_label: 'Omschrijving', title_readonly: true,
+      fields: {
+        productie_id: { type: 'relation' as const, label: 'Productie', required: false, fact: false, relation: { model: 'productie', multiple: false } },
+        productie: { type: 'text' as const, label: 'Productie', required: false, fact: false },
+      },
+    }
+    expect(filterFields(model, []).map((f) => f.field)).toEqual(['productie_id'])
   })
 })
 
@@ -25,24 +36,18 @@ describe("the view's filters", () => {
   it('come first in the menu, in their declared order; the other filterable fields follow', () => {
     const order = filterFields(activity, rows, ['location', 'status']).map((f) => f.field)
 
-    expect(order).toEqual(['location', 'status', 'kind', 'settled_by', 'paid'])
+    expect(order).toEqual(['location', 'status', 'date', 'start', 'end', 'kind', 'place', 'settled_by', 'notes', 'paid'])
   })
 
   it('skip a declared name that is not filterable', () => {
-    expect(filterFields(activity, rows, ['title', 'paid']).map((f) => f.field)).toEqual(['paid', 'kind', 'status', 'location', 'settled_by'])
+    expect(filterFields(activity, rows, ['title', 'paid']).map((f) => f.field)).toEqual(['paid', 'date', 'start', 'end', 'kind', 'status', 'location', 'place', 'settled_by', 'notes'])
   })
 })
 
 describe('filterRows', () => {
-  it('keeps the rows that match every filter', () => {
-    const kept = filterRows(rows, [{ field: 'kind', value: 'build' }, { field: 'location', value: '9' }], '')
-    expect(kept.map((r) => r.id)).toEqual([110])
-    expect(filterRows(rows, [{ field: 'paid', value: '' }], '')).toHaveLength(6)
-  })
-
   it('finds rows by title, ignoring case and accents', () => {
-    expect(filterRows(rows, [], 'presentation').map((r) => r.title)).toEqual(['Présentation interne'])
-    expect(filterRows(rows, [], 'MONTAGE').map((r) => r.id)).toEqual([102, 110])
-    expect(filterRows(rows, [], '  ')).toHaveLength(7)
+    expect(filterRows(rows, 'presentation').map((r) => r.title)).toEqual(['Présentation interne'])
+    expect(filterRows(rows, 'MONTAGE').map((r) => r.id)).toEqual([102, 110])
+    expect(filterRows(rows, '  ')).toHaveLength(7)
   })
 })

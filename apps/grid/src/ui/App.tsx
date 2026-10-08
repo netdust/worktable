@@ -1,5 +1,5 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
@@ -7,7 +7,8 @@ import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
-import { filter, type Layout } from '../grid/layout'
+import { complete, isDate, type Kind, put, readConditions, windowOf } from '../grid/conditions'
+import { type Layout, withFilters } from '../grid/layout'
 import { type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
@@ -19,7 +20,7 @@ import { Filters } from './Filters'
 import { NewViewDialog } from './NewViewDialog'
 import { type ModelActions, Rail } from './Rail'
 import type { Signed } from './RailFoot'
-import { readHash, writeHash } from './hash'
+import { dropHash, readHash, writeHash } from './hash'
 import { createHistory } from './history'
 import { Search } from './Search'
 import { SignIn } from './SignIn'
@@ -31,8 +32,7 @@ import { useFilterNames } from './useFilterNames'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { MATRIX_DAYS, Period } from './Period'
-import { days, formatWindow, useWindow, weekOf } from './Window'
+import { days, formatWindow, MATRIX_DAYS, weekOf } from './Window'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -157,7 +157,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     setAdding(null)
     setViewNote(null)
   }
-  const [picked, setRange] = useWindow()
   const [result, setResult] = useState<Rows>({ status: 'loading' })
   const [query, setQuery] = useState('')
   const [exportFailed, setExportFailed] = useState(false)
@@ -201,12 +200,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // Named by the view's own source: a query's view sits under another model's node and keeps the query's name.
   const title = declared.find((table) => table.key === view?.table)?.label ?? t('viewsShown')
   const dated = Boolean(view?.date_field)
-  // A matrix reads one bounded window: under Alles, or over the engine's cap, it shows the current week.
-  const unbounded = view?.type !== 'matrix'
-  const range = useMemo(() => {
-    const fits = picked.from && picked.to && days({ from: picked.from, to: picked.to }) <= MATRIX_DAYS
-    return unbounded || fits ? picked : weekOf(new Date())
-  }, [unbounded, picked])
   const [space, select] = useSpace(served?.space)
   const scoped = space.status !== 'none' && view?.space === 'scoped'
   // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
@@ -221,23 +214,56 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const spaceField = scope?.field
   // A chip saved before the view was scoped would filter on what the scope already decides.
   const layout = stored && spaceField ? { ...stored, filters: stored.filters.filter((f) => f.field !== spaceField) } : stored
+  // A link's conditions land once, on the view it names, as a local change: only the person's own next change saves.
+  const landing = useRef({ view: readHash('view'), f: readHash('f'), j: readHash('j') })
+  useEffect(() => {
+    const { view: linkedKey, f, j } = landing.current
+    if (!settled || f === null || !view || !layout) return
+    landing.current = { view: null, f: null, j: null }
+    dropHash('f')
+    dropHash('j')
+    const linked = view.key === linkedKey ? readConditions(f) : null
+    if (!linked?.length) return
+    const type = (field: string) => served?.models[view.model]?.fields[field]?.type
+    const kind = (field: string): Kind => (type(field) === 'date' || type(field) === 'datetime' ? 'date' : 'text')
+    const filters = linked.reduce((all, condition) => put(all, condition, kind), layout.filters)
+    storeLayout({ ...withFilters(layout, filters), join: j === 'or' ? 'or' : undefined })
+  }, [settled, view?.key, layout === null])
   const asks = layout ? JSON.stringify([layout.filters, layout.sort, layout.group]) : ''
+  // The period is the condition on the view's date column: its days, for a matrix, a new row and the export.
+  const dateCondition = layout && view?.date_field ? layout.filters.find((f) => f.field === view.date_field && isDate(f.op) && complete(f)) : undefined
+  const conditionDays = useMemo(() => windowOf(dateCondition, new Date()), [JSON.stringify(dateCondition)])
+  // A matrix reads one bounded window: the condition's days, else the current week (none, or over the engine's cap).
+  const conditioned = layout ? layout.filters.some((f) => f !== dateCondition && complete(f)) : false
+  const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
+  const window = view?.type === 'matrix' ? matrixDays : {}
+  const windowKey = JSON.stringify(window)
 
+  const shownKey = useRef<string | null>(null)
   useEffect(() => {
     if (!settled || !view || scope === undefined) return
     let live = true
-    setResult({ status: 'loading' })
-    const asked = dated ? range : {}
+    // The same view asked again (a condition, a sort) keeps its rows on screen, so an open filter builder stays open.
+    if (shownKey.current !== view.key) setResult({ status: 'loading' })
+    const asked = window
     const away = view.type === 'matrix' ? view.away : undefined
     Promise.all([rows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
-      ([r, away, titles]) => live && setResult({ status: 'ready', rows: r.rows, total: r.total, away, titles }),
-      (error: ApiError) => live && setResult({ status: 'error', error }),
+      ([r, away, titles]) => {
+        if (!live) return
+        shownKey.current = view.key
+        setResult({ status: 'ready', rows: r.rows, total: r.total, away, titles })
+      },
+      (error: ApiError) => {
+        if (!live) return
+        shownKey.current = null
+        setResult({ status: 'error', error })
+      },
     )
     return () => {
       live = false
     }
     // By key, and by what the server applies (filters, sort, group): a width or a hidden column stays in the browser.
-  }, [settled, view?.key, dated, range, scopeId, asks, reloads])
+  }, [settled, view?.key, windowKey, scopeId, asks, reloads])
 
   const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
   const model = view ? models[view.model] : undefined
@@ -249,7 +275,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
   const live = useRef(store)
   live.current = store
-  const reload = () => (view ? rows(view, dated ? range : {}, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
+  const reload = () => (view ? rows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload)
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
@@ -263,9 +289,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     ? t('scopeIs', { field: model.fields[scope.field]?.label ?? '', value: space.selected.title })
     : null
 
-  const plan = model && view && !model.creates ? newRow(model, view, dated ? range : null, new Date(), scope ?? null) : null
+  const plan = model && view && !model.creates ? newRow(model, view, dated ? conditionDays : null, new Date(), scope ?? null) : null
   const target = model?.creates ? models[model.creates] : undefined
-  const made = target ? madeFrom(target, served?.tables ?? [], dated ? range : null, space.status === 'ready' ? space.scope : null) : null
+  const made = target ? madeFrom(target, served?.tables ?? [], dated ? conditionDays : null, space.status === 'ready' ? space.scope : null) : null
   const addBlocked = target ? createBlocked(target, made, served?.writable[target.key] === true)
     : !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
   const add = () => {
@@ -286,14 +312,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
-    ? <Filters fields={named} active={layout.filters.filter((f) => !waiting.includes(f.field))} onChange={(field, value) => setLayout(filter(layout, field, value))} />
+    ? <Filters fields={named} filters={layout.filters} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
+      onJoin={(join) => setLayout({ ...layout, join: join === 'or' ? 'or' : undefined })} />
     : null
-  const period = dated ? <Period window={range} onChange={setRange} unbounded={unbounded} /> : null
   const exportView = () => {
     const shown = snapshot.current?.()
     if (!view || !shown) return
     setExportFailed(false)
-    exportSheet(view, shown.columns, shown.groups, dated && range.from && range.to ? { from: range.from, to: range.to } : null, title).catch(() => setExportFailed(true))
+    exportSheet(view, shown.columns, shown.groups, dated ? conditionDays : null, title).catch(() => setExportFailed(true))
   }
   // A link is a row of another dataset, created and deleted there through its writer; then the row it sits on is read again.
   const repaint = (row: Row) => {
@@ -401,15 +427,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         <section className="nv-sheet">
           {matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
-              titles={result.titles} emptyTitle={t('noRowsInWindow')} emptyHint={formatWindow(range)} store={cells} writable={joinWritable}
-              layout={layout} onLayout={setLayout} filters={filters} period={period} />
+              titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
+              layout={layout} onLayout={setLayout} filters={filters} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
-              emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} period={period} onAction={act}
+              emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} />
           ) : (
-            <Sheet hasView={view !== undefined} dated={dated} result={result} period={period} />
+            <Sheet hasView={view !== undefined} result={result} />
           )}
         </section>
         </div>
@@ -439,20 +465,12 @@ function createBlocked(target: Model, made: NewRow | null, writable: boolean): s
   return asked.length > 0 ? t('pickFirst', { fields: asked.join(', ') }) : null
 }
 
-/** Between reads the bar stays, so the period can be stepped again. */
-function Sheet({ hasView, dated, result, period }: { hasView: boolean; dated: boolean; result: Rows; period: ReactNode }) {
+function Sheet({ hasView, result }: { hasView: boolean; result: Rows }) {
   if (!hasView) return <div className="nv-center"><EmptyState type="no-data" title={t('noViews')} description={t('noViewsHint')} /></div>
-  const inside = result.status === 'loading' ? <Spinner /> : (
-    <EmptyState
-      type="no-data"
-      title={t(dated ? 'noRowsInWindow' : 'noRows')}
-      description={result.status === 'error' ? errorText(result.error.code, result.error.message) : undefined}
-    />
-  )
+  if (result.status === 'loading') return <div className="nv-center"><Spinner /></div>
   return (
-    <div className="nv-frame">
-      {period && <div className="nv-bar">{period}</div>}
-      <div className="nv-center">{inside}</div>
+    <div className="nv-center">
+      <EmptyState type="no-data" title={t('noRows')} description={result.status === 'error' ? errorText(result.error.code, result.error.message) : ''} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatWindow, isoWeek, shift, weekOf } from './Window'
 
@@ -57,22 +57,33 @@ describe('the week window', () => {
 })
 
 describe('App and the window', () => {
-  it('requests rows with the window it shows', async () => {
-    const planning = { key: 'planning', label: 'Planning', table: 'planning', model: 'activity', date_field: 'date' }
+  const planning = { key: 'planning', label: 'Planning', table: 'planning', model: 'activity', date_field: 'date' }
+  const shell = () => {
     api.rows.mockResolvedValue({ rows: [], total: 0 })
     const tables = [{ key: 'planning', label: 'Planning', model: 'activity', types: ['grid' as const] }]
-    const models = { activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: {} } }
+    const models = { activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: { date: { type: 'date', label: 'Datum' } } } }
     api.schema.mockResolvedValue({ models, tables, views: [planning], writable: {} })
     render(<App />)
+  }
+  afterEach(() => window.localStorage.clear())
+
+  it('asks a table for its rows with no from or to, its date condition riding in the filters, and names its days when none come', async () => {
+    window.localStorage.setItem('ntdst-views/layout/v2/planning', JSON.stringify({
+      hidden: [], order: [], widths: {}, sort: [], filters: [{ field: 'date', op: 'week', values: [] }], group: null,
+    }))
+    shell()
 
     await screen.findByText('Geen rijen in deze periode')
-    expect(screen.getAllByText('Week 21 · 18–24 mei').length).toBeGreaterThan(0)
-    expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-18', to: '2026-05-24' }, null, expect.any(Object))
+    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
+    expect(api.rows).toHaveBeenLastCalledWith(planning, {}, null, expect.objectContaining({ filters: [{ field: 'date', op: 'week', values: [] }] }))
+    expect(screen.queryByRole('button', { name: 'Volgende periode' })).toBeNull()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }))
+  it('says only "Geen rijen" on a table with no date condition', async () => {
+    shell()
 
-    expect(screen.getAllByText('Week 22 · 25–31 mei').length).toBeGreaterThan(0)
-    await vi.waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-25', to: '2026-05-31' }, null, expect.any(Object)))
-    await screen.findByText('Geen rijen in deze periode')
+    await screen.findByText('Geen rijen')
+    expect(screen.queryByText(/Records will appear/)).toBeNull()
+    expect(api.rows).toHaveBeenLastCalledWith(planning, {}, null, expect.objectContaining({ filters: [] }))
   })
 })

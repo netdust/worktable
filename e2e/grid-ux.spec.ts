@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { shot } from './shots'
-import { modelNode, openModel, openView } from './tree'
+import { modelNode, openModel, openView, openWeek } from './tree'
 
 // One empty week per flow that applies a speeldag, so no flow sees another's rows.
 const FOLD_WEEK = '2027-03-01'
@@ -66,12 +66,6 @@ async function speeldagen(api: Api, naam: string, monday: string): Promise<numbe
   return id
 }
 
-/** The grid reads the hash once, on load: a hash-only goto needs the reload. */
-async function land(page: Page, hash: string) {
-  await page.goto(hash)
-  await page.reload()
-}
-
 async function pick(page: Page, view: string, model = view) {
   await openView(page, view, model)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
@@ -116,23 +110,28 @@ async function switchTo(page: Page, from: string, to: string) {
   await expect(page.getByRole('button', { name: to, exact: true })).toBeVisible()
 }
 
-async function filterMenu(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
-  return page.locator('.nv-filters__menu')
-}
-
-async function closeFilterMenu(page: Page) {
+/** The fields the filter builder offers, read off a new condition that goes again. */
+async function offeredFields(page: Page): Promise<string[]> {
+  await page
+    .locator('.nv-bar')
+    .getByRole('button', { name: /^Filter\s*\d*$/ })
+    .click()
+  await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+  const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+  await row.getByRole('button', { name: /^Veld:/ }).click()
+  const names = await row.getByRole('listbox', { name: 'Veld' }).getByRole('option').allTextContents()
   await page.keyboard.press('Escape')
-  await expect(page.locator('.nv-filters__menu')).toBeHidden()
+  await row.getByRole('button', { name: 'Voorwaarde weghalen' }).click()
+  await page.keyboard.press('Escape')
+  return names
 }
 
 test('switch-production @e2e', async ({ page }) => {
-  await land(page, `/#from=${SEED_WEEK}`)
-  await pick(page, 'Planning', 'Activiteiten')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page).first()).toBeVisible()
   expect((await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
-  await expect((await filterMenu(page)).getByRole('button', { name: 'Productie: Nachtwacht' })).toBeVisible()
-  await closeFilterMenu(page)
+  expect(await offeredFields(page)).toContain('Productie')
 
   await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
   await expect(page.getByRole('listbox', { name: 'Producties' }).getByRole('option')).toHaveText([
@@ -153,8 +152,7 @@ test('switch-production @e2e', async ({ page }) => {
   await expect(page.locator('thead th', { hasText: 'Productie' })).toHaveCount(0)
   await expect(gridRows(page).first()).toBeVisible()
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toHaveCount(0)
-  await expect((await filterMenu(page)).getByRole('button', { name: /^Productie:/ })).toHaveCount(0)
-  await closeFilterMenu(page)
+  expect(await offeredFields(page)).not.toContain('Productie')
 
   // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
   const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
@@ -182,8 +180,8 @@ test('switch-production @e2e', async ({ page }) => {
 })
 
 test('tree-fold-and-hover @e2e', async ({ page }) => {
-  await land(page, `/#from=${SEED_WEEK}`)
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', SEED_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
   const node = modelNode(page, 'Tourstops')
   const row = node.locator('.nv-model')
   const tools = row.locator('.nv-model__tools')
@@ -324,8 +322,8 @@ const facts = (band: Locator) => band.locator('.nv-group__fact')
 
 test('fold-day-band @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e vouwen', FOLD_WEEK)
-  await land(page, `/#from=${FOLD_WEEK}`)
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', FOLD_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   // Row numbers lead every row, and subtle dividers stand between the cells (Stefan, 2026-10-07).
@@ -361,8 +359,8 @@ test('fold-day-band @e2e', async ({ page }) => {
 
 test('band-facts @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e feiten', FACTS_WEEK)
-  await land(page, `/#from=${FACTS_WEEK}`)
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', FACTS_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   for (const band of await bands(page).all()) {
@@ -390,8 +388,8 @@ test('inherited-venue @e2e', async ({ page }) => {
     expect(a.locatie_id ?? null).toBeNull()
   }
 
-  await land(page, `/#from=${INHERIT_WEEK}`)
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', INHERIT_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
   await expect(gridRows(page)).toHaveCount(29)
   const locatie = await columnIndex(page, 'Locatie')
 
@@ -434,8 +432,8 @@ test('inherited-venue @e2e', async ({ page }) => {
 const rowHeight = async (page: Page) => (await gridRows(page).first().boundingBox())?.height ?? 0
 
 test('dark-and-density @e2e', async ({ page }) => {
-  await land(page, `/#from=${SEED_WEEK}`)
-  await pick(page, 'Planning', 'Activiteiten')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page).first()).toBeVisible()
   const root = page.locator('#root')
   const theme = page.getByRole('group', { name: 'Thema' })
@@ -472,16 +470,13 @@ test('dark-and-density @e2e', async ({ page }) => {
 test('dagplanning-details @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await speeldagen(page.request, 'Speelreeks e2e details', DETAILS_WEEK)
-  await land(page, `/#from=${DETAILS_WEEK}`)
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', DETAILS_WEEK)
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
   await switchTo(page, 'Alle producties', 'Nachtwacht')
-  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
 
-  // R10.9 and R4: the Periode chip in the bar, with the ISO week.
-  await expect(page.getByRole('group', { name: 'Periode' }).locator('.nv-chip__value')).toHaveText(
-    'Week 12 · 22–28 mrt',
-  )
+  // The period is a condition: its chip in the bar.
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag tussen 2027-03-22 en 2027-03-28'])
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
   // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Mensen, Status; a time range with its end muted.
@@ -648,6 +643,19 @@ test.describe('a domain without the new shapes', () => {
     await expect(page.getByRole('button', { name: /^Alle /, exact: false })).toHaveCount(0)
     await expect(page.locator('.nv-chip--scope')).toHaveCount(0)
     await expect(page.getByRole('group', { name: 'Periode' })).toHaveCount(0)
+    await page.getByRole('button', { name: /^Filter\s*\d*$/ }).click()
+    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+    const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+    await row.getByRole('button', { name: /^Vergelijking:/ }).click()
+    await expect(row.getByRole('listbox', { name: 'Vergelijking' }).getByRole('option')).toHaveText([
+      'bevat',
+      'bevat niet',
+      'is',
+      'is leeg',
+    ])
+    await shot(page, 'fiche-filter-builder')
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Escape')
     await expect(page.locator('.nv-group__fact')).toHaveCount(0)
     await expect(page.locator('.nv-via')).toHaveCount(0)
     await shot(page, 'fiche-as-before')
@@ -690,8 +698,8 @@ test.describe
 
     test('read-limit-cut @e2e', async ({ page }) => {
       expect(ids).toHaveLength(MAX_READ + 1)
-      await land(page, `/#from=${CUT_WEEK}`)
-      await pick(page, 'Dagplanning', 'Activiteiten')
+      await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', CUT_WEEK)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
@@ -703,8 +711,8 @@ test.describe
 
     // Shake-out row 19: the bar's count and the grid's foot say 5000+ like the title line.
     test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
-      await land(page, `/#from=${CUT_WEEK}`)
-      await pick(page, 'Dagplanning', 'Activiteiten')
+      await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', CUT_WEEK)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen`)

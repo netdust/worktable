@@ -3,8 +3,11 @@ import { expect, test } from '@playwright/test'
 // Read-only and without a session: safe on any running instance.
 test.use({ storageState: { cookies: [], origins: [] } })
 
-for (const hash of ['#period=all', '#from=2026-12-21&to=2027-02-20']) {
-  test(`a period in the address lands on the sign-in page (${hash}) @smoke`, async ({ page }) => {
+const week = encodeURIComponent(
+  JSON.stringify([{ field: 'plandag', op: 'between', values: ['2026-12-21', '2027-02-20'] }]),
+)
+for (const hash of [`#view=dagplanning&f=${week}`, '#view=dagplanning&f=%7Bnot']) {
+  test(`a link with conditions lands on the sign-in page (${hash.slice(0, 24)}) @smoke`, async ({ page }) => {
     const response = await page.goto(`/${hash}`)
     expect(response?.status()).toBe(200)
     await expect(page.getByRole('textbox', { name: 'E-mailadres' })).toBeVisible()

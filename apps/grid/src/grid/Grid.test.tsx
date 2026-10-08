@@ -208,10 +208,10 @@ describe('the sheet', () => {
     expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
   })
 
-  it('keeps the rows a filter chip asks for', () => {
-    renderGrid(calais, { layout: { ...defaults(planning), filters: [{ field: 'status', value: 'option' }] } })
+  it('applies no condition itself: the server answered for them, and every row it sent shows', () => {
+    renderGrid(calais, { layout: { ...defaults(planning), filters: [{ field: 'status', op: 'in', values: ['option'] }] } })
 
-    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)).toEqual(['Présentation interne'])
+    expect(screen.getAllByRole('row').filter((r) => r.dataset.title)).toHaveLength(calais.length)
   })
 
   it('sorts on a header click and keeps it in the layout', () => {
@@ -727,6 +727,17 @@ describe('the drawer', () => {
 describe('the toolbar over the grid', () => {
   const toolbar = () => screen.getByRole('banner')
   const bar = () => document.querySelector<HTMLElement>('.nv-bar')!
+/** Through the builder: Filter, a new condition, its field, then a value from its list. */
+async function addCondition(field: string, value: string) {
+  fireEvent.click(within(bar()).getByRole('button', { name: /^Filter\s*\d*$/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Voorwaarde toevoegen' }))
+  await screen.findAllByRole('group', { name: /^Voorwaarde/ })
+  const last = () => screen.getAllByRole('group', { name: /^Voorwaarde/ }).at(-1) as HTMLElement
+  fireEvent.click(within(last()).getByRole('button', { name: /^Veld:/ }))
+  fireEvent.click(within(within(last()).getByRole('listbox', { name: 'Veld' })).getByRole('option', { name: field }))
+  fireEvent.focus(await within(last()).findByRole('searchbox', { name: `${field} zoeken` }))
+  fireEvent.click(within(within(last()).getByRole('listbox')).getByRole('option', { name: value }))
+}
   const visibleText = (el: Element) => {
     const copy = el.cloneNode(true) as Element
     copy.querySelectorAll('.nv-sr').forEach((sr) => sr.remove())
@@ -755,8 +766,7 @@ describe('the toolbar over the grid', () => {
   it('labels every toolbar and bar control with a visible word, or an icon that says its word on hover (the ⋯, the week steps, a chip\'s ×)', async () => {
     render(<App />)
     await screen.findByText('18 mei')
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter' }))
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
+    await addCondition('Status', 'Optie')
     // A chip asks the server again: the grid comes back once the rows do.
     await screen.findByRole('grid')
     expect(within(bar()).getByRole('button', { name: 'Filter Status wissen' })).toBeTruthy()
@@ -852,10 +862,9 @@ describe('the toolbar over the grid', () => {
     await screen.findByText('18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    expect(within(toolbar()).queryByRole('group', { name: 'Periode' })).toBeNull()
-    expect(within(bar()).getByRole('group', { name: 'Periode' }).textContent).toBe('Periode Week 21 · 18–24 mei')
+    expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
     expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').slice(3).map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Groep: datum', 'Filter', 'Kolommen'])
+    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Groep: datum', 'Filter', 'Kolommen'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
@@ -889,7 +898,7 @@ describe('the toolbar over the grid', () => {
     const mine: SavedView = { ...schema.views[0], key: '42', id: 42, label: 'Calais techniek', starting: false, arrangement: empty,
       shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, public: true }
     window.location.hash = '#view=42'
-    window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: 'date' }))
+    window.localStorage.setItem('ntdst-views/layout/v2/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: 'date' }))
     remote.savedViews.mockResolvedValue([mine])
     remote.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['kind'], group: 'date' } })
     remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
@@ -906,7 +915,7 @@ describe('the toolbar over the grid', () => {
     })
 
     expect(remote.updateView).toHaveBeenCalled()
-    expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBeNull()
+    expect(window.localStorage.getItem('ntdst-views/layout/v2/42')).toBeNull()
     expect(cell('Montage', 'place').textContent).toBe('')
     remote.undoBatch.mockResolvedValueOnce('u1')
     remote.rowOf.mockResolvedValueOnce(calais[1])
@@ -919,22 +928,19 @@ describe('the toolbar over the grid', () => {
     expect(remote.rows).toHaveBeenCalledTimes(1)
   })
 
-  it('adds a filter chip from + Filter and removes it with its ×', async () => {
+  it('adds a condition through the builder, shows it as a chip, and removes it with its ×', async () => {
     render(<App />)
     await screen.findByText('18 mei')
 
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter' }))
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
+    await addCondition('Status', 'Optie')
     await screen.findByRole('grid')
 
-    expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [{ field: 'status', value: 'option' }] }))
-    expect(within(bar()).getByText('Optie', { selector: 'b' })).toBeTruthy()
-    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)).toEqual(['Présentation interne'])
+    expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [{ field: 'status', op: 'in', values: ['option'] }] }))
+    expect(within(bar()).getByText('Status is Optie')).toBeTruthy()
 
     fireEvent.click(within(bar()).getByRole('button', { name: 'Filter Status wissen' }))
     await screen.findByRole('grid')
     expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [] }))
-    expect(screen.getAllByRole('row').filter((r) => r.dataset.title)).toHaveLength(6)
   })
 
   it('says nothing while a cell saves and once it saved; Not saved with the message on a refusal; and Undo with a word', async () => {

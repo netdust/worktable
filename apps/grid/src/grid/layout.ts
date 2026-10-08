@@ -1,14 +1,11 @@
 import type { View } from '../types'
+import type { Filter, Join } from './conditions'
+
+export type { Filter } from './conditions'
 
 export interface SortKey {
   id: string
   desc: boolean
-}
-
-export interface Filter {
-  field: string
-  /** The raw value: an option key, a related id, `1`/`` for a toggle. */
-  value: string
 }
 
 /** One viewer's arrangement of one view (V7/R5): kept in this browser only, never shared. */
@@ -18,12 +15,15 @@ export interface Layout {
   widths: Record<string, number>
   sort: SortKey[]
   filters: Filter[]
+  /** "or": any of the conditions; absent, all of them. */
+  join?: Join
   group: string | null
 }
 
 export type StorageAccess = () => Storage
 
-const PREFIX = 'ntdst-views/layout/v1/'
+// v2: a filter became a condition (field · op · values); a v1 copy is dropped, never misread.
+const PREFIX = 'ntdst-views/layout/v2/'
 const MIN_WIDTH = 48
 
 const browser: StorageAccess = () => window.localStorage
@@ -67,13 +67,8 @@ export function sort(layout: Layout, list: SortKey[]): Layout {
   return { ...layout, sort: list }
 }
 
-export function filter(layout: Layout, field: string, value: string | null): Layout {
-  if (value === null) return { ...layout, filters: layout.filters.filter((f) => f.field !== field) }
-  const exists = layout.filters.some((f) => f.field === field)
-  return {
-    ...layout,
-    filters: exists ? layout.filters.map((f) => (f.field === field ? { field, value } : f)) : [...layout.filters, { field, value }],
-  }
+export function withFilters(layout: Layout, filters: Filter[]): Layout {
+  return { ...layout, filters }
 }
 
 export function group(layout: Layout, field: string | null): Layout {
@@ -91,8 +86,9 @@ function parse(raw: unknown): Layout | null {
     isStrings(l.hidden) && isStrings(l.order)
     && typeof widths === 'object' && widths !== null && Object.values(widths).every((w) => typeof w === 'number')
     && Array.isArray(l.sort) && l.sort.every((s: Partial<SortKey>) => typeof s?.id === 'string' && typeof s.desc === 'boolean')
-    && Array.isArray(l.filters) && l.filters.every((f: Partial<Filter>) => typeof f?.field === 'string' && typeof f.value === 'string')
+    && Array.isArray(l.filters) && l.filters.every((f: Partial<Filter>) => typeof f?.field === 'string' && typeof f.op === 'string' && isStrings(f.values))
     && (l.group === null || typeof l.group === 'string')
+    && (l.join === undefined || l.join === 'and' || l.join === 'or')
   return ok ? (l as unknown as Layout) : null
 }
 

@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { modelNode, openView } from './tree'
+import { addCondition, modelNode, openView, openWeek, pickIn } from './tree'
 
-const WEEK = '/#from=2026-10-12'
+const MONDAY = '2026-10-12'
 const MATRIX = 'Toewijzingen per activiteit'
 
 interface Toewijzing {
@@ -31,8 +31,10 @@ async function pick(page: Page, view: string, ready: Locator, model = view) {
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 }
 
+/** A view under Activiteiten opens on the seed week, its date condition from a link; any other as it stands. */
 async function open(page: Page, view: string, ready: Locator, model = view) {
-  await page.goto(WEEK)
+  if (model === 'Activiteiten') await openWeek(page, view, model, 'plandag', MONDAY)
+  else await page.goto('/')
   await pick(page, view, ready, model)
 }
 
@@ -190,8 +192,7 @@ test('view-saved-after-reload', async ({ page }) => {
   await expect.poll(async () => (await head.boundingBox())?.width as number).toBeGreaterThan(before + 30)
   const widened = await head.evaluate((th) => (th as HTMLElement).style.width)
 
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
-  await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
+  await addCondition(page, 'Productie', 'Nachtwacht')
   await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await page.getByRole('button', { name: 'More actions: Planning (kopie)', exact: true }).click()
@@ -275,12 +276,12 @@ test('in-filter-applies', async ({ page }) => {
   }
   expect(new Set(await statuses())).toEqual(new Set(['Optie', 'Bevestigd']))
 
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
-  await page.getByRole('button', { name: 'Status: Optie' }).click()
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Status is Optie of Bevestigd'])
+  await addCondition(page, 'Status', 'Optie')
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Status is Optie'])
   await expect(row(page, 'vergadering Gent')).toHaveCount(0)
   await expect(row(page, 'overnachting Brugge')).toBeVisible()
   expect(new Set(await statuses())).toEqual(new Set(['Optie']))
-  await expect(page.locator('.nv-toolbar')).toContainText('+ 1 vaste filter')
 })
 
 test('new-without-title', async ({ page }) => {
@@ -302,9 +303,16 @@ test('relation-beyond-page', async ({ page }) => {
       asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
   await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
+  await page
+    .locator('.nv-bar')
+    .getByRole('button', { name: /^Filter\s*\d*$/ })
+    .click()
+  await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+  const condition = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+  await pickIn(condition, 'Veld', 'Productie')
   for (const titel of titels) {
-    await expect(page.getByRole('button', { name: `Productie: ${titel}` })).toBeVisible()
+    await condition.getByRole('searchbox', { name: 'Productie zoeken' }).fill(titel)
+    await expect(condition.getByRole('option', { name: titel, exact: true })).toBeVisible()
   }
   expect(asked.every((a) => a.limit === '2')).toBe(true)
   const offsets = [...new Set(asked.map((a) => a.offset))].sort((a, b) => a - b)
@@ -326,7 +334,7 @@ test.describe('foreign-view-hidden', () => {
 
   test('never listed, never in the rail', async ({ page }) => {
     expect((await views(page)).map((v) => v.name)).not.toContain(name)
-    await page.goto(WEEK)
+    await page.goto('/')
     const nav = page.getByRole('navigation', { name: 'Views' })
     await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toBeVisible()
     await expect(modelNode(page, 'Activiteiten')).toBeVisible()

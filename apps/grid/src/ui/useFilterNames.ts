@@ -32,7 +32,7 @@ export function useFilterNames(model: Model | undefined, fields: FilterField[], 
   const waiting = active.filter((filter) => {
     const related = targetOf(filter.field)
     const field = fields.find((f) => f.field === filter.field)
-    return related && field && !titles[related] && !field.options.some(([value]) => value === filter.value)
+    return related && field && !titles[related] && !filter.values.every((v) => field.options.some(([value]) => value === v))
   })
   return [named, waiting.map((filter) => filter.field)]
 }

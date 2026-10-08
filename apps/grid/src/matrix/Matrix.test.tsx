@@ -286,14 +286,11 @@ describe('the matrix arrangement', () => {
     expect(onLayout).toHaveBeenCalledWith(expect.objectContaining({ hidden: ['name:lieve'] }))
   })
 
-  it('builds the columns from the window, never from the filtered rows, so a filter hides rows only', () => {
-    const rows = week.map((row) => ({ ...row, fields: { ...row.fields, kind: row.id === 1 ? 'show' : 'build' } }))
-    const { container } = render(<Matrix {...props} rows={rows} layout={{ ...layout, filters: [{ field: 'kind', value: 'show' }] }} />)
+  it('applies no condition itself: the server answered for them, and every row it sent shows', () => {
+    const rows = week.map((row) => ({ ...row, fields: { ...row.fields, kind: 'build' } }))
+    render(<Matrix {...props} rows={rows} layout={{ ...layout, filters: [{ field: 'kind', op: 'in', values: ['show'] }] }} />)
 
-    expect(screen.queryByRole('row', { name: /Repetitie/ })).toBeNull()
-    expect(headers()).toEqual(['Activiteit', 'Sien', 'Sien', 'Lieve', '✓Bevestigd'])
-    fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
-    expect(strip(container, 'record:6')).not.toBeNull()
+    expect(screen.getByRole('row', { name: /Repetitie/ })).toBeTruthy()
   })
 
   it('keeps its bar, an active filter chip with it, above an empty window (R10)', () => {
@@ -303,15 +300,10 @@ describe('the matrix arrangement', () => {
     expect(screen.getByText('Geen rijen')).toBeTruthy()
   })
 
-  it('says no rows match when the filters or the search leave none, and the window is empty only when it is', () => {
-    const rows = week.map((row) => ({ ...row, fields: { ...row.fields, kind: 'show' } }))
-    render(<Matrix {...props} rows={rows} layout={{ ...layout, filters: [{ field: 'kind', value: 'build' }] }} />)
-
+  it('says no rows match when the search leaves none, and the window is empty only when it is', () => {
+    render(<Matrix {...props} rows={week} query="zzz" />)
     expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
     expect(screen.queryByText('Geen rijen')).toBeNull()
-    cleanup()
-    render(<Matrix {...props} rows={rows} query="zzz" />)
-    expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
   })
 
   it('regroups the rows by the layout\'s group', () => {

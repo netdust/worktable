@@ -14,7 +14,7 @@ const mine: SavedView = {
   starting: false, arrangement: empty, shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
 }
 const changeLocally = (key: string, group: string) =>
-  window.localStorage.setItem(`ntdst-views/layout/v1/${key}`, JSON.stringify({ hidden: [], order: [], widths: {}, sort: [], filters: [], group }))
+  window.localStorage.setItem(`ntdst-views/layout/v2/${key}`, JSON.stringify({ hidden: [], order: [], widths: {}, sort: [], filters: [], group }))
 
 function hook() {
   return renderHook(() => useSavedViews({

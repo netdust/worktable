@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { shot } from './shots'
-import { modelNode, openView } from './tree'
+import { modelNode, openView, openWeek, pickIn } from './tree'
 
 const WEEK = '2026-12-21'
 const VENUE = 'Theater Het Anker'
@@ -55,9 +55,7 @@ const cellOf = async (page: Page, title: string, label: string): Promise<Locator
     .nth(await columnIndex(page, label))
 
 async function openDagplanning(page: Page) {
-  await page.goto(`/#from=${WEEK}`)
-  await page.reload()
-  await openView(page, 'Dagplanning', 'Activiteiten')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
 }
 
@@ -136,53 +134,44 @@ test('locatie-own-and-back @e2e', async ({ page }) => {
   expect(held.locatie_id ?? null).toBeNull()
 })
 
-test('period-chip @e2e', async ({ page }) => {
+test('period-is-a-filter @e2e', async ({ page }) => {
   const api = page.request
   const productie = await idByName(api, 'productie', 'titel', 'Nachtwacht')
   const [near, far] = ['periode in december', 'periode in februari']
-  await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: WEEK, omschrijving: near })
-  await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: '2027-02-15', omschrijving: far })
-  await openDagplanning(page)
+  const made = [
+    await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: WEEK, omschrijving: near }),
+    await idOf(api, 'activiteit', {
+      productie_id: productie,
+      soort: 'repetitie',
+      datum: '2027-02-15',
+      omschrijving: far,
+    }),
+  ]
+  try {
+    await page.goto('/')
+    await openView(page, 'Dagplanning', 'Activiteiten')
+    const bar = page.locator('.nv-bar')
+    await expect(bar.locator('.nv-chip--filter')).toHaveText(['Plandag deze week'])
+    await shot(page, 'period-is-a-filter')
 
-  const chip = page.getByRole('group', { name: 'Periode' })
-  const value = chip.locator('.nv-chip__value')
-  await expect(value).toHaveText('Week 52 · 21–27 dec')
-  await chip.getByRole('button', { name: 'Volgende periode' }).click()
-  await expect(value).toHaveText('Week 53 · 28 dec–3 jan')
+    await bar.getByRole('button', { name: 'Filter Plandag wissen' }).click()
+    await expect(named(page, near)).toHaveCount(1)
+    await expect(named(page, far)).toHaveCount(1)
 
-  await value.click()
-  await page.getByRole('button', { name: 'Deze maand' }).click()
-  await expect(value).toHaveText(/^[a-z]+ \d{4}$/)
-  const month = await value.innerText()
-  await page.reload()
-  await expect(value).toHaveText(month)
-
-  await value.click()
-  await page.getByRole('button', { name: 'Alles' }).click()
-  await expect(value).toHaveText('Alles')
-  await expect(chip.getByRole('button', { name: 'Volgende periode' })).toHaveCount(0)
-  await expect(named(page, near)).toHaveCount(1)
-  await expect(named(page, far)).toHaveCount(1)
-
-  await value.click()
-  await page.getByLabel('Van', { exact: true }).fill('2026-12-21')
-  await page.getByLabel('Tot', { exact: true }).fill('2027-02-20')
-  await shot(page, 'period-menu')
-  await page.getByRole('button', { name: 'Toepassen' }).click()
-  await expect(value).toHaveText('21 dec – 20 feb')
-  await shot(page, 'period-chip')
-  await expect(named(page, near)).toHaveCount(1)
-  await value.click()
-  await page.getByRole('button', { name: 'Alles' }).click()
-  await expect(value).toHaveText('Alles')
-
-  await openView(page, 'Toewijzingen per activiteit', 'Activiteiten')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen per activiteit')
-  await expect(value).toHaveText(/^Week \d+ · /)
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  await value.click()
-  await expect(page.getByRole('button', { name: 'Deze maand' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Alles' })).toHaveCount(0)
+    await bar.getByRole('button', { name: /^Filter\s*\d*$/ }).click()
+    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+    const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+    await pickIn(row, 'Veld', 'Plandag')
+    await pickIn(row, 'Vergelijking', 'ligt tussen')
+    await row.getByLabel('Van', { exact: true }).fill(WEEK)
+    await row.getByLabel('Tot', { exact: true }).fill('2026-12-27')
+    await page.keyboard.press('Escape')
+    await expect(bar.locator('.nv-chip--filter')).toHaveText(['Plandag tussen 2026-12-21 en 2026-12-27'])
+    await expect(named(page, near)).toHaveCount(1)
+    await expect(named(page, far)).toHaveCount(0)
+  } finally {
+    for (const id of made) await api.delete(`/api/rows/activiteit/${id}`)
+  }
 })
 
 // The specs share one database: what this flow made would show up in later ones, so it goes again whatever happens.
@@ -581,7 +570,7 @@ test('new-row-people @e2e', async ({ page }) => {
 })
 
 test('tourstop-first-in-planning @e2e', async ({ page }) => {
-  await page.goto('/#from=2026-10-12')
+  await page.goto('/')
   const planning = page.getByRole('tree', { name: 'Views' }).getByRole('group', { name: 'Planning', exact: true })
   const models = planning.getByRole('treeitem')
   await expect(models.first()).toHaveAccessibleName('Tourstops')
@@ -606,11 +595,7 @@ test('tourstop-first-in-planning @e2e', async ({ page }) => {
 })
 
 test('period-empty-result @e2e', async ({ page }) => {
-  await page.goto('/#from=2030-01-07')
-  await page.reload()
-  await openView(page, 'Dagplanning', 'Activiteiten')
-  const chip = page.getByRole('group', { name: 'Periode' })
-  await expect(chip.locator('.nv-chip__value')).toHaveText('Week 2 · 7–13 jan')
+  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2030-01-07')
   const empty = page.locator('.nv-center').getByText('Geen rijen in deze periode', { exact: true })
   await expect(empty).toBeVisible()
   await expect(page.locator('.nv-center')).toContainText('Week 2 · 7–13 jan')
@@ -622,10 +607,6 @@ test('period-empty-result @e2e', async ({ page }) => {
   expect(Math.abs(middle(room).x - middle(text).x)).toBeLessThan(4)
   expect(Math.abs(middle(room).y - middle(text).y)).toBeLessThan(40)
   await shot(page, 'period-empty')
-
-  // The chip still steps from an empty period.
-  await chip.getByRole('button', { name: 'Volgende periode' }).click()
-  await expect(chip.locator('.nv-chip__value')).toHaveText('Week 3 · 14–20 jan')
 })
 
 // Bug: a double-click on an option adds twice; the second is refused, so a person added once reads as a failed add.
@@ -665,7 +646,7 @@ test.describe('as the owner', () => {
     const someone = await api.post('/api/rows/toewijzing', { data: { activiteit_id: 1, persoon_id: 2 } })
     expect(someone.status()).toBe(403)
 
-    await page.goto('/#from=2026-10-12')
+    await page.goto('/')
     const tree = page.getByRole('tree', { name: 'Views' })
     await expect(tree.getByRole('treeitem').first()).toBeVisible()
     await expect(tree.getByRole('button', { name: 'Dagplanning', exact: true })).toHaveCount(0)

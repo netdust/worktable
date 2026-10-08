@@ -1,5 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
-import { openView } from './tree'
+import { state } from './auth'
+import { shot } from './shots'
+import { addCondition, openView, openWeek, pickIn } from './tree'
 
 type Stored = { id: number; name: string; group_by: string | null; mine: boolean }
 
@@ -44,5 +46,138 @@ test('autosave-own-view @e2e', async ({ page }) => {
   } finally {
     for (const view of (await views(page)).filter((v) => v.name === name))
       await page.request.delete(`/api/views/${view.id}`)
+  }
+})
+
+const named = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
+
+async function activity(page: Page, soort: string, datum: string, omschrijving: string): Promise<number> {
+  const productie = (
+    (await (await page.request.get('/api/rows/productie?limit=1')).json()) as { rows: { id: number }[] }
+  ).rows[0]?.id
+  const made = await page.request.post('/api/rows/activiteit', {
+    data: { productie_id: productie, soort, datum, omschrijving, status: 'bevestigd' },
+  })
+  expect(made.status(), await made.text()).toBe(201)
+  return ((await made.json()) as { id: number }).id
+}
+
+test('filter-builder @e2e', async ({ page }) => {
+  const week = '2031-03-03'
+  const titles = ['repetitie grote zaal e2e', 'opbouw kleine zaal e2e', 'reis naar de zaal e2e', 'repetitie studio e2e']
+  const made: number[] = []
+  try {
+    for (const [at, soort] of ['repetitie', 'opbouw', 'reis', 'repetitie'].entries())
+      made.push(await activity(page, soort, '2031-03-04', titles[at] as string))
+    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
+    for (const title of titles) await expect(named(page, title)).toHaveCount(1)
+
+    // "Soort is Repetitie of Opbouw", the second value found by searching.
+    await addCondition(page, 'Soort', 'Repetitie')
+    await page
+      .locator('.nv-bar')
+      .getByRole('button', { name: /^Filter\s*\d*$/ })
+      .click()
+    const soort = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+    await soort.getByRole('searchbox', { name: 'Soort zoeken' }).fill('opb')
+    await soort.getByRole('option', { name: 'Opbouw', exact: true }).click()
+
+    // "Omschrijving bevat 'zaal'".
+    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+    const text = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+    await pickIn(text, 'Veld', 'Omschrijving')
+    await text.getByRole('textbox', { name: 'Omschrijving' }).fill('zaal')
+    await shot(page, 'filter-builder')
+    await page.keyboard.press('Escape')
+
+    const chips = page.locator('.nv-bar .nv-chip--filter')
+    await expect(chips).toHaveText([
+      'Status is Bevestigd',
+      'Plandag tussen 2031-03-03 en 2031-03-09',
+      'Soort is Repetitie of Opbouw',
+      'Omschrijving bevat “zaal”',
+    ])
+    await expect(named(page, titles[0] as string)).toHaveCount(1)
+    await expect(named(page, titles[1] as string)).toHaveCount(1)
+    await expect(named(page, titles[2] as string)).toHaveCount(0)
+    await expect(named(page, titles[3] as string)).toHaveCount(0)
+
+    await page.locator('.nv-bar').getByRole('button', { name: 'Filter Soort wissen' }).click()
+    await expect(named(page, titles[2] as string)).toHaveCount(1)
+    await page.reload()
+    await expect(chips).toHaveText([
+      'Status is Bevestigd',
+      'Plandag tussen 2031-03-03 en 2031-03-09',
+      'Omschrijving bevat “zaal”',
+    ])
+    await expect(named(page, titles[2] as string)).toHaveCount(1)
+    await expect(named(page, titles[3] as string)).toHaveCount(0)
+  } finally {
+    for (const id of made) await page.request.delete(`/api/rows/activiteit/${id}`)
+  }
+})
+
+test('filter-link @e2e', async ({ page, browser }) => {
+  const before = (await views(page)).find((v) => v.name === 'Dagplanning')
+  await page.goto('/')
+  await openView(page, 'Dagplanning', 'Activiteiten')
+  await expect.poll(() => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view')).not.toBeNull()
+  const key = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view') as string
+  const f = [
+    { field: 'plandag', op: 'between', values: ['2026-10-12', '2026-10-18'] },
+    { field: 'soort', op: 'in', values: ['repetitie'] },
+  ]
+  const address = `/#view=${key}&f=${encodeURIComponent(JSON.stringify(f))}`
+
+  const other = await browser.newContext({ storageState: state('editor') })
+  try {
+    const fresh = await other.newPage()
+    await fresh.goto(address)
+    await expect(fresh.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+    await expect(fresh.locator('.nv-bar .nv-chip--filter')).toHaveText([
+      'Plandag tussen 2026-10-12 en 2026-10-18',
+      'Soort is Repetitie',
+    ])
+    await expect.poll(() => new URLSearchParams(new URL(fresh.url()).hash.slice(1)).get('f')).toBeNull()
+    await fresh.waitForTimeout(800)
+    expect((await views(fresh)).find((v) => v.id === before?.id)).toEqual(before)
+  } finally {
+    await other.close()
+  }
+})
+
+test('filter-or @e2e', async ({ page }) => {
+  const week = '2031-03-10'
+  const titles = ['reis naar Brugge e2e', 'repetitie studio e2e', 'repetitie zaal e2e']
+  const made: number[] = []
+  try {
+    for (const [at, soort] of ['reis', 'repetitie', 'repetitie'].entries())
+      made.push(await activity(page, soort, '2031-03-11', titles[at] as string))
+    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
+    await page.locator('.nv-bar').getByRole('button', { name: 'Filter Status wissen' }).click()
+    await addCondition(page, 'Soort', 'Reis')
+    await page
+      .locator('.nv-bar')
+      .getByRole('button', { name: /^Filter\s*\d*$/ })
+      .click()
+    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+    const text = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
+    await pickIn(text, 'Veld', 'Omschrijving')
+    await text.getByRole('textbox', { name: 'Omschrijving' }).fill('studio')
+    await expect(named(page, titles[0] as string)).toHaveCount(0)
+
+    // "Of": the period still narrows; the two conditions now either hold.
+    await pickIn(page.getByRole('group', { name: /^Voorwaarde \d/ }).nth(2), 'Verbinding', 'Of')
+    await shot(page, 'filter-or')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.nv-bar .nv-chip-join')).toHaveText(['of'])
+    await expect(named(page, titles[0] as string)).toHaveCount(1)
+    await expect(named(page, titles[1] as string)).toHaveCount(1)
+    await expect(named(page, titles[2] as string)).toHaveCount(0)
+    await page.reload()
+    await expect(named(page, titles[0] as string)).toHaveCount(1)
+    await expect(page.locator('.nv-bar .nv-chip-join')).toHaveText(['of'])
+  } finally {
+    for (const id of made) await page.request.delete(`/api/rows/activiteit/${id}`)
   }
 })

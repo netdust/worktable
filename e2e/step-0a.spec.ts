@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
-import { openView } from './tree'
+import { addCondition, openView, openWeek } from './tree'
 
-const WEEK = '/#from=2026-10-12'
+const MONDAY = '2026-10-12'
 
 interface Section {
   day: string
@@ -10,8 +10,7 @@ interface Section {
 }
 
 async function open(page: Page, view: string, model = view) {
-  await page.goto(WEEK)
-  await openView(page, view, model)
+  await openWeek(page, view, model, 'plandag', MONDAY)
 }
 
 /** A sorted header carries an arrow after its label, so it is stripped before comparing. */
@@ -101,12 +100,11 @@ test('planning-status-filter', async ({ page }) => {
   expect(new Set(await columnTexts(page, 'Status'))).toEqual(new Set(['Bevestigd']))
 
   await page.getByRole('button', { name: 'Filter Status wissen' }).click()
-  await page.getByRole('button', { name: 'Filter', exact: true }).click()
   const request = page.waitForRequest((r) => {
     const url = new URL(r.url())
     return url.pathname === '/api/rows/activiteit' && (url.searchParams.get('filter') ?? '').includes('optie')
   })
-  await page.getByRole('button', { name: 'Status: Optie' }).click()
+  await addCondition(page, 'Status', 'Optie')
   await request
 
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
@@ -114,7 +112,7 @@ test('planning-status-filter', async ({ page }) => {
 })
 
 test('query-view-loads', async ({ page }) => {
-  await page.goto(WEEK)
+  await page.goto('/')
   const response = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/rows/productie_dag')
   await openView(page, 'Per productie per dag', 'Activiteiten')
   expect((await response).status()).toBe(200)

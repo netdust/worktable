@@ -2470,3 +2470,251 @@
   width: 0;
   height: 0;
 }
+
+/* The filter builder: one bordered row per condition, its parts split by hairlines. */
+.nv-fb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(680px, calc(100vw - 32px));
+}
+
+#root .nv-fb__row {
+  display: grid;
+  grid-template-columns: 56px 170px 150px minmax(0, 1fr) 34px;
+  align-items: stretch;
+  min-height: 34px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+#root .nv-fb__row > * + * {
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+#root .nv-fb__join {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  color: var(--color-fg-subtle);
+  font-size: 13px;
+}
+
+#root .nv-pick {
+  position: relative;
+  min-width: 0;
+}
+
+#root .nv-pick__button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+#root .nv-pick__button:hover {
+  background: var(--color-bg-hover);
+}
+
+#root .nv-pick__button svg {
+  flex: none;
+  color: var(--color-fg-subtle);
+}
+
+#root .nv-pick__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#root .nv-pick__panel,
+#root .nv-fb__menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+#root .nv-pick__panel {
+  width: 220px;
+}
+
+#root .nv-pick__search {
+  width: 100%;
+  height: 28px;
+  margin: 0 0 4px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+}
+
+#root .nv-pick__list,
+#root .nv-fb__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#root .nv-pick__option,
+#root .nv-fb__list > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-default);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#root .nv-pick__option:hover,
+#root .nv-fb__list > li:hover {
+  background: var(--color-bg-hover);
+}
+
+#root .nv-pick__option svg {
+  flex: none;
+  color: var(--color-fg-subtle);
+}
+
+#root .nv-pick__option span {
+  flex: 1;
+}
+
+#root .nv-pick__option .nv-pick__check {
+  color: var(--color-accent-default);
+}
+
+#root .nv-fb__value {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+#root .nv-fb__box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 3px 8px;
+}
+
+#root .nv-fb__box input,
+#root .nv-fb__text,
+#root .nv-fb__between input,
+#root .nv-fb__related input {
+  flex: 1;
+  min-width: 48px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+}
+
+#root .nv-fb__text {
+  width: 100%;
+  padding: 0 10px;
+}
+
+#root .nv-fb__between {
+  gap: 6px;
+  padding: 0 10px;
+}
+
+#root .nv-fb__menu {
+  min-width: 220px;
+}
+
+#root .nv-fb__note {
+  margin: 4px 8px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+#root .nv-fb__remove {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+#root .nv-fb__remove:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-danger-fg);
+}
+
+#root .nv-fb__add {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#root .nv-fb__add:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+#root .nv-fb-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+#root .nv-fb-panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  left: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+}
+
+#root .nv-chip-join {
+  align-self: center;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}

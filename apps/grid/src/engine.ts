@@ -1,4 +1,5 @@
-import type { Filter, Layout, SortKey } from './grid/layout'
+import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
+import type { Layout, SortKey } from './grid/layout'
 import type { DateWindow, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
@@ -154,6 +155,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     key: name,
     label: source.label,
     title_label: titleLabel(source),
+    ...(titleColumn(source) ? { title_field: titleColumn(source) as string } : {}),
     title_readonly: !source.writable || Boolean(source.title_via) || isReadonly(source.columns[source.title], source),
     ...(source.columns[source.title]?.nullable ? { title_required: false } : {}),
     ...(source.title_via ? { title_derived: true } : {}),
@@ -217,25 +219,24 @@ export function toSchema(s: EngineSchema): Schema {
 /** A column name as the grid's column id: the title column is the grid's `title`. */
 const columnId = (source: EngineSource, column: string): string => (column === titleColumn(source) ? 'title' : column)
 
-function chipValue(value: unknown): string | null {
-  if (typeof value === 'boolean') return value ? '1' : ''
-  return typeof value === 'string' || typeof value === 'number' ? String(value) : null
-}
-
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/** Only `$eq` on a scalar is a chip, the grid has no word for the other operators; those stay as the view's fixed filters. */
-function splitFilters(filters: Record<string, unknown>): { chips: Filter[]; fixed: Record<string, unknown> } {
-  const chips: Filter[] = []
-  const fixed: Record<string, unknown> = {}
-  for (const [field, raw] of Object.entries(filters)) {
-    const { $eq, ...rest } = isObject(raw) ? raw : { $eq: raw }
-    const value = chipValue($eq)
-    if (value !== null) chips.push({ field, value })
-    const kept = value === null ? raw : rest
-    if (!isObject(kept) || Object.keys(kept).length > 0) fixed[field] = kept
+/** What a source's column is, for the operators the filter builder offers on it. */
+export function kindOf(source: EngineSource | undefined): (field: string) => Kind {
+  return (field) => {
+    const column = source?.columns[field]
+    if (!column) return 'text'
+    if (column.relation || column.options) return 'choice'
+    if (column.type === 'boolean') return 'bool'
+    if (column.type === 'date' || column.type === 'datetime') return column.type
+    return 'text'
   }
-  return { chips, fixed }
+}
+
+/** A stored filter as the builder's conditions; what no condition says stays the view's fixed filter. */
+function splitFilters(filters: Record<string, unknown>, source: EngineSource): { chips: Filter[]; fixed: Record<string, unknown>; join: Join } {
+  const { conditions, fixed, join } = fromEngine(filters, kindOf(source))
+  return { chips: conditions, fixed, join }
 }
 
 /** The grid's field ids, in declared order: never the title column nor `id`. */
@@ -251,7 +252,7 @@ export function fromStoredView(view: EngineArrangement, source: EngineSource): {
     return { id: columnId(source, desc ? key.slice(1) : key), desc }
   })
   const fields = fieldsOf(source)
-  const { chips, fixed } = splitFilters(view.filters)
+  const { chips, fixed, join } = splitFilters(view.filters, source)
   const order = view.visible_fields.map((key) => columnId(source, key)).filter((id) => id === 'title' || fields.includes(id))
   const arrangement = {
     hidden: fields.filter((key) => !view.visible_fields.includes(key)),
@@ -259,18 +260,19 @@ export function fromStoredView(view: EngineArrangement, source: EngineSource): {
     widths: [],
     sort,
     filters: chips,
+    ...(join === 'or' ? { join } : {}),
     group: view.group_by === null ? null : columnId(source, view.group_by),
     picked: [],
   }
   return { arrangement, fixed }
 }
 
-/** A chip and a fixed filter on one column both hold: `{ status: { $in: [...], $eq: 'x' } }`. */
-function mergeFilters(chips: Filter[], fixed: Record<string, unknown>): Record<string, unknown> {
+/** A condition and a fixed filter on one column both hold: `{ status: { $in: [...], $exists: true } }`. */
+function mergeFilters(chips: Filter[], fixed: Record<string, unknown>, source?: EngineSource, join?: Join): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...fixed }
-  for (const { field, value } of chips) {
+  for (const [field, condition] of Object.entries(toEngine(chips, kindOf(source), join))) {
     const kept = merged[field]
-    merged[field] = isObject(kept) ? { ...kept, $eq: value } : { $eq: value }
+    merged[field] = field !== '$or' && isObject(kept) && isObject(condition) ? { ...kept, ...condition } : condition
   }
   return merged
 }
@@ -295,7 +297,7 @@ export function toStoredView(arrangement: StoredArrangement, fixed: Record<strin
   const shown = [...placed, ...fields.filter((id) => !placed.includes(id))].filter((id) => !arrangement.hidden.includes(id))
   const group = arrangement.group === null ? null : engineColumn(arrangement.group, title)
   return {
-    filters: mergeFilters(arrangement.filters, fixed),
+    filters: mergeFilters(arrangement.filters, fixed, source, arrangement.join),
     sort: arrangement.sort.flatMap(({ id, desc }) => {
       const column = engineColumn(id, title)
       return column === null ? [] : [desc ? `-${column}` : column]
@@ -372,9 +374,15 @@ function engineColumn(id: string, title: string | null): string | null {
 }
 
 /** The layout's filters, sort and group as `/rows` params; the grid sorts lookups and rollups itself. */
-export function rowsQuery(view: Pick<View, 'date_field' | 'fixed'>, layout: Layout, window: Partial<DateWindow>, title: string | null): Record<string, string> {
+/**
+ * The rows request. A table's date condition travels in `filter`; a matrix passes its window as `from`/`to`,
+ * and its date condition stays out of `filter`, so the two never narrow each other to nothing.
+ */
+export function rowsQuery(view: Pick<View, 'date_field' | 'fixed'>, layout: Layout, window: Partial<DateWindow>, title: string | null, source?: EngineSource): Record<string, string> {
   const query: Record<string, string> = {}
-  const filters = mergeFilters(layout.filters, view.fixed ?? {})
+  const windowed = Boolean(view.date_field && window.from && window.to)
+  const conditions = windowed ? layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))) : layout.filters
+  const filters = mergeFilters(conditions, view.fixed ?? {}, source, layout.join)
   if (Object.keys(filters).length > 0) query.filter = JSON.stringify(filters)
   const sort = layout.sort.flatMap(({ id, desc }) => {
     const column = engineColumn(id, title)

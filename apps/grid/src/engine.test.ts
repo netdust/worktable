@@ -263,7 +263,7 @@ describe('toSavedViews', () => {
   it('builds the arrangement: Planning opens with the status chip bevestigd, sort start_at, group plandag', () => {
     const planning = saved()[0]
 
-    expect(planning.arrangement.filters).toEqual([{ field: 'status', value: 'bevestigd' }])
+    expect(planning.arrangement.filters).toEqual([{ field: 'status', op: 'in' as const, values: ['bevestigd'] }])
     expect(planning.arrangement.sort).toEqual([{ id: 'start_at', desc: false }])
     expect(planning.arrangement.group).toBe('plandag')
     expect(planning.arrangement.hidden).toEqual(['plandag', 'uren', 'betaald', 'extra'])
@@ -283,14 +283,18 @@ describe('toSavedViews', () => {
     expect(saved()[1].arrangement.sort).toEqual([{ id: 'title', desc: true }])
   })
 
-  it('reads $eq chips and keeps every other filter as fixed: an operator beside $eq, $in, a range, a custom key', () => {
+  it('reads every condition the builder can show, and keeps the rest fixed: a half range, a custom key', () => {
     const filters = {
       soort: { $eq: 'opbouw' }, plandag: { $gte: '2026-10-01' }, status: { $in: ['optie', 'bevestigd'], $eq: 'optie' }, 'custom.zaal': { $in: ['groot'] },
     }
     const [view] = toSavedViews([{ ...views[0], filters }], engine.sources)
 
-    expect(view.arrangement.filters).toEqual([{ field: 'soort', value: 'opbouw' }, { field: 'status', value: 'optie' }])
-    expect(view.fixed).toEqual({ plandag: { $gte: '2026-10-01' }, status: { $in: ['optie', 'bevestigd'] }, 'custom.zaal': { $in: ['groot'] } })
+    expect(view.arrangement.filters).toEqual([
+      { field: 'soort', op: 'in', values: ['opbouw'] },
+      { field: 'status', op: 'in', values: ['optie'] },
+      { field: 'status', op: 'in', values: ['optie', 'bevestigd'] },
+    ])
+    expect(view.fixed).toEqual({ plandag: { $gte: '2026-10-01' }, 'custom.zaal': { $in: ['groot'] } })
   })
 
   it('leaves out a view whose source is not served', () => {
@@ -350,13 +354,24 @@ describe('an arrangement on the wire', () => {
     expect(orderOf(show({ ...reread, widths: {} }, 'soort'), fields)).toEqual(['productie_id', 'start_at', 'status', 'soort'])
   })
 
-  it('merges a chip and a fixed filter per key: both conditions survive a Save', () => {
+  it('shows a seeded $in as a condition, and stores what the conditions say on a Save', () => {
     const seeded = { ...planning, filters: { status: { $in: ['optie', 'bevestigd'] } } }
     const { arrangement, fixed } = fromStoredView(seeded, activiteit)
 
+    expect(arrangement.filters).toEqual([{ field: 'status', op: 'in', values: ['optie', 'bevestigd'] }])
     expect(toStoredView(arrangement, fixed, activiteit).filters).toEqual({ status: { $in: ['optie', 'bevestigd'] } })
-    const chipped = { ...arrangement, filters: [{ field: 'status', value: 'optie' }, { field: 'soort', value: 'opbouw' }] }
-    expect(toStoredView(chipped, fixed, activiteit).filters).toEqual({ status: { $in: ['optie', 'bevestigd'], $eq: 'optie' }, soort: { $eq: 'opbouw' } })
+    const changed = { ...arrangement, filters: [{ field: 'status', op: 'in' as const, values: ['optie'] }, { field: 'soort', op: 'in' as const, values: ['opbouw'] }] }
+    expect(toStoredView(changed, fixed, activiteit).filters).toEqual({ status: { $eq: 'optie' }, soort: { $eq: 'opbouw' } })
+  })
+
+  it('round-trips an any-of: the conditions in $or, the join in the arrangement', () => {
+    const anyOf = { ...planning, filters: { plandag: { $period: 'week' }, $or: [{ status: { $eq: 'optie' } }, { soort: { $eq: 'opbouw' } }] } }
+    const { arrangement, fixed } = fromStoredView(anyOf, activiteit)
+
+    expect(arrangement.join).toBe('or')
+    expect(arrangement.filters.map((f) => f.field)).toEqual(['plandag', 'status', 'soort'])
+    expect(toStoredView(arrangement, fixed, activiteit).filters).toEqual(anyOf.filters)
+    expect(toStoredView({ ...arrangement, join: undefined }, fixed, activiteit).filters).toEqual({ plandag: { $period: 'week' }, status: { $eq: 'optie' }, soort: { $eq: 'opbouw' } })
   })
 
   it("keeps a via-title source's else column as an ordinary column, with no title column", () => {
@@ -381,14 +396,14 @@ describe('rowsQuery', () => {
 
   it('keeps a chip and a fixed filter on the same key, and a fixed filter alone', () => {
     const fixed = { status: { $in: ['optie', 'bevestigd'] }, soort: { $ne: 'repetitie' } }
-    const query = rowsQuery({ ...view, fixed }, { ...layout, filters: [{ field: 'status', value: 'bevestigd' }] }, {}, 'omschrijving')
+    const query = rowsQuery({ ...view, fixed }, { ...layout, filters: [{ field: 'status', op: 'in' as const, values: ['bevestigd'] }] }, {}, 'omschrijving')
 
     expect(JSON.parse(query.filter)).toEqual({ status: { $in: ['optie', 'bevestigd'], $eq: 'bevestigd' }, soort: { $ne: 'repetitie' } })
     expect(JSON.parse(rowsQuery({ ...view, fixed }, layout, {}, 'omschrijving').filter)).toEqual(fixed)
   })
 
   it('lets a chip win over a bare fixed value on the same key: both are $eq', () => {
-    const query = rowsQuery({ ...view, fixed: { status: null } }, { ...layout, filters: [{ field: 'status', value: 'optie' }] }, {}, 'omschrijving')
+    const query = rowsQuery({ ...view, fixed: { status: null } }, { ...layout, filters: [{ field: 'status', op: 'in' as const, values: ['optie'] }] }, {}, 'omschrijving')
 
     expect(JSON.parse(query.filter)).toEqual({ status: { $eq: 'optie' } })
   })
@@ -396,7 +411,7 @@ describe('rowsQuery', () => {
   it('sends chips as $eq filter JSON, sort with - for desc, group and the window', () => {
     const query = rowsQuery(
       view,
-      { ...layout, filters: [{ field: 'status', value: 'bevestigd' }, { field: 'productie_id', value: '1' }], sort: [{ id: 'start_at', desc: true }], group: 'plandag' },
+      { ...layout, filters: [{ field: 'status', op: 'in' as const, values: ['bevestigd'] }, { field: 'productie_id', op: 'in' as const, values: ['1'] }], sort: [{ id: 'start_at', desc: true }], group: 'plandag' },
       { from: '2026-10-12', to: '2026-10-18' },
       'omschrijving',
     )
@@ -408,6 +423,14 @@ describe('rowsQuery', () => {
       from: '2026-10-12',
       to: '2026-10-18',
     })
+  })
+
+  it("sends an any-of as $or, the matrix's window outside it", () => {
+    const filters = [{ field: 'plandag', op: 'week' as const, values: [] }, { field: 'status', op: 'in' as const, values: ['optie'] }, { field: 'soort', op: 'in' as const, values: ['opbouw'] }]
+    const table = rowsQuery(view, { ...layout, filters, join: 'or' }, {}, 'omschrijving')
+    expect(JSON.parse(table.filter)).toEqual({ plandag: { $period: 'week' }, $or: [{ status: { $eq: 'optie' } }, { soort: { $eq: 'opbouw' } }] })
+    const matrix = rowsQuery(view, { ...layout, filters, join: 'or' }, { from: '2026-10-12', to: '2026-10-18' }, 'omschrijving')
+    expect(JSON.parse(matrix.filter)).toEqual({ $or: [{ status: { $eq: 'optie' } }, { soort: { $eq: 'opbouw' } }] })
   })
 
   it('sends nothing for an empty layout and no window', () => {

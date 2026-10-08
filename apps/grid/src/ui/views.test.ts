@@ -7,13 +7,13 @@ import type { Table } from './tables'
 const tabel: View = { key: 'planning', label: 'Tabel', model: 'activity', table: 'planning', sort: ['date', '-start'], group: 'date', starting: true }
 const stored = {
   hidden: ['record:5', 'name:lieve'], order: [], widths: [{ id: 'title', width: 220 }], sort: [{ id: 'date', desc: false }],
-  filters: [{ field: 'location', value: '3' }], group: null, picked: [9],
+  filters: [{ field: 'location', op: 'in' as const, values: ['3'] }], group: null, picked: [9],
 }
 const calais: SavedView = {
   key: '42', id: 42, label: 'Calais techniek', model: 'activity', table: 'planning', type: 'matrix', starting: false,
   arrangement: stored, shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
 }
-const local = (key: string, value: unknown) => window.localStorage.setItem(`ntdst-views/layout/v1/${key}`, JSON.stringify(value))
+const local = (key: string, value: unknown) => window.localStorage.setItem(`ntdst-views/layout/v2/${key}`, JSON.stringify(value))
 const picked = (key: string, value: number[]) => savePicked({ ...calais, key }, value)
 
 afterEach(() => window.localStorage.clear())
@@ -59,6 +59,15 @@ describe('the local copy', () => {
 
     expect(localOf(calais)).toMatchObject({ widths: { title: 220, place: 90 }, picked: [9, 11] })
     expect(changed(calais)).toBe(false)
+  })
+
+  it('is changed by the join once two conditions can join, and not by an "of" over one', () => {
+    local('42', { ...arrangementOf(calais), join: 'or' })
+    expect(changed(calais)).toBe(false)
+    local('42', { ...arrangementOf(calais), join: 'or', filters: [...stored.filters, { field: 'status', op: 'in', values: ['optie'] }] })
+    const both = { ...calais, arrangement: { ...stored, filters: [...stored.filters, { field: 'status', op: 'in' as const, values: ['optie'] }] } }
+    expect(changed(both)).toBe(true)
+    expect(toStored(localOf(both) ?? arrangementOf(both)).join).toBe('or')
   })
 
   it('is not changed when it equals the saved arrangement', () => {

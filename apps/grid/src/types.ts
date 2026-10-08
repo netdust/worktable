@@ -1,3 +1,4 @@
+import type { Join } from './grid/conditions'
 import type { Filter, Layout, SortKey } from './grid/layout'
 
 export type FieldType =
@@ -48,6 +49,8 @@ export interface Model {
   key: string
   label: string
   title_label: string
+  /** The title's own column, which a condition names; absent for a title through a relation. */
+  title_field?: string
   title_readonly: boolean
   /** The title column is not nullable: absent means required. */
   title_required?: boolean
@@ -135,6 +138,7 @@ export interface StoredArrangement {
   widths: { id: string; width: number }[]
   sort: SortKey[]
   filters: Filter[]
+  join?: Join
   group: string | null
   picked: number[]
 }

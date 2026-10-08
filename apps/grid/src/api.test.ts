@@ -92,7 +92,7 @@ describe('schema() and savedViews()', () => {
 
 describe('rows()', () => {
   it("sends the layout's chips, sort and group and the window to /api/rows/<source>", async () => {
-    const layout = { ...defaults(planning), filters: [{ field: 'status', value: 'bevestigd' }], sort: [{ id: 'title', desc: true }], group: 'plandag' }
+    const layout = { ...defaults(planning), filters: [{ field: 'status', op: 'in' as const, values: ['bevestigd'] }], sort: [{ id: 'title', desc: true }], group: 'plandag' }
 
     await rows(planning, { from: '2026-10-12', to: '2026-10-18' }, null, layout)
 
@@ -253,7 +253,7 @@ describe('saved views on the engine', () => {
     routes({ 'POST /api/views': [201, out({ id: 9, name: 'Mijn planning', shared: false })] })
     const arrangement = {
       hidden: ['plandag', 'personen', 'zaal', 'notitie', 'eind_at'], order: ['status', 'productie_id', 'start_at'], widths: [{ id: 'status', width: 90 }],
-      sort: [{ id: 'title', desc: true }], filters: [{ field: 'zaal', value: 'groot' }], group: 'plandag', picked: [],
+      sort: [{ id: 'title', desc: true }], filters: [{ field: 'zaal', op: 'in' as const, values: ['groot'] }], group: 'plandag', picked: [],
     }
 
     const created = await createView({ name: 'Mijn planning', table: 'activiteit', type: 'grid', field: null, shared: false, arrangement, fixed: { personen: { $gt: 2 } } })
@@ -274,18 +274,19 @@ describe('saved views on the engine', () => {
     expect(sent()[0][2]).toMatchObject({ skin: 'matrix', shared: true })
   })
 
-  it("a seeded $in filter survives a Save, beside a chip on the same column", async () => {
-    routes({ 'PATCH /api/views/5': [200, out({ ...seeded, filters: { status: { $in: ['optie', 'bevestigd'], $eq: 'optie' } } })] })
+  it('a seeded $in filter is a condition: a Save stores the conditions as they stand', async () => {
+    routes({ 'PATCH /api/views/5': [200, out({ ...seeded, filters: { status: { $eq: 'optie' } } })] })
     const [view] = await savedViews()
+    expect(view.arrangement.filters).toEqual([{ field: 'status', op: 'in', values: ['optie', 'bevestigd'] }])
     fetcher.mockClear()
 
-    const fresh = await updateView(view, { arrangement: { ...view.arrangement, filters: [{ field: 'status', value: 'optie' }] } })
+    const fresh = await updateView(view, { arrangement: { ...view.arrangement, filters: [{ field: 'status', op: 'in' as const, values: ['optie'] }] } })
 
     expect(sent()).toEqual([['/api/views/5', 'PATCH', {
-      filters: { status: { $in: ['optie', 'bevestigd'], $eq: 'optie' } }, sort: ['plandag'], group_by: null, visible_fields: ['omschrijving', 'status', 'productie_id'],
+      filters: { status: { $eq: 'optie' } }, sort: ['plandag'], group_by: null, visible_fields: ['omschrijving', 'status', 'productie_id'],
     }]])
-    expect(fresh.arrangement.filters).toEqual([{ field: 'status', value: 'optie' }])
-    expect(fresh.fixed).toEqual({ status: { $in: ['optie', 'bevestigd'] } })
+    expect(fresh.arrangement.filters).toEqual([{ field: 'status', op: 'in', values: ['optie'] }])
+    expect(fresh.fixed).toEqual({})
   })
 
   it('a rename or a share sends only that', async () => {

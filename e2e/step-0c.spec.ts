@@ -2,7 +2,6 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 import { openView } from './tree'
 
 const FICHE = 'http://127.0.0.1:5175'
-const WEEK = '/#from=2026-10-12'
 
 test.use({ storageState: 'e2e/.tmp/state/fiche-editor.json' })
 
@@ -18,7 +17,7 @@ interface Revision {
 }
 
 async function open(page: Page, view: string, base = '', model = view) {
-  await page.goto(`${base}${WEEK}`)
+  await page.goto(`${base}/`)
   await openView(page, view, model)
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 }

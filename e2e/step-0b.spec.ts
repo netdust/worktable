@@ -1,8 +1,8 @@
 import { createServer, type Server } from 'node:http'
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { openView } from './tree'
+import { openWeek } from './tree'
 
-const WEEK = '/#from=2026-10-12'
+const MONDAY = '2026-10-12'
 
 interface Activiteit {
   id: number
@@ -21,8 +21,7 @@ interface Revision {
 }
 
 async function open(page: Page, view: string, model = view) {
-  await page.goto(WEEK)
-  await openView(page, view, model)
+  await openWeek(page, view, model, 'plandag', MONDAY)
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 }
 

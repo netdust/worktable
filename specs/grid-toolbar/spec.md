@@ -58,7 +58,7 @@ Stefan, 2026-10-08, looking at the toolbar and the filter bar:
 - Source: the fourth quote.
 
 **R8. A filter builder.**
-- Filter opens a list of conditions, each one row: field · operator · value. Conditions combine with "en".
+- Filter opens a list of conditions, each one row: field · operator · value, after "Waar" on the first row and the join word on the others.
 - The operators by field type:
   - choice and relation: is (one or more values), is niet, is leeg, is niet leeg;
   - text: bevat, bevat niet, is, is leeg;
@@ -69,11 +69,18 @@ Stefan, 2026-10-08, looking at the toolbar and the filter bar:
 - The engine gains what "bevat" needs on a text column: a case-insensitive substring match whose value is bound, never pasted into SQL. Nothing else in the filter language changes.
 - Source: the fifth quote.
 
+**R10. En or Of.**
+- One join word holds for every row: "En" (all conditions) or "Of" (any of them). The second row's join is a choice; the rows after it repeat it. A view stores its join with its conditions.
+- A period (R5) always narrows: it is its own row, above the others and outside the join, so a view reads "this week, and (A of B)". A matrix keeps reading its days from it. The space (productie) narrows the same way.
+- The engine's filter language gains `$or`: a list of conditions in the same language, one level deep, beside the plain keys that still all hold. Its conditions count toward the clause cap; an `$or` inside an `$or` is refused.
+- The bar's chips say the join: a chip "of" between the conditions when the view uses Of.
+- Source: "and yes and / or is necessary" (Stefan, 2026-10-08, after the reference screenshot); the shape (one join word for all rows; the period always narrows) from Stefan's choice, 2026-10-08.
+
 **R9. Minimal scrollbars** in the grid app: thin, no arrow buttons, a quiet thumb that darkens on hover, in both themes.
 - Source: the sixth quote.
 
 ## Out
-- Or-groups of conditions ("of" between rows): not asked for.
+- Groups of conditions with their own join (A en (B of C)): one join word for the list is the choice (R10).
 - Filtering on a link column (Mensen): links are not filterable (dagplanning R3).
 - Undoing someone else's change from the history: the engine refuses it (403), by design.
 - Changes to linked rows (Mensen) in a view's history: they live in another dataset. Their own view (Toewijzingen) has them.

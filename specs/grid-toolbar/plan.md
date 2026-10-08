@@ -52,13 +52,14 @@
 6. **Autosave on a public view puts rows on the website.** An administrator's own public view is editable, and removing a filter would change what `/api/public/views/:token` serves. **Mitigation:** a public view never autosaves. Its changes stay local like a locked view's; the `…` offers "Publieke weergave bijwerken" only when `view.public && view.editable` (an administrator's own public view, `views.ts:66`), which saves them on purpose. A public seeded or shared view is not `editable`, so it offers only Kopie maken. Test map row 1.
 
 **Deferrals:** none.
+7. **An `$or` that widens what a caller may read, or multiplies the query** (R10). An owner sends `{ $or: [{ id: 3 }, …] }` hoping a branch escapes its scope; anyone nests `$or` or stacks branches to blow up the SQL. **Mitigation:** `$or` compiles inside the same `filterWhere` the caller's scope is AND-ed around (`rows.ts`), so a branch never leaves the scope; `filter-compile.ts` takes `$or` only at the top, as a non-empty list of non-empty filters, refuses one inside another, and counts every key inside it toward `MAX_FILTER_CLAUSES` (50). Test map row 2; the owner denial in `access.test.ts`.
 
 ## Test map
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 | --- | --- | --- | --- |
 | Title line, bar, scrollbars | render | unit · `apps/grid/src/ui/Toolbar.test.tsx`, `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | autosave-own-view |
 | Filter operators | `GET /api/rows/:source?filter=`, `POST /api/views` | integration · `packages/engine/test/filter.test.ts`, `rows.test.ts` · `bun test packages/engine` | none, proven by filter-builder |
-| Filter builder | render, `rowsQuery`, `toStoredView` | unit · `apps/grid/src/ui/FilterBuilder.test.tsx` (new), `engine.test.ts` · `cd apps/grid && bunx vitest run` | filter-builder, period-is-a-filter |
+| Filter builder | render, `rowsQuery`, `toStoredView` | unit · `apps/grid/src/ui/FilterBuilder.test.tsx` (new), `engine.test.ts`, `grid/conditions.test.ts` · `cd apps/grid && bunx vitest run` | filter-builder, period-is-a-filter, filter-link, filter-or |
 | History route | `GET /api/history/:source` | integration · `packages/engine/test/history.test.ts` (new), `route-matrix.test.ts` · `bun test packages/engine` | none |
 | History panel | render | unit · `apps/grid/src/ui/HistoryPanel.test.tsx` (new) · `cd apps/grid && bunx vitest run` | history-undo-own |
 | Fiche unchanged | the fiche grid | e2e · `e2e/grid-ux.spec.ts` › `fiche-renders-as-before` · `bunx playwright test e2e/grid-ux.spec.ts` | fiche-renders-as-before |
@@ -78,6 +79,8 @@
    Tested at `filterWhere(…, now)`, with the clock injected there; the HTTP seam takes the real clock (row 2).
 6. **Fiche:** fiche, with no dates, shows no date operators and no period; its views behave as before. Test map row 6.
 7. **Scrollbars (R9):** jsdom cannot see them; the shake-out's screenshots are their proof.
+8. **Threat 7:** an owner's `$or` naming another subject's row finds only its own, asserted by id; `$or` nested, empty, holding `{}` or 51 keys in all is 400. Test map row 2.
+9. **The join (R10):** an "of" over fewer than two conditions is an "en" everywhere it is compared or sent, so an own view never autosaves in a loop; a period stays outside `$or`, and a matrix's window outside the filter. Test map row 3.
 
 ---
 
@@ -244,6 +247,17 @@
   - In `fiche-renders-as-before`: the builder opens and offers the fiche's text operators (bevat, bevat niet, is, is leeg).
   - Both in `e2e/toolbar.spec.ts`.
 - [ ] Step 6: The task's tests. Commit `feat(grid): a filter builder; the period is a filter`.
+
+### Task 3b: En or Of (R10)
+
+Added 2026-10-08 after Stefan's "and yes and / or is necessary"; executed native, after Task 3.
+
+**Files:** `packages/engine/src/filter-compile.ts`, `filter.ts` (`$or`; tests in `filter.test.ts`, `rows.test.ts`, `access.test.ts`); `apps/grid/src/grid/conditions.ts` (`Join`, `joinOf`, `toEngine(…, join)`, `fromEngine` reads `$or`), `grid/layout.ts` and `types.ts` (`join?: 'or'`), `engine.ts` (adapter), `ui/views.ts` (stored and compared by `joinOf`), `ui/FilterBuilder.tsx` (periods first; the second joined row picks En/Of), `ui/Filters.tsx` (an "of" between joined chips), `ui/App.tsx` (the link's `j=or`).
+
+**Interfaces:**
+- Engine: `{ <keys that all hold>, $or: [filter, …] }`, one level deep; a filter inside `$or` is the same language.
+- Grid: `Layout.join?: 'or'`; `toEngine(filters, kindOf, join)` sends the non-period conditions as `$or` when the join is "or" and they are two or more; `fromEngine` returns `join`, and keeps fixed an `$or` whose branches are not one condition each.
+- A link: `#view=<key>&f=<json>&j=or`.
 
 ### Task 4: History (R3)
 
