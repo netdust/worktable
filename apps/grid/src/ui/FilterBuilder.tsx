@@ -1,7 +1,7 @@
 import { Calendar, CalendarClock, CalendarDays, CircleChevronDown, Link2, type LucideIcon, Plus, SquareCheck, Trash2, Type, X } from 'lucide-react'
-import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react'
-import { UNSAFE_PortalProvider } from 'react-aria'
-import { Button, DatePicker, Dialog, Group, Popover } from 'react-aria-components'
+import { type KeyboardEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react'
+import { UNSAFE_PortalProvider, useInteractOutside } from 'react-aria'
+import { Button, DatePicker, Dialog, Group, OverlayTriggerStateContext, Popover } from 'react-aria-components'
 import { Month, Segments } from '../grid/cells/Date'
 import { fromDate, toDate } from '../grid/cells/dates'
 import { type Filter, isDate, type Join, type Kind, type Op, put } from '../grid/conditions'
@@ -145,11 +145,19 @@ function Day({ label, value, onChange }: { label: string; value: string; onChang
         <Segments />
         <Button className="nv-datefield__open"><CalendarDays size={14} aria-hidden="true" /></Button>
       </Group>
-      <Popover className="nv-pop" placement="bottom start" offset={4}>
-        <Dialog className="nv-calendar__dialog"><Month /></Dialog>
+      <Popover isNonModal className="nv-pop" placement="bottom start" offset={4}>
+        <Days />
       </Popover>
     </DatePicker>
   )
+}
+
+/** Non-modal, as the native picker was, so the page stays live: a press outside the calendar closes it and still reaches its target. */
+function Days() {
+  const state = useContext(OverlayTriggerStateContext)
+  const box = useRef<HTMLElement>(null)
+  useInteractOutside({ ref: box, onInteractOutside: () => state?.close() })
+  return <Dialog ref={box} className="nv-calendar__dialog"><Month /></Dialog>
 }
 
 /** The chosen values, each with its ×, and a search after them; the list below holds only what is not chosen. */

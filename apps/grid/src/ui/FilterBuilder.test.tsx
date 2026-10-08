@@ -185,10 +185,12 @@ describe('the join', () => {
 })
 
 /** The builder holding its own filters, as the toolbar does, so each typed segment builds on the last. */
+let drafts = 0
 function Held({ start }: { start: Filter[] }) {
   const [filters, setFilters] = useState(start)
   return <Filters fields={fields} filters={filters} onChange={(next) => {
     changed = next
+    drafts++
     setFilters(next)
   }} onJoin={() => undefined} />
 }
@@ -196,6 +198,7 @@ function Held({ start }: { start: Filter[] }) {
 describe('the range of "ligt tussen"', () => {
   const ranged = (from: string, to: string) => {
     changed = null
+    drafts = 0
     renderNl(<Held start={[{ field: 'plandag', op: 'between', values: [from, to] }]} />)
     open()
   }
@@ -212,6 +215,51 @@ describe('the range of "ligt tussen"', () => {
     end('Tot')[0].focus()
     typeKeys('31')
     expect(changed).toEqual([{ field: 'plandag', op: 'between', values: ['2026-12-14', '2026-12-31'] }])
+  })
+
+  /** What a mouse does: down, up, click. */
+  const press = (target: HTMLElement) => {
+    fireEvent.pointerDown(target, { button: 0, pointerType: 'mouse' })
+    fireEvent.mouseDown(target, { button: 0 })
+    fireEvent.pointerUp(target, { button: 0, pointerType: 'mouse' })
+    fireEvent.mouseUp(target, { button: 0 })
+    fireEvent.click(target, { button: 0 })
+  }
+  const calendar = (name: string) => {
+    press(within(row(0)).getByRole('button', { name: `Kalender ${name}` }))
+    return screen.getByRole('dialog')
+  }
+
+  it('opens its calendar without locking the page or hiding it', () => {
+    ranged('2026-12-21', '2026-12-27')
+    calendar('Van')
+    expect(document.documentElement.style.overflow).not.toBe('hidden')
+    expect(document.querySelector('[aria-hidden="true"] .nv-fb')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Voorwaarde toevoegen' })).toBeTruthy()
+  })
+
+  it('closes its calendar on a press elsewhere, the builder staying open', async () => {
+    ranged('2026-12-21', '2026-12-27')
+    calendar('Van')
+    press(within(row(0)).getByText('Waar'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Voorwaarde toevoegen' })).toBeTruthy()
+    expect(changed).toBeNull()
+  })
+
+  it('drafts a picked day once, as YYYY-MM-DD', async () => {
+    ranged('2026-12-21', '2026-12-27')
+    press(within(calendar('Van')).getByRole('button', { name: /15 december 2026/ }))
+    expect(changed).toEqual([{ field: 'plandag', op: 'between', values: ['2026-12-15', '2026-12-27'] }])
+    expect(drafts).toBe(1)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Voorwaarde toevoegen' })).toBeTruthy()
+  })
+
+  it('closes the builder on Escape in a segment, as the native field did', () => {
+    ranged('2026-12-21', '2026-12-27')
+    fireEvent.keyDown(end('Tot')[0], { key: 'Escape' })
+    expect(screen.queryByRole('button', { name: 'Voorwaarde toevoegen' })).toBeNull()
   })
 
   it('drafts a reversed range as typed', () => {
