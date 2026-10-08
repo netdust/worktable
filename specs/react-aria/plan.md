@@ -61,7 +61,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 - Modify: `apps/grid/src/main.tsx` (wrap the app in `I18nProvider locale={locale()}` and `UNSAFE_PortalProvider getContainer={() => document.getElementById('root')}`)
 - Create: `apps/grid/src/ui/Pop.tsx` — `Pop`; `apps/grid/src/ui/Providers.tsx` — `Providers`
 - Modify: `apps/grid/src/test-setup.ts` — `renderNl(ui)`
-- Create: `e2e/segments.ts` — `fillDate(field: Locator, value: string)` typing a stored value into React Aria segments; the five specs' own `typeInto` call it for dates and times
+- Create: `e2e/segments.ts` — `fillDate(field: Locator, value: string)` typing a stored value into React Aria segments; the three specs above call it from their own `typeInto` for dates and times
 - Modify: `e2e/step-0b.spec.ts` (108, 163-171, 205), `e2e/step-0e.spec.ts` (192-196, 262, 312-334, 420; 270-290 and 371-393 rewritten as segment flows: clearing some segments keeps the stored value, clearing all and Enter writes `{ start_at: null }`), `e2e/step-1.spec.ts` (175-177, 311, 335, 342)
 - Create: `apps/grid/src/grid/cells/dates.ts`
 - Rewrite: `apps/grid/src/grid/cells/Date.tsx` (`DateEditor`, `DateTimeEditor`), `cells/Time.tsx` (`TimeEditor`)
@@ -73,7 +73,9 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 - Produces: `Pop(props: PopoverProps)` — the cell editors' popover: React Aria `Popover` with `isNonModal`, `isKeyboardDismissDisabled` (so Escape travels on to the sheet instead of closing the popover), class `nv-pop`, `data-editor`, and `onClick`/`onDoubleClick` that stop propagation. Tasks 2, 3, 4 and 6 use it; chrome popovers (Tasks 7-10) use React Aria's own `Popover`, `Menu` and `Modal` and need no portal prop.
 - Rules for every in-cell editor:
   - Its root element carries `data-editor`, so its keys reach the key machine, and stops click propagation, so a click on a segment or a chip does not end the edit (as `Links.tsx:108` does today).
-  - Escape cancels the edit in one press, wherever focus is, through the sheet (`keys.ts:91`). Two parts would otherwise swallow it and catch it themselves: the to-one `ComboBox` (an `onKeyDownCapture` that calls `onCancel`), and the to-many removal question, which owns Escape and every key, as `Links.tsx:62-70` does today (Escape keeps the person).
+  - Escape cancels the edit in one press, wherever focus is, through the sheet (`keys.ts:91`). Three parts would otherwise swallow it: the select `ListBox` (Task 2: `selectionMode="none"` lets it through), the to-one `ComboBox` (Task 3: its wrapper catches Escape, calls `onCancel` and stops it, so a second Escape cannot discard a draft row, `Grid.tsx:266-270`), and the to-many removal question, which owns Escape and every key, as `Links.tsx:62-70` does today (Escape keeps the person).
+  - A key handler an editor needs before React Aria sees the key goes on a plain wrapper element (`onKeyDownCapture` on a `div`), never on a React Aria component: they drop capture key props (`filterDOMProps` keeps no key events).
+  - An editor whose `Pop` stands alone (select, long text, the removal question) renders its own anchor element in the cell and passes it as `triggerRef`, with `isOpen`.
   - Leaving: focus moving outside the editor root and its `Pop` calls `onLeave` (which commits the draft, `Grid.tsx:234-244`).
   - A date editor stops Enter only while some segments, not all, are empty. All empty is a clear; React Aria then emits `onChange(null)`.
   - ↑↓ and ←→ inside segments: React Aria already stops them; no code, one guard test.
@@ -89,7 +91,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 - "drafts the typed date as YYYY-MM-DD": type into the segments → `onDraft` last called with `'2026-11-02'`.
 - "datetime shows 24-hour time": `DateTimeEditor` on `'2026-10-13T20:30'` → an hour segment `20`, no AM/PM segment.
 - "required never drafts empty": required column, clear every segment → `onDraft` never called with `''`.
-- "the calendar starts on Monday": open the calendar button → first column header is `ma`.
+- "the calendar starts on Monday": open the calendar button → first column header is `ma` (the `CalendarGrid` takes `weekdayStyle="short"`; the default narrow style gives `M`).
 - "the editor root carries data-editor".
 
 `Grid.test.tsx` (the sheet seam, counting the mocked `update`):
@@ -108,7 +110,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 - [ ] **Step 3: Implement**
 
-`DateEditor`: React Aria `DatePicker` with `data-editor` on its root (`DateInput` + `DateSegment`s, a calendar `Button`, `Pop` with `Calendar`), `value={toDate(editing.draft)}`, `onChange={(d) => { if (d === null && column.required) return; onDraft(fromDate(d)) }}`, autofocus on the first segment, `aria-label={column.label}`. While a segment is empty, Enter is stopped at the editor root (React Aria emits no `onChange` for an incomplete value, so the draft would still hold the last complete one). `DateTimeEditor`: the same with `granularity="minute"`, `hourCycle={24}`, `toMoment`/`fromMoment`. `TimeEditor`: `TimeField`, `hourCycle={24}`, `toTime`/`fromTime`. Blur leaving the editor (focus not inside the field or its `Pop`) calls `onLeave`. A typed character that opened the editor (`editing.mode === 'enter'`): if it is a digit, it is entered into the first segment; verify React Aria takes it, else open on the stored value with the first segment focused and record a `Ruling:`.
+`DateEditor`: React Aria `DatePicker` with `data-editor` on its root (`DateInput` + `DateSegment`s, a calendar `Button`, `Pop` with `Calendar`), `value={toDate(editing.draft)}`, `onChange={(d) => { if (d === null && column.required) return; onDraft(fromDate(d)) }}`, autofocus on the first segment, `aria-label={column.label}`. While some segments, not all, are empty, Enter is stopped at the editor root (React Aria emits no `onChange` for an incomplete value, so the draft would still hold the last complete one). `DateTimeEditor`: the same with `granularity="minute"`, `hourCycle={24}`, `toMoment`/`fromMoment`. `TimeEditor`: `TimeField`, `hourCycle={24}`, `toTime`/`fromTime`. Blur leaving the editor (focus not inside the field or its `Pop`) calls `onLeave`. A typed character that opened the editor (`editing.mode === 'enter'`): if it is a digit, it is entered into the first segment; verify React Aria takes it, else open on the stored value with the first segment focused and record a `Ruling:`.
 
 - [ ] **Step 4: Run** the same command — all pass; then the task gate, plus `bunx playwright test e2e/step-0b.spec.ts e2e/step-0e.spec.ts e2e/step-1.spec.ts`.
 
@@ -124,7 +126,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 - [ ] **Step 1: Tests.** `Select.test.tsx` (rewritten against roles): "each option is drawn as the cell draws it" (a `status` column's options carry `nv-pill nv-pill--<tone>`, `soort` options `nv-dot` or the kind icon); "the current option is marked" (`aria-selected`); "required offers no leeg". `Grid.test.tsx`: the existing "picks a select from its listbox by letter and Enter" passes against the new markup with `update` once; new "Escape in the select listbox writes nothing" (after typing a letter), "an option click commits once and stays", "Tab commits and moves right", "the listbox opens on the option the opening letter picks".
 - [ ] **Step 2: Run** `bunx vitest run src/grid/cells/Select.test.tsx src/grid/Grid.test.tsx` — fail.
-- [ ] **Step 3: Implement** `SelectEditor` as a React Aria `ListBox` (`selectionMode="single"`, `autoFocus`, typeahead built in) inside `Pop`, anchored to the cell (`triggerRef` the cell, `isOpen`), opening with `selectedKeys` and focus on today's `startAt` option (the opening letter went to the cell, not to the typeahead). An `onKeyDownCapture` on the ListBox turns Enter and Tab on the focused option into `onCommit(key, 'down' | 'right' | 'left')` and stops them, since `usePress` consumes Enter before any bubbling handler; a click arrives through `onAction` as `onCommit(key, 'stay')`. Options render `OptionMark`.
+- [ ] **Step 3: Implement** `SelectEditor` as a React Aria `ListBox` with `selectionMode="none"` and `onAction` (typeahead built in), inside a plain `div` wrapper inside `Pop`, anchored to an anchor element in the cell. `selectionMode="none"` makes a click fire `onAction` → `onCommit(key, 'stay')` and lets Escape through to the sheet. The current option carries `data-current` (styled as marked; the test "the current option is marked" asserts it). On open, an effect focuses the `startAt` option's element (the opening letter went to the cell, not the typeahead). The wrapper's `onFocusCapture` drafts the focused option's key (`onDraft`), so leaving commits the highlighted option as today (`Select.tsx:42-44`). The wrapper's `onKeyDownCapture` turns Enter and Tab on the focused option into `onCommit(key, 'down' | 'right' | 'left')` and stops them, before `usePress` consumes Enter. Options render `OptionMark`.
 - [ ] **Step 4: Run** — pass; task gate.
 - [ ] **Step 5: Commit** `feat(grid): the select editor on a React Aria ListBox, options drawn as the cell draws them`
 
@@ -136,7 +138,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 - [ ] **Step 1: Tests:** "lists the space's records first"; "shows at most 50 and says how many more"; "the opening character starts the search"; in `Grid.test.tsx` "Enter picks the active record and writes once", "an option click writes once" and "Escape after typing a search cancels in one press"; "Delete in an empty search clears, unless required"; "Escape cancels"; "the input has the column's accessible name".
 - [ ] **Step 2: Run** `bunx vitest run src/grid/cells/Relation.test.tsx` — fail.
-- [ ] **Step 3: Implement** on React Aria `ComboBox` (`allowsEmptyCollection`, `menuTrigger="input"`, controlled `inputValue`, `items` from the debounced `records` call, 150 ms as today), its `ListBox` in `Pop`; `before` renders before the `Input` inside the field group.
+- [ ] **Step 3: Implement** on React Aria `ComboBox` (`allowsEmptyCollection`, `menuTrigger="input"`, controlled `inputValue`, `items` from the debounced `records` call, 150 ms as today), its `ListBox` in `Pop`; `before` renders before the `Input` inside the field group. A plain `div` wrapper around the field carries `onKeyDownCapture` for three keys, each stopped: Escape → `onCancel`; Tab → `onClose` (as `RelationPicker.tsx:95-96` today; React Aria would otherwise commit and pass Tab to the sheet, which writes the opening letter); Enter with no focused option → picks the first listed record (React Aria focuses no option until ↓; today the first match is active). Tests add, in `Grid.test.tsx`: "Tab in the to-one picker writes nothing" and "Escape in the to-one picker of a draft row keeps the draft row".
 - [ ] **Step 4: Run** — pass; task gate.
 - [ ] **Step 5: Commit** `feat(grid): the relation picker on a React Aria ComboBox`
 
