@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SavedView, View } from '../types'
 import type { Table } from './tables'
 import { ViewList } from './ViewList'
@@ -26,6 +26,8 @@ const open = (name: string) => {
   return screen.getByRole('menu', { name: 'More actions' })
 }
 const choices = (name: string) => within(open(name)).getAllByRole('menuitem').map((item) => item.textContent)
+// The views' own buttons: with the actions each row also holds its drag button, "Verplaats <view>".
+const viewButtons = () => within(group()).getAllByRole('button', { name: (name) => !name.startsWith('Verplaats ') })
 const item = (name: string) => within(group()).getByRole('button', { name: new RegExp(`^${name}`) }).parentElement!
 
 afterEach(cleanup)
@@ -77,7 +79,7 @@ describe("a view's actions", () => {
   it('keeps every ⋯ out of the view type group: it holds the view buttons only', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(within(group()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
+    expect(viewButtons().map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
     expect(group().contains(menuOf('Calais techniek'))).toBe(false)
   })
 
@@ -205,62 +207,66 @@ describe("a view's actions", () => {
 })
 
 describe('ordering the list', () => {
-  const ROW = 28
-  const middle = (row: number) => row * ROW + ROW / 2
-  const keysOf = () => within(group()).getAllByRole('button').map((b) => b.textContent)
-  const press = (name: string, y: number) => fireEvent.pointerDown(item(name), { button: 0, clientY: y })
+  const dag: View = { ...tabel, key: 'dagplanning', label: 'Dagplanning', table: 'dagplanning' }
+  const week: View = { ...dag, key: 'perweek', label: 'Per week' }
+  const grouped: Table = { ...table, views: [...table.views, dag, week] }
+  const keysOf = () => viewButtons().map((b) => b.textContent)
+  const press = (key: string) => {
+    fireEvent.keyDown(document.activeElement!, { key })
+    fireEvent.keyUp(document.activeElement!, { key })
+  }
+  const frame = () => act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))))
+  /** React Aria's keyboard drag: Enter on the view's drag button, keys to a place (Home and End reach its group's ends), Enter drops. */
+  const drag = async (name: string, ...steps: string[]) => {
+    // As a keyboard reaches it: the arrows to its row, then Tab; the list takes back a focus that came another way.
+    const button = screen.getByRole('button', { name: `Verplaats ${name}` })
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    button.closest<HTMLElement>('[role="row"]')!.focus()
+    button.focus()
+    press('Enter')
+    await frame()
+    for (const step of steps) press(step)
+    await frame()
+  }
 
-  beforeEach(() => {
-    // jsdom lays nothing out: each row is ROW tall at its grid row.
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const top = (Number(this.style.gridRow) - 1) * ROW
-      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
-    })
-  })
-  afterEach(() => vi.restoreAllMocks())
-
-  it('drags a view to the edge of the row the pointer is nearest, a line showing where it lands', () => {
+  it('a view moves within its own group', async () => {
     const run = actions()
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
+    render(<ViewList table={grouped} active="planning" onSelect={() => undefined} actions={run} />)
 
-    press('Ploeg', middle(4))
-    fireEvent.pointerMove(window, { clientY: middle(0) - 4 })
-    expect(item('Tabel').className).toContain('nv-view--drop-before')
-    expect(item('Ploeg').className).toContain('nv-view--dragging')
-    fireEvent.pointerUp(window, { clientY: middle(0) - 4 })
+    await drag('Ploeg', 'Home', 'Enter')
 
+    expect(run.order).toHaveBeenCalledTimes(1)
     expect(run.order).toHaveBeenCalledWith('planning', ['44', 'planning', 'bezetting', '42', '43', '45'])
-    expect(item('Tabel').className).not.toContain('nv-view--drop')
   })
 
-  it('drops after the last view below every row, and selects nothing with the click a drag ends on', () => {
+  it('a view never drops into another group', async () => {
     const run = actions()
-    const onSelect = vi.fn()
-    render(<ViewList table={table} active="planning" onSelect={onSelect} actions={run} />)
+    render(<ViewList table={grouped} active="planning" onSelect={() => undefined} actions={run} />)
 
-    press('Tabel', middle(0))
-    fireEvent.pointerMove(window, { clientY: middle(5) + 6 })
-    expect(item('<img src=x onerror=alert\\(1\\)>').className).toContain('nv-view--drop-after')
-    fireEvent.pointerUp(window, { clientY: middle(5) + 6 })
-    fireEvent.click(within(group()).getByRole('button', { name: /^Tabel/ }))
+    await drag('Dagplanning', 'Home', 'Enter')
+    await drag('Matrix', 'End', 'Enter')
+
+    for (const [source, keys] of run.order.mock.calls) {
+      if (source === 'planning') expect([...keys].sort()).toEqual(['42', '43', '44', '45', 'bezetting', 'planning'])
+      else expect(keys).toEqual(['perweek', 'dagplanning'])
+    }
+    expect(run.order).toHaveBeenCalledWith('planning', ['planning', '42', '43', '44', '45', 'bezetting'])
+  })
+
+  it('a view drops past the last view of its group', async () => {
+    const run = actions()
+    render(<ViewList table={grouped} active="planning" onSelect={() => undefined} actions={run} />)
+
+    await drag('Tabel', 'End', 'Enter')
 
     expect(run.order).toHaveBeenCalledWith('planning', ['bezetting', '42', '43', '44', '45', 'planning'])
-    expect(onSelect).not.toHaveBeenCalled()
   })
 
-  it('keeps a press that hardly moves a click, shows no line where nothing would move, and Escape cancels', () => {
+  it('cancels a drag on Escape, ordering nothing', async () => {
     const run = actions()
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
+    render(<ViewList table={grouped} active="planning" onSelect={() => undefined} actions={run} />)
 
-    press('Matrix', middle(1))
-    fireEvent.pointerMove(window, { clientY: middle(1) + 3 })
-    fireEvent.pointerUp(window, { clientY: middle(1) + 3 })
-    press('Matrix', middle(1))
-    fireEvent.pointerMove(window, { clientY: middle(2) - 6 })
-    expect(document.querySelector('[class*="nv-view--drop"]')).toBeNull()
-    fireEvent.pointerMove(window, { clientY: middle(3) + 6 })
-    fireEvent.keyDown(window, { key: 'Escape' })
-    fireEvent.pointerUp(window, { clientY: middle(3) + 6 })
+    await drag('Matrix', 'ArrowDown', 'ArrowDown', 'Escape')
 
     expect(run.order).not.toHaveBeenCalled()
   })
@@ -286,11 +292,7 @@ describe('ordering the list', () => {
   it('orders nothing without the actions, and adds no button to the group', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} />)
 
-    press('Ploeg', middle(4))
-    fireEvent.pointerMove(window, { clientY: 0 })
-    fireEvent.pointerUp(window, { clientY: 0 })
-
-    expect(document.querySelector('.nv-view--dragging')).toBeNull()
-    expect(keysOf()).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
+    expect(screen.queryByRole('button', { name: /^Verplaats / })).toBeNull()
+    expect(within(group()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
   })
 })

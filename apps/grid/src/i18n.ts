@@ -135,6 +135,7 @@ const strings = {
   moveDown: 'Omlaag',
   keepAsNew: 'Bewaar je wijziging met “{action}” voor je weggaat',
   dragToOrder: 'Sleep om te ordenen · Alt+↑/↓',
+  moveView: 'Verplaats {name}',
   delete: 'Verwijderen',
   deleteConfirm: 'Zeker?',
   inUse: 'Nog in gebruik door {by}.',

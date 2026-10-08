@@ -27,7 +27,8 @@ test('query-views-under-model @e2e', async ({ page }) => {
   await page.goto('/')
   const node = modelNode(page, 'Activiteiten')
   await expect(node).toHaveAttribute('aria-expanded', 'true')
-  const names = node.getByRole('group', { name: 'View type' }).getByRole('button')
+  // The views' own buttons: each row also holds its drag button, "Verplaats <view>".
+  const names = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: /^(?!Verplaats )/ })
   const queries = ['Dagplanning', 'Per productie per dag', 'Voorstellingen']
   await expect(names.last()).toHaveText('Voorstellingen')
   expect((await names.allTextContents()).slice(-3)).toEqual(queries)

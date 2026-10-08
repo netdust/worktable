@@ -49,6 +49,24 @@ const node = (model: string) => within(rail()).getByRole('treeitem', { name: mod
 const tableEntry = (model: string) => within(node(model)).getAllByRole('button', { name: model })[0]
 /** An open model's views. */
 const typesOf = (model: string) => within(node(model)).getByRole('group', { name: 'View type' })
+/** The views' own buttons in a list: each row also holds its drag button, "Verplaats <view>". */
+const viewButtons = (list: HTMLElement) => within(list).getAllByRole('button', { name: (name) => !name.startsWith('Verplaats ') })
+/** React Aria's keyboard drag: the view's row, Tab to its drag button, Enter; keys to a place (Home reaches its group's top), Enter drops. */
+const keyboardDrag = async (name: string, ...steps: string[]) => {
+  const press = (key: string) => {
+    fireEvent.keyDown(document.activeElement!, { key })
+    fireEvent.keyUp(document.activeElement!, { key })
+  }
+  const frame = () => act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))))
+  const button = screen.getByRole('button', { name: `Verplaats ${name}` })
+  fireEvent.keyDown(document.body, { key: 'Tab' })
+  button.closest<HTMLElement>('[role="row"]')!.focus()
+  button.focus()
+  press('Enter')
+  await frame()
+  for (const step of steps) press(step)
+  await frame()
+}
 
 beforeEach(() => {
   api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'editor', subject: null })
@@ -950,7 +968,7 @@ describe('saved views', () => {
     await shell()
 
     expect(await within(types()).findByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
-    expect(within(types()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Planning', 'Calais techniek'])
+    expect(viewButtons(types()).map((b) => b.textContent)).toEqual(['Planning', 'Calais techniek'])
     await screen.findByText('Geen rijen')
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ }).getAttribute('aria-current')).toBe('page')
     expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
@@ -1138,7 +1156,7 @@ describe("a saved view's actions", () => {
   const calais = view(42, 'Calais techniek', { arrangement: { ...empty, hidden: ['place'] } })
   const montage = view(43, 'Montage')
   const types = () => typesOf('Planning')
-  const names = () => within(types()).getAllByRole('button').map((b) => b.textContent)
+  const names = () => viewButtons(types()).map((b) => b.textContent)
   const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
   const choose = (name: string, action: string) => {
     fireEvent.click(within(rail()).getByRole('button', { name: `More actions: ${name}` }))
@@ -1315,16 +1333,9 @@ describe("a saved view's actions", () => {
   })
 
   it('keeps a dragged order in the prefs, and the list holds it when opened again from them', async () => {
-    const ROW = 28
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const top = (Number(this.style.gridRow) - 1) * ROW
-      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
-    })
     await opened()
 
-    fireEvent.pointerDown(within(types()).getByRole('button', { name: /^Montage/ }).parentElement!, { button: 0, clientY: 2 * ROW + 14 })
-    fireEvent.pointerMove(window, { clientY: 10 })
-    fireEvent.pointerUp(window, { clientY: 10 })
+    await keyboardDrag('Montage', 'Home', 'Enter')
 
     expect(names()).toEqual(['Montage', 'Planning', 'Calais techniek'])
     const stored = { order: { planning: ['43', 'planning', '42'] }, last: {} }
@@ -1707,7 +1718,7 @@ describe("a query's views under the model it reads", () => {
   const kopie = saved(31, 'Dagplanning (kopie)', 'dagplanning')
   const perDag = saved(40, 'Per productie per dag', 'productie_dag', { mine: false, editable: false })
   const voorstellingen = saved(50, 'Voorstellingen', 'voorstellingen', { mine: false, editable: false })
-  const names = () => within(typesOf('Activiteiten')).getAllByRole('button').map((b) => b.textContent)
+  const names = () => viewButtons(typesOf('Activiteiten')).map((b) => b.textContent)
   const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
   const choices = async (name: string) => {
     const button = within(rail()).getByRole('button', { name: `More actions: ${name}` })
@@ -1789,38 +1800,23 @@ describe("a query's views under the model it reads", () => {
     await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith({ order: { dagplanning: ['31', '30'] }, last: {} }))
   })
 
-  it("does not move a query's view dragged into the model's own views", async () => {
-    const ROW = 28
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const top = (Number(this.style.gridRow) - 1) * ROW
-      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
-    })
+  it("never moves a query's view into the model's own views: its farthest drop up stays in its own block", async () => {
     await opened('20')
 
-    fireEvent.pointerDown(within(typesOf('Activiteiten')).getByRole('button', { name: /^Dagplanning$/ }).parentElement!, { button: 0, clientY: ROW + 14 })
-    fireEvent.pointerMove(window, { clientY: 4 })
-    fireEvent.pointerUp(window, { clientY: 4 })
+    await keyboardDrag('Dagplanning', 'Home', 'Enter')
 
-    expect(names()).toEqual(['Activiteiten', 'Dagplanning', 'Dagplanning (kopie)', 'Per productie per dag', 'Voorstellingen'])
-    vi.restoreAllMocks()
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning (kopie)', 'Dagplanning', 'Per productie per dag', 'Voorstellingen'])
+    await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith({ order: { dagplanning: ['31', '30'] }, last: {} }))
   })
 
-  it("does not move a query's view that is not first in its block when dropped among the model's own views", async () => {
-    const ROW = 28
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const top = (Number(this.style.gridRow) - 1) * ROW
-      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
-    })
+  it("does not move a query's view that is not first in its block among the model's own views: it lands at its block's top", async () => {
     await opened('20')
 
-    fireEvent.pointerDown(within(typesOf('Activiteiten')).getByRole('button', { name: /^Dagplanning \(kopie\)$/ }).parentElement!, { button: 0, clientY: 2 * ROW + 14 })
-    fireEvent.pointerMove(window, { clientY: 4 })
-    fireEvent.pointerUp(window, { clientY: 4 })
+    await keyboardDrag('Dagplanning (kopie)', 'Home', 'Enter')
 
-    expect(names()).toEqual(['Activiteiten', 'Dagplanning', 'Dagplanning (kopie)', 'Per productie per dag', 'Voorstellingen'])
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    expect(api.savePrefs).not.toHaveBeenCalled()
-    vi.restoreAllMocks()
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning (kopie)', 'Dagplanning', 'Per productie per dag', 'Voorstellingen'])
+    await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith({ order: { dagplanning: ['31', '30'] }, last: {} }))
+    expect(api.savePrefs).not.toHaveBeenCalledWith(expect.objectContaining({ order: expect.objectContaining({ activiteit: expect.anything() }) }))
   })
 
   it('reopens the query view last used when its model is clicked again', async () => {
