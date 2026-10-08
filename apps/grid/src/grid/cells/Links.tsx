@@ -67,6 +67,11 @@ function Chips({ label, items, link, onRemove }: ChosenProps) {
   )
 }
 
+// Enter on a chip would reach the sheet, which commits the cell's draft as a value; a links cell is never written as one.
+const keepEnter = (event: KeyboardEvent) => {
+  if (event.key === 'Enter') event.stopPropagation()
+}
+
 /**
  * The chips inside the picker's ComboBox. ComboBoxValue sits out the pass that collects the options, which would take the tags for options.
  * A chip taking focus blurs the search, and React Aria closes the list on that blur; the list belongs to the whole box, so it opens again.
@@ -75,7 +80,7 @@ function Chosen(props: ChosenProps) {
   const combo = useContext(ComboBoxStateContext)
   return (
     <ComboBoxValue className="nv-chosen__value">
-      <span className="nv-chosen__focus" onFocus={() => combo?.open(null, 'manual')}>
+      <span className="nv-chosen__focus" onFocus={() => combo?.open(null, 'manual')} onKeyDown={keepEnter}>
         <Chips {...props} />
       </span>
     </ComboBoxValue>

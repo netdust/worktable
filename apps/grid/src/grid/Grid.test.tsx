@@ -1658,6 +1658,17 @@ describe('the to-many editor', () => {
     expect(api.update).not.toHaveBeenCalled()
   })
 
+  it('Enter on a focused chip writes nothing', async () => {
+    await openPeople()
+    const jan = within(screen.getByRole('grid', { name: 'Mensen' })).getByRole('row', { name: 'Jan' })
+    act(() => jan.focus())
+    await press('Enter')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(links.add).not.toHaveBeenCalled()
+    expect(search()).not.toBeNull()
+  })
+
   it('Escape leaves the editor without a create or delete', async () => {
     await openPeople()
     fireEvent.change(search()!, { target: { value: 'Mi' } })
