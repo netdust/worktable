@@ -49,7 +49,7 @@ function parseCustom(value: unknown): Record<string, unknown> {
   return typeof value === 'string' ? JSON.parse(value) : {}
 }
 
-function titlesOf(db: BunSQLiteDatabase, domain: Domain, relation: string, ids: number[]): Map<number, string> {
+export function titlesOf(db: BunSQLiteDatabase, domain: Domain, relation: string, ids: number[]): Map<number, string> {
   const target = sourceOf(domain, relation)
   if (target?.kind !== 'dataset' || typeof target.title !== 'string' || ids.length === 0) return new Map()
   const table = tableOf(target)
@@ -110,7 +110,21 @@ export function readRows(
   return { rows: withLookups(db, domain, source, raws), total: counted?.total ?? 0 }
 }
 
-const CHUNK = 500
+export const CHUNK = 500
+
+// The ids `readRows` would answer for the same params and scope, in its order.
+export function readIds(db: BunSQLiteDatabase, source: Source, params: RowsParams, scope: Scope): number[] {
+  const table = tableOf(source)
+  const found = db
+    .select({ id: columnOf(table, 'id') })
+    .from(table)
+    .where(whereOf(source, table, params, scope))
+    .orderBy(...orderOf(table, params))
+    .limit(params.limit)
+    .offset(params.offset)
+    .all() as { id: number }[]
+  return found.map((r) => r.id)
+}
 
 export function matrixOf(domain: Domain, source: Source): { join: DatasetDecl; matrix: MatrixDecl } | null {
   const join = domain.datasets.find((d) => d.matrix?.down && d.columns[d.matrix.down]?.relation === source.name)

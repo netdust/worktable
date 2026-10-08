@@ -218,8 +218,10 @@ describe('in use', () => {
       note: true,
       koppel: false,
       merk: false,
+      stempel: false,
       per_project: false,
       note_lijst: false,
+      stempel_lijst: false,
     })
   })
 
@@ -442,8 +444,10 @@ describe('writes', () => {
       note: true,
       koppel: false,
       merk: false,
+      stempel: false,
       per_project: false,
       note_lijst: true,
+      stempel_lijst: false,
     })
   })
 })

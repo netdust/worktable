@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
+import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -159,6 +159,22 @@ describe('rows()', () => {
   it('rejects a source the schema does not serve before asking for its rows', async () => {
     await expect(rows({ ...planning, model: 'kleur' }, {})).rejects.toMatchObject({ code: 'unknown_source' })
     expect(urls()).toEqual(['/api/schema'])
+  })
+})
+
+describe('history()', () => {
+  it("asks /api/history/<source> with the view's filter, scope and window, never its sort or group", async () => {
+    const entries = [{ batch: 'b', record: { id: 4, title: 'opbouw' } }]
+    answer({ '/api/history/activiteit': { entries } })
+    const layout = { ...defaults(planning), filters: [{ field: 'status', value: 'bevestigd' }], sort: [{ id: 'title', desc: true }], group: 'plandag' }
+
+    const found = await history(planning, { from: '2026-10-12', to: '2026-10-18' }, { field: 'productie_id', id: 7 }, layout)
+
+    expect(found).toEqual(entries)
+    const url = new URL(urls()[1], 'http://grid.test')
+    expect(url.pathname).toBe('/api/history/activiteit')
+    expect(JSON.parse(url.searchParams.get('filter') ?? '')).toEqual({ status: { $eq: 'bevestigd' }, productie_id: { $eq: 7 } })
+    expect([...url.searchParams.keys()].sort()).toEqual(['filter', 'from', 'to'])
   })
 })
 

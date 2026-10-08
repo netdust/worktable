@@ -106,8 +106,19 @@ describe('an owner reads only its own subject', () => {
   test('/schema lists only the sources the owner may read', async () => {
     const mine = Object.keys((await owner('GET', '/api/schema')).body.sources)
     const all = Object.keys((await editor('GET', '/api/schema')).body.sources)
-    expect(mine.sort()).toEqual(['koppel', 'note', 'per_project', 'project', 'taak'])
-    expect(all.sort()).toEqual(['koppel', 'merk', 'note', 'note_lijst', 'per_project', 'plat', 'project', 'taak'])
+    expect(mine.sort()).toEqual(['koppel', 'note', 'per_project', 'project', 'stempel_lijst', 'taak'])
+    expect(all.sort()).toEqual([
+      'koppel',
+      'merk',
+      'note',
+      'note_lijst',
+      'per_project',
+      'plat',
+      'project',
+      'stempel',
+      'stempel_lijst',
+      'taak',
+    ])
   })
 
   test('/views lists the shared views on readable sources only', async () => {

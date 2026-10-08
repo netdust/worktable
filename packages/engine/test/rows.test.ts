@@ -344,8 +344,10 @@ describe('rows', () => {
       'note',
       'koppel',
       'merk',
+      'stempel',
       'per_project',
       'note_lijst',
+      'stempel_lijst',
     ])
     expect(body.sources.taak).toMatchObject({ kind: 'dataset', label: 'Taken', title: 'description', date: 'day' })
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })

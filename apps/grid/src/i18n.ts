@@ -200,6 +200,16 @@ const strings = {
   removeItem: '{name} verwijderen',
   removeLinkAsk: '{item} van {name} verwijderen?',
   createView: 'Weergave maken',
+  history: 'Geschiedenis',
+  historyEmpty: 'Nog geen wijzigingen',
+  historyFailed: 'De geschiedenis kon niet gelezen worden',
+  historyCreated: 'aangemaakt',
+  historySelf: 'jij',
+  historySystem: 'systeem',
+  historyHidden: 'planning',
+  historyGone: 'onbekend',
+  historyAlsoOne: 'Dit maakt ook 1 andere wijziging ongedaan',
+  historyAlso: 'Dit maakt ook {n} andere wijzigingen ongedaan',
 }
 
 export type StringKey = keyof typeof strings

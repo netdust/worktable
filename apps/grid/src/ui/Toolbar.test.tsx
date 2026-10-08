@@ -7,6 +7,24 @@ const base = { title: 'Planning', search: null, addLabel: 'Nieuw Activiteit', ad
 afterEach(cleanup)
 
 describe('the toolbar', () => {
+  it('opens the history with an icon button in the title line, before the ⋯', () => {
+    const onHistory = vi.fn()
+    render(<Toolbar {...base} onHistory={onHistory} onExport={() => undefined} />)
+
+    const button = screen.getByRole('button', { name: 'Geschiedenis' })
+    expect(button.getAttribute('title')).toBe('Geschiedenis')
+    const more = screen.getByRole('button', { name: 'More actions' })
+    expect(button.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(button)
+    expect(onHistory).toHaveBeenCalledTimes(1)
+  })
+
+  it('has no history button without a view to read it for', () => {
+    render(<Toolbar {...base} />)
+
+    expect(screen.queryByRole('button', { name: 'Geschiedenis' })).toBeNull()
+  })
+
   it('adds with its button', () => {
     const onAdd = vi.fn()
     render(<Toolbar {...base} onAdd={onAdd} />)

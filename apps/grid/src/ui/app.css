@@ -1810,6 +1810,87 @@
   overflow-wrap: anywhere;
 }
 
+.nv-history {
+  padding: 8px 16px 16px;
+}
+
+.nv-history__empty {
+  color: var(--color-fg-subtle);
+}
+
+#root .nv-history__date {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-fg-subtle);
+}
+
+#root .nv-history__date::first-letter {
+  text-transform: uppercase;
+}
+
+.nv-history__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-history__entry {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.nv-history__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.nv-history__record {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nv-history__by,
+.nv-history__time,
+.nv-history__created,
+.nv-history__also {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-history__created {
+  margin: 2px 0 0;
+}
+
+.nv-history__changes {
+  margin: 4px 0 0;
+}
+
+.nv-history__change {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.nv-history__change dt {
+  color: var(--color-fg-subtle);
+}
+
+.nv-history__change dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nv-history__undo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* A declared action in the drawer: a picker per input opens under its button, in the page. */
 .nv-action {
   display: flex;

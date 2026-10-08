@@ -7,6 +7,7 @@ import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
+import { readHistory } from './history'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, linksOf, matrixOf, readRows } from './rows'
@@ -224,6 +225,10 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     }))
     return c.json({ ...read, rows })
   })
+
+  app.get('/history/:source', (c) =>
+    c.json({ entries: readHistory(store, c.req.param('source'), c.req.query(), c.get('actor')) }),
+  )
 
   writeRoutes(app, store)
   displayRoutes(app, store)

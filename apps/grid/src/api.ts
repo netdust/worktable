@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ApiError, DateWindow, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -86,11 +86,24 @@ export function schema(): Promise<Schema> {
 }
 
 /** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope is one more filter. */
-export async function rows(view: Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
-  const title = titleColumn(await sourceOf(view.model))
-  const scoped = { ...view, fixed: withScope(view.fixed ?? {}, scope) }
-  const query: Query = layout ? rowsQuery(scoped, layout, window, title, await sourceOf(view.model)) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
+export async function rows(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
+  const query = await viewQuery(view, window, scope, layout)
   return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
+}
+
+type ViewRead = Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>
+
+async function viewQuery(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null, layout: Layout | null): Promise<Query> {
+  const source = await sourceOf(view.model)
+  const title = titleColumn(source)
+  const scoped = { ...view, fixed: withScope(view.fixed ?? {}, scope) }
+  return layout ? rowsQuery(scoped, layout, window, title, source) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
+}
+
+/** The recent changes to the rows the view shows: its filter, scope and window, as `rows` sends them. */
+export async function history(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null, layout: Layout | null): Promise<HistoryEntry[]> {
+  const { filter, from, to } = await viewQuery(view, window, scope, layout)
+  return (await request<{ entries: HistoryEntry[] }>('GET', `/history/${view.model}`, { filter, from, to })).entries
 }
 
 /** The away rows overlapping the window: begun before its end, ended after its start. Not the dated window, which would miss a period begun before it. */

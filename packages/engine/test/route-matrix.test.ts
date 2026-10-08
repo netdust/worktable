@@ -36,6 +36,8 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
   { method: 'GET', path: '/api/schema', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   { method: 'GET', path: '/api/rows/taak', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   { method: 'GET', path: '/api/rows/plat', status: { none: 401, owner: 404, editor: 200, administrator: 200 } },
+  { method: 'GET', path: '/api/history/taak', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
+  { method: 'GET', path: '/api/history/plat', status: { none: 401, owner: 404, editor: 200, administrator: 200 } },
   { method: 'GET', path: '/api/revisions/note/1', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   {
     method: 'POST',

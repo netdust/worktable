@@ -256,7 +256,7 @@ export function recordBatch(sqlite: Database, key: string, actorId: number, kind
 }
 
 // The marker row says the batch created the record, as the deleted_at row says a delete removed it.
-const CREATED = 'id'
+export const CREATED = 'id'
 
 // Read back so the defaults the database filled are revised too.
 export function create(

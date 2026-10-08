@@ -1,6 +1,6 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { awayRows, create as createRow, history as readHistory, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
@@ -12,7 +12,7 @@ import { type Layout, withFilters } from '../grid/layout'
 import { type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
-import { errorText, setStrings, t } from '../i18n'
+import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
 import type { Account, ApiError, DateWindow, Model, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Confirm } from './Confirm'
@@ -22,6 +22,7 @@ import { type ModelActions, Rail } from './Rail'
 import type { Signed } from './RailFoot'
 import { dropHash, readHash, writeHash } from './hash'
 import { createHistory } from './history'
+import { HistoryPanel } from './HistoryPanel'
 import { Search } from './Search'
 import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
@@ -148,6 +149,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [notice, notify] = useNotice()
   // A revert remounts the matrix, whose picked columns are its own state.
   const [resets, setResets] = useState(0)
+  const [historyOpen, setHistoryOpen] = useState(false)
   // Only a switch the user made is remembered as the table's last view; the landing is not one.
   const switched = useRef(false)
   const setActiveKey = (key: string) => {
@@ -422,6 +424,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           } : null}
           viewNote={viewNote}
           fixed={Object.keys(view?.fixed ?? {}).length}
+          onHistory={view ? () => setHistoryOpen((open) => !open) : undefined}
         />
         <div className="nv-work">
         <section className="nv-sheet">
@@ -438,6 +441,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             <Sheet hasView={view !== undefined} result={result} />
           )}
         </section>
+        {historyOpen && view && (
+          <HistoryPanel key={view.key} load={() => readHistory(view, dated ? range : {}, scope ?? null, layout)} fields={model?.fields}
+            onUndo={undoBatch} onUndone={reloadView} onRefused={(error) => notify({ message: undoText(error) })} onClose={() => setHistoryOpen(false)} />
+        )}
         </div>
         {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
       </main>

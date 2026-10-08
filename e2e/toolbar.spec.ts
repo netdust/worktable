@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { shot } from './shots'
 import { addCondition, openView, openWeek, pickIn } from './tree'
@@ -179,5 +179,62 @@ test('filter-or @e2e', async ({ page }) => {
     await expect(page.locator('.nv-bar .nv-chip-join')).toHaveText(['of'])
   } finally {
     for (const id of made) await page.request.delete(`/api/rows/activiteit/${id}`)
+  }
+})
+
+interface Activiteit {
+  id: number
+  omschrijving: string
+  status: string
+}
+
+async function activiteit(page: Page, omschrijving: string): Promise<Activiteit> {
+  const response = await page.request.get('/api/rows/activiteit?limit=500')
+  const found = ((await response.json()) as { rows: Activiteit[] }).rows.filter((r) => r.omschrijving === omschrijving)
+  expect(found, `one ${omschrijving}`).toHaveLength(1)
+  return found[0] as Activiteit
+}
+
+async function statusCell(page: Page, omschrijving: string): Promise<Locator> {
+  const index = await page
+    .locator('thead th')
+    .evaluateAll((heads) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === 'Status'))
+  expect(index, 'column Status').toBeGreaterThanOrEqual(0)
+  return page.locator(`tbody tr.nv-tr[data-title="${omschrijving}"]`).locator('td').nth(index)
+}
+
+// The status goes back through the panel's undo; whatever happens, the record ends as it began.
+test('history-undo-own @e2e', async ({ page }) => {
+  const name = 'reis Gent'
+  const before = await activiteit(page, name)
+  const [letter, value, label] = before.status === 'optie' ? ['b', 'bevestigd', 'Bevestigd'] : ['o', 'optie', 'Optie']
+  const was = before.status === 'optie' ? 'Optie' : 'Bevestigd'
+  try {
+    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+    await page.getByRole('button', { name: 'Filter Status wissen' }).click()
+    const status = await statusCell(page, name)
+    await status.click()
+    await status.press('Enter')
+    await status.getByRole('listbox').press(letter)
+    await status.getByRole('listbox').press('Enter')
+    await expect(status).toHaveText(label)
+    await expect.poll(async () => (await activiteit(page, name)).status).toBe(value)
+
+    await page.getByRole('button', { name: 'Geschiedenis', exact: true }).click()
+    const panel = page.getByRole('complementary', { name: 'Geschiedenis' })
+    const newest = () => panel.getByRole('listitem').filter({ hasText: name }).first()
+    await expect(newest()).toContainText(`Status${was} → ${label}`)
+    await expect(newest().locator('.nv-history__by')).toHaveText('jij')
+    await newest().getByRole('button', { name: 'Ongedaan maken' }).click()
+
+    await expect.poll(async () => (await activiteit(page, name)).status).toBe(before.status)
+    // The view reads again: its rows come back once the read answers.
+    await expect(page.locator(`tbody tr.nv-tr[data-title="${name}"]`)).toBeVisible()
+    await expect(await statusCell(page, name)).toHaveText(was)
+    // The list read again: the undo is now the newest entry.
+    await expect(newest()).toContainText(`Status${label} → ${was}`)
+  } finally {
+    if ((await activiteit(page, name)).status !== before.status)
+      await page.request.patch(`/api/rows/activiteit/${before.id}`, { data: { status: before.status } })
   }
 })

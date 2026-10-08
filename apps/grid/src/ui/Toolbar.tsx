@@ -1,5 +1,5 @@
 import { Button } from '@sakaniui/react'
-import { Grid3x3, Lock, Plus, Table as TableIcon, Users } from 'lucide-react'
+import { Grid3x3, History, Lock, Plus, Table as TableIcon, Users } from 'lucide-react'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { ReactNode } from 'react'
 import { fixedCount, summary, t } from '../i18n'
@@ -42,6 +42,8 @@ interface Props {
   viewNote?: string | null
   /** How many saved filters the view holds that no chip shows. */
   fixed?: number
+  /** Opens the view's history; absent while there is no view. */
+  onHistory?: () => void
 }
 
 export interface Local {
@@ -62,7 +64,7 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, local, viewNote, fixed = 0 }: Props) {
+export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
   const more: Action[] = [
     ...(local?.onPublish ? [{ label: t('publishChange'), run: local.onPublish }] : []),
     ...(local ? [{ label: t('revert'), run: local.onRevert }] : []),
@@ -82,6 +84,11 @@ export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel
         {search}
         {saving && <SaveState state={saving} />}
         {exportNote && <span className="nv-toolbar__note" role="alert">{exportNote}</span>}
+        {onHistory && (
+          <button type="button" className="nv-more" aria-label={t('history')} title={t('history')} onClick={onHistory}>
+            <History size={16} aria-hidden="true" />
+          </button>
+        )}
         {more.length > 0 && <MoreMenu actions={more} />}
         {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note nv-toolbar__note--hint">{addBlocked}</span>}
         {onAdd && (

@@ -134,11 +134,38 @@ const noteLijst = defineQuery({
   name: 'note_lijst',
   label: 'Notitielijst',
   title: 'tekst',
+  creates: 'note',
   sql: 'SELECT n.id, n.tekst, p.name FROM note n JOIN project p ON p.id = n.project_id WHERE n.deleted_at IS NULL',
   columns: {
     id: { type: 'integer', label: 'Id' },
     tekst: { type: 'text', label: 'Tekst', writes: { dataset: 'note', field: 'tekst', key: 'id' } },
     name: { type: 'text', label: 'Name' },
+  },
+})
+
+// No owner column: an owner reads stempel_lijst, never the dataset it creates in.
+const stempel = defineDataset({
+  name: 'stempel',
+  label: 'Stempels',
+  title: 'tekst',
+  custom: false,
+  columns: {
+    project_id: { type: 'integer', label: 'Project', relation: 'project' },
+    tekst: { type: 'text', label: 'Tekst' },
+  },
+})
+
+const stempelLijst = defineQuery({
+  name: 'stempel_lijst',
+  label: 'Stempellijst',
+  title: 'tekst',
+  sql: 'SELECT s.id, s.project_id, s.tekst FROM stempel s WHERE s.deleted_at IS NULL',
+  owners: { owner: 'project_id' },
+  creates: 'stempel',
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    project_id: { type: 'integer', label: 'Project', relation: 'project' },
+    tekst: { type: 'text', label: 'Tekst' },
   },
 })
 
@@ -200,9 +227,9 @@ const copyNotes: ActionDecl = {
 }
 
 export const domain: Domain = {
-  datasets: [project, taak, plat, note, koppel, merk],
-  queries: [perProject, noteLijst],
-  writers: { project: projectWriter, note: noteWriter },
+  datasets: [project, taak, plat, note, koppel, merk, stempel],
+  queries: [perProject, noteLijst, stempelLijst],
+  writers: { project: projectWriter, note: noteWriter, stempel: { create: (values) => values } },
   actions: { copy_notes: copyNotes },
   seed: (insert) => {
     insert('project', [{ name: 'Alfa', custom: { colour: 'rood', labels: ['a', 'b'] } }, { name: 'Beta' }])

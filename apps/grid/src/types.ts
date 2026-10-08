@@ -284,6 +284,19 @@ export interface ApiError {
   label?: string
 }
 
+/** One record's part of one batch, as `/history/:source` answers it; `actor` is an email only where the engine may say it. */
+export interface HistoryEntry {
+  batch: string
+  at: string
+  by: 'self' | 'account' | 'system' | 'gone' | 'hidden'
+  actor: string | null
+  undoable: boolean
+  batch_kind: string | null
+  created: boolean
+  record: { id: number; title: string }
+  changes: { field: string; label: string; old: unknown; new: unknown }[]
+}
+
 /** A write's answer: the row, and the batch an undo names it by; none when nothing changed. */
 export interface Saved {
   row: Row
