@@ -234,12 +234,16 @@
   background: rgb(15 20 28 / 35%);
 }
 
+/* The width sits on the Modal's wrapper, the scrim's grid item; on a child it would shrink to the content. */
 .nv-dialog {
   width: min(440px, 100%);
   padding: 20px;
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-pop);
+}
+
+.nv-dialog__body {
   outline: none;
 }
 
@@ -557,6 +561,11 @@
   line-height: 1;
   white-space: nowrap;
   user-select: none;
+}
+
+/* Always mounted, so a modal opened first leaves the toast heard. */
+.nv-toast-region {
+  display: contents;
 }
 
 /* After a change: what happened and the way back, over the sheet's foot. */
@@ -3050,6 +3059,14 @@
   place-items: center;
   padding: 16px;
   background: color-mix(in srgb, var(--color-bg-inverse) 40%, transparent);
+}
+
+.nv-auth-modal {
+  width: min(360px, 100%);
+}
+
+.nv-auth-modal__body {
+  outline: none;
 }
 
 .nv-auth {

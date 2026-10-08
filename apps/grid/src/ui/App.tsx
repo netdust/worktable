@@ -111,8 +111,8 @@ export function App() {
       <Workspace signed={{ email: session.account.email, onSignOut: signOutNow }} role={session.account.role} />
       {session.lapsed && (
         <ModalOverlay className="nv-auth-over" isOpen isKeyboardDismissDisabled>
-          <Modal>
-            <Dialog aria-label={t('signIn')}>
+          <Modal className="nv-auth-modal">
+            <Dialog className="nv-auth-modal__body" aria-label={t('signIn')}>
               <SignIn note={t('sessionLapsed')} />
             </Dialog>
           </Modal>
@@ -482,7 +482,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             onUndo={undoBatch} onUndone={reloadView} onRefused={(error) => notify({ message: undoText(error) })} onClose={() => setHistoryOpen(false)} />
         )}
         </div>
-        {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
+        <div className="nv-toast-region" data-react-aria-top-layer>
+          {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
+        </div>
       </main>
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}

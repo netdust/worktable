@@ -91,6 +91,12 @@ describe('the new view dialog', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1)
   })
 
+  it("sets its width on the scrim's direct child, so the content cannot shrink it", () => {
+    show()
+    const scrim = dialog().closest('.nv-scrim')!
+    expect(scrim.firstElementChild?.classList.contains('nv-dialog')).toBe(true)
+  })
+
   it('opens with the name selected', () => {
     show()
     expect(document.activeElement).toBe(name())

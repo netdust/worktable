@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -1924,6 +1924,28 @@ describe('a link that carries conditions', () => {
     api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'administrator', subject: null })
     await shell()
     expect(await names()).toContain('Publiceren')
+  })
+
+  it('says the link was copied from the publish panel, where the toast stays heard', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+    const own: SavedView = {
+      key: '42', id: 42, label: 'Calais techniek', table: 'planning', table_label: 'Planning', model: 'activity', date_field: 'date', type: 'grid',
+      starting: false, arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] },
+      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
+    }
+    api.savedViews.mockResolvedValue([own])
+    api.publishView.mockResolvedValue('tok-9')
+    api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'administrator', subject: null })
+    window.location.hash = '#view=42'
+    await shell()
+    await screen.findByRole('heading', { level: 1, name: 'Calais techniek' })
+
+    const publish = shareItem('Publiceren')
+    await act(async () => fireEvent.click(publish))
+    fireEvent.click(await screen.findByRole('button', { name: 'Kopiëren' }))
+
+    const toast = await screen.findByRole('status', { name: 'Link gekopieerd' })
+    expect(toast.closest('[inert], [aria-hidden="true"]')).toBeNull()
   })
 
   it('Link kopiëren copies the address a landing reads: the view, its conditions and its join', async () => {

@@ -40,8 +40,8 @@ export function NewViewDialog({ source, type, scope, onSubmit, onClose }: Props)
 
   return (
     <ModalOverlay className="nv-scrim" isOpen isDismissable onOpenChange={(open) => !open && onClose()}>
-      <Modal>
-        <Dialog className="nv-dialog" aria-labelledby={title}>
+      <Modal className="nv-dialog">
+        <Dialog className="nv-dialog__body" aria-labelledby={title}>
           <form className="nv-dialog__form"
             onSubmit={(event) => {
               event.preventDefault()
