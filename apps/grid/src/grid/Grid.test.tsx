@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
+import { renderNl, typeKeys } from '../test-setup'
 import type { Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import { Grid } from './Grid'
@@ -39,7 +40,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
         cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
     )
   }
-  return { store, ...render(<Harness />) }
+  return { store, ...renderNl(<Harness />) }
 }
 
 const headers = () => screen.getAllByRole('columnheader').map((h) => h.dataset.column)
@@ -307,7 +308,7 @@ describe('editing', () => {
     const start = cell('Montage', 'start')
     fireEvent.click(start)
     type(start, '9')
-    fireEvent.change(editor(), { target: { value: '930' } })
+    typeKeys('30')
     await act(async () => {
       type(editor(), 'Tab')
     })
@@ -350,42 +351,45 @@ describe('editing', () => {
     expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
+  // Sorted on a text column within the day, so a typed value re-sorts the rows.
+  const byPlace = { ...defaults(planning), sort: [{ id: 'date', desc: false }, { id: 'place', desc: false }] }
+
   it('follows the record, not the position, when a commit re-sorts the rows', async () => {
-    renderGrid()
+    renderGrid(calais, { layout: byPlace })
     api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: `b${id}` }))
 
-    fireEvent.click(cell('Montage', 'start'))
-    type(cell('Montage', 'start'), '1')
-    fireEvent.change(editor(), { target: { value: '14:00' } })
+    fireEvent.click(cell('Montage', 'place'))
+    type(cell('Montage', 'place'), 'Z')
+    fireEvent.change(editor(), { target: { value: 'Zolder' } })
     await act(async () => {
       type(editor(), 'Enter')
     })
 
-    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { start: '14:00' }, expect.objectContaining({ id: 102 }))
+    expect(api.update).toHaveBeenLastCalledWith('activity', 102, { place: 'Zolder' }, expect.objectContaining({ id: 102 }))
     const titles = screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)
     expect(titles.indexOf('Montage')).toBeGreaterThan(titles.indexOf('Lunch bistrot'))
-    expect(document.activeElement).toBe(cell('Lunch bistrot', 'start'))
+    expect(document.activeElement).toBe(cell('Lunch bistrot', 'place'))
 
-    type(document.activeElement as HTMLElement, '1')
-    fireEvent.change(editor(), { target: { value: '15:00' } })
+    type(document.activeElement as HTMLElement, 'Z')
+    fireEvent.change(editor(), { target: { value: 'Zaal 2' } })
     await act(async () => {
       type(editor(), 'Enter')
     })
-    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { start: '15:00' }, expect.objectContaining({ id: 103 }))
+    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { place: 'Zaal 2' }, expect.objectContaining({ id: 103 }))
   })
 
   it('commits an open editor to its own record when a server answer re-sorts underneath it', async () => {
-    renderGrid()
+    renderGrid(calais, { layout: byPlace })
     let answer!: (saved: Saved) => void
     api.update.mockReturnValueOnce(new Promise<Saved>((resolve) => (answer = resolve))).mockResolvedValue({ row: calais[2], batch: 'b1' })
 
-    fireEvent.click(cell('Montage', 'start'))
-    type(cell('Montage', 'start'), '2')
-    fireEvent.change(editor(), { target: { value: '23:00' } })
+    fireEvent.click(cell('Montage', 'place'))
+    type(cell('Montage', 'place'), 'Z')
+    fireEvent.change(editor(), { target: { value: 'Zolder' } })
     type(editor(), 'Enter')
     fireEvent.click(cell('Auto Pavel + Sien', 'place'))
     type(cell('Auto Pavel + Sien', 'place'), 'X')
-    await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, start: '06:00' } }, batch: 'b1' }))
+    await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, place: 'Aula' } }, batch: 'b1' }))
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title)[0].dataset.title).toBe('Montage')
     fireEvent.change(editor(), { target: { value: 'Xavier' } })
     await act(async () => {
@@ -1261,5 +1265,112 @@ describe('a day plan', () => {
     expect(bands()[0].querySelector('.nv-group__day')?.textContent).toBe('Maandag')
     expect(bands()[0].querySelector('.nv-group__date')?.textContent).toBe('2 november')
     expect(bands()[0].querySelector('.nv-group__fact i')?.className).toBe('nv-tone--rose')
+  })
+})
+
+describe('a date cell', () => {
+  const dated: Model = { ...activity, fields: { ...activity.fields, due: { type: 'date', label: 'Deadline', required: false, fact: false } } }
+  const withDue: View = { ...planning, columns: [...(planning.columns ?? []), 'due'] }
+  const rows = calais.map((r) => ({ ...r, fields: { ...r.fields, due: '2026-05-22' } }))
+  const segments = () => screen.getAllByRole('spinbutton')
+
+  function openDue(how: 'Enter' | string = 'Enter') {
+    renderGrid(rows, { model: dated, view: withDue })
+    api.update.mockImplementation(async (_m, id, data) => ({ row: { ...rows.find((r) => r.id === id)!, fields: { ...rows.find((r) => r.id === id)!.fields, ...data } }, batch: `b${id}` }))
+    const due = cell('Montage', 'due')
+    fireEvent.click(due)
+    type(due, how)
+    return due
+  }
+
+  const press = async (key: string) => {
+    await act(async () => {
+      type(document.activeElement as HTMLElement, key)
+    })
+  }
+
+  it('Enter commits a typed date once', async () => {
+    openDue()
+    expect(document.activeElement).toBe(segments()[0])
+    typeKeys('25')
+    await press('Enter')
+
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 102, { due: '2026-05-25' }, expect.objectContaining({ id: 102 }))
+  })
+
+  it('Escape writes nothing', async () => {
+    const due = openDue()
+    typeKeys('25')
+    await press('Escape')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+    expect(due.textContent).toBe(cell('Auto Pavel + Sien', 'due').textContent)
+  })
+
+  it('a calendar day click commits the date once, and the edit stays open until Enter', async () => {
+    openDue()
+    const open = screen.getByRole('button', { name: /kalender/i })
+    open.focus()
+    fireEvent.click(open)
+    const calendar = document.querySelector('.nv-calendar') as HTMLElement
+    fireEvent.click(within(calendar).getByRole('button', { name: 'woensdag 27 mei 2026' }))
+
+    expect(document.querySelector('.nv-calendar')).toBeNull()
+    expect(segments().map((s) => s.textContent)).toEqual(['27', '05', '2026'])
+    expect(api.update).not.toHaveBeenCalled()
+    await press('Enter')
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 102, { due: '2026-05-27' }, expect.objectContaining({ id: 102 }))
+  })
+
+  it('Enter on an incomplete date writes nothing and keeps the editor', async () => {
+    openDue()
+    segments()[0].focus()
+    type(segments()[0], 'Backspace')
+    type(segments()[0], 'Backspace')
+    await press('Enter')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(segments()).toHaveLength(3)
+  })
+
+  // A date column sends what Delete sends for it ('', columns.ts); a datetime's momentOf makes it null.
+  it('clearing every segment and Enter writes the cleared value on an optional date', async () => {
+    openDue()
+    segments()[2].focus()
+    for (let i = 0; i < 12; i++) type(document.activeElement as HTMLElement, 'Backspace')
+    await press('Enter')
+
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 102, { due: '' }, expect.objectContaining({ id: 102 }))
+  })
+
+  it('Escape with the calendar open cancels the edit', async () => {
+    openDue()
+    const open = screen.getByRole('button', { name: /kalender/i })
+    open.focus()
+    fireEvent.click(open)
+    expect(document.querySelector('.nv-calendar')).not.toBeNull()
+    await press('Escape')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(document.querySelector('.nv-calendar')).toBeNull()
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+  })
+
+  it('a click on a segment keeps the edit', () => {
+    openDue()
+    fireEvent.click(segments()[1])
+    fireEvent.doubleClick(segments()[1])
+
+    expect(segments()).toHaveLength(3)
+  })
+
+  it('↑ steps the focused segment and does not move the cell', () => {
+    openDue('2')
+    expect(segments()[0].textContent).toBe('02')
+    type(document.activeElement as HTMLElement, 'ArrowUp')
+
+    expect(segments()[0].textContent).toBe('03')
+    expect(cell('Montage', 'due').contains(document.activeElement)).toBe(true)
   })
 })

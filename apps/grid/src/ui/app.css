@@ -1436,6 +1436,166 @@
   width: 320px;
 }
 
+/* React Aria places a cell editor's popover itself; its own position wins over the old anchored one. */
+.nv-pop[data-trigger] {
+  z-index: 50;
+}
+
+/* A date and time can be wider than its column: the editor grows past the cell, as the editing cell lets it. */
+.nv-datefield {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 9px;
+  background: var(--color-bg-surface);
+  box-shadow: inset 0 0 0 2px var(--color-accent-default);
+  color: var(--color-fg-default);
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-first .nv-datefield {
+  padding-left: 15px;
+}
+
+.nv-datefield .react-aria-DatePicker,
+.nv-datefield__group {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+}
+
+.nv-datefield__input {
+  display: flex;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.nv-datefield__segment {
+  padding: 0 1px;
+  border-radius: 3px;
+  outline: none;
+}
+
+.nv-datefield__segment[data-placeholder],
+.nv-datefield__segment[data-type="literal"] {
+  color: var(--color-fg-subtle);
+}
+
+.nv-datefield__segment[data-focused] {
+  background: var(--color-accent-default);
+  color: var(--color-fg-on-accent);
+}
+
+#root .nv-datefield__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-datefield__open:hover,
+#root .nv-datefield__open[data-pressed] {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+.nv-calendar__dialog {
+  outline: none;
+}
+
+.nv-calendar {
+  width: 238px;
+  color: var(--color-fg-default);
+  font-size: 13px;
+}
+
+.nv-calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.nv-calendar__head .react-aria-Heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#root .nv-calendar__head .react-aria-Button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-calendar__head .react-aria-Button:hover {
+  background: var(--color-bg-muted);
+}
+
+.nv-calendar .react-aria-CalendarGrid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.nv-calendar .react-aria-CalendarHeaderCell {
+  padding: 2px 0 4px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.nv-calendar__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  outline: none;
+}
+
+.nv-calendar__day:hover {
+  background: var(--color-bg-muted);
+}
+
+.nv-calendar__day[data-outside-month] {
+  display: none;
+}
+
+.nv-calendar__day[data-focus-visible] {
+  box-shadow: inset 0 0 0 2px var(--color-border-focus);
+}
+
+.nv-calendar__day[data-selected] {
+  background: var(--color-accent-default);
+  color: var(--color-fg-on-accent);
+}
+
+.nv-calendar__day[data-today]:not([data-selected]) {
+  color: var(--color-accent-default);
+  font-weight: 600;
+}
+
 #root .nv-open {
   position: absolute;
   top: 50%;

@@ -1,5 +1,6 @@
 import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test'
 import { ACCOUNTS, requestAndOpenLink, state, THEATRE } from './auth'
+import { fillDate } from './segments'
 import { addCondition, openModel, openView, openWeek } from './tree'
 
 const LOTTE = 'Lotte Verhaegen'
@@ -189,9 +190,15 @@ async function cellOf(page: Page, tr: Cells, label: string) {
   return tr.locator('td').nth(index)
 }
 
+/** A stored date or moment goes into the editor's segments, anything else into its input; Enter commits. */
 async function typeInto(target: Cells, value: string) {
   await target.click()
   await target.press('Enter')
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    await fillDate(target, value)
+    await target.getByRole('spinbutton').last().press('Enter')
+    return
+  }
   await target.locator('input').fill(value)
   await target.locator('input').press('Enter')
 }
@@ -266,26 +273,33 @@ test('untimed-activity', async ({ page }) => {
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Start')).toHaveText(/ 05:00$/)
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Datum')).toHaveText(day)
 
-  // One segment cleared reads as '' in Chromium (badInput); Enter keeps the stored time.
+  // One segment cleared: Enter waits on the half-typed moment, nothing is written, Escape keeps the stored time.
+  const sent: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'PATCH') sent.push(req.url())
+  })
   const halfTyped = await cellOf(page, named(page, 'vroeg e2e'), 'Start')
   await halfTyped.click()
   await halfTyped.press('Enter')
-  await halfTyped.locator('input').press('Backspace')
-  await expect(halfTyped.locator('input')).toHaveValue('')
-  expect(await halfTyped.locator('input').evaluate((input: HTMLInputElement) => input.validity.badInput)).toBe(true)
-  await halfTyped.locator('input').press('Enter')
+  const minute = halfTyped.locator('[data-type="minute"]')
+  await minute.click()
+  await minute.press('Backspace')
+  await expect(minute).toHaveAttribute('data-placeholder', 'true')
+  await minute.press('Enter')
+  await expect(halfTyped.getByRole('spinbutton')).toHaveCount(5)
+  await minute.press('Escape')
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Start')).toHaveText(/ 05:00$/)
+  expect(sent).toEqual([])
 
-  // Cleared again, Start goes on the wire as null and the row stays on its day.
+  // Every segment cleared, Start goes on the wire as null and the row stays on its day.
   const patched = page.waitForRequest(
     (req) => req.method() === 'PATCH' && new URL(req.url()).pathname.startsWith('/api/rows/activiteit/'),
   )
   const clearing = await cellOf(page, named(page, 'vroeg e2e'), 'Start')
   await clearing.click()
   await clearing.press('Enter')
-  await clearing.locator('input').fill('')
-  await expect(clearing.locator('input')).toHaveValue('')
-  await clearing.locator('input').press('Enter')
+  await fillDate(clearing, '')
+  await clearing.getByRole('spinbutton').first().press('Enter')
   expect((await patched).postDataJSON()).toEqual({ start_at: null })
   await expect(await cellOf(page, named(page, 'vroeg e2e'), 'Start')).toHaveText('')
   await page.reload()
@@ -380,16 +394,19 @@ test.describe('undo restores what the writer changed with the edit', () => {
     const cell = await cellOf(page, row(), 'Start')
     await cell.click()
     await cell.press('Enter')
-    const input = cell.locator('input')
-    for (let segment = 0; segment < 8; segment++) {
-      await input.press('Backspace')
-      await input.press('ArrowRight')
+    const segments = await cell.getByRole('spinbutton').all()
+    for (const segment of segments) {
+      await segment.click()
+      while ((await segment.getAttribute('data-placeholder')) === null) await segment.press('Backspace')
+      // Some segments still hold a value: Enter waits, the editor stays.
+      if (segment !== segments.at(-1)) {
+        await segment.press('Enter')
+        await expect(cell.getByRole('spinbutton')).toHaveCount(segments.length)
+      }
     }
-    await expect(input).toHaveValue('')
-    expect(await input.evaluate((node: HTMLInputElement) => node.validity.badInput)).toBe(false)
 
     const cleared = patchOf(page, 'activiteit')
-    await input.press('Enter')
+    await segments[0].press('Enter')
     expect((await cleared).postDataJSON()).toEqual({ start_at: null })
     await expect(await cellOf(page, row(), 'Start')).toHaveText('')
 
@@ -416,6 +433,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
 
   await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
   const row = () => named(page, 'dagplanning undo e2e')
+  await expect(row()).toBeVisible()
   const moved = patchOf(page, 'activiteit')
   await typeInto(await cellOf(page, row(), 'Tijd'), '2026-10-15T20:00')
   await (await moved).response()

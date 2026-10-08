@@ -9,14 +9,18 @@ import '@sakaniui/react/tokens.css'
 import '@sakaniui/react/style.css'
 import './ui/theme.css'
 import './ui/app.css'
+import { locale } from './i18n'
 import { App } from './ui/App'
+import { Providers } from './ui/Providers'
 
 const root = document.getElementById('root')
 
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <App />
+      <Providers locale={locale()}>
+        <App />
+      </Providers>
     </StrictMode>,
   )
 }

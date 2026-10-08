@@ -1,4 +1,7 @@
-import { InputEditor } from './Text'
+import { useRef } from 'react'
+import { TimeField } from 'react-aria-components'
+import { drafts, opening, SegmentShell, Segments } from './Date'
+import { fromTime, toTime } from './dates'
 import type { CellProps, EditorProps } from './props'
 
 export function TimeCell({ column, row }: CellProps) {
@@ -6,5 +9,15 @@ export function TimeCell({ column, row }: CellProps) {
 }
 
 export function TimeEditor(props: EditorProps) {
-  return <InputEditor {...props} placeholder="HH:MM" inputMode="numeric" />
+  const root = useRef<HTMLDivElement>(null)
+  const shown = opening(props, toTime)
+  const change = drafts(props, fromTime)
+
+  return (
+    <SegmentShell props={props} shown={shown} root={root}>
+      <TimeField aria-label={props.column.label} value={toTime(shown)} onChange={change} hourCycle={24} shouldForceLeadingZeros>
+        <Segments />
+      </TimeField>
+    </SegmentShell>
+  )
 }

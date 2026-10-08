@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { type FocusEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
+import {
+  Button, Calendar, CalendarCell, CalendarGrid, DateInput, DatePicker, type DateValue, DateSegment, Dialog, Group, Heading,
+} from 'react-aria-components'
+import { Pop } from '../../ui/Pop'
+import { fromDate, fromMoment, toDate, toMoment } from './dates'
 import type { CellProps, EditorProps } from './props'
-
-const ISO = /^\d{4}-\d{2}-\d{2}$/
-const MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
 
 export function DateCell({ column, row }: CellProps) {
   const value = column.kind === 'datetime' ? column.edit(row) : undefined
@@ -19,44 +22,125 @@ export function DateCell({ column, row }: CellProps) {
   return <span className="nv-cell__tabular" data-value={value}>{column.text(row)}</span>
 }
 
-/** A typed character cannot start a date: the editor opens on the current day instead. */
+/** The draft an editor opens on: a typed key cannot start a value, so it opens on the stored one. */
+export function opening({ column, row, editing }: EditorProps, reads: (value: string) => unknown): string {
+  return editing.draft === '' || reads(editing.draft) !== null ? editing.draft : column.edit(row)
+}
+
+/** A required column never clears, as Delete never does (keys.ts): cleared, it drafts the stored value again. */
+export function drafts<T>({ column, row, onDraft }: EditorProps, write: (value: T | null) => string) {
+  return (value: T | null) => onDraft(value === null && column.required ? column.edit(row) : write(value))
+}
+
+function segmentsOf(root: HTMLElement | null): HTMLElement[] {
+  return root ? [...root.querySelectorAll<HTMLElement>('[data-type]:not([data-type="literal"])')] : []
+}
+
+/** Some segments empty, not all: React Aria drafts nothing for it, so the draft still holds the last whole value. */
+function partial(root: HTMLElement | null): boolean {
+  const segments = segmentsOf(root)
+  const empty = segments.filter((segment) => segment.hasAttribute('data-placeholder')).length
+  return empty > 0 && empty < segments.length
+}
+
+const stop = (event: MouseEvent) => event.stopPropagation()
+
+// A press on the frame around the segments would move focus to the cell, which reads as leaving the editor.
+const keepFocus = (event: MouseEvent) => {
+  if (event.target === event.currentTarget) event.preventDefault()
+}
+
+function focusFirst(root: HTMLElement | null): HTMLElement | undefined {
+  const first = segmentsOf(root)[0]
+  first?.focus()
+  return first
+}
+
+/** The frame of a segmented editor: its keys reach the key machine, its clicks stay in the cell, leaving it commits. */
+export function SegmentShell({ props, shown, root, children }: { props: EditorProps; shown: string; root: RefObject<HTMLDivElement | null>; children: ReactNode }) {
+  const { editing, onDraft, onCommit, onLeave } = props
+
+  useEffect(() => {
+    if (shown !== editing.draft) onDraft(shown)
+    const first = focusFirst(root.current)
+    // The key that opened the editor went to the cell; a digit belongs in the first segment.
+    if (editing.mode === 'enter' && /^\d$/.test(editing.draft)) {
+      first?.dispatchEvent(new InputEvent('beforeinput', { data: editing.draft, inputType: 'insertText', bubbles: true, cancelable: true }))
+    }
+  }, [])
+
+  // React Aria's segments swallow Enter, so the editor commits it as the sheet would; a half-typed value waits.
+  const keys = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || !segmentsOf(root.current).includes(event.target as HTMLElement)) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (!partial(root.current)) onCommit(editing.draft, 'down')
+  }
+
+  const blur = (event: FocusEvent) => {
+    const next = event.relatedTarget
+    if (next instanceof Element && next.closest('[data-editor]')) return
+    onLeave()
+  }
+
+  return (
+    <div ref={root} className="nv-datefield" data-editor onClick={stop} onDoubleClick={stop} onMouseDown={keepFocus} onKeyDownCapture={keys} onBlur={blur}>
+      {children}
+    </div>
+  )
+}
+
+export function Segments() {
+  return <DateInput className="nv-datefield__input">{(segment) => <DateSegment segment={segment} className="nv-datefield__segment" />}</DateInput>
+}
+
 export function DateEditor(props: EditorProps) {
-  return <PickerEditor {...props} type="date" shape={ISO} />
+  return <PickerEditor {...props} reads={toDate} writes={fromDate} granularity="day" />
 }
 
 export function DateTimeEditor(props: EditorProps) {
-  return <PickerEditor {...props} type="datetime-local" shape={MOMENT} />
+  return <PickerEditor {...props} reads={toMoment} writes={fromMoment} granularity="minute" />
 }
 
-function PickerEditor({ column, row, editing, onDraft, onLeave, type, shape }: EditorProps & { type: 'date' | 'datetime-local'; shape: RegExp }) {
-  const input = useRef<HTMLInputElement>(null)
-  // A required column never clears, as Delete never does (keys.ts).
-  const valid = (editing.draft === '' && !column.required) || shape.test(editing.draft)
+interface PickerProps<T extends DateValue> extends EditorProps {
+  reads: (value: string) => T | null
+  writes: (value: T | null) => string
+  granularity: 'day' | 'minute'
+}
 
-  const take = (node: HTMLInputElement) => {
-    // Half-typed segments read as '' with badInput: they stay on screen but commit as the stored value.
-    if (node.value === '' && node.validity.badInput) return onDraft(column.edit(row))
-    if (node.value === '' && column.required) node.value = column.edit(row)
-    onDraft(node.value)
-  }
+function PickerEditor<T extends DateValue>({ reads, writes, granularity, ...props }: PickerProps<T>) {
+  const root = useRef<HTMLDivElement>(null)
+  const shown = opening(props, reads)
+  const change = drafts(props, writes)
+  const [open, setOpen] = useState(false)
 
+  // A picked day closes the calendar with focus on a day that is gone: back to the segments, where Enter commits.
   useEffect(() => {
-    if (!valid) onDraft(column.edit(row))
-    input.current?.focus()
-  }, [])
+    if (!open) focusFirst(root.current)
+  }, [open])
 
   return (
-    <input
-      ref={input}
-      type={type}
-      className="nv-editor"
-      data-editor
-      aria-label={column.label}
-      defaultValue={valid ? editing.draft : column.edit(row)}
-      onChange={(event) => take(event.currentTarget)}
-      // Chromium fires no input once the value is '': clearing the last segments shows only as a key.
-      onKeyUp={(event) => take(event.currentTarget)}
-      onBlur={onLeave}
-    />
+    <SegmentShell props={props} shown={shown} root={root}>
+      <DatePicker aria-label={props.column.label} value={reads(shown)} onChange={(value) => change(value as T | null)}
+        granularity={granularity} hourCycle={24} shouldForceLeadingZeros isOpen={open} onOpenChange={setOpen}>
+        <Group className="nv-datefield__group">
+          <Segments />
+          <Button className="nv-datefield__open"><CalendarDays size={14} aria-hidden="true" /></Button>
+        </Group>
+        <Pop placement="bottom start">
+          {/* Focusable, so a press on the calendar's heading or padding keeps focus inside the editor. */}
+          <Dialog className="nv-calendar__dialog">
+            <Calendar className="nv-calendar">
+              <header className="nv-calendar__head">
+                <Button slot="previous"><ChevronLeft size={14} aria-hidden="true" /></Button>
+                <Heading />
+                <Button slot="next"><ChevronRight size={14} aria-hidden="true" /></Button>
+              </header>
+              <CalendarGrid weekdayStyle="short">{(date) => <CalendarCell date={date} className="nv-calendar__day" />}</CalendarGrid>
+            </Calendar>
+          </Dialog>
+        </Pop>
+      </DatePicker>
+    </SegmentShell>
   )
 }

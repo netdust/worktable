@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
+import { fillDate } from './segments'
 import { openView, openWeek } from './tree'
 
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
@@ -88,9 +89,15 @@ async function columnIndex(page: Page, label: string): Promise<number> {
 
 const cellOf = async (page: Page, tr: Locator, label: string) => tr.locator('td').nth(await columnIndex(page, label))
 
+/** A stored date or moment goes into the editor's segments, anything else into its input; Enter commits. */
 async function typeInto(target: Locator, value: string) {
   await target.click()
   await target.press('Enter')
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    await fillDate(target, value)
+    await target.getByRole('spinbutton').last().press('Enter')
+    return
+  }
   await target.locator('input').fill(value)
   await target.locator('input').press('Enter')
 }

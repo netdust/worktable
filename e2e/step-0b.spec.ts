@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { fillDate } from './segments'
 import { openWeek } from './tree'
 
 const MONDAY = '2026-10-12'
@@ -56,13 +57,12 @@ async function cell(page: Page, omschrijving: string, label: string): Promise<Lo
   return row(page, omschrijving).locator('td').nth(index)
 }
 
-/** Select the cell, Enter opens the editor, the typed value commits on Enter. */
+/** Select the cell, Enter opens the editor, the value typed into its segments commits on Enter. */
 async function typeInto(target: Locator, value: string) {
   await target.click()
   await target.press('Enter')
-  const input = target.locator('input')
-  await input.fill(value)
-  await input.press('Enter')
+  await fillDate(target, value)
+  await target.getByRole('spinbutton').last().press('Enter')
 }
 
 /** Select the cell, Enter opens the list, the first letter picks the option, Enter commits. */
