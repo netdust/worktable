@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TableDef, View } from '../types'
 import { type ModelActions, Rail } from './Rail'
@@ -32,14 +32,6 @@ const expanded = (model: string) => node(model).getAttribute('aria-expanded')
 const menu = (button: string) => {
   fireEvent.click(within(rail()).getByRole('button', { name: button }))
   return screen.getByRole('menu', { name: button })
-}
-
-/** Escape, once focus has moved into the open menu. */
-const closeMenu = async () => {
-  const open = screen.getByRole('menu')
-  await waitFor(() => expect(open.contains(document.activeElement)).toBe(true))
-  fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
-  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
 }
 
 afterEach(() => {
@@ -204,16 +196,16 @@ describe('the tree', () => {
     expect(within(menu('Weergave toevoegen aan Afwezigheden')).queryByRole('menuitem', { name: 'Matrix' })).toBeNull()
   })
 
-  it("opens a model's menus outside the tree, so its scrolling never clips them", async () => {
+  it("opens a model's menus outside the tree, so its scrolling never clips them, and closes them when it scrolls", () => {
     render(<Rail tables={spaced} active="planning" onSelect={() => undefined} onNewView={() => undefined} />)
 
-    const outer = tree()
     const kinds = menu('Weergave toevoegen aan Planning')
-    expect(outer.contains(kinds)).toBe(false)
+    expect(tree().contains(kinds)).toBe(false)
     expect(document.body.contains(kinds)).toBe(true)
-    await closeMenu()
+    fireEvent.scroll(tree())
+    expect(screen.queryByRole('menu')).toBeNull()
 
-    expect(outer.contains(menu('Meer voor Planning'))).toBe(false)
+    expect(tree().contains(menu('Meer voor Planning'))).toBe(false)
   })
 
   it('keeps a source without views as a node, and its + asks for its first view', () => {
@@ -281,12 +273,12 @@ describe("a model's ⋯: name, icon, export", () => {
     ])
   })
 
-  it("exports from the ⋯ of the open view's model only", async () => {
+  it("exports from the ⋯ of the open view's model only", () => {
     const actions = modelActions()
     render(<Rail tables={spaced} active="planning" onSelect={() => undefined} modelActions={actions} />)
 
     expect(disabled(items('Afwezigheden'))).toEqual(['ExporterenOpen eerst een weergave van dit model'])
-    await closeMenu()
+    fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.click(within(menu('Meer voor Planning')).getByRole('menuitem', { name: 'Exporteren' }))
     expect(actions.exportOpen.run).toHaveBeenCalledTimes(1)
   })

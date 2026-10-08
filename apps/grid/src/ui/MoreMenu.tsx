@@ -1,5 +1,7 @@
 import { Ellipsis, type LucideIcon } from 'lucide-react'
-import { Button, Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components'
+import { useContext, useRef } from 'react'
+import { useInteractOutside } from 'react-aria'
+import { Button, Menu, MenuItem, MenuTrigger, OverlayTriggerStateContext, Popover } from 'react-aria-components'
 import { t } from '../i18n'
 import { hint as titled } from './hint'
 
@@ -33,19 +35,32 @@ export function MoreMenu({ actions, label = t('moreActions'), hint = label === t
         <Button ref={titled(hint)} className="nv-more" aria-label={label} aria-haspopup="menu">
           <Icon size={16} aria-hidden="true" />
         </Button>
-        {/* The menu is named by `menu`, not by its trigger: an empty aria-labelledby stops MenuTrigger pointing it at the button. */}
-        <Popover className="nv-menu__layer" placement={placement === 'bottom-start' ? 'bottom start' : 'bottom end'} offset={4}>
-          <Menu className="nv-menu__list" aria-label={menu} aria-labelledby="">
-            {actions.map((action) => (
-              <MenuItem key={action.label} id={action.label} className="nv-menu__item" textValue={action.label}
-                isDisabled={Boolean(action.blocked)} onAction={action.run}>
-                {action.label}
-                {action.blocked && <span className="nv-menu__reason">{action.blocked}</span>}
-              </MenuItem>
-            ))}
-          </Menu>
+        <Popover isNonModal className="nv-menu__layer" placement={placement === 'bottom-start' ? 'bottom start' : 'bottom end'} offset={4}>
+          <Items actions={actions} label={menu} />
         </Popover>
       </MenuTrigger>
     </span>
+  )
+}
+
+/** The popover is non-modal, so the page stays live: a press outside it, its own trigger too, closes it and still reaches its target. */
+function Items({ actions, label }: { actions: Action[]; label: string }) {
+  const state = useContext(OverlayTriggerStateContext)
+  const list = useRef<HTMLDivElement>(null)
+  useInteractOutside({
+    ref: list,
+    onInteractOutside: () => state?.close(),
+  })
+  // Named by `menu`, not by its trigger: an empty aria-labelledby stops MenuTrigger pointing it at the button.
+  return (
+    <Menu className="nv-menu__list" ref={list} aria-label={label} aria-labelledby="">
+      {actions.map((action) => (
+        <MenuItem key={action.label} id={action.label} className="nv-menu__item" textValue={action.label}
+          isDisabled={Boolean(action.blocked)} onAction={action.run}>
+          {action.label}
+          {action.blocked && <span className="nv-menu__reason">{action.blocked}</span>}
+        </MenuItem>
+      ))}
+    </Menu>
   )
 }

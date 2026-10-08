@@ -1662,7 +1662,8 @@ describe("a query's views under the model it reads", () => {
     const offered = within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((item) => item.textContent)
     const open = screen.getByRole('menu')
     await waitFor(() => expect(open.contains(document.activeElement)).toBe(true))
-    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    fireEvent.pointerDown(button, { button: 0, pointerType: 'mouse' })
+    fireEvent.pointerUp(button, { button: 0, pointerType: 'mouse' })
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     return offered
   }
