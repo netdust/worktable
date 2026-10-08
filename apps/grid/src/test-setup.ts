@@ -2,7 +2,7 @@ import { fireEvent, render } from '@testing-library/react'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { Providers } from './ui/Providers'
 
-// jsdom has no ResizeObserver; Sakani's SegmentedControl measures its thumb with one.
+// jsdom has no ResizeObserver; React Aria's Popover and ComboBox measure their trigger with one.
 class NoResize {
   observe(): void {}
   unobserve(): void {}
