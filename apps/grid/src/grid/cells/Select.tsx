@@ -28,11 +28,15 @@ function choices(options: Record<string, string>, required: boolean): [string, s
   return required ? listed : [['', t('empty')], ...listed]
 }
 
+function firstStarting(list: [string, string][], typed: string): number {
+  const lower = typed.toLowerCase()
+  return list.findIndex(([, label]) => label.toLowerCase().startsWith(lower))
+}
+
 /** Typing a letter opens the list on the first option that starts with it, the way a spreadsheet's dropdown does. */
 function startAt(list: [string, string][], editing: EditorProps['editing'], current: string): number {
   if (editing.mode === 'enter') {
-    const typed = editing.draft.toLowerCase()
-    const hit = list.findIndex(([, label]) => label.toLowerCase().startsWith(typed))
+    const hit = firstStarting(list, editing.draft)
     if (hit >= 0) return hit
   }
   return Math.max(0, list.findIndex(([key]) => key === current))
@@ -58,6 +62,20 @@ export function SelectEditor({ column, row, editing, onDraft, onCommit, onLeave 
     const at = indexOf(event.target)
     if (at === null) return
     onDraft(list[at][0])
+  }
+
+  // A letter jumps to the first option starting with it, as the field contract says; React Aria's typeahead would search on from the focused option and join letters.
+  const jump = (event: KeyboardEvent) => {
+    if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey || !/\S/.test(event.key)) return
+    event.preventDefault()
+    event.stopPropagation()
+    const hit = firstStarting(list, event.key)
+    if (hit >= 0) root.current?.querySelector<HTMLElement>(`[data-index="${hit}"]`)?.focus()
+  }
+
+  const keysFirst = (event: KeyboardEvent) => {
+    jump(event)
+    commitKeys(event)
   }
 
   // Enter and Tab commit before React Aria presses the option; the sheet decides where they move.
@@ -94,7 +112,7 @@ export function SelectEditor({ column, row, editing, onDraft, onCommit, onLeave 
       <SelectCell column={column} row={row} />
       <span ref={anchor} className="nv-select__anchor" />
       <Pop triggerRef={anchor} isOpen placement="bottom start" className="nv-select">
-        <div ref={root} data-editor onFocusCapture={focus} onKeyDownCapture={commitKeys} onKeyDown={clamp} onBlur={blur}>
+        <div ref={root} data-editor onFocusCapture={focus} onKeyDownCapture={keysFirst} onKeyDown={clamp} onBlur={blur}>
           <ListBox aria-label={column.label} selectionMode="none" onAction={(at) => onCommit(list[Number(at)][0], 'stay')}>
             {list.map(([key, label], i) => (
               <ListBoxItem key={key} id={String(i)} textValue={label} data-index={i} data-current={key === current || undefined}

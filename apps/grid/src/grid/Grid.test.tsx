@@ -294,10 +294,10 @@ describe('editing', () => {
         fireEvent.keyUp(target, { key, ...mods })
       })
     }
-    function openKind(how: string) {
+    function openKind(how: string, title = 'Lunch bistrot') {
       renderGrid()
       api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: 'b1' }))
-      const kind = cell('Lunch bistrot', 'kind')
+      const kind = cell(title, 'kind')
       fireEvent.click(kind)
       type(kind, how)
     }
@@ -317,6 +317,29 @@ describe('editing', () => {
     it('the listbox opens on the option the opening letter picks', () => {
       openKind('o')
       expect(focused().textContent).toBe('Opbouw')
+    })
+
+    it('a letter in the open list jumps to the first option starting with it, past the focused one', async () => {
+      openKind('Enter', 'Repetitie')
+      expect(focused().textContent).toBe('Repetitie')
+      await press('r')
+      expect(focused().textContent).toBe('Reis')
+    })
+
+    it('each letter in the open list jumps on its own, never joined to the one before', async () => {
+      openKind('Enter', 'Repetitie')
+      await press('o')
+      await press('r')
+      expect(focused().textContent).toBe('Reis')
+    })
+
+    it('Enter after a letter commits the option it jumped to, once', async () => {
+      openKind('Enter', 'Repetitie')
+      await press('r')
+      await press('Enter')
+
+      expect(api.update).toHaveBeenCalledTimes(1)
+      expect(api.update).toHaveBeenCalledWith('activity', 104, { kind: 'travel' }, expect.objectContaining({ id: 104 }))
     })
 
     it('↑ on the first option keeps the select open and writes nothing', async () => {
