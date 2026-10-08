@@ -1,5 +1,28 @@
 import type { FilterInput } from './filter-compile'
 
+/** The generic icons an administrator picks a source's icon from. */
+export const ICONS = [
+  'table',
+  'calendar',
+  'users',
+  'clock',
+  'tag',
+  'pin',
+  'check',
+  'list',
+  'film',
+  'box',
+  'star',
+  'flag',
+  'user',
+  'query',
+] as const
+export type Icon = (typeof ICONS)[number]
+
+/** The generic palette a column colours its options from. */
+export const TONES = ['ok', 'warn', 'bad', 'rose', 'violet', 'amber', 'sky', 'slate', 'green', 'teal', 'grey'] as const
+export type Tone = (typeof TONES)[number]
+
 export type ColumnType = 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'datetime' | 'json'
 
 export interface ColumnDecl {
@@ -8,10 +31,20 @@ export interface ColumnDecl {
   nullable?: boolean
   default?: string | number | boolean | null
   options?: Record<string, string>
+  /** A tone per option key, for the grid to colour the option. */
+  tones?: Record<string, Tone>
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }
+  /** Query columns only: the value is taken over from elsewhere when the row's `flag` column is neither `own` nor empty. */
+  inherited?: { flag: string; own: string }
 }
+
+/** A fact the grid computes from a group's rows. */
+export type GroupFact =
+  | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
+  | { kind: 'count'; where?: Record<string, unknown>; label: string }
+  | { kind: 'empty'; column: string; label: string }
 
 export type TitleDecl = string | { via: string; else: string }
 
@@ -45,6 +78,13 @@ export interface DatasetDecl {
   config?: boolean
   /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
   checks?: string[]
+  /** The relation column that points at the domain's space. */
+  scoped?: string
+  group_facts?: GroupFact[]
+  /** The icon the grid shows until an administrator picks one. */
+  icon?: Icon
+  /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
+  new_label?: string
 }
 
 export interface QueryDecl {
@@ -56,6 +96,11 @@ export interface QueryDecl {
   sql: string
   columns: Record<string, ColumnDecl>
   owners?: Owners
+  scoped?: string
+  group_facts?: GroupFact[]
+  icon?: Icon
+  /** The dataset a new row from this query is created in. */
+  creates?: string
 }
 
 export interface SavedViewSeed {
@@ -76,6 +121,10 @@ export interface Domain {
   views: SavedViewSeed[]
   writers?: Record<string, Writer>
   actions?: Record<string, ActionDecl>
+  /** The dataset whose records split the work. A view filter for the grid, never access control. */
+  space?: { dataset: string }
+  /** The order of the sources in the grid's tree; unlisted sources follow, unlabelled. */
+  sections?: { label: string; sources: string[] }[]
 }
 
 export interface Actor {

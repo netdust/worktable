@@ -5,9 +5,10 @@ import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
 import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
-import type { DatasetDecl, Domain } from './declare'
+import type { Actor, ColumnDecl, DatasetDecl, Domain } from './declare'
+import { displayRoutes, displaysOf } from './display'
 import { ApiError, parseRowsParams } from './params'
-import { type Source, sourcesOf, writerOf } from './registry'
+import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, matrixOf, readRows } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
@@ -64,6 +65,41 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   )
 }
 
+// A space narrows what a planner sees and never limits what they may read: only a reader of its dataset gets it.
+function spaceOf(domain: Domain, actor: Actor): { model: string; field: string } | undefined {
+  const model = domain.space?.dataset
+  const space = model ? sourceOf(domain, model) : null
+  const field = sourcesOf(domain).find((s) => s.scoped)?.scoped
+  return model && space && field && readable(actor, space) ? { model, field } : undefined
+}
+
+function sectionsOf(domain: Domain, actor: Actor): { label: string; sources: string[] }[] | undefined {
+  const visible = (name: string): boolean => {
+    const source = sourceOf(domain, name)
+    return source !== null && readable(actor, source)
+  }
+  return domain.sections
+    ?.map(({ label, sources }) => ({ label, sources: sources.filter(visible) }))
+    .filter((section) => section.sources.length > 0)
+}
+
+// A column that writes to a dataset reads with that column's options and tones, unless it declares its own options.
+function servedColumn(domain: Domain, column: ColumnDecl, actor: Actor): ColumnDecl {
+  if (!column.writes || column.options) return column
+  const target = sourceOf(domain, column.writes.dataset)
+  const decl = target?.columns[column.writes.field]
+  if (!target || !decl?.options || !readable(actor, target)) return column
+  return { ...column, options: decl.options, ...(decl.tones ? { tones: decl.tones } : {}) }
+}
+
+const servedColumns = (domain: Domain, source: Source, actor: Actor): Record<string, ColumnDecl> =>
+  Object.fromEntries(Object.entries(source.columns).map(([name, c]) => [name, servedColumn(domain, c, actor)]))
+
+function createsOf(domain: Domain, source: Source, actor: Actor): { creates?: string } {
+  const target = source.kind === 'query' && source.creates ? sourceOf(domain, source.creates) : null
+  return target && readable(actor, target) ? { creates: target.name } : {}
+}
+
 export interface EngineOptions {
   port: number
   appUrl?: string
@@ -103,6 +139,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
 
   app.get('/schema', (c) => {
     const actor = c.get('actor')
+    const space = spaceOf(domain, actor)
+    const sections = sectionsOf(domain, actor)
+    const displays = displaysOf(sqlite)
     const joinOf = (s: Source): string | undefined => {
       const join = matrixOf(domain, s)?.join
       return join && readable(actor, join) ? join.name : undefined
@@ -114,20 +153,27 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
           s.name,
           {
             kind: s.kind,
-            label: s.label,
+            label: displays.get(s.name)?.label ?? s.label,
+            icon: displays.get(s.name)?.icon ?? s.icon ?? null,
             title: typeof s.title === 'string' ? s.title : s.title.else,
             ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
             date: s.date ?? null,
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
-            columns: s.columns,
+            columns: servedColumns(domain, s, actor),
+            ...createsOf(domain, s, actor),
+            ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
+              ? { new_label: s.new_label }
+              : {}),
             writable: isWritable(domain, s),
             deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
             actions: actionsOn(domain, s.name),
+            ...(space ? { space: s.scoped ? 'scoped' : 'global' } : {}),
+            ...(s.group_facts ? { group_facts: s.group_facts } : {}),
           },
         ]),
     )
-    return c.json({ sources })
+    return c.json({ sources, ...(space ? { space } : {}), ...(sections ? { sections } : {}) })
   })
 
   app.get('/rows/:source', (c) => {
@@ -150,6 +196,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   })
 
   writeRoutes(app, store)
+  displayRoutes(app, store)
   viewRoutes(app, store)
   shareRoutes(app, store)
 

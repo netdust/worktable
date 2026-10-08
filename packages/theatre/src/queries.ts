@@ -1,13 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { defineQuery } from '@worktable/engine'
+import { dagFacts, soorten } from './datasets'
 
 const count = (label: string) => ({ type: 'integer' as const, label })
 
 export const productieDag = defineQuery({
   name: 'productie_dag',
   label: 'Per productie per dag',
+  icon: 'table',
   title: 'productie',
   date: 'plandag',
+  scoped: 'productie_id',
   sql: readFileSync(new URL('./queries/productie_dag.sql', import.meta.url), 'utf8'),
   columns: {
     id: { type: 'integer', label: 'Id' },
@@ -32,8 +35,12 @@ const writesActiviteit = (field: string) => ({ dataset: 'activiteit', field, key
 export const dagplanning = defineQuery({
   name: 'dagplanning',
   label: 'Dagplanning',
+  icon: 'query',
   title: 'omschrijving',
   date: 'plandag',
+  scoped: 'productie_id',
+  group_facts: dagFacts,
+  creates: 'activiteit',
   sql: readFileSync(new URL('./queries/dagplanning.sql', import.meta.url), 'utf8'),
   columns: {
     id: { type: 'integer', label: 'Id' },
@@ -41,12 +48,20 @@ export const dagplanning = defineQuery({
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
     productie: { type: 'text', label: 'Productie' },
     omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
-    soort: { type: 'text', label: 'Soort' },
+    soort: { type: 'text', label: 'Soort', ...soorten },
     datum: { type: 'date', label: 'Datum', writes: writesActiviteit('datum') },
     start_at: { type: 'datetime', label: 'Start', nullable: true, writes: writesActiviteit('start_at') },
+    eind_at: { type: 'datetime', label: 'Einde', nullable: true, writes: writesActiviteit('eind_at') },
     plandag: { type: 'date', label: 'Plandag' },
     status: { type: 'text', label: 'Status', writes: writesActiviteit('status') },
-    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie', readonly: true },
+    locatie_id: {
+      type: 'integer',
+      label: 'Locatie',
+      nullable: true,
+      relation: 'organisatie',
+      readonly: true,
+      inherited: { flag: 'locatie_bron', own: 'eigen' },
+    },
     locatie_bron: {
       type: 'text',
       label: 'Locatie van',
@@ -60,6 +75,7 @@ export const dagplanning = defineQuery({
 export const voorstellingen = defineQuery({
   name: 'voorstellingen',
   label: 'Voorstellingen',
+  icon: 'table',
   title: 'productie',
   date: 'datum',
   sql: readFileSync(new URL('./queries/voorstellingen.sql', import.meta.url), 'utf8'),

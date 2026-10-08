@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { Model, Row, Saved, SavedView, Schema } from '../types'
+import type { Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
@@ -21,27 +21,32 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
   }
   const store = createStore({ model: 'activity', rows, api })
   function Harness() {
-    const [layout, setLayout] = useState(options.layout ?? defaults(planning))
+    const [layout, setLayout] = useState(options.layout ?? defaults(options.view ?? planning))
     const change = (next: Layout) => {
       saved = next
       setLayout(next)
     }
     return (
-      <Grid model={options.model ?? activity} view={planning} store={store} writable layout={layout} onLayout={change} title={options.title}
-        query={options.query ?? ''} emptyTitle="No rows in this window" emptyHint="Week 18 – 24 mei" filters={options.filters} />
+      <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
+        query={options.query ?? ''} emptyTitle="Geen rijen in deze week" emptyHint="Week 21 · 18–24 mei" filters={options.filters}
+        cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
     )
   }
   return { store, ...render(<Harness />) }
 }
 
 const headers = () => screen.getAllByRole('columnheader').map((h) => h.dataset.column)
+const bands = () => screen.getAllByRole('row').filter((r) => r.classList.contains('nv-group'))
+const labels = () => bands().map((b) => b.querySelector('.nv-group__label')?.textContent)
+const band = (label: string) => bands().find((b) => b.querySelector('.nv-group__label')?.textContent === label)!
+const titled = () => screen.getAllByRole('row').flatMap((r) => (r.dataset.title ? [r.dataset.title] : []))
 function cell(title: string, column: string): HTMLElement {
   const row = screen.getAllByRole('row').find((r) => r.dataset.title === title)
   if (!row) throw new Error(`no row ${title}`)
@@ -69,20 +74,74 @@ describe('the sheet', () => {
     expect(screen.getByRole('grid', { name: planning.label })).toBeTruthy()
   })
 
-  it('renders the Calais week grouped by day, header and first column sticky, a foot per group and a total', () => {
+  it('renders the Calais week grouped by day, header and first column sticky, a count per band and a total', () => {
     const { container } = renderGrid()
 
     expect(container.querySelector('thead')?.classList.contains('nv-grid__head')).toBe(true)
     expect(headers()).toEqual(['title', 'start', 'end', 'kind', 'status', 'location', 'place', 'settled_by', 'rollups.confirmed'])
-    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).every((r) => r.firstElementChild?.classList.contains('nv-first'))).toBe(true)
+    expect(screen.getAllByRole('row').filter((r) => r.dataset.title).every((r) => r.children[1]?.classList.contains('nv-first'))).toBe(true)
 
-    const sections = screen.getAllByRole('rowheader').map((h) => h.textContent)
-    expect(sections).toEqual(['Maandag 18 mei', 'Dinsdag 19 mei', 'Woensdag 20 mei'])
-    expect(screen.getAllByTestId('group-foot').map((f) => f.textContent)).toEqual(['3 rows', '2 rows', '1 row'])
+    expect(labels()).toEqual(['Maandag 18 mei', 'Dinsdag 19 mei', 'Woensdag 20 mei'])
+    expect(bands().map((b) => b.querySelector('.nv-group__count')?.textContent)).toEqual(['3', '2', '1'])
+    expect(screen.queryByTestId('group-foot')).toBeNull()
 
     const total = screen.getByTestId('total')
-    expect(total.textContent).toContain('Total · 6 rows')
+    expect(total.textContent).toContain('Totaal · 6 rijen')
     expect(within(total).getByText('47')).toBeTruthy()
+  })
+
+  it('numbers the rows it shows, top to bottom across the groups, and skips a folded group', () => {
+    const { container } = renderGrid()
+    const numbers = () => [...container.querySelectorAll('tbody tr.nv-tr')].map((tr) => tr.firstElementChild?.textContent)
+
+    expect(numbers()).toEqual(['1', '2', '3', '4', '5', '6'])
+    expect(container.querySelector('tbody tr.nv-tr .nv-num')?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector('thead .nv-num')?.textContent).toBe('#')
+    fireEvent.click(bands()[0])
+    expect(numbers()).toEqual(['1', '2', '3'])
+    expect(screen.getAllByRole('gridcell').some((c) => c.classList.contains('nv-num'))).toBe(false)
+    fireEvent.click(bands()[0])
+    expect(numbers()).toHaveLength(6)
+  })
+
+  it("hides the scoped column under a scope: every row would hold the same record", () => {
+    renderGrid(calais, { scope: { field: 'location', id: 12 } })
+    expect(headers()).not.toContain('location')
+    cleanup()
+
+    renderGrid()
+    expect(headers()).toContain('location')
+  })
+
+  it('heads the bar with a tinted scope chip nobody removes, then the group, the sort, the columns', () => {
+    const { container } = renderGrid(calais, { scope: { field: 'location', id: 12 }, scopeChip: 'Locatie is Le Grenier' })
+    const chips = [...container.querySelectorAll('.nv-bar .nv-chip')]
+
+    expect(chips.map((c) => c.textContent)).toEqual(['Locatie is Le Grenier', 'Groep: datum', 'Datum ↑, Start ↑', 'Kolommen'])
+    expect(chips[0].className).toContain('nv-chip--set')
+    expect(chips[0].tagName).toBe('SPAN')
+    expect(chips[0].querySelector('button')).toBeNull()
+  })
+
+  it('regroups from the group chip and turns the sort from its chip', () => {
+    renderGrid()
+    fireEvent.click(screen.getByRole('button', { name: 'Groep: datum' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Groeperen' })).getByRole('button', { name: 'Soort' }))
+    expect(saved?.group).toBe('kind')
+    expect(screen.getByRole('button', { name: 'Groep: soort' }).className).toContain('nv-chip--set')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Datum ↑, Start ↑' }))
+    expect(saved?.sort).toEqual([{ id: 'date', desc: true }, { id: 'start', desc: false }])
+  })
+
+  it('shows the title where the view puts it', () => {
+    renderGrid(calais, { layout: { ...defaults(planning), order: ['date', 'start', 'kind', 'title'] } })
+    expect(headers().slice(0, 3)).toEqual(['start', 'kind', 'title'])
+  })
+
+  it('shows the label of a stored view in the sheet', () => {
+    renderGrid()
+    expect(within(screen.getAllByRole('columnheader')[0]).getByRole('button').textContent).toBe('Titel')
   })
 
   it('shows a select as its option label and a relation as the looked-up title', () => {
@@ -97,9 +156,9 @@ describe('the sheet', () => {
   it('marks a required cell only while it is empty', () => {
     renderGrid([{ ...calais[2], fields: { ...calais[2].fields, kind: '' } }])
 
-    expect(within(cell('Lunch bistrot', 'kind')).getByText('Required')).toBeTruthy()
-    expect(within(cell('Lunch bistrot', 'status')).queryByText('Required')).toBeNull()
-    expect(within(cell('Lunch bistrot', 'place')).queryByText('Required')).toBeNull()
+    expect(within(cell('Lunch bistrot', 'kind')).getByText('Verplicht')).toBeTruthy()
+    expect(within(cell('Lunch bistrot', 'status')).queryByText('Verplicht')).toBeNull()
+    expect(within(cell('Lunch bistrot', 'place')).queryByText('Verplicht')).toBeNull()
   })
 
   it('hides the date column while the sections carry the day, and brings it back for another grouping', () => {
@@ -114,15 +173,15 @@ describe('the sheet', () => {
   it('names the window when it is empty', () => {
     renderGrid([])
 
-    expect(screen.getByText('No rows in this window')).toBeTruthy()
-    expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
+    expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
+    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
   })
 
   it('keeps the arrangement bar, an active filter chip with it, above an empty window (R10)', () => {
     renderGrid([], { filters: <button type="button">Productie: Calais ×</button> })
 
     expect(screen.getByRole('button', { name: 'Productie: Calais ×' })).toBeTruthy()
-    expect(screen.getByText('No rows in this window')).toBeTruthy()
+    expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
   })
 
   it('renders a stored value with markup as its characters, never as an element (threat 8)', () => {
@@ -141,7 +200,7 @@ describe('the sheet', () => {
 
     cleanup()
     renderGrid(calais, { query: 'zzz' })
-    expect(screen.getByText('No rows match the search or filters')).toBeTruthy()
+    expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
   })
 
   it('keeps the rows a filter chip asks for', () => {
@@ -203,7 +262,7 @@ describe('editing', () => {
     expect(within(refused).getByRole('alert').textContent).toContain('A title is required.')
     expect(refused.getAttribute('aria-invalid')).toBe('true')
 
-    fireEvent.click(within(refused).getByRole('button', { name: 'Dismiss' }))
+    fireEvent.click(within(refused).getByRole('button', { name: 'Negeren' }))
     expect(within(cell('Montage', 'title')).queryByRole('alert')).toBeNull()
   })
 
@@ -350,7 +409,7 @@ describe('editing', () => {
     expect(seen).toHaveBeenCalled()
 
     fireEvent.click(cell('Montage', 'place'))
-    const opens = screen.getAllByRole('button', { name: 'Open' })
+    const opens = screen.getAllByRole('button', { name: 'Openen' })
     expect(opens.filter((b) => b.tabIndex === 0).map((b) => b.closest('tr')?.dataset.title)).toEqual(['Montage'])
   })
 
@@ -366,7 +425,7 @@ describe('editing', () => {
     expect(api.update).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
 
-    const open = within(cell('Montage', 'title')).getByRole('button', { name: 'Open' })
+    const open = within(cell('Montage', 'title')).getByRole('button', { name: 'Openen' })
     expect(fireEvent.keyDown(open, { key: 'Enter' })).toBe(true)
     expect(screen.queryByRole('textbox')).toBeNull()
 
@@ -381,8 +440,8 @@ describe('editing', () => {
   it('moves a column from the Columns menu with words', () => {
     renderGrid()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Start: move right' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kolommen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start: naar rechts' }))
 
     expect(headers().slice(0, 3)).toEqual(['title', 'end', 'start'])
     expect(saved?.order.slice(0, 4)).toEqual(['title', 'date', 'end', 'start'])
@@ -432,22 +491,143 @@ describe('editing', () => {
   })
 })
 
+describe('the group bands', () => {
+  const declared: View = {
+    ...planning,
+    facts: [
+      { kind: 'first', column: 'start', where: { kind: 'show' }, label: 'avondshow' },
+      { kind: 'count', where: { kind: 'meal' }, label: 'maaltijd' },
+    ],
+  }
+  afterEach(() => window.localStorage.clear())
+
+  it('carry a chevron, the label, a count badge, the declared facts and the totals', () => {
+    renderGrid(calais, { view: declared })
+
+    const tuesday = band('Dinsdag 19 mei')
+    expect(tuesday.querySelector('.nv-group__chevron')).toBeTruthy()
+    expect(tuesday.querySelector('.nv-group__count')?.textContent).toBe('2')
+    expect([...tuesday.querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow 16:30'])
+    expect([...band('Maandag 18 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['1 maaltijd'])
+    expect(tuesday.querySelector('.nv-group__totals')?.textContent).toContain('24')
+  })
+
+  it('shows … for each fact of the group the read limit may have cut short', () => {
+    renderGrid(calais, { view: declared, cut: calais[5] })
+
+    expect([...band('Woensdag 20 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow …', '… maaltijd'])
+    expect([...band('Dinsdag 19 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow 16:30'])
+  })
+
+  it('marks the count and the totals of the group the read limit may have cut short, and the summary', () => {
+    const onShown = vi.fn()
+    renderGrid(calais, { view: declared, cut: calais[5], onShown })
+
+    const wednesday = band('Woensdag 20 mei')
+    expect(wednesday.querySelector('.nv-group__count')?.textContent).toBe('1+')
+    expect(wednesday.querySelector('.nv-group__totals')?.textContent).not.toMatch(/\d/)
+    expect(wednesday.querySelector('.nv-group__totals')?.textContent).toContain('…')
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__count')?.textContent).toBe('2')
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__totals')?.textContent).toContain('24')
+    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: true })
+  })
+
+  it('says N+ rijen in the bar and the foot when the read limit cut the rows', () => {
+    renderGrid(calais, { view: declared, cut: calais[5] })
+
+    expect(document.querySelector('.nv-bar__count')?.textContent).toBe('6+ rijen')
+    expect(screen.getByTestId('total').textContent).toContain('Totaal · 6+ rijen')
+  })
+
+  it('keeps … on the group the last loaded row was in while the search hides that row', () => {
+    const koffie: Row = { ...calais[5], id: 107, title: 'Ochtendkoffie', fields: { ...calais[5].fields, kind: 'travel' } }
+    renderGrid([...calais, koffie], { view: declared, cut: calais[5], query: 'koffie' })
+
+    expect([...band('Woensdag 20 mei').querySelectorAll('.nv-group__fact')].map((f) => f.textContent)).toEqual(['● avondshow …', '… maaltijd'])
+  })
+
+  it('fold on a click, and open on Enter, aria-expanded following', () => {
+    renderGrid()
+
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(band('Dinsdag 19 mei'))
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('false')
+    expect(titled()).not.toContain('Présentation interne')
+
+    type(band('Dinsdag 19 mei'), 'Enter')
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+    expect(titled()).toContain('Présentation interne')
+
+    type(band('Dinsdag 19 mei'), ' ')
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('keep the count, totals and summary of folded rows', () => {
+    const onShown = vi.fn()
+    renderGrid(calais, { onShown })
+
+    fireEvent.click(band('Dinsdag 19 mei'))
+
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__count')?.textContent).toBe('2')
+    expect(band('Dinsdag 19 mei').querySelector('.nv-group__totals')?.textContent).toContain('24')
+    const total = screen.getByTestId('total')
+    expect(total.textContent).toContain('Totaal · 6 rijen')
+    expect(within(total).getByText('47')).toBeTruthy()
+    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: false })
+  })
+
+  it('leave folded rows out of keyboard movement', () => {
+    renderGrid()
+
+    fireEvent.click(band('Dinsdag 19 mei'))
+    fireEvent.click(cell('Montage', 'start'))
+    type(document.activeElement as HTMLElement, 'ArrowDown')
+    type(document.activeElement as HTMLElement, 'ArrowDown')
+
+    expect(document.activeElement).toBe(cell('Diner door Rosalie', 'start'))
+  })
+
+  it("never fold the draft's group", () => {
+    const { store } = renderGrid()
+
+    fireEvent.click(band('Dinsdag 19 mei'))
+    act(() => store.draft({ date: '2026-05-19', kind: 'travel', status: 'confirmed' }))
+
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getAllByRole('row').some((r) => r.classList.contains('nv-tr--draft'))).toBe(true)
+    expect(titled()).toContain('Présentation interne')
+  })
+
+  it('stay folded in this browser, per view', () => {
+    renderGrid()
+    fireEvent.click(band('Dinsdag 19 mei'))
+    cleanup()
+
+    renderGrid()
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('false')
+    cleanup()
+
+    renderGrid(calais, { view: { ...planning, key: 'other' } })
+    expect(band('Dinsdag 19 mei').getAttribute('aria-expanded')).toBe('true')
+  })
+})
+
 describe('the drawer', () => {
   it("shows one row's every field, the long ones too, and closes", () => {
     const noted = { ...calais[2], fields: { ...calais[2].fields, notes: 'Twee veggie\nEén glutenvrij' } }
     renderGrid([noted])
 
-    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Open' }))
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
 
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
     expect(within(drawer).getByText('Notities')).toBeTruthy()
     expect(within(drawer).getByText(/Twee veggie/).textContent).toBe('Twee veggie\nEén glutenvrij')
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }))
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
     expect(screen.queryByRole('complementary')).toBeNull()
   })
 
   const openDrawer = (title: string) => {
-    fireEvent.click(within(cell(title, 'title')).getByRole('button', { name: 'Open' }))
+    fireEvent.click(within(cell(title, 'title')).getByRole('button', { name: 'Openen' }))
     return screen.getByRole('complementary', { name: title })
   }
   const deletable: Model = { ...activity, deletable: true }
@@ -480,7 +660,7 @@ describe('the drawer', () => {
   it('leaving the drawer resets Zeker? to Verwijderen', () => {
     renderGrid(calais, { model: deletable })
     fireEvent.click(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Verwijderen' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sluiten' }))
 
     const again = openDrawer('Lunch bistrot')
     expect(within(again).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
@@ -567,39 +747,44 @@ describe('the toolbar over the grid', () => {
     window.location.hash = ''
   })
 
-  it('labels every toolbar and bar control with a visible word, a filter chip included', async () => {
+  it('labels every toolbar and bar control with a visible word, or an icon that says its word on hover (the ⋯, the week steps, a chip\'s ×)', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
-    fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
+    await screen.findByText('18 mei')
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
     // A chip asks the server again: the grid comes back once the rows do.
     await screen.findByRole('grid')
-    expect(within(bar()).getByRole('button', { name: 'Remove filter Status' })).toBeTruthy()
+    expect(within(bar()).getByRole('button', { name: 'Filter Status wissen' })).toBeTruthy()
+    const said = (control: HTMLElement) => {
+      const title = control.getAttribute('title')
+      return visibleText(control).match(/\p{L}/u) !== null || (title !== null && title === control.getAttribute('aria-label'))
+    }
+    expect(said(Object.assign(document.createElement('button'), { textContent: '×' })), 'a bare icon button says nothing').toBe(false)
     for (const control of within(bar()).getAllByRole('button')) {
-      expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
+      expect(said(control), control.outerHTML).toBe(true)
     }
 
     // The one icon button, ⋯ (Stefan, 2026-10-03: menus when it gets crowded), says its word on hover.
     const more = within(toolbar()).getByRole('button', { name: 'More actions' })
-    expect(more.getAttribute('title')).toBe('More actions')
+    expect(more.getAttribute('title')).toBe('Meer acties')
     const controls = within(toolbar()).getAllByRole('button').filter((control) => control !== more)
     expect(controls.length).toBeGreaterThan(3)
     for (const control of controls) {
-      expect(visibleText(control), control.outerHTML).toMatch(/\p{L}/u)
+      expect(said(control), control.outerHTML).toBe(true)
     }
-    expect(within(toolbar()).getByRole('searchbox', { name: 'Search' }).getAttribute('placeholder')).toBe('Search')
-    expect(within(toolbar()).getByText('Previous')).toBeTruthy()
-    expect(within(toolbar()).getByText('Next')).toBeTruthy()
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Saved')
+    expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }).getAttribute('placeholder')).toBe('Zoeken')
+    expect(within(toolbar()).getByRole('button', { name: 'Vorige week' })).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Volgende week' })).toBeTruthy()
+    expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
   })
 
   it('shows a refused delete in the toolbar as the Dutch in-use sentence', async () => {
     remote.schema.mockResolvedValue({ ...schema, models: { activity: { ...schema.models.activity, deletable: true } } })
     remote.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced by Toewijzingen (2)', by: [{ label: 'Toewijzingen', count: 2 }, { label: 'Personen', count: 1 }] })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
-    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Open' }))
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
     fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
     await act(async () => {
@@ -615,7 +800,7 @@ describe('the toolbar over the grid', () => {
     remote.schema.mockResolvedValue({ ...schema, strings: { 'error.title_required': 'Een activiteit heeft een <b>naam</b> nodig' } })
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.doubleClick(cell('Montage', 'title'))
     fireEvent.change(editor(), { target: { value: '' } })
@@ -623,30 +808,30 @@ describe('the toolbar over the grid', () => {
       type(editor(), 'Enter')
     })
 
-    expect(within(toolbar()).getByRole('status').textContent).toBe('Not saved: Een activiteit heeft een <b>naam</b> nodig')
+    expect(within(toolbar()).getByRole('status').textContent).toBe('Niet opgeslagen: Een activiteit heeft een <b>naam</b> nodig')
     expect(within(cell('Montage', 'title')).getByRole('alert').textContent).toContain('Een activiteit heeft een <b>naam</b> nodig')
     expect(document.querySelector('.nv-td b')).toBeNull()
   })
 
   it('a click away from an empty new title sends nothing', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' }))
     await act(async () => {
       fireEvent.blur(editor())
     })
 
     expect(remote.create).not.toHaveBeenCalled()
     const draft = screen.getAllByRole('row').find((r) => r.classList.contains('nv-tr--draft'))!
-    expect(within(within(draft).getAllByRole('gridcell')[0]).getByText('Required')).toBeTruthy()
+    expect(within(within(draft).getAllByRole('gridcell')[0]).getByText('Verplicht')).toBeTruthy()
   })
 
   it('keeps a refusal whole in the DOM however narrow the toolbar', async () => {
     const long = 'Deze persoon staat al op deze activiteit en kan er geen tweede keer op'
     remote.update.mockRejectedValueOnce({ code: 'duplicate_assignment', message: long })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
@@ -654,40 +839,40 @@ describe('the toolbar over the grid', () => {
     })
 
     const status = within(toolbar()).getByRole('status')
-    expect(status.textContent).toBe(`Not saved: ${long}`)
+    expect(status.textContent).toBe(`Niet opgeslagen: ${long}`)
     expect(status.getAttribute('title')).toBe(long)
   })
 
   it('is one row of title, week, search and + New, with no theme or undo in it; the chips sit in the bar beneath (Stefan, 2026-10-03)', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    expect(within(toolbar()).getByText('Previous')).toBeTruthy()
-    expect(within(toolbar()).queryByRole('button', { name: '+ Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Columns', '+ Filter'])
-    expect(within(toolbar()).getByRole('searchbox', { name: 'Search' })).toBeTruthy()
-    expect(within(toolbar()).getByRole('button', { name: 'New Activiteit' })).toBeTruthy()
+    expect(within(toolbar()).getByRole('group', { name: 'Week 21 · 18–24 mei' }).textContent).toBe('Week 21 · 18–24 mei')
+    expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
+    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Groep: datum', 'Datum ↑, Start ↑', 'Kolommen', 'Filter'])
+    expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
+    expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
-    expect(screen.queryByRole('status', { name: 'Changed' })).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Gewijzigd' })).toBeNull()
   })
 
   it('offers undo in a toast after a change', async () => {
     remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
       type(cell('Montage', 'place'), 'Delete')
     })
 
-    const toast = screen.getByRole('status', { name: 'Changed' })
+    const toast = screen.getByRole('status', { name: 'Gewijzigd' })
     expect(toast.textContent).toContain('⌘Z')
     remote.undoBatch.mockResolvedValueOnce('u1')
     remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
-      fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }))
+      fireEvent.click(within(toast).getByRole('button', { name: 'Ongedaan maken' }))
     })
     expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
     expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
@@ -704,14 +889,14 @@ describe('the toolbar over the grid', () => {
     remote.updateView.mockResolvedValue({ ...mine, arrangement: { ...empty, hidden: ['kind'], group: 'date' } })
     remote.update.mockResolvedValueOnce({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => {
       type(cell('Montage', 'place'), 'Delete')
     })
 
     await act(async () => {
-      fireEvent.click(within(toolbar()).getByRole('button', { name: 'Save' }))
+      fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
     })
 
     expect(remote.updateView).toHaveBeenCalled()
@@ -730,9 +915,9 @@ describe('the toolbar over the grid', () => {
 
   it('adds a filter chip from + Filter and removes it with its ×', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
-    fireEvent.click(within(bar()).getByRole('button', { name: '+ Filter' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(bar()).getByRole('button', { name: 'Status: Optie' }))
     await screen.findByRole('grid')
 
@@ -740,7 +925,7 @@ describe('the toolbar over the grid', () => {
     expect(within(bar()).getByText('Optie', { selector: 'b' })).toBeTruthy()
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title).map((r) => r.dataset.title)).toEqual(['Présentation interne'])
 
-    fireEvent.click(within(bar()).getByRole('button', { name: 'Remove filter Status' }))
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Filter Status wissen' }))
     await screen.findByRole('grid')
     expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [] }))
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title)).toHaveLength(6)
@@ -750,14 +935,14 @@ describe('the toolbar over the grid', () => {
     let answer!: (saved: Saved) => void
     remote.update.mockReturnValueOnce(new Promise<Saved>((resolve) => (answer = resolve)))
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Montage', 'place'))
     type(cell('Montage', 'place'), 'Delete')
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Saving…')
+    expect(within(toolbar()).getByRole('status').textContent).toContain('Opslaan…')
 
     await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' }))
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Saved')
+    expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
 
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
     fireEvent.doubleClick(cell('Montage', 'title'))
@@ -765,12 +950,12 @@ describe('the toolbar over the grid', () => {
     await act(async () => {
       type(editor(), 'Enter')
     })
-    expect(within(toolbar()).getByRole('status').textContent).toBe('Not saved: A title is required.')
+    expect(within(toolbar()).getByRole('status').textContent).toBe('Niet opgeslagen: A title is required.')
 
     remote.undoBatch.mockResolvedValueOnce('u1')
     remote.rowOf.mockResolvedValueOnce(calais[1])
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('status', { name: 'Changed' })).getByRole('button', { name: 'Undo' }))
+      fireEvent.click(within(screen.getByRole('status', { name: 'Gewijzigd' })).getByRole('button', { name: 'Ongedaan maken' }))
     })
     expect(remote.undoBatch).toHaveBeenLastCalledWith('b1')
     expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
@@ -779,23 +964,23 @@ describe('the toolbar over the grid', () => {
 
   it("+ New opens a row at the top of today's group with its title in edit", async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'New Activiteit' }))
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' }))
 
     const tuesday = screen.getAllByRole('row')
-    const header = tuesday.findIndex((r) => r.textContent === 'Dinsdag 19 mei')
+    const header = tuesday.findIndex((r) => r.querySelector('.nv-group__label')?.textContent === 'Dinsdag 19 mei')
     expect(tuesday[header + 1].classList.contains('nv-tr--draft')).toBe(true)
     expect(editor().getAttribute('aria-label')).toBe('Titel')
   })
 
   it('keeps focus in the search while the rows it filters move under the active cell', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Lunch bistrot', 'kind'))
     fireEvent.keyDown(cell('Lunch bistrot', 'kind'), { key: 'Delete' })
-    const search = within(toolbar()).getByRole('searchbox', { name: 'Search' })
+    const search = within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })
     search.focus()
     fireEvent.change(search, { target: { value: 'lu' } })
 
@@ -806,11 +991,11 @@ describe('the toolbar over the grid', () => {
   it('commits an open editor when focus leaves for the search, and leaves focus there', async () => {
     remote.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, place: 'x' } }, batch: 'b1' })
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
     fireEvent.click(cell('Lunch bistrot', 'place'))
     fireEvent.keyDown(cell('Lunch bistrot', 'place'), { key: 'x' })
-    const search = within(toolbar()).getByRole('searchbox', { name: 'Search' })
+    const search = within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })
     await act(async () => {
       search.focus()
     })
@@ -821,10 +1006,10 @@ describe('the toolbar over the grid', () => {
 
   it('jumps to a view from the search', async () => {
     render(<App />)
-    await screen.findByText('Maandag 18 mei')
+    await screen.findByText('18 mei')
 
-    fireEvent.change(within(toolbar()).getByRole('searchbox', { name: 'Search' }), { target: { value: 'afwez' } })
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Go to Afwezigheden' }))
+    fireEvent.change(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }), { target: { value: 'afwez' } })
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Naar Afwezigheden' }))
 
     expect(screen.getByRole('heading', { level: 1, name: 'Afwezigheden' })).toBeTruthy()
   })
@@ -863,7 +1048,7 @@ describe('a new row the writer refuses', () => {
     remote.create.mockRejectedValueOnce({ code: 'person_or_name', message: 'A person or a name is required.' })
     render(<App />)
     await screen.findByText('Bert op Lunch')
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
     const montage = await screen.findByRole('option', { name: 'Montage' })
     await act(async () => {
       fireEvent.click(montage)
@@ -886,7 +1071,7 @@ describe('a new row the writer refuses', () => {
   it('+ Nieuwe twice focuses the existing draft', async () => {
     await refusedOnce()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
 
     expect(drafts()).toHaveLength(1)
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Persoon' }))
@@ -895,11 +1080,11 @@ describe('a new row the writer refuses', () => {
   it('+ Nieuwe on a draft nothing was written to starts it again', async () => {
     render(<App />)
     await screen.findByText('Bert op Lunch')
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
     fireEvent.blur(screen.getByRole('combobox', { name: 'Activiteit' }))
     expect(screen.queryByRole('combobox', { name: 'Activiteit' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
 
     expect(drafts()).toHaveLength(1)
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Activiteit' }))
@@ -921,7 +1106,7 @@ describe('a new row the writer refuses', () => {
     render(<App />)
     await screen.findByText('Bert op Lunch')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Toewijzing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Toewijzing' }))
     screen.getByRole('combobox', { name: 'Activiteit' })
     const montage = await screen.findByRole('option', { name: 'Montage' })
     await act(async () => {
@@ -977,7 +1162,7 @@ describe('a new record with a required relation', () => {
     render(<App />)
     await screen.findAllByText('Bert')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
     const picker = screen.getByRole('combobox', { name: 'Persoon' })
     expect(remote.create).not.toHaveBeenCalled()
     fireEvent.click(await screen.findByRole('option', { name: 'Ann' }))
@@ -995,7 +1180,7 @@ describe('a new record with a required relation', () => {
     await screen.findByText('Bert')
     expect(screen.queryByRole('columnheader', { name: /Persoon/ })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
     screen.getByRole('combobox', { name: 'Persoon' })
     fireEvent.click(await screen.findByRole('option', { name: 'Ann' }))
     await act(async () => undefined)
@@ -1007,7 +1192,7 @@ describe('a new record with a required relation', () => {
     render(<App />)
     await screen.findAllByText('Bert')
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Afwezigheid' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
     fireEvent.blur(screen.getByRole('combobox', { name: 'Persoon' }))
 
     expect(screen.queryByRole('combobox', { name: 'Persoon' })).toBeNull()
@@ -1022,5 +1207,47 @@ describe('a new record with a required relation', () => {
     expect(draft()).toBeUndefined()
     expect(remote.create).not.toHaveBeenCalled()
     await act(async () => undefined)
+  })
+})
+
+describe('a day plan', () => {
+  const field = { required: false, fact: false }
+  const plan: Model = {
+    key: 'plan', label: 'Plan', title_label: 'Wat', title_readonly: false,
+    fields: {
+      day: { ...field, type: 'date', label: 'Dag' },
+      from: { ...field, type: 'datetime', label: 'Start' },
+      until: { ...field, type: 'datetime', label: 'Einde' },
+      kind: { ...field, type: 'select', label: 'Soort', options: { spel: 'Spel', maal: 'Maal' }, tones: { spel: 'rose', maal: 'green' } },
+    },
+  }
+  const view: View = {
+    key: 'plan', label: 'Plan', table: 'plan', model: 'plan', type: 'grid', date_field: 'day', columns: ['day', 'from', 'until', 'kind'], hidden: ['until'],
+    sort: ['from'], group: 'day',
+    facts: [{ kind: 'first', column: 'from', where: { kind: 'spel' }, label: 'spel' }, { kind: 'empty', column: 'from', label: 'geen uur' }],
+  }
+  const at = (id: number, title: string, from: string | null, until: string | null, kind: string): Row =>
+    ({ id, title, status: '', fields: { day: '2026-11-02', from, until, kind } })
+  const rows = [at(1, 'Lunch', '2026-11-02T13:00', '2026-11-02T14:00', 'maal'), at(2, 'Spel', '2026-11-02T20:00', null, 'spel'), at(3, 'Nacht', null, null, 'maal')]
+
+  it("reads a moment as its time, the end muted, under Tijd; an empty one as the view's empty fact", () => {
+    renderGrid(rows, { model: plan, view })
+    const time = cell('Lunch', 'from')
+
+    expect(screen.getByRole('columnheader', { name: /Tijd/ })).toBeTruthy()
+    expect(headers()).not.toContain('until')
+    expect(time.textContent).toBe('13:00–14:00')
+    expect(time.querySelector('.nv-time__end')?.textContent).toBe('–14:00')
+    expect(cell('Spel', 'from').textContent).toBe('20:00')
+    expect(cell('Nacht', 'from').querySelector('.nv-blank')?.textContent).toBe('geen uur')
+  })
+
+  it('colours an option by its tone and the band by its day, its date and its toned facts', () => {
+    renderGrid(rows, { model: plan, view })
+
+    expect(cell('Lunch', 'kind').querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--green')
+    expect(bands()[0].querySelector('.nv-group__day')?.textContent).toBe('Maandag')
+    expect(bands()[0].querySelector('.nv-group__date')?.textContent).toBe('2 november')
+    expect(bands()[0].querySelector('.nv-group__fact i')?.className).toBe('nv-tone--rose')
   })
 })

@@ -4,18 +4,24 @@ export type FieldType =
   | 'int' | 'float' | 'bool' | 'text' | 'textarea' | 'html' | 'email' | 'url' | 'date' | 'datetime'
   | 'select' | 'array' | 'json' | 'relation' | 'gallery' | 'image' | 'file' | 'repeater'
 
+export type Tone = 'ok' | 'warn' | 'bad' | 'rose' | 'violet' | 'amber' | 'sky' | 'slate' | 'green' | 'teal' | 'grey'
+
 export interface Field {
   type: FieldType
   label: string
   required: boolean
   fact: boolean
   options?: Record<string, string>
+  /** A tone per option key; an option not listed falls back to the built-in defaults. */
+  tones?: Record<string, Tone>
   relation?: { model: string; multiple: boolean }
   description?: string
   /** Shown, never written: a readonly column, or a query column no writer takes. */
   readonly?: boolean
   /** A query column's write: to `dataset`'s `field`, on the record the row's `key` names. */
   writes?: { dataset: string; field: string; key: string }
+  /** A value its row may take from elsewhere: `flag` names the column that says where from, `own` the flag's value for the row's own. */
+  inherited?: { flag: string; own: string }
 }
 
 export interface Model {
@@ -31,6 +37,10 @@ export interface Model {
   query?: boolean
   /** Its writer deletes: the drawer offers Verwijderen. */
   deletable?: boolean
+  /** A query whose `+ Nieuw` creates a row in this model. */
+  creates?: string
+  /** The words of `+ Nieuw` ("Nieuwe activiteit"), while the model keeps its declared name. */
+  new_label?: string
   /** What the drawer offers to run on one of its records. */
   actions?: ModelAction[]
   fields: Record<string, Field>
@@ -62,6 +72,12 @@ export interface TableDef {
   sort?: string[]
   /** `scoped`: its rows are the selected space record's; `global`: beside any space. */
   space?: 'scoped' | 'global'
+  /** A query's rows: joined, never created. */
+  query?: boolean
+  /** An administrator's pick from the engine's icon set; absent, the tree shows the kind's icon. */
+  icon?: string
+  /** What a group's band says of its rows, computed by the grid. */
+  facts?: GroupFact[]
   /** A matrix table: the records that join a row to a column, and what they mean. */
   join?: MatrixJoin
   /** A matrix table: the table whose rows say which columns are away when. */
@@ -181,9 +197,17 @@ export interface Schema {
   writable: Record<string, boolean>
   /** The relation that scopes a view, and the model it points at; null when the site configured none. */
   space?: Space | null
+  /** The tree's sections, in order; the sources each lists, in order. */
+  sections?: { label: string; sources: string[] }[]
   /** The site's words for the app's own strings, by `i18n.ts` key. */
   strings?: Record<string, string>
 }
+
+/** A fact the grid computes from a group's rows. */
+export type GroupFact =
+  | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
+  | { kind: 'count'; where?: Record<string, unknown>; label: string }
+  | { kind: 'empty'; column: string; label: string }
 
 export interface Space {
   field: string

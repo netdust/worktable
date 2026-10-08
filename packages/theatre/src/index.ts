@@ -42,6 +42,13 @@ const theatre: Domain = {
     sjabloon: sjabloonWriter,
   },
   actions: { sjabloon_toepassen: sjabloonToepassen },
+  space: { dataset: 'productie' },
+  // Section names and order are a draft, pending Stefan's approval.
+  sections: [
+    { label: 'Planning', sources: ['dagplanning', 'activiteit', 'speelreeks', 'toewijzing', 'beschikbaarheid'] },
+    { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
+    { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
+  ],
   seed,
   views,
 }

@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
+import { openView } from './tree'
 
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
 const APPLY_WEEK = '2026-11-02'
@@ -19,6 +20,15 @@ const PATTERN: [string, string | null][] = [
   ['Afwas', '21:15'],
   ['Overnachting', null],
 ]
+// Each timed item's end, from the template's durations: Dagplanning shows the range.
+const UNTIL: Record<string, string> = {
+  Lunch: '14:00',
+  Voorbereiding: '17:30',
+  Diner: '18:30',
+  'Voorbereiding avond': '20:00',
+  Voorstelling: '21:15',
+  Afwas: '22:15',
+}
 
 type Api = Page['request']
 type Values = Record<string, unknown>
@@ -58,8 +68,8 @@ async function speelreeks(api: Api, naam: string, start: string, eind: string): 
   })
 }
 
-async function pick(page: Page, view: string) {
-  await page.getByText(view, { exact: true }).first().click()
+async function pick(page: Page, view: string, model = view) {
+  await openView(page, view, model)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
 }
 
@@ -115,12 +125,11 @@ const undoOf = (page: Page) =>
 /** Dagplanning as it reads: each group's rows, with the cells this gate looks at. */
 async function dayGroups(page: Page) {
   const cols = {
-    start: await columnIndex(page, 'Start'),
+    start: await columnIndex(page, 'Tijd'),
     locatie: await columnIndex(page, 'Locatie'),
-    bron: await columnIndex(page, 'Locatie van'),
   }
   return page.locator('tbody tr').evaluateAll((trs, c) => {
-    const groups: { title: string; start: string; locatie: string; bron: string }[][] = []
+    const groups: { title: string; start: string; locatie: string }[][] = []
     for (const tr of trs) {
       if (tr.classList.contains('nv-group')) groups.push([])
       if (!tr.classList.contains('nv-tr')) continue
@@ -129,7 +138,6 @@ async function dayGroups(page: Page) {
         title: tr.getAttribute('data-title') ?? '',
         start: text(c.start),
         locatie: text(c.locatie),
-        bron: text(c.bron),
       })
     }
     return groups
@@ -148,7 +156,7 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
   const created = page.waitForResponse(
     (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/speelreeks',
   )
-  await page.getByRole('button', { name: 'New Speelreeksen' }).click()
+  await page.getByRole('button', { name: 'Nieuwe speelreeks' }).click()
   await page.getByRole('textbox', { name: 'Naam' }).fill(naam)
   await page.getByRole('textbox', { name: 'Naam' }).press('Enter')
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
@@ -177,7 +185,7 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
 
 /** The drawer's action: the Sjabloon picked, then the button; answers the action's reply. */
 async function applyInDrawer(page: Page, naam: string) {
-  await named(page, naam).getByRole('button', { name: 'Open' }).click()
+  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
   const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
   await action.getByRole('button', { name: /^Sjabloon: / }).click()
   await page.getByRole('combobox', { name: 'Sjabloon' }).fill('speeldag')
@@ -232,13 +240,12 @@ test('apply-template @e2e', async ({ page }) => {
   // Grouped by plandag: one group a day, each the whole pattern at its times, the venue the Speelreeks's.
   const groups = await dayGroups(page)
   expect(groups).toHaveLength(4)
-  groups.forEach((rows, n) => {
-    const [, m, d] = days[n].split('-')
-    const want = PATTERN.map(([title, tijd]) => `${title}|${tijd ? `${d}/${m} ${tijd}` : ''}|${VENUE}|Speelreeks`)
-    expect(rows.map((r) => `${r.title}|${r.start.replace(/^\S+ /, '')}|${r.locatie}|${r.bron}`).sort()).toEqual(
-      want.sort(),
+  for (const rows of groups) {
+    const want = PATTERN.map(
+      ([title, tijd]) => `${title}|${tijd ? `${tijd}–${UNTIL[title]}` : 'zonder tijd'}|${VENUE}via speelreeks`,
     )
-  })
+    expect(rows.map((r) => `${r.title}|${r.start}|${r.locatie}`).sort()).toEqual(want.sort())
+  }
 
   // One undo, from a cell of Dagplanning, removes the 28.
   await (await cellOf(page, gridRows(page).first(), 'Soort')).click()
@@ -250,7 +257,7 @@ test('apply-template @e2e', async ({ page }) => {
 
   await page.reload()
   await pick(page, 'Dagplanning')
-  await expect(page.getByText('No rows in this window')).toBeVisible()
+  await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
   await expect(gridRows(page)).toHaveCount(0)
 })
 
@@ -280,7 +287,7 @@ test('speelreeks-delete-in-use @e2e', async ({ page }) => {
 
   await page.goto('/')
   await pick(page, 'Speelreeksen')
-  await named(page, naam).getByRole('button', { name: 'Open' }).click()
+  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
   await page.getByRole('button', { name: 'Verwijderen' }).click()
   const answered = page.waitForResponse((res) => res.request().method() === 'DELETE')
   await page.getByRole('button', { name: 'Zeker?' }).click()
@@ -330,7 +337,7 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   await land(page, `/#from=${UNDO_WEEK}`)
   await pick(page, 'Dagplanning')
   const savedA = patchOf(page, 'activiteit')
-  await typeInto(await cellOf(page, named(page, omschrijving), 'Start'), `${datum}T10:00`)
+  await typeInto(await cellOf(page, named(page, omschrijving), 'Tijd'), `${datum}T10:00`)
   expect((await savedA).status()).toBe(200)
 
   const other = await browser.newContext({ baseURL: THEATRE.app, storageState: state('admin') })
@@ -338,9 +345,9 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   await land(b, `/#from=${UNDO_WEEK}`)
   await pick(b, 'Dagplanning')
   const savedB = patchOf(b, 'activiteit')
-  await typeInto(await cellOf(b, named(b, omschrijving), 'Start'), `${datum}T11:00`)
+  await typeInto(await cellOf(b, named(b, omschrijving), 'Tijd'), `${datum}T11:00`)
   expect((await savedB).status()).toBe(200)
-  await expect(await cellOf(b, named(b, omschrijving), 'Start')).toHaveText(/ 11:00$/)
+  await expect(await cellOf(b, named(b, omschrijving), 'Tijd')).toHaveText('11:00')
   await other.close()
   expect(await startOf()).toBe(`${datum}T11:00`)
 
@@ -353,7 +360,7 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
 
   await page.reload()
   await pick(page, 'Dagplanning')
-  await expect(await cellOf(page, named(page, omschrijving), 'Start')).toHaveText(/ 11:00$/)
+  await expect(await cellOf(page, named(page, omschrijving), 'Tijd')).toHaveText('11:00')
   expect(await startOf()).toBe(`${datum}T11:00`)
 })
 
@@ -405,8 +412,8 @@ test.describe('as the administrator', () => {
 test('sjablonen-read-only @e2e', async ({ page }) => {
   await page.goto('/')
   await pick(page, 'Sjablonen')
-  await expect(page.getByText('This list is read-only')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'New Sjablonen' })).toBeDisabled()
+  await expect(page.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Nieuw sjabloon' })).toBeDisabled()
   const row = named(page, SJABLOON)
   for (const label of ['Naam', 'Items']) {
     const cell = await cellOf(page, row, label)
@@ -434,13 +441,14 @@ test('dagplanning-locatie-van @e2e', async ({ page }) => {
 
   await land(page, `/#from=${week}`)
   await pick(page, 'Dagplanning')
-  const seen = async (title: string) => [
-    await (await cellOf(page, named(page, title), 'Locatie')).textContent(),
-    await (await cellOf(page, named(page, title), 'Locatie van')).textContent(),
-  ]
-  expect(await seen('bron geerfd')).toEqual([VENUE, 'Speelreeks'])
-  expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'Eigen'])
-  expect(await seen('bron geen')).toEqual(['', ''])
+  // "Locatie van" left the default view (R10); the grid shows the venue, the query still serves where it comes from.
+  const seen = async (title: string) => {
+    const [row] = await rowsOf<Values>(api, 'dagplanning', { omschrijving: title })
+    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), row.locatie_bron ?? null]
+  }
+  expect(await seen('bron geerfd')).toEqual([`${VENUE}via speelreeks`, 'speelreeks'])
+  expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'eigen'])
+  expect(await seen('bron geen')).toEqual(['', null])
 
   // Resolved, not stored: the inheriting activity holds no venue of its own.
   const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'bron geerfd' })
@@ -452,7 +460,7 @@ test('apply-double-submit @e2e', async ({ page }) => {
   const id = await speelreeks(page.request, naam, '2026-12-14', '2026-12-15')
   await page.goto('/')
   await pick(page, 'Speelreeksen')
-  await named(page, naam).getByRole('button', { name: 'Open' }).click()
+  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
   const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
   await action.getByRole('button', { name: /^Sjabloon: / }).click()
   await page.getByRole('combobox', { name: 'Sjabloon' }).fill('speeldag')

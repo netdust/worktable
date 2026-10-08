@@ -36,7 +36,8 @@ export function useGridTable(columns: Column[], rows: Row[], layout: Layout, onL
     [columns],
   )
 
-  const order = layout.order.length > 0 ? ['title', ...layout.order.filter((id) => id !== 'title')] : []
+  // The title stands where the view put it; first when it was never moved.
+  const order = layout.order.length === 0 || layout.order.includes('title') ? layout.order : ['title', ...layout.order]
 
   return useReactTable<Row>({
     data: rows,

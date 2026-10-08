@@ -14,8 +14,9 @@ const saved = (id: number, label: string, extra: Partial<SavedView> = {}): Saved
 const own = saved(42, 'Calais techniek')
 const sharedOwn = saved(43, 'Montage', { shared: true })
 const theirs = saved(44, 'Ploeg', { shared: true, mine: false, editable: false, owner: { id: 2, name: 'Jan' } })
+const seeded = saved(47, 'Rooster', { shared: true, mine: false, editable: false, owner: { id: -1, name: '' } })
 const marked = saved(45, '<img src=x onerror=alert(1)>')
-const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', views: [tabel, matrix, own, sharedOwn, theirs, marked] }
+const table: Table = { key: 'planning', label: 'Planning', space: 'scoped', types: ['grid', 'matrix'], views: [tabel, matrix, own, sharedOwn, theirs, marked] }
 
 const group = () => screen.getByRole('group', { name: 'View type' })
 const actions = () => ({ rename: vi.fn(), duplicate: vi.fn(), remove: vi.fn(), share: vi.fn(), order: vi.fn() })
@@ -30,30 +31,26 @@ const item = (name: string) => within(group()).getByRole('button', { name: new R
 afterEach(cleanup)
 
 describe('the views list', () => {
-  it('holds one button per view and the disabled calendar in its group, the new view outside it', () => {
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} onNew={() => undefined} />)
+  it('holds one button per view in its group, each named by its label alone', () => {
+    render(<ViewList table={table} active="planning" onSelect={() => undefined} />)
     const buttons = within(group()).getAllByRole('button')
 
-    expect(buttons.map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>', 'Calendarsoon'])
-    expect((buttons.at(-1) as HTMLButtonElement).disabled).toBe(true)
-    const add = screen.getByRole('button', { name: '+ View' })
-    expect(group().contains(add)).toBe(false)
+    expect(buttons.map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
+    expect(within(group()).getByRole('button', { name: 'Calais techniek' })).toBeTruthy()
   })
 
-  it('has no new-view button without its handler', () => {
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} />)
+  it("marks a starting or seeded view with the Standaardweergave lock, a colleague's shared view with its own mark, and one's own unshared view with a person", () => {
+    render(<ViewList table={{ ...table, views: [...table.views, seeded] }} active="planning" onSelect={() => undefined} />)
+    const lock = 'Standaardweergave, alleen te kopiëren'
+    const colleague = 'Gedeeld door een collega, alleen te kopiëren'
 
-    expect(screen.queryByRole('button', { name: '+ View' })).toBeNull()
-  })
-
-  it('marks only an own view that is not shared as mine; a shared one as shared', () => {
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} />)
-
-    expect(within(item('Calais techniek')).getByRole('img', { name: 'Mine' })).toBeTruthy()
-    for (const name of ['Tabel', 'Matrix', 'Montage', 'Ploeg']) expect(within(item(name)).queryByRole('img', { name: 'Mine' })).toBeNull()
-    expect(within(item('Montage')).getByRole('img', { name: 'Shared with the team' })).toBeTruthy()
-    expect(within(item('Ploeg')).getByRole('img', { name: 'Shared with the team' })).toBeTruthy()
-    expect(within(item('Tabel')).queryByRole('img')).toBeNull()
+    expect(within(item('Calais techniek')).getByRole('img', { name: 'Alleen voor jou' })).toBeTruthy()
+    for (const name of ['Tabel', 'Matrix', 'Rooster']) expect(within(item(name)).getByRole('img', { name: lock })).toBeTruthy()
+    expect(within(item('Ploeg')).getByRole('img', { name: colleague })).toBeTruthy()
+    expect(within(item('Ploeg')).queryByRole('img', { name: lock })).toBeNull()
+    expect(within(item('Rooster')).queryByRole('img', { name: colleague })).toBeNull()
+    expect(within(item('Montage')).queryByRole('img')).toBeNull()
+    expect(within(item('Calais techniek')).queryByRole('img', { name: lock })).toBeNull()
   })
 
   it('renders a name made of markup as its characters', () => {
@@ -77,61 +74,67 @@ describe("a view's actions", () => {
   const admin = saved(46, 'Bezetting Jan', { shared: true, mine: false, editable: true, owner: { id: 2, name: 'Jan' } })
   const withAdmin: Table = { ...table, views: [...table.views, admin] }
 
-  it('keeps every ⋯ out of the view type group: it holds the view buttons and the calendar only', () => {
-    render(<ViewList table={table} active="planning" onSelect={() => undefined} onNew={() => undefined} actions={actions()} />)
+  it('keeps every ⋯ out of the view type group: it holds the view buttons only', () => {
+    render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(within(group()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>', 'Calendarsoon'])
+    expect(within(group()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
     expect(group().contains(menuOf('Calais techniek'))).toBe(false)
   })
 
-  it('offers rename, duplicate, share, move up and down and delete on an own view', () => {
+  it('says its ⋯ in Dutch on hover, while its accessible name stays the kept contract', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Calais techniek')).toEqual(['Rename', 'Duplicate', 'Share with the team', 'Move up', 'Move down', 'Remove'])
+    expect(menuOf('Montage').getAttribute('title')).toBe('Meer acties: Montage')
+  })
+
+  it('offers copy, rename, share, Omhoog, Omlaag and delete on an own view', () => {
+    render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
+
+    expect(choices('Calais techniek')).toEqual(['Kopie maken', 'Naam wijzigen', 'Delen met het team', 'Omhoog', 'Omlaag', 'Verwijderen'])
   })
 
   it('offers unshare on an own shared view', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Montage')).toContain('Only for me')
+    expect(choices('Montage')).toContain('Niet meer delen')
   })
 
   it('offers only duplicate on a starting view and on another\'s shared view', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Tabel')).toEqual(['Duplicate'])
+    expect(choices('Tabel')).toEqual(['Kopie maken'])
     cleanup()
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
-    expect(choices('Ploeg')).toEqual(['Duplicate'])
+    expect(choices('Ploeg')).toEqual(['Kopie maken'])
   })
 
   it('offers an administrator rename and delete on a shared view of another', () => {
     render(<ViewList table={withAdmin} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Bezetting Jan')).toEqual(['Rename', 'Duplicate', 'Remove'])
+    expect(choices('Bezetting Jan')).toEqual(['Kopie maken', 'Naam wijzigen', 'Verwijderen'])
   })
 
   it('offers no move up on the first view of the list and no move down on the last', () => {
     const first: Table = { ...table, views: [own, tabel, sharedOwn] }
     render(<ViewList table={first} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    expect(choices('Calais techniek')).not.toContain('Move up')
+    expect(choices('Calais techniek')).not.toContain('Omhoog')
     cleanup()
     render(<ViewList table={first} active="planning" onSelect={() => undefined} actions={actions()} />)
-    expect(choices('Montage')).not.toContain('Move down')
+    expect(choices('Montage')).not.toContain('Omlaag')
   })
 
   it('runs the chosen action on its view', () => {
     const run = actions()
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
 
-    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Duplicate' }))
+    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Kopie maken' }))
     expect(run.duplicate).toHaveBeenCalledWith(own)
-    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Move up' }))
+    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Omhoog' }))
     expect(run.order).toHaveBeenCalledWith('planning', ['planning', '42', 'bezetting', '43', '44', '45'])
-    fireEvent.click(within(open('Montage')).getByRole('menuitem', { name: 'Only for me' }))
+    fireEvent.click(within(open('Montage')).getByRole('menuitem', { name: 'Niet meer delen' }))
     expect(run.share).toHaveBeenCalledWith(sharedOwn, false)
-    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Remove' }))
+    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Verwijderen' }))
     expect(run.remove).toHaveBeenCalledWith(own)
   })
 
@@ -157,13 +160,13 @@ describe("a view's actions", () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
 
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Calais techniek/ }))
-    const name = screen.getByRole('textbox', { name: 'Rename' }) as HTMLInputElement
+    const name = screen.getByRole('textbox', { name: 'Nieuwe naam' }) as HTMLInputElement
     expect(name.value).toBe('Calais techniek')
     fireEvent.change(name, { target: { value: 'Calais licht' } })
     fireEvent.keyDown(name, { key: 'Enter' })
 
     expect(run.rename).toHaveBeenCalledWith(own, 'Calais licht')
-    expect(screen.queryByRole('textbox', { name: 'Rename' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Nieuwe naam' })).toBeNull()
   })
 
   it('cancels a rename on Escape, and renames nothing unchanged or blank', () => {
@@ -171,22 +174,22 @@ describe("a view's actions", () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={run} />)
 
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Calais techniek/ }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Rename' }), { target: { value: 'Calais licht' } })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rename' }), { key: 'Escape' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { target: { value: 'Calais licht' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { key: 'Escape' })
     expect(within(group()).getByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
 
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Calais techniek/ }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Rename' }), { target: { value: '   ' } })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rename' }), { key: 'Enter' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { target: { value: '   ' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Nieuwe naam' }), { key: 'Enter' })
     expect(run.rename).not.toHaveBeenCalled()
   })
 
   it('renames from the menu in the same place', () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
 
-    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Rename' }))
+    fireEvent.click(within(open('Calais techniek')).getByRole('menuitem', { name: 'Naam wijzigen' }))
 
-    expect((screen.getByRole('textbox', { name: 'Rename' }) as HTMLInputElement).value).toBe('Calais techniek')
+    expect((screen.getByRole('textbox', { name: 'Nieuwe naam' }) as HTMLInputElement).value).toBe('Calais techniek')
   })
 
   it('renames nothing in place on a starting view or on another\'s shared view', () => {
@@ -195,7 +198,7 @@ describe("a view's actions", () => {
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Tabel/ }))
     fireEvent.doubleClick(within(group()).getByRole('button', { name: /^Ploeg/ }))
 
-    expect(screen.queryByRole('textbox', { name: 'Rename' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Nieuwe naam' })).toBeNull()
   })
 })
 
@@ -270,7 +273,7 @@ describe('ordering the list', () => {
     expect(run.order).toHaveBeenLastCalledWith('planning', ['planning', 'bezetting', '43', '42', '44', '45'])
     rerender(<ViewList table={{ ...table, views: [tabel, matrix, sharedOwn, own, theirs, marked] }} active="planning" onSelect={() => undefined} actions={run} />)
 
-    expect(keysOf()).toEqual(['Tabel', 'Matrix', 'Montage', 'Calais techniek', 'Ploeg', '<img src=x onerror=alert(1)>', 'Calendarsoon'])
+    expect(keysOf()).toEqual(['Tabel', 'Matrix', 'Montage', 'Calais techniek', 'Ploeg', '<img src=x onerror=alert(1)>'])
     expect(document.activeElement?.textContent).toBe('Calais techniek')
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp', altKey: true })
     expect(run.order).toHaveBeenLastCalledWith('planning', ['planning', 'bezetting', '42', '43', '44', '45'])
@@ -286,6 +289,6 @@ describe('ordering the list', () => {
     fireEvent.pointerUp(window, { clientY: 0 })
 
     expect(document.querySelector('.nv-view--dragging')).toBeNull()
-    expect(keysOf()).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>', 'Calendarsoon'])
+    expect(keysOf()).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
   })
 })

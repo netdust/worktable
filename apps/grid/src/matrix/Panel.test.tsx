@@ -94,7 +94,7 @@ describe('the matrix side panel', () => {
     expect(aside.getAttribute('aria-label')).toBe('Lieve')
     expect(within(aside).getByText(/Montage/)).toBeTruthy()
     expect(within(aside).getByRole('radio', { checked: true }).textContent).toBe('Misschien')
-    expect(within(aside).getByLabelText('Note')).toBeTruthy()
+    expect(within(aside).getByLabelText('Notitie')).toBeTruthy()
     expect(document.activeElement).toBe(at(/Montage/, 'name:lieve'))
 
     await act(async () => {
@@ -165,7 +165,7 @@ describe('the matrix side panel', () => {
     const { at, choose, store } = setup()
     fireEvent.click(at(/Montage/, 'record:5'))
 
-    await choose('None')
+    await choose('Geen')
 
     expect(store.set).toHaveBeenCalledWith(1, expect.objectContaining({ key: 'record:5' }), null)
   })
@@ -175,7 +175,7 @@ describe('the matrix side panel', () => {
     fireEvent.click(at(/Montage/, 'record:5'))
 
     const options = within(group()).getAllByRole('radio').map((o) => o.textContent)
-    expect(options).toEqual(['None', 'Gevraagd', 'Bevestigd', 'Misschien', 'Afgezegd'])
+    expect(options).toEqual(['Geen', 'Gevraagd', 'Bevestigd', 'Misschien', 'Afgezegd'])
     await choose('Afgezegd')
 
     expect(store.set).toHaveBeenCalledWith(1, expect.objectContaining({ key: 'record:5' }), 'declined')
@@ -186,7 +186,7 @@ describe('the matrix side panel', () => {
   it('saves the note on leaving the field, sending the note alone', async () => {
     const { at, panel, store, writes } = setup()
     fireEvent.click(at(/Montage/, 'name:lieve'))
-    const note = within(panel()!).getByLabelText('Note')
+    const note = within(panel()!).getByLabelText('Notitie')
 
     fireEvent.change(note, { target: { value: 'komt om 10u' } })
     await act(async () => {
@@ -201,8 +201,8 @@ describe('the matrix side panel', () => {
     const { at, panel, choose, writes } = setup()
     fireEvent.click(at(/Montage/, 'record:5'))
 
-    expect(within(panel()!).getByText('Away: Examen')).toBeTruthy()
-    expect(within(panel()!).getByText('Away and assigned')).toBeTruthy()
+    expect(within(panel()!).getByText('Afwezig: Examen')).toBeTruthy()
+    expect(within(panel()!).getByText('Afwezig en toegewezen')).toBeTruthy()
     await choose('Misschien')
 
     expect(writes.update).toHaveBeenCalledWith('assignment', 11, { status: 'maybe' })
@@ -213,8 +213,8 @@ describe('the matrix side panel', () => {
 
     fireEvent.click(at(/Leeg ook/, 'record:5'))
 
-    expect(within(panel()!).getByText('Away: Examen')).toBeTruthy()
-    expect(within(panel()!).queryByText('Away and assigned')).toBeNull()
+    expect(within(panel()!).getByText('Afwezig: Examen')).toBeTruthy()
+    expect(within(panel()!).queryByText('Afwezig en toegewezen')).toBeNull()
   })
 
   it('shows a row label\'s fields and who is on it', () => {
@@ -279,7 +279,7 @@ describe('the matrix side panel', () => {
 
     fireEvent.click(at(/Montage/, 'name:lieve'))
 
-    const note = within(panel()!).getByLabelText('Note') as HTMLTextAreaElement
+    const note = within(panel()!).getByLabelText('Notitie') as HTMLTextAreaElement
     expect(note.tagName).toBe('TEXTAREA')
     expect(note.value).toHaveLength(10_000)
     expect(note.closest('.nv-panel')).not.toBeNull()
@@ -289,9 +289,9 @@ describe('the matrix side panel', () => {
     const { at, panel, container } = setup({ rows: week(evil), awayRows: away(evil) })
 
     fireEvent.click(at(/Montage/, 'name:lieve'))
-    expect((within(panel()!).getByLabelText('Note') as HTMLTextAreaElement).value).toBe(evil)
+    expect((within(panel()!).getByLabelText('Notitie') as HTMLTextAreaElement).value).toBe(evil)
     fireEvent.click(at(/Montage/, 'record:5'))
-    expect(within(panel()!).getByText(`Away: ${evil}`)).toBeTruthy()
+    expect(within(panel()!).getByText(`Afwezig: ${evil}`)).toBeTruthy()
 
     expect(container.querySelector('img')).toBeNull()
   })

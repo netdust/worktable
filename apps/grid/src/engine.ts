@@ -1,5 +1,5 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
-import type { DateWindow, Field, FieldType, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, StoredArrangement, TableDef, View } from './types'
+import type { DateWindow, Field, FieldType, GroupFact, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -8,11 +8,13 @@ export interface EngineColumn {
   nullable?: boolean
   default?: unknown
   options?: Record<string, string>
+  tones?: Record<string, Tone>
   /** The dataset its integer points at. */
   relation?: string
   readonly?: true
   /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
   writes?: { dataset: string; field: string; key: string }
+  inherited?: { flag: string; own: string }
 }
 
 /** A join dataset's matrix: down and across are its relation columns, cell an options column. */
@@ -44,6 +46,15 @@ export interface EngineSource {
   writable?: boolean
   deletable?: boolean
   actions?: ModelAction[]
+  /** Served only beside the schema's `space`. */
+  space?: 'scoped' | 'global'
+  /** An administrator's pick from the engine's icon set, else null. */
+  icon?: string | null
+  /** A query's new rows are created in this dataset. */
+  creates?: string
+  /** The words of the button that adds a row, while the dataset keeps its declared name. */
+  new_label?: string
+  group_facts?: GroupFact[]
   columns: Record<string, EngineColumn>
 }
 
@@ -70,6 +81,9 @@ export interface EngineView extends EngineArrangement {
 
 export interface EngineSchema {
   sources: Record<string, EngineSource>
+  /** Served only to a caller who can read the space's dataset. */
+  space?: Space
+  sections?: { label: string; sources: string[] }[]
 }
 
 export interface EngineRow {
@@ -97,13 +111,11 @@ type Sources = Record<string, EngineSource>
 /** The column the grid's `title` stands for; none for a title through a relation. */
 export const titleColumn = (source: EngineSource): string | null => (source.title_via ? null : source.title)
 
-/** A mapped query column reads as its target column, unless it declares its own options or relation. */
+/** The engine serves a mapped query column with its target's options and tones; only the relation is read off the target here. */
 function asTarget(column: EngineColumn, sources: Sources): EngineColumn {
   const target = column.writes ? sources[column.writes.dataset]?.columns[column.writes.field] : undefined
-  if (!target) return column
-  const options = column.options ?? target.options
-  const relation = column.relation ?? target.relation
-  return { ...column, ...(options ? { options } : {}), ...(relation ? { relation } : {}) }
+  const relation = column.relation ?? target?.relation
+  return relation ? { ...column, relation } : column
 }
 
 function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources): Field {
@@ -115,9 +127,11 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     required: !column.nullable && column.default === undefined,
     fact: false,
     ...(column.options ? { options: column.options } : {}),
+    ...(column.tones ? { tones: column.tones } : {}),
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
+    ...(declared.inherited ? { inherited: declared.inherited } : {}),
   }
 }
 
@@ -138,6 +152,8 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.title_via ? { title_derived: true } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.deletable ? { deletable: true } : {}),
+    ...(source.creates ? { creates: source.creates } : {}),
+    ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(source.actions?.length ? { actions: source.actions } : {}),
     fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
   }
@@ -157,7 +173,15 @@ function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): Matr
 }
 
 function tableDefOf(name: string, source: EngineSource, sources: Sources): TableDef {
-  const table: TableDef = { key: name, label: source.label, model: name, ...(source.date ? { date_field: source.date } : {}), types: ['grid'] }
+  const table: TableDef = {
+    key: name, label: source.label, model: name,
+    ...(source.date ? { date_field: source.date } : {}),
+    ...(source.space ? { space: source.space } : {}),
+    ...(source.kind === 'query' ? { query: true } : {}),
+    ...(source.icon ? { icon: source.icon } : {}),
+    ...(source.group_facts ? { facts: source.group_facts } : {}),
+    types: ['grid'],
+  }
   const matrix = source.matrix_join ? sources[source.matrix_join]?.matrix : undefined
   if (!source.matrix_join || !matrix) return table
   return { ...table, types: ['grid', 'matrix'], join: joinOf(source.matrix_join, matrix), ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
@@ -170,6 +194,8 @@ export function toSchema(s: EngineSchema): Schema {
     tables: Object.entries(s.sources).map(([name, source]) => tableDefOf(name, source, s.sources)),
     views: [],
     writable: Object.fromEntries(Object.entries(s.sources).map(([name, source]) => [name, source.writable === true])),
+    ...(s.space ? { space: s.space } : {}),
+    ...(s.sections ? { sections: s.sections } : {}),
   }
 }
 
@@ -208,9 +234,10 @@ export function fromStoredView(view: EngineArrangement, source: EngineSource): {
   })
   const fields = fieldsOf(source)
   const { chips, fixed } = splitFilters(view.filters)
+  const order = view.visible_fields.map((key) => columnId(source, key)).filter((id) => id === 'title' || fields.includes(id))
   const arrangement = {
     hidden: fields.filter((key) => !view.visible_fields.includes(key)),
-    order: view.visible_fields.filter((key) => fields.includes(key)),
+    order: order.includes('title') ? order : ['title', ...order],
     widths: [],
     sort,
     filters: chips,
@@ -230,16 +257,24 @@ function mergeFilters(chips: Filter[], fixed: Record<string, unknown>): Record<s
   return merged
 }
 
+/** The selected space record narrows the rows as a fixed filter would, beside any other condition on its column. */
+export function withScope(fixed: Record<string, unknown>, scope: Scope | null): Record<string, unknown> {
+  if (!scope) return fixed
+  const kept = fixed[scope.field]
+  return { ...fixed, [scope.field]: isObject(kept) ? { ...kept, $eq: scope.id } : { $eq: scope.id } }
+}
+
 /**
- * The arrangement as the engine stores it. `visible_fields` is the title column, then the shown fields in their order:
+ * The arrangement as the engine stores it. `visible_fields` is the shown columns in their order, the title column where it stands (first when it was never moved):
  * a hidden column keeps no place, so shown again after a re-read it comes last. Widths, picks and matrix keys stay in the browser; lookup, rollup and custom (`custom` JSON) columns are not stored,
  * so hiding or reordering one is lost on save. Custom fields come with Field, step 5.
  */
 export function toStoredView(arrangement: StoredArrangement, fixed: Record<string, unknown>, source: EngineSource): EngineArrangement {
   const title = titleColumn(source)
   const fields = fieldsOf(source)
-  const kept = arrangement.order.filter((id) => fields.includes(id))
-  const shown = [...kept, ...fields.filter((id) => !kept.includes(id))].filter((id) => !arrangement.hidden.includes(id))
+  const kept = arrangement.order.filter((id) => fields.includes(id) || (id === 'title' && title !== null))
+  const placed = kept.includes('title') || title === null ? kept : ['title', ...kept]
+  const shown = [...placed, ...fields.filter((id) => !placed.includes(id))].filter((id) => !arrangement.hidden.includes(id))
   const group = arrangement.group === null ? null : engineColumn(arrangement.group, title)
   return {
     filters: mergeFilters(arrangement.filters, fixed),
@@ -248,7 +283,7 @@ export function toStoredView(arrangement: StoredArrangement, fixed: Record<strin
       return column === null ? [] : [desc ? `-${column}` : column]
     }),
     group_by: group,
-    visible_fields: [...(title ? [title] : []), ...shown],
+    visible_fields: shown.map((id) => (id === 'title' ? title ?? id : id)),
   }
 }
 

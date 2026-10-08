@@ -38,3 +38,31 @@ export function useGridStore(view: View | undefined, rows: Row[] | null, history
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))
   return [store, state]
 }
+
+function storedFolds(key: string): Set<string> {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '[]')
+    return new Set(Array.isArray(value) ? value.filter((k): k is string => typeof k === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+/** The groups folded away in this view, by the column it groups on; kept in this browser. */
+export function useFolded(view: string, group: string | null): [Set<string>, (key: string) => void] {
+  const key = `ntdst-views/folded/v1/${view}/${group ?? ''}`
+  const [held, setHeld] = useState(() => ({ key, folded: storedFolds(key) }))
+  const folded = held.key === key ? held.folded : storedFolds(key)
+
+  const toggle = (group: string) => {
+    const next = new Set(folded)
+    if (!next.delete(group)) next.add(group)
+    setHeld({ key, folded: next })
+    try {
+      window.localStorage.setItem(key, JSON.stringify([...next]))
+    } catch {
+      // Blocked storage: the fold holds for this visit only.
+    }
+  }
+  return [folded, toggle]
+}

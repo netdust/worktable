@@ -3,14 +3,15 @@ import { type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNod
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { RelationContext } from './cells/Relation'
-import { type Column, columnsFor } from './columns'
+import { type Column, columnsFor, inDays } from './columns'
 import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
+import { useFolded } from './hooks'
 import { GridBar } from './GridBar'
 import { type BodyActions, GridBody } from './GridBody'
 import { GridFoot } from './GridFoot'
-import { GridHeader } from './GridHeader'
+import { GridHeader, NUMBER_WIDTH } from './GridHeader'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
 import { DRAFT, type Store } from './store'
@@ -38,6 +39,8 @@ export interface GridProps {
   emptyHint?: string
   /** Set to a reader of what is on screen, for the toolbar's export. */
   snapshot?: RefObject<(() => OnScreen) | null>
+  /** Told what is on screen, for the title line's summary. */
+  onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
@@ -45,11 +48,16 @@ export interface GridProps {
   spaceModel?: string | null
   /** The filter chips, shown in the bar over the sheet. */
   filters?: ReactNode
+  /** The scope chip's words, "Productie is Nachtwacht"; null when the view is not scoped. */
+  scopeChip?: string | null
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
+  /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
+  cut?: Row | null
 }
 
 const NO_MODELS: Record<string, Model> = {}
+
 
 /** Only a cell or its editor drives the sheet; a header, Open or Dismiss button keeps its own keys. */
 function fromCell(target: EventTarget): boolean {
@@ -60,17 +68,24 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, models = NO_MODELS, scope = null, spaceModel = null, filters, onAction }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
-  const columns = useMemo(() => {
+  const declared = useMemo(() => {
     const declared = columnsFor(model, view, writable, models)
     const absent = wanted.filter((need) => !declared.some((c) => c.field === need))
     if (absent.length === 0) return declared
     return [...declared, ...columnsFor(model, { ...view, columns: absent, lookups: {}, rollups: {} }, writable, models).filter((c) => c.field !== 'title')]
   }, [model, view, writable, models, wanted])
   const every = useMemo(() => columnsFor(model, { ...view, columns: undefined }, false, models), [model, view, models])
+  const by: Column | undefined = layout.group ? every.find((c) => c.id === layout.group) : undefined
+  const day = by?.kind === 'date' ? by.id : null
+  const hidden = layout.hidden.join()
+  const columns = useMemo(
+    () => (day ? inDays(declared, model, day, view.facts, declared.map((c) => c.id).filter((id) => !layout.hidden.includes(id))) : declared),
+    [declared, model, day, view.facts, hidden],
+  )
   const byId = useMemo(() => new Map(columns.map((c) => [c.id, c])), [columns])
 
   const drafts = useMemo(() => state.rows.filter((r) => r.id === DRAFT), [state.rows])
@@ -78,12 +93,15 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     () => filterRows(state.rows.filter((r) => r.id !== DRAFT), layout.filters, query),
     [state.rows, layout.filters, query],
   )
-  const by: Column | undefined = layout.group ? every.find((c) => c.id === layout.group) : undefined
-  // Grouped by a day, each section names it: the column would repeat it on every row.
-  const table = useGridTable(columns, shown, layout, onLayout, by?.kind === 'date' ? [by.id] : [], wanted)
+  // Grouped by a day, each section names it; under a scope every row holds the same record: either column would repeat it on every row.
+  const unshown = [...(day ? [day] : []), ...(scope ? [scope.field] : [])]
+  const table = useGridTable(columns, shown, layout, onLayout, unshown, wanted)
   const visible = table.getVisibleLeafColumns().map((c) => byId.get(c.id)!)
-  const groups = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by)
-  const ordered = groups.flatMap((g) => g.rows)
+  const groups = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by, { facts: view.facts ?? [], columns: every, cut })
+  const [folded, fold] = useFolded(view.key, by?.id ?? null)
+  // A group holding the draft stays open: the row being written must stay in reach.
+  const shut = new Set(groups.filter((g) => folded.has(g.key) && !g.rows.some((r) => r.id === DRAFT)).map((g) => g.key))
+  const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
 
   const sorted = table.getRowModel().rows
   useEffect(() => {
@@ -93,6 +111,13 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       snapshot.current = null
     }
   })
+
+  const shownRows = total(groups)
+  const shownGroups = by ? groups.length : null
+  useEffect(() => {
+    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null })
+  }, [shownRows, shownGroups, cut])
+  useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)
   const keysRef = useRef<KeyState>(initial)
@@ -265,7 +290,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   return (
     <RelationContext.Provider value={{ models, scope, spaceModel }}>
     <div className="nv-frame">
-      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} filters={filters} />
+      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState type="no-data" title={emptyTitle} description={emptyHint} />
@@ -273,11 +298,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       ) : (
       <div className="nv-body">
         <div className="nv-scroll">
-          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + NUMBER_WIDTH }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
             <GridHeader table={table} byId={byId} />
-            <GridBody groups={groups} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
-              emptyText={ordered.length === 0 ? t('noRowsMatch') : null} />
-            <GridFoot columns={visible} count={total(groups) - drafts.length} sums={sums(shown, visible)} />
+            <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+              emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
+            <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
         {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions}

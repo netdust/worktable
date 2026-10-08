@@ -160,6 +160,6 @@ describe('the relation picker', () => {
     fireEvent.click(cell('Lunch bistrot', 'location'))
     fireEvent.keyDown(cell('Lunch bistrot', 'location'), { key: 'Enter' })
 
-    expect(await screen.findByText('More results: refine your search')).toBeTruthy()
+    expect(await screen.findByText('Meer resultaten: verfijn je zoekopdracht')).toBeTruthy()
   })
 })

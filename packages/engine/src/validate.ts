@@ -1,6 +1,6 @@
-import type { ColumnDecl, DatasetDecl, Domain, QueryDecl } from './declare'
+import { type ColumnDecl, type DatasetDecl, type Domain, ICONS, type QueryDecl, TONES } from './declare'
 import { reservedNames } from './engine-tables'
-import { sourcesOf, writerOf } from './registry'
+import { sourceOf, sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
   constructor(
@@ -31,6 +31,50 @@ function checkTitle(source: DatasetDecl | QueryDecl): void {
   checkColumn(source, 'title else', fallback)
   const target = source.columns[via]?.relation
   if (!target) throw new DomainError(source.name, via, `title via "${via}" is not a relation column`)
+}
+
+function checkTones(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.tones) continue
+    if (!decl.options) throw new DomainError(source.name, column, `${column} declares tones but has no options`)
+    for (const key of Object.keys(decl.tones)) {
+      if (!Object.hasOwn(decl.options, key)) {
+        throw new DomainError(source.name, key, `${column} has a tone for "${key}", which is not one of its options`)
+      }
+    }
+    for (const tone of Object.values(decl.tones)) {
+      if (!(TONES as readonly string[]).includes(tone)) {
+        throw new DomainError(source.name, tone, `${column} has tone "${tone}", not one of ${TONES.join(', ')}`)
+      }
+    }
+  }
+}
+
+function checkIcon(source: DatasetDecl | QueryDecl): void {
+  const icon = source.icon
+  if (icon !== undefined && !(ICONS as readonly string[]).includes(icon)) {
+    throw new DomainError(source.name, icon, `icon "${icon}" is not one of ${ICONS.join(', ')}`)
+  }
+}
+
+const MAX_NEW_LABEL = 60
+
+function checkNewLabel(dataset: DatasetDecl): void {
+  const label = dataset.new_label
+  if (label === undefined || (typeof label === 'string' && label.trim() !== '' && label.length <= MAX_NEW_LABEL)) return
+  throw new DomainError(dataset.name, String(label), `new_label must be words of 1 to ${MAX_NEW_LABEL} characters`)
+}
+
+function checkCreates(domain: Domain, query: QueryDecl): void {
+  const dataset = query.creates
+  if (dataset === undefined) return
+  if (!domain.datasets.some((d) => d.name === dataset) || !writerOf(domain, dataset)?.create) {
+    throw new DomainError(
+      query.name,
+      dataset,
+      `creates "${dataset}", which is not a dataset with a writer that creates`,
+    )
+  }
 }
 
 function checkOwners(source: DatasetDecl | QueryDecl): void {
@@ -165,6 +209,57 @@ function checkConfig(domain: Domain, dataset: DatasetDecl): void {
   }
 }
 
+function checkSpace(domain: Domain): void {
+  const space = domain.space?.dataset
+  if (space !== undefined && !domain.datasets.some((d) => d.name === space)) {
+    throw new DomainError('space', space, `space dataset "${space}" is not declared`)
+  }
+  let field: string | undefined
+  for (const source of sourcesOf(domain)) {
+    const column = source.scoped
+    if (column === undefined) continue
+    if (space === undefined)
+      throw new DomainError(source.name, column, `scoped "${column}", but the domain declares no space`)
+    if (source.columns[column]?.relation !== space) {
+      throw new DomainError(source.name, column, `scoped "${column}" is not a relation column to "${space}"`)
+    }
+    if (field !== undefined && column !== field) {
+      throw new DomainError(source.name, column, `scoped "${column}", but another source is scoped by "${field}"`)
+    }
+    field = column
+  }
+  if (space !== undefined && field === undefined)
+    throw new DomainError('space', space, 'no source is scoped to the space')
+}
+
+function checkSections(domain: Domain): void {
+  const seen = new Set<string>()
+  for (const { label, sources } of domain.sections ?? []) {
+    for (const name of sources) {
+      if (!sourceOf(domain, name)) throw new DomainError(label, name, `section lists unknown source "${name}"`)
+      if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
+      seen.add(name)
+    }
+  }
+}
+
+function checkFacts(source: DatasetDecl | QueryDecl): void {
+  for (const fact of source.group_facts ?? []) {
+    if (fact.kind !== 'count') checkColumn(source, 'fact column', fact.column)
+    const where = fact.kind === 'empty' ? undefined : fact.where
+    for (const column of Object.keys(where ?? {})) checkColumn(source, 'fact where', column)
+  }
+}
+
+function checkInherited(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.inherited) continue
+    if (source.kind === 'dataset') throw new DomainError(source.name, column, `${column} is inherited on a dataset`)
+    const { flag } = decl.inherited
+    if (!declared(source, flag)) throw new DomainError(source.name, flag, `${column} has flag "${flag}", not a column`)
+  }
+}
+
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
     if (reservedNames.has(source.name)) {
@@ -174,15 +269,23 @@ export function validateDomain(domain: Domain): void {
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
     checkOwners(source)
+    checkTones(source)
+    checkIcon(source)
+    checkFacts(source)
+    checkInherited(source)
   }
+  checkSpace(domain)
+  checkSections(domain)
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
+    checkNewLabel(dataset)
     checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {
+    checkCreates(domain, query)
     for (const [column, decl] of Object.entries(query.columns)) {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }

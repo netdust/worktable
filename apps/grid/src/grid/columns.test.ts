@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { activity, calais, planning } from './calais.test.data'
-import { columnsFor } from './columns'
+import type { GroupFact, Model } from '../types'
+import { type Column, columnsFor, inDays } from './columns'
 import { columnsFixture, fixtureModel } from '../fixture.test-support'
 
 const lunch = calais[2]
@@ -174,7 +175,41 @@ describe('columnsFor', () => {
 
   it('reads a pasted toggle text back as a boolean', () => {
     const paid = byId({ ...planning, columns: undefined }).paid
-    expect(['No', 'no', '0', 'false', ''].map(paid.fromText)).toEqual([false, false, false, false, false])
-    expect(['Yes', 'YES', '1', 'true'].map(paid.fromText)).toEqual([true, true, true, true])
+    expect(['Nee', 'nee', '0', 'false', ''].map(paid.fromText)).toEqual([false, false, false, false, false])
+    expect(['Ja', 'JA', '1', 'true'].map(paid.fromText)).toEqual([true, true, true, true])
+  })
+})
+
+describe('inDays', () => {
+  const field = (type: 'date' | 'datetime' | 'text', label: string) => ({ type, label, required: false, fact: false })
+  const plan: Model = {
+    key: 'plan', label: 'Plan', title_label: 'Naam', title_readonly: false,
+    fields: { day: field('date', 'Dag'), from: field('datetime', 'Start'), until: field('datetime', 'Einde'), note: field('text', 'Notitie') },
+  }
+  const row = (fields: Record<string, unknown>) => ({ id: 1, title: 'x', status: '', fields })
+  const facts: GroupFact[] = [{ kind: 'empty', column: 'from', label: 'leeg' }]
+  const laid = (shown: string[]) => inDays(columnsFor(plan, { key: 'p', label: 'p', table: 'plan', model: 'plan', columns: shown }), plan, 'day', facts)
+  const from = (shown: string[]) => laid(shown).find((c) => c.id === 'from') as Column
+
+  it("reads a moment on its row's day as its time, with the hidden end after it, under the word Tijd", () => {
+    const column = from(['day', 'from', 'note'])
+    expect(column.label).toBe('Tijd')
+    expect(column.range?.(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: '2026-11-02T14:00' }))).toEqual({ start: '13:00', end: '–14:00' })
+    expect(column.text(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: '2026-11-02T14:00' }))).toBe('13:00–14:00')
+    expect(column.text(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: null }))).toBe('13:00')
+  })
+
+  it('keeps the date of a moment on another day than its row, and leaves the end alone where the view shows it', () => {
+    expect(from(['from']).text(row({ day: '2026-10-13', from: '2026-10-14T00:30' }))).toBe('wo 14/10 00:30')
+    const shown = from(['from', 'until'])
+    expect(shown.label).toBe('Start')
+    expect(shown.text(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: '2026-11-02T14:00' }))).toBe('13:00')
+  })
+
+  it("names an empty moment as the view's facts do, and edits the stored moment", () => {
+    const column = from(['from'])
+    expect(column.blank).toBe('leeg')
+    expect(column.range?.(row({ day: '2026-11-02', from: null }))).toBeNull()
+    expect(column.edit(row({ day: '2026-11-02', from: '2026-11-02T13:00' }))).toBe('2026-11-02T13:00')
   })
 })

@@ -1,14 +1,29 @@
 import { Button } from '@sakaniui/react'
-import { Plus } from 'lucide-react'
+import { Grid3x3, Lock, Plus, Table as TableIcon, Users } from 'lucide-react'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { ReactNode } from 'react'
-import { fixedCount, t } from '../i18n'
+import { fixedCount, summary, t } from '../i18n'
 import type { StoreState } from '../grid/store'
 import type { DateWindow } from '../types'
 import { WindowControl } from './Window'
 
+export interface Shown {
+  rows: number
+  /** Null where the view is not grouped. */
+  groups: number | null
+  /** The read limit cut the rows: the count is what loaded. */
+  cut: boolean
+}
+
 interface Props {
+  /** The view's name. */
   title: string
+  /** The view's kind, for its icon. */
+  matrix?: boolean
+  /** A view this user can only copy: a lock says whose it is. */
+  locked?: 'standard' | 'colleague' | null
+  /** What the grid shows now; absent while there is no grid. */
+  shown?: Shown | null
   window: DateWindow | null
   onWindow: (value: DateWindow) => void
   search: ReactNode
@@ -67,7 +82,7 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, window, onWindow, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, modified, viewNote, fixed = 0 }: Props) {
+export function Toolbar({ title, matrix, locked, shown, window, onWindow, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, modified, viewNote, fixed = 0 }: Props) {
   const more: Action[] = [
     ...(modified ? [{ label: t('saveAsNew'), run: modified.onSaveAs }, { label: t('revert'), run: modified.onRevert }] : []),
     ...(onExport || exportBlocked ? [{ label: t('export'), run: () => onExport?.(), blocked: exportBlocked }] : []),
@@ -75,7 +90,12 @@ export function Toolbar({ title, window, onWindow, search, saving, addLabel, add
   return (
     // A changed view's actions take room: there, the end may take a second row rather than leave the screen.
     <header className={modified ? 'nv-toolbar nv-toolbar--crowded' : 'nv-toolbar'}>
-      <h1 className="nv-toolbar__title">{title}</h1>
+      <div className="nv-toolbar__name">
+        <span className="nv-toolbar__glyph" aria-hidden="true">{matrix ? <Grid3x3 size={16} /> : <TableIcon size={16} />}</span>
+        <h1 className="nv-toolbar__title">{title}</h1>
+        {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
+        {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups, shown.cut)}</span>}
+      </div>
       {modified && <ModifiedState modified={modified} />}
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}
@@ -85,9 +105,9 @@ export function Toolbar({ title, window, onWindow, search, saving, addLabel, add
         {saving && <SaveState state={saving} />}
         {exportNote && <span className="nv-toolbar__note" role="alert">{exportNote}</span>}
         {more.length > 0 && <MoreMenu actions={more} />}
-        {onAdd && addBlocked && <span className="nv-toolbar__note">{addBlocked}</span>}
+        {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note nv-toolbar__note--hint">{addBlocked}</span>}
         {onAdd && (
-          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} disabled={addBlocked !== null} onClick={onAdd}>
+          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} disabled={addBlocked !== null} title={addBlocked ?? undefined} onClick={onAdd}>
             {addLabel}
           </Button>
         )}

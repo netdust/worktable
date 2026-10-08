@@ -31,6 +31,16 @@ export function toStored(arrangement: Arrangement): StoredArrangement {
 
 export const blank = (): StoredArrangement => ({ hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] })
 
+/** The engine's system owner: it seeds the starting views. */
+const SYSTEM_OWNER = -1
+
+/** Why this user can only copy a view: it is a default, or a colleague's; null where they may change it. */
+export function lockOf(view: View): 'standard' | 'colleague' | null {
+  if (!isSaved(view)) return 'standard'
+  if (view.editable) return null
+  return view.owner.id === SYSTEM_OWNER ? 'standard' : 'colleague'
+}
+
 export function isSaved(view: View): view is SavedView {
   return typeof (view as Partial<SavedView>).id === 'number' && typeof (view as Partial<SavedView>).arrangement === 'object'
 }

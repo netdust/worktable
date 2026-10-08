@@ -19,19 +19,19 @@ describe('the search', () => {
   it('names a view of a table with two views as table · view', () => {
     render(<Search query="planning" onQuery={() => undefined} tables={tables} onJump={() => undefined} />)
 
-    expect(options()).toEqual(['Go to Planning · Tabel', 'Go to Planning · Matrix'])
+    expect(options()).toEqual(['Naar Planning · Tabel', 'Naar Planning · Matrix'])
   })
 
   it('matches a view by its own label', () => {
     render(<Search query="matrix" onQuery={() => undefined} tables={tables} onJump={() => undefined} />)
 
-    expect(options()).toEqual(['Go to Planning · Matrix'])
+    expect(options()).toEqual(['Naar Planning · Matrix'])
   })
 
   it('names the view of a table with one view by the table alone', () => {
     render(<Search query="afwez" onQuery={() => undefined} tables={tables} onJump={() => undefined} />)
 
-    expect(options()).toEqual(['Go to Afwezigheden'])
+    expect(options()).toEqual(['Naar Afwezigheden'])
   })
 
   it('jumps to the view and clears the query', () => {
@@ -39,7 +39,7 @@ describe('the search', () => {
     const onQuery = vi.fn()
     render(<Search query="matrix" onQuery={onQuery} tables={tables} onJump={onJump} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Go to Planning · Matrix' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Naar Planning · Matrix' }))
 
     expect(onJump).toHaveBeenCalledWith('bezetting')
     expect(onQuery).toHaveBeenCalledWith('')
@@ -50,7 +50,7 @@ describe('the search', () => {
     const withSaved = tables.map((table) => (table.key === 'planning' ? { ...table, views: [...table.views, saved] } : table))
     render(<Search query="calais" onQuery={() => undefined} tables={withSaved} onJump={() => undefined} />)
 
-    expect(options()).toEqual(['Go to Planning · Calais techniek'])
+    expect(options()).toEqual(['Naar Planning · Calais techniek'])
   })
 
   it('shows a saved name with markup as its characters, never as an element (threat 7)', () => {
@@ -58,7 +58,7 @@ describe('the search', () => {
     const withSaved = tables.map((table) => (table.key === 'planning' ? { ...table, views: [...table.views, saved] } : table))
     const { container } = render(<Search query="onerror" onQuery={() => undefined} tables={withSaved} onJump={() => undefined} />)
 
-    expect(options()).toEqual(['Go to Planning · <img src=x onerror=alert(1)>'])
+    expect(options()).toEqual(['Naar Planning · <img src=x onerror=alert(1)>'])
     expect(container.querySelector('img')).toBeNull()
   })
 })

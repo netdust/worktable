@@ -51,6 +51,63 @@ const views: EngineView[] = [
   },
 ]
 
+describe('toSchema: space, sections, facts and inherited', () => {
+  const declared: EngineSchema = {
+    sources: {
+      season: { kind: 'dataset', label: 'Seizoenen', title: 'name', date: null, space: 'global', columns: { name: { type: 'text', label: 'Naam' } } },
+      session: {
+        kind: 'query', label: 'Sessies', title: 'name', date: 'day', space: 'scoped',
+        group_facts: [{ kind: 'count', label: 'sessies' }, { kind: 'empty', column: 'room', label: 'zonder zaal' }],
+        columns: {
+          name: { type: 'text', label: 'Naam' },
+          day: { type: 'date', label: 'Dag' },
+          season_id: { type: 'integer', label: 'Seizoen', relation: 'season' },
+          room: { type: 'text', label: 'Zaal', inherited: { flag: 'room_from', own: 'self' } },
+          room_from: { type: 'text', label: 'Zaal van', options: { self: 'Eigen', block: 'Blok' } },
+        },
+      },
+    },
+    space: { model: 'season', field: 'season_id' },
+    sections: [{ label: 'Werk', sources: ['session'] }],
+  }
+
+  it('maps the space, the sections, each table\'s space and facts, and a column\'s inherited', () => {
+    const schema = toSchema(declared)
+
+    expect(schema.space).toEqual({ model: 'season', field: 'season_id' })
+    expect(schema.sections).toEqual([{ label: 'Werk', sources: ['session'] }])
+    expect(schema.tables.map((t) => [t.key, t.space, t.facts])).toEqual([
+      ['season', 'global', undefined],
+      ['session', 'scoped', declared.sources.session.group_facts],
+    ])
+    expect(schema.models.session.fields.room.inherited).toEqual({ flag: 'room_from', own: 'self' })
+    expect(schema.models.session.fields.room_from.inherited).toBeUndefined()
+  })
+
+  it('carries the table\'s space and facts onto its saved views', () => {
+    const [view] = toSavedViews([{ ...views[0], id: 5, source: 'session', source_type: 'query', filters: {}, sort: [], visible_fields: [] }], declared.sources)
+
+    expect(view).toMatchObject({ space: 'scoped', facts: declared.sources.session.group_facts })
+  })
+
+  it("maps an administrator's icon onto its table, and none where the engine serves null", () => {
+    const iconed: EngineSchema = { sources: { ...declared.sources, season: { ...declared.sources.season, icon: 'star' }, session: { ...declared.sources.session, icon: null } } }
+    const schema = toSchema(iconed)
+
+    expect(schema.tables.map((t) => [t.key, t.icon])).toEqual([['season', 'star'], ['session', undefined]])
+    expect('icon' in (schema.tables[1] ?? {})).toBe(false)
+  })
+
+  it('maps none of it for a domain that declares none', () => {
+    const schema = toSchema(engine)
+
+    expect('space' in schema).toBe(false)
+    expect('sections' in schema).toBe(false)
+    expect(schema.tables.some((t) => 'space' in t || 'facts' in t)).toBe(false)
+    expect(Object.values(schema.models).flatMap((m) => Object.values(m.fields)).some((f) => 'inherited' in f)).toBe(false)
+  })
+})
+
 describe('toSchema', () => {
   it("maps a dataset's columns to model fields by type", () => {
     const fields = toSchema(engine).models.activiteit.fields
@@ -135,7 +192,7 @@ describe('writes', () => {
     expect(toEngineData({ start_at: '' }, source, writes.sources)).toEqual({ start_at: null })
   })
 
-  it("a mapped query column takes its target's options and relation, unless it declares its own", () => {
+  it("a mapped query column reads the options the engine serves on it, and its target's relation", () => {
     const own: EngineSchema = {
       ...writes,
       sources: {
@@ -153,8 +210,8 @@ describe('writes', () => {
     const fields = toSchema(own).models.dagplanning.fields
     const status = columnsFor(toSchema(own).models.dagplanning, { key: 'd', label: 'd', table: 'dagplanning', model: 'dagplanning' }, true).find((c) => c.id === 'status')
 
-    expect(fields.status).toMatchObject({ type: 'select', options: { optie: 'Optie', bevestigd: 'Bevestigd' } })
-    expect(status?.text?.({ id: 40, title: '', status: '', fields: { status: 'optie' } })).toBe('Optie')
+    expect(fields.status).toMatchObject({ type: 'text' })
+    expect(status?.text?.({ id: 40, title: '', status: '', fields: { status: 'optie' } })).toBe('optie')
     expect(fields.soort).toMatchObject({ type: 'select', options: { reis: 'Reis' } })
     expect(fields.productie_id).toMatchObject({ type: 'relation', relation: { model: 'productie', multiple: false } })
   })
@@ -194,7 +251,7 @@ describe('toSavedViews', () => {
     expect(planning.arrangement.sort).toEqual([{ id: 'start_at', desc: false }])
     expect(planning.arrangement.group).toBe('plandag')
     expect(planning.arrangement.hidden).toEqual(['plandag', 'uren', 'betaald', 'extra'])
-    expect(planning.arrangement.order).toEqual(['productie_id', 'soort', 'start_at', 'status'])
+    expect(planning.arrangement.order).toEqual(['title', 'productie_id', 'soort', 'start_at', 'status'])
   })
 
   it("Planning's SavedView has key '1', label 'Planning', table 'activiteit', date_field 'plandag', and the engine's owner flags", () => {
@@ -240,6 +297,16 @@ describe('an arrangement on the wire', () => {
       visible_fields: ['omschrijving', 'productie_id', 'soort', 'start_at', 'status'],
     })
     expect(fromStoredView({ ...planning, ...stored }, activiteit)).toEqual({ arrangement, fixed })
+  })
+
+  it('keeps the title column where the view stores it, through a read and a save', () => {
+    const later = { ...planning, visible_fields: ['start_at', 'omschrijving', 'soort', 'status'] }
+    const { arrangement, fixed } = fromStoredView(later, activiteit)
+
+    expect(arrangement.order).toEqual(['start_at', 'title', 'soort', 'status'])
+    expect(toStoredView(arrangement, fixed, activiteit).visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'status'])
+    const moved = { ...arrangement, order: ['soort', 'start_at', 'title', 'status'] }
+    expect(toStoredView(moved, fixed, activiteit).visible_fields).toEqual(['soort', 'start_at', 'omschrijving', 'status'])
   })
 
   it('keeps a reorder and drops what only the grid keeps: widths, picks, matrix keys, lookups and the title id', () => {

@@ -194,7 +194,7 @@ export const views: SavedViewSeed[] = [
     filters: {},
     sort: ['start_at'],
     group_by: 'plandag',
-    visible_fields: ['productie', 'soort', 'start_at', 'status', 'locatie_id', 'locatie_bron'],
+    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie_id', 'status'],
   },
   {
     name: 'Toewijzingen per activiteit',

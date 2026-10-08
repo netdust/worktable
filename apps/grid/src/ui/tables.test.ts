@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TableDef, View } from '../types'
-import { byFirstView, groupTables, tableOf } from './tables'
+import { byFirstView, groupTables, sectionsOf, tableOf } from './tables'
 
 const table = (key: string, extra: Partial<TableDef> = {}): TableDef => ({ key, label: key.toUpperCase(), model: 'record', types: ['grid'], ...extra })
 const view = (key: string, of: string, extra: Partial<View> = {}): View => ({ key, label: key.toUpperCase(), model: 'record', table: of, ...extra })
@@ -28,8 +28,15 @@ describe('the tables', () => {
     expect(groupTables([table('one')], [view('a', 'one')])[0].space).toBe('global')
   })
 
-  it('leaves out a table without a view: a rail entry must open one', () => {
-    expect(groupTables([table('one'), table('empty')], [view('a', 'one')]).map((t) => t.key)).toEqual(['one'])
+  it('keeps a table without a view: its node is where its first view is made', () => {
+    expect(groupTables([table('one'), table('empty')], [view('a', 'one')]).map((t) => [t.key, t.views.length])).toEqual([['one', 1], ['empty', 0]])
+  })
+
+  it("carries the table's view types and whether it is a query", () => {
+    const [one, two] = groupTables([table('one', { types: ['grid', 'matrix'] }), table('two', { query: true })], [])
+
+    expect([one.types, one.query]).toEqual([['grid', 'matrix'], undefined])
+    expect([two.types, two.query]).toEqual([['grid'], true])
   })
 
   it('keeps two tables with one label as two entries', () => {
@@ -51,5 +58,26 @@ describe('the tables', () => {
     expect(tableOf(tables, 'c')?.key).toBe('c')
     expect(tableOf(tables, 'gone')).toBeUndefined()
     expect(tableOf(tables, undefined)).toBeUndefined()
+  })
+})
+
+describe('the sections', () => {
+  const tables = groupTables([table('one'), table('two'), table('three'), table('four')], [view('a', 'four'), view('b', 'one')])
+  const shape = (sections: ReturnType<typeof sectionsOf>) => sections.map((s) => [s.label, s.tables.map((t) => t.key)])
+
+  it('holds the served sections in their order, each with its sources in theirs, the rest unlabelled last', () => {
+    const sections = sectionsOf(tables, [{ label: 'Later', sources: ['three', 'one'] }, { label: 'First', sources: ['two'] }])
+
+    expect(shape(sections)).toEqual([['Later', ['three', 'one']], ['First', ['two']], [null, ['four']]])
+  })
+
+  it('is one unlabelled section when the domain declares none', () => {
+    expect(shape(sectionsOf(tables))).toEqual([[null, ['one', 'two', 'three', 'four']]])
+  })
+
+  it('drops a source it does not know and a section left empty, and adds no empty last section', () => {
+    const sections = sectionsOf(tables, [{ label: 'Gone', sources: ['missing'] }, { label: 'All', sources: ['one', 'two', 'three', 'four'] }])
+
+    expect(shape(sections)).toEqual([['All', ['one', 'two', 'three', 'four']]])
   })
 })

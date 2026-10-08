@@ -17,7 +17,7 @@ describe('filterFields', () => {
     expect(Object.keys(fields)).toEqual(['kind', 'status', 'location', 'settled_by', 'paid'])
     expect(fields.status.options).toEqual([['confirmed', 'Bevestigd'], ['option', 'Optie'], ['cancelled', 'Geannuleerd']])
     expect(fields.location).toMatchObject({ label: 'Locatie', options: [['9', 'Bijloke, Gent'], ['12', 'Le Grenier, Calais']] })
-    expect(fields.paid.options).toEqual([['1', 'Yes'], ['', 'No']])
+    expect(fields.paid.options).toEqual([['1', 'Ja'], ['', 'Nee']])
   })
 })
 

@@ -1,8 +1,46 @@
-import { defineDataset } from '@worktable/engine'
+import { defineDataset, type GroupFact } from '@worktable/engine'
+
+// A day band's facts on the planning sources.
+export const dagFacts: GroupFact[] = [
+  { kind: 'first', column: 'start_at', where: { soort: 'voorstelling' }, label: 'voorstelling' },
+  { kind: 'empty', column: 'start_at', label: 'zonder tijd' },
+]
+
+export const soorten = {
+  options: {
+    voorstelling: 'Voorstelling',
+    repetitie: 'Repetitie',
+    opbouw: 'Opbouw',
+    afbouw: 'Afbouw',
+    reis: 'Reis',
+    overnachting: 'Overnachting',
+    maaltijd: 'Maaltijd',
+    vergadering: 'Vergadering',
+    andere: 'Andere',
+  },
+  tones: {
+    voorstelling: 'rose',
+    repetitie: 'violet',
+    opbouw: 'amber',
+    afbouw: 'amber',
+    reis: 'sky',
+    overnachting: 'slate',
+    maaltijd: 'green',
+    vergadering: 'teal',
+    andere: 'grey',
+  },
+} as const
+
+const statussen = {
+  options: { optie: 'Optie', bevestigd: 'Bevestigd', geannuleerd: 'Geannuleerd' },
+  tones: { optie: 'warn', bevestigd: 'ok', geannuleerd: 'bad' },
+} as const
 
 export const organisatie = defineDataset({
   name: 'organisatie',
   label: 'Organisaties',
+  new_label: 'Nieuwe organisatie',
+  icon: 'pin',
   title: 'naam',
   custom: true,
   columns: {
@@ -31,6 +69,8 @@ export const organisatie = defineDataset({
 export const productie = defineDataset({
   name: 'productie',
   label: 'Producties',
+  new_label: 'Nieuwe productie',
+  icon: 'tag',
   title: 'titel',
   custom: true,
   columns: {
@@ -51,27 +91,17 @@ export const productie = defineDataset({
 export const activiteit = defineDataset({
   name: 'activiteit',
   label: 'Activiteiten',
+  new_label: 'Nieuwe activiteit',
+  icon: 'calendar',
   title: 'omschrijving',
   date: 'plandag',
   custom: true,
+  scoped: 'productie_id',
+  group_facts: dagFacts,
   columns: {
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
     speelreeks_id: { type: 'integer', label: 'Speelreeks', nullable: true, relation: 'speelreeks' },
-    soort: {
-      type: 'text',
-      label: 'Soort',
-      options: {
-        voorstelling: 'Voorstelling',
-        repetitie: 'Repetitie',
-        opbouw: 'Opbouw',
-        afbouw: 'Afbouw',
-        reis: 'Reis',
-        overnachting: 'Overnachting',
-        maaltijd: 'Maaltijd',
-        vergadering: 'Vergadering',
-        andere: 'Andere',
-      },
-    },
+    soort: { type: 'text', label: 'Soort', ...soorten },
     omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
     datum: { type: 'date', label: 'Datum' },
     start_at: { type: 'datetime', label: 'Start', nullable: true },
@@ -83,7 +113,7 @@ export const activiteit = defineDataset({
       type: 'text',
       label: 'Status',
       default: 'optie',
-      options: { optie: 'Optie', bevestigd: 'Bevestigd', geannuleerd: 'Geannuleerd' },
+      ...statussen,
     },
     verrekening_default: { type: 'text', label: 'Verrekening', nullable: true },
     bron: { type: 'text', label: 'Bron', default: 'plan', options: { plan: 'Plan', registratie: 'Registratie' } },
@@ -96,6 +126,8 @@ export const activiteit = defineDataset({
 export const persoon = defineDataset({
   name: 'persoon',
   label: 'Personen',
+  new_label: 'Nieuwe persoon',
+  icon: 'user',
   title: 'weergavenaam',
   custom: true,
   owners: { owner: 'id' },
@@ -121,6 +153,8 @@ export const persoon = defineDataset({
 export const toewijzing = defineDataset({
   name: 'toewijzing',
   label: 'Toewijzingen',
+  new_label: 'Nieuwe toewijzing',
+  icon: 'users',
   title: { via: 'persoon_id', else: 'naam' },
   custom: true,
   owners: { owner: 'persoon_id' },
@@ -150,6 +184,7 @@ export const toewijzing = defineDataset({
         geweigerd: 'Geweigerd',
         geannuleerd: 'Geannuleerd',
       },
+      tones: { uitgenodigd: 'warn', bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' },
     },
     notitie: { type: 'text', label: 'Notitie', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
@@ -160,6 +195,8 @@ export const toewijzing = defineDataset({
 export const beschikbaarheid = defineDataset({
   name: 'beschikbaarheid',
   label: 'Beschikbaarheden',
+  new_label: 'Nieuwe beschikbaarheid',
+  icon: 'clock',
   title: { via: 'persoon_id', else: 'reden' },
   date: 'start_at',
   custom: true,
@@ -176,6 +213,8 @@ export const beschikbaarheid = defineDataset({
 export const rol = defineDataset({
   name: 'rol',
   label: 'Rollen',
+  new_label: 'Nieuwe rol',
+  icon: 'check',
   title: 'naam',
   custom: true,
   config: true,
@@ -196,8 +235,11 @@ export const rol = defineDataset({
 export const speelreeks = defineDataset({
   name: 'speelreeks',
   label: 'Speelreeksen',
+  new_label: 'Nieuwe speelreeks',
+  icon: 'film',
   title: 'naam',
   custom: true,
+  scoped: 'productie_id',
   columns: {
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
     naam: { type: 'text', label: 'Naam' },
@@ -208,7 +250,7 @@ export const speelreeks = defineDataset({
       type: 'text',
       label: 'Status',
       default: 'optie',
-      options: { optie: 'Optie', bevestigd: 'Bevestigd', geannuleerd: 'Geannuleerd' },
+      ...statussen,
     },
   },
 })
@@ -216,6 +258,8 @@ export const speelreeks = defineDataset({
 export const sjabloon = defineDataset({
   name: 'sjabloon',
   label: 'Sjablonen',
+  new_label: 'Nieuw sjabloon',
+  icon: 'list',
   title: 'naam',
   custom: true,
   config: true,
