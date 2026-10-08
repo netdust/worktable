@@ -238,13 +238,13 @@ describe('the tree', () => {
     const keys = within(foot).getByText('Sneltoetsen').closest('details')
     expect(keys?.open).toBe(false)
     const looks = foot.querySelector('.nv-rail__looks')
-    expect(looks && within(looks as HTMLElement).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Thema', 'Dichtheid'])
+    expect(looks && within(looks as HTMLElement).getAllByRole('radiogroup').map((g) => g.getAttribute('aria-label'))).toEqual(['Thema', 'Dichtheid'])
 
     for (const hint of ['bewegen', 'bewerken', 'annuleren', 'Ongedaan maken', 'zoeken en springen']) expect(within(foot).getByText(hint)).toBeTruthy()
     for (const key of ['Esc', '⌘Z', '⌘K']) expect(within(foot).getByText(key)).toBeTruthy()
 
-    const theme = within(foot).getByRole('group', { name: 'Thema' })
-    fireEvent.click(within(theme).getByRole('tab', { name: 'Donker' }))
+    const theme = within(foot).getByRole('radiogroup', { name: 'Thema' })
+    fireEvent.click(within(theme).getByRole('radio', { name: 'Donker' }))
     expect(root.dataset.theme).toBe('dark')
   })
 })

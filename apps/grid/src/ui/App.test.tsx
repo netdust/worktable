@@ -273,10 +273,10 @@ describe('the density setting', () => {
     const root = Object.assign(document.createElement('div'), { id: 'root' })
     document.body.append(root)
     await shell()
-    const density = () => within(within(rail()).getByRole('contentinfo')).getByRole('group', { name: 'Dichtheid' })
+    const density = () => within(within(rail()).getByRole('contentinfo')).getByRole('radiogroup', { name: 'Dichtheid' })
 
     expect(root.dataset.density).toBe('normal')
-    fireEvent.click(within(density()).getByRole('tab', { name: 'Compact' }))
+    fireEvent.click(within(density()).getByRole('radio', { name: 'Compact' }))
     expect(root.dataset.density).toBe('compact')
 
     cleanup()
@@ -284,7 +284,7 @@ describe('the density setting', () => {
     await shell()
 
     expect(root.dataset.density).toBe('compact')
-    expect(within(density()).getByRole('tab', { name: 'Compact' }).getAttribute('aria-selected')).toBe('true')
+    expect(within(density()).getByRole('radio', { name: 'Compact' }).getAttribute('aria-checked')).toBe('true')
   })
 })
 

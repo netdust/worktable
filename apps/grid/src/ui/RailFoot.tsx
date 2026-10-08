@@ -1,7 +1,7 @@
-import { Kbd, SegmentedControl } from '@sakaniui/react'
 import { Fragment, useEffect, useState } from 'react'
+import { Keyboard } from 'react-aria-components'
 import { t } from '../i18n'
-import { ThemeToggle } from './Theme'
+import { Segmented, ThemeToggle } from './Theme'
 
 export interface Signed {
   email: string
@@ -37,13 +37,8 @@ function DensityToggle() {
   }, [density])
 
   return (
-    <div className="nv-theme" role="group" aria-label={t('density')}>
-      <SegmentedControl
-        options={DENSITIES.map((value) => ({ value, label: t(DENSITY_WORD[value]) }))}
-        value={density}
-        onChange={(value) => setDensity(value as Density)}
-      />
-    </div>
+    <Segmented label={t('density')} value={density} onChange={setDensity}
+      options={DENSITIES.map((value) => ({ value, label: t(DENSITY_WORD[value]) }))} />
   )
 }
 
@@ -58,7 +53,7 @@ export function RailFoot({ signed }: { signed?: Signed }) {
         <dl className="nv-keys__list">
           {KEYS.map(([key, word]) => (
             <Fragment key={key}>
-              <dt><Kbd>{key}</Kbd></dt>
+              <dt><Keyboard className="nv-kbd">{key}</Keyboard></dt>
               <dd>{t(word)}</dd>
             </Fragment>
           ))}

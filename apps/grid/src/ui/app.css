@@ -463,12 +463,12 @@
   gap: 4px;
 }
 
-#root .nv-rail__looks .nv-theme > * {
+#root .nv-rail__looks .nv-theme {
   gap: 0;
   padding: 2px;
 }
 
-#root .nv-rail__looks .nv-theme [role="tab"] {
+#root .nv-rail__looks .nv-theme__option {
   padding: 2px 3px;
   font-size: 10.5px;
 }
@@ -497,11 +497,62 @@
   margin: 0;
 }
 
-#root .nv-theme [role="tab"] {
+/* A few choices side by side: the chosen one lifts off the track. */
+.nv-theme {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+  font-family: var(--font-sans);
+}
+
+#root .nv-theme__option {
   flex: none;
   min-width: 0;
   padding: 3px 4px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-fg-muted);
+  font: inherit;
   font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#root .nv-theme__option[data-hovered],
+#root .nv-theme__option[data-selected] {
+  color: var(--color-fg-default);
+}
+
+#root .nv-theme__option[data-selected] {
+  background: var(--color-bg-surface);
+  box-shadow: 0 1px 3px 0 rgba(16, 15, 12, 0.1), 0 1px 2px 0 rgba(16, 15, 12, 0.06);
+}
+
+#root .nv-theme__option[data-focus-visible] {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-border-focus);
+}
+
+.nv-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  box-shadow: 0 1px 0 var(--color-border-strong);
+  color: var(--color-fg-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
 }
 
 /* After a change: what happened and the way back, over the sheet's foot. */
@@ -617,6 +668,66 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Loading: a ring that turns; the small one sits inside a field. */
+.nv-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: nv-spin 0.75s linear infinite;
+}
+
+.nv-spinner--sm {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes nv-spin {
+  to { transform: rotate(360deg); }
+}
+
+.nv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 24px;
+  text-align: center;
+}
+
+.nv-empty__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-muted);
+}
+
+.nv-empty__title {
+  margin: 0;
+  color: var(--color-fg-default);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.nv-empty__desc {
+  max-width: 268px;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .nv-center {
@@ -793,13 +904,48 @@
 }
 
 /* The placeholder must read whole beside the ⌘K hint. */
-#root .nv-search input {
-  font-size: 13px;
+#root .nv-search__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
 }
 
-#root .nv-search [class*="_input--sm"] {
-  min-height: 0;
-  padding: 3px 8px;
+#root .nv-search__field:focus-within {
+  border-color: var(--color-border-strong);
+  border-width: 1.5px;
+}
+
+#root .nv-search__field > svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+#root .nv-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+#root .nv-search input:focus-visible {
+  box-shadow: none;
+}
+
+#root .nv-search input::placeholder {
+  color: var(--color-fg-subtle);
+  font-weight: 400;
 }
 
 .nv-toolbar__end > :not(.nv-search):not(.nv-save) {
@@ -1000,6 +1146,103 @@
   color: var(--color-fg-muted);
   font: inherit;
   cursor: pointer;
+}
+
+/* A panel under a bar button: over the page, not in the way of it. */
+.nv-bar__panel {
+  z-index: 50;
+  box-sizing: border-box;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: 0 12px 16px -4px rgba(16, 15, 12, 0.08), 0 4px 6px -2px rgba(16, 15, 12, 0.03);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-fg-default);
+}
+
+.nv-bar__panel[data-entering] {
+  animation: nv-panel-in 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.nv-bar__panel[data-exiting] {
+  animation: nv-panel-out 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes nv-panel-in {
+  from { opacity: 0; translate: 0 -4px; scale: 0.98; }
+}
+
+@keyframes nv-panel-out {
+  to { opacity: 0; translate: 0 -4px; scale: 0.98; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-bar__panel[data-entering],
+  .nv-bar__panel[data-exiting] {
+    animation-duration: 1ms;
+  }
+}
+
+.nv-bar__dialog {
+  outline: none;
+}
+
+.nv-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-fg-muted);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nv-check__box {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-on-accent);
+}
+
+.nv-check__box svg {
+  opacity: 0;
+}
+
+.nv-check[data-hovered] .nv-check__box {
+  border-color: var(--color-border-strong);
+}
+
+.nv-check[data-selected] .nv-check__box {
+  border-color: var(--color-accent-default);
+  background: var(--color-accent-default);
+}
+
+.nv-check[data-selected] .nv-check__box svg {
+  opacity: 1;
+}
+
+.nv-check[data-focus-visible] .nv-check__box {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-border-focus);
+}
+
+.nv-check[data-disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .nv-bar__columns {

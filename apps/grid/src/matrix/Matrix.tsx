@@ -1,4 +1,3 @@
-import { EmptyState } from '@sakaniui/react'
 import { type ClipboardEvent, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
@@ -13,6 +12,7 @@ import { ColumnPicker } from './ColumnPicker'
 import { buildColumns, cellFor, loadPicked, markFor, savePicked, visibleColumns } from './columns'
 import { actionForKey, cycle } from './keys'
 import { Panel } from './Panel'
+import { EmptyState } from '../ui/EmptyState'
 import type { MatrixStore } from './store'
 
 export interface MatrixProps {
@@ -384,8 +384,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
       </div>
       {picking && <ColumnPicker model={models[join.model]?.fields[join.column_field]?.relation?.model ?? ''} taken={everyColumn.flatMap((c) => (c.id ? [c.id] : []))} onPick={pick}
         columns={everyColumn} hidden={layout.hidden} onToggle={toggle} />}
-      {windowRows.length === 0 ? <div className="nv-center"><EmptyState type="no-data" title={emptyTitle} description={emptyHint ?? ''} /></div>
-        : rows.length === 0 ? <div className="nv-center"><EmptyState type="no-data" title={t('noRowsMatch')} description="" /></div> : (
+      {windowRows.length === 0 ? <div className="nv-center"><EmptyState title={emptyTitle} description={emptyHint ?? ''} /></div>
+        : rows.length === 0 ? <div className="nv-center"><EmptyState title={t('noRowsMatch')} description="" /></div> : (
       <div className="nv-body" ref={bodyRef} onMouseDownCapture={onSecondClick} onClickCapture={onSecondClick}>
         <div className="nv-scroll nv-mx__scroll">
           <table ref={tableRef} role="grid" aria-label={title ?? view.label} aria-readonly={editable ? undefined : true} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}

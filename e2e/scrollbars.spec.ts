@@ -33,9 +33,9 @@ test('minimal-scrollbars @e2e', async ({ page }) => {
   const hovered = await page.screenshot({ clip: thumb, animations: 'disabled' })
   expect(hovered.equals(quiet), 'the thumb changes under the pointer').toBe(false)
 
-  const theme = page.getByRole('group', { name: 'Thema' })
+  const theme = page.getByRole('radiogroup', { name: 'Thema' })
   try {
-    await theme.getByRole('tab', { name: 'Donker' }).click()
+    await theme.getByRole('radio', { name: 'Donker' }).click()
     await expect(page.locator('#root')).toHaveAttribute('data-theme', 'dark')
     const dark = await look()
     console.log('dark', JSON.stringify(dark))
@@ -43,7 +43,7 @@ test('minimal-scrollbars @e2e', async ({ page }) => {
     expect(dark.colour).not.toBe(light.colour)
     await shot(page, 'scrollbars-dark')
   } finally {
-    await theme.getByRole('tab', { name: 'Licht' }).click()
+    await theme.getByRole('radio', { name: 'Licht' }).click()
     await expect(page.locator('#root')).not.toHaveAttribute('data-theme', 'dark')
   }
 })

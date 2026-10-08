@@ -41,6 +41,7 @@ const strings = {
   row: '1 rij',
   dismiss: 'Negeren',
   columns: 'Kolommen',
+  loading: 'Laden',
   moveLeft: 'Naar links',
   moveRight: 'Naar rechts',
   remove: 'Wissen',

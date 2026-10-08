@@ -1,5 +1,5 @@
-import { Kbd } from '@sakaniui/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Keyboard } from 'react-aria-components'
 import { t } from '../i18n'
 import type { StoreState } from '../grid/store'
 
@@ -81,7 +81,7 @@ export function Toast({ state, onUndo, onRedo, notice }: Props) {
     <div className="nv-toast" role="status" aria-label={t('changed')}>
       <span>{t('changed')}</span>
       {state.canUndo && <button type="button" onClick={onUndo}>{t('undo')}</button>}
-      {state.canUndo && <Kbd>⌘Z</Kbd>}
+      {state.canUndo && <Keyboard className="nv-kbd">⌘Z</Keyboard>}
       {state.canRedo && <button type="button" onClick={onRedo}>{t('redo')}</button>}
     </div>
   )

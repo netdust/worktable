@@ -1,9 +1,9 @@
-import { Spinner } from '@sakaniui/react'
 import { Undo2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { locale, type StringKey, t } from '../i18n'
 import type { ApiError, Field, HistoryEntry } from '../types'
 import { SidePanel } from './SidePanel'
+import { Spinner } from './Spinner'
 
 interface Props {
   load: () => Promise<HistoryEntry[]>

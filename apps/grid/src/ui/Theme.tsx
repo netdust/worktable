@@ -1,5 +1,5 @@
-import { SegmentedControl } from '@sakaniui/react'
 import { useEffect, useState } from 'react'
+import { ToggleButton, ToggleButtonGroup } from 'react-aria-components'
 import { t } from '../i18n'
 
 type Theme = 'auto' | 'light' | 'dark'
@@ -15,6 +15,23 @@ function stored(): Theme {
   } catch {
     return 'auto'
   }
+}
+
+/** One choice of a few, shown side by side. */
+export function Segmented<T extends string>({ label, value, options, onChange }: {
+  label: string
+  value: T
+  options: { value: T; label: string }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <ToggleButtonGroup className="nv-theme" aria-label={label} selectionMode="single" disallowEmptySelection
+      selectedKeys={[value]} onSelectionChange={([key]) => key !== undefined && onChange(key as T)}>
+      {options.map((option) => (
+        <ToggleButton key={option.value} id={option.value} className="nv-theme__option">{option.label}</ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  )
 }
 
 /** One viewer's choice, kept in this browser; `auto` follows the system. */
@@ -33,12 +50,7 @@ export function ThemeToggle() {
   }, [theme])
 
   return (
-    <div className="nv-theme" role="group" aria-label={t('theme')}>
-      <SegmentedControl
-        options={THEMES.map((value) => ({ value, label: t(WORD[value]) }))}
-        value={theme}
-        onChange={(value) => setTheme(value as Theme)}
-      />
-    </div>
+    <Segmented label={t('theme')} value={theme} onChange={setTheme}
+      options={THEMES.map((value) => ({ value, label: t(WORD[value]) }))} />
   )
 }

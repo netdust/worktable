@@ -1,6 +1,6 @@
-import { Input, Kbd } from '@sakaniui/react'
 import { Search as Glass } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { Input, Keyboard, SearchField } from 'react-aria-components'
 import { t } from '../i18n'
 import type { Table } from './tables'
 
@@ -44,20 +44,11 @@ export function Search({ query, onQuery, tables, onJump }: Props) {
 
   return (
     <div className="nv-search">
-      <Input
-        ref={input}
-        type="search"
-        size="sm"
-        aria-label={t('search')}
-        placeholder={t('search')}
-        value={query}
-        onChange={(event) => onQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') onQuery('')
-        }}
-        leadingIcon={<Glass size={14} />}
-        trailingIcon={<Kbd>⌘K</Kbd>}
-      />
+      <SearchField className="nv-search__field" aria-label={t('search')} value={query} onChange={onQuery}>
+        <Glass size={14} aria-hidden="true" />
+        <Input ref={input} placeholder={t('search')} />
+        <Keyboard className="nv-kbd">⌘K</Keyboard>
+      </SearchField>
       {matches.length > 0 && (
         <div className="nv-pop nv-search__views">
           {matches.map((match) => (

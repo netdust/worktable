@@ -61,4 +61,25 @@ describe('the search', () => {
     expect(options()).toEqual(['Naar Planning · <img src=x onerror=alert(1)>'])
     expect(container.querySelector('img')).toBeNull()
   })
+
+  it('reports what is typed, and Escape clears it', () => {
+    const onQuery = vi.fn()
+    render(<Search query="mat" onQuery={onQuery} tables={tables} onJump={() => undefined} />)
+    const field = screen.getByRole('searchbox', { name: 'Zoeken' })
+
+    fireEvent.change(field, { target: { value: 'matr' } })
+    expect(onQuery).toHaveBeenLastCalledWith('matr')
+
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(onQuery).toHaveBeenLastCalledWith('')
+  })
+
+  it('takes focus on Ctrl+K and shows the hint', () => {
+    render(<Search query="" onQuery={() => undefined} tables={tables} onJump={() => undefined} />)
+
+    fireEvent.keyDown(document.body, { key: 'k', ctrlKey: true })
+
+    expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Zoeken' }))
+    expect(screen.getByText('⌘K').tagName).toBe('KBD')
+  })
 })

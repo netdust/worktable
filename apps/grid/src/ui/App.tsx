@@ -1,4 +1,5 @@
-import { EmptyState, Spinner } from '@sakaniui/react'
+import { EmptyState } from './EmptyState'
+import { Spinner } from './Spinner'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { awayRows, create as createRow, history as readHistory, me, publishView, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
@@ -423,7 +424,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     return (
       <div className="nv-app" ref={frame}>
         <div className="nv-center">
-          {unserved ? <EmptyState type="no-data" title={t('noViews')} description={errorText(unserved.code, unserved.message)} /> : <Spinner />}
+          {unserved ? <EmptyState title={t('noViews')} description={errorText(unserved.code, unserved.message)} /> : <Spinner />}
         </div>
       </div>
     )
@@ -503,11 +504,11 @@ function createBlocked(target: Model, made: NewRow | null, writable: boolean): s
 }
 
 function Sheet({ hasView, result }: { hasView: boolean; result: Rows }) {
-  if (!hasView) return <div className="nv-center"><EmptyState type="no-data" title={t('noViews')} description={t('noViewsHint')} /></div>
+  if (!hasView) return <div className="nv-center"><EmptyState title={t('noViews')} description={t('noViewsHint')} /></div>
   if (result.status === 'loading') return <div className="nv-center"><Spinner /></div>
   return (
     <div className="nv-center">
-      <EmptyState type="no-data" title={t('noRows')} description={result.status === 'error' ? errorText(result.error.code, result.error.message) : ''} />
+      <EmptyState title={t('noRows')} description={result.status === 'error' ? errorText(result.error.code, result.error.message) : ''} />
     </div>
   )
 }

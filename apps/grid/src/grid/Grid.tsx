@@ -1,4 +1,3 @@
-import { EmptyState } from '@sakaniui/react'
 import { Button } from 'react-aria-components'
 import { type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
@@ -13,6 +12,7 @@ import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
 import { GridBar } from './GridBar'
 import { type BodyActions, GridBody } from './GridBody'
+import { EmptyState } from '../ui/EmptyState'
 import { GridFoot } from './GridFoot'
 import { GridHeader, NUMBER_WIDTH } from './GridHeader'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
@@ -316,7 +316,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
       {state.rows.length === 0 ? (
       <div className="nv-center">
-        <EmptyState type="no-data" title={emptyTitle} description={emptyHint ?? ''} />
+        <EmptyState title={emptyTitle} description={emptyHint ?? ''} />
       </div>
       ) : (
       <div className="nv-body">

@@ -1,10 +1,10 @@
-import { Spinner } from '@sakaniui/react'
 import { type FocusEvent, type KeyboardEvent, type Key, type MouseEvent, type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ComboBox, ComboBoxStateContext, Group, Input, ListBox, ListBoxItem } from 'react-aria-components'
 import { records } from '../../api'
 import { t } from '../../i18n'
 import type { Row } from '../../types'
 import { Pop } from '../../ui/Pop'
+import { Spinner } from '../../ui/Spinner'
 
 export const PICKER_CAP = 50
 const DEBOUNCE = 150
@@ -148,7 +148,7 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
             <ListBox<Row> className="nv-picker__list">
               {(row) => <ListBoxItem id={row.id} textValue={row.title} className="nv-pop__option">{row.title}</ListBoxItem>}
             </ListBox>
-            {found.status === 'loading' && <Spinner size="sm" />}
+            {found.status === 'loading' && <Spinner small />}
             {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
             {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults', { n: found.total - found.rows.length })}</p>}
           </div>
