@@ -667,6 +667,90 @@ describe('the to-one picker', () => {
   })
 })
 
+describe('long text and bool', () => {
+  const view = { ...planning, columns: [...planning.columns!, 'notes', 'paid'] }
+  const notes = () => screen.queryByRole('textbox', { name: 'Notities' }) as HTMLTextAreaElement | null
+  const press = async (key: string, mods: object = {}) => {
+    await act(async () => {
+      const target = document.activeElement as HTMLElement
+      type(target, key, mods)
+      fireEvent.keyUp(target, { key, ...mods })
+    })
+  }
+  function open(column: string, key?: string) {
+    renderGrid(calais, { view })
+    api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: 'b1' }))
+    const at = cell('Montage', column)
+    fireEvent.click(at)
+    if (key) type(at, key)
+    return at
+  }
+
+  it('Enter is a new line, Ctrl+Enter commits once', async () => {
+    open('notes', 'Enter')
+    expect(document.activeElement).toBe(notes())
+    fireEvent.change(notes()!, { target: { value: 'Twee veggie\nEén glutenvrij' } })
+    await press('Enter')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(notes()).not.toBeNull()
+    await press('Enter', { ctrlKey: true })
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { notes: 'Twee veggie\nEén glutenvrij' }, expect.objectContaining({ id: 102 }))
+    expect(notes()).toBeNull()
+  })
+
+  it('Escape writes nothing', async () => {
+    open('notes', 'Enter')
+    fireEvent.change(notes()!, { target: { value: 'weg' } })
+    await press('Escape')
+
+    expect(notes()).toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(cell('Montage', 'notes').textContent).toBe('')
+  })
+
+  it('↓ in the long text keeps the editor and writes nothing', async () => {
+    open('notes', 'x')
+    await press('ArrowDown')
+
+    expect(notes()).not.toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+  })
+
+  it('Tab in the long text commits once and moves right', async () => {
+    open('notes', 'Enter')
+    fireEvent.change(notes()!, { target: { value: 'klaar' } })
+    await press('Tab')
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { notes: 'klaar' }, expect.objectContaining({ id: 102 }))
+    expect(document.activeElement).toBe(cell('Montage', 'paid'))
+  })
+
+  it('Space flips the bool', async () => {
+    const paid = open('paid')
+    await press(' ')
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { paid: true }, expect.objectContaining({ id: 102 }))
+    expect((within(cell('Montage', 'paid')).getByRole('switch') as HTMLInputElement).checked).toBe(true)
+    expect(document.activeElement).toBe(paid)
+  })
+
+  it('a click on the switch flips it once', async () => {
+    renderGrid(calais, { view })
+    api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
+    await act(async () => {
+      fireEvent.click(within(cell('Montage', 'paid')).getByRole('switch'))
+    })
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { paid: true }, expect.objectContaining({ id: 102 }))
+  })
+})
+
 describe('the group bands', () => {
   const declared: View = {
     ...planning,

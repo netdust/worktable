@@ -1,4 +1,4 @@
-import { Switch } from '@sakaniui/react'
+import { Switch } from 'react-aria-components'
 import type { CellProps } from './props'
 
 interface Props extends CellProps {
@@ -9,13 +9,10 @@ interface Props extends CellProps {
 export function BoolCell({ column, row, onToggle }: Props) {
   return (
     <span className="nv-cell__bool">
-      <Switch
-        aria-label={column.label}
-        tabIndex={-1}
-        checked={Boolean(column.value(row))}
-        disabled={!column.editable}
-        onChange={onToggle}
-      />
+      <Switch aria-label={column.label} excludeFromTabOrder className="nv-switch" isSelected={Boolean(column.value(row))}
+        isReadOnly={!column.editable} onChange={onToggle}>
+        <span className="nv-switch__track"><span className="nv-switch__thumb" /></span>
+      </Switch>
       <span className="nv-cell__muted">{column.text(row)}</span>
     </span>
   )

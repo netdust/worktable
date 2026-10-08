@@ -768,7 +768,8 @@
 }
 
 .nv-select__anchor,
-.nv-links__anchor {
+.nv-links__anchor,
+.nv-longtext__anchor {
   position: absolute;
   inset: auto auto 0 0;
   width: 100%;
@@ -1443,6 +1444,102 @@
 .nv-cell__bool {
   display: inline-flex;
   align-items: center;
+}
+
+.nv-switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nv-switch[data-readonly] {
+  cursor: not-allowed;
+  opacity: var(--opacity-60);
+}
+
+.nv-switch__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-muted);
+  transition: background-color var(--transition-base);
+}
+
+.nv-switch[data-selected] .nv-switch__track {
+  background: var(--color-accent-default);
+}
+
+.nv-switch[data-focus-visible] .nv-switch__track {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-border-focus);
+}
+
+.nv-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-fast);
+}
+
+.nv-switch[data-selected] .nv-switch__thumb {
+  transform: translateX(16px);
+}
+
+.nv-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  font-family: var(--font-sans);
+}
+
+.nv-field__label {
+  color: var(--color-fg-default);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.nv-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 84px;
+  padding: var(--space-10) var(--space-14);
+  border: var(--border-width-100) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  resize: vertical;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.nv-textarea::placeholder {
+  color: var(--color-fg-subtle);
+}
+
+.nv-textarea[data-focused] {
+  border-width: var(--border-width-150);
+  border-color: var(--color-border-strong);
+  padding: calc(var(--space-10) - .5px) calc(var(--space-14) - .5px);
+  outline: none;
+}
+
+.nv-textarea[data-disabled] {
+  background: var(--color-bg-subtle);
+  border-color: var(--color-border-subtle);
+  cursor: not-allowed;
+  opacity: var(--opacity-60);
+  resize: none;
 }
 
 #root .nv-editor {

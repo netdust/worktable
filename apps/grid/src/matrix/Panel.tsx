@@ -1,5 +1,5 @@
-import { Textarea } from '@sakaniui/react'
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import { Label, TextArea, TextField } from 'react-aria-components'
 import { dayLabel } from '../grid/group'
 import { t } from '../i18n'
 import type { MatrixCell, MatrixColumn, Model, Row, View } from '../types'
@@ -61,11 +61,13 @@ function CellPanel({ view, models, row, column, away, store }: PanelProps & { co
       <Choices label={t('statusLabel')} options={choices} value={current} disabled={!store}
         onPick={(value) => void store?.set(row.id, column, value === '' ? null : value)} />
       {join.note_field && (
-        <Textarea className="nv-panel__note" label={t('noteLabel')} rows={4} value={draft} disabled={!store || !cell}
-          onChange={(event) => setDraft(event.target.value)}
+        <TextField className="nv-field" value={draft} isDisabled={!store || !cell} onChange={setDraft}
           onBlur={() => {
             if (draft !== note) void store?.setNote(row.id, column, draft)
-          }} />
+          }}>
+          <Label className="nv-field__label">{t('noteLabel')}</Label>
+          <TextArea className="nv-textarea nv-panel__note" rows={4} />
+        </TextField>
       )}
       {others.length > 0 && (
         <section className="nv-panel__section">

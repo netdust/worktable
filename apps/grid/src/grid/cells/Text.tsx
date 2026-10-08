@@ -1,5 +1,6 @@
-import { Textarea } from '@sakaniui/react'
-import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { type FocusEvent, type KeyboardEvent, useCallback, useEffect, useRef } from 'react'
+import { TextArea, TextField } from 'react-aria-components'
+import { Pop } from '../../ui/Pop'
 import type { CellProps, EditorProps } from './props'
 
 export function TextCell({ column, row }: CellProps) {
@@ -39,17 +40,16 @@ export function InputEditor({ column, editing, onDraft, onLeave, placeholder, in
 }
 
 /** Long text shows as one line in the sheet and opens in a textarea beside the cell: Enter is a new line there. */
-export function LongTextEditor({ column, editing, onDraft, onCommit, onLeave }: EditorProps) {
-  const area = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    const el = area.current
-    if (!el) return
-    el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
+export function LongTextEditor({ column, row, editing, onDraft, onCommit, onLeave }: EditorProps) {
+  const anchor = useRef<HTMLSpanElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+  // React Aria renders the popover's content a pass after the cell, so the textarea takes focus as it arrives.
+  const opening = useCallback((el: HTMLTextAreaElement | null) => {
+    el?.focus()
+    el?.setSelectionRange(el.value.length, el.value.length)
   }, [])
 
-  const keys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const keys = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault()
       event.stopPropagation()
@@ -59,17 +59,35 @@ export function LongTextEditor({ column, editing, onDraft, onCommit, onLeave }: 
     if (event.key === 'Enter' || event.key.startsWith('Arrow')) event.stopPropagation()
   }
 
+  // The popover's focus scope moves Tab focus from a capture listener on the document; the window hears Tab first.
+  useEffect(() => {
+    const tab = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Tab' || !root.current?.contains(event.target as Node)) return
+      event.preventDefault()
+      event.stopPropagation()
+      onCommit(editing.draft, event.shiftKey ? 'left' : 'right')
+    }
+    window.addEventListener('keydown', tab, true)
+    return () => window.removeEventListener('keydown', tab, true)
+  })
+
+  const blur = (event: FocusEvent) => {
+    const next = event.relatedTarget
+    if (next instanceof Element && next.closest('[data-editor]')) return
+    onLeave()
+  }
+
   return (
-    <div className="nv-pop nv-pop--text" data-editor>
-      <Textarea
-        ref={area}
-        aria-label={column.label}
-        rows={5}
-        value={editing.draft}
-        onChange={(event) => onDraft(event.target.value)}
-        onKeyDown={keys}
-        onBlur={onLeave}
-      />
-    </div>
+    <>
+      <TextCell column={column} row={row} />
+      <span ref={anchor} className="nv-longtext__anchor" />
+      <Pop triggerRef={anchor} isOpen placement="bottom start" className="nv-pop--text">
+        <div ref={root} data-editor onKeyDown={keys} onBlur={blur}>
+          <TextField aria-label={column.label} value={editing.draft} onChange={onDraft}>
+            <TextArea ref={opening} className="nv-textarea" rows={5} />
+          </TextField>
+        </div>
+      </Pop>
+    </>
   )
 }
