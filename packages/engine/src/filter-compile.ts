@@ -1,4 +1,20 @@
-export type Operator = '$eq' | '$ne' | '$in' | '$nin' | '$gt' | '$gte' | '$lt' | '$lte' | '$exists' | '$contains'
+export type Operator =
+  | '$eq'
+  | '$ne'
+  | '$in'
+  | '$nin'
+  | '$gt'
+  | '$gte'
+  | '$lt'
+  | '$lte'
+  | '$exists'
+  | '$contains'
+  | '$like'
+  | '$nlike'
+  | '$period'
+
+export const PERIODS = ['week', 'next_week', 'month'] as const
+export type Period = (typeof PERIODS)[number]
 
 /** Max number of values in a `$contains` array — bounds the EXISTS subquery fan-out (DoS guard). */
 const CONTAINS_MAX_VALUES = 100
@@ -29,7 +45,21 @@ export class FilterCompileError extends Error {
   }
 }
 
-const OPERATORS = new Set<Operator>(['$eq', '$ne', '$in', '$nin', '$gt', '$gte', '$lt', '$lte', '$exists', '$contains'])
+const OPERATORS = new Set<Operator>([
+  '$eq',
+  '$ne',
+  '$in',
+  '$nin',
+  '$gt',
+  '$gte',
+  '$lt',
+  '$lte',
+  '$exists',
+  '$contains',
+  '$like',
+  '$nlike',
+  '$period',
+])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -62,6 +92,12 @@ export function filterCompile(input: FilterInput): FilterAST {
       }
       if (op === '$exists' && typeof value !== 'boolean') {
         throw new FilterCompileError(`$exists requires a boolean for key "${key}"`)
+      }
+      if ((op === '$like' || op === '$nlike') && typeof value !== 'string') {
+        throw new FilterCompileError(`${op} requires a string for key "${key}"`)
+      }
+      if (op === '$period' && !PERIODS.includes(value as Period)) {
+        throw new FilterCompileError(`$period takes ${PERIODS.join(', ')} for key "${key}"`)
       }
       if (op === '$contains') {
         const values = Array.isArray(value) ? value : [value]

@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { DatasetDecl, FilterInput } from '../src'
 import { filterCompile, tableOf } from '../src'
-import { compileFilter } from '../src/filter'
+import { compileFilter, filterWhere } from '../src/filter'
 import { domain, freshDb } from './fixture'
 
 const taak = domain.datasets.find((d) => d.name === 'taak') as DatasetDecl
@@ -58,5 +58,61 @@ describe('compileFilter', () => {
   })
   test('an empty filter matches everything', () => {
     expect(ids({})).toEqual([1, 2, 3, 4])
+  })
+})
+
+describe('$period resolves against the injected now', () => {
+  const sqlite = freshDb()
+  const dated = drizzle(sqlite)
+  const days = [
+    '2026-11-30',
+    '2026-12-01',
+    '2026-12-27',
+    '2026-12-28',
+    '2026-12-31',
+    '2027-01-03',
+    '2027-01-04',
+    '2027-01-10',
+    '2027-01-11',
+    '2028-01-31',
+    '2028-02-01',
+    '2028-02-29',
+    '2028-03-01',
+  ]
+  sqlite.run('DELETE FROM taak')
+  for (const day of days)
+    sqlite.run("INSERT INTO taak (project_id, description, status, start_at, day) VALUES (1, 'x', 'open', ?, ?)", [
+      `${day}T23:30`,
+      day,
+    ])
+
+  const within = (key: 'day' | 'start_at', period: string, now: Date): string[] =>
+    dated
+      .select({ day: (table as unknown as { day: SQLiteColumn }).day })
+      .from(table)
+      .where(filterWhere({ [key]: { $period: period } }, taak, table, now))
+      .all()
+      .map((r: { day: string }) => r.day)
+      .sort()
+
+  const newYearsEve = new Date(2026, 11, 31, 12)
+
+  test('week is Monday to Sunday around now', () => {
+    expect(within('day', 'week', newYearsEve)).toEqual(['2026-12-28', '2026-12-31', '2027-01-03'])
+  })
+  test('next_week is the following Monday to Sunday', () => {
+    expect(within('day', 'next_week', newYearsEve)).toEqual(['2027-01-04', '2027-01-10'])
+  })
+  test('month is the calendar month', () => {
+    expect(within('day', 'month', newYearsEve)).toEqual(['2026-12-01', '2026-12-27', '2026-12-28', '2026-12-31'])
+  })
+  test('February 2028 ends on the 29th', () => {
+    expect(within('day', 'month', new Date(2028, 1, 10, 12))).toEqual(['2028-02-01', '2028-02-29'])
+  })
+  test('a datetime column compares on its date part', () => {
+    expect(within('start_at', 'week', newYearsEve)).toEqual(['2026-12-28', '2026-12-31', '2027-01-03'])
+  })
+  test('a Sunday belongs to the week that ends on it', () => {
+    expect(within('day', 'week', new Date(2027, 0, 3, 23, 59))).toEqual(['2026-12-28', '2026-12-31', '2027-01-03'])
   })
 })

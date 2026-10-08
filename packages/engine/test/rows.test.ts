@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { type Domain, defineDataset, migrate, seedDomain } from '../src'
-import { domain, freshDb } from './fixture'
+import { domain, freshDb, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
 let sqlite: Database
@@ -45,6 +45,70 @@ const badFilter = (filter: unknown) =>
     400,
     'bad_filter',
   )
+
+describe('$like, $nlike and $period', () => {
+  const tekst = async (filter: unknown): Promise<string[]> => {
+    const { status, body } = await filtered('note', filter)
+    expect(status).toBe(200)
+    return body.rows.map((r: { tekst: string }) => r.tekst).sort()
+  }
+  const addNotes = (...texts: string[]) => {
+    for (const t of texts) sqlite.run('INSERT INTO note (project_id, tekst, lengte) VALUES (1, ?, 0)', [t])
+  }
+  const postView = (filters: unknown) =>
+    send(app, cookie)('POST', '/api/views', { body: JSON.stringify({ name: 'Deze week', source: 'taak', filters }) })
+
+  test('$like is a case-insensitive substring', async () => {
+    addNotes('Grote zaal', 'Kleine kamer')
+    expect(await tekst({ tekst: { $like: 'zaal' } })).toEqual(['Grote zaal'])
+    expect(await tekst({ tekst: { $like: 'ZAAL' } })).toEqual(['Grote zaal'])
+  })
+
+  test('$like with 50%_\\ matches only the literal text (threat 1)', async () => {
+    addNotes('50abc', '50abc\\', 'tot 50%_\\ korting')
+    expect(await tekst({ tekst: { $like: '50%_\\' } })).toEqual(['tot 50%_\\ korting'])
+  })
+
+  test('$nlike leaves out what contains the text', async () => {
+    addNotes('Grote zaal')
+    expect(await tekst({ tekst: { $nlike: 'zaal' } })).toEqual(['eerste'])
+  })
+
+  const onText = 'only supported on text columns'
+  const onDate = 'only supported on date or datetime columns'
+  const tokens = '$period takes week, next_week, month'
+  test.each([
+    ['$like on an integer column', { prio: { $like: '1' } }, onText],
+    ['$like on a date column', { day: { $like: '2026' } }, onText],
+    ['$nlike on an integer column', { prio: { $nlike: '1' } }, onText],
+    ['$like with a number', { description: { $like: 5 } }, '$like requires a string'],
+    ['$like on a custom key', { 'custom.colour': { $like: 'ro' } }, onText],
+    ['$period with an unknown token', { day: { $period: 'year' } }, tokens],
+    ['$period with a number', { day: { $period: 7 } }, tokens],
+    ['$period on a text column', { description: { $period: 'week' } }, onDate],
+    ['$period on a custom key', { 'custom.colour': { $period: 'week' } }, onDate],
+  ])('%s is 400 bad_filter on /rows and bad_view on POST /views (threat 2)', async (_, filter, reason) => {
+    await badFilter(filter)
+    expect((await filtered('taak', filter)).body.message).toContain(reason)
+    const before = counts()
+    const { status, body } = await postView(filter)
+    expect({ status, code: body.code }).toEqual({ status: 400, code: 'bad_view' })
+    expect(body.message).toContain(reason)
+    expect(counts()).toEqual(before)
+  })
+
+  test('$period on a date column reads through /rows', async () => {
+    const { status } = await filtered('taak', { day: { $period: 'week' } })
+    expect(status).toBe(200)
+  })
+
+  test('POST /views stores a $period on the dated source', async () => {
+    const { status, body } = await postView({ day: { $period: 'week' } })
+    expect(status).toBe(201)
+    const stored = sqlite.query('SELECT filters FROM saved_view WHERE id = ?').get(body.id) as { filters: string }
+    expect(JSON.parse(stored.filters)).toEqual({ day: { $period: 'week' } })
+  })
+})
 
 describe('denials', () => {
   test('filter key outside the declared columns is 400 bad_filter', () => badFilter({ 'heading) OR 1=1 --': 1 }))
@@ -406,4 +470,36 @@ describe('offset', () => {
   test.each(['-1', 'abc', '1.5', ''])('offset=%s is 400 bad_offset', (v) =>
     denied(`/api/rows/taak?offset=${v}`, 400, 'bad_offset'),
   )
+})
+
+describe('an empty text cell', () => {
+  const regel = defineDataset({
+    name: 'regel',
+    label: 'Regels',
+    title: 'reason',
+    custom: false,
+    columns: { reason: { type: 'text', label: 'Reason', nullable: true } },
+  })
+  const empty: Domain = {
+    datasets: [regel],
+    queries: [],
+    seed: (insert) => insert('regel', [{ reason: 'ziek' }, { reason: null }, { reason: 'vrij' }]),
+    views: [],
+  }
+
+  beforeEach(async () => {
+    sqlite = new Database(':memory:')
+    migrate(sqlite, empty)
+    seedDomain(sqlite, empty)
+    app = testEngine(sqlite, empty)
+    cookie = await signIn(app)
+  })
+
+  const reasons = async (filter: unknown) =>
+    (await filtered('regel', filter)).body.rows.map((r: { reason: string | null }) => r.reason).sort()
+
+  test('$nlike leaves it out, as $nin does', async () => {
+    expect(await reasons({ reason: { $nin: ['ziek'] } })).toEqual(['vrij'])
+    expect(await reasons({ reason: { $nlike: 'ziek' } })).toEqual(['vrij'])
+  })
 })

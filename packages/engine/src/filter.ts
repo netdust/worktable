@@ -1,12 +1,20 @@
 import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, type SQL, sql } from 'drizzle-orm'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import { type FilterAST, FilterCompileError, type FilterInput, filterCompile, type JsonValue } from './filter-compile'
+import {
+  type FilterAST,
+  FilterCompileError,
+  type FilterInput,
+  filterCompile,
+  type JsonValue,
+  type Period,
+} from './filter-compile'
 import { ApiError } from './params'
 import type { Source } from './registry'
 
 export const CUSTOM_KEY = /^[A-Za-z0-9_]+$/
 
-type Lhs = { expr: SQL | SQLiteColumn; custom: string | null; numeric: boolean }
+// type is null on a custom key: its type is not declared.
+type Lhs = { expr: SQL | SQLiteColumn; custom: string | null; numeric: boolean; type: string | null }
 
 function resolveKey(key: string, source: Source, table: SQLiteTable): Lhs {
   if (key.startsWith('custom.')) {
@@ -15,13 +23,14 @@ function resolveKey(key: string, source: Source, table: SQLiteTable): Lhs {
       throw new ApiError(400, 'bad_filter', `"${source.name}" has no custom fields`)
     if (!CUSTOM_KEY.test(name)) throw new ApiError(400, 'bad_filter', `invalid custom key "${name}"`)
     const column = (table as unknown as Record<string, SQLiteColumn>).custom as SQLiteColumn
-    return { expr: sql`json_extract(${column}, ${`$.${name}`})`, custom: `$.${name}`, numeric: false }
+    return { expr: sql`json_extract(${column}, ${`$.${name}`})`, custom: `$.${name}`, numeric: false, type: null }
   }
   const declared = Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
   if (!declared) throw new ApiError(400, 'bad_filter', `unknown filter key "${key}"`)
   const type = key === 'id' ? 'integer' : source.columns[key]?.type
   const numeric = type === 'integer' || type === 'real'
-  return { expr: (table as unknown as Record<string, SQLiteColumn>)[key] as SQLiteColumn, custom: null, numeric }
+  const expr = (table as unknown as Record<string, SQLiteColumn>)[key] as SQLiteColumn
+  return { expr, custom: null, numeric, type: type ?? null }
 }
 
 const isScalar = (v: unknown): v is string | number | boolean | null =>
@@ -58,7 +67,37 @@ function contains(lhs: Lhs, key: string, column: SQLiteColumn, value: JsonValue)
   return sql`(SELECT count(DISTINCT value) FROM json_each(${column}, ${path}) WHERE json_type(${column}, ${path}) = 'array' AND value IN (${wanted})) = ${values.length}`
 }
 
-function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: SQLiteTable): SQL {
+function onType(lhs: Lhs, key: string, op: string, types: string[]): void {
+  if (lhs.type === null || !types.includes(lhs.type))
+    throw new ApiError(400, 'bad_filter', `${op} is only supported on ${types.join(' or ')} columns, not "${key}"`)
+}
+
+function like(lhs: Lhs, key: string, op: string, value: JsonValue): SQL {
+  onType(lhs, key, op, ['text'])
+  const literal = String(value).replace(/[\\%_]/g, '\\$&')
+  const match = sql`${lhs.expr} LIKE '%' || ${literal} || '%' ESCAPE '\\'`
+  return op === '$like' ? match : sql`NOT (${match})`
+}
+
+const ymd = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+// In the server's local date: weeks run Monday to Sunday, a month is the calendar month.
+function periodDays(period: Period, now: Date): [string, string] {
+  const y = now.getFullYear()
+  const m = now.getMonth()
+  if (period === 'month') return [ymd(new Date(y, m, 1)), ymd(new Date(y, m + 1, 0))]
+  const monday = now.getDate() - ((now.getDay() + 6) % 7) + (period === 'next_week' ? 7 : 0)
+  return [ymd(new Date(y, m, monday)), ymd(new Date(y, m, monday + 6))]
+}
+
+function period(lhs: Lhs, key: string, value: JsonValue, now: Date): SQL {
+  onType(lhs, key, '$period', ['date', 'datetime'])
+  const [from, to] = periodDays(value as Period, now)
+  return sql`substr(${lhs.expr}, 1, 10) BETWEEN ${from} AND ${to}`
+}
+
+function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: SQLiteTable, now: Date): SQL {
   const expr = lhs.expr as SQLiteColumn
   switch (op) {
     case '$eq': {
@@ -83,6 +122,11 @@ function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: 
       return notInArray(expr, list(lhs, key, op, value))
     case '$exists':
       return value ? isNotNull(expr) : isNull(expr)
+    case '$like':
+    case '$nlike':
+      return like(lhs, key, op, value)
+    case '$period':
+      return period(lhs, key, value, now)
     case '$contains':
       return contains(lhs, key, (table as unknown as Record<string, SQLiteColumn>).custom as SQLiteColumn, value)
     default:
@@ -90,21 +134,21 @@ function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: 
   }
 }
 
-function clauseOf(ast: FilterAST, source: Source, table: SQLiteTable): SQL | undefined {
+function clauseOf(ast: FilterAST, source: Source, table: SQLiteTable, now: Date): SQL | undefined {
   if (ast.kind === 'cmp') {
-    return comparison(resolveKey(ast.key, source, table), ast.key, ast.op, ast.value, table)
+    return comparison(resolveKey(ast.key, source, table), ast.key, ast.op, ast.value, table, now)
   }
-  const parts = ast.clauses.map((c) => clauseOf(c, source, table)).filter((p): p is SQL => p !== undefined)
+  const parts = ast.clauses.map((c) => clauseOf(c, source, table, now)).filter((p): p is SQL => p !== undefined)
   return parts.length ? and(...parts) : undefined
 }
 
-export function compileFilter(ast: FilterAST, source: Source, table: SQLiteTable): SQL | undefined {
-  return clauseOf(ast, source, table)
+export function compileFilter(ast: FilterAST, source: Source, table: SQLiteTable, now = new Date()): SQL | undefined {
+  return clauseOf(ast, source, table, now)
 }
 
-export function filterWhere(input: FilterInput, source: Source, table: SQLiteTable): SQL | undefined {
+export function filterWhere(input: FilterInput, source: Source, table: SQLiteTable, now = new Date()): SQL | undefined {
   try {
-    return compileFilter(filterCompile(input), source, table)
+    return compileFilter(filterCompile(input), source, table, now)
   } catch (e) {
     if (e instanceof FilterCompileError) throw new ApiError(400, 'bad_filter', e.message)
     throw e
