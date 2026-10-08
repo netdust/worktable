@@ -753,6 +753,31 @@
   font-weight: 500;
 }
 
+/* The select's list: the highlight follows focus, the stored option keeps a mark beside it. */
+.nv-select .nv-pop__option {
+  outline: none;
+}
+
+#root .nv-select .nv-pop__option[data-focused] {
+  background: var(--color-accent-subtle);
+}
+
+#root .nv-select .nv-pop__option[data-current] {
+  box-shadow: inset 2px 0 0 var(--color-accent-default);
+  font-weight: 500;
+}
+
+.nv-select__anchor {
+  position: absolute;
+  inset: auto auto 0 0;
+  width: 100%;
+  height: 0;
+}
+
+.nv-select [role="listbox"]:focus {
+  outline: none;
+}
+
 /* At its narrowest the placeholder still reads whole beside the icon and ⌘K. */
 .nv-search {
   position: relative;

@@ -284,21 +284,80 @@ describe('editing', () => {
     expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
-  it('picks a select from its listbox by letter and Enter', async () => {
-    renderGrid()
-    api.update.mockResolvedValue({ row: { ...calais[2], fields: { ...calais[2].fields, kind: 'show' } }, batch: 'b1' })
+  describe('the select editor', () => {
+    const focused = () => document.activeElement as HTMLElement
+    // React Aria presses an option on the key's release.
+    const press = async (key: string, mods: object = {}) => {
+      await act(async () => {
+        const target = focused()
+        type(target, key, mods)
+        fireEvent.keyUp(target, { key, ...mods })
+      })
+    }
+    function openKind(how: string) {
+      renderGrid()
+      api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: 'b1' }))
+      const kind = cell('Lunch bistrot', 'kind')
+      fireEvent.click(kind)
+      type(kind, how)
+    }
+    const listbox = () => screen.queryByRole('listbox', { name: 'Soort' })
 
-    const kind = cell('Lunch bistrot', 'kind')
-    fireEvent.click(kind)
-    type(kind, 'v')
-    const listbox = screen.getByRole('listbox', { name: 'Soort' })
-    expect(within(listbox).getByRole('option', { selected: true }).textContent).toBe('Voorstelling')
-    await act(async () => {
-      type(listbox, 'Enter')
+    it('picks a select from its listbox by letter and Enter', async () => {
+      openKind('v')
+      expect(focused().getAttribute('role')).toBe('option')
+      expect(focused().textContent).toBe('Voorstelling')
+      await press('Enter')
+
+      expect(api.update).toHaveBeenCalledTimes(1)
+      expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
+      expect(cell('Lunch bistrot', 'kind').textContent).toBe('Voorstelling')
     })
 
-    expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
-    expect(cell('Lunch bistrot', 'kind').textContent).toBe('Voorstelling')
+    it('the listbox opens on the option the opening letter picks', () => {
+      openKind('o')
+      expect(focused().textContent).toBe('Opbouw')
+    })
+
+    it('↑ on the first option keeps the select open and writes nothing', async () => {
+      openKind('r')
+      expect(focused().textContent).toBe('Reis')
+      await press('ArrowUp')
+
+      expect(listbox()).not.toBeNull()
+      expect(focused().textContent).toBe('Reis')
+      expect(api.update).not.toHaveBeenCalled()
+    })
+
+    it('Escape in the select listbox writes nothing', async () => {
+      openKind('v')
+      await press('Escape')
+
+      expect(listbox()).toBeNull()
+      expect(api.update).not.toHaveBeenCalled()
+      expect(cell('Lunch bistrot', 'kind').textContent).toBe('Maaltijd')
+    })
+
+    it('an option click commits once and stays', async () => {
+      openKind('Enter')
+      await act(async () => {
+        fireEvent.click(within(listbox()!).getByRole('option', { name: 'Opbouw' }))
+      })
+
+      expect(api.update).toHaveBeenCalledTimes(1)
+      expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'build' }, expect.objectContaining({ id: 103 }))
+      expect(listbox()).toBeNull()
+      expect(focused()).toBe(cell('Lunch bistrot', 'kind'))
+    })
+
+    it('Tab commits and moves right', async () => {
+      openKind('v')
+      await press('Tab')
+
+      expect(api.update).toHaveBeenCalledTimes(1)
+      expect(api.update).toHaveBeenCalledWith('activity', 103, { kind: 'show' }, expect.objectContaining({ id: 103 }))
+      expect(focused()).toBe(cell('Lunch bistrot', headers()[headers().indexOf('kind') + 1]!))
+    })
   })
 
   it('reads a typed time the way a hand types it', async () => {

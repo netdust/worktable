@@ -1,13 +1,21 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { type FocusEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { ListBox, ListBoxItem } from 'react-aria-components'
 import { t } from '../../i18n'
+import { Pop } from '../../ui/Pop'
+import type { Column } from '../columns'
 import type { CellProps, EditorProps } from './props'
 import { iconOf, toneOf } from './tones'
 
-/** A kind reads as its icon and word; a column keyed `status` as a pill toned by what it means; any other option as a dot in that tone. */
 export function SelectCell({ column, row }: CellProps) {
   const text = column.text(row)
-  if (text === '') return null
-  const option = column.edit(row)
+  return text === '' ? null : <OptionMark column={column} option={column.edit(row)} text={text} />
+}
+
+/**
+ * A kind reads as its icon and word; a column keyed `status` as a pill toned by what it means; any other option as a dot in that tone.
+ * The cell passes its own text, which an inherited column words for itself.
+ */
+export function OptionMark({ column, option, text = column.options?.[option] ?? option }: { column: Column; option: string; text?: string }) {
   const Icon = iconOf(option)
   if (Icon) return <span className="nv-kind"><Icon size={13} aria-hidden="true" />{text}</span>
   const shape = column.id === 'status' ? 'nv-pill' : 'nv-dot'
@@ -30,61 +38,73 @@ function startAt(list: [string, string][], editing: EditorProps['editing'], curr
   return Math.max(0, list.findIndex(([key]) => key === current))
 }
 
-export function SelectEditor({ column, row, editing, onDraft, onCommit }: EditorProps) {
-  const list = choices(column.options ?? {}, column.required)
-  const [index, setIndex] = useState(() => startAt(list, editing, column.edit(row)))
-  const box = useRef<HTMLDivElement>(null)
+type KeyLike = { key: string; target: EventTarget | null; shiftKey: boolean; preventDefault(): void; stopPropagation(): void }
 
-  useEffect(() => {
-    box.current?.focus()
-  }, [])
-  useEffect(() => {
-    onDraft(list[index]?.[0] ?? '')
-  }, [index])
+export function SelectEditor({ column, row, editing, onDraft, onCommit, onLeave }: EditorProps) {
+  const [list] = useState(() => choices(column.options ?? {}, column.required))
+  const current = column.edit(row)
+  const [start] = useState(() => startAt(list, editing, current))
+  const anchor = useRef<HTMLSpanElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+  // React Aria renders its options a pass after the list, so the opening option takes focus as it arrives.
+  const opening = useCallback((option: HTMLElement | null) => option?.focus(), [])
 
-  const keys = (event: KeyboardEvent<HTMLDivElement>) => {
-    const pick = list[index]?.[0] ?? ''
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      setIndex((i) => Math.max(0, Math.min(list.length - 1, i + (event.key === 'ArrowDown' ? 1 : -1))))
-    } else if (event.key === 'Enter' || event.key === 'Tab') {
-      onCommit(pick, event.key === 'Enter' ? 'down' : event.shiftKey ? 'left' : 'right')
-    } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-      const hit = list.findIndex(([, label]) => label.toLowerCase().startsWith(event.key.toLowerCase()))
-      if (hit >= 0) setIndex(hit)
-    } else {
-      return
-    }
+  const indexOf = (target: EventTarget | null) => {
+    const at = target instanceof HTMLElement ? target.dataset.index : undefined
+    return at === undefined ? null : Number(at)
+  }
+
+  const focus = (event: FocusEvent) => {
+    const at = indexOf(event.target)
+    if (at === null) return
+    onDraft(list[at][0])
+  }
+
+  // Enter and Tab commit before React Aria presses the option; the sheet decides where they move.
+  const commitKeys = (event: KeyLike) => {
+    const at = indexOf(event.target)
+    if (at === null || (event.key !== 'Enter' && event.key !== 'Tab')) return
     event.preventDefault()
     event.stopPropagation()
+    onCommit(list[at][0], event.key === 'Enter' ? 'down' : event.shiftKey ? 'left' : 'right')
+  }
+
+  // The popover's focus scope moves Tab focus from a capture listener on the document; the window hears Tab first.
+  useEffect(() => {
+    const tab = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Tab' && root.current?.contains(event.target as Node)) commitKeys(event)
+    }
+    window.addEventListener('keydown', tab, true)
+    return () => window.removeEventListener('keydown', tab, true)
+  })
+
+  // React Aria stops the ↑↓ it moves by; at the first or last option they come back out, and the sheet would move the cell.
+  const clamp = (event: KeyboardEvent) => {
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') event.stopPropagation()
+  }
+
+  const blur = (event: FocusEvent) => {
+    const next = event.relatedTarget
+    if (next instanceof Element && next.closest('[data-editor]')) return
+    onLeave()
   }
 
   return (
     <>
       <SelectCell column={column} row={row} />
-      <div
-        ref={box}
-        className="nv-pop"
-        data-editor
-        role="listbox"
-        aria-label={column.label}
-        aria-activedescendant={`nv-opt-${index}`}
-        tabIndex={0}
-        onKeyDown={keys}
-      >
-        {list.map(([key, label], i) => (
-          <div
-            key={key}
-            id={`nv-opt-${i}`}
-            role="option"
-            aria-selected={i === index}
-            className="nv-pop__option"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onCommit(key, 'stay')}
-          >
-            {label}
-          </div>
-        ))}
-      </div>
+      <span ref={anchor} className="nv-select__anchor" />
+      <Pop triggerRef={anchor} isOpen placement="bottom start" className="nv-select">
+        <div ref={root} data-editor onFocusCapture={focus} onKeyDownCapture={commitKeys} onKeyDown={clamp} onBlur={blur}>
+          <ListBox aria-label={column.label} selectionMode="none" onAction={(at) => onCommit(list[Number(at)][0], 'stay')}>
+            {list.map(([key, label], i) => (
+              <ListBoxItem key={key} id={String(i)} textValue={label} data-index={i} data-current={key === current || undefined}
+                ref={i === start ? opening : undefined} className="nv-pop__option">
+                {key === '' ? label : <OptionMark column={column} option={key} />}
+              </ListBoxItem>
+            ))}
+          </ListBox>
+        </div>
+      </Pop>
     </>
   )
 }
