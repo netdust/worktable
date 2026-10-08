@@ -767,13 +767,18 @@
   font-weight: 500;
 }
 
+/* The anchor is the cell's whole box: "bottom" opens below the cell, and a flip opens above it, never over it. */
 .nv-select__anchor,
 .nv-links__anchor,
 .nv-longtext__anchor {
   position: absolute;
-  inset: auto auto 0 0;
-  width: 100%;
-  height: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 100%;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .nv-select [role="listbox"]:focus {
