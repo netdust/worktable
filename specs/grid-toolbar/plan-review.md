@@ -139,3 +139,154 @@ Two premises in the plan are false in the source. Both are small to fix. The res
 - Every route needs a route-matrix row → `engine/test/route-matrix.test.ts:189` → holds; the plan omits it (Should fix 7)
 - Simplest design: reusing `/revisions` costs one request per row and is dataset-only; `$period` is needed because stored filters are validated server-side → `writes.ts:411`, `views.ts:96` → holds
 - Test regime commands → `package.json:13-17`, `apps/grid/package.json:8` → holds
+
+---
+
+# Plan review — grid-toolbar (round 2)
+Reviewed-plan: 37cdd1d89c50dcf66f9f095051322e40934c8728
+Verdict: ready with fixes
+
+All 16 round-1 findings and the Notes are taken up. Both round-1 Blocking premises are fixed. The four rulings hold, and spec and plan state each one the same way, with one stale test bullet (Should fix 1). There is no Blocking finding this round. What is left is mostly places where an executor would build the wrong thing or fail `bun run check`.
+
+## Blocking
+None.
+
+## Should fix
+
+1. **Task 2 Step 1 has two test bullets that contradict each other.**
+   - Line 146 says "`$nlike` keeps nulls". Line 150 says "`$nlike` leaves out empty cells, as `$nin` does (spec Out)".
+   - The Interfaces (line 137) and the spec's Out ruling side with line 150. `col NOT LIKE x` on a null `col` gives NULL, so the row drops out, the same as `notInArray` (`packages/engine/src/filter.ts:83`).
+   - Fix: delete the line-146 bullet.
+
+2. **The engine tests use theatre words, which fails `bun run check`.**
+   - Task 4 Step 1: "A query without `creates` (the theatre's `productie_dag`) answers no entries", in `packages/engine/test/history.test.ts`.
+   - Task 2 Step 1: "stores `{ plandag: { $period: 'week' } }`" and "matches 'Repetitie'", in `packages/engine/test/filter.test.ts`.
+   - `scripts/check-vocabulary.ts:25-50` scans all of `packages/engine` (tests included) for every theatre dataset, query and column name split on `_`. `productie` and `plandag` are on that list.
+   - Fix: use the fixture's own names: `per_project` (`test/fixture.ts:98`, no `creates`), `note.day`, `note.tekst`. If the theatre case is wanted too, test it in `packages/theatre/test`.
+
+3. **The engine fixture has no query with `creates`, and Task 4 does not list `fixture.ts`.**
+   - Two Task 4 tests need such a query: "the changes of a query entry hold only its mapped columns", and "a query whose `creates` dataset the caller cannot read answers no entries".
+   - The second one needs a query with `owners` whose `creates` dataset declares no owner column.
+   - `packages/engine/test/fixture.ts:98-144` declares only `per_project` and `note_lijst`, and neither has `creates`.
+   - Fix: add `packages/engine/test/fixture.ts` to Task 4's Files and name the query to add. For example, `note_lijst` gains `creates: 'note'` for the mapped-columns case, plus one owner-scoped query creating into an ownerless dataset with a writer, for the denial. Re-run `route-matrix.test.ts` and the schema tests, which list the fixture's sources.
+
+4. **The history reply cannot carry "systeem" and "onbekend".**
+   - Task 4 Interfaces say the grid renders "actor id -1 → 'systeem'; … an account that no longer exists → 'onbekend'".
+   - But the entry carries only `actor: string | null` and `mine`. Null already means "planning" for an owner, so the grid cannot tell the three cases apart.
+   - It is also undecided what an owner sees for a system batch.
+   - Fix: give the entry a discriminator, for example `by: 'self' | 'account' | 'system' | 'gone' | 'hidden'` beside `actor`. Add "onbekend" to Step 2's render test.
+
+5. **`limit` means two things on the history route.**
+   - The route is `GET /api/history/:source?filter&from&to&limit` with "limit ≤ 100", and it "reads the source's row ids exactly as `/rows` would".
+   - `parseRowsParams` reads `limit` as a row cap of 1 to 5000 (`packages/engine/src/params.ts:53-58`). Passing the query through would cap the ids to the 50 entries asked for, so the history would silently cover only the first 50 rows.
+   - Fix: say the ids are read at `MAX_LIMIT` and `limit` caps the entries. Or name it `entries`.
+   - Also say which query the grid sends: the one `rowsQuery` builds, scope included.
+
+6. **The history scope does not check the `creates` dataset's own owner scope.**
+   - Threat 3 reads the ids through the query's scope and then checks `readable(actor, creates)`.
+   - `readable` (`access.ts:48`) only checks that the dataset declares an owner column. It never checks that each id is in that dataset's scope for the owner.
+   - `readRevisions` does that check (`writes.ts:415-418`, `inScope`).
+   - Fix: keep only the ids that are also `inScope(scopeOf(actor, createsDataset), row)`. Add that to Test map row 4.
+
+7. **The `#f=` link has no defined lifetime, and it can land on the wrong view.**
+   - Task 3 `hash.ts`: "the conditions travel in the hash as `#f=<json>`… A landing with `f` applies them as a local change." This reads as `f` being written on every change and re-applied on every load.
+   - First problem: a reload re-applies an old `f` over a save made since in another tab.
+   - Second problem: when the hash's `view` does not resolve, the conditions land on another view. A colleague's private view is not listed to anyone else (`views.ts:251`), and App then falls back to `tables[0]?.views[0]` (`ui/App.tsx:193`). The conditions go onto that view, whose source may lack the fields, and `/rows` answers 400 `bad_filter`.
+   - Fix, simpler: Link kopiëren composes `#view=…&f=…` at the moment of the click. The landing applies `f` only when `view` resolves to that exact key, drops a malformed `f`, and removes `f` from the hash once applied.
+   - Name a shared or seeded view in the `filter-link` e2e.
+
+8. **Task 3 contradicts itself on where the matrix window comes from.**
+   - The `Window.tsx` line says "the matrix window comes from the condition on the source's declared `date` column… or none, reads the current week".
+   - The Tests line says "Their landings `#from=` keep working for the matrix".
+   - These are two sources for one window.
+   - The plan also does not say what else reads `range` (`ui/App.tsx:209-213`) once Period leaves:
+     - the rows request (`asked = dated ? range : {}`, `App.tsx:229`);
+     - `newRow` and `madeFrom`, which take a new row's default day from it (`App.tsx:268-270`, `grid/newRow.ts:26`);
+     - the export file name (`App.tsx:294`).
+   - Fix: pick one source for the matrix. Either drop `useWindow` and rewrite the `#from=` landings as `#f=`, or state the precedence between hash and condition. Say that a table sends no `from`/`to`, and that `newRow` and the export read the date condition's window, or none.
+
+9. **Task 1 contradicts itself on the toolbar's save-as.** It is also silent on Terugzetten.
+   - Files: "`App.tsx`: autosave; the save-as path stays in `…` as Kopie maken". Interfaces: "One 'Kopie maken', the rail's… The toolbar's save-as button leaves."
+   - The toolbar's `…` today holds `saveAsNew` and `revert` whenever the view is modified (`ui/Toolbar.tsx:82-85`).
+   - Once there is no "gewijzigd" mark, a local change on a seeded view stays in the browser, unseen, unless Terugzetten stays.
+   - Fix: delete the stale Files clause. State whether Terugzetten stays in `…` on a locked view with a local change, and test it in Task 1.
+
+10. **Autosave changes what a public link serves at once, and the threat model does not say so.**
+    - An administrator's own public view is `editable` (`views.ts:66`). Under R2, every filter click on it now rewrites what `/public/views/:token` serves (`views.ts:331-339`), where an explicit Opslaan used to be needed.
+    - This is the asset "Rows the caller may not read", reached by the public.
+    - Fix: name it in the threat model. Either record a ruling (a public view keeps changes local until …) or accept it explicitly. Add a row if a mitigation is chosen.
+
+11. **Review Focus 6 points at the wrong row, and its test is vacuous.**
+    - It points at "Test map row 7". The fiche row is row 6; row 7 is Share.
+    - The existing `fiche-renders-as-before` (`e2e/grid-ux.spec.ts:643-654`) asserts that no `Periode` group shows, which is always true after Task 3.
+    - Fiche declares no date columns, so "no date operators" holds trivially. No task touches the test.
+    - Fix: point the focus at row 6. In Task 3, add one assertion to that test: the builder opens and offers the fiche's text operators.
+
+12. **Task 4: the entry's `kind` means two different things.**
+    - The entry has `kind` (by threat 5, the batch kind: write, action, undo, import, seed). Yet "A create is one entry whose kind is `create`".
+    - Fix: name them apart, for example `batch_kind` and `created: boolean`.
+
+## Note
+- **Where the type check goes.** Threat 2 says "`comparison`, which knows the column". `comparison` gets `Lhs`, which holds `numeric` and not the type (`filter.ts:9,61`). Carry the column type in `Lhs` from `resolveKey`. Also decide `$like` and `$period` on `custom.<key>` keys, where the type is unknown; refuse them.
+- **Two ops share one engine key.** "One condition per field and operator" collides on engine keys: `week`/`next_week`/`month` all store `$period`, `empty`/`filled` both store `$exists`, and `in` with one value stores `$eq`. Say "per engine key", and have the builder not offer a second date-period or emptiness condition on a field.
+- **Undo across records.** One batch spanning several records gives several entries, each `undoable`. Undoing one undoes all of them. Undo can also fail with 409 `changed_since` (`writes.ts:491`). Say what the panel shows in both cases.
+- **The id list can get long.** The id list can reach 5000. `rows.ts` already chunks at 500 (`CHUNK`). Use the same chunking for `record_id IN (…)`.
+- **R3 wording.** Spec R3 says "a deletion … has no undo" and also "Deletions are not listed". Both are consistent with threat 5: a listed batch that also deleted another record is not undoable. The wording could say so.
+- **Task 5 files.** Mapping `public` from `ViewOut` touches `toSavedViews` in `apps/grid/src/engine.ts` and `SavedView` in `types.ts`. Neither is in Task 5's Files.
+- **docs/SPEC.md Sidebar line.** "The period is a filter chip over the declared date column, with the window in the URL" (the working-tree diff) becomes false in Task 3. No step amends it.
+- **Matrix navigation.** The matrix loses Period's ‹ › week steps (`ui/Period.tsx`). By spec that is intended, but the matrix e2e that use "Vorige/Volgende periode" need a rewrite, not a rename.
+
+## The rulings
+- **Deletes out of history:** sound. The view's rows cannot find a deleted record (`rows.ts:35`). Spec R3 and plan threat 5 agree.
+- **A link's conditions applied as a local change:** sound, and spec R4 matches plan Task 3. The landing guard is still missing (Should fix 7).
+- **"is niet" and "bevat niet" leave out empty cells:** sound. It matches `NOT IN` and `NOT LIKE` on NULL. The spec Out line matches Task 2 Interfaces; one test bullet does not (Should fix 1).
+- **Actor words rendered by the grid:** sound; the engine stays English. The reply shape cannot carry two of the four words (Should fix 4).
+
+## Round 1, resolved or not
+| # | Finding | Status |
+|---|---|---|
+| B1 | Conditions not in the hash | resolved (`#f=`); lifetime and landing guard open (S7) |
+| B2 | History keyed on `of` | resolved (`creates`); its test uses a theatre name (S2) |
+| 3 | Deletes in history | resolved by ruling (spec R3) |
+| 4 | Undo refusals | resolved (`undoable`, threat 5) |
+| 5 | Unreadable `creates` dataset, unmapped columns | resolved; owner scope on the dataset still unchecked (S6), fixture missing (S3) |
+| 6 | Dutch actor words in the engine | resolved in principle; discriminator missing (S4) |
+| 7 | Route-matrix row | resolved |
+| 8 | `Filter.value` readers, `filterRows`, `v1` → `v2` | resolved |
+| 9 | "ligt tussen" on a datetime | resolved |
+| 10 | Two "Kopie maken" | resolved in Interfaces; stale Files clause (S9) |
+| 11 | In-flight autosave lost | resolved |
+| 12 | A failed write still shows | resolved |
+| 13 | e2e grep for period strings | resolved |
+| 14 | First working version line | resolved |
+| 15 | Review Focus rows | Focus 4 resolved; Focus 6 points at the wrong row (S11) |
+| 16 | `api.ts` in Task 5 | resolved |
+| Notes | `update`, token check, clock, HistoryPanel name, rotate warning, matrix window, relation titles, "is niet", R9 screenshot | all resolved; token-check location partly (Note 1) |
+
+## Premises checked
+- `readHash`/`writeHash` exist with a free key; the hash carries no filters today → `apps/grid/src/ui/hash.ts:1-10` → holds
+- The layout `Filter` is `{field, value}`, `parse` requires a string `value`, the prefix is `v1` → `grid/layout.ts:8-12,26,94` → holds
+- `filterRows` compares `f.value` and is called from Grid and Matrix → `grid/filter.ts:57-60`, `grid/Grid.tsx:98`, `matrix/Matrix.tsx:149` → holds
+- `save` returns early while `sending.current`; `duplicate` uses `arrangementOf`; `saveAs` uses `currentOf`, `copyKept`, `clearIfSent` → `ui/useSavedViews.ts:135-159` → holds
+- `toStored` and `comparable` read `{field, value}` → `ui/views.ts:26,80` → holds
+- The rail's Kopie maken calls `actions.duplicate` → `ui/ViewList.tsx:49` → holds
+- `Niet opgeslagen: …` renders from `SaveState` → `ui/Toolbar.tsx:72-78` → holds
+- `useFilterNames` reads `filter.value` → `ui/useFilterNames.ts:35` → holds
+- `splitFilters`, `mergeFilters` and `rowsQuery` map chips as `$eq`; `rowsQuery` sends `from`/`to` when the view has a `date_field` → `apps/grid/src/engine.ts:227-276,373-386` → holds
+- `api.ts` appends `T23:59:59` for a day's end → `apps/grid/src/api.ts` `awayRows` → holds
+- The window feeds rows, `newRow`, `madeFrom` and the export → `ui/App.tsx:209-213,229,268-270,294` → holds; the plan does not account for it (S8)
+- Operators live in `filter-compile.ts` and SQL in `filter.ts`; `$nin` is `NOT IN` → `packages/engine/src/filter-compile.ts:1,32`, `filter.ts:82-83` → holds
+- `comparison` knows the column type → `filter.ts:9,61` → does not hold (it knows `numeric` only; Note)
+- `filtersOf` validates through `filterWhere` and maps a refusal to `bad_view` → `views.ts:96-106` → holds
+- A public view applies stored filters at read time; a second PUT rotates the token; a non-query view is `not_query` → `views.ts:301-310,331-339` → holds
+- Undo refuses another account's batch (403), non-undoable kinds, done batches and delete batches → `writes.ts:458-483` → holds
+- `readRevisions` exists, is dataset only and checks `inScope` → `writes.ts:409-424` → holds
+- `readable` checks only the presence of an owner column → `access.ts:48-50` → holds (hence S6)
+- `readRows` scopes, filters and drops deleted rows; `/rows` uses `parseRowsParams`, whose `limit` caps rows → `rows.ts:29-41,92-112`, `params.ts:53-58` → holds (hence S5)
+- Only `dagplanning` declares `creates`; its mapped columns are the `writesActiviteit` fields → `packages/theatre/src/queries.ts:36-88` → holds
+- Every `/api` route needs a matrix row, and each row gives all four roles → `packages/engine/test/route-matrix.test.ts:189-205` → holds
+- The engine fixture has a query with `creates` → `packages/engine/test/fixture.ts:98-144` → does not hold (S3)
+- Engine tests may name theatre sources and columns → `scripts/check-vocabulary.ts:25-50` → does not hold (S2)
+- `fiche-renders-as-before` exists → `e2e/grid-ux.spec.ts:643` → holds; it is vacuous for the new builder (S11)
+- `RelationPicker` takes `before`/`hide` → `grid/cells/RelationPicker.tsx:42` → holds
+- Simplest design: `$period` is needed because a stored filter is validated server-side, and per-record `/revisions` costs one request per row → `views.ts:96`, `writes.ts:409` → holds

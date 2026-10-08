@@ -21,6 +21,7 @@ Stefan, 2026-10-08, looking at the toolbar and the filter bar:
 **R2. A view saves itself.**
 - A change in filters, columns, widths of the stored kind, grouping or sorting on one's own view is stored at once.
 - On a view one cannot change (a starting view, a colleague's), the change stays in this browser. "… → Kopie maken" keeps it as one's own view.
+- A published view never saves itself: a removed filter would put rows on the website. Its changes stay local, and "… → Publieke weergave bijwerken" saves them on purpose (administrators). Terugzetten throws a local change away.
 - Source: Stefan's choice "Own views save automatically", 2026-10-08.
 
 **R3. Geschiedenis.**
