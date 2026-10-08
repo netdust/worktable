@@ -1,8 +1,10 @@
 import { X } from 'lucide-react'
 import { Button } from '@sakaniui/react'
-import { createContext, type KeyboardEvent, type MouseEvent, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, type KeyboardEvent, type RefObject, useContext, useEffect, useRef, useState } from 'react'
+import { Button as AriaButton, ComboBoxStateContext, ComboBoxValue, Dialog, type Key, Tag, TagGroup, TagList } from 'react-aria-components'
 import { t } from '../../i18n'
 import type { Link, LinkItem, Row } from '../../types'
+import { Pop } from '../../ui/Pop'
 import { linksOf } from '../columns'
 import type { CellProps, EditorProps } from './props'
 import { RelationPicker } from './RelationPicker'
@@ -15,9 +17,6 @@ export interface LinkActions {
 }
 
 export const LinksContext = createContext<LinkActions | null>(null)
-
-// Keeps focus in the picker's search: a blur there closes the editor.
-const keepFocus = (event: MouseEvent) => event.preventDefault()
 
 function pillOf(item: LinkItem, link: Link | undefined): string {
   if (item.target === null) return 'nv-pill nv-pill--muted'
@@ -41,47 +40,86 @@ export function LinksCell({ column, row }: CellProps) {
   )
 }
 
-function Chosen({ items, link, onRemove }: { items: LinkItem[]; link: Link; onRemove: (item: LinkItem) => void }) {
+type ChosenProps = { label: string; items: LinkItem[]; link: Link; onRemove: (item: LinkItem) => void }
+
+function Chips({ label, items, link, onRemove }: ChosenProps) {
+  const remove = (keys: Set<Key>) => {
+    const item = items.find((i) => keys.has(i.id))
+    if (item && item.target !== null) onRemove(item)
+  }
   return (
-    <ul className="nv-chosen">
-      {items.map((item) => (
-        <li key={item.id} className={pillOf(item, link)} aria-label={item.title}>
-          {item.title}
-          {item.target !== null && (
-            <button type="button" className="nv-chosen__remove" aria-label={t('removeItem', { name: item.title })}
-              onMouseDown={keepFocus} onClick={() => onRemove(item)}>
-              <X size={11} aria-hidden="true" />
-            </button>
-          )}
-        </li>
-      ))}
-    </ul>
+    <TagGroup aria-label={label} className="nv-chosen" onRemove={remove}>
+      <TagList items={items} className="nv-chosen__list">
+        {(item) => (
+          <Tag id={item.id} textValue={item.title} className={pillOf(item, link)}>
+            {item.title}
+            {item.target !== null && (
+              // Our own name for it: React Aria's slot would label it "Verwijderen <name>".
+              <AriaButton slot={null} className="nv-chosen__remove" aria-label={t('removeItem', { name: item.title })}
+                preventFocusOnPress onPress={() => onRemove(item)}>
+                <X size={11} aria-hidden="true" />
+              </AriaButton>
+            )}
+          </Tag>
+        )}
+      </TagList>
+    </TagGroup>
+  )
+}
+
+/**
+ * The chips inside the picker's ComboBox. ComboBoxValue sits out the pass that collects the options, which would take the tags for options.
+ * A chip taking focus blurs the search, and React Aria closes the list on that blur; the list belongs to the whole box, so it opens again.
+ */
+function Chosen(props: ChosenProps) {
+  const combo = useContext(ComboBoxStateContext)
+  return (
+    <ComboBoxValue className="nv-chosen__value">
+      <span className="nv-chosen__focus" onFocus={() => combo?.open(null, 'manual')}>
+        <Chips {...props} />
+      </span>
+    </ComboBoxValue>
   )
 }
 
 /** Asked before a removal: no key reaches the grid behind it; Tab moves between the two answers and Escape keeps the person. */
-function Question({ text, onCancel, onConfirm }: { text: string; onCancel: () => void; onConfirm: () => void }) {
+function Question({ anchor, text, onCancel, onConfirm }: { anchor: RefObject<HTMLElement | null>; text: string; onCancel: () => void; onConfirm: () => void }) {
   const cancel = useRef<HTMLButtonElement>(null)
   const confirm = useRef<HTMLButtonElement>(null)
+  const root = useRef<HTMLDivElement>(null)
   useEffect(() => cancel.current?.focus(), [])
-  const keys = (event: KeyboardEvent) => {
-    event.stopPropagation()
-    if (event.key === 'Escape') {
+
+  // The popover's focus scope moves Tab focus from a capture listener on the document; the window hears Tab first.
+  useEffect(() => {
+    const tab = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Tab' || !root.current?.contains(event.target as Node)) return
       event.preventDefault()
-      onCancel()
-    } else if (event.key === 'Tab') {
-      event.preventDefault()
+      event.stopPropagation()
       ;(document.activeElement === cancel.current ? confirm : cancel).current?.focus()
     }
+    window.addEventListener('keydown', tab, true)
+    return () => window.removeEventListener('keydown', tab, true)
+  }, [])
+
+  const keys = (event: KeyboardEvent) => {
+    event.stopPropagation()
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    onCancel()
   }
+
   return (
-    <div className="nv-pop nv-confirm" role="alertdialog" aria-label={text} onKeyDown={keys}>
-      <p>{text}</p>
-      <div className="nv-confirm__actions">
-        <Button ref={cancel} variant="secondary" size="sm" onClick={onCancel}>{t('cancel')}</Button>
-        <Button ref={confirm} variant="destructive" size="sm" onClick={onConfirm}>{t('delete')}</Button>
-      </div>
-    </div>
+    <Pop triggerRef={anchor} isOpen placement="bottom start" className="nv-confirm">
+      <Dialog role="alertdialog" aria-label={text}>
+        <div ref={root} onKeyDown={keys}>
+          <p>{text}</p>
+          <div className="nv-confirm__actions">
+            <Button ref={cancel} variant="secondary" size="sm" onClick={onCancel}>{t('cancel')}</Button>
+            <Button ref={confirm} variant="destructive" size="sm" onClick={onConfirm}>{t('delete')}</Button>
+          </div>
+        </div>
+      </Dialog>
+    </Pop>
   )
 }
 
@@ -91,6 +129,7 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
   const [asking, setAsking] = useState<LinkItem | null>(null)
   // A second click on a name, before the first add answered, would be refused as a duplicate.
   const adding = useRef(new Set<number>())
+  const anchor = useRef<HTMLSpanElement>(null)
   const { link } = column
   const key = column.field ?? column.id
   const items = linksOf(row, key)
@@ -107,8 +146,10 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
   return (
     <div data-editor onClick={(event) => event.stopPropagation()}>
       <LinksCell column={column} row={row} />
+      <span ref={anchor} className="nv-links__anchor" />
       {asking ? (
         <Question
+          anchor={anchor}
           text={t('removeLinkAsk', { item: link.item, name: asking.title })}
           onCancel={() => setAsking(null)}
           onConfirm={() => {
@@ -121,7 +162,7 @@ export function LinksEditor({ column, row, editing, onCancel, onClose }: EditorP
           model={link.target_dataset}
           label={column.label}
           query={editing.mode === 'enter' ? editing.draft : ''}
-          before={<Chosen items={items} link={link} onRemove={drop} />}
+          before={<Chosen label={column.label} items={items} link={link} onRemove={drop} />}
           hide={(record) => items.some((item) => item.target === record.id)}
           clearOnPick
           onPick={(record) => {

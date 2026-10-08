@@ -80,7 +80,9 @@ describe('a links cell', () => {
   })
 
   const box = () => within(popup())
-  const chips = () => box().getAllByRole('listitem').map((li) => li.textContent)
+  const chips = () => within(box().getByRole('grid')).getAllByRole('row').map((chip) => chip.textContent)
+  const chip = (name: string) => within(box().getByRole('grid')).getByRole('row', { name })
+  const search = () => screen.getByRole('combobox', { name: 'Mensen' })
 
   it('opens on Enter: one box with the chosen names and a search; the list offers only the others', async () => {
     renderGrid()
@@ -88,7 +90,7 @@ describe('a links cell', () => {
     expect(chips()).toEqual(['Lotte', 'Jan', 'Gastmuzikant'])
     expect(box().getByRole('combobox', { name: 'Mensen' })).toBeTruthy()
     expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Mira'])
-    expect(within(box().getByRole('listitem', { name: 'Gastmuzikant' })).queryByRole('button')).toBeNull()
+    expect(within(chip('Gastmuzikant')).queryByRole('button')).toBeNull()
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Mensen' }), { key: 'Escape' })
     expect(screen.queryByRole('combobox', { name: 'Mensen' })).toBeNull()
   })
@@ -110,38 +112,94 @@ describe('a links cell', () => {
     expect(screen.getByRole('combobox', { name: 'Mensen' })).toBeTruthy()
   })
 
-  it("removes a name in the default state at once, by its × or by Backspace in an empty search", async () => {
+  it('chips flow inline and the box caps at two lines: one TagGroup grid holds every chip', () => {
     renderGrid()
     open()
-    await act(async () => fireEvent.click(box().getByRole('button', { name: 'Jan verwijderen' })))
-    expect(actions.remove).toHaveBeenCalledWith('people', lunch, jan_)
-    actions.remove.mockClear()
-    await act(async () => fireEvent.keyDown(screen.getByRole('combobox', { name: 'Mensen' }), { key: 'Backspace' }))
+    const grids = box().getAllByRole('grid')
+    expect(grids).toHaveLength(1)
+    expect(grids[0]?.closest('.nv-chosen')).not.toBeNull()
+    expect(chips()).toEqual(['Lotte', 'Jan', 'Gastmuzikant'])
+  })
+
+  it("a chip's remove button names the person", () => {
+    renderGrid()
+    open()
+    expect(within(chip('Jan')).getByRole('button', { name: 'Jan verwijderen' })).toBeTruthy()
+    expect(within(chip('Lotte')).getByRole('button', { name: 'Lotte verwijderen' })).toBeTruthy()
+  })
+
+  it('removes a name in the default state at once by its ×', async () => {
+    renderGrid()
+    open()
+    await act(async () => fireEvent.click(within(chip('Jan')).getByRole('button', { name: 'Jan verwijderen' })))
     expect(actions.remove).toHaveBeenCalledWith('people', lunch, jan_)
   })
 
-  it('puts the question in reach of the keyboard: Annuleren has focus, Escape keeps the person, Verwijderen removes', async () => {
+  it('Backspace in an empty search removes the last chip', async () => {
     renderGrid()
     open()
-    fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annuleren' }))
-    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
+    await act(async () => fireEvent.keyDown(search(), { key: 'Backspace' }))
+    expect(actions.remove).toHaveBeenCalledTimes(1)
+    expect(actions.remove).toHaveBeenCalledWith('people', lunch, jan_)
+  })
+
+  it('Delete on a focused chip removes that chip, through the same question', async () => {
+    renderGrid()
+    open()
+    act(() => chip('Lotte').focus())
+    await act(async () => fireEvent.keyDown(chip('Lotte'), { key: 'Delete' }))
+    expect(screen.getByRole('alertdialog').textContent).toContain('Toewijzing van Lotte verwijderen?')
+    expect(actions.remove).not.toHaveBeenCalled()
+  })
+
+  it("focus a chip's remove button: the typed search and the list survive", async () => {
+    renderGrid()
+    open()
+    await screen.findAllByRole('option')
+    fireEvent.change(search(), { target: { value: 'Mi' } })
+    act(() => within(chip('Jan')).getByRole('button', { name: 'Jan verwijderen' }).focus())
+    expect((search() as HTMLInputElement).value).toBe('Mi')
+    expect(screen.getByRole('listbox')).toBeTruthy()
+  })
+
+  it('removing a confirmed link asks first: an alertdialog over the sheet, Annuleren has focus, Escape keeps the person', async () => {
+    renderGrid()
+    open()
+    fireEvent.click(within(chip('Lotte')).getByRole('button', { name: 'Lotte verwijderen' }))
+    const question = screen.getByRole('alertdialog')
+    expect(cell().contains(question)).toBe(false)
+    expect(within(question).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Annuleren' }))
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(actions.remove).not.toHaveBeenCalled()
-    fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
+    expect(document.activeElement).toBe(search())
+    fireEvent.click(within(chip('Lotte')).getByRole('button', { name: 'Lotte verwijderen' }))
     screen.getByRole('button', { name: 'Verwijderen' }).focus()
     await act(async () => fireEvent.click(document.activeElement as HTMLElement))
     expect(actions.remove).toHaveBeenCalledWith('people', lunch, lotte)
   })
 
+  it('Tab in the question moves between its two answers and goes no further', () => {
+    renderGrid()
+    open()
+    fireEvent.click(within(chip('Lotte')).getByRole('button', { name: 'Lotte verwijderen' }))
+    const question = screen.getByRole('alertdialog')
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Tab' })
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Verwijderen' }))
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Tab' })
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Annuleren' }))
+    expect(screen.getByRole('alertdialog')).toBe(question)
+  })
+
   it('asks before removing a person who left the default state; Annuleren keeps them', async () => {
     renderGrid()
     open()
-    fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
+    fireEvent.click(within(chip('Lotte')).getByRole('button', { name: 'Lotte verwijderen' }))
     expect(screen.getByRole('alertdialog').textContent).toContain('Toewijzing van Lotte verwijderen?')
     fireEvent.click(screen.getByRole('button', { name: 'Annuleren' }))
     expect(actions.remove).not.toHaveBeenCalled()
-    fireEvent.click(box().getByRole('button', { name: 'Lotte verwijderen' }))
+    fireEvent.click(within(chip('Lotte')).getByRole('button', { name: 'Lotte verwijderen' }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Verwijderen' })))
     expect(actions.remove).toHaveBeenCalledWith('people', lunch, lotte)
   })

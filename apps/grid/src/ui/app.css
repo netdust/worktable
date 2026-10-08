@@ -767,7 +767,8 @@
   font-weight: 500;
 }
 
-.nv-select__anchor {
+.nv-select__anchor,
+.nv-links__anchor {
   position: absolute;
   inset: auto auto 0 0;
   width: 100%;
@@ -2670,6 +2671,10 @@
   border: 1px solid var(--color-border-default);
   border-radius: 6px;
   background: var(--color-bg-surface);
+  /* Two lines of chips, then it scrolls. */
+  box-sizing: border-box;
+  max-height: 58px;
+  overflow-y: auto;
 }
 
 .nv-picker__box:focus-within {
@@ -2688,7 +2693,10 @@
   background: transparent;
 }
 
-.nv-chosen {
+.nv-chosen,
+.nv-chosen__list,
+.nv-chosen__value,
+.nv-chosen__focus {
   display: contents;
   list-style: none;
 }
@@ -2696,6 +2704,11 @@
 .nv-chosen .nv-pill {
   height: 22px;
   padding: 0 4px 0 8px;
+  outline: none;
+}
+
+.nv-chosen .nv-pill[data-focus-visible] {
+  box-shadow: 0 0 0 2px var(--color-border-focus);
 }
 
 .nv-chosen .nv-pill--muted {
@@ -2723,6 +2736,10 @@
 .nv-confirm {
   padding: 10px 12px;
   max-width: 260px;
+}
+
+.nv-confirm [role="alertdialog"]:focus {
+  outline: none;
 }
 
 .nv-confirm p {

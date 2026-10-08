@@ -3,8 +3,9 @@ import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
 import { renderNl, typeKeys } from '../test-setup'
-import type { Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
+import type { LinkItem, Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
+import type { LinkActions } from './cells/Links'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
 import { createStore, type StoreApi } from './store'
@@ -1592,5 +1593,80 @@ describe('a date cell', () => {
 
     expect(segments()[0].textContent).toBe('03')
     expect(cell('Montage', 'due').contains(document.activeElement)).toBe(true)
+  })
+})
+
+describe('the to-many editor', () => {
+  const day: Model = {
+    key: 'day', label: 'Dag', title_label: 'Omschrijving', title_readonly: false, query: true,
+    fields: {
+      people: {
+        type: 'links', label: 'Mensen', required: false, fact: false,
+        link: {
+          item: 'Toewijzing', dataset: 'assignment', key: 'day_id', target: 'person_id', target_dataset: 'person',
+          state: { options: { invited: 'Uitgenodigd', confirmed: 'Bevestigd' }, tones: {}, default: 'invited' },
+        },
+      },
+    },
+  }
+  const dayView: View = {
+    key: 'day', label: 'Dag', table: 'day', table_label: 'Dag', model: 'day', type: 'grid',
+    columns: ['title', 'people'], lookups: {}, rollups: {}, filters: [], sort: [], group: null,
+  }
+  const jan: LinkItem = { id: 71, target: 2, title: 'Jan', state: 'invited' }
+  const lunch: Row = { id: 5, title: 'Lunch', status: '', fields: { people: [jan] } }
+  const person = (id: number, title: string): Row => ({ id, title, status: '', fields: {} })
+  const search = () => screen.queryByRole('combobox', { name: 'Mensen' }) as HTMLInputElement | null
+  const press = async (key: string) => {
+    await act(async () => {
+      const target = document.activeElement as HTMLElement
+      type(target, key)
+      fireEvent.keyUp(target, { key })
+    })
+  }
+  let links: { add: ReturnType<typeof vi.fn<LinkActions['add']>>; remove: ReturnType<typeof vi.fn<LinkActions['remove']>> }
+
+  async function openPeople() {
+    links = { add: vi.fn<LinkActions['add']>().mockResolvedValue(), remove: vi.fn<LinkActions['remove']>().mockResolvedValue() }
+    api = { update: vi.fn(), create: vi.fn(), remove: vi.fn(), read: vi.fn(), undo: vi.fn() }
+    const store = createStore({ model: 'day', rows: [lunch], api })
+    renderNl(
+      <Grid model={day} view={dayView} store={store} writable layout={defaults(dayView)} onLayout={() => undefined}
+        query="" emptyTitle="" models={{ day }} links={links} />,
+    )
+    const people = cell('Lunch', 'people')
+    fireEvent.click(people)
+    type(people, 'Enter')
+    await screen.findAllByRole('option')
+  }
+
+  beforeEach(() => {
+    remote.records.mockResolvedValue({ rows: [person(2, 'Jan'), person(3, 'Mira'), person(4, 'Mo')], total: 3 })
+  })
+  afterEach(() => vi.resetAllMocks())
+
+  it('Enter adds once and empties the search', async () => {
+    await openPeople()
+    fireEvent.change(search()!, { target: { value: 'Mi' } })
+    await act(async () => new Promise((done) => setTimeout(done, 200)))
+    await press('Enter')
+
+    expect(links.add).toHaveBeenCalledTimes(1)
+    expect(links.add).toHaveBeenCalledWith('people', lunch, 3)
+    expect(links.remove).not.toHaveBeenCalled()
+    expect(search()?.value).toBe('')
+    expect(api.update).not.toHaveBeenCalled()
+  })
+
+  it('Escape leaves the editor without a create or delete', async () => {
+    await openPeople()
+    fireEvent.change(search()!, { target: { value: 'Mi' } })
+    await press('Escape')
+
+    expect(search()).toBeNull()
+    expect(links.add).not.toHaveBeenCalled()
+    expect(links.remove).not.toHaveBeenCalled()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(cell('Lunch', 'people').textContent).toBe('Jan')
   })
 })

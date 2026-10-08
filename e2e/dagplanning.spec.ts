@@ -233,7 +233,7 @@ async function peopleTags(page: Page) {
   // One box: the chosen names, then the search; the list offers only the others. Picking adds as uitgenodigd and keeps the box open.
   await openPeople()
   const search = page.getByRole('combobox', { name: 'Mensen' })
-  const chosen = page.locator('.nv-picker .nv-chosen li')
+  const chosen = page.locator('.nv-picker .nv-chosen [role="row"]')
   await expect(chosen).toHaveText(['Bram De Wilde'])
   await expect(option('Bram De Wilde')).toHaveCount(0)
   await search.fill('Noor')
@@ -365,7 +365,7 @@ test('people-colours-and-overflow @e2e', async ({ page }) => {
     // The box: every chosen name, a × only for a person; the list offers none of them.
     await cell.click()
     await cell.press('Enter')
-    const chosen = page.locator('.nv-picker .nv-chosen li')
+    const chosen = page.locator('.nv-picker .nv-chosen [role="row"]')
     await expect(chosen).toHaveText(['Bram De Wilde', 'Noor Claes', 'Sam Peeters', 'Lotte Verhaegen', 'Gastregisseur'])
     await expect(chosen.filter({ hasText: 'Gastregisseur' }).getByRole('button')).toHaveCount(0)
     await expect(page.locator('.nv-picker .nv-chosen__remove')).toHaveCount(4)
@@ -427,7 +427,7 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
     await expect(question).toHaveCount(0)
     await expect(search).toBeFocused()
     expect(await assignedTo(api, activity)).toEqual([bram])
-    await expect(page.locator('.nv-picker .nv-chosen li')).toHaveText(['Bram De Wilde'])
+    await expect(page.locator('.nv-picker .nv-chosen [role="row"]')).toHaveText(['Bram De Wilde'])
 
     // Space on the focused Annuleren keeps them too.
     await search.press('Backspace')
@@ -441,7 +441,7 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
     await page.getByRole('button', { name: 'Bram De Wilde verwijderen' }).click()
     await question.getByRole('button', { name: 'Verwijderen' }).click()
     await expect.poll(() => assignedTo(api, activity)).toEqual([])
-    await expect(page.locator('.nv-picker .nv-chosen li')).toHaveCount(0)
+    await expect(page.locator('.nv-picker .nv-chosen [role="row"]')).toHaveCount(0)
     await search.press('Escape')
     await (await cellOf(page, 'mensen vraag e2e', 'Mensen')).press('Control+z')
     await page.waitForTimeout(500)
