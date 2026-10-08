@@ -28,7 +28,7 @@
 ## Review Focus
 
 1. A click inside a portalled popover (calendar day, listbox option, combobox option) commits that choice and does not end the edit through the cell's click — Task 1 `Grid.test.tsx` "a calendar day click commits the date once", Task 2 "an option click commits once".
-2. In dark mode every popover, menu and dialog is dark — Task 1 `main.test.tsx` "popovers render inside #root"; Task 12 screenshots light and dark.
+2. In dark mode every popover, menu and dialog is dark — Task 1 `Providers.test.tsx` "popovers render inside #root"; Task 12 screenshots light and dark.
 3. Enter, Tab and Escape inside an editor commit or cancel exactly once — tested at the `Grid` seam counting `update` calls, in each editor task ("Enter commits once", "Escape writes nothing").
 4. An incomplete date or time (a segment left empty) never writes: Enter keeps the editor open — Task 1 `Grid.test.tsx` "Enter on an incomplete date writes nothing and keeps the editor".
 5. A required column offers no empty choice and never clears — Tasks 1, 2, 3 "required offers no leeg".
@@ -37,8 +37,8 @@
 
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
-| Date, datetime, time editors + `dates.ts` + `Pop` + root providers | the sheet (`Grid`), and `Editor` render | unit · `grid/Grid.test.tsx` (sheet seam: commit, cancel, click), `cells/Date.test.tsx`, `cells/dates.test.ts`, `src/main.test.tsx` · `cd apps/grid && bunx vitest run src/grid src/main.test.tsx` | edit-date-cell, edit-datetime-cell, edit-time-cell (new, `/shakeout` writes them); the existing cell-date flows of step-0b, step-0e, step-1, rewritten in Task 1 |
-| Select editor | the sheet, and `Editor` render | unit · `Grid.test.tsx` ("picks a select from its listbox by letter and Enter", "cancels on Escape without a write"), `cells/Select.test.tsx` · same runner | edit-select-cell (new, `/shakeout`) |
+| Date, datetime, time editors + `dates.ts` + `Pop` + root providers | the sheet (`Grid`), and `Editor` render | unit · `grid/Grid.test.tsx` (sheet seam: commit, cancel, click), `cells/Date.test.tsx`, `cells/dates.test.ts`, `ui/Providers.test.tsx` · `cd apps/grid && bunx vitest run src/grid src/ui/Providers.test.tsx` | edit-date-cell, edit-datetime-cell, edit-time-cell (new, `/shakeout` writes them); the existing cell-date flows of step-0b, step-0e, step-1, rewritten in Task 1 |
+| Select editor | the sheet, and `Editor` render | unit · `Grid.test.tsx` ("picks a select from its listbox by letter and Enter", the new "Escape in the select listbox writes nothing"), `cells/Select.test.tsx` · same runner | edit-select-cell (new, `/shakeout`) |
 | To-one picker (`RelationPicker` on `ComboBox`) | the sheet, and `Editor` render | unit · `Grid.test.tsx`, `cells/Relation.test.tsx` · same runner | edit-relation-cell (new, `/shakeout`) |
 | To-many editor (`TagGroup` + `ComboBox`) | the sheet, and `Editor` render | unit · `Grid.test.tsx`, `cells/Links.test.tsx` · same runner | add-and-remove-link (new, `/shakeout`) |
 | Open-panel icon on a to-one cell | `Display` render + `Grid` | unit · `cells/Relation.test.tsx`, `Grid.test.tsx` · same runner | open-related-record (new, `/shakeout`) |
@@ -57,19 +57,26 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 ### Task 1: Date, datetime and time editors on React Aria
 
 **Files:**
-- Modify: `apps/grid/package.json` (add `react-aria-components@^1.22.0`, `react-aria`, `@internationalized/date`)
+- Modify: `apps/grid/package.json` (add `react-aria-components@1.22.0` and `react-aria@3.53.0`, both exact: the components pin that `react-aria`, and a second copy would carry its own portal context; plus `@internationalized/date`)
 - Modify: `apps/grid/src/main.tsx` (wrap the app in `I18nProvider locale={locale()}` and `UNSAFE_PortalProvider getContainer={() => document.getElementById('root')}`)
-- Create: `apps/grid/src/ui/Pop.tsx` — `Pop`
+- Create: `apps/grid/src/ui/Pop.tsx` — `Pop`; `apps/grid/src/ui/Providers.tsx` — `Providers`
+- Modify: `apps/grid/src/test-setup.ts` — `renderNl(ui)`
 - Create: `e2e/segments.ts` — `fillDate(field: Locator, value: string)` typing a stored value into React Aria segments; the five specs' own `typeInto` call it for dates and times
-- Modify: `e2e/step-0b.spec.ts` (108, 163-171, 205), `e2e/step-0e.spec.ts` (192-196, 262, 312-334, 377, 383, 420; 270-290 rewritten as an incomplete-segments flow), `e2e/step-1.spec.ts` (175-177, 311, 335, 342)
+- Modify: `e2e/step-0b.spec.ts` (108, 163-171, 205), `e2e/step-0e.spec.ts` (192-196, 262, 312-334, 420; 270-290 and 371-393 rewritten as segment flows: clearing some segments keeps the stored value, clearing all and Enter writes `{ start_at: null }`), `e2e/step-1.spec.ts` (175-177, 311, 335, 342)
 - Create: `apps/grid/src/grid/cells/dates.ts`
 - Rewrite: `apps/grid/src/grid/cells/Date.tsx` (`DateEditor`, `DateTimeEditor`), `cells/Time.tsx` (`TimeEditor`)
 - Modify: `apps/grid/src/ui/app.css` (`.nv-datefield`, `.nv-calendar`, `.nv-pop` for React Aria)
-- Test: `cells/dates.test.ts` (new), `cells/Date.test.tsx` (rewrite), `grid/Grid.test.tsx` (sheet-seam tests), `src/main.test.tsx` (new)
+- Test: `cells/dates.test.ts` (new), `cells/Date.test.tsx` (rewrite), `grid/Grid.test.tsx` (new sheet-seam tests; and the three that `fireEvent.change` a time editor — `:303` "reads a typed time the way a hand types it" types `930` into the segments and expects `09:30`; `:353` and `:377` move to a text column, keeping their re-sort coverage), `ui/Providers.test.tsx` (new)
 
 **Interfaces:**
-- Produces: `Pop(props: PopoverProps)` — the cell editors' popover: React Aria `Popover` with `isNonModal`, class `nv-pop`, `data-editor`, and `onClick`/`onDoubleClick` that stop propagation. `onOpenChange(false)` (focus left, a click elsewhere) calls the editor's `onLeave`. Tasks 2, 3, 4 and 6 use it; chrome popovers (Tasks 7-10) use React Aria's own `Popover`, `Menu` and `Modal` and need no portal prop.
-- Rule for every in-cell editor: its root element carries `data-editor`, so its keys reach the key machine. The sheet owns Escape (`keys.ts:91`); editors never handle it. An editor stops propagation of Enter only while its value is incomplete, and of ↑↓ inside date segments.
+- Produces: `Providers({ locale, children }: { locale: string; children: ReactNode })` in `src/ui/Providers.tsx` — `I18nProvider locale={locale}` + `UNSAFE_PortalProvider getContainer={() => document.getElementById('root')}`. `main.tsx` renders `<Providers locale={locale()}>`; every test that renders an editor or the `Grid` wraps in `<Providers locale="nl">` (a `renderNl` helper in `src/test-setup.ts`), since jsdom's empty `lang` makes `locale()` answer `'en'`.
+- Produces: `Pop(props: PopoverProps)` — the cell editors' popover: React Aria `Popover` with `isNonModal`, `isKeyboardDismissDisabled` (so Escape travels on to the sheet instead of closing the popover), class `nv-pop`, `data-editor`, and `onClick`/`onDoubleClick` that stop propagation. Tasks 2, 3, 4 and 6 use it; chrome popovers (Tasks 7-10) use React Aria's own `Popover`, `Menu` and `Modal` and need no portal prop.
+- Rules for every in-cell editor:
+  - Its root element carries `data-editor`, so its keys reach the key machine, and stops click propagation, so a click on a segment or a chip does not end the edit (as `Links.tsx:108` does today).
+  - Escape cancels the edit in one press, wherever focus is, through the sheet (`keys.ts:91`). Two parts would otherwise swallow it and catch it themselves: the to-one `ComboBox` (an `onKeyDownCapture` that calls `onCancel`), and the to-many removal question, which owns Escape and every key, as `Links.tsx:62-70` does today (Escape keeps the person).
+  - Leaving: focus moving outside the editor root and its `Pop` calls `onLeave` (which commits the draft, `Grid.tsx:234-244`).
+  - A date editor stops Enter only while some segments, not all, are empty. All empty is a clear; React Aria then emits `onChange(null)`.
+  - ↑↓ and ←→ inside segments: React Aria already stops them; no code, one guard test.
 - Produces in `dates.ts`: `toDate(v: string): CalendarDate | null`, `fromDate(d: CalendarDate | null): string`, `toMoment(v: string): CalendarDateTime | null`, `fromMoment(d: CalendarDateTime | null): string`, `toTime(v: string): Time | null`, `fromTime(t: Time | null): string`. Empty string ⇄ null; malformed input → null.
 - Consumes: `EditorProps` (`cells/props.ts`), unchanged.
 
@@ -90,11 +97,14 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 - "Escape writes nothing": open, type, Escape → `update` not called, the cell shows the stored value.
 - "a calendar day click commits the date once": open, open the calendar, click a day → the edit stays open on that day (the cell's click did not end it); Enter → `update` once.
 - "Enter on an incomplete date writes nothing and keeps the editor": clear the day segment, Enter → `update` not called, the editor still open.
+- "clearing every segment and Enter writes null on an optional date" → `update` once with `null`.
+- "Escape with the calendar open cancels the edit": open the calendar, Escape → `update` not called, the editor closed. `Ruling:` Escape cancels in one press even with the calendar open — cost if wrong: one key handler to close the calendar first.
+- "a click on a segment keeps the edit".
 - "↑ steps the focused segment and does not move the cell", in an editor opened by typing a digit.
 
-`main.test.tsx`: "popovers render inside #root": render the providers around an open React Aria `Popover` → its element is inside `#root`.
+`Providers.test.tsx`: "popovers render inside #root": render `Providers` inside a `<div id="root">` around an open React Aria `Popover` → its element is inside `#root`.
 
-- [ ] **Step 2: Run** `cd apps/grid && bunx vitest run src/grid src/main.test.tsx`- [ ] **Step 2: Run** `cd apps/grid && bunx vitest run src/grid/cells/dates.test.ts src/grid/cells/Date.test.tsx src/ui/Pop.test.tsx` — expect failures (modules missing).
+- [ ] **Step 2: Run** `cd apps/grid && bunx vitest run src/grid src/ui/Providers.test.tsx` — expect failures (modules missing).
 
 - [ ] **Step 3: Implement**
 
@@ -112,9 +122,9 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 **Interfaces:** Consumes `Pop` (Task 1). Produces `OptionMark({ column, option }: { column: Column; option: string })` — the pill, dot or icon-and-word the cell draws; `SelectCell` renders through it.
 
-- [ ] **Step 1: Tests.** `Select.test.tsx` (rewritten against roles): "each option is drawn as the cell draws it" (a `status` column's options carry `nv-pill nv-pill--<tone>`, `soort` options `nv-dot` or the kind icon); "the current option is marked" (`aria-selected`); "required offers no leeg". `Grid.test.tsx`: the existing "picks a select from its listbox by letter and Enter" and "cancels on Escape without a write" pass against the new markup with `update` counted once and zero; new "an option click commits once" and "Tab commits and moves right".
+- [ ] **Step 1: Tests.** `Select.test.tsx` (rewritten against roles): "each option is drawn as the cell draws it" (a `status` column's options carry `nv-pill nv-pill--<tone>`, `soort` options `nv-dot` or the kind icon); "the current option is marked" (`aria-selected`); "required offers no leeg". `Grid.test.tsx`: the existing "picks a select from its listbox by letter and Enter" passes against the new markup with `update` once; new "Escape in the select listbox writes nothing" (after typing a letter), "an option click commits once and stays", "Tab commits and moves right", "the listbox opens on the option the opening letter picks".
 - [ ] **Step 2: Run** `bunx vitest run src/grid/cells/Select.test.tsx src/grid/Grid.test.tsx` — fail.
-- [ ] **Step 3: Implement** `SelectEditor` as a React Aria `ListBox` (`selectionMode="single"`, `autoFocus`, typeahead built in) inside `Pop`, anchored to the cell (`triggerRef` the cell, `isOpen`); Enter and Tab call `onCommit(key, move)` and stop propagation, so the sheet does not commit a second time. Options render `OptionMark`.
+- [ ] **Step 3: Implement** `SelectEditor` as a React Aria `ListBox` (`selectionMode="single"`, `autoFocus`, typeahead built in) inside `Pop`, anchored to the cell (`triggerRef` the cell, `isOpen`), opening with `selectedKeys` and focus on today's `startAt` option (the opening letter went to the cell, not to the typeahead). An `onKeyDownCapture` on the ListBox turns Enter and Tab on the focused option into `onCommit(key, 'down' | 'right' | 'left')` and stops them, since `usePress` consumes Enter before any bubbling handler; a click arrives through `onAction` as `onCommit(key, 'stay')`. Options render `OptionMark`.
 - [ ] **Step 4: Run** — pass; task gate.
 - [ ] **Step 5: Commit** `feat(grid): the select editor on a React Aria ListBox, options drawn as the cell draws them`
 
@@ -124,7 +134,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 **Interfaces:** Keeps `RelationPicker`'s props (`model, label, query, first, onPick, onCancel, onClose, onClear, before, hide, clearOnPick`) and `PICKER_CAP = 50` — Task 4 uses the same props. Consumes `records(model, search)` (`api.ts:135`), `Pop`.
 
-- [ ] **Step 1: Tests:** "lists the space's records first"; "shows at most 50 and says how many more"; "the opening character starts the search"; in `Grid.test.tsx` "Enter picks the active record and writes once" and "an option click writes once"; "Delete in an empty search clears, unless required"; "Escape cancels"; "the input has the column's accessible name".
+- [ ] **Step 1: Tests:** "lists the space's records first"; "shows at most 50 and says how many more"; "the opening character starts the search"; in `Grid.test.tsx` "Enter picks the active record and writes once", "an option click writes once" and "Escape after typing a search cancels in one press"; "Delete in an empty search clears, unless required"; "Escape cancels"; "the input has the column's accessible name".
 - [ ] **Step 2: Run** `bunx vitest run src/grid/cells/Relation.test.tsx` — fail.
 - [ ] **Step 3: Implement** on React Aria `ComboBox` (`allowsEmptyCollection`, `menuTrigger="input"`, controlled `inputValue`, `items` from the debounced `records` call, 150 ms as today), its `ListBox` in `Pop`; `before` renders before the `Input` inside the field group.
 - [ ] **Step 4: Run** — pass; task gate.
@@ -136,7 +146,7 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 **Interfaces:** Consumes `RelationPicker` (Task 3), `LinksContext` unchanged.
 
-- [ ] **Step 1: Tests:** "chips flow inline and the box caps at two lines" (the box has class `nv-chosen` with `max-height` set; asserted in CSS by the e2e screenshot, here: chips render in one `TagGroup` `role="grid"`); "Backspace in an empty search removes the last chip"; "removing a confirmed link asks first" (an `alertdialog` with Annuleren and Verwijderen; Escape keeps it); "Enter adds once and empties the search" (in `Grid.test.tsx`, counting the link create); "a chip's remove button names the person".
+- [ ] **Step 1: Tests:** "chips flow inline and the box caps at two lines" (the box has class `nv-chosen` with `max-height` set; asserted in CSS by the e2e screenshot, here: chips render in one `TagGroup` `role="grid"`); "Backspace in an empty search removes the last chip"; "removing a confirmed link asks first" (an `alertdialog` with Annuleren and Verwijderen; Escape keeps it); "Enter adds once and empties the search" and "Escape leaves the editor without a create or delete" (both in `Grid.test.tsx`, counting link creates and deletes); "a chip's remove button names the person".
 - [ ] **Step 2: Run** — fail.
 - [ ] **Step 3: Implement** `Chosen` as a React Aria `TagGroup`/`TagList`/`Tag` with `onRemove`, passed as `before` to `RelationPicker`; `Question` as `Dialog role="alertdialog"` inside `Pop`.
 - [ ] **Step 4: Run** — pass; task gate.
@@ -146,11 +156,11 @@ Gate for every task: `bun run check && cd apps/grid && bunx vitest run` (the ful
 
 **Files:** Modify `cells/Relation.tsx` (`RelationCell`), `grid/Grid.tsx` (drawer opens a related record), `grid/Drawer.tsx` only if it needs a `title` prop; Test `cells/Relation.test.tsx`, `grid/Grid.test.tsx`.
 
-**Interfaces:** Consumes `rowOf(model, id)` (`api.ts:162`), `columnsFor(model, view, false, models)` (`columns.ts:260`). Produces a context or prop `openRelated(model: string, id: number)` from `Grid` to `RelationCell`.
+**Interfaces:** Consumes `rowOf(model, id)` (`api.ts:162`), `columnsFor(model, view, false, models)` (`columns.ts:260`). Produces a context `openRelated(model: string, id: number)` from `Grid` to `RelationCell`, and a new `Grid` prop `onNotice(message: string)` that `App` wires to its `notify` (`App.tsx:152`, the `Grid` at `App.tsx:466`).
 
-- [ ] **Step 1: Tests:** "a filled to-one cell shows an open button named after the record" (React Aria `Button`, `aria-label` "Open <title>"); "an empty cell shows none"; "no open button when the target model is not readable" (not in `models`); in `Grid.test.tsx`: "the open button shows the related record in the drawer, read-only" and "a missing record opens no drawer and says so" (`rowOf` null or a 404 → a toast, no drawer).
+- [ ] **Step 1: Tests:** "a filled to-one cell shows an open button named after the record" (React Aria `Button`, `aria-label` "Open <title>"); "an empty cell shows none"; "no open button when the target model is not readable" (not in `models`); in `Grid.test.tsx`: "the open button shows the related record in the drawer, read-only" and "a missing record opens no drawer and says so" (`rowOf` null or a 404 → `onNotice` called once, no drawer).
 - [ ] **Step 2: Run** — fail.
-- [ ] **Step 3: Implement**: the button appears on hover and focus of the cell (CSS), press calls `openRelated`; `Grid` fetches `rowOf` and opens the `Drawer` with that model's columns, `writable = false`; a null or a thrown `rowOf` shows the existing error toast.
+- [ ] **Step 3: Implement**: the button appears on hover and focus of the cell (CSS), press calls `openRelated`; `Grid` fetches `rowOf` and opens the `Drawer` with that model's columns, `writable = false`; a null or a thrown `rowOf` calls `onNotice(t('recordGone'))` (a new Dutch string: "Dit record bestaat niet meer of je mag het niet zien").
 - [ ] **Step 4: Run** — pass; task gate.
 - [ ] **Step 5: Commit** `feat(grid): a to-one cell opens its record`
 

@@ -1,129 +1,119 @@
-# Plan review — react-aria
-Reviewed-plan: 3941bc8eb18c06c8fe735c05f2581e930ba9260b specs/react-aria/plan.md
+# Plan review — react-aria (second review)
+Reviewed-plan: 56c50e041abc67a83914de6a2dbbcba9cdb8003d specs/react-aria/plan.md
 Verdict: not ready
 
-Every spec requirement (R1 to R7) has a task. The `docs/SPEC.md` sentence and the field-contract update are already committed in 0e96e48 (SPEC.md:37, field-contract.md:371-375), so they need no task. Most premises hold. One does not, and Review Focus 1 rests on it.
+The revision fixed B1, S4, S6, S7 and S8, and N1 and N2. These premises hold in the source:
+- `UNSAFE_PortalProvider` is exported from `react-aria`.
+- `isNonModal` is a Popover prop.
+- Popover passes `onClick` and `data-*` through to the DOM.
+- The CHECKS.md flow names and the existing Grid.test names are real.
+- `keys.ts:91` is the Escape case.
+
+One new premise is false: the plan says the sheet owns Escape, but React Aria takes Escape first. Four smaller problems come from the revision itself.
 
 ## Blocking
 
-**B1. The `Pop` does not fix the click problem it claims to fix (Simplest design; Review Focus 1; Task 1 `Pop.test.tsx` "a click in the popover keeps the edit").**
-- The plan says the popover sits "outside `[data-editor]` where the sheet looks for an open edit (`Grid.tsx:67`)", and that marking `Pop` `data-editor` means "a click in the popover keeps the edit".
-- What the source does:
-  - `fromCell` (Grid.tsx:66-68) is only checked in `onKeyDown`, `onCopy` and `onPaste` (Grid.tsx:260, 279, 286). It never decides anything about a click.
-  - A click inside a React portal still bubbles up the React component tree. The editor is rendered inside the `<td onClick={() => actions.click(cell)}>` (GridBody.tsx:56-61), so a calendar-day or option click reaches `actions.click`.
-  - `click` goes to `focus(cell)`, which sets `editing: null` (keys.ts:141-142, 77-79). The edit is dropped without a write.
-  - The codebase already knows this. Links.tsx:106-108 says "A click in here would reach the cell, and selecting the cell ends the edit" and stops propagation on its wrapper.
-- As written, the `Pop` test passes (the attribute is there) while the property it is meant to prove fails.
-- Smallest change:
-  - `Pop` stops click and double-click propagation. RAC `Popover` accepts `onClick` through `GlobalDOMAttributes` (@react-types/shared dom.d.ts:298-326).
-  - Point Review Focus 1 at a test that renders the editor through `Grid`, clicks a calendar day or option, and asserts the edit committed and the cell's `onClick` did not end it.
-  - Restate the reason in the Simplest design paragraph. `data-editor` only routes keyboard events from the portal to the key machine; that is a separate concern (see S2).
+**B1. "The sheet owns Escape (`keys.ts:91`); editors never handle it" is false wherever focus sits inside a React Aria overlay or ComboBox.**
+- **Plan:** Task 1 Interfaces, the rule for every in-cell editor. Review Focus 3 depends on it.
+- **Popover:** `usePopover` always installs `useOverlay` (react-aria 3.53.0 `overlays/usePopover.mjs:28-35`). Its Escape shortcut (`overlays/useOverlay.mjs:60-68`) returns `undefined`. `createKeyboardShortcutHandler.mjs` turns that into "stop propagation", unless `isKeyboardDismissDisabled` makes it return `false`. So Escape from a focused calendar (Task 1), a ListBox in `Pop` (Task 2) or a TextArea in `Pop` (Task 6) never reaches the `<table onKeyDown>`. Instead the popover's `state.close` runs.
+  - Task 2 controls `isOpen` and maps `onOpenChange(false)` to `onLeave`. Escape after typing `v` would then commit `show`: `onLeave` commits the draft (`Grid.tsx:234-244`). Without that mapping, Escape does nothing.
+  - Either way the contract line "Escape leaves without a write" fails (`field-contract.md:31`).
+- **ComboBox:** `useComboBox.mjs:165-171` stops Escape whenever the input holds text and nothing is selected. The opening character puts text there (Task 3 "the opening character starts the search"). So the first Escape only reverts the search.
+- **Task 4 contradicts the rule.** Its Question must keep "Escape keeps it". Today `Links.tsx:62-70` does that by owning Escape and stopping every key.
+- **Smallest change:**
+  - `Pop` sets `isKeyboardDismissDisabled`, so Escape keeps propagating to the sheet.
+  - The to-one picker catches Escape itself (`onKeyDownCapture` → `onCancel`).
+  - Name the alertdialog as the one editor part that owns Escape and stops all keys, as `Links.tsx:62-70` does today.
+  - Add the Grid-seam tests that are missing: "Escape in the select listbox writes nothing" (Task 2), "Escape with the calendar open…" (Task 1, with the ruling: close the calendar first, or cancel the edit), and "Escape after typing a search cancels in one press" (Task 3).
 
 ## Should fix
 
-**S1. Task 6, Step 4 points at the wrong e2e lines and leaves out the ones that break.**
-- `e2e/dagplanning.spec.ts:166-167` is the filter builder's "ligt tussen" range (FilterBuilder.tsx:106-107). That belongs to Task 10, not to a cell.
-- The specs that type into date and time cells with `locator('input').fill(ISO)` are not named:
-  - step-0b.spec.ts:108, 163-171, 205
-  - step-0e.spec.ts:192-196, 262, 312-334, 377, 383, 420
-  - step-1.spec.ts:175-177, 311, 335, 342
-- step-0e.spec.ts:270-290 asserts `validity.badInput` on a native input, so it needs rewriting as an incomplete-segments flow.
-- They break at Task 1, but the first e2e gate is Task 6.
-- Fix: list these files in Task 1 or Task 6, with one shared helper for typing into segments (five specs each have their own `typeInto`). Drop the 166-167 reference from Task 6.
+**S1. The Task 1 Enter rule contradicts the e2e flows the plan keeps.**
+- **Plan:** Step 3 says "While a segment is empty, Enter is stopped". Interfaces says an editor stops Enter "only while its value is incomplete".
+- **Source:**
+  - `e2e/step-0e.spec.ts:279-290` and `:371-393` (`clear-start-segment-by-segment`) clear every segment, press Enter, and expect `{ start_at: null }`.
+  - The contract agrees: "Empties it, unless required" (`field-contract.md:38-39`).
+  - When every segment is cleared, React Aria emits `onChange(null)`, but under the plan's rule Enter is stopped and the clear is never written.
+- **Fix:** stop Enter only when some segments, but not all, are empty. Add the Grid-seam test "clearing every segment and Enter writes null on an optional date".
+- Task 1 Files also leaves out `step-0e.spec.ts:385-389`: line 389 is a second `validity.badInput` assertion, and 383-388 drive a native `input`. List 379-393 as rewritten.
 
-**S2. The "exactly once" Review Focus lines (3 and 4) are tested where a double write cannot be seen.**
-- Every editor test renders the editor alone. A second commit comes from the sheet: a key that is not stopped reaches the `<table onKeyDown>` through the React tree, `fromCell` accepts it (the portal now carries `data-editor`), and keys.ts:93-96 commits `editing.draft` again.
-- One concrete case is Enter on a ListBox option or calendar day: the editor commits it, then the sheet commits again.
-- Fix: for Tasks 1 to 4 and 6, put the "commits once on Enter / Escape writes nothing" tests at the `Grid` seam, counting `update` calls. The pattern already exists in `Grid.test.tsx` ("picks a select from its listbox by letter and Enter", "cancels on Escape without a write"). Name those existing Grid tests in the Test map; they will break on the markup change and are the real guard.
+**S2. Task 2 and the Test map row "Select editor" name an existing test that does not test the select.**
+- `Grid.test.tsx:274` "cancels on Escape without a write" edits `place`, a text column, and expects 'Grote zaal'.
+- So no select Escape test exists at the sheet seam. That gap is where B1 shows.
+- **Fix:** add a new select test in Task 2. Keep 274 as text coverage.
 
-**S3. Task 1, Step 3: the code shown contradicts its own tests.**
-- No `data-editor` on the field:
-  - Today `<input data-editor>` (Date.tsx:53) is what lets segment keys reach the sheet. Step 3 puts `data-editor` only on `Pop`.
-  - Without it on the DatePicker/TimeField root, Enter and Tab from a segment never reach the key machine, because `matches('td[data-cell]')` does not match descendants.
-  - Fix: state that every in-cell editor root keeps `data-editor`.
-- Required columns can still be cleared:
-  - `onChange={(d) => onDraft(fromDate(d))}` drafts `''` when every segment is cleared. RAC calls `setDate(null)` on a cleared value (react-stately useDateFieldState.mjs:154-156), and `isRequired` only validates.
-  - Fix: show the guard (`d === null && column.required` → ignore).
-- The "Escape writes nothing … `onCancel` called once" test:
-  - Today Escape in a date editor is handled by the sheet (keys.ts:91), not the editor.
-  - Asserting `onCancel` in isolation forces the editor to own Escape. Unless it also stops propagation, that cancels twice.
-  - Fix: decide which of the two owns Escape, and test it at the Grid seam.
+**S3. Task 1 breaks four existing Grid tests on a time column and names none of them.**
+- In the Calais fixture `start` is a `time` column (`columns.ts:102, 197`).
+- `Grid.test.tsx:303` "reads a typed time the way a hand types it", `:353` "follows the record…" and `:377` "commits an open editor…" all do `fireEvent.change(editor(), { target: { value: … } })`. `editor()` is `document.activeElement as HTMLInputElement` (line 56).
+- Once Task 1 turns `TimeEditor` into a `TimeField`, the focused element is a `spinbutton` segment.
+- **Fix:** list them in Task 1. Test 303 drops the lenient `930` parse; that is a ruling under R7. The two re-sort tests can move to a text column so their coverage survives.
 
-**S4. Test map row "Buttons, MoreMenu, Confirm, SidePanel, Drawer — existing `*.test.tsx` of each": three of those tests do not exist.**
-- There is no `MoreMenu.test.tsx`, `Confirm.test.tsx` or `SidePanel.test.tsx` in `apps/grid/src/ui`. Only `Drawer.test.tsx` exists.
-- Fix: name what really covers them (`Grid.test.tsx` drawer and DeleteRow tests; `e2e/model-menu.spec.ts` for MoreMenu), or add a test for MoreMenu's Escape-returns-focus, which the RAC swap changes.
+**S4. The `Pop` interface contradicts itself and React Aria.**
+- **Plan:** Task 1 Interfaces says "`onOpenChange(false)` (focus left, a click elsewhere) calls the editor's `onLeave`", but `Pop(props: PopoverProps)` never receives `onLeave`.
+- Inside `DatePicker` and `ComboBox`, React Aria's Popover uses the parent's state (`react-aria-components/dist/private/Popover.mjs:53-55`), so a `Pop`-level `onOpenChange` is never called.
+- Where it does fire (a standalone `isOpen`), it fires on Escape too (B1).
+- Step 3 already gives the real mechanism: blur outside the field and its `Pop` calls `onLeave`.
+- **Fix:** delete the `onOpenChange` clause and keep the one blur rule.
 
-**S5. Task 5 has no path for a related record the caller cannot read.**
-- `rowOf` (api.ts:161-164) throws on 404 and returns null for an out-of-scope row.
-- An owner account reads only the titles of related rows, never the rows (docs/SPEC.md Dataset row). The open button would show and then fail.
-- Fix:
-  - Show the button only when the target model is in `models`.
-  - Handle `null` or a throw from `rowOf` with no drawer and a toast.
-  - Add tests: "no open button when the target is not readable" and "a missing record opens no drawer".
+**S5. Task 5 relies on "the existing error toast" from `Grid`, which has no route to it.**
+- The toast's `notify` lives in `App` (`App.tsx:152`).
+- `Grid` gets no notify prop (`App.tsx:466`, the props at `Grid.tsx:30-60`), and `Grid.tsx` has no toast.
+- **Fix:** add a `Grid` prop (e.g. `onNotice(message)`, wired to `notify` in `App`) to Task 5 Interfaces, and assert on it in "a missing record opens no drawer and says so".
 
-**S6. Task 10's "a reversed range is not drafted" is new behaviour.**
-- Today the two native inputs draft whatever is typed (FilterBuilder.tsx:106-107).
-- R7: "no new behaviour beyond R4's editors."
-- Fix: drop the test, or note it as a ruling for Stefan.
+**S6. The tests have no seam for the locale or for the root providers.**
+- **Locale:**
+  - The `I18nProvider` lives only in `main.tsx`.
+  - In jsdom `document.documentElement.lang` is empty, so `locale()` returns `'en'` (`i18n.ts:259-265`), and `Date.test.tsx` and `Grid.test.tsx` render without a provider.
+  - "shows the stored date in Dutch order", "first column header is `ma`" and every Grid-seam segment test would run in en-US.
+- **Providers:** `main.tsx` renders at import (`main.tsx:14-22`) and exports nothing, so `main.test.tsx` "popovers render inside #root" has nothing to render.
+- **Fix:** extract an exported `Providers` component (I18nProvider + PortalProvider) that `main.tsx` uses and the tests wrap with `locale="nl"`, or set `lang="nl"` in `test-setup.ts` and wrap in `Providers`.
 
-**S7. Task 11's "existing `ViewList.test.tsx`, kept" cannot hold.**
-- The existing tests drive `useDragOrder` with `pointerDown`/`pointerMove`/`pointerUp` on `window` and check `nv-view--dragging`/`nv-view--drop` (ViewList.test.tsx:209-289). RAC `useDragAndDrop` uses its own drag events and drop indicators.
-- `useDragOrder` is used only by ViewList, so "delete if nothing else uses it" is already decided.
-- Fix:
-  - Say the reorder tests are rewritten against RAC's keyboard drag or `onReorder`.
-  - Delete `useDragOrder.ts` unconditionally.
-  - State which current drag behaviours must survive: moving only within its own group, dropping past the last view.
-
-**S8. Test map E2E flows give existing flows new names.**
-- "toggle-theme-density" is `dark-and-density`, "period-between" is `period-is-a-filter`, and "new-view" is `create-team-and-personal-view` in specs/CHECKS.md.
-- Fix: use the registered names.
-- The new names (edit-date-cell, edit-select-cell, add-and-remove-link, open-related-record, reorder-views …) exist nowhere and no task writes them. Either say `/shakeout` creates them, or assign them to tasks.
+**S7. Task 1 Step 2 (line 97) is a broken merge of two lines.**
+- The step appears twice on one line.
+- The second copy runs `src/ui/Pop.test.tsx`, which no Files or Test line creates anymore.
+- **Fix:** keep `cd apps/grid && bunx vitest run src/grid src/main.test.tsx`.
 
 ## Note
 
-- **N1. A simpler design the plan did not consider.**
-  - In 1.22, `UNSTABLE_portalContainer` on Popover and Modal is marked `@deprecated - Use a parent UNSAFE_PortalProvider` (RAC dist/types/src/Popover.d.ts:46, Modal.d.ts:36).
-  - One `<UNSAFE_PortalProvider getContainer={() => document.getElementById('root')}>` beside the `I18nProvider` in main.tsx would send every popover, menu and modal into `#root`. Tasks 7 and 9 would then stop passing the prop per call site.
-  - `Pop` would shrink to class + `data-editor` + click stop.
-  - The provider is exported from `react-aria` 3.53.0 (exports/index.d.ts:92), not from `react-aria-components`. It would need adding as a direct dependency.
-  - Even with the plan's own design, Tasks 7 and 9 use a bare `Popover` or `Modal` with the prop, while Task 1 says "every later task's popover, menu and modal uses these". That is two ways of doing one thing.
-- **N2. Modal or non-modal `Pop` for cell editors is undecided.**
-  - A modal RAC Popover adds a full-screen underlay and contains focus (Popover source: underlay `position: fixed; inset: 0`).
-  - A click on another cell would then close the popover instead of committing and selecting that cell, as blur does today.
-  - Decide `isNonModal` (or how `onOpenChange(false)` maps to `onLeave`/`onCancel`) in `Pop`'s interface.
-- **N3. An incomplete date followed by Enter.**
-  - RAC emits no `onChange` for an incomplete value (useDateFieldState.mjs:164-180), so the draft keeps the last complete value.
-  - Enter then commits that value and closes the editor. The contract says "keeps the editor open and writes nothing". This needs a ruling at Task 1.
-- **N4. Arrows in an editor opened by typing.**
-  - In `enter` mode, arrows commit and move (keys.ts:99-100). The contract says ↑↓ step the focused segment.
-  - Whether RAC segments stop propagation of arrow keys decides which one wins. Rule on it and test it at the Grid seam.
-- **N5.** Task 1's typed-digit handling is already deferred to a `Ruling:`. That is fine as written.
-- **N6.** There is no `## Threat model`. No security-boundary file is touched; Task 5's new read is enforced by the server. S5 covers the UX side.
+- **N1. Pin `react-aria` to `3.53.0`.** `react-aria-components` 1.22.0 pins `react-aria` exactly at `3.53.0` (its package.json). Task 1 adds `react-aria` unversioned, so bun writes `^3.53.0`. A later 3.54 would install a second copy with its own `PortalContext`, and the provider would silently stop placing popovers. `main.test.tsx` would catch it, but pinning prevents it.
+- **N2. Task 2 needs a ruling on how Enter becomes `onCommit(key, 'down')`.** On a ListBox option, Enter is consumed by `usePress` (`interactions/usePress.mjs:251-266`, which stops propagation), so an `onKeyDown` on the ListBox or `Pop` never sees it. The commit has to come from `onAction`/`onSelectionChange` or a capture handler, and a click must still mean `'stay'`. The listbox must also start on the option the opening letter picks (today `startAt`, `Select.tsx:33-35`). Typeahead does not see that letter, because it went to the cell.
+- **N3. Clicking a segment ends the edit.** The in-cell editor root could also stop click propagation, as `Links.tsx:108` does. `useDateSegment` stops only `pointerdown`/`mousedown` (`datepicker/useDateSegment.mjs:365-370`), so clicking a segment to fix the month bubbles a click to `<td onClick>` and ends the edit. Today's native input does the same, so this is not a regression, but it is cheap to fix while the rule is being written.
+- **N4. The ↑↓ rule is redundant.** React Aria already stops ↑↓ in segments (`useSpinButton` shortcuts) and ←→ (`useDatePickerGroup`, which `TimeField` uses too), so the editor needs no code for it. The Grid-seam test "↑ steps the focused segment and does not move the cell" stays useful as the guard.
+- **N5. To-many cancel is not tested.** The spec's done-when asks for each editor's commit and cancel. Task 4 tests Escape only inside the removal question, not Escape leaving the to-many editor.
 
 ## Premises checked
-- `fromCell` at Grid.tsx:67 → Grid.tsx:66-68 → holds as a location. "Where the sheet looks for an open edit" / keeps a click's edit → Grid.tsx:260,279,286; GridBody.tsx:56; keys.ts:141 → does not hold (keyboard, copy and paste only).
-- `locale()` at i18n.ts:259, page `<html lang>` → i18n.ts:258-266 → holds
-- `rowOf(model, id)` at api.ts:162 → api.ts:161-164 → holds (returns null, or throws on 404)
-- `columnsFor(model, view, false, models)` at columns.ts:260 → columns.ts:260 → holds
-- `records(model, search)` at api.ts:135 → api.ts:135 → holds
-- `RelationPicker` props and `PICKER_CAP = 50`, 150 ms debounce → RelationPicker.tsx:7-8, 12-34 → holds
-- `Pick` props `label, value, searchable, className` → Pick.tsx:11-19 → holds (plus `options`, `onChange`)
-- Theme tokens on the app root → theme.css:62, 110; Theme.tsx:25-27; RailFoot.tsx:31 → holds
-- MoreMenu has its own portal → MoreMenu.tsx:4, 46-50 (already portals into `#root`) → holds
-- FilterBuilder lines 106-107 are the "ligt tussen" range → FilterBuilder.tsx:106-107 → holds
-- `e2e/dagplanning.spec.ts:166-167` are cell date flows (Task 6) → dagplanning.spec.ts:166-167 is the filter range → does not hold
-- RAC popovers portal to `document.body` → Popover.d.ts:47 `@default document.body` → holds
-- RAC Popover and Modal accept `UNSTABLE_portalContainer` → Popover.d.ts:49, Modal.d.ts:39 → holds, but deprecated
-- `Pop` can carry `data-editor` → Popover spreads `filterDOMProps(props, {global: true})` → holds
-- `react-aria-components` 1.22 → npm latest 1.22.0 → holds
-- Sakani 0.3.29 in the lockfile → bun.lock:245 → holds
-- `[class*="_…"]` rules in app.css → app.css:768 (one rule) → holds
-- `docs/SPEC.md` names React Aria → SPEC.md:37, committed in 0e96e48 → holds (no task needed)
-- Field contract already updated → field-contract.md:363-375, committed in 0e96e48 → holds
-- Existing tests for MoreMenu, Confirm, SidePanel → ls apps/grid/src/ui → does not hold
-- `useDragOrder` used elsewhere → only ViewList.tsx → nothing else uses it
-- Existing ViewList tests survive GridList DnD → ViewList.test.tsx:209-289 (pointer-driven) → does not hold
-- The Drawer is read-only and takes no `title` → Drawer.tsx:12-40 → holds (`writable = false` is `columnsFor`'s argument)
+
+- `UNSAFE_PortalProvider` from `react-aria` → react-aria 3.53.0 `exports/index.d.ts:92` → holds (not re-exported by RAC)
+- Popover and Modal honour the provider → `overlays/Overlay.mjs:31-41` (`getContainer` when no `portalContainer`) → holds
+- `isNonModal` on Popover → `usePopover.d.ts:30`; RAC `PopoverProps` extends `AriaPopoverProps` → holds
+- Popover accepts `onClick`/`onDoubleClick`/`data-editor` → RAC `Popover.mjs:183` `filterDOMProps(props, {global: true})` → holds
+- `Pop`'s `onOpenChange(false)` reaches the editor → `Popover.mjs:53-55` uses the context state inside DatePicker/ComboBox → does not hold
+- The sheet owns Escape while an editor is open → `useOverlay.mjs:60-68`, `useComboBox.mjs:165-171`, `Links.tsx:62-70` → does not hold
+- `keys.ts:91` Escape → `keys.ts:91-92` → holds
+- Dark tokens on `#root` → `theme.css:62, 110`, `Theme.tsx:26-27`, `app.css:10-18` → holds
+- `fromCell` judges keys, copy and paste only → `Grid.tsx:66-68, 260, 279, 286` → holds
+- A td click drops the edit → `GridBody.tsx:56-61`, `keys.ts:77-79, 141-142` → holds
+- `Links.tsx:106-108` stops propagation → holds
+- Calendar day and option clicks stop on their own as well → `usePress.mjs:277-301` → holds (`Pop`'s click stop is a second guard)
+- `locale()` at `i18n.ts:259` → holds, but returns `'en'` under jsdom
+- e2e step-0b 108, 163-171, 205 → holds
+- e2e step-0e 192-196, 262, 270-290, 312-334, 377, 383, 420 → holds, but 385-389 (native input, `badInput`) is missing
+- e2e step-1 175-177, 311, 335, 342 → holds
+- `dagplanning.spec.ts:166-167` is the Van/Tot range (Task 10) → holds
+- Grid.test "picks a select from its listbox by letter and Enter" → `Grid.test.tsx:286` → holds
+- Grid.test "cancels on Escape without a write" is a select test → `Grid.test.tsx:274` edits `place` (text) → does not hold
+- Grid.test "the drawer", "Zeker?" → `Grid.test.tsx:620-725` → holds
+- The existing time-cell Grid tests survive Task 1 → `Grid.test.tsx:303, 353, 377` use `fireEvent.change` on an input → does not hold (not named)
+- CHECKS.md names (dark-and-density, create-team-and-personal-view, period-is-a-filter, filter-builder, publish-from-share-menu, the-open-models-menu-exports, rename-and-icon-a-model, query-views-under-model, tree-scrolls-in-rail) → `specs/CHECKS.md:30-87` → holds
+- "the existing error toast" reachable from `Grid` → `App.tsx:152, 466`; Grid has no notify prop → does not hold
+- `rowOf` `api.ts:162`, `records` `api.ts:135`, `columnsFor` `columns.ts:260`, `PICKER_CAP`/props `RelationPicker.tsx:7-30` → holds
+- `useDragOrder` used only by ViewList → `ViewList.tsx:8, 100` → holds
+- FilterBuilder 106-107 range, `app.css:768` `[class*="_input--sm"]` → holds
+- RAC 1.22.0 pins `react-aria` 3.53.0 → RAC package.json → holds (the plan does not pin)
 
 ## The cut
-One plan for one spec: one feature, one boundary (the grid's UI library). Twelve tasks is large, but they share that one boundary. Splitting the editors from the chrome would leave Sakani's removal (Task 12) depending on both.
+One plan for one spec: one feature. The judgement in the first review stands.
+
+Files: /home/ntdst/Sites/worktable/specs/react-aria/plan.md, /home/ntdst/Sites/worktable/specs/react-aria/plan-review.md (first review), /home/ntdst/Sites/worktable/apps/grid/src/grid/Grid.tsx, /home/ntdst/Sites/worktable/apps/grid/src/grid/Grid.test.tsx, /home/ntdst/Sites/worktable/apps/grid/src/grid/cells/Links.tsx, /home/ntdst/Sites/worktable/apps/grid/src/main.tsx, /home/ntdst/Sites/worktable/apps/grid/src/ui/App.tsx, /home/ntdst/Sites/worktable/e2e/step-0e.spec.ts. The React Aria sources I checked are unpacked under /tmp/claude-1000/-home-ntdst-Sites-worktable/06225491-7288-42da-ac3a-20327873f390/scratchpad/pkgs/.
+
+The first review (of blob 3941bc8) is in git: `git show 8231620:specs/react-aria/plan-review.md`.
