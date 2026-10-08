@@ -93,7 +93,7 @@
   - `apps/grid/src/i18n.ts`.
 - Also modify:
   - `apps/grid/src/ui/useSavedViews.ts`: autosave, the in-flight follow-up, `duplicate` from `currentOf`. Autosave follows the person's own `setLayout`, never the stored local state: a landing or link applied with `keepLocal` does not save.
-  - `apps/grid/src/engine.ts` (`toSavedViews` maps `public`) and `apps/grid/src/types.ts` (`SavedView.public`), for threat 6.
+  - `apps/grid/src/engine.ts` (`EngineView` gains `public`, `toSavedViews` maps it) and `apps/grid/src/types.ts` (`SavedView.public`), for threat 6.
 - Tests: `apps/grid/src/ui/Toolbar.test.tsx`, `ui/App.test.tsx`, and the e2e lines that click "Opslaan" or read "gewijzigd"/"Opgeslagen" (grep `e2e/` for `Opslaan`, `gewijzigd`, `Opgeslagen`, `Start ↑`, `Kolommen`).
 
 **Interfaces:**
@@ -111,6 +111,7 @@
   - On an own view, a filter change calls `updateView` once after 400 ms.
   - On a seeded view, the change is kept local, and `updateView` is never called.
   - On a public view, the change is kept local; "Publieke weergave bijwerken" saves it (threat 6).
+  - On a public view that is not `editable` (a seeded or shared one), "Publieke weergave bijwerken" is absent and Kopie maken is offered.
   - Two changes 300 ms apart, the first PATCH still pending, end with both stored.
   - A refused save still shows `Niet opgeslagen: …`; a save in flight shows nothing.
   - Kopie maken on a locked view with a local change copies the change.
@@ -186,10 +187,21 @@
     - A landing applies `f` only when `view` resolves to that exact key. The conditions become a local change, not saved (an own view saves only on the person's own next change).
     - A malformed `f` is dropped. `f` leaves the hash once applied, so a reload does not apply it again.
     - `from`/`to`/`period` are no longer read from the hash: an old address with them lands on the view without a date condition from the address.
-    - A date condition from a link replaces the field's existing date condition (`$period` or `$gte`/`$lte`). It is never stored beside it.
+    - A date field holds one date condition, from the builder or a link: a new one (`week`, `next_week`, `month`, `between`) replaces the field's existing one (`$period` or `$gte`/`$lte`). It is never stored beside it, and the builder does not offer a second.
     - `f` is applied or dropped only once the saved views have answered (`settled`, `App.tsx:182`), so a saved view's key resolves before the check.
   - `packages/theatre/src/seed.ts`: Dagplanning's `filters: { plandag: { $period: 'week' } }`; `--seed-missing` brings the system view up to date.
-- Tests: `FilterBuilder.test.tsx`, `apps/grid/src/engine.test.ts`, `packages/theatre/test/seed-missing.test.ts`, `packages/theatre/test/grid-ux.test.ts`. Also the e2e that use the period chip: grep `Periode`, `period-chip`, `nv-period`, `Vorige periode`, `Volgende periode`, `period=all` in `e2e/`. The `#from=` landings stop narrowing: rewrite the shared helpers (`openDagplanning` in `e2e/dagplanning.spec.ts:56`, `land` in `e2e/grid-ux.spec.ts:70`, and their likes) to open the view and then land on `#view=<key>&f=<the date condition for that week>`. Flows that step with ‹ › ("Vorige/Volgende periode") need the same rewrite.
+- Tests: `FilterBuilder.test.tsx`, `apps/grid/src/engine.test.ts`, `packages/theatre/test/seed-missing.test.ts`, `packages/theatre/test/grid-ux.test.ts`. Also the e2e that use the period chip: grep `Periode`, `period-chip`, `nv-period`, `Vorige periode`, `Volgende periode`, `period=all` in `e2e/`. The `#from=` landings stop narrowing. A shared helper takes the view and the week: it resolves the view's key, then lands on `#view=<key>&f=<the date condition for that week>`, so `f` targets the view the flow then reads. The helper replaces `land(page, hash)`, which knows no view.
+  - Rewrite:
+    - `e2e/dagplanning.spec.ts:56` (`openDagplanning`), and `:609` (`period-empty-result`);
+    - `e2e/grid-ux.spec.ts:70` (`land`) and its callers;
+    - `e2e/step-1.spec.ts:148` (its own `land`) and the calls at 205, 337, 345, 442 and 480. The comment at 205 ("The window is the app's, not the view's") goes;
+    - `e2e/step-0b.spec.ts:5,24`, which then opens Dagplanning at 122 and 141;
+    - `e2e/step-0d.spec.ts:5,35,327`: the matrix at 117–172 reads 2026-10-12, so it lands with a date condition; Dagplanning at 210;
+    - `e2e/step-0e.spec.ts:39,86,91,418`: Afwezigheden at 89 and the empty text at 93 (lowercase "periode");
+    - `e2e/title-line.spec.ts:9,25`: it expects a visible Dagplanning row, which on "deze week" depends on the run's date;
+    - `e2e/step-0a.spec.ts:4,13`: Planning's day sections at 93–95 (Planning loses its default week);
+    - flows that step with ‹ › ("Vorige/Volgende periode").
+  - Harmless (the `#from=` is now ignored): `e2e/rail-tree.spec.ts:7,27`, `e2e/dagplanning.spec.ts:584,668` (tree only). `e2e/smoke/dagplanning.spec.ts:6` (sign-in page) is rewritten to land with `#view=&f=` so the smoke test checks an address the app reads.
 - Also amend the `docs/SPEC.md` working-tree Sidebar line ("The period is a filter chip … with the window in the URL"): the period is a condition on the date column, stored in the view; a matrix reads the condition's days, else the current week.
 
 **Interfaces:**
@@ -237,7 +249,7 @@
 
 **Files:**
 - Create: `packages/engine/src/history.ts`, `packages/engine/test/history.test.ts`, `apps/grid/src/ui/HistoryPanel.tsx`, `apps/grid/src/ui/HistoryPanel.test.tsx`. (`ui/history.ts` is the tab's undo stack; the panel's name keeps them apart.)
-- Modify: `packages/engine/test/fixture.ts`. `note_lijst` gains `creates: 'note'` for the mapped-columns case. For the denial, add a dataset `stempel` (no owner column, a `create` writer) and a query `stempel_lijst` with `owners: { owner: 'project_id' }` and `creates: 'stempel'`. Update the tests that list the fixture's sources exactly: `access.test.ts:99-100`, `rows.test.ts:256-265`, `writes.test.ts:214-229` and `:442-450`, and `route-matrix.test.ts`. Keep the new names off the vocabulary list (`bun run check`). Also `packages/engine/src/app.ts` (route), `packages/engine/test/route-matrix.test.ts` (two rows: `/api/history/taak`, owner 200; `/api/history/plat`, owner 404; both unauthenticated 401), `apps/grid/src/api.ts`, `apps/grid/src/ui/Toolbar.tsx` (icon button), `apps/grid/src/ui/App.tsx`, `apps/grid/src/i18n.ts`.
+- Modify: `packages/engine/test/fixture.ts`. `note_lijst` gains `creates: 'note'` for the mapped-columns case. For the denial, add a dataset `stempel` with a `project_id` column (relation `project`), no `owners`, and a `create` writer; and a query `stempel_lijst` that selects `id, project_id, …` from `stempel`, with `owners: { owner: 'project_id' }` and `creates: 'stempel'`. Update the tests that list the fixture's sources exactly: `access.test.ts:99-100`, `rows.test.ts:256-265`, `writes.test.ts:214-229` and `:442-450`, and `route-matrix.test.ts`. Keep the new names off the vocabulary list (`bun run check`). Also `packages/engine/src/app.ts` (route), `packages/engine/test/route-matrix.test.ts` (two rows: `/api/history/taak`, owner 200; `/api/history/plat`, owner 404; both unauthenticated 401), `apps/grid/src/api.ts`, `apps/grid/src/ui/Toolbar.tsx` (icon button), `apps/grid/src/ui/App.tsx`, `apps/grid/src/i18n.ts`.
 
 **Interfaces:**
 - `GET /api/history/:source?filter&from&to&entries`.

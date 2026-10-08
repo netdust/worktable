@@ -428,3 +428,76 @@ Most of round 2 is fixed, but one premise fails against the e2e source. The `#fr
 - Spec R2 states the public-view ruling → `specs/grid-toolbar/spec.md:24` → holds
 
 Files: `/home/ntdst/Sites/worktable/specs/grid-toolbar/plan.md`, `/home/ntdst/Sites/worktable/specs/grid-toolbar/plan-review.md`, `/home/ntdst/Sites/worktable/specs/grid-toolbar/spec.md`.
+
+---
+
+# Plan review — grid-toolbar (round 4)
+Reviewed-plan: 1e3a59d5cd536ee7af878c3bef95e10207478270
+Verdict: ready with fixes
+
+All round 3 findings are fixed except one. The `#from=` Blocking is resolved in design: option (a) plus the replace rule. Its list of e2e files to rewrite is still incomplete. An executor who rewrites only the two helpers it names will leave four more spec files failing. Most of their flows open Dagplanning, which is now seeded on the current week, or a matrix, which reads the current week when it has no condition. "A linked date condition replaces the view's own" can be built as written. The replace happens in the grid's `Filter[]`, where each condition still carries its `op`, before `mergeFilters` turns them into engine keys.
+
+## Blocking
+None.
+
+## Should fix
+
+1. **The list of `#from=` landings to rewrite is incomplete (Task 3, Tests, line 192: "`openDagplanning` … `land` in `e2e/grid-ux.spec.ts:70`, and their likes").**
+   - "and their likes" is not a list. Grepping `e2e/` finds these landings outside the two named helpers. Today their assertions rely on the week the hash sets:
+     - `e2e/step-1.spec.ts:148` has its own `land`, called at 205, 337, 345 and 442, and inside `appliedInDagplanning` at 480. Every one is followed by `pick(page, 'Dagplanning', …)`. Dagplanning will now open on `$period: 'week'`, the current week, not 2026-11-02, 2026-11-16 or 2026-12-21. The line-205 comment says "The window is the app's, not the view's", which is the very rule this plan removes.
+     - `e2e/step-0b.spec.ts:5,24`: `open` lands on 2026-10-12, then opens Dagplanning at 122 and 141 and edits rows of that week.
+     - `e2e/step-0d.spec.ts:5,35,327`: the MATRIX view (117–172) reads Noor Claes' cells for 2026-10-12. With no condition it now reads the current week. Dagplanning is opened at 210.
+     - `e2e/step-0e.spec.ts:39,86,91,418`: the Afwezigheden assertions at 89 (count 1 for the week of 5 Oct) and 93 ("Geen rijen in deze periode" for the week of 12 Oct) depend on the week. The `Periode` grep does not catch them, because the word is lowercase "periode" there.
+     - `e2e/title-line.spec.ts:9,25`: `title-line-fits-at-1280` expects a visible Dagplanning row. On the current week whether a row shows depends on the date the test runs.
+     - `e2e/step-0a.spec.ts:4,13`: the Planning day sections for 2026-10-13/14 (lines 93–95). Planning loses its default week and becomes unbounded, so check this file rather than assume it passes.
+   - These do not need a rewrite, because the `#from=` there is now just ignored: `rail-tree.spec.ts:7,27` and `dagplanning.spec.ts:584,668` (tree only), and `smoke/dagplanning.spec.ts:6` (the sign-in page).
+   - `dagplanning.spec.ts:609` (`period-empty-result`) is already caught by the `Periode` grep.
+   - The rewrite cannot keep the current helper shape. `land(page, hash)` knows no view, and its callers land, then open a different view; step-1 even detours through Tourstops before opening Dagplanning. Each call site has to become "open X on week W": resolve X's key, then land on `#view=<key>&f=…` for that view.
+   - Smallest change: replace "and their likes" with the file:line list above, split into "rewrite" and "harmless". Add: "a helper takes the view and the week, and the `f` targets the view the flow then reads".
+
+## Note
+
+- **The builder can still put two date conditions on one field.**
+  - Line 183 says `filter()` holds "one condition per field and operator". Line 211 blocks only a second condition with the same engine key.
+  - So `week` (`$period`) and `between` (`$gte`/`$lte`) can stand side by side on `plandag`. They are ANDed, which empties the view unless the range overlaps the current week. The matrix's "the condition's days" (line 176) then has no single answer.
+  - The new replace rule (line 189) covers only conditions arriving through a link.
+  - Simplest fix: say that one date field holds one date condition, whether it comes from the builder or a link, and that a new one replaces the old.
+- **`stempel` needs the column that `stempel_lijst` owns by.**
+  - `owners: { owner: 'project_id' }` on the query means its SQL must select a `project_id`. "no owner column" could be read as "no `project_id` column".
+  - Say it plainly: `stempel` has `project_id` (relation `project`) and no `owners`; `stempel_lijst` selects `id, project_id, …` from `stempel`.
+  - The new names pass the vocabulary check. I rebuilt the list the way `scripts/check-vocabulary.ts:44-53` does: `stempel`, `lijst`, `grote` and `zaal` are not on it.
+- **Threat 6 has no test for its negative case.**
+  - Task 1 Step 1 (line 113) tests only the administrator's own public view.
+  - Add one line: on a public view that is not `editable`, "Publieke weergave bijwerken" is absent and Kopie maken is offered.
+  - The grid's `EngineView` (`apps/grid/src/engine.ts:76-84`) also has to gain `public` before `toSavedViews` can map it. The compiler will flag this.
+- The smoke tests at `e2e/smoke/dagplanning.spec.ts:6` still pass. They now test an address word the app no longer reads. Keep or drop them; that is a ruling for execution time.
+
+## Round 3, resolved or not
+
+| # | Finding | Status |
+|---|---|---|
+| B1 | `#from=` landing | resolved in design: lines 188-190 drop the legacy rule and add the replace rule. The e2e rewrite list is incomplete (S1) |
+| S1 | `public` in Task 1; the editable gate; threat 6 wording | resolved: lines 52, 96, 285 |
+| S2 | `limit` on the history route | resolved: line 243 |
+| S3 | "Opbouw" | resolved: "Grote zaal", line 151, checked against the vocabulary |
+| S4 | A fixture dataset for the denial; tests that list sources | resolved: line 240 names `stempel`/`stempel_lijst` and the four tests. Column detail in a Note |
+| S5 | `newRow` day | resolved: line 177 matches `newRow.ts:25-26` |
+| S6 | Matrix window on a long "ligt tussen" | resolved: line 176 |
+| S7 | `f` waits for `settled` | resolved: line 190; test at line 221 |
+| Notes | Other readers of `range`; landings do not autosave; `gone`; route-matrix as two rows | resolved: lines 178, 95, 253, 240. Editor and administrator cells are implied (200) |
+
+## Premises checked
+
+- Every e2e `#from=` landing is reached by `openDagplanning` or the grid-ux `land` → `e2e/step-1.spec.ts:148,205,337,345,442,480`, `step-0b:5,24`, `step-0d:5,35,327`, `step-0e:39,86,91,418`, `title-line:9,25`, `step-0a:4,13` → does not hold (S1)
+- The window is app-wide today and defaults to the current week → `apps/grid/src/ui/Window.tsx:96-125`, `App.tsx:207-212` → holds
+- Layout filters carry `op` before the merge into engine keys, so a date-condition replace can be built → `apps/grid/src/engine.ts:268-275,373-376` → holds
+- `filter()` per field and operator lets `week` and `between` coexist → plan lines 183 and 211 → holds (Note)
+- The grid's `SavedView`/`EngineView` lack `public`; the engine serves it → `apps/grid/src/types.ts:145-151`, `apps/grid/src/engine.ts:76-84,320-328`, `packages/engine/src/views.ts:20,70` → holds
+- `newRow` keeps today inside the window → `apps/grid/src/grid/newRow.ts:24-26` → holds
+- Only `view` is read and written in the hash → `apps/grid/src/ui/hash.ts`, `App.tsx:145,157` → holds
+- A `creates` needs a dataset whose writer creates → `packages/engine/src/validate.ts:69-77` → holds
+- The tests that list fixture sources are the four named → `access.test.ts:99-100`, `rows.test.ts:256-265`, `writes.test.ts:214-229,442-450` → holds
+- Route-matrix rows give one path and four roles → `packages/engine/test/route-matrix.test.ts:16-40` → holds
+- `stempel`, `lijst`, `grote` and `zaal` are off the vocabulary list → `scripts/check-vocabulary.ts:44-53`, probed → holds
+
+Files: /home/ntdst/Sites/worktable/specs/grid-toolbar/plan.md, /home/ntdst/Sites/worktable/specs/grid-toolbar/plan-review.md, /home/ntdst/Sites/worktable/e2e/step-1.spec.ts, /home/ntdst/Sites/worktable/e2e/step-0b.spec.ts, /home/ntdst/Sites/worktable/e2e/step-0d.spec.ts, /home/ntdst/Sites/worktable/e2e/step-0e.spec.ts, /home/ntdst/Sites/worktable/e2e/title-line.spec.ts, /home/ntdst/Sites/worktable/e2e/step-0a.spec.ts
