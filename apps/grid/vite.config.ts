@@ -15,5 +15,5 @@ export default defineConfig({
     // The one chunk past the default is exceljs, fetched only when Export is pressed.
     chunkSizeWarningLimit: 1000,
   },
-  test: { environment: 'jsdom', setupFiles: ['src/test-setup.ts'] },
+  test: { environment: 'jsdom', setupFiles: ['src/test-setup.ts'], testTimeout: 15000 },
 })

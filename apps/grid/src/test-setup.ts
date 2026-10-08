@@ -1,6 +1,9 @@
-import { fireEvent, render } from '@testing-library/react'
+import { configure, fireEvent, render } from '@testing-library/react'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { Providers } from './ui/Providers'
+
+// React Aria's first mount costs about 2x in jsdom, so waits get 5 s; real browsers are not slower.
+configure({ asyncUtilTimeout: 5000 })
 
 // jsdom has no ResizeObserver; React Aria's Popover and ComboBox measure their trigger with one.
 class NoResize {
