@@ -91,7 +91,7 @@ interface Spot {
  * Where a drop lands in the dragged view's block: beside one of the block's views, so the gap after its
  * last view counts even where the next group starts. Nowhere outside the block, nor where nothing would move.
  */
-function landing(all: string[], block: string[], key: string, target: DropTarget): Spot | null {
+export function landing(all: string[], block: string[], key: string, target: DropTarget): Spot | null {
   if (target.type !== 'item' || target.dropPosition === 'on') return null
   const gap = all.indexOf(String(target.key)) + (target.dropPosition === 'after' ? 1 : 0)
   const next = all[gap]

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SavedView, View } from '../types'
 import type { Table } from './tables'
-import { ViewList } from './ViewList'
+import { landing, ViewList } from './ViewList'
 
 const tabel: View = { key: 'planning', label: 'Tabel', model: 'activity', table: 'planning', starting: true }
 const matrix: View = { ...tabel, key: 'bezetting', label: 'Matrix', type: 'matrix' }
@@ -253,6 +253,33 @@ describe('ordering the list', () => {
     expect(run.order).toHaveBeenCalledWith('planning', ['planning', '42', '43', '44', '45', 'bezetting'])
   })
 
+  it('refuses a drop into another group: the keyboard is never offered a gap outside the group, and nothing is written', async () => {
+    const month: View = { ...dag, key: 'permaand', label: 'Per maand' }
+    const run = actions()
+    render(<ViewList table={{ ...table, views: [...table.views, dag, week, month] }} active="planning" onSelect={() => undefined} actions={run} />)
+    const offered = new Set<string>()
+    const target = () => {
+      const line = document.querySelector<HTMLElement>('.nv-view__drop[data-drop-target]')
+      if (line) offered.add(`${line.style.gridRow} ${line.className.includes('--after') ? 'after' : 'before'}`)
+    }
+
+    await drag('Per week')
+    target()
+    for (const key of ['ArrowUp', 'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Home', 'End']) {
+      fireEvent.keyDown(document.activeElement!, { key })
+      fireEvent.keyUp(document.activeElement!, { key })
+      await frame()
+      target()
+    }
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    fireEvent.keyUp(document.activeElement!, { key: 'Escape' })
+    await frame()
+
+    // Rows 7 to 9 are the query's views: only the gap above its first view and the one below its last.
+    expect([...offered].sort()).toEqual(['7 before', '9 after'])
+    expect(run.order).not.toHaveBeenCalled()
+  })
+
   it('a view drops past the last view of its group', async () => {
     const run = actions()
     render(<ViewList table={grouped} active="planning" onSelect={() => undefined} actions={run} />)
@@ -294,5 +321,30 @@ describe('ordering the list', () => {
 
     expect(screen.queryByRole('button', { name: /^Verplaats / })).toBeNull()
     expect(within(group()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tabel', 'Matrix', 'Calais techniek', 'Montage', 'Ploeg', '<img src=x onerror=alert(1)>'])
+  })
+})
+
+describe('where a drop lands', () => {
+  const all = ['planning', 'bezetting', 'dagplanning', 'perweek']
+  const own = ['planning', 'bezetting']
+  const query = ['dagplanning', 'perweek']
+
+  it('refuses the first row of another group and any drop on a view', () => {
+    expect(landing(all, query, 'perweek', { type: 'item', key: 'bezetting', dropPosition: 'before' })).toBeNull()
+    expect(landing(all, query, 'perweek', { type: 'item', key: 'planning', dropPosition: 'before' })).toBeNull()
+    expect(landing(all, own, 'planning', { type: 'item', key: 'perweek', dropPosition: 'before' })).toBeNull()
+    expect(landing(all, own, 'planning', { type: 'item', key: 'bezetting', dropPosition: 'on' })).toBeNull()
+    expect(landing(all, own, 'planning', { type: 'root' })).toBeNull()
+  })
+
+  it('counts the gap after a block\'s last view as its own, whichever side names it', () => {
+    expect(landing(all, own, 'planning', { type: 'item', key: 'bezetting', dropPosition: 'after' })).toEqual({ key: 'bezetting', edge: 'after' })
+    expect(landing(all, own, 'planning', { type: 'item', key: 'dagplanning', dropPosition: 'before' })).toEqual({ key: 'bezetting', edge: 'after' })
+    expect(landing(all, query, 'perweek', { type: 'item', key: 'bezetting', dropPosition: 'after' })).toEqual({ key: 'dagplanning', edge: 'before' })
+  })
+
+  it('refuses a drop where nothing would move', () => {
+    expect(landing(all, own, 'planning', { type: 'item', key: 'planning', dropPosition: 'before' })).toBeNull()
+    expect(landing(all, own, 'planning', { type: 'item', key: 'bezetting', dropPosition: 'before' })).toBeNull()
   })
 })

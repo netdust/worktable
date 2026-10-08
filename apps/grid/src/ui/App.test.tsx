@@ -1800,7 +1800,7 @@ describe("a query's views under the model it reads", () => {
     await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith({ order: { dagplanning: ['31', '30'] }, last: {} }))
   })
 
-  it("never moves a query's view into the model's own views: its farthest drop up stays in its own block", async () => {
+  it("moves a query's first view with Home onto its block's only gap that moves it, below its sibling, never into the model's own views", async () => {
     await opened('20')
 
     await keyboardDrag('Dagplanning', 'Home', 'Enter')
