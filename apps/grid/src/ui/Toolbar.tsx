@@ -1,5 +1,6 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { Grid3x3, History, Lock, Plus, Table as TableIcon, Users } from 'lucide-react'
+import { hint as titled } from './hint'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { ReactNode } from 'react'
 import { fixedCount, summary, t } from '../i18n'
@@ -90,7 +91,8 @@ export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel
         {more.length > 0 && <MoreMenu actions={more} />}
         {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note nv-toolbar__note--hint">{addBlocked}</span>}
         {onAdd && (
-          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} disabled={addBlocked !== null} title={addBlocked ?? undefined} onClick={onAdd}>
+          <Button ref={titled(addBlocked)} className="nv-button nv-button--primary nv-button--sm" isDisabled={addBlocked !== null} onPress={onAdd}>
+            <Plus size={14} aria-hidden="true" />
             {addLabel}
           </Button>
         )}

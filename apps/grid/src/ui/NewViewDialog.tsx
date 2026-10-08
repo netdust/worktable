@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { Grid3x3, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { useId, useState } from 'react'
 import { errorText, t } from '../i18n'
@@ -72,8 +72,8 @@ export function NewViewDialog({ source, type, scope, onSubmit, onClose }: Props)
         </p>
         {refusal && <p className="nv-dialog__refusal" role="alert">{refusal}</p>}
         <div className="nv-dialog__actions">
-          <Button type="button" variant="secondary" size="sm" onClick={onClose}>{t('cancel')}</Button>
-          <Button type="submit" variant="primary" size="sm" disabled={!ready}>{t('createView')}</Button>
+          <Button className="nv-button nv-button--secondary nv-button--sm" type="button" onPress={onClose}>{t('cancel')}</Button>
+          <Button className="nv-button nv-button--primary nv-button--sm" type="submit" isDisabled={!ready}>{t('createView')}</Button>
         </div>
       </form>
     </div>

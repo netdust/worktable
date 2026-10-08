@@ -138,18 +138,20 @@ describe('a change kept in this browser', () => {
 
   it('opens on the keyboard, moves with the arrows, and gives focus back to ⋯ on Escape', async () => {
     render(<Toolbar {...base} local={{ onRevert: () => undefined, onPublish: () => undefined }} />)
-    more().focus()
-    fireEvent.click(more())
+    const trigger = more()
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.keyUp(trigger, { key: 'Enter' })
 
     const menu = within(screen.getByRole('menu')).getAllByRole('menuitem')
-    expect(document.activeElement).toBe(menu[0])
+    await waitFor(() => expect(document.activeElement).toBe(menu[0]))
     fireEvent.keyDown(menu[0] as HTMLElement, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(menu[1])
     fireEvent.keyDown(menu[1] as HTMLElement, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(menu[0])
 
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
-    await waitFor(() => expect(document.activeElement).toBe(more()))
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
   })
 
   it('has no ⋯ while the view is as saved', () => {

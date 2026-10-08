@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { type ReactNode, useEffect, useRef } from 'react'
 import { t } from '../i18n'
 
@@ -31,7 +31,7 @@ export function SidePanel({ label, onClose, children, focusOnOpen = true, focusK
     >
       <header className="nv-drawer__head">
         <h2 className="nv-drawer__title">{label}</h2>
-        <Button ref={close} variant="ghost" size="sm" onClick={onClose}>
+        <Button className="nv-button nv-button--ghost nv-button--sm" ref={close} onPress={onClose}>
           {t('close')}
         </Button>
       </header>

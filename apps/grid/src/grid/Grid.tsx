@@ -1,5 +1,6 @@
-import { Button, EmptyState } from '@sakaniui/react'
-import { type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { EmptyState } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
+import { type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
@@ -342,16 +343,19 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
 /** Two presses: Verwijderen, then Zeker?. Keyed by its row, so leaving the drawer starts it over. */
 function DeleteRow({ onDelete }: { onDelete: () => Promise<void> }) {
   const [step, setStep] = useState<'ask' | 'sure' | 'sent'>('ask')
-  const press = (event: MouseEvent) => {
-    if (step === 'ask') return setStep('sure')
+  const clicks = useRef(0)
+  const press = () => {
     // A double click's second click is not a confirmation.
-    if (step !== 'sure' || event.detail > 1) return
+    const double = clicks.current > 1
+    clicks.current = 0
+    if (step === 'ask') return setStep('sure')
+    if (step !== 'sure' || double) return
     setStep('sent')
     void onDelete().finally(() => setStep('ask'))
   }
   return (
-    <div aria-live="polite">
-      <Button variant="destructive" size="sm" disabled={step === 'sent'} onClick={press}>
+    <div aria-live="polite" onMouseDownCapture={(event) => { clicks.current = event.detail }}>
+      <Button className="nv-button nv-button--destructive nv-button--sm" isDisabled={step === 'sent'} onPress={press}>
         {t(step === 'ask' ? 'delete' : 'deleteConfirm')}
       </Button>
     </div>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SavedView, View } from '../types'
 import type { Table } from './tables'
@@ -138,21 +138,23 @@ describe("a view's actions", () => {
     expect(run.remove).toHaveBeenCalledWith(own)
   })
 
-  it('is keyboard-operable: the menu says it is open, Escape closes it and gives focus back to ⋯', () => {
+  it('is keyboard-operable: the menu says it is open, Escape closes it and gives focus back to ⋯', async () => {
     render(<ViewList table={table} active="planning" onSelect={() => undefined} actions={actions()} />)
     const trigger = menuOf('Calais techniek')
     trigger.focus()
 
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    const menu = open('Calais techniek')
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.keyUp(trigger, { key: 'Enter' })
+    const menu = screen.getByRole('menu', { name: 'More actions' })
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
-    expect(document.activeElement).toBe(within(menu).getAllByRole('menuitem')[0])
+    await waitFor(() => expect(document.activeElement).toBe(within(menu).getAllByRole('menuitem')[0]))
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(within(menu).getAllByRole('menuitem')[1])
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
 
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(trigger)
   })
 
   it('renames an own view in place on a double-click: Enter saves', () => {

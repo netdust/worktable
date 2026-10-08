@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { type ReactNode, useState } from 'react'
 import { errorText, t } from '../i18n'
 import type { ApiError, ModelAction, Row } from '../types'
@@ -63,7 +63,7 @@ function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<
     <div className="nv-action" role="group" aria-label={action.label}>
       {inputs.map(([key, input]) => (
         <div key={key} className="nv-action__input">
-          <Button variant="secondary" size="sm" onClick={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
+          <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
           {open === key && (
             <RelationPicker model={input.relation} label={input.label} onCancel={() => setOpen(null)}
               onPick={(record) => {
@@ -73,7 +73,7 @@ function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<
           )}
         </div>
       ))}
-      <Button variant="primary" size="sm" disabled={!ready || sending.status === 'sent'} onClick={run}>{action.label}</Button>
+      <Button className="nv-button nv-button--primary nv-button--sm" isDisabled={!ready || sending.status === 'sent'} onPress={run}>{action.label}</Button>
       {sending.status === 'refused' && <p className="nv-action__refused" role="alert">{sending.message}</p>}
     </div>
   )

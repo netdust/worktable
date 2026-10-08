@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { useId, useState } from 'react'
 import { errorText, t } from '../i18n'
 import type { ApiError, ViewType } from '../types'
@@ -42,7 +42,7 @@ export function ViewPanel({ label, type, onSubmit, onClose }: Props) {
           onChange={(event) => setName(event.target.value)} />
         {refusal && <p className="nv-viewpanel__refusal" role="alert">{refusal}</p>}
         <div className="nv-viewpanel__actions">
-          <Button type="submit" variant="primary" size="sm" disabled={!ready}>{t('save')}</Button>
+          <Button className="nv-button nv-button--primary nv-button--sm" type="submit" isDisabled={!ready}>{t('save')}</Button>
         </div>
       </form>
     </SidePanel>

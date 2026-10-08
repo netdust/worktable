@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { type FormEvent, useId, useState } from 'react'
 import { requestLink } from '../api'
 import { t } from '../i18n'
@@ -25,7 +25,7 @@ export function SignIn({ note }: { note?: string }) {
           <label className="nv-auth__label" htmlFor={field}>{t('email')}</label>
           <input id={field} className="nv-auth__input" type="email" value={email} autoComplete="email" autoFocus
             onChange={(event) => setEmail(event.target.value)} />
-          <Button type="submit" variant="primary" size="sm" disabled={email.trim() === ''}>{t('sendLink')}</Button>
+          <Button className="nv-button nv-button--primary nv-button--sm" type="submit" isDisabled={email.trim() === ''}>{t('sendLink')}</Button>
         </>
       )}
     </form>

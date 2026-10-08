@@ -936,14 +936,17 @@ describe('the drawer', () => {
     renderGrid(calais, { model: deletable })
     const drawer = openDrawer('Lunch bistrot')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }), { detail: 1 })
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }), { detail: 2 })
+    const press = (name: string, detail: number) => {
+      const button = within(drawer).getByRole('button', { name })
+      fireEvent.mouseDown(button, { detail })
+      fireEvent.click(button)
+    }
+    press('Verwijderen', 1)
+    press('Zeker?', 2)
     expect(api.remove).not.toHaveBeenCalled()
 
     api.remove.mockResolvedValueOnce({ id: 103 })
-    await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }), { detail: 1 })
-    })
+    await act(async () => press('Zeker?', 1))
     expect(api.remove).toHaveBeenCalledTimes(1)
   })
 

@@ -1,5 +1,4 @@
 import { X } from 'lucide-react'
-import { Button } from '@sakaniui/react'
 import { createContext, type KeyboardEvent, type RefObject, useContext, useEffect, useRef, useState } from 'react'
 import { Button as AriaButton, ComboBoxStateContext, ComboBoxValue, Dialog, type Key, Tag, TagGroup, TagList } from 'react-aria-components'
 import { t } from '../../i18n'
@@ -119,8 +118,8 @@ function Question({ anchor, text, onCancel, onConfirm }: { anchor: RefObject<HTM
         <div ref={root} onKeyDown={keys}>
           <p>{text}</p>
           <div className="nv-confirm__actions">
-            <Button ref={cancel} variant="secondary" size="sm" onClick={onCancel}>{t('cancel')}</Button>
-            <Button ref={confirm} variant="destructive" size="sm" onClick={onConfirm}>{t('delete')}</Button>
+            <AriaButton className="nv-button nv-button--secondary nv-button--sm" ref={cancel} onPress={onCancel}>{t('cancel')}</AriaButton>
+            <AriaButton className="nv-button nv-button--destructive nv-button--sm" ref={confirm} onPress={onConfirm}>{t('delete')}</AriaButton>
           </div>
         </div>
       </Dialog>

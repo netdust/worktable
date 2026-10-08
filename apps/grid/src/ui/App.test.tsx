@@ -1656,11 +1656,14 @@ describe("a query's views under the model it reads", () => {
   const voorstellingen = saved(50, 'Voorstellingen', 'voorstellingen', { mine: false, editable: false })
   const names = () => within(typesOf('Activiteiten')).getAllByRole('button').map((b) => b.textContent)
   const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
-  const choices = (name: string) => {
+  const choices = async (name: string) => {
     const button = within(rail()).getByRole('button', { name: `More actions: ${name}` })
     fireEvent.click(button)
     const offered = within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((item) => item.textContent)
-    fireEvent.click(button)
+    const open = screen.getByRole('menu')
+    await waitFor(() => expect(open.contains(document.activeElement)).toBe(true))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     return offered
   }
   const choose = (name: string, action: string) => {
@@ -1722,8 +1725,8 @@ describe("a query's views under the model it reads", () => {
   it("moves a query's view only within that query's views", async () => {
     await opened('20')
 
-    const first = choices('Dagplanning')
-    const second = choices('Dagplanning (kopie)')
+    const first = await choices('Dagplanning')
+    const second = await choices('Dagplanning (kopie)')
     expect([first.includes('Omhoog'), first.includes('Omlaag')]).toEqual([false, true])
     expect([second.includes('Omhoog'), second.includes('Omlaag')]).toEqual([true, false])
     choose('Dagplanning (kopie)', 'Omhoog')

@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { useState } from 'react'
 import { consumeLink } from '../api'
 import { errorText, t } from '../i18n'
@@ -28,7 +28,7 @@ export function Confirm({ token, onSignedIn }: { token: string; onSignedIn: (acc
     <section className="nv-auth" aria-label={t('signIn')}>
       <h1 className="nv-auth__title">{t('signIn')}</h1>
       <p className="nv-auth__note">{refusal ? errorText(refusal.code, refusal.message) : t('confirmHint')}</p>
-      <Button variant="primary" size="sm" disabled={busy} onClick={press}>{t('signIn')}</Button>
+      <Button className="nv-button nv-button--primary nv-button--sm" isDisabled={busy} onPress={press}>{t('signIn')}</Button>
     </section>
   )
 }

@@ -1,4 +1,4 @@
-import { Button } from '@sakaniui/react'
+import { Button } from 'react-aria-components'
 import { Share2, X } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../i18n'
@@ -63,8 +63,8 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
             <>
               <p>{t('publishAgain')}</p>
               <div className="nv-share__actions">
-                <Button variant="ghost" size="sm" onClick={() => setDialog(null)}>{t('cancel')}</Button>
-                <Button variant="primary" size="sm" onClick={go}>{t('publishNew')}</Button>
+                <Button className="nv-button nv-button--ghost nv-button--sm" onPress={() => setDialog(null)}>{t('cancel')}</Button>
+                <Button className="nv-button nv-button--primary nv-button--sm" onPress={go}>{t('publishNew')}</Button>
               </div>
             </>
           )}
@@ -75,7 +75,7 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
               <p>{t('publishedOnce')}</p>
               <div className="nv-share__address">
                 <input type="text" readOnly aria-label={t('publicAddress')} value={dialog.address} onFocus={(event) => event.target.select()} />
-                <Button variant="secondary" size="sm" onClick={() => void copy(dialog.address)}>{t('copy')}</Button>
+                <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => void copy(dialog.address)}>{t('copy')}</Button>
               </div>
             </>
           )}
