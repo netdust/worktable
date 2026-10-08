@@ -248,6 +248,8 @@ const undoOf = (page: Page) =>
   )
 
 test('untimed-activity', async ({ page }) => {
+  // About fifty presses, typed segment by segment, each re-rendering a view the earlier specs grew to some 140 rows.
+  test.setTimeout(60_000)
   await page.goto('/')
   await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
