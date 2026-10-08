@@ -2,8 +2,9 @@ import { Button, EmptyState } from '@sakaniui/react'
 import { type ClipboardEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
+import { type LinkActions, LinksContext } from './cells/Links'
 import { RelationContext } from './cells/Relation'
-import { type Column, columnsFor, inDays } from './columns'
+import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
@@ -50,10 +51,14 @@ export interface GridProps {
   filters?: ReactNode
   /** The scope chip's words, "Productie is Nachtwacht"; null when the view is not scoped. */
   scopeChip?: string | null
+  /** The Periode chip of a dated source. */
+  period?: ReactNode
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
   /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
   cut?: Row | null
+  /** Adds and removes a `links` cell's rows; without it a links cell only shows its tags. */
+  links?: LinkActions
 }
 
 const NO_MODELS: Record<string, Model> = {}
@@ -68,7 +73,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, period = null, onAction, cut = null, links }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -131,8 +136,9 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const sheet: Sheet = {
     rows: ordered.length,
     cols: visible.length,
-    editable: (c) => Boolean(visible[c.col]?.editable && ordered[c.row]),
-    required: (c) => Boolean(visible[c.col]?.required),
+    editable: (c) => Boolean(visible[c.col] && ordered[c.row] && editableAt(visible[c.col] as Column, ordered[c.row] as Row)),
+    // A links cell is changed in its editor only: Delete never clears it.
+    required: (c) => Boolean(visible[c.col]?.required || visible[c.col]?.kind === 'links'),
     toggles: (c) => visible[c.col]?.kind === 'bool',
     value: (c) => (ordered[c.row] && visible[c.col] ? visible[c.col].edit(ordered[c.row]) : ''),
   }
@@ -280,7 +286,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
 
   const onPaste = (event: ClipboardEvent<HTMLTableElement>) => {
     const hit = fromCell(event.target) ? selected() : null
-    if (!hit || !hit.column.editable || hit.column.kind === 'relation') return
+    if (!hit || !hit.column.editable || hit.column.kind === 'relation' || hit.column.kind === 'links') return
     apply(hit.row, hit.column, hit.column.fromText(firstLine(event.clipboardData.getData('text/plain'))))
     event.preventDefault()
   }
@@ -288,9 +294,10 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
 
   return (
+    <LinksContext.Provider value={links ?? null}>
     <RelationContext.Provider value={{ models, scope, spaceModel }}>
     <div className="nv-frame">
-      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
+      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} period={period} />
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState type="no-data" title={emptyTitle} description={emptyHint} />
@@ -312,6 +319,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       )}
     </div>
     </RelationContext.Provider>
+    </LinksContext.Provider>
   )
 }
 

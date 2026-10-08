@@ -1,9 +1,10 @@
 import { locale, t } from '../i18n'
-import type { Field, GroupFact, Model, Row, Tone, View } from '../types'
+import type { Field, GroupFact, Link, LinkItem, Model, Row, Tone, View } from '../types'
+import { DRAFT } from './store'
 
 export type CellKind =
   | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'datetime' | 'time' | 'relation' | 'bool' | 'number'
-  | 'lookup' | 'rollup' | 'other'
+  | 'lookup' | 'rollup' | 'links' | 'other'
 
 export interface Column {
   /** `title`, a field key, `lookups.<field>.<name>` or `rollups.<key>`. */
@@ -22,6 +23,8 @@ export interface Column {
   tones?: Record<string, Tone>
   /** A relation's target model; single relations are picked in the cell. */
   relation?: { model: string; multiple: boolean }
+  /** A `links` column's link: added and removed by its own editor, never written as a value. */
+  link?: Link
   value: (row: Row) => unknown
   /** What the cell shows, copy takes and search reads. */
   text: (row: Row) => string
@@ -41,7 +44,7 @@ export interface Column {
 
 const WIDTH: Record<CellKind, number> = {
   title: 240, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 170,
-  bool: 80, number: 90, lookup: 170, rollup: 90, other: 140,
+  bool: 80, number: 90, lookup: 170, rollup: 90, links: 240, other: 140,
 }
 
 /** Room for a value and its "via" tag side by side. */
@@ -112,6 +115,8 @@ function kindOf(field: Field): CellKind {
     case 'int':
     case 'float':
       return 'number'
+    case 'links':
+      return 'links'
     default:
       return 'other'
   }
@@ -141,6 +146,17 @@ function dayFromText(text: string): string {
 function optionFromText(options: Record<string, string>, text: string): string {
   const wanted = text.trim().toLowerCase()
   return Object.entries(options).find(([key, label]) => key === text.trim() || label.toLowerCase() === wanted)?.[0] ?? text.trim()
+}
+
+/** A links cell edits only a row that exists: a draft has no record to link to yet. */
+export function editableAt(column: Column, row: Row): boolean {
+  return column.editable && !(column.kind === 'links' && row.id === DRAFT)
+}
+
+/** A `links` field's rows; empty when the engine served none. */
+export function linksOf(row: Row, key: string): LinkItem[] {
+  const value = row.fields[key]
+  return Array.isArray(value) ? (value as LinkItem[]) : []
 }
 
 /** A relation holds a list of ids; its cell edits the first. */
@@ -192,6 +208,12 @@ function fieldColumn(key: string, field: Field, writable: boolean, model: Model)
   if (field.inherited) {
     column.via = viaOf(field.inherited, model.fields[field.inherited.flag])
     column.width = INHERITED_WIDTH
+  }
+  if (kind === 'links') {
+    column.editable = writable
+    column.sortable = false
+    column.link = field.link
+    column.text = (row) => linksOf(row, key).map((item) => item.title).join(', ')
   }
   if (kind === 'other') column.text = (row) => (Array.isArray(row.fields[key]) ? String((row.fields[key] as unknown[]).length) : scalar(row.fields[key]))
 

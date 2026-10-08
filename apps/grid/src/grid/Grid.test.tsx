@@ -35,7 +35,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     }
     return (
       <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
-        query={options.query ?? ''} emptyTitle="Geen rijen in deze week" emptyHint="Week 21 · 18–24 mei" filters={options.filters}
+        query={options.query ?? ''} emptyTitle="Geen rijen in deze periode" emptyHint="Week 21 · 18–24 mei" filters={options.filters}
         cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
     )
   }
@@ -173,7 +173,7 @@ describe('the sheet', () => {
   it('names the window when it is empty', () => {
     renderGrid([])
 
-    expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
+    expect(screen.getByText('Geen rijen in deze periode')).toBeTruthy()
     expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
   })
 
@@ -181,7 +181,7 @@ describe('the sheet', () => {
     renderGrid([], { filters: <button type="button">Productie: Calais ×</button> })
 
     expect(screen.getByRole('button', { name: 'Productie: Calais ×' })).toBeTruthy()
-    expect(screen.getByText('Geen rijen in deze week')).toBeTruthy()
+    expect(screen.getByText('Geen rijen in deze periode')).toBeTruthy()
   })
 
   it('renders a stored value with markup as its characters, never as an element (threat 8)', () => {
@@ -768,13 +768,12 @@ describe('the toolbar over the grid', () => {
     const more = within(toolbar()).getByRole('button', { name: 'More actions' })
     expect(more.getAttribute('title')).toBe('Meer acties')
     const controls = within(toolbar()).getAllByRole('button').filter((control) => control !== more)
-    expect(controls.length).toBeGreaterThan(3)
+    expect(controls.length).toBeGreaterThan(1)
     for (const control of controls) {
       expect(said(control), control.outerHTML).toBe(true)
     }
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }).getAttribute('placeholder')).toBe('Zoeken')
-    expect(within(toolbar()).getByRole('button', { name: 'Vorige week' })).toBeTruthy()
-    expect(within(toolbar()).getByRole('button', { name: 'Volgende week' })).toBeTruthy()
+    expect(within(toolbar()).queryByRole('button', { name: 'Volgende periode' })).toBeNull()
     expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
   })
 
@@ -843,14 +842,15 @@ describe('the toolbar over the grid', () => {
     expect(status.getAttribute('title')).toBe(long)
   })
 
-  it('is one row of title, week, search and + New, with no theme or undo in it; the chips sit in the bar beneath (Stefan, 2026-10-03)', async () => {
+  it('is one row of title, search and + New, with no theme or undo in it; the chips sit in the bar beneath (Stefan, 2026-10-03)', async () => {
     render(<App />)
     await screen.findByText('18 mei')
 
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    expect(within(toolbar()).getByRole('group', { name: 'Week 21 · 18–24 mei' }).textContent).toBe('Week 21 · 18–24 mei')
+    expect(within(toolbar()).queryByRole('group', { name: 'Periode' })).toBeNull()
+    expect(within(bar()).getByRole('group', { name: 'Periode' }).textContent).toBe('Periode Week 21 · 18–24 mei')
     expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Groep: datum', 'Datum ↑, Start ↑', 'Kolommen', 'Filter'])
+    expect(within(bar()).getAllByRole('button').slice(3).map((b) => b.textContent)).toEqual(['Groep: datum', 'Datum ↑, Start ↑', 'Kolommen', 'Filter'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()

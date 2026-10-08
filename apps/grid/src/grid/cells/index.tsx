@@ -1,6 +1,7 @@
 import { locale, t } from '../../i18n'
 import { BoolCell } from './Bool'
 import { DateCell, DateEditor, DateTimeEditor } from './Date'
+import { LinksCell, LinksEditor } from './Links'
 import { NumberCell, NumberEditor } from './Number'
 import type { CellProps, EditorProps } from './props'
 import { RelationCell, RelationEditor } from './Relation'
@@ -30,6 +31,8 @@ function Value({ column, row, onToggle }: CellProps & { onToggle: () => void }) 
       return <TimeCell column={column} row={row} />
     case 'relation':
       return <RelationCell column={column} row={row} />
+    case 'links':
+      return <LinksCell column={column} row={row} />
     case 'bool':
       return <BoolCell column={column} row={row} onToggle={onToggle} />
     case 'number':
@@ -56,6 +59,8 @@ export function Editor(props: EditorProps) {
       return <LongTextEditor {...props} />
     case 'relation':
       return <RelationEditor {...props} />
+    case 'links':
+      return <LinksEditor {...props} />
     default:
       return <InputEditor {...props} />
   }

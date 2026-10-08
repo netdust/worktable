@@ -77,6 +77,13 @@ function checkCreates(domain: Domain, query: QueryDecl): void {
   }
 }
 
+function checkOf(domain: Domain, query: QueryDecl): void {
+  const dataset = query.of
+  if (dataset !== undefined && !domain.datasets.some((d) => d.name === dataset)) {
+    throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
+  }
+}
+
 function checkOwners(source: DatasetDecl | QueryDecl): void {
   const column = source.owners?.owner
   if (column === undefined || column === 'id' || source.columns[column]?.relation) return
@@ -87,6 +94,7 @@ function checkOwners(source: DatasetDecl | QueryDecl): void {
 const OVERWRITTEN = [
   ['title', 'the computed row title'],
   ['revision', 'the write reply'],
+  ['links', "the row's link rows"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -107,6 +115,26 @@ function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
         column,
         `${column} relates to "${target.name}", whose title is through a relation`,
       )
+    }
+  }
+}
+
+// The key points back at the source's own rows: the dataset itself, or the dataset a query creates.
+function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
+  for (const [name, link] of Object.entries(source.links ?? {})) {
+    const at = (bad: string, message: string): DomainError =>
+      new DomainError(source.name, bad, `link ${name} ${message}`)
+    const linked = domain.datasets.find((d) => d.name === link.dataset)
+    if (!linked) throw at(link.dataset, `reads undeclared dataset "${link.dataset}"`)
+    if (declared(source, name)) throw at(name, 'has the name of a column')
+    const own = source.kind === 'dataset' ? source.name : source.creates
+    if (own === undefined) throw at(name, 'is on a query that declares no creates')
+    if (linked.columns[link.key]?.relation !== own)
+      throw at(link.key, `key "${link.key}" is not a relation to "${own}"`)
+    if (!linked.columns[link.target]?.relation)
+      throw at(link.target, `target "${link.target}" is not a relation column`)
+    if (link.state !== undefined && !linked.columns[link.state]?.options) {
+      throw at(link.state, `state "${link.state}" is not an options column`)
     }
   }
 }
@@ -236,7 +264,9 @@ function checkSections(domain: Domain): void {
   const seen = new Set<string>()
   for (const { label, sources } of domain.sections ?? []) {
     for (const name of sources) {
-      if (!sourceOf(domain, name)) throw new DomainError(label, name, `section lists unknown source "${name}"`)
+      const source = sourceOf(domain, name)
+      if (!source) throw new DomainError(label, name, `section lists unknown source "${name}"`)
+      if (source.kind === 'query') throw new DomainError(label, name, `section lists query "${name}"; only datasets`)
       if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
       seen.add(name)
     }
@@ -273,6 +303,7 @@ export function validateDomain(domain: Domain): void {
     checkIcon(source)
     checkFacts(source)
     checkInherited(source)
+    checkLinks(domain, source)
   }
   checkSpace(domain)
   checkSections(domain)
@@ -286,6 +317,7 @@ export function validateDomain(domain: Domain): void {
   }
   for (const query of domain.queries) {
     checkCreates(domain, query)
+    checkOf(domain, query)
     for (const [column, decl] of Object.entries(query.columns)) {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }

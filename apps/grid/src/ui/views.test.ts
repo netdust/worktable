@@ -126,11 +126,21 @@ describe('a table\'s list', () => {
   const elsewhere: SavedView = { ...calais, key: '44', id: 44, table: 'afwezigheden' }
 
   it('is the starting views, then the saved ones of that table', () => {
-    expect(listFor(table, [calais, elsewhere, other], []).map((v) => v.key)).toEqual(['planning', 'bezetting', '42', '43'])
+    expect(listFor(table, [calais, elsewhere, other], {}).map((v) => v.key)).toEqual(['planning', 'bezetting', '42', '43'])
   })
 
   it('follows an order, with the views it does not name after it and a key it names that is gone ignored', () => {
-    expect(listFor(table, [calais, other], ['43', 'gone', 'bezetting']).map((v) => v.key)).toEqual(['43', 'bezetting', 'planning', '42'])
+    expect(listFor(table, [calais, other], { planning: ['43', 'gone', 'bezetting'] }).map((v) => v.key)).toEqual(['43', 'bezetting', 'planning', '42'])
+  })
+
+  it("is its own views, then each query's, each block in the order kept for its own source", () => {
+    const query: View = { key: 'dag', label: 'Dag', model: 'per_dag', table: 'per_dag', of: 'planning', query: true, starting: true }
+    const copy: SavedView = { ...calais, key: '45', id: 45, label: 'Dag (kopie)', model: 'per_dag', table: 'per_dag', of: 'planning', query: true }
+    const withQuery: Table = { ...table, views: [tabel, bezetting, query] }
+    const order = { planning: ['bezetting'], per_dag: ['45', 'dag'] }
+
+    expect(listFor(withQuery, [calais, copy], order).map((v) => v.key)).toEqual(['bezetting', 'planning', '42', '45', 'dag'])
+    expect(listFor(withQuery, [calais, copy], { planning: ['45', '42'] }).map((v) => v.key)).toEqual(['42', 'planning', 'bezetting', 'dag', '45'])
   })
 })
 
@@ -170,5 +180,11 @@ describe('the view a table opens on', () => {
     expect(lastIn(table, { planning: '99' })?.key).toBe('bezetting')
     expect(lastIn(table, {})?.key).toBe('bezetting')
     expect(lastIn(table, { afwezigheden: '42' })?.key).toBe('bezetting')
+  })
+
+  it("is a query's view last used under the table its views sit under", () => {
+    const query: View = { key: 'dag', label: 'Dag', model: 'per_dag', table: 'per_dag', of: 'planning', query: true }
+
+    expect(lastIn({ ...table, views: [...table.views, query] }, { planning: 'dag' })?.key).toBe('dag')
   })
 })

@@ -119,7 +119,7 @@ test('query-edit-lands', async ({ page }) => {
   const name = 'opbouw Brugge'
   const before = await activiteit(page, name)
   expect(before.status).toBe('bevestigd')
-  await open(page, 'Dagplanning')
+  await open(page, 'Dagplanning', 'Activiteiten')
 
   const status = await cell(page, name, 'Status')
   await expect(status).toHaveText('Bevestigd')
@@ -138,7 +138,7 @@ test('revisions-recorded', async ({ page }) => {
   const before = await activiteit(page, name)
   expect(before.status).toBe('geannuleerd')
   expect(await revisions(page, before.id)).toEqual([])
-  await open(page, 'Dagplanning')
+  await open(page, 'Dagplanning', 'Activiteiten')
 
   const status = await cell(page, name, 'Status')
   await expect(status).toHaveText('Geannuleerd')

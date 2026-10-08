@@ -6,6 +6,7 @@ const count = (label: string) => ({ type: 'integer' as const, label })
 
 export const productieDag = defineQuery({
   name: 'productie_dag',
+  of: 'activiteit',
   label: 'Per productie per dag',
   icon: 'table',
   title: 'productie',
@@ -34,6 +35,7 @@ const writesActiviteit = (field: string) => ({ dataset: 'activiteit', field, key
 
 export const dagplanning = defineQuery({
   name: 'dagplanning',
+  of: 'activiteit',
   label: 'Dagplanning',
   icon: 'query',
   title: 'omschrijving',
@@ -41,14 +43,24 @@ export const dagplanning = defineQuery({
   scoped: 'productie_id',
   group_facts: dagFacts,
   creates: 'activiteit',
+  links: {
+    mensen: {
+      label: 'Mensen',
+      item: 'Toewijzing',
+      dataset: 'toewijzing',
+      key: 'activiteit_id',
+      target: 'persoon_id',
+      state: 'state',
+    },
+  },
   sql: readFileSync(new URL('./queries/dagplanning.sql', import.meta.url), 'utf8'),
   columns: {
     id: { type: 'integer', label: 'Id' },
     activiteit_id: { type: 'integer', label: 'Activiteit' },
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
     productie: { type: 'text', label: 'Productie' },
-    omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
-    soort: { type: 'text', label: 'Soort', ...soorten },
+    omschrijving: { type: 'text', label: 'Omschrijving', nullable: true, writes: writesActiviteit('omschrijving') },
+    soort: { type: 'text', label: 'Soort', ...soorten, writes: writesActiviteit('soort') },
     datum: { type: 'date', label: 'Datum', writes: writesActiviteit('datum') },
     start_at: { type: 'datetime', label: 'Start', nullable: true, writes: writesActiviteit('start_at') },
     eind_at: { type: 'datetime', label: 'Einde', nullable: true, writes: writesActiviteit('eind_at') },
@@ -59,7 +71,7 @@ export const dagplanning = defineQuery({
       label: 'Locatie',
       nullable: true,
       relation: 'organisatie',
-      readonly: true,
+      writes: writesActiviteit('locatie_id'),
       inherited: { flag: 'locatie_bron', own: 'eigen' },
     },
     locatie_bron: {
@@ -67,13 +79,14 @@ export const dagplanning = defineQuery({
       label: 'Locatie van',
       nullable: true,
       readonly: true,
-      options: { eigen: 'Eigen', speelreeks: 'Speelreeks' },
+      options: { eigen: 'Eigen', speelreeks: 'Tourstop' },
     },
   },
 })
 
 export const voorstellingen = defineQuery({
   name: 'voorstellingen',
+  of: 'activiteit',
   label: 'Voorstellingen',
   icon: 'table',
   title: 'productie',

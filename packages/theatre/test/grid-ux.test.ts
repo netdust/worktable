@@ -39,14 +39,24 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     for (const s of Object.values(body.sources) as Schema[]) expect(['scoped', 'global']).toContain(s.space)
   })
 
-  test('an editor gets the sections in their draft order', async () => {
+  test('an editor gets the sections in their draft order, with no query in them', async () => {
     const body = await schemaAs('editor')
     expect(body.sections).toEqual([
-      { label: 'Planning', sources: ['dagplanning', 'activiteit', 'speelreeks', 'toewijzing', 'beschikbaarheid'] },
+      { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
       { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
       { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
     ])
     expect(body.sources.beschikbaarheid.label).toBe('Beschikbaarheden')
+  })
+
+  test('the three queries read activiteit, declared in the order the tree shows them', async () => {
+    const body = await schemaAs('editor')
+    const queries = Object.entries(body.sources).filter(([, s]) => (s as Schema).kind === 'query')
+    expect(queries.map(([name, s]) => [name, (s as Schema).of])).toEqual([
+      ['dagplanning', 'activiteit'],
+      ['productie_dag', 'activiteit'],
+      ['voorstellingen', 'activiteit'],
+    ])
   })
 
   test('dagplanning and activiteit carry the two facts; the venue is inherited from locatie_bron', async () => {
@@ -135,7 +145,7 @@ describe('theatre declares the details: icons, colours, an end time and create-f
 
   test('the Dagplanning view shows time, omschrijving, soort, locatie and status', () => {
     const view = theatre.views.find((v) => v.name === 'Dagplanning')
-    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'status'])
+    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'])
   })
 
   test('an owner sees no dagplanning, so none of its colours or its create', async () => {

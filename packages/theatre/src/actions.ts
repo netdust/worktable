@@ -48,7 +48,7 @@ export const sjabloonToepassen: ActionDecl = {
   run(reeks, { sjabloon_id }, ctx) {
     if (ctx.exists('activiteit', { speelreeks_id: reeks.id })) {
       refuse(
-        'Deze speelreeks heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.',
+        'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.',
       )
     }
     validateItems(sjabloon_id?.items)

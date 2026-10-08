@@ -145,7 +145,36 @@ function seedViews(run: Run): SeedReport['views'] {
     } else if (system && updateView(run, system, next)) counts.updated++
     else counts.present++
   }
+  removeUndeclared(run)
   return counts
+}
+
+// A system view whose name and source no seed declares any more (a renamed seed) is removed; a public one stays.
+function removeUndeclared(run: Run): void {
+  const declared = new Set(run.store.domain.views.map((seed) => `${seed.name}\u0000${seed.source}`))
+  const sql = 'SELECT * FROM saved_view WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
+  for (const view of run.store.sqlite.query(sql).all(SYSTEM_OWNER) as Stored[]) {
+    if (declared.has(`${view.name}\u0000${view.source}`)) continue
+    const label = `view "${view.name}" (${view.source})`
+    if (isPublic(view)) {
+      run.named.push(`${label} is public, left alone`)
+      continue
+    }
+    run.store.sqlite
+      .query('UPDATE saved_view SET deleted_at = ?, updated_at = ? WHERE id = ?')
+      .run(run.now, run.now, view.id as number)
+    revise(
+      run.store.sqlite,
+      savedView,
+      view.id as number,
+      [['deleted_at', null, run.now]],
+      run.now,
+      SYSTEM_OWNER,
+      run.batch,
+    )
+    run.written++
+    run.named.push(`${label} removed, no longer declared`)
+  }
 }
 
 // One transaction under one seed batch; a second run finds everything present and records nothing.

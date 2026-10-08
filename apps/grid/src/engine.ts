@@ -1,5 +1,5 @@
 import type { Filter, Layout, SortKey } from './grid/layout'
-import type { DateWindow, Field, FieldType, GroupFact, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
+import type { DateWindow, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -52,10 +52,14 @@ export interface EngineSource {
   icon?: string | null
   /** A query's new rows are created in this dataset. */
   creates?: string
+  /** The dataset a query reads; served only to a caller who can read it. */
+  of?: string
   /** The words of the button that adds a row, while the dataset keeps its declared name. */
   new_label?: string
   group_facts?: GroupFact[]
   columns: Record<string, EngineColumn>
+  /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
+  links?: Record<string, Link & { label: string }>
 }
 
 /** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
@@ -95,6 +99,8 @@ export interface EngineRow {
   cells?: EngineRow[]
   /** On a write reply: the write's batch and the columns it changed. */
   revision?: { batch_id: string | null; changed: string[] }
+  /** Per link name, the linked rows the caller may read. */
+  links?: Record<string, LinkItem[]>
   [column: string]: unknown
 }
 
@@ -155,8 +161,15 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.creates ? { creates: source.creates } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(source.actions?.length ? { actions: source.actions } : {}),
-    fields: Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
+    fields: {
+      ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
+      ...Object.fromEntries(Object.entries(source.links ?? {}).map(([name, link]) => [name, linkField(link)])),
+    },
   }
+}
+
+function linkField({ label, ...link }: Link & { label: string }): Field {
+  return { type: 'links', label, required: false, fact: false, link }
 }
 
 function joinOf(model: string, m: EngineMatrix): MatrixJoin {
@@ -178,6 +191,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.date ? { date_field: source.date } : {}),
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
+    ...(source.of ? { of: source.of } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: ['grid'],
@@ -224,7 +238,10 @@ function splitFilters(filters: Record<string, unknown>): { chips: Filter[]; fixe
 }
 
 /** The grid's field ids, in declared order: never the title column nor `id`. */
-const fieldsOf = (source: EngineSource): string[] => Object.keys(source.columns).filter((key) => key !== titleColumn(source) && key !== 'id')
+const fieldsOf = (source: EngineSource): string[] => [
+  ...Object.keys(source.columns).filter((key) => key !== titleColumn(source) && key !== 'id'),
+  ...Object.keys(source.links ?? {}),
+]
 
 /** A stored view as the grid's arrangement: its visible columns are the order, the rest hidden; widths and picks are never stored. */
 export function fromStoredView(view: EngineArrangement, source: EngineSource): { arrangement: StoredArrangement; fixed: Record<string, unknown> } {
@@ -318,12 +335,12 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
 
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, revision: _revision, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, ...fields } = r
   return {
     id,
     title: title ?? '',
     status: '',
-    fields,
+    fields: { ...fields, ...links },
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
     ...(cells ? { rollups: { cells: cells.map(toRow) } } : {}),
   }

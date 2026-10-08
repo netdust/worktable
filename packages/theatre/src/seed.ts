@@ -194,7 +194,7 @@ export const views: SavedViewSeed[] = [
     filters: {},
     sort: ['start_at'],
     group_by: 'plandag',
-    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie_id', 'status'],
+    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'],
   },
   {
     name: 'Toewijzingen per activiteit',
@@ -277,7 +277,7 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['titel', 'seizoen', 'status', 'organisatie_id'],
   },
   {
-    name: 'Speelreeksen',
+    name: 'Tourstops',
     source_type: 'dataset',
     source: 'speelreeks',
     skin: 'table',

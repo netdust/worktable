@@ -131,6 +131,7 @@ describe('rows', () => {
       title: 'een',
       custom: { colour: 'rood', labels: ['a', 'b'] },
       lookups: { project_id: { id: 1, title: 'Alfa' } },
+      links: { koppels: [], merken: [], platen: [] },
     })
     expect(body.rows[1].afgerond).toBe(true)
     expect(body.rows[2].custom).toEqual({})
@@ -204,6 +205,15 @@ describe('rows', () => {
     expect(inText.body.total).toBe(1)
   })
 
+  // The grid's yes/no chip sends '1' for yes and '' for no.
+  test('a yes/no filter sent as text matches the stored boolean', async () => {
+    const yes = await filtered('taak', { afgerond: true })
+    const no = await filtered('taak', { afgerond: false })
+    expect((await filtered('taak', { afgerond: { $eq: '1' } })).body.total).toBe(yes.body.total)
+    expect((await filtered('taak', { afgerond: { $eq: '' } })).body.total).toBe(no.body.total)
+    expect(no.body.total).toBeGreaterThan(0)
+  })
+
   test('rows with deleted_at set are not returned', async () => {
     sqlite.run("UPDATE taak SET deleted_at = '2026-10-13' WHERE id = 1")
     const { body } = await rows('taak')
@@ -242,7 +252,16 @@ describe('rows', () => {
   test('schema lists every declared source and no saved views: GET /api/views serves those', async () => {
     const { status, body } = await get('/api/schema')
     expect(status).toBe(200)
-    expect(Object.keys(body.sources)).toEqual(['project', 'taak', 'plat', 'note', 'per_project', 'note_lijst'])
+    expect(Object.keys(body.sources)).toEqual([
+      'project',
+      'taak',
+      'plat',
+      'note',
+      'koppel',
+      'merk',
+      'per_project',
+      'note_lijst',
+    ])
     expect(body.sources.taak).toMatchObject({ kind: 'dataset', label: 'Taken', title: 'description', date: 'day' })
     expect(body.sources.taak.columns.project_id).toEqual({ type: 'integer', label: 'Project', relation: 'project' })
     expect(body.sources.project.date).toBeNull()

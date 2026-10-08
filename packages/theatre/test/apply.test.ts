@@ -10,7 +10,7 @@ type Request = (method: string, path: string, body?: unknown) => Promise<{ statu
 const LOTTE = { dataset: 'persoon', id: 1 }
 const SPEELDAG = 1
 const TWICE =
-  'Deze speelreeks heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.'
+  'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.'
 const DAYS = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04']
 const TIMED = [
   ['13:00', '14:00'],

@@ -3,7 +3,7 @@ import { t } from '../i18n'
 import type { Row } from '../types'
 import { Display, Editor } from './cells'
 import type { Pick } from './cells/RelationPicker'
-import type { Column } from './columns'
+import { type Column, editableAt } from './columns'
 import { type Fact, type Group, sums } from './group'
 import type { Cell, KeyState, Move } from './keys'
 import { cellKey, type CellError, DRAFT } from './store'
@@ -51,7 +51,7 @@ function GridCell({ row, column, cell, keys, error, actions }: {
       className={className}
       tabIndex={active ? 0 : -1}
       aria-selected={active}
-      aria-readonly={column.editable ? undefined : true}
+      aria-readonly={editableAt(column, row) ? undefined : true}
       aria-invalid={error ? true : undefined}
       onClick={() => actions.click(cell)}
       onDoubleClick={() => actions.dblclick(cell)}

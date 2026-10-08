@@ -108,6 +108,22 @@ describe('toSchema: space, sections, facts and inherited', () => {
   })
 })
 
+describe('toSchema: a query over a dataset', () => {
+  const over: EngineSchema = { sources: { ...engine.sources, productie_dag: { ...engine.sources.productie_dag, of: 'activiteit' } } }
+
+  it("carries `of` onto the query's table and its saved views, and keeps the view's table and model the query", () => {
+    const table = toSchema(over).tables.find((t) => t.key === 'productie_dag')
+    const [view] = toSavedViews([views[1]], over.sources)
+
+    expect(table?.of).toBe('activiteit')
+    expect([view.of, view.table, view.model]).toEqual(['activiteit', 'productie_dag', 'productie_dag'])
+  })
+
+  it('carries no `of` where the engine serves none', () => {
+    expect(toSchema(engine).tables.map((t) => t.of)).toEqual([undefined, undefined, undefined])
+  })
+})
+
 describe('toSchema', () => {
   it("maps a dataset's columns to model fields by type", () => {
     const fields = toSchema(engine).models.activiteit.fields
@@ -497,5 +513,48 @@ describe('the matrix and titles through a relation', () => {
     const layout = { ...defaults(toSavedViews(theatreViews, theatre.sources)[1]), filters: [], sort: [{ id: 'title', desc: false }, { id: 'naam', desc: true }], group: 'title' }
 
     expect(rowsQuery({}, layout, {}, null)).toEqual({ sort: '-naam' })
+  })
+})
+
+describe('links', () => {
+  const MENSEN = {
+    label: 'Mensen', item: 'Toewijzing', dataset: 'toewijzing', key: 'activiteit_id', target: 'persoon_id', target_dataset: 'persoon',
+    state: { options: { uitgenodigd: 'Uitgenodigd', bevestigd: 'Bevestigd' }, tones: { uitgenodigd: 'warn' as const, bevestigd: 'ok' as const }, default: 'uitgenodigd' },
+  }
+  const dag = {
+    kind: 'query' as const, label: 'Dagplanning', title: 'omschrijving', date: 'plandag',
+    columns: {
+      omschrijving: { type: 'text' as const, label: 'Omschrijving' },
+      locatie_id: { type: 'integer' as const, label: 'Locatie', nullable: true },
+      status: { type: 'text' as const, label: 'Status' },
+    },
+    links: { mensen: MENSEN },
+  }
+  const stored = {
+    id: 9, name: 'Dagplanning', source_type: 'query' as const, source: 'dagplanning', skin: 'table' as const,
+    filters: {}, sort: [], group_by: null, visible_fields: ['omschrijving', 'locatie_id', 'mensen', 'status'],
+    shared: true, owner_id: -1, mine: false, editable: false,
+  }
+
+  it('makes a link a field of type links, with what the cell needs', () => {
+    const { models } = toSchema({ sources: { dagplanning: dag } } as unknown as EngineSchema)
+    expect(models.dagplanning?.fields.mensen).toEqual({
+      type: 'links', label: 'Mensen', required: false, fact: false,
+      link: { item: 'Toewijzing', dataset: 'toewijzing', key: 'activiteit_id', target: 'persoon_id', target_dataset: 'persoon', state: MENSEN.state },
+    })
+  })
+
+  it("puts a row's links among its fields", () => {
+    const people = [{ id: 7, target: 3, title: 'Lotte', state: 'bevestigd' }]
+    const row = toRow({ id: 1, omschrijving: 'x', title: 'x', custom: {}, lookups: {}, links: { mensen: people } })
+    expect(row.fields).toEqual({ omschrijving: 'x', mensen: people })
+  })
+
+  it('keeps a link in a saved view: shown in place, and hidden', () => {
+    const { arrangement, fixed } = fromStoredView(stored, dag)
+    expect(arrangement.order).toEqual(['title', 'locatie_id', 'mensen', 'status'])
+    expect(toStoredView(arrangement, fixed, dag).visible_fields).toEqual(['omschrijving', 'locatie_id', 'mensen', 'status'])
+    const hidden = { ...arrangement, hidden: [...arrangement.hidden, 'mensen'] }
+    expect(toStoredView(hidden, fixed, dag).visible_fields).toEqual(['omschrijving', 'locatie_id', 'status'])
   })
 })

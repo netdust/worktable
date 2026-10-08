@@ -1,18 +1,13 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { formatWindow, isoWeek, shift, useWindow, weekOf, WindowControl } from './Window'
+import { formatWindow, isoWeek, shift, weekOf } from './Window'
 
-const api = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), update: vi.fn(), create: vi.fn(), savedViews: () => Promise.resolve([]),
+const api = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), records: vi.fn(), awayRows: vi.fn(), savedViews: () => Promise.resolve([]),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
   rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))
 vi.mock('../api', () => api)
 const { App } = await import('./App')
-
-function Harness() {
-  const [value, setValue] = useWindow()
-  return <WindowControl value={value} onChange={setValue} />
-}
 
 beforeEach(() => {
   document.documentElement.lang = 'nl-BE'
@@ -61,66 +56,23 @@ describe('the week window', () => {
   })
 })
 
-describe('WindowControl', () => {
-  it('defaults to the current Monday to Sunday', () => {
-    render(<Harness />)
-
-    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
-  })
-
-  it('next and previous move it by seven days and keep it in the hash', () => {
-    render(<Harness />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Volgende week' }))
-    expect(screen.getByText('Week 22 · 25–31 mei')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Vorige week' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Vorige week' }))
-    expect(screen.getByText('Week 20 · 11–17 mei')).toBeTruthy()
-    expect(window.location.hash).toBe('#from=2026-05-11&to=2026-05-17')
-  })
-
-  it('a reload keeps the window from the hash', () => {
-    window.location.hash = '#from=2026-06-01&to=2026-06-07'
-
-    render(<Harness />)
-
-    expect(screen.getByText('Week 23 · 1–7 jun')).toBeTruthy()
-  })
-
-  it('a hash that is not a date falls back to the current week', () => {
-    window.location.hash = '#from=soon'
-
-    render(<Harness />)
-
-    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
-  })
-
-  it('picking a day shows its week', () => {
-    render(<Harness />)
-
-    fireEvent.change(screen.getByLabelText('Kies een dag'), { target: { value: '2026-07-02' } })
-
-    expect(screen.getByText('Week 27 · 29 jun–5 jul')).toBeTruthy()
-  })
-})
-
 describe('App and the window', () => {
   it('requests rows with the window it shows', async () => {
     const planning = { key: 'planning', label: 'Planning', table: 'planning', model: 'activity', date_field: 'date' }
     api.rows.mockResolvedValue({ rows: [], total: 0 })
     const tables = [{ key: 'planning', label: 'Planning', model: 'activity', types: ['grid' as const] }]
-    api.schema.mockResolvedValue({ models: {}, tables, views: [planning], writable: {} })
+    const models = { activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: {} } }
+    api.schema.mockResolvedValue({ models, tables, views: [planning], writable: {} })
     render(<App />)
 
-    await screen.findByText('Geen rijen in deze week')
-    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
+    await screen.findByText('Geen rijen in deze periode')
+    expect(screen.getAllByText('Week 21 · 18–24 mei').length).toBeGreaterThan(0)
     expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-18', to: '2026-05-24' }, null, expect.any(Object))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Volgende week' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }))
 
-    expect(screen.getByText('Week 22 · 25–31 mei')).toBeTruthy()
+    expect(screen.getAllByText('Week 22 · 25–31 mei').length).toBeGreaterThan(0)
     await vi.waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(planning, { from: '2026-05-25', to: '2026-05-31' }, null, expect.any(Object)))
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
   })
 })

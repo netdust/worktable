@@ -1,9 +1,10 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { awayRows, create as createRow, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
+import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
 import { filter } from '../grid/layout'
@@ -24,14 +25,15 @@ import { Search } from './Search'
 import { SignIn } from './SignIn'
 import { SpaceSelect } from './SpaceSelect'
 import { Toast, useNotice } from './Toast'
-import { type Table, tableOf } from './tables'
+import type { Table } from './tables'
 import { type Shown, Toolbar } from './Toolbar'
 import { ViewPanel } from './ViewPanel'
 import { useFilterNames } from './useFilterNames'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { formatWindow, useWindow } from './Window'
+import { MATRIX_DAYS, Period } from './Period'
+import { days, formatWindow, useWindow, weekOf } from './Window'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -158,7 +160,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     setAdding(null)
     setViewNote(null)
   }
-  const [range, setRange] = useWindow()
+  const [picked, setRange] = useWindow()
   const [result, setResult] = useState<Rows>({ status: 'loading' })
   const [query, setQuery] = useState('')
   const [exportFailed, setExportFailed] = useState(false)
@@ -199,8 +201,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   useEffect(() => {
     if (settled && view && view.key !== activeKey) setActive(view.key)
   }, [settled, view?.key, activeKey])
-  const title = tableOf(tables, view?.key)?.label ?? t('viewsShown')
+  // Named by the view's own source: a query's view sits under another model's node and keeps the query's name.
+  const title = declared.find((table) => table.key === view?.table)?.label ?? t('viewsShown')
   const dated = Boolean(view?.date_field)
+  // A matrix reads one bounded window: under Alles, or over the engine's cap, it shows the current week.
+  const unbounded = view?.type !== 'matrix'
+  const range = useMemo(() => {
+    const fits = picked.from && picked.to && days({ from: picked.from, to: picked.to }) <= MATRIX_DAYS
+    return unbounded || fits ? picked : weekOf(new Date())
+  }, [unbounded, picked])
   const [space, select] = useSpace(served?.space)
   const scoped = space.status !== 'none' && view?.space === 'scoped'
   // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
@@ -277,11 +286,39 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const filters = layout && fields.length > 0
     ? <Filters fields={named} active={layout.filters.filter((f) => !waiting.includes(f.field))} onChange={(field, value) => setLayout(filter(layout, field, value))} />
     : null
+  const period = dated ? <Period window={range} onChange={setRange} unbounded={unbounded} /> : null
   const exportView = () => {
     const shown = snapshot.current?.()
     if (!view || !shown) return
     setExportFailed(false)
-    exportSheet(view, shown.columns, shown.groups, dated ? range : null, title).catch(() => setExportFailed(true))
+    exportSheet(view, shown.columns, shown.groups, dated && range.from && range.to ? { from: range.from, to: range.to } : null, title).catch(() => setExportFailed(true))
+  }
+  // A link is a row of another dataset, created and deleted there through its writer; then the row it sits on is read again.
+  const repaint = (row: Row) => {
+    if (model) rowOf(model.key, row.id).then((found) => found && store?.replace(found), reloadView)
+  }
+  const refused = (row: Row) => (error: ApiError) => {
+    notify({ message: errorText(error.code, error.message) })
+    repaint(row)
+  }
+  const links: LinkActions = {
+    add: async (field, row, target) => {
+      const link = model?.fields[field]?.link
+      if (!link) return
+      await createRow(link.dataset, { [link.key]: row.id, [link.target]: target }).then(({ row: made, batch }) => {
+        history.push({ batch: Promise.resolve(batch), model: link.dataset, id: made.id })
+        repaint(row)
+      }, refused(row))
+    },
+    // A delete is never undone: its earlier steps leave the history with it.
+    remove: async (field, row, item) => {
+      const link = model?.fields[field]?.link
+      if (!link) return
+      await removeRow(link.dataset, item.id).then(() => {
+        history.forget(link.dataset, item.id)
+        repaint(row)
+      }, refused(row))
+    },
   }
   const changeDisplay = (table: Table, data: { label?: string; icon?: string }) => {
     setDisplay(table.key, data).then(
@@ -343,8 +380,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           matrix={matrix}
           locked={view ? lockOf(view) : null}
           shown={matrix ? null : shown}
-          window={dated ? range : null}
-          onWindow={setRange}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
@@ -368,14 +403,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           {matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t('noRowsInWindow')} emptyHint={formatWindow(range)} store={cells} writable={joinWritable}
-              layout={layout} onLayout={setLayout} filters={filters} />
+              layout={layout} onLayout={setLayout} filters={filters} period={period} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(dated ? 'noRowsInWindow' : 'noRows')} emptyHint={dated ? formatWindow(range) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act}
-              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} />
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} period={period} onAction={act}
+              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} />
           ) : (
-            <Sheet hasView={view !== undefined} dated={dated} result={result} />
+            <Sheet hasView={view !== undefined} dated={dated} result={result} period={period} />
           )}
         </section>
         {panel && view && (
@@ -394,7 +429,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 }
 
 /** What a query's `+ Nieuw` creates in its dataset: that dataset's own new row, on the window's day and in the selected space. */
-function madeFrom(target: Model, tables: TableDef[], window: DateWindow | null, scope: Scope | null): NewRow {
+function madeFrom(target: Model, tables: TableDef[], window: Partial<DateWindow> | null, scope: Scope | null): NewRow {
   const table = tables.find((t) => t.model === target.key)
   const view: View = { key: target.key, label: target.label, table: target.key, model: target.key, ...(table?.date_field ? { date_field: table.date_field } : {}) }
   return newRow(target, view, window, new Date(), table?.space === 'scoped' ? scope : null)
@@ -408,16 +443,20 @@ function createBlocked(target: Model, made: NewRow | null, writable: boolean): s
   return asked.length > 0 ? t('pickFirst', { fields: asked.join(', ') }) : null
 }
 
-function Sheet({ hasView, dated, result }: { hasView: boolean; dated: boolean; result: Rows }) {
+/** Between reads the bar stays, so the period can be stepped again. */
+function Sheet({ hasView, dated, result, period }: { hasView: boolean; dated: boolean; result: Rows; period: ReactNode }) {
   if (!hasView) return <div className="nv-center"><EmptyState type="no-data" title={t('noViews')} description={t('noViewsHint')} /></div>
-  if (result.status === 'loading') return <div className="nv-center"><Spinner /></div>
+  const inside = result.status === 'loading' ? <Spinner /> : (
+    <EmptyState
+      type="no-data"
+      title={t(dated ? 'noRowsInWindow' : 'noRows')}
+      description={result.status === 'error' ? errorText(result.error.code, result.error.message) : undefined}
+    />
+  )
   return (
-    <div className="nv-center">
-      <EmptyState
-        type="no-data"
-        title={t(dated ? 'noRowsInWindow' : 'noRows')}
-        description={result.status === 'error' ? errorText(result.error.code, result.error.message) : undefined}
-      />
+    <div className="nv-frame">
+      {period && <div className="nv-bar">{period}</div>}
+      <div className="nv-center">{inside}</div>
     </div>
   )
 }

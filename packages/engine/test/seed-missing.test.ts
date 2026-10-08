@@ -212,6 +212,40 @@ describe('seedMissing: views', () => {
   })
 })
 
+describe('seedMissing: system views no longer declared', () => {
+  test('a system view whose name and source match no seed is removed, revised and named', () => {
+    const sqlite = existingDb()
+    const old = insertView(sqlite, SYSTEM_OWNER, 'Oud', 'taak', ['day'])
+    const report = seedMissing(sqlite, seedDomain)
+    const [gone] = viewsNamed(sqlite, 'Oud')
+    expect(gone?.deleted_at).not.toBeNull()
+    expect(seedLines(report)).toContain('seed-missing: view "Oud" (taak) removed, no longer declared')
+    const revised = sqlite
+      .query("SELECT field, actor_id, batch_id FROM revision WHERE entity = 'saved_view' AND record_id = ?")
+      .all(old) as Record<string, unknown>[]
+    expect(revised).toEqual([{ field: 'deleted_at', actor_id: SYSTEM_OWNER, batch_id: report.batch }])
+  })
+
+  test('a public system view no longer declared stays, and is named', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Oud', 'taak', ['day'])
+    sqlite.query("UPDATE saved_view SET public = 1, share_token = 'tok' WHERE id = ?").run(id)
+    const before = viewsNamed(sqlite, 'Oud')
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Oud')).toEqual(before)
+    expect(seedLines(report)).toContain('seed-missing: view "Oud" (taak) is public, left alone')
+  })
+
+  test("a person's own or shared view that matches no seed is never removed", () => {
+    const sqlite = existingDb()
+    insertView(sqlite, 7, 'Mijn', 'taak', ['day'], 0)
+    insertView(sqlite, 7, 'Gedeeld', 'taak', ['day'], 1)
+    const before = [...viewsNamed(sqlite, 'Mijn'), ...viewsNamed(sqlite, 'Gedeeld')]
+    seedMissing(sqlite, seedDomain)
+    expect([...viewsNamed(sqlite, 'Mijn'), ...viewsNamed(sqlite, 'Gedeeld')]).toEqual(before)
+  })
+})
+
 describe('seedMissing: public and updated system views', () => {
   test('a public system view keeps its filters, fields, public flag, share token and format, and is named', () => {
     const sqlite = existingDb()

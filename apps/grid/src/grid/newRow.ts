@@ -21,9 +21,9 @@ function fillable(field: Field): boolean {
  * What `+ New` fills in by itself — the day it lands on, the first option of a
  * required list, the selected space — and what the draft row asks for.
  */
-export function newRow(model: Model, view: View, window: DateWindow | null, today = new Date(), scope: Scope | null = null): NewRow {
+export function newRow(model: Model, view: View, window: Partial<DateWindow> | null, today = new Date(), scope: Scope | null = null): NewRow {
   const now = iso(today)
-  const day = window && (now < window.from || now > window.to) ? window.from : now
+  const day = window?.from && window.to && (now < window.from || now > window.to) ? window.from : now
   const fields: Record<string, unknown> = {}
   // The title is asked only when the writer requires it and the grid may write it.
   const needs: string[] = model.title_readonly || model.title_required === false ? [] : ['title']

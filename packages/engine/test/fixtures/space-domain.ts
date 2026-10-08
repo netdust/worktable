@@ -52,6 +52,7 @@ const jobRoom = defineQuery({
   name: 'job_room',
   label: 'Job rooms',
   title: 'name',
+  of: 'job',
   scoped: 'team_id',
   sql: `SELECT j.id, j.name, j.team_id, COALESCE(j.room_id, 1) AS room_id,
           CASE WHEN j.room_id IS NULL THEN 'team' ELSE 'own' END AS room_from
@@ -76,7 +77,7 @@ const domain: Domain = {
   queries: [jobRoom],
   space: { dataset: 'team' },
   sections: [
-    { label: 'Work', sources: ['job_room', 'job'] },
+    { label: 'Work', sources: ['job'] },
     { label: 'Setup', sources: ['team', 'room'] },
   ],
   seed: (insert) => {

@@ -38,6 +38,9 @@ const bad = (message: string) => new ApiError(400, 'bad_view', message)
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const hasColumn = (source: Source, key: string): boolean =>
   Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
+// A link is shown like a column, never sorted or grouped on.
+const hasField = (source: Source, key: string): boolean =>
+  hasColumn(source, key) || Object.hasOwn(source.links ?? {}, key)
 
 export function viewOf(raw: Raw): SavedViewRow {
   return {
@@ -102,11 +105,17 @@ function filtersOf(source: Source, value: unknown): FilterInput {
   return value as FilterInput
 }
 
-function columnsOf(source: Source, what: string, value: unknown, strip = (key: string) => key): string[] {
+function columnsOf(
+  source: Source,
+  what: string,
+  value: unknown,
+  strip = (key: string) => key,
+  known = hasColumn,
+): string[] {
   if (!Array.isArray(value) || !value.every((key) => typeof key === 'string')) throw bad(`${what} must be a list`)
   const problem = keysProblem(what, value.map(strip))
   if (problem) throw bad(problem)
-  for (const key of value) if (!hasColumn(source, strip(key))) throw bad(`${what}: "${key}" is not a column`)
+  for (const key of value) if (!known(source, strip(key))) throw bad(`${what}: "${key}" is not a column`)
   return value
 }
 
@@ -141,7 +150,7 @@ export function viewBody(input: unknown, domain: Domain, creating: boolean): Vie
     filters: filtersOf(source, v.filters),
     sort: columnsOf(source, 'sort', v.sort, (key) => key.replace(/^-/, '')),
     group_by: groupOf(source, v.group_by),
-    visible_fields: columnsOf(source, 'visible_fields', v.visible_fields),
+    visible_fields: columnsOf(source, 'visible_fields', v.visible_fields, undefined, hasField),
     shared: sharedOf(v.shared),
   })
 }
@@ -342,7 +351,7 @@ export function publicRows({ db, domain }: Store, raw: Raw, window: { from?: str
     filter: view.filters,
   }
   const owner = source.owners?.owner
-  const keys = view.visible_fields.filter((key) => key !== owner)
+  const keys = view.visible_fields.filter((key) => key !== owner && !Object.hasOwn(source.links ?? {}, key))
   const { rows, total } = readRows(db, domain, source, params, 'all')
   return {
     columns: keys.map((key) => ({ key, label: source.columns[key]?.label, type: source.columns[key]?.type })),

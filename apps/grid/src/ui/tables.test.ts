@@ -51,6 +51,31 @@ describe('the tables', () => {
     expect(tables.map((t) => t.key)).toEqual(['three', 'one', 'two', 'four'])
   })
 
+  it('puts the views of a query with `of` under that table, its own first, then each query in the declared order; the query gets no node', () => {
+    const tables = groupTables(
+      [table('model'), table('later', { query: true, of: 'model' }), table('sooner', { query: true, of: 'model' }), table('other')],
+      [view('s', 'sooner'), view('l', 'later'), view('m', 'model'), view('o', 'other')],
+    )
+
+    expect(tables.map((t) => t.key)).toEqual(['model', 'other'])
+    expect(tables[0].views.map((v) => v.key)).toEqual(['m', 'l', 's'])
+  })
+
+  it('keeps a query without `of`, or with an `of` no table answers to, as a node of its own', () => {
+    const tables = groupTables([table('model'), table('free', { query: true }), table('lost', { query: true, of: 'gone' })], [view('f', 'free')])
+
+    expect(tables.map((t) => t.key)).toEqual(['model', 'free', 'lost'])
+  })
+
+  it('orders a node by its own first view, keeping its queries in their declared order', () => {
+    const declared = [table('one'), table('two'), table('q1', { of: 'two' }), table('q2', { of: 'two' })]
+    const all = [view('a', 'q2'), view('b', 'one'), view('c', 'two'), view('d', 'q1')]
+    const tables = byFirstView(groupTables(declared, all), all)
+
+    expect(tables.map((t) => t.key)).toEqual(['one', 'two'])
+    expect(tables[1].views.map((v) => v.key)).toEqual(['c', 'd', 'a'])
+  })
+
   it('finds the table a view belongs to', () => {
     const tables = groupTables([table('one'), table('c')], [view('a', 'one'), view('b', 'one'), view('c', 'c')])
 
@@ -73,6 +98,12 @@ describe('the sections', () => {
 
   it('is one unlabelled section when the domain declares none', () => {
     expect(shape(sectionsOf(tables))).toEqual([[null, ['one', 'two', 'three', 'four']]])
+  })
+
+  it('places no query with `of`: its views sit under its table', () => {
+    const grouped = groupTables([table('one'), table('q', { query: true, of: 'one' })], [view('a', 'q')])
+
+    expect(shape(sectionsOf(grouped, [{ label: 'Werk', sources: ['one'] }]))).toEqual([['Werk', ['one']]])
   })
 
   it('drops a source it does not know and a section left empty, and adds no empty last section', () => {

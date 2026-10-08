@@ -158,14 +158,14 @@ test('switch-production @e2e', async ({ page }) => {
 
   // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
   const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
-  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning'))).toEqual(nachtwacht)
+  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning', 'Activiteiten'))).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
 
   // Kept in this browser: a reload still works in Nachtwacht.
   const reload = async () => {
     await page.reload()
     await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
-    await pick(page, 'Dagplanning')
+    await pick(page, 'Dagplanning', 'Activiteiten')
   }
   expect(await scopeAsked(page, 'dagplanning', reload)).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
@@ -183,8 +183,8 @@ test('switch-production @e2e', async ({ page }) => {
 
 test('tree-fold-and-hover @e2e', async ({ page }) => {
   await land(page, `/#from=${SEED_WEEK}`)
-  await pick(page, 'Dagplanning')
-  const node = modelNode(page, 'Speelreeksen')
+  await pick(page, 'Dagplanning', 'Activiteiten')
+  const node = modelNode(page, 'Tourstops')
   const row = node.locator('.nv-model')
   const tools = row.locator('.nv-model__tools')
 
@@ -194,8 +194,8 @@ test('tree-fold-and-hover @e2e', async ({ page }) => {
   await row.hover()
   await expect(row.locator('.nv-model__chevron')).toBeVisible()
   await expect(tools).toHaveCSS('opacity', '1')
-  await expect(row.getByRole('button', { name: 'Weergave toevoegen aan Speelreeksen' })).toBeVisible()
-  await expect(row.getByRole('button', { name: 'Meer voor Speelreeksen' })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Weergave toevoegen aan Tourstops' })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Meer voor Tourstops' })).toBeVisible()
   await shot(page, 'tree-hover')
 
   // The chevron folds and unfolds; the view stays Dagplanning.
@@ -204,19 +204,19 @@ test('tree-fold-and-hover @e2e', async ({ page }) => {
     await row.getByRole('button', { name: 'Uitklappen' }).click()
   }
   await expect(node).toHaveAttribute('aria-expanded', 'true')
-  await expect(views.getByRole('button', { name: 'Speelreeksen', exact: true })).toBeVisible()
+  await expect(views.getByRole('button', { name: 'Tourstops', exact: true })).toBeVisible()
   await row.getByRole('button', { name: 'Inklappen' }).click()
   await expect(node).toHaveAttribute('aria-expanded', 'false')
   await expect(views).toHaveCount(0)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
   await row.getByRole('button', { name: 'Uitklappen' }).click()
   await expect(node).toHaveAttribute('aria-expanded', 'true')
-  await expect(views.getByRole('button', { name: 'Speelreeksen', exact: true })).toBeVisible()
+  await expect(views.getByRole('button', { name: 'Tourstops', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
 
   // The name opens the model's view.
-  await openModel(page, 'Speelreeksen')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speelreeksen')
+  await openModel(page, 'Tourstops')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tourstops')
 })
 
 async function newView(page: Page, model: string, name: string, who: 'Het team' | 'Alleen ik', snap?: string) {
@@ -271,14 +271,14 @@ test('create-team-and-personal-view @e2e', async ({ page }) => {
 })
 
 test('copy-rename-delete-view @e2e', async ({ page }) => {
-  const copy = 'Speelreeksen (kopie)'
+  const copy = 'Tourstops (kopie)'
   const renamed = 'Reeksen e2e hernoemd'
   await page.goto('/')
-  await pick(page, 'Speelreeksen')
+  await pick(page, 'Tourstops')
 
-  await page.getByRole('button', { name: 'More actions: Speelreeksen' }).click()
+  await page.getByRole('button', { name: 'More actions: Tourstops' }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(1)
+  await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(1)
   await expect.poll(async () => (await views(page.request)).find((v) => v.name === copy)?.mine).toBe(true)
   const made = (await views(page.request)).find((v) => v.name === copy) as SavedView
 
@@ -287,15 +287,15 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('   ')
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
-  await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(1)
+  await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(1)
   expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(copy)
 
   await page.getByRole('button', { name: `More actions: ${copy}` }).click()
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(renamed)
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
-  await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(1)
-  await expect(viewRow(page, 'Speelreeksen', copy)).toHaveCount(0)
+  await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(1)
+  await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(0)
   await expect.poll(async () => (await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
 
   await page.getByRole('button', { name: `More actions: ${renamed}` }).click()
@@ -304,7 +304,7 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
   )
   await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
   expect((await deleted).status()).toBe(200)
-  await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(0)
+  await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(0)
   await shot(page, 'view-deleted')
   expect((await views(page.request)).some((v) => v.id === made.id)).toBe(false)
 
@@ -314,10 +314,10 @@ test('copy-rename-delete-view @e2e', async ({ page }) => {
     .getByRole('button', { name: 'Ongedaan maken' })
     .click()
   expect((await restored).status()).toBe(200)
-  await expect(viewRow(page, 'Speelreeksen', renamed)).toHaveCount(1)
+  await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(1)
   expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
   await page.reload()
-  await pick(page, renamed, 'Speelreeksen')
+  await pick(page, renamed, 'Tourstops')
 })
 
 const facts = (band: Locator) => band.locator('.nv-group__fact')
@@ -325,7 +325,7 @@ const facts = (band: Locator) => band.locator('.nv-group__fact')
 test('fold-day-band @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e vouwen', FOLD_WEEK)
   await land(page, `/#from=${FOLD_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   // Row numbers lead every row, and subtle dividers stand between the cells (Stefan, 2026-10-07).
@@ -346,7 +346,7 @@ test('fold-day-band @e2e', async ({ page }) => {
 
   // Kept per view in this browser.
   await page.reload()
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(bands(page)).toHaveCount(4)
   await expect(bands(page).first()).toHaveAttribute('aria-expanded', 'false')
   await expect(gridRows(page)).toHaveCount(21)
@@ -362,7 +362,7 @@ test('fold-day-band @e2e', async ({ page }) => {
 test('band-facts @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e feiten', FACTS_WEEK)
   await land(page, `/#from=${FACTS_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   for (const band of await bands(page).all()) {
@@ -391,7 +391,7 @@ test('inherited-venue @e2e', async ({ page }) => {
   }
 
   await land(page, `/#from=${INHERIT_WEEK}`)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(29)
   const locatie = await columnIndex(page, 'Locatie')
 
@@ -400,7 +400,7 @@ test('inherited-venue @e2e', async ({ page }) => {
   for (const tr of await inherited.all()) {
     const cell = tr.locator('td').nth(locatie)
     await expect(cell.locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
-    await expect(cell.locator('.nv-via')).toHaveText('via speelreeks')
+    await expect(cell.locator('.nv-via')).toHaveText('via tourstop')
     // Never clipped: the venue gives way, the tag keeps its full width.
     const fits = await cell.locator('.nv-via').evaluate((tag) => {
       const td = tag.closest('td')?.getBoundingClientRect()
@@ -475,14 +475,16 @@ test('dagplanning-details @e2e', async ({ page }) => {
   await land(page, `/#from=${DETAILS_WEEK}`)
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
   await switchTo(page, 'Alle producties', 'Nachtwacht')
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
 
-  // R10.9: one bordered week control with the ISO week.
-  await expect(page.locator('.nv-window__week')).toHaveText('Week 12 · 22–28 mrt')
+  // R10.9 and R4: the Periode chip in the bar, with the ISO week.
+  await expect(page.getByRole('group', { name: 'Periode' }).locator('.nv-chip__value')).toHaveText(
+    'Week 12 · 22–28 mrt',
+  )
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
-  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Status; a time range with its end muted.
+  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Mensen, Status; a time range with its end muted.
   const heads = await page.locator('thead th').allTextContents()
   expect(heads.map((h) => h.replace(/\s*[↑↓]$/, '').trim())).toEqual([
     '#',
@@ -490,6 +492,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
     'Omschrijving',
     'Soort',
     'Locatie',
+    'Mensen',
     'Status',
   ])
   const lunch = named(page, 'Lunch').first()
@@ -507,7 +510,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
   await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveText('Productie is Nachtwacht')
 
   // R10.5: a model reads stronger than its views.
-  const node = modelNode(page, 'Dagplanning')
+  const node = modelNode(page, 'Activiteiten')
   await expect(node.locator('.nv-model__name')).toHaveCSS('font-weight', '500')
   const view = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: 'Dagplanning', exact: true })
   await expect(view).toHaveCSS('font-size', '13.5px')
@@ -549,19 +552,19 @@ async function addViewDialog(page: Page, model: string): Promise<Locator> {
 test('new-view-blank-and-double-submit @e2e', async ({ page }) => {
   const name = 'Dubbel e2e weergave'
   await page.goto('/')
-  await pick(page, 'Speelreeksen')
+  await pick(page, 'Tourstops')
   const posts: string[] = []
   page.on('request', (req) => {
     if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/views') posts.push(req.url())
   })
 
   // Escape leaves without a view.
-  let dialog = await addViewDialog(page, 'Speelreeksen')
+  let dialog = await addViewDialog(page, 'Tourstops')
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
 
   // A blank name cannot be made.
-  dialog = await addViewDialog(page, 'Speelreeksen')
+  dialog = await addViewDialog(page, 'Tourstops')
   await dialog.getByRole('textbox', { name: 'Naam' }).fill('   ')
   await expect(dialog.getByRole('button', { name: 'Weergave maken' })).toBeDisabled()
   await dialog.getByRole('textbox', { name: 'Naam' }).press('Enter')
@@ -575,7 +578,7 @@ test('new-view-blank-and-double-submit @e2e', async ({ page }) => {
   await page.waitForTimeout(500)
   expect(posts).toHaveLength(1)
   expect((await views(page.request)).filter((v) => v.name === name)).toHaveLength(1)
-  await expect(viewRow(page, 'Speelreeksen', name)).toHaveCount(1)
+  await expect(viewRow(page, 'Tourstops', name)).toHaveCount(1)
   await shot(page, 'view-double-submit')
 })
 
@@ -584,23 +587,23 @@ test('colleague-shared-view @e2e', async ({ page, browser }) => {
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('admin') })
   const theirs = await admin.newPage()
   await theirs.goto('/')
-  await pick(theirs, 'Speelreeksen')
-  await newView(theirs, 'Speelreeksen', name, 'Het team')
+  await pick(theirs, 'Tourstops')
+  await newView(theirs, 'Tourstops', name, 'Het team')
   const made = (await views(theirs.request)).find((v) => v.name === name) as SavedView
   await admin.close()
 
   // The editor sees it shared by a colleague: a people mark, never the default's lock.
   await page.goto('/')
-  await pick(page, name, 'Speelreeksen')
-  const mark = viewRow(page, 'Speelreeksen', name).getByRole('img')
+  await pick(page, name, 'Tourstops')
+  const mark = viewRow(page, 'Tourstops', name).getByRole('img')
   await expect(mark).toHaveAccessibleName('Gedeeld door een collega, alleen te kopiëren')
   await expect(page.locator('.nv-toolbar__lock')).toHaveAccessibleName(
     'Gedeeld door een collega: maak een kopie om aan te passen',
   )
-  await expect(viewRow(page, 'Speelreeksen', name).getByRole('img', { name: /^Standaardweergave/ })).toHaveCount(0)
+  await expect(viewRow(page, 'Tourstops', name).getByRole('img', { name: /^Standaardweergave/ })).toHaveCount(0)
   // The seeded default keeps its lock.
   await expect(
-    viewRow(page, 'Speelreeksen', 'Speelreeksen').getByRole('img', { name: 'Standaardweergave, alleen te kopiëren' }),
+    viewRow(page, 'Tourstops', 'Tourstops').getByRole('img', { name: 'Standaardweergave, alleen te kopiëren' }),
   ).toBeVisible()
   await shot(page, 'colleague-view')
 
@@ -644,6 +647,7 @@ test.describe('a domain without the new shapes', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Alle /, exact: false })).toHaveCount(0)
     await expect(page.locator('.nv-chip--scope')).toHaveCount(0)
+    await expect(page.getByRole('group', { name: 'Periode' })).toHaveCount(0)
     await expect(page.locator('.nv-group__fact')).toHaveCount(0)
     await expect(page.locator('.nv-via')).toHaveCount(0)
     await shot(page, 'fiche-as-before')
@@ -687,7 +691,7 @@ test.describe
     test('read-limit-cut @e2e', async ({ page }) => {
       expect(ids).toHaveLength(MAX_READ + 1)
       await land(page, `/#from=${CUT_WEEK}`)
-      await pick(page, 'Dagplanning')
+      await pick(page, 'Dagplanning', 'Activiteiten')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
@@ -700,7 +704,7 @@ test.describe
     // Shake-out row 19: the bar's count and the grid's foot say 5000+ like the title line.
     test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
       await land(page, `/#from=${CUT_WEEK}`)
-      await pick(page, 'Dagplanning')
+      await pick(page, 'Dagplanning', 'Activiteiten')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen`)

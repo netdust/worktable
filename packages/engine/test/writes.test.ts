@@ -216,6 +216,8 @@ describe('in use', () => {
       taak: false,
       plat: false,
       note: true,
+      koppel: false,
+      merk: false,
       per_project: false,
       note_lijst: false,
     })
@@ -438,6 +440,8 @@ describe('writes', () => {
       taak: false,
       plat: false,
       note: true,
+      koppel: false,
+      merk: false,
       per_project: false,
       note_lijst: true,
     })

@@ -37,6 +37,54 @@ const taak = defineDataset({
     day: { type: 'date', label: 'Day' },
     afgerond: { type: 'boolean', label: 'Afgerond', default: false },
   },
+  links: {
+    koppels: {
+      label: 'Koppels',
+      item: 'Koppel',
+      dataset: 'koppel',
+      key: 'taak_id',
+      target: 'project_id',
+      state: 'stand',
+    },
+    merken: { label: 'Merken', item: 'Merk', dataset: 'merk', key: 'taak_id', target: 'plat_id' },
+    // An owner reads these koppels, never the plat they point at: only its title (threat 2).
+    platen: { label: 'Platen', item: 'Plat', dataset: 'koppel', key: 'taak_id', target: 'plat_id' },
+  },
+})
+
+// An owned join: an owner sees a taak's koppels of its own project only.
+const koppel = defineDataset({
+  name: 'koppel',
+  label: 'Koppels',
+  title: 'tekst',
+  custom: false,
+  owners: { owner: 'project_id' },
+  columns: {
+    taak_id: { type: 'integer', label: 'Taak', relation: 'taak' },
+    project_id: { type: 'integer', label: 'Project', relation: 'project', nullable: true },
+    plat_id: { type: 'integer', label: 'Plat', relation: 'plat', nullable: true },
+    tekst: { type: 'text', label: 'Tekst' },
+    stand: {
+      type: 'text',
+      label: 'Stand',
+      options: { open: 'Open', vast: 'Vast' },
+      tones: { open: 'amber', vast: 'ok' },
+      default: 'open',
+    },
+  },
+})
+
+// A join without an owner column: no owner reads it, nor sees that taak links to it.
+const merk = defineDataset({
+  name: 'merk',
+  label: 'Merken',
+  title: 'tekst',
+  custom: false,
+  columns: {
+    taak_id: { type: 'integer', label: 'Taak', relation: 'taak' },
+    plat_id: { type: 'integer', label: 'Plat', relation: 'plat', nullable: true },
+    tekst: { type: 'text', label: 'Tekst' },
+  },
 })
 
 const plat = defineDataset({
@@ -152,7 +200,7 @@ const copyNotes: ActionDecl = {
 }
 
 export const domain: Domain = {
-  datasets: [project, taak, plat, note],
+  datasets: [project, taak, plat, note, koppel, merk],
   queries: [perProject, noteLijst],
   writers: { project: projectWriter, note: noteWriter },
   actions: { copy_notes: copyNotes },

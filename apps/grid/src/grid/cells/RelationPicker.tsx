@@ -1,5 +1,5 @@
 import { Spinner } from '@sakaniui/react'
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { records } from '../../api'
 import { t } from '../../i18n'
 import type { Row } from '../../types'
@@ -25,6 +25,12 @@ interface Props {
   onClose?: () => void
   /** Delete on an empty search; absent where the value may not be emptied. */
   onClear?: () => void
+  /** Shown in the search box before the input: a multiselect's chosen records. */
+  before?: ReactNode
+  /** Records left out of the list, such as those chosen already. */
+  hide?: (row: Row) => boolean
+  /** A multiselect: the search empties after each pick, ready for the next. */
+  clearOnPick?: boolean
 }
 
 type Found = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number }
@@ -34,11 +40,13 @@ function ordered(rows: Row[], first: Props['first']): Row[] {
 }
 
 /** A search over one model's records with a listbox under it: ↑↓ move, Enter picks, Escape cancels. */
-export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear }: Props) {
+export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, before, hide, clearOnPick }: Props) {
   const [query, setQuery] = useState(opening)
   const [found, setFound] = useState<Found>({ status: 'loading' })
   const [active, setActive] = useState(0)
   const input = useRef<HTMLInputElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const [shift, setShift] = useState(0)
   const id = useId()
 
   useEffect(() => {
@@ -61,14 +69,28 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
     }
   }, [model, query])
 
-  const rows = found.status === 'ready' ? found.rows : []
+  // A picker in a column near the right edge would run off the screen: it moves left by what overflows.
+  useLayoutEffect(() => {
+    const right = box.current?.getBoundingClientRect().right ?? 0
+    setShift((was) => Math.max(0, right + was - (window.innerWidth - 8)))
+  }, [found])
+
+  const pick = (row: Row, how: Pick) => {
+    onPick(row, how)
+    if (clearOnPick) {
+      setQuery('')
+      setActive(0)
+    }
+  }
+
+  const rows = found.status === 'ready' ? (hide ? found.rows.filter((row) => !hide(row)) : found.rows) : []
 
   const keys = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       setActive((i) => Math.max(0, Math.min(rows.length - 1, i + (event.key === 'ArrowDown' ? 1 : -1))))
     } else if (event.key === 'Enter') {
       // Until the typed search answers, the list is the last one: a pick from it would be a stranger.
-      if (found.status === 'ready' && rows[active]) onPick(rows[active], 'key')
+      if (found.status === 'ready' && rows[active]) pick(rows[active], 'key')
     } else if (event.key === 'Escape') {
       onCancel()
     } else if (event.key === 'Tab') {
@@ -82,27 +104,31 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
     event.stopPropagation()
   }
 
-  return (
-    <div className="nv-pop nv-picker" data-editor>
+  const field = (
       <input
-        ref={input}
-        className="nv-picker__input"
-        role="combobox"
-        aria-label={label}
-        aria-expanded="true"
-        aria-controls={`${id}-list`}
-        aria-activedescendant={rows[active] ? `${id}-${rows[active].id}` : undefined}
-        aria-autocomplete="list"
-        placeholder={`${label}…`}
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value)
-          setActive(0)
-          setFound({ status: 'loading' })
-        }}
-        onKeyDown={keys}
-        onBlur={onClose}
-      />
+          ref={input}
+          className="nv-picker__input"
+          role="combobox"
+          aria-label={label}
+          aria-expanded="true"
+          aria-controls={`${id}-list`}
+          aria-activedescendant={rows[active] ? `${id}-${rows[active].id}` : undefined}
+          aria-autocomplete="list"
+          placeholder={`${label}…`}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setActive(0)
+            setFound({ status: 'loading' })
+          }}
+          onKeyDown={keys}
+          onBlur={onClose}
+        />
+  )
+
+  return (
+    <div ref={box} className="nv-pop nv-picker" data-editor style={shift ? { transform: `translateX(-${shift}px)` } : undefined}>
+      {before ? <div className="nv-picker__box">{before}{field}</div> : field}
       <ul id={`${id}-list`} role="listbox" aria-label={label} className="nv-picker__list" onMouseDown={(event) => event.preventDefault()}>
         {rows.map((row, i) => (
           <li
@@ -112,7 +138,7 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
             aria-selected={i === active}
             className="nv-pop__option"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onPick(row, 'click')}
+            onClick={() => pick(row, 'click')}
           >
             {row.title}
           </li>
@@ -120,7 +146,7 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
       </ul>
       {found.status === 'loading' && <Spinner size="sm" />}
       {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
-      {found.status === 'ready' && found.total > rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
+      {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
     </div>
   )
 }

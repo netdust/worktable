@@ -1,5 +1,5 @@
 import { SidebarItem } from '@sakaniui/react'
-import { Grid3x3, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
+import { Combine, Grid3x3, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import type { SavedView, View } from '../types'
@@ -14,8 +14,8 @@ export interface ViewActions {
   duplicate: (view: View) => void
   remove: (view: SavedView) => void
   share: (view: SavedView, shared: boolean) => void
-  /** The table's views in this user's new order, by key. */
-  order: (table: string, keys: string[]) => void
+  /** One source's views in this user's new order, by key. */
+  order: (source: string, keys: string[]) => void
 }
 
 interface Props {
@@ -42,14 +42,15 @@ function Mark({ view }: { view: View }) {
 }
 
 /** A copy of any; rename, share, move and delete on one's own: the engine makes only the owner's views editable. */
-function choices(view: View, at: number, count: number, actions: ViewActions, rename: () => void, move: (step: -1 | 1) => void): Action[] {
+function choices(view: View, block: string[], actions: ViewActions, rename: () => void, move: (step: -1 | 1) => void): Action[] {
   const own = editable(view) && view.mine ? view : null
+  const at = block.indexOf(view.key)
   return [
     { label: t('duplicate'), run: () => actions.duplicate(view) },
     ...(editable(view) ? [{ label: t('renameView'), run: rename }] : []),
     ...(own ? [{ label: t(own.shared ? 'unshare' : 'share'), run: () => actions.share(own, !own.shared) }] : []),
     ...(own && at > 0 ? [{ label: t('moveUp'), run: () => move(-1) }] : []),
-    ...(own && at < count - 1 ? [{ label: t('moveDown'), run: () => move(1) }] : []),
+    ...(own && at < block.length - 1 ? [{ label: t('moveDown'), run: () => move(1) }] : []),
     ...(editable(view) ? [{ label: t('delete'), run: () => actions.remove(view) }] : []),
   ]
 }
@@ -86,15 +87,20 @@ export function RenameField({ value, label, max, onDone }: { value: string; labe
 export function ViewList({ table, active, onSelect, actions }: Props) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const views = table.views
-  const keys = views.map((view) => view.key)
+  // A view moves only among its own source's views: the table's own, or one query's.
+  const sourceOf = (key: string) => views.find((view) => view.key === key)?.table
+  const blockOf = (key: string) => views.filter((view) => view.table === sourceOf(key)).map((view) => view.key)
   const rows = useRef(new Map<string, HTMLElement>())
   // A moved row keeps the keyboard: React may re-insert its element, and a re-inserted element loses focus.
   const refocus = useRef<string | null>(null)
-  const order = (next: string[]) => actions?.order(table.key, next)
-  const drag = useDragOrder(keys, rows, order)
+  const order = (next: string[]) => {
+    const source = next[0] === undefined ? undefined : sourceOf(next[0])
+    if (source) actions?.order(source, next)
+  }
+  const drag = useDragOrder(blockOf, rows, order)
   const move = (key: string, step: -1 | 1) => {
     refocus.current = key
-    order(stepped(keys, key, step))
+    order(stepped(blockOf(key), key, step))
   }
   const onKey = (key: string, event: KeyboardEvent) => {
     if (!actions || renaming === key || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
@@ -131,7 +137,7 @@ export function ViewList({ table, active, onSelect, actions }: Props) {
               {renaming === view.key && editable(view) ? <RenameField value={view.label} label={t('rename')} max={80} onDone={(name) => renamed(view, name)} /> : (
                 <>
                   <SidebarItem
-                    icon={view.type === 'matrix' ? Grid3x3 : TableIcon}
+                    icon={view.type === 'matrix' ? Grid3x3 : view.query ? Combine : TableIcon}
                     label={view.label}
                     active={view.key === active}
                     activeIndicator={false}
@@ -147,7 +153,7 @@ export function ViewList({ table, active, onSelect, actions }: Props) {
           <div className="nv-views__menus">
             {views.map((view, at) => renaming !== view.key && (
               <div key={view.key} className={view.key === active ? 'nv-view__menu nv-view__menu--active' : 'nv-view__menu'} style={{ gridRow: at + 1 }}>
-                <MoreMenu label={`${t('moreActions')}: ${view.label}`} hint={`${t('moreActionsShown')}: ${view.label}`} placement="bottom-start" actions={choices(view, at, views.length, actions, () => setRenaming(view.key), (step) => move(view.key, step))} />
+                <MoreMenu label={`${t('moreActions')}: ${view.label}`} hint={`${t('moreActionsShown')}: ${view.label}`} placement="bottom-start" actions={choices(view, blockOf(view.key), actions, () => setRenaming(view.key), (step) => move(view.key, step))} />
               </div>
             ))}
           </div>

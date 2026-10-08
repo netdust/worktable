@@ -90,7 +90,7 @@ test.describe('as the owner', () => {
     await expect(gridRows(page).first()).toHaveAttribute('data-title', LOTTE)
     await land(page, WEEK)
     await pick(page, 'Afwezigheden', 'Beschikbaarheden')
-    await expect(page.getByText('Geen rijen in deze week')).toBeVisible()
+    await expect(page.getByText('Geen rijen in deze periode')).toBeVisible()
     expect((await rows(editor, 'beschikbaarheid')).some((r) => r.persoon_id !== 1)).toBe(true)
 
     // Another person's row by id, and a view on a dataset the owner cannot read, show nothing.
@@ -416,7 +416,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   }
 
   await land(page, WEEK)
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   const row = () => named(page, 'dagplanning undo e2e')
   const moved = patchOf(page, 'activiteit')
   await typeInto(await cellOf(page, row(), 'Tijd'), '2026-10-15T20:00')
@@ -430,7 +430,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
 
   await page.reload()
-  await pick(page, 'Dagplanning')
+  await pick(page, 'Dagplanning', 'Activiteiten')
   await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
   expect(await datumOf()).toBe('2026-10-13')
 })

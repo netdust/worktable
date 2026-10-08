@@ -77,7 +77,7 @@ describe('App shell', () => {
     expect(await within(rail()).findByRole('treeitem', { name: 'Afwezigheden' })).toBeTruthy()
     expect(within(typesOf('Planning')).getByRole('button', { name: 'Planning' }).getAttribute('aria-current')).toBe('page')
     expect(tableEntry('Planning').getAttribute('aria-current')).toBeNull()
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
   })
 
   it('lands on the same view when the sections put another model first', async () => {
@@ -85,14 +85,14 @@ describe('App shell', () => {
     await shell()
 
     expect(within(rail()).getAllByRole('treeitem')[0].getAttribute('aria-expanded')).toBe('false')
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
     expect(node('Planning').getAttribute('aria-expanded')).toBe('true')
   })
 
   it('opens a view named like its model from its button, twice in a row', async () => {
     await shell()
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     fireEvent.click(within(node('Afwezigheden')).getByRole('button', { name: 'Uitklappen' }))
 
     for (const _ of [1, 2]) {
@@ -108,7 +108,7 @@ describe('App shell', () => {
     await shell()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
   })
 
@@ -116,13 +116,13 @@ describe('App shell', () => {
     await shell()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
   })
 
   it('shows the empty state when the window has no rows', async () => {
     render(<App />)
 
-    expect(await screen.findByText('Geen rijen in deze week')).toBeTruthy()
+    expect(await screen.findByText('Geen rijen in deze periode')).toBeTruthy()
   })
 
   it("shows the schema route's refusal, and asks for no rows, when the schema fails", async () => {
@@ -146,7 +146,7 @@ describe('App shell', () => {
 
   it("names the add button after the view's model, enabled only when it is writable", async () => {
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     const add = screen.getByRole('button', { name: 'Nieuw Activiteit' })
     expect((add as HTMLButtonElement).disabled).toBe(false)
@@ -157,11 +157,11 @@ describe('App shell', () => {
   })
 
   it("speaks the schema's strings once it loads", async () => {
-    api.schema.mockResolvedValue({ ...served, strings: { saved: 'Opgeslagen', noRowsInWindow: 'Geen rijen in deze week', new: 'Nieuw' } })
+    api.schema.mockResolvedValue({ ...served, strings: { saved: 'Opgeslagen', noRowsInWindow: 'Geen rijen in deze periode', new: 'Nieuw' } })
 
     render(<App />)
 
-    expect(await screen.findByText('Geen rijen in deze week')).toBeTruthy()
+    expect(await screen.findByText('Geen rijen in deze periode')).toBeTruthy()
     expect(screen.getByText('Opgeslagen')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
   })
@@ -175,7 +175,7 @@ describe('App shell', () => {
     fireEvent.click(tableEntry('Planning'))
 
     expect(new URLSearchParams(window.location.hash.slice(1)).get('view')).toBe('planning')
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
   })
 
   it('says so when no view is declared', async () => {
@@ -189,7 +189,7 @@ describe('App shell', () => {
 
   it('focuses the search on Cmd/Ctrl+K', async () => {
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.keyDown(document, { key: 'k', metaKey: true })
 
@@ -335,7 +335,7 @@ describe('the production space', () => {
 
   it('asks a scoped view for every row under "Alle producties", for the chosen production\'s once switched, and for every row again', async () => {
     await shell()
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), null, expect.any(Object))
 
     await choose('Alle producties', 'Wat de uil zag')
@@ -395,7 +395,7 @@ describe('the production space', () => {
   it('keeps the selection across a remount, per site', async () => {
     const first = await shell()
     await choose('Alle producties', 'Wat de uil zag')
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     first.unmount()
 
     expect(window.localStorage.getItem(key())).toBe('9')
@@ -408,7 +408,7 @@ describe('the production space', () => {
     api.records.mockResolvedValue({ rows: [], total: 0 })
     await shell()
 
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(api.rows).toHaveBeenLastCalledWith(spaced.views[0], expect.any(Object), null, expect.any(Object))
     expect(await switcher('Alle producties')).toBeTruthy()
   })
@@ -447,6 +447,16 @@ describe('a matrix view', () => {
     api.schema.mockResolvedValue(matrixSchema)
     api.rows.mockImplementation((v: { table: string }) => Promise.resolve({ rows: v.table === 'bezetting' ? [montage] : [], total: 1 }))
     api.records.mockResolvedValue({ rows: [{ id: 5, title: 'Sien', status: 'publish', fields: {} }], total: 1 })
+  })
+
+  it('reads the current week when the range it carries is over 92 days, and shows no error', async () => {
+    window.location.hash = '#view=bezetting&from=2026-01-01&to=2026-04-30'
+    render(<App />)
+
+    expect(await screen.findByRole('grid', { name: 'Bezetting' })).toBeTruthy()
+    const [, asked] = api.rows.mock.calls.at(-1) as [unknown, { from: string; to: string }]
+    expect((Date.parse(asked.to) - Date.parse(asked.from)) / 86_400_000).toBe(6)
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it("fetches the matrix view's rows and the away view's rows, and shows the matrix", async () => {
@@ -616,7 +626,7 @@ describe('a matrix view with the table\'s filters', () => {
     render(<App />)
 
     await screen.findByRole('button', { name: 'Filter' })
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['+ Kolom', 'Filter'])
+    expect(within(bar()).getAllByRole('button').slice(3).map((b) => b.textContent)).toEqual(['+ Kolom', 'Filter'])
     expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Filter' })).toBeNull()
   })
 
@@ -770,7 +780,7 @@ describe('a table with two views', () => {
       window.location.hash = '#view=afwezigheden&from=2026-05-18&to=2026-05-24'
       api.prefs.mockResolvedValue({ order: { planning: ['bezetting', 'planning'] }, last: { planning: 'planning' } })
       render2()
-      await screen.findByText('Geen rijen in deze week')
+      await screen.findByText('Geen rijen in deze periode')
 
       fireEvent.click(entry('Planning'))
       expect(view()).toBe('planning')
@@ -779,7 +789,7 @@ describe('a table with two views', () => {
       window.location.hash = '#view=afwezigheden&from=2026-05-18&to=2026-05-24'
       api.prefs.mockResolvedValue({ order: { planning: ['bezetting', 'planning'] }, last: { planning: '99' } })
       render2()
-      await screen.findByText('Geen rijen in deze week')
+      await screen.findByText('Geen rijen in deze periode')
 
       fireEvent.click(entry('Planning'))
       expect(view()).toBe('bezetting')
@@ -825,7 +835,7 @@ describe('saved views', () => {
 
     expect(await within(types()).findByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
     expect(within(types()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Planning', 'Calais techniek'])
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ }).getAttribute('aria-current')).toBe('page')
     expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
   })
@@ -836,7 +846,7 @@ describe('saved views', () => {
     await shell()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Calais techniek' })).toBeTruthy()
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(api.rows).toHaveBeenLastCalledWith(calais, expect.any(Object), null, expect.any(Object))
   })
 
@@ -845,7 +855,7 @@ describe('saved views', () => {
     api.savedViews.mockResolvedValue([calais])
     render(<App />)
 
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
     expect(api.rows).toHaveBeenLastCalledWith(served.views[0], expect.any(Object), null, expect.any(Object))
     expect(api.rows).not.toHaveBeenCalledWith(calais, expect.any(Object), null, expect.any(Object))
   })
@@ -854,7 +864,7 @@ describe('saved views', () => {
     api.schema.mockResolvedValue({ ...served, views: [{ ...served.views[0], sort: ['-date'], group: 'date', hidden: ['place'] }, served.views[1]] })
     api.createView.mockResolvedValue(calais)
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Planning' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
@@ -878,7 +888,7 @@ describe('saved views', () => {
     api.schema.mockResolvedValue({ ...served, tables: [...served.tables, spare] })
     api.createView.mockResolvedValue(first)
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     expect(node('Reserve').getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Reserve' }))
@@ -895,7 +905,7 @@ describe('saved views', () => {
 
   it('closes the new view dialog on Escape, creating nothing', async () => {
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Planning' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
@@ -910,7 +920,7 @@ describe('saved views', () => {
     api.savedViews.mockResolvedValue([calais])
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     expect(within(toolbar()).getByText('· gewijzigd')).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Opslaan' }).title).toBe('')
@@ -921,7 +931,7 @@ describe('saved views', () => {
   it('saves a changed starting view only as a new one: its one Save asks a name', async () => {
     changeLocally('planning')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     expect(within(toolbar()).getByText('· gewijzigd')).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: 'Opslaan als nieuwe weergave' })).toBeNull()
@@ -936,7 +946,7 @@ describe('saved views', () => {
     api.savedViews.mockResolvedValue([{ ...calais, shared: true, mine: false, editable: true, owner: { id: 2, name: 'Jan' } }])
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     expect(within(toolbar()).getByText('· gewijzigd')).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Opslaan' }).title).toBe('Opslaan als nieuwe weergave')
@@ -947,7 +957,7 @@ describe('saved views', () => {
     api.savedViews.mockResolvedValue([{ ...calais, mine: false, editable: false, owner: { id: -1, name: '' } }])
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     expect((within(toolbar()).getByRole('button', { name: 'Opslaan' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }))
@@ -958,7 +968,7 @@ describe('saved views', () => {
     window.location.hash = '#view=42'
     api.savedViews.mockResolvedValue([calais])
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     expect(within(toolbar()).queryByText('· gewijzigd')).toBeNull()
     expect(within(toolbar()).queryByRole('button', { name: 'Opslaan' })).toBeNull()
@@ -970,7 +980,7 @@ describe('saved views', () => {
     api.updateView.mockResolvedValue({ ...calais, arrangement: { ...empty, hidden: ['place'] }, hidden: ['place'] })
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
 
@@ -982,7 +992,7 @@ describe('saved views', () => {
   it('reverts: the local copy is gone and the view is as saved', async () => {
     changeLocally('planning')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Terugzetten' }))
 
@@ -993,7 +1003,7 @@ describe('saved views', () => {
   it('undoes a revert: the notice says it was reverted, and its Undo brings the change back (R10)', async () => {
     changeLocally('planning')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Terugzetten' }))
     expect(screen.getByText('Teruggezet')).toBeTruthy()
@@ -1007,7 +1017,7 @@ describe('saved views', () => {
     api.createView.mockResolvedValue({ ...calais, arrangement: { ...empty, hidden: ['place'] } })
     changeLocally('planning')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
     const panel = screen.getByRole('complementary', { name: 'Opslaan als nieuwe weergave' })
@@ -1030,7 +1040,7 @@ describe('saved views', () => {
     changeLocally('42')
     window.localStorage.setItem('ntdst-views/kept/v1/42', JSON.stringify({ widths: { place: 90 }, picked: [9], hidden: [] }))
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }))
     const panel = screen.getByRole('complementary', { name: 'Opslaan als nieuwe weergave' })
@@ -1050,7 +1060,7 @@ describe('saved views', () => {
     api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
 
@@ -1067,7 +1077,7 @@ describe('saved views', () => {
     api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
 
@@ -1085,7 +1095,7 @@ describe('saved views', () => {
     changeLocally('42')
     window.localStorage.setItem('ntdst-views/layout/v1/planning', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
 
@@ -1100,7 +1110,7 @@ describe('saved views', () => {
     api.updateView.mockReturnValue(new Promise((resolve) => (answer = resolve)))
     changeLocally('42')
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
 
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
     fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
@@ -1130,7 +1140,7 @@ describe("a saved view's actions", () => {
   }
   const opened = async () => {
     render(<App />)
-    await screen.findByText('Geen rijen in deze week')
+    await screen.findByText('Geen rijen in deze periode')
   }
 
   beforeEach(() => {
@@ -1655,5 +1665,203 @@ describe("a model's ⋯ in the app", () => {
     const [view, , , , title] = exporter.exportSheet.mock.calls[0]
     expect(view).toBe(tabel)
     expect(title).toBe('Planning')
+  })
+})
+
+describe("a query's views under the model it reads", () => {
+  const empty = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
+  const model = (key: string, label: string, query = false) => ({ key, label, title_label: 'Titel', title_readonly: false, ...(query ? { query: true } : {}), fields: {} })
+  const def = (key: string, label: string, extra = {}) => ({ key, label, model: key, types: ['grid' as const], ...extra })
+  const over = { query: true, of: 'activiteit' }
+  const schema: Schema = {
+    models: {
+      persoon: model('persoon', 'Personen'),
+      activiteit: model('activiteit', 'Activiteiten'),
+      dagplanning: model('dagplanning', 'Dagplanning', true),
+      productie_dag: model('productie_dag', 'Per productie per dag', true),
+      voorstellingen: model('voorstellingen', 'Voorstellingen', true),
+    },
+    tables: [
+      def('persoon', 'Personen'), def('activiteit', 'Activiteiten'),
+      def('dagplanning', 'Dagplanning', over), def('productie_dag', 'Per productie per dag', over), def('voorstellingen', 'Voorstellingen', over),
+    ],
+    views: [],
+    writable: { persoon: true, activiteit: true, dagplanning: true, productie_dag: false, voorstellingen: false },
+  }
+  const saved = (id: number, label: string, table: string, extra: Partial<SavedView> = {}): SavedView => ({
+    key: String(id), id, label, table, table_label: label, model: table, type: 'grid', starting: false, arrangement: empty,
+    shared: true, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, ...(table === 'activiteit' || table === 'persoon' ? {} : over), ...extra,
+  })
+  const personen = saved(10, 'Personen', 'persoon', { mine: false, editable: false })
+  const activiteiten = saved(20, 'Activiteiten', 'activiteit', { mine: false, editable: false })
+  const dagplanning = saved(30, 'Dagplanning', 'dagplanning')
+  const kopie = saved(31, 'Dagplanning (kopie)', 'dagplanning')
+  const perDag = saved(40, 'Per productie per dag', 'productie_dag', { mine: false, editable: false })
+  const voorstellingen = saved(50, 'Voorstellingen', 'voorstellingen', { mine: false, editable: false })
+  const names = () => within(typesOf('Activiteiten')).getAllByRole('button').map((b) => b.textContent)
+  const hash = () => new URLSearchParams(window.location.hash.slice(1)).get('view')
+  const choices = (name: string) => {
+    const button = within(rail()).getByRole('button', { name: `More actions: ${name}` })
+    fireEvent.click(button)
+    const offered = within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((item) => item.textContent)
+    fireEvent.click(button)
+    return offered
+  }
+  const choose = (name: string, action: string) => {
+    fireEvent.click(within(rail()).getByRole('button', { name: `More actions: ${name}` }))
+    fireEvent.click(within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name: action }))
+  }
+  const opened = async (at: string) => {
+    window.location.hash = `#view=${at}`
+    await shell()
+    await waitFor(() => expect(api.rows).toHaveBeenCalled())
+  }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(schema)
+    api.savedViews.mockResolvedValue([personen, voorstellingen, perDag, kopie, dagplanning, activiteiten].sort((a, b) => a.id - b.id))
+    api.rows.mockResolvedValue({ rows: [{ id: 1, title: 'Montage', status: '', fields: {} }], total: 1 })
+  })
+
+  it("ends the model's views with each query's, in the declared order, and lists no query as a node", async () => {
+    await opened('20')
+
+    expect(within(rail()).getAllByRole('treeitem')).toHaveLength(2)
+    expect(within(rail()).queryByRole('treeitem', { name: 'Dagplanning' })).toBeNull()
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning', 'Dagplanning (kopie)', 'Per productie per dag', 'Voorstellingen'])
+  })
+
+  it("opens a query's view on the query's rows, the grid named by the query", async () => {
+    await opened('20')
+
+    fireEvent.click(within(typesOf('Activiteiten')).getByRole('button', { name: 'Dagplanning' }))
+
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(dagplanning, expect.any(Object), null, expect.any(Object)))
+    expect(await screen.findByRole('grid', { name: 'Dagplanning' })).toBeTruthy()
+  })
+
+  it("makes a view on the model itself from the model's +", async () => {
+    api.createView.mockResolvedValue(saved(60, 'Nieuw', 'activiteit'))
+    await opened('30')
+
+    fireEvent.click(within(rail()).getByRole('button', { name: 'Weergave toevoegen aan Activiteiten' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Grid' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Nieuw' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Weergave maken' }))
+
+    expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ name: 'Nieuw', table: 'activiteit' }))
+  })
+
+  it("copies a query's view as a view on the query", async () => {
+    api.createView.mockResolvedValue(saved(61, 'Voorstellingen (kopie)', 'voorstellingen'))
+    await opened('20')
+
+    choose('Voorstellingen', 'Kopie maken')
+
+    expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ name: 'Voorstellingen (kopie)', table: 'voorstellingen' }))
+    await waitFor(() => expect(hash()).toBe('61'))
+  })
+
+  it("moves a query's view only within that query's views", async () => {
+    await opened('20')
+
+    const first = choices('Dagplanning')
+    const second = choices('Dagplanning (kopie)')
+    expect([first.includes('Omhoog'), first.includes('Omlaag')]).toEqual([false, true])
+    expect([second.includes('Omhoog'), second.includes('Omlaag')]).toEqual([true, false])
+    choose('Dagplanning (kopie)', 'Omhoog')
+
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning (kopie)', 'Dagplanning', 'Per productie per dag', 'Voorstellingen'])
+    await waitFor(() => expect(api.savePrefs).toHaveBeenCalledWith({ order: { dagplanning: ['31', '30'] }, last: {} }))
+  })
+
+  it("does not move a query's view dragged into the model's own views", async () => {
+    const ROW = 28
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = (Number(this.style.gridRow) - 1) * ROW
+      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
+    })
+    await opened('20')
+
+    fireEvent.pointerDown(within(typesOf('Activiteiten')).getByRole('button', { name: /^Dagplanning$/ }).parentElement!, { button: 0, clientY: ROW + 14 })
+    fireEvent.pointerMove(window, { clientY: 4 })
+    fireEvent.pointerUp(window, { clientY: 4 })
+
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning', 'Dagplanning (kopie)', 'Per productie per dag', 'Voorstellingen'])
+    vi.restoreAllMocks()
+  })
+
+  it("does not move a query's view that is not first in its block when dropped among the model's own views", async () => {
+    const ROW = 28
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = (Number(this.style.gridRow) - 1) * ROW
+      return { top, bottom: top + ROW, height: ROW, left: 0, right: 200, width: 200, x: 0, y: top, toJSON: () => ({}) } as DOMRect
+    })
+    await opened('20')
+
+    fireEvent.pointerDown(within(typesOf('Activiteiten')).getByRole('button', { name: /^Dagplanning \(kopie\)$/ }).parentElement!, { button: 0, clientY: 2 * ROW + 14 })
+    fireEvent.pointerMove(window, { clientY: 4 })
+    fireEvent.pointerUp(window, { clientY: 4 })
+
+    expect(names()).toEqual(['Activiteiten', 'Dagplanning', 'Dagplanning (kopie)', 'Per productie per dag', 'Voorstellingen'])
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(api.savePrefs).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('reopens the query view last used when its model is clicked again', async () => {
+    await opened('20')
+
+    fireEvent.click(within(typesOf('Activiteiten')).getByRole('button', { name: 'Dagplanning' }))
+    await waitFor(() => expect(hash()).toBe('30'))
+    fireEvent.click(within(node('Personen')).getAllByRole('button', { name: 'Personen' })[0])
+    await waitFor(() => expect(hash()).toBe('10'))
+    fireEvent.click(within(node('Activiteiten')).getAllByRole('button', { name: 'Activiteiten' })[0])
+
+    await waitFor(() => expect(hash()).toBe('30'))
+  })
+
+  it('opens the next view under the model when the open query view is deleted', async () => {
+    api.deleteView.mockResolvedValue({})
+    await opened('31')
+
+    choose('Dagplanning (kopie)', 'Verwijderen')
+
+    await waitFor(() => expect(hash()).toBe('20'))
+  })
+})
+
+describe('App and the period chip', () => {
+  const toolbarEl = () => document.querySelector<HTMLElement>('.nv-toolbar')!
+  const barEl = () => document.querySelector<HTMLElement>('.nv-bar')!
+
+  it('keeps the week control out of the toolbar and starts the filter bar with the Periode chip', async () => {
+    await shell()
+    await screen.findByText('Geen rijen in deze periode')
+
+    expect(within(toolbarEl()).queryByRole('group', { name: 'Periode' })).toBeNull()
+    expect(within(toolbarEl()).queryByRole('button', { name: /periode/i })).toBeNull()
+    expect((barEl().firstElementChild as HTMLElement).className).toContain('nv-chip--period')
+    expect(within(barEl()).getByRole('group', { name: 'Periode' })).toBeTruthy()
+  })
+
+  it('has no chip on a source without a date', async () => {
+    await shell()
+    fireEvent.click(await within(rail()).findByRole('button', { name: 'Afwezigheden' }))
+    await screen.findByText('Geen rijen')
+
+    expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
+  })
+
+  it('Alles asks for the rows without from or to', async () => {
+    await shell()
+    await screen.findByText('Geen rijen in deze periode')
+
+    fireEvent.click(document.querySelector('.nv-chip__value') as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: 'Alles' }))
+
+    await waitFor(() => expect(api.rows).toHaveBeenLastCalledWith(expect.objectContaining({ key: 'planning' }), {}, null, expect.any(Object)))
+    expect(window.location.hash).toContain('period=all')
   })
 })

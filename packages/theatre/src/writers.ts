@@ -195,7 +195,7 @@ function checkSpan(values: Values, ctx: WriteContext): void {
   if (eind_datum < start_datum) refuse('Einde ligt voor de start.')
   const dagen = (Date.parse(eind_datum) - Date.parse(start_datum)) / DAY_MS + 1
   const max = maxDagen(ctx, productie_id)
-  if (dagen > max) refuse(`Een speelreeks duurt hoogstens ${max} dagen.`)
+  if (dagen > max) refuse(`Een tourstop duurt hoogstens ${max} dagen.`)
 }
 
 export const speelreeksWriter = forPlanners(
@@ -210,7 +210,7 @@ export const speelreeksWriter = forPlanners(
     checkSpan(values, ctx)
     return values
   }),
-  'speelreeksen',
+  'tourstops',
 )
 
 const KLEUR = /^#[0-9a-fA-F]{6}$/

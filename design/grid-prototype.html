@@ -370,9 +370,12 @@ const PRODUCTIES = [
 ]
 const SKINS = { grid: ['grid', 'Grid'], matrix: ['matrix', 'Matrix'], calendar: ['cal', 'Kalender'], list: ['list', 'Lijst'], board: ['board', 'Bord'] }
 const MODELS = [
-  { section: 'Planning', key: 'dagplanning', label: 'Dagplanning', glyph: 'query', count: 28, query: true, views: [{ name: 'Dagplanning', skin: 'grid', lock: true }, { name: 'Mijn week', skin: 'grid', personal: true }] },
-  { section: 'Planning', key: 'activiteit', label: 'Activiteiten', glyph: 'cal', count: 246, views: [{ name: 'Planning', skin: 'grid', lock: true }, { name: 'Optie of bevestigd', skin: 'grid', lock: true }, { name: 'Kalender', skin: 'calendar' }] },
-  { section: 'Planning', key: 'speelreeks', label: 'Speelreeksen', glyph: 'film', count: 3, views: [{ name: 'Speelreeksen', skin: 'grid', lock: true }] },
+  { section: 'Planning', key: 'speelreeks', label: 'Tourstops', glyph: 'film', count: 3, views: [{ name: 'Tourstops', skin: 'grid', lock: true }] },
+  // A query's views sit under the model it reads, after the model's own views.
+  { section: 'Planning', key: 'activiteit', label: 'Activiteiten', glyph: 'cal', count: 246, views: [
+    { name: 'Planning', skin: 'grid', lock: true }, { name: 'Optie of bevestigd', skin: 'grid', lock: true }, { name: 'Kalender', skin: 'calendar' },
+    { name: 'Dagplanning', skin: 'grid', lock: true, query: true }, { name: 'Mijn week', skin: 'grid', personal: true, query: true },
+    { name: 'Per productie per dag', skin: 'grid', lock: true, query: true }, { name: 'Voorstellingen', skin: 'grid', lock: true, query: true }] },
   { section: 'Planning', key: 'toewijzing', label: 'Toewijzingen', glyph: 'users', count: 508, views: [{ name: 'Toewijzingen', skin: 'grid', lock: true }, { name: 'Wie speelt wanneer', skin: 'matrix' }] },
   { section: 'Planning', key: 'beschikbaarheid', label: 'Afwezigheden', glyph: 'clock', count: 12, views: [{ name: 'Afwezigheden', skin: 'grid', lock: true }] },
   { section: 'Gegevens', key: 'productie', label: 'Producties', glyph: 'tag', count: 3, views: [{ name: 'Producties', skin: 'grid', lock: true }] },
@@ -399,7 +402,7 @@ const order = (r) => (r.start ? r.start : r.soort === 'overnachting' ? '99' : '0
 ROWS.sort((a, b) => DAYS.findIndex((x) => x[0] === a.day) - DAYS.findIndex((x) => x[0] === b.day) || order(a).localeCompare(order(b)))
 
 // ---------- state ----------
-const state = { shut: new Set(), layout: 'table', space: 'nw', open: new Set(['dagplanning', 'activiteit']), view: ['dagplanning', 0], sel: -1 }
+const state = { shut: new Set(), layout: 'table', space: 'nw', open: new Set(['activiteit']), view: ['activiteit', 3], sel: -1 }
 const store = { get: (k) => { try { return localStorage.getItem('wt-proto-' + k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem('wt-proto-' + k, v) } catch {} } }
 
 // ---------- sidebar ----------
@@ -416,7 +419,7 @@ function renderTree() {
       </div>
       <div class="views" role="group">${m.views.map((v, i) => {
         const active = state.view[0] === m.key && state.view[1] === i
-        return `<div class="view ${active ? 'active' : ''}" data-view="${i}" tabindex="0">${icon(SKINS[v.skin][0])}<span class="vname">${esc(v.name)}</span>
+        return `<div class="view ${active ? 'active' : ''}" data-view="${i}" tabindex="0" ${v.query ? 'title="Berekend: een query over activiteiten"' : ''}>${icon(v.query ? 'query' : SKINS[v.skin][0])}<span class="vname">${esc(v.name)}</span>
           ${v.lock ? `<span class="lock" title="Standaardweergave, alleen te kopiëren">${icon('lock')}</span>` : v.personal ? `<span class="lock" title="Alleen voor jou">${icon('user')}</span>` : ''}
           <span class="vtools"><button class="tool" data-act="vmore" aria-label="Meer">${icon('dots')}</button></span></div>`
       }).join('')}</div></div>`
@@ -454,7 +457,7 @@ document.addEventListener('mousedown', (e) => { if (popEl && !popEl.contains(e.t
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePop(); closeDialog() } })
 
 function addMenu(anchor, m) {
-  const items = [['grid', 'Grid'], ['matrix', 'Matrix', m.key !== 'toewijzing'], ['calendar', 'Kalender', m.query && m.key !== 'dagplanning'], ['list', 'Lijst'], ['board', 'Bord', true]]
+  const items = [['grid', 'Grid'], ['matrix', 'Matrix', m.key !== 'toewijzing'], ['calendar', 'Kalender'], ['list', 'Lijst'], ['board', 'Bord', true]]
   const pop = openPop(anchor, `<div class="pop-head">Nieuwe weergave op ${esc(m.label)}</div>` + items.map(([k, label, off]) =>
     `<button class="pop-item" data-skin="${k}" ${off ? 'disabled' : ''}>${icon(SKINS[k][0])}${label}${off ? `<span class="soon">${k === 'board' ? 'later' : 'n.v.t.'}</span>` : ''}</button>`).join(''), { align: 'right' })
   pop.addEventListener('click', (e) => { const b = e.target.closest('[data-skin]'); if (b && !b.disabled) { closePop(); viewDialog(m, b.dataset.skin) } })
@@ -522,7 +525,7 @@ function renderMain() {
   const p = PRODUCTIES.find((x) => x.id === state.space)
   const shown = ROWS.filter((r) => state.space === 'all' || r.prod === state.space)
   const optie = shown.filter((r) => r.status === 'optie').length
-  $('#crumbs').innerHTML = `<span class="tglyph">${icon(SKINS[v.skin][0])}</span><h1>${esc(v.name)}</h1>${v.lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
+  $('#crumbs').innerHTML = `<span class="tglyph">${icon(v.query ? 'query' : SKINS[v.skin][0])}</span><h1>${esc(v.name)}</h1>${v.lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
     <span class="sum">${shown.length} activiteiten · ${new Set(shown.map((r) => r.day)).size} dagen</span>${optie ? `<span class="insight"><b>${optie}</b> nog in optie</span>` : ''}`
   const scoped = state.space !== 'all'
   $('#bar').innerHTML = `${scoped ? `<span class="chip set">${icon('tag')}Productie is ${esc(p.titel)}</span>` : ''}
@@ -533,9 +536,9 @@ function renderMain() {
 
 function renderGrid(m, v) {
   $('#grid').hidden = state.layout === 'columns'; $('#board').hidden = state.layout !== 'columns'
-  if (state.layout === 'columns' && (m.key === 'dagplanning' || m.key === 'activiteit')) return renderBoard()
-  if (m.key !== 'dagplanning' && m.key !== 'activiteit') {
-    $('#grid').innerHTML = `<tbody><tr><td style="height:220px;text-align:center;color:var(--color-fg-subtle);white-space:normal">Deze weergave is in het prototype niet uitgewerkt. Kies Dagplanning of Activiteiten.</td></tr></tbody>`
+  if (state.layout === 'columns' && m.key === 'activiteit') return renderBoard()
+  if (m.key !== 'activiteit') {
+    $('#grid').innerHTML = `<tbody><tr><td style="height:220px;text-align:center;color:var(--color-fg-subtle);white-space:normal">Deze weergave is in het prototype niet uitgewerkt. Kies een weergave onder Activiteiten.</td></tr></tbody>`
     $('#rows').textContent = ''; return
   }
   const scoped = state.space !== 'all'
@@ -558,7 +561,7 @@ function renderGrid(m, v) {
     if (state.shut.has(day)) return
     const prod = PRODUCTIES.find((p) => p.id === r.prod)
     const time = r.start ? `<span class="time">${r.start}<span class="end">–${r.end}</span></span>` : `<span class="allday">zonder tijd</span>`
-    const venue = !r.venue ? `<span class="muted">—</span>` : r.inherited ? `<span class="inherited" title="Overgenomen van de speelreeks">${esc(r.venue)}<span class="via">via speelreeks</span></span>` : esc(r.venue)
+    const venue = !r.venue ? `<span class="muted">—</span>` : r.inherited ? `<span class="inherited" title="Overgenomen van de tourstop">${esc(r.venue)}<span class="via">via tourstop</span></span>` : esc(r.venue)
     const [have, need] = r.crew
     body += `<tr class="row ${state.sel === i ? 'sel' : ''}" data-i="${i}"><td class="num">${n}</td><td>${time}</td><td class="title-cell">${esc(r.title)}</td>
       <td><span class="soort"><i style="background:var(--s-${r.soort})"></i>${SOORT[r.soort]}</span></td>
