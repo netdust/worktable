@@ -157,12 +157,11 @@ describe('App shell', () => {
   })
 
   it("speaks the schema's strings once it loads", async () => {
-    api.schema.mockResolvedValue({ ...served, strings: { saved: 'Opgeslagen', noRowsInWindow: 'Geen rijen in deze periode', new: 'Nieuw' } })
+    api.schema.mockResolvedValue({ ...served, strings: { noRowsInWindow: 'Geen rijen in deze periode', new: 'Nieuw' } })
 
     render(<App />)
 
     expect(await screen.findByText('Geen rijen in deze periode')).toBeTruthy()
-    expect(screen.getByText('Opgeslagen')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
   })
 
@@ -502,14 +501,14 @@ describe('a matrix view', () => {
     fireEvent.keyDown(cell, { key: 'x' })
 
     expect(api.create).toHaveBeenCalledWith('assignment', { activity: [2], person: [5], status: 'confirmed' })
-    expect(await screen.findByText('Opgeslagen')).toBeTruthy()
     expect(await screen.findByRole('button', { name: 'Ongedaan maken' })).toBeTruthy()
+    expect(screen.queryByText('Opgeslagen')).toBeNull()
   })
 
-  it('keeps a written cell and its undo through Save on a saved matrix view', async () => {
+  it('keeps a written cell and its undo through a save of a saved matrix view', async () => {
     const empty = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
     const mine: SavedView = { ...bezetting, key: '42', id: 42, label: 'Calais techniek', starting: false, arrangement: empty,
-      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true }
+      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, public: true }
     window.location.hash = '#view=42&from=2026-05-18&to=2026-05-24'
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['name:lieve'], order: [], widths: {}, sort: [], filters: [], group: null }))
     api.savedViews.mockResolvedValue([mine])
@@ -525,7 +524,8 @@ describe('a matrix view', () => {
     fireEvent.keyDown(cell(), { key: 'x' })
     await screen.findByRole('button', { name: 'Ongedaan maken' })
 
-    fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'Opslaan' }))
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'More actions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
     await waitFor(() => expect(window.localStorage.getItem('ntdst-views/layout/v1/42')).toBeNull())
 
     expect(api.updateView).toHaveBeenCalled()
@@ -828,6 +828,56 @@ describe('saved views', () => {
   beforeEach(() => window.localStorage.clear())
   afterEach(() => window.localStorage.clear())
 
+  const items = () => within(more()).getAllByRole('menuitem').map((item) => item.textContent)
+
+  it('says no save word for a change kept here, and offers Terugzetten in the ⋯', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([{ ...calais, mine: false, editable: false, owner: { id: -1, name: '' } }])
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('Geen rijen in deze periode')
+
+    expect(within(toolbar()).queryByText(/gewijzigd|Opslaan|Opgeslagen/)).toBeNull()
+    const offered = items()
+    expect(offered).toContain('Terugzetten')
+    expect(offered).not.toContain('Publieke weergave bijwerken')
+  })
+
+  it("offers Publieke weergave bijwerken on one's own public view, and saves only with it", async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([{ ...calais, public: true }])
+    api.updateView.mockResolvedValue({ ...calais, public: true, arrangement: { ...empty, hidden: ['place'] }, hidden: ['place'] })
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('Geen rijen in deze periode')
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(api.updateView).not.toHaveBeenCalled()
+
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
+    expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { arrangement: { ...empty, hidden: ['place'] } })
+    await waitFor(() => expect(local('42')).toBeNull())
+  })
+
+  it('offers no Publieke weergave bijwerken on a public view one may not write: only Kopie maken in the rail', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([{ ...calais, public: true, mine: false, editable: false, owner: { id: -1, name: '' } }])
+    changeLocally('42')
+    render(<App />)
+    await screen.findByText('Geen rijen in deze periode')
+
+    expect(items()).not.toContain('Publieke weergave bijwerken')
+  })
+
+  it('says nothing and offers no Terugzetten for a view this browser has not changed', async () => {
+    window.location.hash = '#view=42'
+    api.savedViews.mockResolvedValue([calais])
+    render(<App />)
+    await screen.findByText('Geen rijen in deze periode')
+
+    expect(within(toolbar()).queryByText(/gewijzigd|Opslaan|Opgeslagen/)).toBeNull()
+    expect(within(toolbar()).queryByRole('button', { name: 'More actions' }) ? items() : []).not.toContain('Terugzetten')
+  })
+
   it("lists the table's saved views after its starting one, and opens one the hash names by id", async () => {
     window.location.hash = '#view=42'
     api.savedViews.mockResolvedValue([calais])
@@ -915,78 +965,13 @@ describe('saved views', () => {
     expect(api.createView).not.toHaveBeenCalled()
   })
 
-  it('shows an own changed view as modified: Save, and Save as new view and Revert under More actions', async () => {
-    window.location.hash = '#view=42'
-    api.savedViews.mockResolvedValue([calais])
-    changeLocally('42')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    expect(within(toolbar()).getByText('· gewijzigd')).toBeTruthy()
-    expect(within(toolbar()).getByRole('button', { name: 'Opslaan' }).title).toBe('')
-    expect(within(toolbar()).queryByRole('button', { name: 'Opslaan als nieuwe weergave' })).toBeNull()
-    expect(within(more()).getAllByRole('menuitem').map((item) => item.textContent).slice(0, 2)).toEqual(['Opslaan als nieuwe weergave', 'Terugzetten'])
-  })
-
-  it('saves a changed starting view only as a new one: its one Save asks a name', async () => {
-    changeLocally('planning')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    expect(within(toolbar()).getByText('· gewijzigd')).toBeTruthy()
-    expect(within(toolbar()).queryByRole('button', { name: 'Opslaan als nieuwe weergave' })).toBeNull()
-    const save = within(toolbar()).getByRole('button', { name: 'Opslaan' })
-    expect(save.title).toBe('Opslaan als nieuwe weergave')
-    fireEvent.click(save)
-    expect(screen.getByRole('complementary', { name: 'Opslaan als nieuwe weergave' })).toBeTruthy()
-  })
-
-  it("offers no Save on another's shared view, to an administrator who may edit it either", async () => {
-    window.location.hash = '#view=42'
-    api.savedViews.mockResolvedValue([{ ...calais, shared: true, mine: false, editable: true, owner: { id: 2, name: 'Jan' } }])
-    changeLocally('42')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    expect(within(toolbar()).getByText('· gewijzigd')).toBeTruthy()
-    expect(within(toolbar()).getByRole('button', { name: 'Opslaan' }).title).toBe('Opslaan als nieuwe weergave')
-  })
-
-  it('disables Save on a system view, and keeps Save as new view under More actions', async () => {
-    window.location.hash = '#view=42'
-    api.savedViews.mockResolvedValue([{ ...calais, mine: false, editable: false, owner: { id: -1, name: '' } }])
-    changeLocally('42')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    expect((within(toolbar()).getByRole('button', { name: 'Opslaan' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }))
-    expect(screen.getByRole('complementary', { name: 'Opslaan als nieuwe weergave' })).toBeTruthy()
-  })
-
   it('says nothing of a view this browser has not changed', async () => {
     window.location.hash = '#view=42'
     api.savedViews.mockResolvedValue([calais])
     render(<App />)
     await screen.findByText('Geen rijen in deze periode')
 
-    expect(within(toolbar()).queryByText('· gewijzigd')).toBeNull()
     expect(within(toolbar()).queryByRole('button', { name: 'Opslaan' })).toBeNull()
-  })
-
-  it('saves the changed arrangement to the view and clears the local copy', async () => {
-    window.location.hash = '#view=42'
-    api.savedViews.mockResolvedValue([calais])
-    api.updateView.mockResolvedValue({ ...calais, arrangement: { ...empty, hidden: ['place'] }, hidden: ['place'] })
-    changeLocally('42')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
-
-    expect(api.updateView).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }), { arrangement: { ...empty, hidden: ['place'] } })
-    await waitFor(() => expect(local('42')).toBeNull())
-    expect(within(toolbar()).queryByText('· gewijzigd')).toBeNull()
   })
 
   it('reverts: the local copy is gone and the view is as saved', async () => {
@@ -997,7 +982,6 @@ describe('saved views', () => {
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Terugzetten' }))
 
     expect(local('planning')).toBeNull()
-    expect(within(toolbar()).queryByText('· gewijzigd')).toBeNull()
   })
 
   it('undoes a revert: the notice says it was reverted, and its Undo brings the change back (R10)', async () => {
@@ -1010,59 +994,19 @@ describe('saved views', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ongedaan maken' }))
 
     expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['place'])
-    expect(await within(toolbar()).findByText('· gewijzigd')).toBeTruthy()
-  })
-
-  it('saves a changed starting view as a new one: asked a name, its arrangement kept, the new one opened', async () => {
-    api.createView.mockResolvedValue({ ...calais, arrangement: { ...empty, hidden: ['place'] } })
-    changeLocally('planning')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
-    const panel = screen.getByRole('complementary', { name: 'Opslaan als nieuwe weergave' })
-    fireEvent.change(within(panel).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Calais techniek' } })
-    fireEvent.click(within(panel).getByRole('button', { name: 'Opslaan' }))
-
-    expect(api.createView).toHaveBeenCalledWith({
-      name: 'Calais techniek', table: 'planning', type: 'grid', field: null, shared: false,
-      arrangement: { ...empty, hidden: ['place'] },
-    })
-    await waitFor(() => expect(hash()).toBe('42'))
-    expect(local('planning')).toBeNull()
-  })
-
-  it('"Save as new" on a saved view sends its fixed filters, opens the new view, and carries the widths and picks over to it', async () => {
-    window.location.hash = '#view=42'
-    const fixed = { status: { $in: ['optie', 'bevestigd'] } }
-    api.savedViews.mockResolvedValue([{ ...calais, fixed }])
-    api.createView.mockResolvedValue({ ...calais, key: '50', id: 50, label: 'Mijn planning', fixed, arrangement: { ...empty, hidden: ['place'] } })
-    changeLocally('42')
-    window.localStorage.setItem('ntdst-views/kept/v1/42', JSON.stringify({ widths: { place: 90 }, picked: [9], hidden: [] }))
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }))
-    const panel = screen.getByRole('complementary', { name: 'Opslaan als nieuwe weergave' })
-    fireEvent.change(within(panel).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Mijn planning' } })
-    fireEvent.click(within(panel).getByRole('button', { name: 'Opslaan' }))
-
-    await waitFor(() => expect(hash()).toBe('50'))
-    expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mijn planning', table: 'planning', fixed }))
-    expect(JSON.parse(window.localStorage.getItem('ntdst-views/kept/v1/50') ?? '{}')).toEqual({ widths: { place: 90 }, picked: [9], hidden: [] })
-    expect(within(types()).getByRole('button', { name: /^Mijn planning/ }).getAttribute('aria-current')).toBe('page')
+    expect(items()).toContain('Terugzetten')
   })
 
   it("drops a view another tab deleted, says so, and keeps the change on the table's starting view", async () => {
     window.location.hash = '#view=42'
     api.schema.mockResolvedValue({ ...served, strings: { 'error.unknown_view': 'Deze weergave bestaat niet meer' } })
-    api.savedViews.mockResolvedValue([calais])
+    api.savedViews.mockResolvedValue([{ ...calais, public: true }])
     api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     render(<App />)
     await screen.findByText('Geen rijen in deze periode')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
 
     expect(await screen.findByText('Deze weergave bestaat niet meer')).toBeTruthy()
     await waitFor(() => expect(hash()).toBe('planning'))
@@ -1073,53 +1017,35 @@ describe('saved views', () => {
   it('keeps a deleted view and its change when the table has no starting view of its type', async () => {
     window.location.hash = '#view=42'
     api.schema.mockResolvedValue({ ...served, views: [{ ...served.views[0], type: 'matrix' }, served.views[1]] })
-    api.savedViews.mockResolvedValue([calais])
+    api.savedViews.mockResolvedValue([{ ...calais, public: true }])
     api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     render(<App />)
     await screen.findByText('Geen rijen in deze periode')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
 
-    expect(await screen.findByText('unknown view 42 · Bewaar je wijziging met “Opslaan als nieuwe weergave” voor je weggaat')).toBeTruthy()
+    expect(await screen.findByText('unknown view 42 · Bewaar je wijziging met “Kopie maken” voor je weggaat')).toBeTruthy()
     expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
     expect(hash()).toBe('42')
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
-    expect(within(toolbar()).getByRole('button', { name: 'Opslaan' }).title).toBe('Opslaan als nieuwe weergave')
+    expect(items()).toContain('Terugzetten')
   })
 
   it("never overwrites the starting view's own unsaved change with a deleted view's", async () => {
     window.location.hash = '#view=42'
-    api.savedViews.mockResolvedValue([calais])
+    api.savedViews.mockResolvedValue([{ ...calais, public: true }])
     api.updateView.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 42' })
     changeLocally('42')
     window.localStorage.setItem('ntdst-views/layout/v1/planning', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
     render(<App />)
     await screen.findByText('Geen rijen in deze periode')
 
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
+    fireEvent.click(within(more()).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
 
-    expect(await screen.findByText('unknown view 42 · Bewaar je wijziging met “Opslaan als nieuwe weergave” voor je weggaat')).toBeTruthy()
+    expect(await screen.findByText('unknown view 42 · Bewaar je wijziging met “Kopie maken” voor je weggaat')).toBeTruthy()
     expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['kind'])
     expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
-  })
-  it('keeps a change made while Save was on its way, and sends one request for a double click', async () => {
-    window.location.hash = '#view=42'
-    api.savedViews.mockResolvedValue([calais])
-    let answer: (view: SavedView) => void = () => undefined
-    api.updateView.mockReturnValue(new Promise((resolve) => (answer = resolve)))
-    changeLocally('42')
-    render(<App />)
-    await screen.findByText('Geen rijen in deze periode')
-
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
-    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
-    window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['place', 'kind'], order: [], widths: {}, sort: [], filters: [], group: null }))
-    answer({ ...calais, arrangement: { ...empty, hidden: ['place'] } })
-
-    await waitFor(() => expect(api.updateView).toHaveBeenCalledOnce())
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place', 'kind'])
   })
 })
 

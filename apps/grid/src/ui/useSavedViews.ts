@@ -4,12 +4,18 @@ import { errorText, t } from '../i18n'
 import type { ApiError, Prefs, SavedView, TableDef, View, ViewType } from '../types'
 import { byFirstView, type Table, groupTables, tableOf } from './tables'
 import type { Notice } from './Toast'
-import { arrangementOf, blank, clearIfSent, copyKept, currentOf, forget, isSaved, keepLocal, lastIn, listFor, localOf, toStored } from './views'
+import { arrangementOf, blank, changed, clearIfSent, copyKept, currentOf, forget, isSaved, keepLocal, lastIn, listFor, localOf, toStored } from './views'
 
 const NAME_MAX = 80
 
 /** A switch or a drag is written once things settle: a run of them is one request. */
 const PREFS_DELAY = 500
+
+/** A run of changes to one's own view is one save. */
+export const AUTOSAVE_DELAY = 400
+
+/** One's own view saves itself; a view one may not write keeps the change here, and so does a public one: a dropped filter would publish rows. */
+export const autosaves = (view: View): view is SavedView => isSaved(view) && view.mine && view.editable && !view.public
 
 interface Options {
   declared: TableDef[]
@@ -40,6 +46,9 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   const changedPrefs = useRef(false)
   const [busy, setBusy] = useState(false)
   const sending = useRef(false)
+  // A change made while a save is on its way: sent once that save answered.
+  const again = useRef<SavedView | null>(null)
+  const autosave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const removals = useRef(0)
 
   useEffect(() => {
@@ -99,7 +108,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     const change = localOf(from)
     if (change && !(home && localOf(home) === null)) {
       setSaved((list) => list.map((v) => (v.id === from.id ? { ...v, editable: false } : v)))
-      return note(`${reason} · ${t('keepAsNew', { action: t('saveAsNew') })}`)
+      return note(`${reason} · ${t('keepAsNew', { action: t('duplicate') })}`)
     }
     if (change && home) keepLocal(home, change)
     forget(from)
@@ -142,20 +151,38 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   }
 
   const save = (from: SavedView) => {
-    if (sending.current) return
+    if (sending.current) {
+      again.current = from
+      return
+    }
     sending.current = true
     setBusy(true)
     const sent = currentOf(from)
     void write(from, { arrangement: toStored(sent) }).then((fresh) => fresh && clearIfSent(from, sent)).finally(() => {
       sending.current = false
       setBusy(false)
+      const next = again.current
+      again.current = null
+      if (next && changed(next)) save(next)
     })
   }
 
+  /** The person changed the open view's arrangement: one's own view saves itself once the run of changes settles. */
+  const changedLayout = (view: View) => {
+    if (!autosaves(view)) return
+    clearTimeout(autosave.current)
+    autosave.current = setTimeout(() => save(view), AUTOSAVE_DELAY)
+  }
+
+  /** A copy takes the view as this browser shows it: a change kept here goes along. */
   const duplicate = (from: View) => {
-    const arrangement = toStored(arrangementOf(from))
-    createView({ name: copyName(from.label), table: from.table, type: from.type ?? 'grid', field: null, shared: false, arrangement, ...fixedOf(from) })
-      .then(added, (error: ApiError) => note(errorText(error.code, error.message)))
+    const sent = currentOf(from)
+    return createView({ name: copyName(from.label), table: from.table, type: from.type ?? 'grid', field: null, shared: false, arrangement: toStored(sent), ...fixedOf(from) })
+      .then((created) => {
+        copyKept(from, created)
+        clearIfSent(from, sent)
+        added(created)
+      }, (error: ApiError) => note(errorText(error.code, error.message)))
   }
 
   const restore = (view: SavedView, wasOpen: boolean) => {
@@ -187,7 +214,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   }
 
   return {
-    load: setSaved, loadPrefs, tables, busy, create, saveAs, save, remember, openTable,
+    load: setSaved, loadPrefs, tables, busy, create, saveAs, save, changedLayout, remember, openTable,
     actions: {
       rename: (view: SavedView, name: string) => void write(view, { name }),
       share: (view: SavedView, shared: boolean) => void write(view, { shared }),

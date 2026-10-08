@@ -113,25 +113,30 @@ describe('the sheet', () => {
     expect(headers()).toContain('location')
   })
 
-  it('heads the bar with a tinted scope chip nobody removes, then the group, the sort, the columns', () => {
+  it('heads the bar with a tinted scope chip nobody removes, then the group; no sort chip; Kolommen an icon after the count', () => {
     const { container } = renderGrid(calais, { scope: { field: 'location', id: 12 }, scopeChip: 'Locatie is Le Grenier' })
     const chips = [...container.querySelectorAll('.nv-bar .nv-chip')]
 
-    expect(chips.map((c) => c.textContent)).toEqual(['Locatie is Le Grenier', 'Groep: datum', 'Datum ↑, Start ↑', 'Kolommen'])
+    expect(chips.map((c) => c.textContent)).toEqual(['Locatie is Le Grenier', 'Groep: datum'])
+    const end = container.querySelector<HTMLElement>('.nv-bar__end')!
+    expect(end.querySelector('.nv-bar__count')?.textContent).toBe('6 rijen')
+    const columnsButton = within(end).getByRole('button', { name: 'Kolommen' })
+    expect(columnsButton.textContent).toBe('')
+    expect(columnsButton.title).toBe('Kolommen')
     expect(chips[0].className).toContain('nv-chip--set')
     expect(chips[0].tagName).toBe('SPAN')
     expect(chips[0].querySelector('button')).toBeNull()
   })
 
-  it('regroups from the group chip and turns the sort from its chip', () => {
+  it('regroups from the group chip; the sort shows in its column header, in the accent', () => {
     renderGrid()
     fireEvent.click(screen.getByRole('button', { name: 'Groep: datum' }))
     fireEvent.click(within(screen.getByRole('group', { name: 'Groeperen' })).getByRole('button', { name: 'Soort' }))
     expect(saved?.group).toBe('kind')
     expect(screen.getByRole('button', { name: 'Groep: soort' }).className).toContain('nv-chip--set')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Datum ↑, Start ↑' }))
-    expect(saved?.sort).toEqual([{ id: 'date', desc: true }, { id: 'start', desc: false }])
+    const sorted = screen.getAllByRole('columnheader').filter((h) => h.classList.contains('nv-th--sorted')).map((h) => h.dataset.column)
+    expect(sorted).toEqual(['date', 'start'])
   })
 
   it('shows the title where the view puts it', () => {
@@ -768,13 +773,13 @@ describe('the toolbar over the grid', () => {
     const more = within(toolbar()).getByRole('button', { name: 'More actions' })
     expect(more.getAttribute('title')).toBe('Meer acties')
     const controls = within(toolbar()).getAllByRole('button').filter((control) => control !== more)
-    expect(controls.length).toBeGreaterThan(1)
+    expect(controls.length).toBeGreaterThan(0)
     for (const control of controls) {
       expect(said(control), control.outerHTML).toBe(true)
     }
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }).getAttribute('placeholder')).toBe('Zoeken')
     expect(within(toolbar()).queryByRole('button', { name: 'Volgende periode' })).toBeNull()
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
+    expect(within(toolbar()).queryByRole('status')).toBeNull()
   })
 
   it('shows a refused delete in the toolbar as the Dutch in-use sentence', async () => {
@@ -850,7 +855,7 @@ describe('the toolbar over the grid', () => {
     expect(within(toolbar()).queryByRole('group', { name: 'Periode' })).toBeNull()
     expect(within(bar()).getByRole('group', { name: 'Periode' }).textContent).toBe('Periode Week 21 · 18–24 mei')
     expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').slice(3).map((b) => b.textContent)).toEqual(['Groep: datum', 'Datum ↑, Start ↑', 'Kolommen', 'Filter'])
+    expect(within(bar()).getAllByRole('button').slice(3).map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Groep: datum', 'Filter', 'Kolommen'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
@@ -879,10 +884,10 @@ describe('the toolbar over the grid', () => {
     expect(cell('Montage', 'place').textContent).toBe('Grote zaal')
   })
 
-  it('keeps an edited cell and its undo through Save on a saved view', async () => {
+  it('keeps an edited cell and its undo through a save of a saved view', async () => {
     const empty = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
     const mine: SavedView = { ...schema.views[0], key: '42', id: 42, label: 'Calais techniek', starting: false, arrangement: empty,
-      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true }
+      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, public: true }
     window.location.hash = '#view=42'
     window.localStorage.setItem('ntdst-views/layout/v1/42', JSON.stringify({ hidden: ['kind'], order: [], widths: {}, sort: [], filters: [], group: 'date' }))
     remote.savedViews.mockResolvedValue([mine])
@@ -895,8 +900,9 @@ describe('the toolbar over the grid', () => {
       type(cell('Montage', 'place'), 'Delete')
     })
 
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'More actions' }))
     await act(async () => {
-      fireEvent.click(within(toolbar()).getByRole('button', { name: 'Opslaan' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
     })
 
     expect(remote.updateView).toHaveBeenCalled()
@@ -931,7 +937,7 @@ describe('the toolbar over the grid', () => {
     expect(screen.getAllByRole('row').filter((r) => r.dataset.title)).toHaveLength(6)
   })
 
-  it('shows Saving, then Saved; Not saved with the message on a refusal; and Undo with a word', async () => {
+  it('says nothing while a cell saves and once it saved; Not saved with the message on a refusal; and Undo with a word', async () => {
     let answer!: (saved: Saved) => void
     remote.update.mockReturnValueOnce(new Promise<Saved>((resolve) => (answer = resolve)))
     render(<App />)
@@ -939,10 +945,10 @@ describe('the toolbar over the grid', () => {
 
     fireEvent.click(cell('Montage', 'place'))
     type(cell('Montage', 'place'), 'Delete')
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Opslaan…')
+    expect(within(toolbar()).queryByRole('status')).toBeNull()
 
     await act(async () => answer({ row: { ...calais[1], fields: { ...calais[1].fields, place: '' } }, batch: 'b1' }))
-    expect(within(toolbar()).getByRole('status').textContent).toContain('Opgeslagen')
+    expect(within(toolbar()).queryByRole('status')).toBeNull()
 
     remote.update.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })
     fireEvent.doubleClick(cell('Montage', 'title'))
@@ -1065,7 +1071,7 @@ describe('a new row the writer refuses', () => {
     fireEvent.keyDown(cellOf, { key: 'Escape' })
 
     expect(drafts()).toHaveLength(0)
-    expect(screen.getByRole('banner').querySelector('[role=status]')?.textContent).not.toContain('A person or a name')
+    expect(screen.getByRole('banner').querySelector('[role=status]')?.textContent ?? '').not.toContain('A person or a name')
   })
 
   it('+ Nieuwe twice focuses the existing draft', async () => {

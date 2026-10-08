@@ -22,7 +22,7 @@ function HeaderCell({ header, column, first, last }: { header: Header<Row, unkno
   return (
     <th
       data-column={column.id}
-      className={['nv-th', first ? 'nv-first' : '', column.align === 'end' ? 'nv-end' : ''].filter(Boolean).join(' ')}
+      className={['nv-th', first ? 'nv-first' : '', column.align === 'end' ? 'nv-end' : '', sorted ? 'nv-th--sorted' : ''].filter(Boolean).join(' ')}
       style={last ? undefined : { width: header.getSize() }}
       aria-sort={sorted ? ARIA_SORT[sorted] : undefined}
     >

@@ -1,10 +1,10 @@
 import { Checkbox, Popover } from '@sakaniui/react'
-import { ArrowUpDown, Columns3, Rows2, Tag } from 'lucide-react'
+import { Columns3, Rows2, Tag } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { rowCount, t } from '../i18n'
 import type { Model } from '../types'
 import type { Column } from './columns'
-import { group, hide, type Layout, orderOf, reorder, show, sort } from './layout'
+import { group, hide, type Layout, orderOf, reorder, show } from './layout'
 
 interface Props {
   model: Model
@@ -25,11 +25,10 @@ interface Props {
 const GROUPABLE = ['date', 'select', 'relation']
 const ICON = 13
 
-/** The sheet's arrangement, under the toolbar, as one row of chips: the scope, the group, the sort, the columns, the filters. */
+/** The sheet's arrangement, under the toolbar: the scope, the group and the filters as chips; the count and Kolommen at the end. The sort shows in its column header. */
 export function GridBar({ model, columns, layout, onLayout, count, cut = false, filters, scope = null, period = null }: Props) {
   const label = (id: string) => columns.find((c) => c.id === id)?.label ?? model.fields[id]?.label ?? id
   const groupable = Object.entries(model.fields).filter(([, f]) => GROUPABLE.includes(f.type))
-  const [first, ...rest] = layout.sort
 
   return (
     <div className="nv-bar">
@@ -50,18 +49,15 @@ export function GridBar({ model, columns, layout, onLayout, count, cut = false, 
           ))}
         </div>
       </Popover>
-      {first && (
-        <button type="button" className="nv-chip nv-chip--set" title={t('sortedBy')}
-          onClick={() => onLayout(sort(layout, [{ ...first, desc: !first.desc }, ...rest]))}>
-          <ArrowUpDown size={ICON} aria-hidden="true" />
-          {[first, ...rest].map((s) => `${model.fields[s.id]?.label ?? label(s.id)} ${s.desc ? '↓' : '↑'}`).join(', ')}
-        </button>
-      )}
-      <Popover trigger={<button type="button" className="nv-chip"><Columns3 size={ICON} aria-hidden="true" />{t('columns')}</button>} placement="bottom-start">
-        <ColumnsMenu columns={columns} layout={layout} onLayout={onLayout} />
-      </Popover>
       {filters}
-      <span className="nv-bar__count">{rowCount(count, cut)}</span>
+      <span className="nv-bar__end">
+        <span className="nv-bar__count">{rowCount(count, cut)}</span>
+        <Popover trigger={
+          <button type="button" className="nv-bar__icon" aria-label={t('columns')} title={t('columns')}><Columns3 size={ICON + 1} aria-hidden="true" /></button>
+        } placement="bottom-end">
+          <ColumnsMenu columns={columns} layout={layout} onLayout={onLayout} />
+        </Popover>
+      </span>
     </div>
   )
 }

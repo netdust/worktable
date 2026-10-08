@@ -118,27 +118,30 @@ test('seeded-view-read-only', async ({ page }) => {
   await page.getByRole('button', { name: 'Filter', exact: true }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
   const toolbar = page.locator('.nv-toolbar')
-  await expect(toolbar.getByText('· gewijzigd')).toBeVisible()
-  await expect(toolbar.getByRole('button', { name: 'Opslaan', exact: true })).toBeDisabled()
+  // The seeded view keeps the change in this browser: no save word, nothing sent.
+  await expect(toolbar.getByText(/gewijzigd|Opslaan|Opgeslagen/)).toHaveCount(0)
+  expect((await views(page.request)).find((v) => v.id === seeded?.id)?.filters).toEqual(seeded?.filters)
 
-  await page.getByRole('button', { name: 'More actions', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }).click()
-  await page.getByLabel('Naam').fill(name)
-  await page.getByLabel('Naam').press('Enter')
+  // Kopie maken in the rail takes the change along; the copy is one's own.
+  await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+  await page.getByRole('button', { name: 'More actions: Planning (kopie)', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
   await expect.poll(async () => (await views(page.request)).find((v) => v.name === name)?.mine).toBe(true)
   const copy = (await views(page.request)).find((v) => v.name === name) as SavedView
   expect(JSON.stringify(copy.filters)).toContain('productie_id')
 
+  // On one's own view a change saves itself.
   await page.getByRole('button', { name: 'Filter Productie wissen' }).click()
-  await expect(toolbar.getByRole('button', { name: 'Opslaan', exact: true })).toBeEnabled()
-  await toolbar.getByRole('button', { name: 'Opslaan', exact: true }).click()
   await expect
     .poll(async () => JSON.stringify((await views(page.request)).find((v) => v.id === copy.id)?.filters))
     .not.toContain('productie_id')
 
   await page.reload()
   await pick(page, name, 'Activiteiten')
-  await expect(toolbar.getByText('· gewijzigd')).toHaveCount(0)
+  await expect(toolbar.getByText(/gewijzigd|Opslaan/)).toHaveCount(0)
   await expect(page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' })).toHaveCount(0)
 })
 

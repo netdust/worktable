@@ -2401,3 +2401,72 @@
 .nv-grid .nv-names .nv-pill:not([class*="nv-pill--"]) {
   color: var(--color-fg-default);
 }
+
+/* The bar's end: the row count and Kolommen as an icon, pushed right. */
+.nv-bar__end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.nv-bar__end .nv-bar__count {
+  margin-left: 0;
+}
+
+.nv-bar__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.nv-bar__icon:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-fg-default);
+}
+
+/* The sorted column says so in its header: label and arrow in the accent. */
+.nv-th--sorted .nv-th__sort,
+.nv-th--sorted .nv-th__icon {
+  color: var(--color-accent-default);
+  font-weight: 600;
+}
+
+/* Minimal scrollbars: thin, no arrows, a quiet thumb that darkens on hover; both themes through the tokens. */
+#root * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-default) transparent;
+}
+
+#root *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#root *::-webkit-scrollbar-track,
+#root *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+#root *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--color-border-default) padding-box;
+}
+
+#root *::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-fg-subtle);
+}
+
+#root *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}

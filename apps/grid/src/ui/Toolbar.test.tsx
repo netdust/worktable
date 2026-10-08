@@ -81,11 +81,16 @@ describe('the toolbar', () => {
     expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
   })
 
-  it('says the save word from any store that carries a save and an error', () => {
+  it('says only a refused or failed write: saving and saved say nothing', () => {
     const error = { id: 2, field: 'record:5', code: 'duplicate_assignment', message: 'Deze persoon staat al op deze activiteit' }
-    render(<Toolbar {...base} saving={{ save: 'error', error }} />)
-
+    const { rerender } = render(<Toolbar {...base} saving={{ save: 'error', error }} />)
     expect(screen.getByRole('status').textContent).toBe('Niet opgeslagen: Deze persoon staat al op deze activiteit')
+
+    for (const save of ['saving', 'saved'] as const) {
+      rerender(<Toolbar {...base} saving={{ save, error: null }} />)
+      expect(screen.queryByRole('status')).toBeNull()
+      expect(screen.queryByText(/Opslaan|Opgeslagen|gewijzigd/)).toBeNull()
+    }
   })
 })
 
@@ -102,67 +107,50 @@ describe('a view with fixed filters', () => {
   })
 })
 
-describe('a modified view in the toolbar', () => {
-  const actions = () => ({ onSave: vi.fn(), onSaveAs: vi.fn(), onRevert: vi.fn() })
+describe('a change kept in this browser', () => {
   const more = () => screen.getByRole('button', { name: 'More actions' })
+  const items = () => within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((item) => item.textContent)
 
-  it("saves one's own view with Save, and puts Save as new view and Revert in the ⋯ before Export", () => {
-    const modified = actions()
-    render(<Toolbar {...base} onExport={() => undefined} modified={modified} />)
+  it('says no save word, and puts Terugzetten in the ⋯ before Exporteren', () => {
+    const onRevert = vi.fn()
+    render(<Toolbar {...base} onExport={() => undefined} local={{ onRevert }} />)
 
-    expect(screen.getByText('· gewijzigd')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
-    expect(modified.onSave).toHaveBeenCalled()
-    expect(modified.onSaveAs).not.toHaveBeenCalled()
+    expect(screen.queryByText(/gewijzigd|Opslaan|Opgeslagen/)).toBeNull()
     fireEvent.click(more())
-    const menu = screen.getByRole('menu', { name: 'More actions' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Opslaan als nieuwe weergave', 'Terugzetten', 'Exporteren'])
-    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Terugzetten' }))
-    expect(modified.onRevert).toHaveBeenCalled()
+    expect(items()).toEqual(['Terugzetten', 'Exporteren'])
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Terugzetten' }))
+    expect(onRevert).toHaveBeenCalled()
   })
 
-  it('names the one button Save where it saves as new, and describes it so', () => {
-    const modified = { ...actions(), onSave: undefined }
-    render(<Toolbar {...base} modified={modified} />)
+  it('offers Publieke weergave bijwerken on a public view one may write, and saves with it', () => {
+    const onPublish = vi.fn()
+    render(<Toolbar {...base} local={{ onRevert: () => undefined, onPublish }} />)
 
-    expect(screen.queryByRole('button', { name: 'Opslaan als nieuwe weergave' })).toBeNull()
-    const save = screen.getByRole('button', { name: 'Opslaan' })
-    expect(save).toHaveProperty('title', 'Opslaan als nieuwe weergave')
-    fireEvent.click(save)
-    expect(modified.onSaveAs).toHaveBeenCalled()
     fireEvent.click(more())
-    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Opslaan als nieuwe weergave', 'Terugzetten'])
-  })
-
-  it('keeps add as the one primary button beside Save', () => {
-    render(<Toolbar {...base} onAdd={() => undefined} modified={actions()} />)
-
-    expect(screen.getByRole('button', { name: 'Opslaan' }).className).not.toMatch(/primary/)
-    expect(screen.getByRole('button', { name: 'Nieuw Activiteit' }).className).toMatch(/primary/)
+    expect(items()).toEqual(['Publieke weergave bijwerken', 'Terugzetten'])
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
+    expect(onPublish).toHaveBeenCalled()
   })
 
   it('opens on the keyboard, moves with the arrows, and gives focus back to ⋯ on Escape', async () => {
-    render(<Toolbar {...base} modified={actions()} />)
+    render(<Toolbar {...base} onExport={() => undefined} local={{ onRevert: () => undefined }} />)
     more().focus()
     fireEvent.click(more())
 
-    const items = within(screen.getByRole('menu')).getAllByRole('menuitem')
-    expect(document.activeElement).toBe(items[0])
-    fireEvent.keyDown(items[0], { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(items[1])
-    fireEvent.keyDown(items[1], { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(items[0])
-    fireEvent.keyDown(items[0], { key: 'ArrowUp' })
-    expect(document.activeElement).toBe(items[1])
+    const menu = within(screen.getByRole('menu')).getAllByRole('menuitem')
+    expect(document.activeElement).toBe(menu[0])
+    fireEvent.keyDown(menu[0] as HTMLElement, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(menu[1])
+    fireEvent.keyDown(menu[1] as HTMLElement, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(menu[0])
 
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
     await waitFor(() => expect(document.activeElement).toBe(more()))
   })
 
-  it('shows nothing of it while the view is as saved', () => {
-    render(<Toolbar {...base} modified={null} />)
-
-    expect(screen.queryByText('· gewijzigd')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Opslaan' })).toBeNull()
+  it('offers no Terugzetten while the view is as saved', () => {
+    render(<Toolbar {...base} onExport={() => undefined} local={null} />)
+    fireEvent.click(more())
+    expect(items()).toEqual(['Exporteren'])
   })
 })

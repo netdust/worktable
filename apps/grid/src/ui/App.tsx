@@ -7,7 +7,7 @@ import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
-import { filter } from '../grid/layout'
+import { filter, type Layout } from '../grid/layout'
 import { type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
@@ -27,7 +27,6 @@ import { SpaceSelect } from './SpaceSelect'
 import { Toast, useNotice } from './Toast'
 import type { Table } from './tables'
 import { type Shown, Toolbar } from './Toolbar'
-import { ViewPanel } from './ViewPanel'
 import { useFilterNames } from './useFilterNames'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
@@ -143,7 +142,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [unserved, setUnserved] = useState<ApiError | null>(null)
   const [settled, setSettled] = useState(false)
   const [activeKey, setActive] = useState<string | undefined>(() => readHash('view') ?? undefined)
-  const [panel, setPanel] = useState<'saveAs' | null>(null)
   const [adding, setAdding] = useState<{ table: Table; type: ViewType } | null>(null)
   const [viewNote, setViewNote] = useState<string | null>(null)
   const [shown, setShown] = useState<Shown | null>(null)
@@ -156,7 +154,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     switched.current = true
     writeHash('view', key)
     setActive(key)
-    setPanel(null)
     setAdding(null)
     setViewNote(null)
   }
@@ -190,7 +187,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const starting = served?.views ?? []
   const declared = useMemo(() => (served?.tables ?? []).map((table) => displayed(table, displays[table.key])), [served, displays])
   const current = useRef<string | undefined>(undefined)
-  const { load, loadPrefs, tables, busy, create, saveAs, save, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
+  const { load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
   const view = tables.flatMap((table) => table.views).find((v) => v.key === activeKey) ?? tables[0]?.views[0] ?? starting[0]
   current.current = view?.key
 
@@ -215,7 +212,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
   const scope: Scope | null | undefined = !scoped ? null : space.status === 'ready' ? space.scope : undefined
   const scopeId = scope === undefined ? undefined : scope?.id ?? null
-  const [stored, setLayout] = useLayout(view)
+  const [stored, storeLayout] = useLayout(view)
+  // A change the person makes: kept here, and one's own view saves itself. A landing or a link is not that.
+  const setLayout = (next: Layout) => {
+    storeLayout(next)
+    if (view) changedLayout(view)
+  }
   const spaceField = scope?.field
   // A chip saved before the view was scoped would filter on what the scope already decides.
   const layout = stored && spaceField ? { ...stored, filters: stored.filters.filter((f) => f.field !== spaceField) } : stored
@@ -388,12 +390,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onExport={grid ? exportView : undefined}
           exportBlocked={matrix ? t('matrixNotExported') : undefined}
           exportNote={exportFailed ? t('exportFailed') : null}
-          modified={view && modified ? {
-            onSave: isSaved(view) && view.mine && view.editable ? () => save(view) : undefined,
-            busy,
-            onSaveAs: () => setPanel('saveAs'),
-            readOnly: isSaved(view) && !view.editable,
+          local={view && modified ? {
             onRevert: revert,
+            ...(isSaved(view) && view.public && view.editable ? { onPublish: () => save(view) } : {}),
           } : null}
           viewNote={viewNote}
           fixed={Object.keys(view?.fixed ?? {}).length}
@@ -413,9 +412,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             <Sheet hasView={view !== undefined} dated={dated} result={result} period={period} />
           )}
         </section>
-        {panel && view && (
-          <ViewPanel label={t('saveAsNew')} type={view.type ?? 'grid'} onSubmit={(name, type) => saveAs(view, name, type)} onClose={() => setPanel(null)} />
-        )}
         </div>
         {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
       </main>

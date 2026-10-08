@@ -148,6 +148,8 @@ export interface SavedView extends View {
   mine: boolean
   /** Only its owner may write it. */
   editable: boolean
+  /** Published with a share token: it never saves itself. */
+  public?: boolean
 }
 
 /** What `POST views` takes: a new view, always of no field. */

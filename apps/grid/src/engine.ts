@@ -81,6 +81,7 @@ export interface EngineView extends EngineArrangement {
   owner_id: number
   mine: boolean
   editable: boolean
+  public?: boolean
 }
 
 export interface EngineSchema {
@@ -325,6 +326,7 @@ export function toSavedViews(views: EngineView[], sources: Sources): SavedView[]
       owner: { id: view.owner_id, name: '' },
       mine: view.mine,
       editable: view.editable,
+      ...(view.public ? { public: true } : {}),
     }]
   })
 }

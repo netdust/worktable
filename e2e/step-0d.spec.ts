@@ -192,10 +192,12 @@ test('view-saved-after-reload', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Filter', exact: true }).click()
   await page.getByRole('button', { name: 'Productie: Nachtwacht' }).click()
-  await page.getByRole('button', { name: 'More actions', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Opslaan als nieuwe weergave' }).click()
-  await page.getByLabel('Naam').fill(name)
-  await page.getByLabel('Naam').press('Enter')
+  await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+  await page.getByRole('button', { name: 'More actions: Planning (kopie)', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
 
   await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
   await page.reload()
