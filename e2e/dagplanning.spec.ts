@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { openEditor } from './editor'
 import { fillDate } from './segments'
 import { shot } from './shots'
 import { modelNode, openView, openWeek, pickIn } from './tree'
@@ -88,7 +89,7 @@ test('edit-dagplanning @e2e', async ({ page }) => {
   const soort = await cellOf(page, 'dagplanning bewerkt', 'Soort')
   await soort.click()
   await soort.press('Enter')
-  await soort.getByRole('option', { name: 'Opbouw' }).click()
+  await openEditor(page).getByRole('option', { name: 'Opbouw' }).click()
   await expect(soort).toHaveText('Opbouw')
 
   await page.reload()
@@ -164,8 +165,8 @@ test('period-is-a-filter @e2e', async ({ page }) => {
     const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
     await pickIn(row, 'Veld', 'Plandag')
     await pickIn(row, 'Vergelijking', 'ligt tussen')
-    await fillDate(row.getByLabel('Van', { exact: true }), WEEK)
-    await fillDate(row.getByLabel('Tot', { exact: true }), '2026-12-27')
+    await fillDate(row.getByRole('group', { name: 'Van', exact: true }), WEEK)
+    await fillDate(row.getByRole('group', { name: 'Tot', exact: true }), '2026-12-27')
     await page.keyboard.press('Escape')
     await expect(bar.locator('.nv-chip--filter')).toHaveText(['Plandag tussen 2026-12-21 en 2026-12-27'])
     await expect(named(page, near)).toHaveCount(1)

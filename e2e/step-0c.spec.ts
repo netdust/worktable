@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { openEditor } from './editor'
 import { openView } from './tree'
 
 const FICHE = 'http://127.0.0.1:5175'
@@ -196,7 +197,7 @@ test('select-clear-refused', async ({ page }) => {
   const state = target.locator('td').nth(await columnIndex(page, 'Status'))
   await state.click()
   await state.press('Enter')
-  const list = state.getByRole('listbox')
+  const list = openEditor(page).getByRole('listbox')
   await list.press('ArrowUp')
   await list.press('ArrowUp')
   await list.press('Enter')

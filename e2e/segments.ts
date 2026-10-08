@@ -1,4 +1,4 @@
-import type { Locator } from '@playwright/test'
+import { expect, type Locator } from '@playwright/test'
 
 /** The digits each segment takes from a stored YYYY-MM-DD, YYYY-MM-DDTHH:mm or HH:MM. */
 function digitsOf(value: string): Record<string, string> {
@@ -22,6 +22,8 @@ export async function fillDate(field: Locator, value: string) {
   const segments = field.getByRole('spinbutton')
   if (value === '') return clearAll(segments)
   const digits = digitsOf(value)
+  // all() does not wait: a field that has not rendered, or a locator that misses it, would type nothing and pass.
+  await expect(segments.first()).toBeVisible()
   for (const segment of await segments.all()) {
     const type = (await segment.getAttribute('data-type')) ?? ''
     await segment.click()

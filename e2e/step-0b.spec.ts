@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { openEditor } from './editor'
 import { fillDate } from './segments'
 import { openWeek } from './tree'
 
@@ -69,7 +70,7 @@ async function typeInto(target: Locator, value: string) {
 async function pickOption(target: Locator, letter: string) {
   await target.click()
   await target.press('Enter')
-  const list = target.getByRole('listbox')
+  const list = openEditor(target.page()).getByRole('listbox')
   await list.press(letter)
   await list.press('Enter')
 }

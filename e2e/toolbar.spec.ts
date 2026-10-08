@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { openEditor } from './editor'
 import { shot } from './shots'
 import { addCondition, openModel, openView, openWeek, pickIn } from './tree'
 
@@ -218,8 +219,8 @@ test('history-undo-own @e2e', async ({ page }) => {
     const status = await statusCell(page, name)
     await status.click()
     await status.press('Enter')
-    await status.getByRole('listbox').press(letter)
-    await status.getByRole('listbox').press('Enter')
+    await openEditor(page).getByRole('listbox').press(letter)
+    await openEditor(page).getByRole('listbox').press('Enter')
     await expect(status).toHaveText(label)
     await expect.poll(async () => (await activiteit(page, name)).status).toBe(value)
 
