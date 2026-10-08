@@ -182,7 +182,7 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--color-border-default); color: var(--color-fg-muted); font-size: 12.5px; background: var(--color-bg-surface); cursor: pointer }
 .chip:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
 .chip.set { border-color: transparent; background: var(--color-accent-subtle); color: var(--color-accent-default) }
-.bar .rows { margin-left: auto; color: var(--color-fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums }
+.bar .rows { color: var(--color-fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums }
 
 .gridwrap { flex: 1; overflow: auto; min-height: 0 }
 table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 900px; background: var(--color-bg-surface) }
@@ -236,6 +236,54 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-widt
 .prod-tag { display: inline-flex; align-items: center; gap: 6px }
 .prod-tag i { width: 6px; height: 14px; border-radius: 2px }
 
+/* minimal scrollbars: thin, no arrows, a quiet thumb that darkens on hover */
+* { scrollbar-width: thin; scrollbar-color: var(--color-border-default) transparent }
+*::-webkit-scrollbar { width: 8px; height: 8px }
+*::-webkit-scrollbar-track { background: transparent }
+*::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box }
+*::-webkit-scrollbar-thumb:hover { background-color: var(--color-fg-subtle) }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
+*::-webkit-scrollbar-corner { background: transparent }
+.iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-fg-muted); cursor: pointer }
+.iconbtn:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
+.iconbtn.on { color: var(--color-accent-default); border-color: var(--color-accent-default) }
+.bar .tools { margin-left: auto; display: flex; align-items: center; gap: 10px }
+.bar .iconbtn { width: 28px; height: 28px }
+.chip .x { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0 -4px 0 0; border-radius: 50%; color: inherit; opacity: .7 }
+.chip .x:hover { opacity: 1; background: color-mix(in srgb, currentColor 16%, transparent) }
+.chip .x .icon { width: 12px; height: 12px }
+.chip .op { opacity: .75 }
+.chip .count { font: 600 11px var(--font-mono); background: var(--color-accent-default); color: var(--color-fg-on-accent); border-radius: 999px; padding: 0 5px; margin-left: 2px }
+.grid th.sortable { cursor: pointer; user-select: none }
+.grid th.sortable:hover { color: var(--color-fg-default) }
+.grid th.sorted { color: var(--color-accent-default); font-weight: 600 }
+.grid th .arrow { margin-left: 4px; font-weight: 600 }
+.fb { width: 600px; padding: 10px }
+.fb-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--color-fg-subtle); margin: 0 2px 8px }
+.fb-row { display: grid; grid-template-columns: 40px 128px 128px 1fr 26px; gap: 6px; align-items: start; margin-bottom: 6px }
+.fb-row .where { font-size: 12px; color: var(--color-fg-subtle); padding-top: 7px; text-align: right }
+.fb select, .fb input[type=text], .fb input[type=date] { height: 30px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-fg-default); font: inherit; padding: 0 6px; width: 100% }
+.fb .add { margin-top: 4px; border: 0; background: none; color: var(--color-accent-default); cursor: pointer; padding: 4px 2px; font: inherit }
+.vbox-in { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 30px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); padding: 3px 4px; background: var(--color-bg-surface) }
+.vbox-in:focus-within { border-color: var(--color-accent-default) }
+.vtok { display: inline-flex; align-items: center; gap: 2px; height: 22px; padding: 0 2px 0 8px; border-radius: 999px; background: var(--color-accent-subtle); color: var(--color-accent-default); font-size: 12px; font-weight: 500 }
+.vtok button { border: 0; background: none; color: inherit; cursor: pointer; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; padding: 0 }
+.vtok .icon { width: 11px; height: 11px }
+.vbox-in input { flex: 1 1 80px; min-width: 80px; border: 0; outline: 0; background: transparent; font: inherit; color: var(--color-fg-default); height: 22px }
+.vlist { margin-top: 4px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); max-height: 196px; overflow: auto; background: var(--color-bg-surface) }
+.vlist button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; cursor: pointer; font: inherit; color: var(--color-fg-default) }
+.vlist button:hover { background: var(--color-bg-hover) }
+.vlist .more { padding: 6px 8px; font-size: 12px; color: var(--color-fg-subtle) }
+.fb .between { display: flex; gap: 6px }
+.fb-x { width: 26px; height: 30px; border: 0; background: none; color: var(--color-fg-subtle); cursor: pointer; display: grid; place-items: center }
+.fb-x:hover { color: var(--color-danger-fg) }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; z-index: 35; background: var(--color-bg-surface); border-left: 1px solid var(--color-border-default); box-shadow: var(--shadow-pop); display: flex; flex-direction: column }
+.drawer header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--color-border-default); font-weight: 600 }
+.drawer ol { list-style: none; margin: 0; padding: 6px 0; overflow: auto }
+.drawer li { padding: 10px 16px; border-bottom: 1px solid var(--color-border-subtle); display: grid; gap: 3px }
+.drawer li .meta { font-size: 12px; color: var(--color-fg-subtle) }
+.drawer li .undo { justify-self: start; border: 0; background: none; color: var(--color-accent-default); padding: 0; cursor: pointer; font: inherit; font-size: 12px }
+.drawer .day { padding: 12px 16px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-fg-subtle); border: 0 }
 .foot { background: var(--color-bg-subtle); border-top: 1px solid var(--color-border-default); padding: 6px 18px; font-size: 12px; color: var(--color-fg-subtle); display: flex; gap: 16px }
 
 /* ---------- title ---------- */
@@ -306,6 +354,9 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-widt
   <symbol id="i-left" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></symbol>
   <symbol id="i-right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
   <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.5 3.5h11L9.5 8.5v4l-3 1.5v-5.5z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9"/><path d="M2.5 2.5v2.6h2.6"/><path d="M8 5v3l2 1.5"/></symbol>
+  <symbol id="i-share" viewBox="0 0 16 16"><path d="M8 2v8M5 4.5L8 2l3 2.5"/><path d="M3 8.5V13h10V8.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
   <symbol id="i-sort" viewBox="0 0 16 16"><path d="M5 3v10M2.5 10.5L5 13l2.5-2.5M11 13V3M8.5 5.5L11 3l2.5 2.5"/></symbol>
   <symbol id="i-group" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4" rx="1"/><rect x="2" y="9.5" width="12" height="4" rx="1"/></symbol>
   <symbol id="i-cols" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11M10 2.5v11"/></symbol>
@@ -336,13 +387,14 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; min-widt
     <header class="top">
       <div class="title" id="crumbs"></div>
       <span class="spacer"></span>
-      <div class="weeknav" id="weeknav"><button class="btn" aria-label="Vorige week"><svg class="icon"><use href="#i-left"/></svg></button><span class="week">Week 45 · 2–8 nov</span><button class="btn" aria-label="Volgende week"><svg class="icon"><use href="#i-right"/></svg></button></div>
       <label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="q" placeholder="Zoeken"><kbd>⌘K</kbd></label>
+      <button class="iconbtn" id="history-btn" title="Geschiedenis" aria-label="Geschiedenis"><svg class="icon"><use href="#i-history"/></svg></button>
+      <button class="iconbtn" id="share-btn" title="Exporteren of delen" aria-label="Exporteren of delen"><svg class="icon"><use href="#i-share"/></svg></button>
       <button class="btn primary"><svg class="icon"><use href="#i-plus"/></svg>Nieuwe activiteit</button>
     </header>
     <div class="bar" id="bar"></div>
     <div class="gridwrap" id="wrap"><table class="grid" id="grid"></table><div class="board" id="board" hidden></div></div>
-    <div class="foot"><span>↑↓←→ bewegen</span><span>↵ bewerken</span><span>⌘Z ongedaan maken</span><span>Opgeslagen</span></div>
+    <div class="foot"><span>↑↓←→ bewegen</span><span>↵ bewerken</span><span>⌘Z ongedaan maken</span></div>
   </main>
 </div>
 
@@ -402,7 +454,25 @@ const order = (r) => (r.start ? r.start : r.soort === 'overnachting' ? '99' : '0
 ROWS.sort((a, b) => DAYS.findIndex((x) => x[0] === a.day) - DAYS.findIndex((x) => x[0] === b.day) || order(a).localeCompare(order(b)))
 
 // ---------- state ----------
-const state = { shut: new Set(), layout: 'table', space: 'nw', open: new Set(['activiteit']), view: ['activiteit', 3], sel: -1 }
+const VENUES = ['Zaal De Spiegel', 'Repetitiekot De Loods', 'Gezelschap Lantaarn', 'Theater Het Anker', 'Zaal Kompas', 'CC De Vlinder', 'CC Noordkaap', 'Schouwburg Zandhoven', 'De Lindeboom', 'Theater Uilenspiegel', 'Studio Meridiaan', 'CC Berkenhof', 'Zaal Morgenrood', 'Het Klokhuis', 'De Waterpoort', 'Schouwburg Oostmolen', 'CC Heidebloem', 'Zaal Pelikaan', 'Theater De Kaars', 'De Zilverreiger', 'CC Rozendaal', 'Zaal Atlas', 'Het Lichtschip', 'CC Groenhove', 'Studio Vonk', 'De Brandspuit', 'Theater Hoogwater', 'CC Klaverveld', 'Zaal Horizon', 'CC Meeuwenhof']
+const FIELDS = {
+  plandag: { label: 'Plandag', type: 'date' },
+  soort: { label: 'Soort', type: 'select', options: SOORT },
+  venue: { label: 'Locatie', type: 'relation', options: Object.fromEntries(VENUES.map((v) => [v, v])) },
+  status: { label: 'Status', type: 'select', options: { optie: 'Optie', bevestigd: 'Bevestigd' } },
+  title: { label: 'Omschrijving', type: 'text' },
+}
+const OPS = {
+  select: [['in', 'is'], ['nin', 'is niet'], ['empty', 'is leeg'], ['filled', 'is niet leeg']],
+  relation: [['in', 'is'], ['nin', 'is niet'], ['empty', 'is leeg'], ['filled', 'is niet leeg']],
+  text: [['has', 'bevat'], ['hasnt', 'bevat niet'], ['eq', 'is'], ['empty', 'is leeg']],
+  date: [['week', 'is deze week'], ['next', 'is volgende week'], ['month', 'is deze maand'], ['between', 'ligt tussen']],
+}
+const HISTORY = [
+  ['Vandaag', [['Bram De Wilde toegevoegd aan <b>Voorstelling</b>', 'Stefan · 10:42', true], ['Status van <b>Diner</b> → Bevestigd', 'Noor · 10:31', true], ['Locatie van <b>Lunch</b> → Zaal De Spiegel', 'Stefan · 09:58', true]]],
+  ['Gisteren', [['Sjabloon <b>Speeldag op locatie</b> toegepast op Nachtwacht in Brugge · 21 activiteiten', 'Stefan · 16:20', false], ['<b>Afwas</b> verwijderd', 'Noor · 14:05', false]]],
+]
+const state = { filters: [{ field: 'plandag', op: 'week', values: [] }], sort: { col: 'start', dir: 'asc' }, shut: new Set(), layout: 'table', space: 'nw', open: new Set(['activiteit']), view: ['activiteit', 3], sel: -1 }
 const store = { get: (k) => { try { return localStorage.getItem('wt-proto-' + k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem('wt-proto-' + k, v) } catch {} } }
 
 // ---------- sidebar ----------
@@ -519,6 +589,107 @@ function viewDialog(m, skin, name) {
   })
 }
 
+// ---------- filters: field · operator · value; the period is one of them ----------
+const NO_VALUE = ['empty', 'filled', 'week', 'next', 'month']
+const complete = (f) => NO_VALUE.includes(f.op) || f.values.filter(Boolean).length > 0
+function chipText(f) {
+  const field = FIELDS[f.field], op = OPS[field.type].find(([k]) => k === f.op)[1]
+  if (field.type === 'date') return `${icon('cal')}${field.label} <span class="op">${f.op === 'between' ? 'tussen' : op.replace(/^is /, '')}</span>${f.op === 'between' ? ` ${f.values.join(' – ')}` : ''}`
+  const shown = f.values.map((v) => esc(field.options?.[v] ?? v))
+  const list = shown.length > 2 ? `${shown.slice(0, 2).join(', ')} +${shown.length - 2}` : shown.join(' of ')
+  return `${field.label} <span class="op">${op}</span> ${list}`
+}
+function matches(r) {
+  return state.filters.filter(complete).every((f) => {
+    if (FIELDS[f.field].type === 'date') return true
+    const value = r[f.field]
+    if (f.op === 'in') return f.values.includes(value)
+    if (f.op === 'nin') return !f.values.includes(value)
+    if (f.op === 'empty') return !value
+    if (f.op === 'filled') return Boolean(value)
+    const text = String(value ?? '').toLowerCase(), want = (f.values[0] ?? '').toLowerCase()
+    return f.op === 'has' ? text.includes(want) : f.op === 'hasnt' ? !text.includes(want) : text === want
+  })
+}
+const SORTKEY = { start: (r) => order(r), title: (r) => r.title, soort: (r) => r.soort, prod: (r) => r.prod, venue: (r) => r.venue ?? '', status: (r) => r.status, crew: (r) => String(r.crew[0]).padStart(3, '0') }
+const bySort = (a, b) => {
+  const days = DAYS.findIndex((x) => x[0] === a.day) - DAYS.findIndex((x) => x[0] === b.day)
+  if (days) return days
+  const k = SORTKEY[state.sort.col], c = String(k(a)).localeCompare(String(k(b)))
+  return state.sort.dir === 'asc' ? c : -c
+}
+let vq = {}
+function valueControl(f, i) {
+  const field = FIELDS[f.field]
+  if (NO_VALUE.includes(f.op)) return '<span></span>'
+  if (field.type === 'date') return `<div class="between"><input type="date" data-v="${i}:0" value="${f.values[0] ?? ''}"><input type="date" data-v="${i}:1" value="${f.values[1] ?? ''}"></div>`
+  if (field.type === 'text') return `<input type="text" data-v="${i}:0" placeholder="tekst" value="${esc(f.values[0] ?? '')}">`
+  const q = (vq[i] ?? '').toLowerCase()
+  const free = Object.entries(field.options).filter(([k, label]) => !f.values.includes(k) && label.toLowerCase().includes(q))
+  return `<div class="vbox"><div class="vbox-in">${f.values.map((v) => `<span class="vtok">${esc(field.options[v] ?? v)}<button data-unval="${i}:${esc(v)}" aria-label="${esc(field.options[v] ?? v)} weghalen">${icon('x')}</button></span>`).join('')}<input data-q="${i}" placeholder="${f.values.length ? '' : 'Zoek een waarde'}" value="${esc(vq[i] ?? '')}"></div>
+    <div class="vlist">${free.slice(0, 6).map(([k, label]) => `<button data-val="${i}:${esc(k)}">${esc(label)}</button>`).join('')}${free.length > 6 ? `<div class="more">nog ${free.length - 6} — typ om te zoeken</div>` : free.length ? '' : '<div class="more">Geen andere waarden</div>'}</div></div>`
+}
+function renderFilterPop(pop) {
+  pop.innerHTML = `<div class="fb"><div class="fb-head"><span>Toon rijen waar</span><span>${state.filters.filter(complete).length} actief</span></div>
+    ${state.filters.map((f, i) => `<div class="fb-row"><span class="where">${i ? 'en' : 'waar'}</span>
+      <select data-f="${i}">${Object.entries(FIELDS).map(([k, x]) => `<option value="${k}" ${k === f.field ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
+      <select data-o="${i}">${OPS[FIELDS[f.field].type].map(([k, label]) => `<option value="${k}" ${k === f.op ? 'selected' : ''}>${label}</option>`).join('')}</select>
+      ${valueControl(f, i)}<button class="fb-x" data-rm="${i}" aria-label="Voorwaarde weghalen">${icon('x')}</button></div>`).join('')}
+    <button class="add" data-add>+ Voorwaarde toevoegen</button></div>`
+}
+function filterPop(anchor) {
+  const pop = openPop(anchor, '')
+  renderFilterPop(pop)
+  const refresh = (focus) => {
+    renderFilterPop(pop); renderMain()
+    const el = focus === undefined ? null : pop.querySelector(`[data-q="${focus}"]`)
+    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) }
+  }
+  pop.addEventListener('change', (e) => {
+    const t = e.target
+    if (t.dataset.f) { const f = state.filters[+t.dataset.f]; f.field = t.value; f.op = OPS[FIELDS[f.field].type][0][0]; f.values = []; refresh(t.dataset.f) }
+    else if (t.dataset.o) { const f = state.filters[+t.dataset.o]; f.op = t.value; f.values = []; refresh(t.dataset.o) }
+    else if (t.dataset.v) { const [i, n] = t.dataset.v.split(':').map(Number); state.filters[i].values[n] = t.value; refresh() }
+  })
+  pop.addEventListener('input', (e) => { const t = e.target; if (t.dataset.q) { vq[t.dataset.q] = t.value; refresh(t.dataset.q) } })
+  pop.addEventListener('keydown', (e) => {
+    const t = e.target
+    if (t.dataset.q && e.key === 'Backspace' && !t.value) { state.filters[+t.dataset.q].values.pop(); refresh(t.dataset.q) }
+  })
+  pop.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    if (b.dataset.val) { const [i, v] = b.dataset.val.split(/:(.*)/); state.filters[+i].values.push(v); vq[i] = ''; refresh(i) }
+    else if (b.dataset.unval) { const [i, v] = b.dataset.unval.split(/:(.*)/); const f = state.filters[+i]; f.values = f.values.filter((x) => x !== v); refresh(i) }
+    else if (b.dataset.rm) { state.filters.splice(+b.dataset.rm, 1); vq = {}; refresh() }
+    else if (b.hasAttribute('data-add')) { state.filters.push({ field: 'soort', op: 'in', values: [] }); refresh(String(state.filters.length - 1)) }
+  })
+}
+$('#bar').addEventListener('click', (e) => {
+  const x = e.target.closest('[data-act="unfilter"]')
+  if (x) { state.filters.splice(+x.closest('[data-fi]').dataset.fi, 1); vq = {}; return renderMain() }
+  const btn = e.target.closest('#filter-btn')
+  if (btn) filterPop(btn)
+})
+$('#grid').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return
+  const col = th.dataset.sort
+  state.sort = state.sort.col === col ? { col, dir: state.sort.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }
+  renderMain()
+})
+
+// ---------- history and share: icon buttons in the title line ----------
+$('#history-btn').addEventListener('click', () => {
+  const open = document.querySelector('.drawer')
+  if (open) { open.remove(); $('#history-btn').classList.remove('on'); return }
+  const d = document.createElement('aside'); d.className = 'drawer'
+  d.innerHTML = `<header>Geschiedenis van Dagplanning<button class="tool" aria-label="Sluiten">${icon('x')}</button></header><ol>${HISTORY.map(([day, items]) => `<li class="day">${day}</li>${items.map(([what, meta, undo]) => `<li><span class="what">${what}</span><span class="meta">${meta}</span>${undo ? '<button class="undo">Ongedaan maken</button>' : ''}</li>`).join('')}`).join('')}</ol>`
+  d.querySelector('header button').onclick = () => { d.remove(); $('#history-btn').classList.remove('on') }
+  document.body.append(d); $('#history-btn').classList.add('on')
+})
+$('#share-btn').addEventListener('click', (e) => {
+  openPop(e.currentTarget, `<div class="pop-head">Exporteren</div><button class="pop-item">${icon('table')}Excel (.xlsx)</button><button class="pop-item">${icon('cal')}Agenda (.ics)</button><div class="pop-sep"></div><div class="pop-head">Delen</div><button class="pop-item">${icon('users')}Link naar deze weergave kopiëren</button><button class="pop-item">${icon('share')}Publiceren…<span class="meta">openbare link</span></button>`)
+})
+
 // ---------- main ----------
 function renderMain() {
   const m = MODELS.find((x) => x.key === state.view[0]), v = m.views[state.view[1]]
@@ -528,9 +699,11 @@ function renderMain() {
   $('#crumbs').innerHTML = `<span class="tglyph">${icon(v.query ? 'query' : SKINS[v.skin][0])}</span><h1>${esc(v.name)}</h1>${v.lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
     <span class="sum">${shown.length} activiteiten · ${new Set(shown.map((r) => r.day)).size} dagen</span>${optie ? `<span class="insight"><b>${optie}</b> nog in optie</span>` : ''}`
   const scoped = state.space !== 'all'
-  $('#bar').innerHTML = `${scoped ? `<span class="chip set">${icon('tag')}Productie is ${esc(p.titel)}</span>` : ''}
-    <span class="chip">${icon('filter')}Filter</span><span class="chip set">${icon('group')}Groep: plandag</span><span class="chip set">${icon('sort')}Start ↑</span><span class="chip">${icon('cols')}Kolommen</span>
-    <span class="rows" id="rows"></span>`
+  const done = state.filters.filter(complete)
+  $('#bar').innerHTML = `${scoped ? `<span class="chip set" title="Gekozen in de productiekiezer">${icon('tag')}Productie is ${esc(p.titel)}</span>` : ''}
+    ${done.map((f) => `<span class="chip set" data-fi="${state.filters.indexOf(f)}">${chipText(f)}<span class="x" data-act="unfilter" title="Filter wissen">${icon('x')}</span></span>`).join('')}
+    <button class="chip" id="filter-btn">${icon('filter')}Filter${done.length ? `<span class="count">${done.length}</span>` : ''}</button><span class="chip set">${icon('group')}Groep: plandag</span>
+    <span class="tools"><span class="rows" id="rows"></span><button class="iconbtn" title="Kolommen" aria-label="Kolommen">${icon('cols')}</button></span>`
   renderGrid(m, v)
 }
 
@@ -543,9 +716,10 @@ function renderGrid(m, v) {
   }
   const scoped = state.space !== 'all'
   const q = $('#q').value.toLowerCase()
-  const rows = ROWS.filter((r) => (!scoped || r.prod === state.space) && (!q || r.title.toLowerCase().includes(q)))
+  const rows = ROWS.filter((r) => (!scoped || r.prod === state.space) && (!q || r.title.toLowerCase().includes(q)) && matches(r)).sort(bySort)
   const prodCol = !scoped
-  const head = `<thead><tr><th class="num">#</th><th>${icon('clock')}Tijd</th><th>${icon('text')}Omschrijving</th><th>${icon('tag')}Soort</th>${prodCol ? `<th>${icon('film')}Productie</th>` : ''}<th>${icon('pin')}Locatie</th><th>${icon('check')}Status</th><th>${icon('users')}Bezetting</th></tr></thead>`
+  const th = (col, glyph, label) => { const on = state.sort.col === col; return `<th class="sortable ${on ? 'sorted' : ''}" data-sort="${col}" aria-sort="${on ? (state.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">${icon(glyph)}${label}${on ? `<span class="arrow">${state.sort.dir === 'asc' ? '↑' : '↓'}</span>` : ''}</th>` }
+  const head = `<thead><tr><th class="num">#</th>${th('start', 'clock', 'Tijd')}${th('title', 'text', 'Omschrijving')}${th('soort', 'tag', 'Soort')}${prodCol ? th('prod', 'film', 'Productie') : ''}${th('venue', 'pin', 'Locatie')}${th('status', 'check', 'Status')}${th('crew', 'users', 'Bezetting')}</tr></thead>`
   const span = prodCol ? 8 : 7
   let body = '', day = '', n = 0
   rows.forEach((r, i) => {
@@ -574,7 +748,7 @@ function renderGrid(m, v) {
 }
 function renderBoard() {
   const scoped = state.space !== 'all', q = $('#q').value.toLowerCase()
-  const rows = ROWS.filter((r) => (!scoped || r.prod === state.space) && (!q || r.title.toLowerCase().includes(q)))
+  const rows = ROWS.filter((r) => (!scoped || r.prod === state.space) && (!q || r.title.toLowerCase().includes(q)) && matches(r)).sort(bySort)
   $('#board').innerHTML = DAYS.map(([day, date]) => {
     const inDay = rows.filter((r) => r.day === day)
     const timed = inDay.filter((r) => r.start).length, need = inDay.reduce((a, r) => a + r.crew[1], 0), have = inDay.reduce((a, r) => a + r.crew[0], 0)
