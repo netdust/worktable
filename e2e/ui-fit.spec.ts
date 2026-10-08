@@ -346,3 +346,35 @@ test('filter-row-fits @e2e', async ({ page }) => {
     () => page.keyboard.press('Escape'),
   )
 })
+
+test('drawer-picker-keeps-its-frame @e2e', async ({ page }) => {
+  await page.goto('/')
+  await openView(page, 'Tourstops')
+  const created = page.waitForResponse(
+    (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/speelreeks',
+  )
+  await page.getByRole('button', { name: 'Nieuwe tourstop' }).click()
+  await page.getByRole('textbox', { name: 'Naam' }).fill('Kader e2e')
+  await page.getByRole('textbox', { name: 'Naam' }).press('Enter')
+  await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
+  await page.getByRole('option', { name: 'Nachtwacht' }).click()
+  expect((await created).status()).toBe(201)
+  await page.locator('tbody tr.nv-tr[data-title="Kader e2e"]').getByRole('button', { name: 'Openen' }).click()
+  const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
+  const open = async () => {
+    await action.getByRole('button', { name: /^Sjabloon: / }).click()
+    await expect(page.locator('.nv-picker__pop').getByRole('option').first()).toBeVisible()
+  }
+
+  // Outside a cell the picker keeps its panel: a border and a shadow around the search.
+  await open()
+  const frame = await action.locator('.nv-pop.nv-picker').evaluate((el) => {
+    const style = getComputedStyle(el)
+    return { border: style.borderTopWidth, shadow: style.boxShadow }
+  })
+  console.log('drawer picker frame', JSON.stringify(frame))
+  expect.soft(frame.border, 'a border around the search').not.toBe('0px')
+  expect.soft(frame.shadow, 'a shadow under the panel').not.toBe('none')
+  await page.keyboard.press('Escape')
+  await bothThemes(page, 'drawer-picker', open, () => page.keyboard.press('Escape'))
+})

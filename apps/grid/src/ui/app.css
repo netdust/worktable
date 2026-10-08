@@ -1114,22 +1114,19 @@
   display: contents;
 }
 
-/* The search is the picker's frame; a panel around it would draw a second border. */
-.nv-pop.nv-picker {
+/* In a cell the search is the picker's frame; a panel around it would draw a second border. The drawer's keeps its panel. */
+.nv-td .nv-pop.nv-picker {
   min-width: 0;
   padding: 0;
   border: 0;
   background: none;
   box-shadow: none;
-}
-
-#root .nv-picker__field .nv-picker__input:focus {
-  border-color: var(--color-accent-default);
-}
-
-.nv-td .nv-pop.nv-picker {
   top: calc(100% + 4px);
   left: 0;
+}
+
+#root .nv-td .nv-picker__field .nv-picker__input:focus {
+  border-color: var(--color-accent-default);
 }
 
 .nv-pop.nv-picker__pop {
