@@ -469,9 +469,8 @@ async function copyOfDagplanning(page: Page, copy: string): Promise<number> {
   return ((await views(page)).find((v) => v.name === copy) as Stored).id
 }
 
-// Bug: the grid's PUT share-token carries no body and no Content-Type, so the write guard answers 415.
+// Publiceren from the menu: the write guard takes a PUT only with a JSON body, an empty one too.
 test('publish-from-share-menu @e2e', async ({ browser }) => {
-  test.fail()
   const copy = 'Dagplanning (kopie)'
   const admin = await browser.newContext({ storageState: state('admin') })
   const page = await admin.newPage()
@@ -494,7 +493,6 @@ test('publish-from-share-menu @e2e', async ({ browser }) => {
 })
 
 // A published view never saves itself: a removed condition stays in this browser until "Publieke weergave bijwerken".
-// Published over the wire, as the share menu cannot yet (publish-from-share-menu).
 test('published-view-stays-put @e2e', async ({ browser }) => {
   const copy = 'Dagplanning (kopie)'
   const admin = await browser.newContext({ storageState: state('admin') })

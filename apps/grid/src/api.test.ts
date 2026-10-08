@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onUnauthenticated, prefs, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
+import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -482,6 +482,13 @@ describe('writes', () => {
 
     expect(batch).toBe('b-1')
     expect(row.fields).not.toHaveProperty('revision')
+  })
+
+  it('publishes a view with an empty JSON body, as the write guard asks of every write, and answers its token', async () => {
+    fetcher.mockImplementationOnce(async () => json({ token: 't-1' }))
+    expect(await publishView(42)).toBe('t-1')
+    expect(fetcher.mock.calls[0][0]).toBe('/api/views/42/share-token')
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'PUT', body: '{}', headers: { 'Content-Type': 'application/json' } })
   })
 
   it('undoes a batch with an empty JSON body and answers the undo batch; a changed_since keeps its column and label', async () => {
