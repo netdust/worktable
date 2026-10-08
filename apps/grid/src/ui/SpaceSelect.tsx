@@ -45,7 +45,7 @@ export function SpaceSelect({ label, records, selected, onSelect }: Props) {
             </span>
             <ChevronsUpDown size={14} aria-hidden="true" />
           </Button>
-          <Popover isNonModal className="nv-pop nv-space__pop" placement="bottom start" offset={4}>
+          <Popover isNonModal className="nv-pop nv-space__pop" placement="bottom start" offset={4} containerPadding={0}>
             <Outside>
               <FirstMatch texts={options.map((o) => [o.choice, o.title])}>
                 <Autocomplete inputValue={query} onInputChange={setQuery} filter={holds}>

@@ -866,6 +866,10 @@
   cursor: pointer;
 }
 
+#root .nv-pop__option {
+  box-sizing: border-box;
+}
+
 #root .nv-filters__option:hover,
 #root .nv-pop__option:hover {
   background: var(--color-bg-muted);
@@ -1058,7 +1062,12 @@
 }
 
 .nv-space .nv-space__pop {
+  box-sizing: border-box;
   width: var(--trigger-width);
+}
+
+.nv-pop .nv-picker__input {
+  box-sizing: border-box;
 }
 
 .nv-space__option {
@@ -1105,7 +1114,26 @@
   display: contents;
 }
 
+/* The search is the picker's frame; a panel around it would draw a second border. */
+.nv-pop.nv-picker {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+#root .nv-picker__field .nv-picker__input:focus {
+  border-color: var(--color-accent-default);
+}
+
+.nv-td .nv-pop.nv-picker {
+  top: calc(100% + 4px);
+  left: 0;
+}
+
 .nv-pop.nv-picker__pop {
+  box-sizing: border-box;
   width: var(--trigger-width);
   min-width: 0;
 }
@@ -1853,14 +1881,15 @@
   z-index: 50;
 }
 
-/* A date and time can be wider than its column: the editor grows past the cell, as the editing cell lets it. */
+/* A date and time can be wider than its column: the editor grows past the cell by what its segments need, as the editing cell lets it. */
 .nv-datefield {
   position: absolute;
   inset: 0 auto 0 0;
+  box-sizing: border-box;
   min-width: 100%;
   display: flex;
   align-items: center;
-  padding: 0 4px 0 9px;
+  padding: 0 2px 0 6px;
   background: var(--color-bg-surface);
   box-shadow: inset 0 0 0 2px var(--color-accent-default);
   color: var(--color-fg-default);
@@ -1868,7 +1897,7 @@
 }
 
 .nv-first .nv-datefield {
-  padding-left: 15px;
+  padding-left: 9px;
 }
 
 .nv-datefield .react-aria-DatePicker,
@@ -1876,7 +1905,7 @@
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .nv-datefield__input {
@@ -1886,8 +1915,7 @@
 }
 
 .nv-datefield__segment {
-  padding: 0 1px;
-  border-radius: 3px;
+  border-radius: 2px;
   outline: none;
 }
 
@@ -1896,8 +1924,15 @@
   color: var(--color-fg-subtle);
 }
 
+/* The ", " between date and time keeps its space: a flex item drops its trailing one. */
+.nv-datefield__segment[data-type="literal"] {
+  white-space: pre;
+}
+
 .nv-datefield__segment[data-focused] {
   background: var(--color-accent-default);
+  /* The highlight's margin is painted, not laid out: the segments keep their width. */
+  box-shadow: 0 0 0 1px var(--color-accent-default);
   color: var(--color-fg-on-accent);
 }
 
@@ -1905,8 +1940,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -3304,15 +3339,22 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin: 0 0 4px;
+  margin: 0;
   padding: 4px;
   border: 1px solid var(--color-border-default);
   border-radius: 6px;
   background: var(--color-bg-surface);
-  /* Two lines of chips, then it scrolls. */
+  /* Two lines of chips, then it scrolls a whole line at a time. */
   box-sizing: border-box;
   max-height: 58px;
   overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-padding-block: 4px;
+}
+
+.nv-picker__box .nv-pill,
+.nv-picker__box .nv-picker__input {
+  scroll-snap-align: start;
 }
 
 .nv-picker__box:focus-within {
@@ -3339,7 +3381,8 @@
   list-style: none;
 }
 
-.nv-chosen .nv-pill {
+/* #root: the grid's cell pills (.nv-grid .nv-pill) would make a chip shorter than its line. */
+#root .nv-chosen .nv-pill {
   height: 22px;
   padding: 0 4px 0 8px;
   outline: none;
@@ -3349,7 +3392,7 @@
   box-shadow: 0 0 0 2px var(--color-border-focus);
 }
 
-.nv-chosen .nv-pill--muted {
+#root .nv-chosen .nv-pill--muted {
   padding-right: 8px;
   font-style: italic;
 }
@@ -3518,6 +3561,10 @@
   min-width: 0;
 }
 
+#root .nv-pick .react-aria-Select {
+  height: 100%;
+}
+
 #root .nv-pick__button {
   display: flex;
   align-items: center;
@@ -3660,6 +3707,8 @@
 }
 
 #root .nv-fb__text {
+  box-sizing: border-box;
+  align-self: center;
   width: 100%;
   padding: 0 10px;
 }

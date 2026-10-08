@@ -145,7 +145,7 @@ function Day({ label, value, onChange }: { label: string; value: string; onChang
         <Segments />
         <Button className="nv-datefield__open"><CalendarDays size={14} aria-hidden="true" /></Button>
       </Group>
-      <Popover isNonModal className="nv-pop" placement="bottom start" offset={4}>
+      <Popover isNonModal className="nv-pop" placement="bottom start" offset={4} containerPadding={0}>
         <Days />
       </Popover>
     </DatePicker>

@@ -51,7 +51,8 @@ export function Pick({ label, value, options, onChange, searchable = false, clas
             <span className="nv-pick__text">{current?.label}</span>
             <ChevronDown size={14} aria-hidden="true" className="nv-pick__chevron" />
           </Button>
-          <Popover isNonModal className="nv-pick__panel" placement="bottom start" offset={4} maxHeight={260}>
+          {/* React Aria keeps 12px from the window's edge in the picker's own coordinates, which moved the list right of its button. */}
+          <Popover isNonModal className="nv-pick__panel" placement="bottom start" offset={4} maxHeight={260} containerPadding={0}>
             <Outside>
               {searchable ? <Searched label={label} options={options} /> : <Options label={label} options={options} />}
             </Outside>
