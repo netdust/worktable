@@ -47,9 +47,9 @@ function byDay(entries: HistoryEntry[]): { day: string; entries: HistoryEntry[] 
   return days
 }
 
-/** Undoing one entry undoes its whole batch: the others this list holds are named. */
-function alsoUndone(entries: HistoryEntry[], entry: HistoryEntry): string | null {
-  const others = entries.filter((e) => e.batch === entry.batch).length - 1
+/** Undoing one entry undoes its whole batch: the engine counts the other records it changes. */
+function alsoUndone(entry: HistoryEntry): string | null {
+  const { others } = entry
   return others === 0 ? null : others === 1 ? t('historyAlsoOne') : t('historyAlso', { n: others })
 }
 
@@ -90,7 +90,7 @@ export function HistoryPanel({ load, onUndo, onUndone, onRefused, onClose, field
             <h3 className="nv-history__date">{day}</h3>
             <ul className="nv-history__list">
               {entries.map((entry) => (
-                <Item key={`${entry.batch}:${entry.record.id}`} entry={entry} fields={fields} also={alsoUndone(read.entries, entry)} busy={busy !== null} onUndo={undo} />
+                <Item key={`${entry.batch}:${entry.record.id}`} entry={entry} fields={fields} also={alsoUndone(entry)} busy={busy !== null} onUndo={undo} />
               ))}
             </ul>
           </section>

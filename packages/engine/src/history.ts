@@ -15,6 +15,8 @@ export interface HistoryEntry {
   by: By
   actor: string | null
   undoable: boolean
+  /** On an undoable entry: the other records its undo changes too, across the whole batch. */
+  others: number
   batch_kind: string | null
   created: boolean
   record: { id: number; title: string }
@@ -137,13 +139,27 @@ function undoable(store: Store, key: string, batch: BatchRow | null, caller: Act
 
 const parsed = (raw: unknown): unknown => (raw === null ? null : JSON.parse(String(raw)))
 
-function shownValue(store: Store, relation: string | undefined, value: unknown): unknown {
+// A related record is named only to a caller who may read it (threat 3): an old value may point outside the scope.
+function shownValue(store: Store, relation: string | undefined, value: unknown, caller: Actor): unknown {
   if (!relation || typeof value !== 'number') return value
+  const target = store.domain.datasets.find((d) => d.name === relation)
+  if (!target || !readable(caller, target)) return null
+  const scope = scopeOf(caller, target)
+  if (scope !== 'all') {
+    const raw = store.sqlite.query(`SELECT * FROM "${target.name}" WHERE id = ?`).get(value) as Raw | null
+    if (!raw || !inScope(scope, raw)) return null
+  }
   return titlesOf(store.db, store.domain, relation, [value]).get(value) ?? null
 }
 
+// Only the caller's own batches are undoable, so the count names nothing outside its scope.
+function othersIn(store: Store, key: string): number {
+  const sql = `SELECT COUNT(DISTINCT entity || ':' || record_id) AS n FROM revision WHERE batch_id = ?`
+  return ((store.sqlite.query(sql).get(key) as { n: number }).n ?? 1) - 1
+}
+
 // Per field the first old and the last new, as an undo would restore it.
-function changesOf(store: Store, revisions: Raw[], shown: Map<string, Shown>): HistoryEntry['changes'] {
+function changesOf(store: Store, revisions: Raw[], shown: Map<string, Shown>, caller: Actor): HistoryEntry['changes'] {
   const fields = new Map<string, { old: unknown; new: unknown }>()
   for (const r of revisions) {
     if (!shown.has(r.field as string)) continue
@@ -152,7 +168,12 @@ function changesOf(store: Store, revisions: Raw[], shown: Map<string, Shown>): H
   }
   return [...fields].map(([name, values]) => {
     const { field, label, relation } = shown.get(name) as Shown
-    return { field, label, old: shownValue(store, relation, values.old), new: shownValue(store, relation, values.new) }
+    return {
+      field,
+      label,
+      old: shownValue(store, relation, values.old, caller),
+      new: shownValue(store, relation, values.new, caller),
+    }
   })
 }
 
@@ -166,15 +187,17 @@ function entryOf(store: Store, records: Records, pair: Pair, title: string, call
     .query('SELECT actor_id, kind, undone_by FROM batch WHERE key = ?')
     .get(pair.batch_id) as BatchRow | null
   const last = revisions.at(-1) as Raw
+  const canUndo = undoable(store, pair.batch_id, batch, caller)
   return {
     batch: pair.batch_id,
     at: last.at as string,
     ...whose(store, last.actor_id as number, caller),
-    undoable: undoable(store, pair.batch_id, batch, caller),
+    undoable: canUndo,
+    others: canUndo ? othersIn(store, pair.batch_id) : 0,
     batch_kind: batch?.kind ?? null,
     created: revisions.some((r) => r.field === CREATED),
     record: { id: pair.record_id, title },
-    changes: changesOf(store, revisions, records.shown),
+    changes: changesOf(store, revisions, records.shown, caller),
   }
 }
 

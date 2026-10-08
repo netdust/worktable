@@ -36,6 +36,7 @@ let emails: { owner: string; editor: string }
 
 interface Entry {
   batch: string
+  others?: number
   by: string
   actor: string | null
   undoable: boolean
@@ -121,6 +122,23 @@ describe('GET /history/:source', () => {
     revised('a', ids.editor, 'write', [['note', 1, 'project_id', 2, 1]])
     const [entry] = await history(editor, 'note')
     expect(entry?.changes).toEqual([{ field: 'project_id', label: 'Project', old: 'Beta', new: 'Alfa' }])
+  })
+
+  test("a relation's title outside the caller's scope is not named: an owner reads no other project's title", async () => {
+    revised('a', ids.editor, 'write', [['note', 1, 'project_id', 2, 1]])
+    const [entry] = await history(owner, 'note')
+    expect(entry?.changes).toEqual([{ field: 'project_id', label: 'Project', old: null, new: 'Alfa' }])
+    expect(json(await history(owner, 'note'))).not.toContain('Beta')
+  })
+
+  test('an undoable entry counts the other records its undo changes, across the whole batch', async () => {
+    revised('a', ids.editor, 'write', [
+      ['note', 1, 'tekst', 'x', 'eerste'],
+      ['note', 2, 'tekst', 'y', 'ander'],
+      ['taak', 1, 'status', 'open', 'klaar'],
+    ])
+    const entries = await history(editor, 'note', `?filter=${encodeURIComponent(json({ id: 1 }))}`)
+    expect(entries.map((e) => [e.record.id, e.others])).toEqual([[1, 2]])
   })
 
   test('one batch over two records gives an entry for each', async () => {

@@ -11,6 +11,7 @@ const entry = (over: Partial<HistoryEntry>): HistoryEntry => ({
   by: 'self',
   actor: 'hester@example.test',
   undoable: true,
+  others: 0,
   batch_kind: 'write',
   created: false,
   record: { id: 1, title: 'Bouw' },
@@ -80,11 +81,12 @@ describe('the history panel', () => {
     expect(onUndo).toHaveBeenCalledWith('mine')
   })
 
-  it('says an undo also undoes the batch’s other changes', async () => {
-    shown([entry({ batch: 'x', record: { id: 1, title: 'A' } }), entry({ batch: 'x', record: { id: 2, title: 'B' } }), entry({ batch: 'y' })])
+  it('says an undo also undoes the batch’s other changes, counted across the whole batch, not the list', async () => {
+    shown([entry({ batch: 'x', others: 29 }), entry({ batch: 'z', others: 1 }), entry({ batch: 'y' })])
 
     await within(panel()).findAllByRole('listitem')
-    expect(items()[0]!.textContent).toContain('Dit maakt ook 1 andere wijziging ongedaan')
+    expect(items()[0]!.textContent).toContain('Dit maakt ook 29 andere wijzigingen ongedaan')
+    expect(items()[1]!.textContent).toContain('Dit maakt ook 1 andere wijziging ongedaan')
     expect(items()[2]!.textContent).not.toContain('andere')
   })
 

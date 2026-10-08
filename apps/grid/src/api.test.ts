@@ -166,7 +166,7 @@ describe('history()', () => {
   it("asks /api/history/<source> with the view's filter, scope and window, never its sort or group", async () => {
     const entries = [{ batch: 'b', record: { id: 4, title: 'opbouw' } }]
     answer({ '/api/history/activiteit': { entries } })
-    const layout = { ...defaults(planning), filters: [{ field: 'status', value: 'bevestigd' }], sort: [{ id: 'title', desc: true }], group: 'plandag' }
+    const layout = { ...defaults(planning), filters: [{ field: 'status', op: 'in' as const, values: ['bevestigd'] }], sort: [{ id: 'title', desc: true }], group: 'plandag' }
 
     const found = await history(planning, { from: '2026-10-12', to: '2026-10-18' }, { field: 'productie_id', id: 7 }, layout)
 

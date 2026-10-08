@@ -291,6 +291,8 @@ export interface HistoryEntry {
   by: 'self' | 'account' | 'system' | 'gone' | 'hidden'
   actor: string | null
   undoable: boolean
+  /** On an undoable entry: the other records its undo changes too. */
+  others: number
   batch_kind: string | null
   created: boolean
   record: { id: number; title: string }

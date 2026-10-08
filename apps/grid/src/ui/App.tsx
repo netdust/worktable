@@ -1,5 +1,5 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { awayRows, create as createRow, history as readHistory, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
@@ -442,7 +442,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           )}
         </section>
         {historyOpen && view && (
-          <HistoryPanel key={view.key} load={() => readHistory(view, dated ? range : {}, scope ?? null, layout)} fields={model?.fields}
+          <HistoryPanel key={`${view.key}:${asks}:${windowKey}:${scopeId}`} load={() => readHistory(view, window, scope ?? null, layout)} fields={model?.fields}
             onUndo={undoBatch} onUndone={reloadView} onRefused={(error) => notify({ message: undoText(error) })} onClose={() => setHistoryOpen(false)} />
         )}
         </div>
