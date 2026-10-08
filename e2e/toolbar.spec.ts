@@ -272,7 +272,10 @@ test.describe('the share menu', () => {
       const other = await admin.newPage()
       await openWeek(other, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
       expect(await items(other)).toEqual(['Excel', 'Agenda (.ics)', 'Link kopiëren', 'Publiceren'])
+      await other.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
+      await expect(other.getByRole('menu', { name: 'Exporteren / delen' })).toBeVisible()
       await shot(other, 'share-menu')
+      await other.keyboard.press('Escape')
     } finally {
       await admin.close()
     }
