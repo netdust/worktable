@@ -113,10 +113,13 @@ function PickerEditor<T extends DateValue>({ reads, writes, granularity, ...prop
   const shown = opening(props, reads)
   const change = drafts(props, writes)
   const [open, setOpen] = useState(false)
+  const wasOpen = useRef(false)
 
   // A picked day closes the calendar with focus on a day that is gone: back to the segments, where Enter commits.
+  // Only on closing: on mount the shell has focused the segments, and a typed digit may have moved on already.
   useEffect(() => {
-    if (!open) focusFirst(root.current)
+    if (wasOpen.current && !open) focusFirst(root.current)
+    wasOpen.current = open
   }, [open])
 
   return (

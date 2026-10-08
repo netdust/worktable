@@ -81,6 +81,20 @@ describe('the date editors', () => {
     expect(onDraft).toHaveBeenLastCalledWith('2026-10-25')
   })
 
+  it('a digit that advances past the day keeps focus moving on: 9 then 10 is the 9th of October', () => {
+    editor(DateEditor, 'due', { draft: '9', mode: 'enter' })
+
+    typeKeys('10')
+    expect(read()).toEqual(['09', '10', '2026'])
+  })
+
+  it('the same for a moment: 9 then 10 is the 9th of October', () => {
+    editor(DateTimeEditor, 'at', { draft: '9', mode: 'enter' })
+
+    typeKeys('10')
+    expect(read()).toEqual(['09', '10', '2026', '20', '30'])
+  })
+
   it('opens on the stored moment when a letter started it', () => {
     const { onDraft } = editor(DateTimeEditor, 'at', { draft: 'a', mode: 'enter' })
 

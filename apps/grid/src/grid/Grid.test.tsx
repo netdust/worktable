@@ -1283,9 +1283,12 @@ describe('a date cell', () => {
     return due
   }
 
+  // Down and up: React Aria presses a calendar day on the key's release.
   const press = async (key: string) => {
     await act(async () => {
-      type(document.activeElement as HTMLElement, key)
+      const target = document.activeElement as HTMLElement
+      type(target, key)
+      fireEvent.keyUp(target, { key })
     })
   }
 
@@ -1355,6 +1358,38 @@ describe('a date cell', () => {
     expect(api.update).not.toHaveBeenCalled()
     expect(document.querySelector('.nv-calendar')).toBeNull()
     expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+  })
+
+  function onADay() {
+    openDue()
+    const open = screen.getByRole('button', { name: /kalender/i })
+    open.focus()
+    fireEvent.click(open)
+    const day = within(document.querySelector('.nv-calendar') as HTMLElement).getByRole('button', { name: 'woensdag 27 mei 2026' })
+    day.focus()
+    expect(document.activeElement).toBe(day)
+    return day
+  }
+
+  it('Escape on a calendar day cancels the edit', async () => {
+    onADay()
+    await press('Escape')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(document.querySelector('.nv-calendar')).toBeNull()
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+  })
+
+  it('Enter on a calendar day picks it without a write; a second Enter commits it once', async () => {
+    onADay()
+    await press('Enter')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(document.querySelector('.nv-calendar')).toBeNull()
+    expect(segments().map((s) => s.textContent)).toEqual(['27', '05', '2026'])
+    expect(document.activeElement).toBe(segments()[0])
+    await press('Enter')
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 102, { due: '2026-05-27' }, expect.objectContaining({ id: 102 }))
   })
 
   it('a click on a segment keeps the edit', () => {
