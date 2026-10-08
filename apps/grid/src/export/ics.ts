@@ -7,8 +7,16 @@ const OCTETS = 75
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
 
-/** RFC 5545 text: a backslash, a semicolon, a comma and a line break are escaped. */
-const escape = (value: string): string => value.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n/g, '\\n')
+/**
+ * RFC 5545 text: a backslash, a semicolon, a comma and any line break are escaped; other control characters go.
+ * A lone CR left in would let a lenient reader start a property of its own from a row's text.
+ */
+const escape = (value: string): string =>
+  value
+    .replace(/[\\;,]/g, (c) => `\\${c}`)
+    .replace(/\r\n|\r|\n/g, '\\n')
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what this removes.
+    .replace(/[\u0000-\u001f\u007f]/g, '')
 
 /** A content line longer than 75 octets continues on lines that start with a space; a character is never split. */
 function fold(line: string): string {

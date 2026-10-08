@@ -74,6 +74,7 @@ const strings = {
   calendar: 'Agenda (.ics)',
   copyLink: 'Link kopiëren',
   linkCopied: 'Link gekopieerd',
+  linkViewGone: 'De gedeelde weergave is er niet voor jou; je ziet {view} zonder de filters van de link.',
   publish: 'Publiceren',
   publishAgain: 'Nieuwe link maken? De vorige stopt.',
   publishNew: 'Nieuwe link maken',

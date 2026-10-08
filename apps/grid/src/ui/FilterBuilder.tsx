@@ -17,6 +17,9 @@ export const OPERATORS: Record<Kind, Op[]> = {
 
 const OPTIONS_SHOWN = 6
 
+/** A yes/no starts at "ja", as its select shows; anything else starts empty. */
+const startOf = (field: FilterField): string[] => (field.kind === 'bool' ? ['1'] : [])
+
 /** The rows in their order on screen: periods first, then the rest; `joined` counts the rows the join holds over, -1 for a period. */
 function rowsOf(filters: Filter[]): { condition: Filter; at: number; joined: number }[] {
   const all = filters.map((condition, at) => ({ condition, at }))
@@ -48,7 +51,7 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
   }
   const add = () => {
     const field = fields.find((f) => !filters.some((c) => c.field === f.field)) ?? fields[0]
-    if (field) onChange([...filters, { field: field.field, op: OPERATORS[field.kind][0] as Op, values: [] }])
+    if (field) onChange([...filters, { field: field.field, op: OPERATORS[field.kind][0] as Op, values: startOf(field) }])
   }
 
   return (
@@ -67,7 +70,7 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
               options={fields.map((f) => ({ value: f.field, label: f.label, icon: iconOf(f) }))}
               onChange={(name) => {
                 const next = fieldOf(name)
-                if (next) setAt(at, { field: next.field, op: OPERATORS[next.kind][0] as Op, values: [] })
+                if (next) setAt(at, { field: next.field, op: OPERATORS[next.kind][0] as Op, values: startOf(next) })
               }} />
             <Pick label={t('filterOperator')} value={condition.op} className="nv-fb__op"
               options={OPERATORS[kind].map((op) => ({ value: op, label: t(opWord(kind, op)) }))}

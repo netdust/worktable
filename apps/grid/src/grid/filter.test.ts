@@ -18,7 +18,7 @@ describe('filterFields', () => {
     expect([fields.date.kind, fields.place.kind, fields.status.kind, fields.paid.kind]).toEqual(['date', 'text', 'choice', 'bool'])
     expect(fields.status.options).toEqual([['confirmed', 'Bevestigd'], ['option', 'Optie'], ['cancelled', 'Geannuleerd']])
     expect(fields.location).toMatchObject({ label: 'Locatie', options: [['9', 'Bijloke, Gent'], ['12', 'Le Grenier, Calais']] })
-    expect(fields.paid.options).toEqual([['1', 'Ja'], ['', 'Nee']])
+    expect(fields.paid.options).toEqual([['1', 'Ja'], ['0', 'Nee']])
   })
   it("drops a text column that repeats a relation's label: a query's title column beside the relation it names", () => {
     const model = {

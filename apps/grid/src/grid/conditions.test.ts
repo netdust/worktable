@@ -33,6 +33,13 @@ describe('a condition on the wire', () => {
       .toEqual([{ field: 'start', op: 'between', values: ['2026-10-12', '2026-10-18'] }])
   })
 
+  it('sends a yes/no as a boolean, "nee" as false, and reads both back', () => {
+    expect(toEngine([{ field: 'klaar', op: 'in', values: ['1'] }], kindOf)).toEqual({ klaar: { $eq: true } })
+    expect(toEngine([{ field: 'klaar', op: 'in', values: ['0'] }], kindOf)).toEqual({ klaar: { $eq: false } })
+    expect(fromEngine({ klaar: { $eq: false } }, kindOf).conditions).toEqual([{ field: 'klaar', op: 'in', values: ['0'] }])
+    expect(fromEngine({ klaar: false }, kindOf).conditions).toEqual([{ field: 'klaar', op: 'in', values: ['0'] }])
+  })
+
   it('reads a stored bare value and a yes/no as an "is"', () => {
     expect(fromEngine({ status: 'optie', klaar: true }, kindOf).conditions).toEqual([
       { field: 'status', op: 'in', values: ['optie'] },

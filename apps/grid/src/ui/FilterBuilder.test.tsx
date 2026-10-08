@@ -11,6 +11,7 @@ const fields: FilterField[] = [
   { field: 'omschrijving', label: 'Omschrijving', kind: 'text', options: [] },
   { field: 'plandag', label: 'Plandag', kind: 'date', options: [] },
   { field: 'status', label: 'Status', kind: 'choice', options: [['optie', 'Optie'], ['bevestigd', 'Bevestigd'], ['geannuleerd', 'Geannuleerd']] },
+  { field: 'klaar', label: 'Klaar', kind: 'bool', options: [['1', 'Ja'], ['0', 'Nee']] },
   { field: 'soort', label: 'Soort', kind: 'choice', options: [['repetitie', 'Repetitie'], ['opbouw', 'Opbouw'], ['reis', 'Reis'], ['maaltijd', 'Maaltijd']] },
 ]
 
@@ -110,6 +111,21 @@ describe('the filter builder', () => {
     open()
     fireEvent.click(within(row(1)).getByRole('button', { name: 'Voorwaarde weghalen' }))
     expect(changed).toEqual([{ field: 'plandag', op: 'week', values: [] }])
+  })
+})
+
+describe('a yes/no condition', () => {
+  it('starts at "ja", so the chip says what the select shows, and "nee" applies', () => {
+    bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }])
+    open()
+    fireEvent.click(within(listOf(row(0), 'Veld')).getByRole('option', { name: 'Klaar' }))
+    expect(changed).toEqual([{ field: 'klaar', op: 'in', values: ['1'] }])
+    cleanup()
+    bar([{ field: 'klaar', op: 'in', values: ['1'] }])
+    expect(chips()).toEqual(['Klaar is Ja'])
+    open()
+    fireEvent.change(within(row(0)).getByRole('combobox', { name: 'Klaar' }), { target: { value: '0' } })
+    expect(changed).toEqual([{ field: 'klaar', op: 'in', values: ['0'] }])
   })
 })
 

@@ -23,19 +23,23 @@ const plusDays = (day: string, n: number) => {
   return d.toISOString().slice(0, 10)
 }
 
-/** The address that opens a view on one week: its key, and "ligt tussen" on its date column. */
-export function weekLink(key: string, field: string, monday: string): string {
-  const f = [{ field, op: 'between', values: [monday, plusDays(monday, 6)] }]
-  return `/#view=${encodeURIComponent(key)}&f=${encodeURIComponent(JSON.stringify(f))}`
-}
-
-/** Opens a view, then lands on it again on one week: the link's date condition replaces the view's own. */
+/**
+ * Opens a view on one week, keeping its own conditions: Link kopiëren gives the view's address, its date
+ * condition becomes "ligt tussen" that week, and the page lands on that address.
+ */
 export async function openWeek(page: Page, view: string, model: string, field: string, monday: string): Promise<void> {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/')
   await openView(page, view, model)
-  await expect.poll(() => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view')).not.toBeNull()
-  const key = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view') as string
-  await page.goto(weekLink(key, field, monday))
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
+  await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
+  await page.getByRole('menu', { name: 'Exporteren / delen' }).getByRole('menuitem', { name: 'Link kopiëren' }).click()
+  await expect(page.getByText('Link gekopieerd')).toBeVisible()
+  const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()))
+  const params = new URLSearchParams(copied.hash.slice(1))
+  const kept = (JSON.parse(params.get('f') ?? '[]') as { field: string }[]).filter((c) => c.field !== field)
+  params.set('f', JSON.stringify([{ field, op: 'between', values: [monday, plusDays(monday, 6)] }, ...kept]))
+  await page.goto(`/#${params.toString()}`)
   await page.reload()
   // The landing waits for the saved views; under a full run's load that can take a while.
   await expect

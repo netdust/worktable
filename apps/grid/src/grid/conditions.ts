@@ -59,6 +59,8 @@ function keyOf(op: Op): string {
 function engineOf(f: Filter, kind: Kind): Record<string, unknown> {
   switch (f.op) {
     case 'in':
+      // A yes/no is a boolean column: "ja" is true, "nee" false.
+      if (kind === 'bool') return { $eq: f.values[0] === '1' }
       return f.values.length === 1 ? { $eq: f.values[0] } : { $in: f.values }
     case 'nin':
       return { $nin: f.values }
@@ -99,7 +101,7 @@ export function toEngine(filters: Filter[], kindOf: (field: string) => Kind, joi
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const text = (value: unknown): string | null => {
-  if (typeof value === 'boolean') return value ? '1' : ''
+  if (typeof value === 'boolean') return value ? '1' : '0'
   return typeof value === 'string' || typeof value === 'number' ? String(value) : null
 }
 const texts = (value: unknown): string[] | null => {

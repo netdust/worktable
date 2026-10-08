@@ -73,15 +73,17 @@ async function pick(page: Page, view: string, model = view) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
 }
 
+/** The header may still be laying out after a landing: wait for the column asked for. */
 async function columnIndex(page: Page, label: string): Promise<number> {
-  const index = await page
-    .locator('thead th')
-    .evaluateAll(
-      (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
-      label,
-    )
-  expect(index, `column ${label}`).toBeGreaterThanOrEqual(0)
-  return index
+  const find = () =>
+    page
+      .locator('thead th')
+      .evaluateAll(
+        (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
+        label,
+      )
+  await expect.poll(find, { message: `column ${label}` }).toBeGreaterThanOrEqual(0)
+  return find()
 }
 
 const cellOf = async (page: Page, tr: Locator, label: string) => tr.locator('td').nth(await columnIndex(page, label))

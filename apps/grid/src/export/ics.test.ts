@@ -55,6 +55,14 @@ describe('toIcs', () => {
     expect(ics.replace(/\r\n /g, '')).toContain(`SUMMARY:${'é'.repeat(60)}`)
   })
 
+  it('lets no carriage return or other control character start a property of its own', () => {
+    const forged = row(5, 'a\rATTENDEE:mailto:x@evil\u0000', { plandag: '2026-10-15', plaats: 'b\rURL:http://evil' })
+    const ics = toIcs([forged], view, columns, model, now)
+    expect(ics.split(/\r\n|\r|\n/).some((line) => /^(ATTENDEE|URL):/.test(line))).toBe(false)
+    expect(ics).not.toContain('\u0000')
+    expect(ics.replace(/\r\n /g, '')).toContain('SUMMARY:a\\nATTENDEE:mailto:x@evil')
+  })
+
   it('leaves out a row without a day', () => {
     expect(lines(toIcs([row(4, 'Zonder dag', { plandag: null })], view, columns, model, now))).not.toContain('BEGIN:VEVENT')
   })

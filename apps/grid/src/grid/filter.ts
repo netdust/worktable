@@ -47,7 +47,7 @@ export function filterFields(model: Model, rows: Row[], first: string[] = []): F
       case 'relation':
         return [{ ...base, kind: 'choice', options: relationOptions(rows, field), relation: declared.relation?.model }]
       case 'bool':
-        return [{ ...base, kind: 'bool', options: [['1', t('yes')], ['', t('no')]] }]
+        return [{ ...base, kind: 'bool', options: [['1', t('yes')], ['0', t('no')]] }]
       case 'date':
       case 'datetime':
         return [{ ...base, kind: declared.type }]

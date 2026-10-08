@@ -1802,6 +1802,11 @@ describe('App and the period as a filter', () => {
 describe('a link that carries conditions', () => {
   const link = (view: string, f: unknown) => `#view=${view}&f=${encodeURIComponent(typeof f === 'string' ? f : JSON.stringify(f))}`
   const optie = [{ field: 'status', op: 'in', values: ['option'] }]
+  const declared = {
+    status: { type: 'select' as const, label: 'Status', options: { option: 'Optie' } },
+    kind: { type: 'select' as const, label: 'Soort', options: { show: 'Voorstelling' } },
+  }
+  beforeEach(() => api.schema.mockResolvedValue({ ...served, models: { ...served.models, activity: { ...served.models.activity, fields: declared } } }))
   const lastFilters = () => (api.rows.mock.calls.at(-1)?.[3] as { filters: unknown[] }).filters
   const params = () => new URLSearchParams(window.location.hash.slice(1))
 
@@ -1846,6 +1851,13 @@ describe('a link that carries conditions', () => {
 
     await waitFor(() => expect(params().get('f')).toBeNull())
     expect(lastFilters()).toEqual([])
+  })
+
+  it('says so when the linked view is not one this account can open', async () => {
+    window.location.hash = link('gone', optie)
+    await shell()
+
+    expect(await screen.findByText('De gedeelde weergave is er niet voor jou; je ziet Planning zonder de filters van de link.')).toBeTruthy()
   })
 
   it('carries the join: j=or lands an any-of, and leaves the address with f', async () => {
@@ -1911,6 +1923,34 @@ describe('a link that carries conditions', () => {
     const sent = new URLSearchParams(copied.hash.slice(1))
     expect([sent.get('view'), JSON.parse(sent.get('f') ?? '[]'), sent.get('j')]).toEqual(['planning', two, 'or'])
     expect(await screen.findByText('Link gekopieerd')).toBeTruthy()
+  })
+
+  it("replaces the view's conditions with the link's, so the colleague sees what the sender saw; an empty f clears them", async () => {
+    const status = { type: 'select' as const, label: 'Status', options: { option: 'Optie', confirmed: 'Bevestigd' } }
+    const kind = { type: 'select' as const, label: 'Soort', options: { show: 'Voorstelling' } }
+    api.schema.mockResolvedValue({ ...served, models: { ...served.models, activity: { ...served.models.activity, fields: { status, kind } } } })
+    window.localStorage.setItem('ntdst-views/layout/v2/planning', JSON.stringify({
+      hidden: [], order: [], widths: {}, sort: [], filters: [{ field: 'status', op: 'in', values: ['confirmed'] }], group: null,
+    }))
+    const soort = [{ field: 'kind', op: 'in', values: ['show'] }]
+    window.location.hash = link('planning', soort)
+    const first = await shell()
+    await waitFor(() => expect(lastFilters()).toEqual(soort))
+    first.unmount()
+
+    window.location.hash = link('planning', [])
+    await shell()
+    await waitFor(() => expect(lastFilters()).toEqual([]))
+  })
+
+  it("drops a linked condition the view's model cannot hold: a field it has not, or an operator its field does not take", async () => {
+    const status = { type: 'select' as const, label: 'Status', options: { option: 'Optie' } }
+    api.schema.mockResolvedValue({ ...served, models: { ...served.models, activity: { ...served.models.activity, fields: { status } } } })
+    const kept = { field: 'status', op: 'in', values: ['option'] }
+    window.location.hash = link('planning', [{ field: 'gone', op: 'in', values: ['x'] }, { field: 'status', op: 'week', values: [] }, kept])
+    await shell()
+
+    await waitFor(() => expect(lastFilters()).toEqual([kept]))
   })
 
   it("replaces the view's own date condition with the linked one, never beside it", async () => {

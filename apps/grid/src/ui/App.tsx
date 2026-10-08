@@ -2,12 +2,13 @@ import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { awayRows, create as createRow, history as readHistory, me, publishView, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
+import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
-import { complete, isDate, joinOf, type Kind, put, readConditions, windowOf } from '../grid/conditions'
+import { complete, type Filter, isDate, joinOf, readConditions, windowOf } from '../grid/conditions'
 import { type Layout, withFilters } from '../grid/layout'
 import { type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
@@ -218,7 +219,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const spaceField = scope?.field
   // A chip saved before the view was scoped would filter on what the scope already decides.
   const layout = stored && spaceField ? { ...stored, filters: stored.filters.filter((f) => f.field !== spaceField) } : stored
-  // A link's conditions land once, on the view it names, as a local change: only the person's own next change saves.
+  // A link's conditions land once, on the view it names, in place of the view's own: the colleague sees what the sender saw.
+  // It is a local change: only the person's own next change saves. A condition the view's model cannot hold is dropped.
   const landing = useRef({ view: readHash('view'), f: readHash('f'), j: readHash('j') })
   useEffect(() => {
     const { view: linkedKey, f, j } = landing.current
@@ -226,12 +228,16 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     landing.current = { view: null, f: null, j: null }
     dropHash('f')
     dropHash('j')
-    const linked = view.key === linkedKey ? readConditions(f) : null
-    if (!linked?.length) return
-    const type = (field: string) => served?.models[view.model]?.fields[field]?.type
-    const kind = (field: string): Kind => (type(field) === 'date' || type(field) === 'datetime' ? 'date' : 'text')
-    const filters = linked.reduce((all, condition) => put(all, condition, kind), layout.filters)
-    storeLayout({ ...withFilters(layout, filters), join: j === 'or' ? 'or' : undefined })
+    const model = served?.models[view.model]
+    if (view.key !== linkedKey || !model) {
+      notify({ message: t('linkViewGone', { view: view.label }) })
+      return
+    }
+    const linked = readConditions(f)
+    if (linked === null) return
+    const offered = filterFields(model, [])
+    const fits = (c: Filter) => offered.some((field) => field.field === c.field && OPERATORS[field.kind].includes(c.op))
+    storeLayout({ ...withFilters(layout, linked.filter(fits)), join: j === 'or' ? 'or' : undefined })
   }, [settled, view?.key, layout === null])
   const asks = layout ? JSON.stringify([layout.filters, joinOf(layout.filters, layout.join), layout.sort, layout.group]) : ''
   // The period is the condition on the view's date column: its days, for a matrix, a new row and the export.
@@ -333,8 +339,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // The address with the view and its conditions, as a landing reads it.
   const shareLink = () => {
     const params = new URLSearchParams({ view: view?.key ?? '' })
-    const conditions = layout?.filters.filter(complete) ?? []
-    if (conditions.length > 0) params.set('f', JSON.stringify(conditions))
+    // Always an f, an empty one too: the link replaces the colleague's conditions with the sender's.
+    params.set('f', JSON.stringify(layout?.filters.filter(complete) ?? []))
     if (layout && joinOf(layout.filters, layout.join) === 'or') params.set('j', 'or')
     return `${globalThis.location.origin}${globalThis.location.pathname}#${params.toString()}`
   }
