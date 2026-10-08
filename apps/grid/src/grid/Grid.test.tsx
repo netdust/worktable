@@ -1777,11 +1777,11 @@ describe('opening a related record', () => {
   const record: Row = { id: 12, title: 'Le Grenier, Calais', status: 'publish', fields: { city: 'Calais' } }
   const models = { activity, organisation }
   const openButton = () => within(cell('Lunch bistrot', 'location')).getByRole('button', { name: 'Open Le Grenier, Calais' })
-  // React Aria presses a button on the key's release.
+  // Enter passes the sheet by, and the browser clicks a focused button on it; jsdom does not, so the click is sent.
   const press = async (target: HTMLElement) => {
     await act(async () => {
       type(target, 'Enter')
-      fireEvent.keyUp(target, { key: 'Enter' })
+      fireEvent.click(target)
     })
   }
 
