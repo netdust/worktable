@@ -5,6 +5,7 @@ import type { Lookup, Model, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
 import { RelationContext } from './cells/Relation'
 import { type Column, columnsFor, editableAt, inDays } from './columns'
+import { rowOf } from '../api'
 import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
@@ -57,6 +58,8 @@ export interface GridProps {
   cut?: Row | null
   /** Adds and removes a `links` cell's rows; without it a links cell only shows its tags. */
   links?: LinkActions
+  /** Told when a related record cannot be opened. */
+  onNotice?: (message: string) => void
 }
 
 const NO_MODELS: Record<string, Model> = {}
@@ -71,7 +74,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links, onNotice }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -129,6 +132,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Focus moves to a cell only after the grid itself moved it; a search filtering rows must keep its focus.
   const moved = useRef(false)
   const [drawer, setDrawer] = useState<number | null>(null)
+  const [related, setRelated] = useState<{ row: Row; columns: Column[] } | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
 
   const sheet: Sheet = {
@@ -252,7 +256,10 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       dispatch({ type: 'click', cell })
       if (visible[cell.col]?.editable && ordered[cell.row]) run({ type: 'toggle', cell })
     },
-    open: setDrawer,
+    open: (id) => {
+      setRelated(null)
+      setDrawer(id)
+    },
     dismiss: store.dismiss,
   }
 
@@ -289,11 +296,21 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     event.preventDefault()
   }
 
+  function openRelated(target: string, id: number): void {
+    const gone = () => onNotice?.(t('recordGone'))
+    rowOf(target, id).then((found) => {
+      const targetModel = models[target]
+      if (!found || !targetModel) return gone()
+      setDrawer(null)
+      setRelated({ row: found, columns: columnsFor(targetModel, { ...view, columns: undefined, lookups: {}, rollups: {} }, false, models) })
+    }, gone)
+  }
+
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
 
   return (
     <LinksContext.Provider value={links ?? null}>
-    <RelationContext.Provider value={{ models, scope, spaceModel }}>
+    <RelationContext.Provider value={{ models, scope, spaceModel, openRelated }}>
     <div className="nv-frame">
       <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
       {state.rows.length === 0 ? (
@@ -310,7 +327,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
-        {open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions}
+        {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} />}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions}
           onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>

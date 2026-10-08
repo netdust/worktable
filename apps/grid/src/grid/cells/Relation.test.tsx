@@ -19,12 +19,12 @@ const org = (id: number, title: string, production: number[] = []): Row => ({ id
 
 let api: { update: ReturnType<typeof vi.fn<StoreApi['update']>>; create: ReturnType<typeof vi.fn<StoreApi['create']>> }
 
-function renderGrid(scope: Scope | null = null, spaceModel = 'production', model: Model = activity) {
+function renderGrid(scope: Scope | null = null, spaceModel = 'production', model: Model = activity, known: Record<string, Model> = models, rows: Row[] = calais) {
   api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-  const store = createStore({ model: 'activity', rows: calais, api })
+  const store = createStore({ model: 'activity', rows, api })
   renderNl(
     <Grid model={model} view={planning} store={store} writable layout={defaults(planning)} onLayout={() => undefined}
-      query="" emptyTitle="" models={models} scope={scope} spaceModel={spaceModel} />,
+      query="" emptyTitle="" models={known} scope={scope} spaceModel={spaceModel} />,
   )
 }
 
@@ -168,5 +168,28 @@ describe('the relation picker', () => {
     })
     expect(api.update).not.toHaveBeenCalled()
     expect(picker()).toBeTruthy()
+  })
+})
+
+describe('the open button of a to-one cell', () => {
+  const opener = (title: string) => within(cell(title, 'location')).queryByRole('button', { name: /^Open / })
+
+  it('a filled cell shows an open button named after the record', () => {
+    renderGrid()
+
+    expect(opener('Lunch bistrot')?.getAttribute('aria-label')).toBe('Open Le Grenier, Calais')
+  })
+
+  it('an empty cell shows none', () => {
+    const bare: Row = { ...calais[2], fields: { ...calais[2].fields, location: [] }, lookups: {} }
+    renderGrid(null, 'production', activity, models, [bare])
+
+    expect(opener('Lunch bistrot')).toBeNull()
+  })
+
+  it('shows none when the target model is not readable', () => {
+    renderGrid(null, 'production', activity, { activity })
+
+    expect(opener('Lunch bistrot')).toBeNull()
   })
 })

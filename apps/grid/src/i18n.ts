@@ -57,6 +57,8 @@ const strings = {
   removeFilter: 'Filter {field} wissen',
   any: 'Alle',
   open: 'Openen',
+  openRecord: 'Open {title}',
+  recordGone: 'Dit record bestaat niet meer of je mag het niet zien',
   close: 'Sluiten',
   theme: 'Thema',
   themeAuto: 'Auto',

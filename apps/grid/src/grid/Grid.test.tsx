@@ -23,7 +23,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -38,7 +38,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     return (
       <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
         query={options.query ?? ''} emptyTitle="Geen rijen in deze periode" emptyHint="Week 21 · 18–24 mei" filters={options.filters}
-        cut={options.cut} onShown={options.onShown} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
+        cut={options.cut} onShown={options.onShown} models={options.models} onNotice={options.onNotice} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
     )
   }
   return { store, ...renderNl(<Harness />) }
@@ -1679,5 +1679,57 @@ describe('the to-many editor', () => {
     expect(links.remove).not.toHaveBeenCalled()
     expect(api.update).not.toHaveBeenCalled()
     expect(cell('Lunch', 'people').textContent).toBe('Jan')
+  })
+})
+
+describe('opening a related record', () => {
+  const organisation: Model = {
+    key: 'organisation', label: 'Organisatie', title_label: 'Naam', title_readonly: false,
+    fields: { city: { type: 'text', label: 'Stad', required: false, fact: true } },
+  }
+  const record: Row = { id: 12, title: 'Le Grenier, Calais', status: 'publish', fields: { city: 'Calais' } }
+  const models = { activity, organisation }
+  const openButton = () => within(cell('Lunch bistrot', 'location')).getByRole('button', { name: 'Open Le Grenier, Calais' })
+  // React Aria presses a button on the key's release.
+  const press = async (target: HTMLElement) => {
+    await act(async () => {
+      type(target, 'Enter')
+      fireEvent.keyUp(target, { key: 'Enter' })
+    })
+  }
+
+  it('the open button shows the related record in the drawer, read-only', async () => {
+    remote.rowOf.mockResolvedValueOnce(record)
+    renderGrid(calais, { models })
+    await press(openButton())
+
+    expect(remote.rowOf).toHaveBeenCalledWith('organisation', 12)
+    const drawer = await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })
+    expect(within(drawer).getByText('Stad')).toBeTruthy()
+    expect(within(drawer).getByText('Calais')).toBeTruthy()
+    expect(within(drawer).queryByRole('button', { name: 'Verwijderen' })).toBeNull()
+    expect(cell('Lunch bistrot', 'location').getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('a click on it does not select the cell or open its editor', async () => {
+    remote.rowOf.mockResolvedValueOnce(record)
+    renderGrid(calais, { models })
+    await act(async () => {
+      fireEvent.click(openButton())
+    })
+
+    expect(cell('Lunch bistrot', 'location').getAttribute('aria-selected')).toBe('false')
+    expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+  it.each([['is gone', () => remote.rowOf.mockResolvedValueOnce(null)], ['is refused', () => remote.rowOf.mockRejectedValueOnce({ code: 'not_found', message: 'x' })]])('a record that %s opens no drawer and says so', async (_name, arrange) => {
+    arrange()
+    const onNotice = vi.fn()
+    renderGrid(calais, { models, onNotice })
+    await press(openButton())
+
+    expect(onNotice).toHaveBeenCalledTimes(1)
+    expect(onNotice).toHaveBeenCalledWith('Dit record bestaat niet meer of je mag het niet zien')
+    expect(screen.queryByRole('complementary')).toBeNull()
   })
 })
