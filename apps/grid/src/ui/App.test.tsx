@@ -1060,6 +1060,8 @@ describe('saved views', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // React Aria gives focus back on the next animation frame, after the dialog has gone.
+    await act(() => new Promise((done) => requestAnimationFrame(() => done(undefined))))
     expect(document.activeElement).toBe(trigger)
   })
 
