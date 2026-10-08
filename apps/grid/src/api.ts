@@ -100,6 +100,11 @@ async function viewQuery(view: ViewRead, window: Partial<DateWindow>, scope: Sco
   return layout ? rowsQuery(scoped, layout, window, title, source) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
 }
 
+/** Makes a saved view public, or gives it a new link, the old one stopping: the token comes back once. */
+export async function publishView(id: number): Promise<string> {
+  return (await request<{ token: string }>('PUT', `/views/${id}/share-token`)).token
+}
+
 /** The recent changes to the rows the view shows: its filter, scope and window, as `rows` sends them. */
 export async function history(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null, layout: Layout | null): Promise<HistoryEntry[]> {
   const { filter, from, to } = await viewQuery(view, window, scope, layout)

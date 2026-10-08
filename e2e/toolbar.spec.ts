@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { shot } from './shots'
@@ -237,4 +238,40 @@ test('history-undo-own @e2e', async ({ page }) => {
     if ((await activiteit(page, name)).status !== before.status)
       await page.request.patch(`/api/rows/activiteit/${before.id}`, { data: { status: before.status } })
   }
+})
+
+test.describe('the share menu', () => {
+  const items = async (page: Page) => {
+    await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
+    const names = await page.getByRole('menu', { name: 'Exporteren / delen' }).getByRole('menuitem').allTextContents()
+    await page.keyboard.press('Escape')
+    return names
+  }
+
+  test('share-menu @e2e', async ({ page, browser }) => {
+    await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
+    await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
+    expect(await items(page)).toEqual(['Excel', 'Agenda (.ics)', 'Link kopiëren'])
+
+    await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
+    const download = page.waitForEvent('download')
+    await page.getByRole('menuitem', { name: 'Agenda (.ics)' }).click()
+    const file = await download
+    expect(file.suggestedFilename()).toBe('Dagplanning.ics')
+    const ics = readFileSync(await file.path(), 'utf8')
+    const shown = await page.locator('tbody tr.nv-tr').count()
+    expect(ics.split('\r\n').filter((line) => line === 'BEGIN:VEVENT')).toHaveLength(shown)
+    const first = (await page.locator('tbody tr.nv-tr').first().getAttribute('data-title')) as string
+    expect(ics.replace(/\r\n /g, '')).toContain(`SUMMARY:${first.replace(/[;,]/g, (c) => `\\${c}`)}`)
+
+    const admin = await browser.newContext({ storageState: state('admin') })
+    try {
+      const other = await admin.newPage()
+      await openWeek(other, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
+      expect(await items(other)).toEqual(['Excel', 'Agenda (.ics)', 'Link kopiëren', 'Publiceren'])
+      await shot(other, 'share-menu')
+    } finally {
+      await admin.close()
+    }
+  })
 })

@@ -2806,3 +2806,61 @@
   padding: 0 6px 0 10px;
   color: var(--color-fg-default);
 }
+
+#root .nv-share {
+  position: fixed;
+  z-index: 60;
+  top: 56px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  color: var(--color-fg-default);
+  font-size: 13px;
+}
+
+#root .nv-share p {
+  margin: 0;
+  padding-right: 24px;
+}
+
+#root .nv-share__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+#root .nv-share__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#root .nv-share__address {
+  display: flex;
+  gap: 8px;
+}
+
+#root .nv-share__address input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}

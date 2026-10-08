@@ -9,7 +9,7 @@ afterEach(cleanup)
 describe('the toolbar', () => {
   it('opens the history with an icon button in the title line, before the ⋯', () => {
     const onHistory = vi.fn()
-    render(<Toolbar {...base} onHistory={onHistory} onExport={() => undefined} />)
+    render(<Toolbar {...base} onHistory={onHistory} local={{ onRevert: () => undefined }} />)
 
     const button = screen.getByRole('button', { name: 'Geschiedenis' })
     expect(button.getAttribute('title')).toBe('Geschiedenis')
@@ -71,26 +71,12 @@ describe('the toolbar', () => {
     expect(screen.queryByRole('button', { name: 'Nieuw Activiteit' })).toBeNull()
   })
 
-  it('exports from its ⋯ menu, not from a button of its own', () => {
-    const onExport = vi.fn()
-    render(<Toolbar {...base} onExport={onExport} />)
+  it('holds the share menu in the title line, and Exporteren is no longer in the ⋯', () => {
+    render(<Toolbar {...base} share={<button type="button">Exporteren / delen</button>} local={{ onRevert: () => undefined }} />)
 
-    expect(screen.queryByRole('button', { name: 'Exporteren' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Exporteren / delen' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
-    fireEvent.click(within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name: 'Exporteren' }))
-    expect(onExport).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows a blocked export disabled in the menu, its reason written under it', () => {
-    const onExport = vi.fn()
-    render(<Toolbar {...base} onExport={onExport} exportBlocked="Not for this view" />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
-    const item = within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name: /^Export/ })
-    expect(item.getAttribute('aria-disabled')).toBe('true')
-    expect(within(item).getByText('Not for this view')).toBeTruthy()
-    fireEvent.click(item)
-    expect(onExport).not.toHaveBeenCalled()
+    expect(within(screen.getByRole('menu', { name: 'More actions' })).queryByRole('menuitem', { name: /^Export/ })).toBeNull()
   })
 
   it('has no ⋯ when there is nothing to put in it', () => {
@@ -129,13 +115,13 @@ describe('a change kept in this browser', () => {
   const more = () => screen.getByRole('button', { name: 'More actions' })
   const items = () => within(screen.getByRole('menu', { name: 'More actions' })).getAllByRole('menuitem').map((item) => item.textContent)
 
-  it('says no save word, and puts Terugzetten in the ⋯ before Exporteren', () => {
+  it('says no save word, and puts Terugzetten in the ⋯', () => {
     const onRevert = vi.fn()
-    render(<Toolbar {...base} onExport={() => undefined} local={{ onRevert }} />)
+    render(<Toolbar {...base} local={{ onRevert }} />)
 
     expect(screen.queryByText(/gewijzigd|Opslaan|Opgeslagen/)).toBeNull()
     fireEvent.click(more())
-    expect(items()).toEqual(['Terugzetten', 'Exporteren'])
+    expect(items()).toEqual(['Terugzetten'])
     fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Terugzetten' }))
     expect(onRevert).toHaveBeenCalled()
   })
@@ -151,7 +137,7 @@ describe('a change kept in this browser', () => {
   })
 
   it('opens on the keyboard, moves with the arrows, and gives focus back to ⋯ on Escape', async () => {
-    render(<Toolbar {...base} onExport={() => undefined} local={{ onRevert: () => undefined }} />)
+    render(<Toolbar {...base} local={{ onRevert: () => undefined, onPublish: () => undefined }} />)
     more().focus()
     fireEvent.click(more())
 
@@ -166,9 +152,8 @@ describe('a change kept in this browser', () => {
     await waitFor(() => expect(document.activeElement).toBe(more()))
   })
 
-  it('offers no Terugzetten while the view is as saved', () => {
-    render(<Toolbar {...base} onExport={() => undefined} local={null} />)
-    fireEvent.click(more())
-    expect(items()).toEqual(['Exporteren'])
+  it('has no ⋯ while the view is as saved', () => {
+    render(<Toolbar {...base} local={null} />)
+    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
   })
 })

@@ -30,10 +30,8 @@ interface Props {
   addBlocked: string | null
   /** Absent where a view takes no new row: there is no button. */
   onAdd?: () => void
-  /** Exports what the grid shows; absent while there is no grid. */
-  onExport?: () => void
-  /** Why the export is off, written under it in the ⋯. */
-  exportBlocked?: string
+  /** Exporteren / delen: its menu, where the view has one. */
+  share?: ReactNode
   /** Why the last export gave no file; null when it did. */
   exportNote?: string | null
   /** The view holds a change kept in this browser (a view one may not write, a public one, or one not saved yet). */
@@ -64,11 +62,10 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel, addBlocked, onAdd, onExport, exportBlocked, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
+export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
   const more: Action[] = [
     ...(local?.onPublish ? [{ label: t('publishChange'), run: local.onPublish }] : []),
     ...(local ? [{ label: t('revert'), run: local.onRevert }] : []),
-    ...(onExport || exportBlocked ? [{ label: t('export'), run: () => onExport?.(), blocked: exportBlocked }] : []),
   ]
   return (
     <header className="nv-toolbar">
@@ -84,6 +81,7 @@ export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel
         {search}
         {saving && <SaveState state={saving} />}
         {exportNote && <span className="nv-toolbar__note" role="alert">{exportNote}</span>}
+        {share}
         {onHistory && (
           <button type="button" className="nv-more" aria-label={t('history')} title={t('history')} onClick={onHistory}>
             <History size={16} aria-hidden="true" />

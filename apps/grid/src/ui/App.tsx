@@ -1,6 +1,6 @@
 import { EmptyState, Spinner } from '@sakaniui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, history as readHistory, me, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { awayRows, create as createRow, history as readHistory, me, publishView, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { exportSheet } from '../export/download'
 import { Grid, type OnScreen } from '../grid/Grid'
@@ -30,6 +30,8 @@ import { Toast, useNotice } from './Toast'
 import type { Table } from './tables'
 import { type Shown, Toolbar } from './Toolbar'
 import { useFilterNames } from './useFilterNames'
+import { Share } from './Share'
+import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
@@ -323,6 +325,29 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     setExportFailed(false)
     exportSheet(view, shown.columns, shown.groups, dated ? conditionDays : null, title).catch(() => setExportFailed(true))
   }
+  const exportIcs = () => {
+    const shown = snapshot.current?.()
+    if (!view || !model || !shown) return
+    downloadIcs(toIcs(shown.groups.flatMap((group) => group.rows), view, shown.columns, model), view.label)
+  }
+  // The address with the view and its conditions, as a landing reads it.
+  const shareLink = () => {
+    const params = new URLSearchParams({ view: view?.key ?? '' })
+    const conditions = layout?.filters.filter(complete) ?? []
+    if (conditions.length > 0) params.set('f', JSON.stringify(conditions))
+    if (layout && joinOf(layout.filters, layout.join) === 'or') params.set('j', 'or')
+    return `${globalThis.location.origin}${globalThis.location.pathname}#${params.toString()}`
+  }
+  const publishing = role === 'administrator' && view && isSaved(view)
+    ? { isPublic: Boolean(view.public), run: () => publishView(view.id).then((token) => {
+      savedViews().then(load, () => undefined)
+      return token
+    }) }
+    : undefined
+  const share = view
+    ? <Share onExcel={grid ? exportView : undefined} excelBlocked={matrix ? t('matrixNotExported') : grid ? undefined : t('exportNotReady')}
+        onIcs={grid && dated ? exportIcs : undefined} link={shareLink} onCopied={() => notify({ message: t('linkCopied') })} publish={publishing} />
+    : null
   // A link is a row of another dataset, created and deleted there through its writer; then the row it sits on is read again.
   const repaint = (row: Row) => {
     if (model) rowOf(model.key, row.id).then((found) => found && store?.replace(found), reloadView)
@@ -415,8 +440,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           addLabel={newLabel(target ?? model)}
           addBlocked={addBlocked}
           onAdd={matrix ? undefined : add}
-          onExport={grid ? exportView : undefined}
-          exportBlocked={matrix ? t('matrixNotExported') : undefined}
+          share={share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
             onRevert: revert,

@@ -38,10 +38,10 @@ const shell = async () => {
   await screen.findByRole('navigation', { name: 'Views' })
   return rendered
 }
-/** The toolbar's ⋯ opened, and the item it names. */
-const toolbarItem = (name: string | RegExp) => {
-  fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'More actions' }))
-  return within(screen.getByRole('menu', { name: 'More actions' })).getByRole('menuitem', { name })
+/** The share menu opened, and the item it names. */
+const shareItem = (name: string | RegExp) => {
+  fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'Exporteren / delen' }))
+  return within(screen.getByRole('menu', { name: 'Exporteren / delen' })).getByRole('menuitem', { name })
 }
 /** A model's node in the tree, named by its label alone. */
 const node = (model: string) => within(rail()).getByRole('treeitem', { name: model })
@@ -223,7 +223,7 @@ describe('App shell', () => {
 
     render(<App />)
     await screen.findByText('Montage')
-    fireEvent.click(toolbarItem('Exporteren'))
+    fireEvent.click(shareItem('Excel'))
 
     expect(exporter.exportSheet).toHaveBeenCalledTimes(1)
     const [view, columns, groups, range, title] = exporter.exportSheet.mock.calls[0]
@@ -260,7 +260,7 @@ describe('App shell', () => {
 
     render(<App />)
     await screen.findByText('Montage')
-    fireEvent.click(toolbarItem('Exporteren'))
+    fireEvent.click(shareItem('Excel'))
 
     expect((await screen.findByRole('alert')).textContent).toBe('Exporteren mislukt')
   })
@@ -494,7 +494,7 @@ describe('a matrix view', () => {
 
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Exporteren' })).toBeNull()
-    const item = toolbarItem(/^Export/)
+    const item = shareItem(/^Excel/)
     expect(item.getAttribute('aria-disabled')).toBe('true')
     expect(within(item).getByText('De matrix wordt nog niet geëxporteerd')).toBeTruthy()
   })
@@ -1872,6 +1872,45 @@ describe('a link that carries conditions', () => {
     fireEvent.click(within(within(second as HTMLElement).getByRole('listbox', { name: 'Verbinding' })).getByRole('option', { name: 'Of' }))
 
     await waitFor(() => expect(api.rows.mock.calls.at(-1)?.[3]).toMatchObject({ join: 'or' }))
+  })
+
+  it('offers Publiceren on a saved view to an administrator only', async () => {
+    const own: SavedView = {
+      key: '42', id: 42, label: 'Calais techniek', table: 'planning', table_label: 'Planning', model: 'activity', date_field: 'date', type: 'grid',
+      starting: false, arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] },
+      shared: false, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
+    }
+    api.savedViews.mockResolvedValue([own])
+    window.location.hash = '#view=42'
+    const names = async () => {
+      await screen.findByRole('heading', { level: 1, name: 'Calais techniek' })
+      const menu = (shareItem('Excel').closest('[role="menu"]') as HTMLElement)
+      return within(menu).getAllByRole('menuitem').map((item) => item.textContent)
+    }
+    const first = await shell()
+    expect(await names()).not.toContain('Publiceren')
+    first.unmount()
+
+    api.me.mockResolvedValue({ id: 1, email: 'hester@example.test', role: 'administrator', subject: null })
+    await shell()
+    expect(await names()).toContain('Publiceren')
+  })
+
+  it('Link kopiëren copies the address a landing reads: the view, its conditions and its join', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    const two = [{ field: 'status', op: 'in', values: ['option'] }, { field: 'kind', op: 'in', values: ['show'] }]
+    window.location.hash = `${link('planning', two)}&j=or`
+    await shell()
+    await waitFor(() => expect(lastFilters()).toEqual(two))
+
+    fireEvent.click(shareItem('Link kopiëren'))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled())
+    const copied = new URL(writeText.mock.calls[0]?.[0] as string)
+    const sent = new URLSearchParams(copied.hash.slice(1))
+    expect([sent.get('view'), JSON.parse(sent.get('f') ?? '[]'), sent.get('j')]).toEqual(['planning', two, 'or'])
+    expect(await screen.findByText('Link gekopieerd')).toBeTruthy()
   })
 
   it("replaces the view's own date condition with the linked one, never beside it", async () => {
