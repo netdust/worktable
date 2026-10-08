@@ -25,16 +25,18 @@ Stefan, 2026-10-08, looking at the toolbar and the filter bar:
 
 **R3. Geschiedenis.**
 - An icon button in the title line opens a panel with the recent changes to the records this view shows, newest first.
-- Each entry says who changed what and when: a row's title, the column, the new value, and creates and deletes.
-- A change the caller made shows "Ongedaan maken", which runs the existing batch undo. Anyone else's change has no undo.
-- The panel reads only what the caller may read, through the same scope as the rows.
+- Each entry says who changed what and when: the row's title, the column, the old and new value (a relation by its title), and creations.
+- A change the caller made, of a kind the engine can undo, shows "Ongedaan maken", which runs the existing batch undo. Anyone else's change, a deletion or an import has no undo.
+- The panel reads only what the caller may read, through the same scope as the rows. A person account sees no colleague's email; it sees "planning" for others and "jij" for itself.
+- A computed view has a history only when the query declares `creates` (its row id is that record's id). Its entries are those of the created dataset, limited to the columns the query writes.
+- Deletions are not listed: a deleted row is no longer in the view, so it cannot be found by the view's rows. This was not asked for; "creates and deletes" was the first draft's wording.
 - Source: the first quote; scope from Stefan's choice "Recent changes to this view's records", 2026-10-08.
 
 **R4. Exporteren / delen.**
 - An icon button in the title line opens a menu:
   - Excel, the current export moved here;
   - Agenda (.ics), the view's dated rows as calendar events;
-  - Link kopiëren, the address with view, filters and period;
+  - Link kopiëren: the address with the view and its conditions. Whoever opens it sees those conditions in this browser, as a change they did not save. Their own view saves only once they change something themselves.
   - Publiceren, the existing public link, for administrators only.
 - Source: the first quote; contents from Stefan's choice of all four, 2026-10-08.
 
@@ -73,3 +75,5 @@ Stefan, 2026-10-08, looking at the toolbar and the filter bar:
 - Or-groups of conditions ("of" between rows): not asked for.
 - Filtering on a link column (Mensen): links are not filterable (dagplanning R3).
 - Undoing someone else's change from the history: the engine refuses it (403), by design.
+- Changes to linked rows (Mensen) in a view's history: they live in another dataset. Their own view (Toewijzingen) has them.
+- "is niet" and "bevat niet" both leave out empty cells, as the database's NOT IN does. Showing empty cells is "is leeg".

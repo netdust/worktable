@@ -10,7 +10,7 @@
   - `$period` for a date relative to today, so a stored "deze week" moves with the calendar;
   - `GET /history/:source`.
 - **Conditions are stored as engine filters.** A condition in the builder is stored in the view's `filters` as the engine's own filter language, which `filterWhere` already validates on save (`packages/engine/src/views.ts:96`).
-- **First working version:** Task 1 (the title line without save words, the bar without the sort and period chips, Kolommen as an icon, minimal scrollbars).
+- **First working version:** Task 1 (the title line without save words, the bar without the sort chip, Kolommen as an icon, minimal scrollbars). The period chip leaves in Task 3.
 
 **Tech Stack:** Bun, Hono, bun:sqlite, Drizzle, TypeScript, React 19, Vitest, Playwright, Biome.
 
@@ -38,10 +38,16 @@
 
 **Attacks:**
 1. **A filter value that is SQL or a LIKE pattern** (`%`, `_`, `\`) reaches the database. **Mitigation:** `$like`/`$nlike` bind the value. `%`, `_` and `\` are escaped with `ESCAPE '\'` (`packages/engine/src/filter.ts`), so a value matches only itself as a substring.
-2. **A `$period` value that is not one of the fixed tokens.** **Mitigation:** `filter-compile.ts` accepts only `week`, `next_week` and `month`, and only on a `date` or `datetime` column; anything else is 400 `bad_filter`.
+2. **A `$period` value that is not one of the fixed tokens.** **Mitigation:** `filter-compile.ts` accepts only the tokens `week`, `next_week` and `month`. `filter.ts` (`comparison`, which knows the column) accepts it only on a `date` or `datetime` column. Anything else is 400 `bad_filter` on `/rows`, and `bad_view` through `POST /views` (`views.ts:98`).
 3. **History shows changes to rows the caller cannot read** (another project's, an owner's neighbours'). **Mitigation:** `GET /history/:source` first reads the source's row ids through the same `readRows` scope and parameters as `/rows`, then reads revisions only for those ids (`packages/engine/src/history.ts`, new).
-4. **History leaks colleagues' emails to an owner account.** **Mitigation:** an entry's actor is the account's email only for a caller who is not an owner. An owner sees "planning" for anyone else and "jij" for itself.
-5. **Undo from the panel on someone else's change.** **Mitigation:** no new route. Undo is the existing `POST /batches/:id/undo`, which refuses another account's batch (403). The panel offers undo only on the caller's own entries.
+   - For a query, the records are its `creates` dataset's, which needs `readable(actor, that dataset)`; else no entries.
+   - The changes are limited to the source's own columns (a query's mapped `writes.field`s), so no unmapped column of the dataset leaks.
+4. **History leaks colleagues' emails to an owner account.** **Mitigation:** the engine answers `actor: string | null`. It is the account's email for a caller who is not an owner, and null for an owner reading anyone's but its own. The grid renders the words (Dutch strings stay in the grid).
+5. **Undo from the panel on someone else's change.** **Mitigation:** no new route. Undo is the existing `POST /batches/:id/undo`, which refuses another account's batch (403). The panel offers undo only where the entry says `undoable`:
+   - the batch is the caller's;
+   - its kind is write, action or undo;
+   - it is not undone;
+   - it holds no `deleted_at` change (`writes.ts:465-474`).
 
 **Deferrals:** none.
 
@@ -51,8 +57,9 @@
 | Title line, bar, scrollbars | render | unit · `apps/grid/src/ui/Toolbar.test.tsx`, `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | autosave-own-view |
 | Filter operators | `GET /api/rows/:source?filter=`, `POST /api/views` | integration · `packages/engine/test/filter.test.ts`, `rows.test.ts` · `bun test packages/engine` | none, proven by filter-builder |
 | Filter builder | render, `rowsQuery`, `toStoredView` | unit · `apps/grid/src/ui/FilterBuilder.test.tsx` (new), `engine.test.ts` · `cd apps/grid && bunx vitest run` | filter-builder, period-is-a-filter |
-| History route | `GET /api/history/:source` | integration · `packages/engine/test/history.test.ts` (new) · `bun test packages/engine` | none |
-| History panel | render | unit · `apps/grid/src/ui/History.test.tsx` (new) · `cd apps/grid && bunx vitest run` | history-undo-own |
+| History route | `GET /api/history/:source` | integration · `packages/engine/test/history.test.ts` (new), `route-matrix.test.ts` · `bun test packages/engine` | none |
+| History panel | render | unit · `apps/grid/src/ui/HistoryPanel.test.tsx` (new) · `cd apps/grid && bunx vitest run` | history-undo-own |
+| Fiche unchanged | the fiche grid | e2e · `e2e/grid-ux.spec.ts` › `fiche-renders-as-before` · `bunx playwright test e2e/grid-ux.spec.ts` | fiche-renders-as-before |
 | Share menu, ics | render, `toIcs` | unit · `apps/grid/src/ui/Share.test.tsx` (new), `apps/grid/src/export/ics.test.ts` (new) · `cd apps/grid && bunx vitest run` | share-menu |
 
 ## Review Focus
@@ -60,17 +67,15 @@
 2. **Threat 3:** an owner's history never holds an entry for a row outside its scope, asserted by record id. Test map row 4.
 3. **Threat 4:** an owner sees no other account's email. Test map row 4.
 4. **Saved views:**
-   - a seeded view's stored `$in` filter ("Optie of bevestigd") shows as a chip;
-   - changing it on the locked view stays local;
-   - Kopie maken keeps it.
-
-   Test map row 3.
+   - a seeded view's stored `$in` filter ("Optie of bevestigd") shows as a chip (row 3);
+   - changing it on the locked view stays local, and Kopie maken keeps the local change (row 1).
 5. **Periods:**
    - `$period: 'week'` on 2026-12-31 (a Thursday) covers 2026-12-28 to 2027-01-03;
    - `month` in February 2028 ends on the 29th.
 
-   Test map row 2, with an injected clock.
-6. **Fiche:** fiche, with no dates, shows no date operators and no period; its views behave as before. The fiche e2e.
+   Tested at `filterWhere(…, now)`, with the clock injected there; the HTTP seam takes the real clock (row 2).
+6. **Fiche:** fiche, with no dates, shows no date operators and no period; its views behave as before. Test map row 7.
+7. **Scrollbars (R9):** jsdom cannot see them; the shake-out's screenshots are their proof.
 
 ---
 
@@ -84,16 +89,25 @@
   - `apps/grid/src/grid/GridHeader.tsx`: the sorted header in the accent colour.
   - `apps/grid/src/ui/app.css`: scrollbars, `::-webkit-scrollbar` plus `scrollbar-width: thin`, both themes.
   - `apps/grid/src/i18n.ts`.
+- Also modify: `apps/grid/src/ui/useSavedViews.ts` (autosave, the in-flight follow-up, `duplicate` from `currentOf`).
 - Tests: `apps/grid/src/ui/Toolbar.test.tsx`, `ui/App.test.tsx`, and the e2e lines that click "Opslaan" or read "gewijzigd"/"Opgeslagen" (grep `e2e/` for `Opslaan`, `gewijzigd`, `Opgeslagen`, `Start ↑`, `Kolommen`).
 
 **Interfaces:**
-- Consumes: `useSavedViews` actions (`update`, `saveAs`); `isSaved`/`keepLocal` in `apps/grid/src/ui/views.ts`.
-- Produces: an own view's arrangement is sent with `updateView` on every change, debounced 400 ms. A locked view keeps it local (`keepLocal`). No save word renders.
+- Consumes: the top-level `save` in `useSavedViews.ts:194`; `saveAs`, `duplicate`; `isSaved`/`keepLocal`/`changed` in `apps/grid/src/ui/views.ts`.
+- Produces:
+  - An own view's arrangement is sent with `save` on every change, debounced 400 ms.
+  - A change made while a save is in flight (`sending.current`, `useSavedViews.ts:145`) is sent once that save settles, when `changed(view)` still holds.
+  - A locked view keeps the change local (`keepLocal`).
+  - No save word renders; a refused or failed save still shows `Niet opgeslagen: …` (`Toolbar.tsx:68-74`).
+  - One "Kopie maken", the rail's (`ViewList.tsx:49` → `duplicate`). It now copies `currentOf(from)`, the local change included, with `copyKept`/`clearIfSent` as `saveAs` does. The toolbar's save-as button leaves.
 
 - [ ] Step 1: Write the tests:
   - The title line has no "gewijzigd", "Opslaan" or "Opgeslagen".
   - On an own view, a filter change calls `updateView` once after 400 ms.
   - On a seeded view, the change is kept local, and `updateView` is never called.
+  - Two changes 300 ms apart, the first PATCH still pending, end with both stored.
+  - A refused save still shows `Niet opgeslagen: …`; a save in flight shows nothing.
+  - Kopie maken on a locked view with a local change copies the change.
   - The bar has no sort chip.
   - Kolommen is an icon button named "Kolommen" after the row count.
   - A sorted header carries the class `nv-th--sorted`.
@@ -120,19 +134,20 @@
 **Interfaces:**
 - `$like: string` and `$nlike: string` on a `text` column:
   - a case-insensitive substring (`LIKE '%' || ? || '%' ESCAPE '\'`, with `%`, `_` and `\` in the value escaped);
-  - `$nlike` also keeps rows where the column is null.
+  - `$nlike` leaves out rows where the column is null, as `$nin` does; SQLite's LIKE folds ASCII letters only.
 - `$period: 'week' | 'next_week' | 'month'` on a `date` or `datetime` column:
   - compiled to `substr(col, 1, 10) BETWEEN ? AND ?`;
   - the days come from the server's local date: Monday to Sunday, or the calendar month.
-- Today comes from a `now` the compiler takes, defaulting to `new Date()`, so tests inject it.
+- Today comes from a `now` that `filterWhere` takes, defaulting to `new Date()`, so tests inject it there.
 
-- [ ] Step 1: Write the tests:
+- [ ] Step 1: Write the tests, at `filterWhere(input, source, table, now)` for the clock and through `GET /api/rows` for the rest:
   - `$like` matches "Repetitie" on "repet".
   - `$like` with `50%_\` matches only the literal text: a row containing "50abc" is absent (threat 1).
   - `$nlike` keeps nulls.
   - `$like` on a non-text column is 400.
   - `$period` with `now` = 2026-12-31: `week` covers 2026-12-28 to 2027-01-03; `next_week` covers 2027-01-04 to 2027-01-10; `month` covers 2026-12-01 to 2026-12-31; February 2028 ends on the 29th.
-  - `$period` with an unknown token, or on a text column, is 400 `bad_filter` (threat 2).
+  - `$period` with an unknown token, or on a text column, is 400 `bad_filter` on `/rows` and `bad_view` on `POST /views` (threat 2).
+  - `$nlike` leaves out empty cells, as `$nin` does (spec Out).
   - `POST /api/views` stores `{ plandag: { $period: 'week' } }` on the fixture's dated source.
 - [ ] Step 2: Run them. Expected: FAIL.
 - [ ] Step 3: Implement.
@@ -149,10 +164,14 @@
   - `apps/grid/src/engine.ts`: `splitFilters`, `mergeFilters` and `rowsQuery`. A condition maps to the engine operator and back, and `fixed` keeps only what the builder cannot show.
   - `apps/grid/src/ui/Filters.tsx`: the chips, with ×, and the Filter button with its count.
   - `apps/grid/src/ui/App.tsx`, `ui/Period.tsx`: Period leaves the bar.
-  - `apps/grid/src/ui/Window.tsx`: the matrix window comes from a date condition, else the current week.
-  - `apps/grid/src/grid/filter.ts`: `filterFields` gives each field its operators.
+  - `apps/grid/src/ui/Window.tsx`: the matrix window comes from the condition on the source's declared `date` column. A "ligt tussen" over 92 days, or none, reads the current week.
+  - `apps/grid/src/grid/filter.ts`: `filterFields` gives each field its operators. `filterRows` drops the condition re-filter: the server is the authority (SQLite's LIKE and the grid's `fold` disagree on diacritics). The search text keeps filtering client-side.
+  - `apps/grid/src/grid/Grid.tsx:98`, `apps/grid/src/matrix/Matrix.tsx:149`: call `filterRows` with the search only.
+  - `apps/grid/src/ui/views.ts` (`toStored`, `comparable`), `apps/grid/src/ui/useFilterNames.ts:35`: the new `Filter` shape.
+  - `apps/grid/src/grid/layout.ts`: `filter()` holds one condition per field and operator; `parse` (:94) reads the new shape; the stored layout key moves from `v1` to `v2`, so an old local copy is dropped, not misread.
+  - `apps/grid/src/ui/hash.ts`: the conditions travel in the hash as `#f=<json>` beside `view`. A landing with `f` applies them as a local change (they are not saved; an own view saves only on the person's own next change). Task 5's Link kopiëren copies that address.
   - `packages/theatre/src/seed.ts`: Dagplanning's `filters: { plandag: { $period: 'week' } }`; `--seed-missing` brings the system view up to date.
-- Tests: `FilterBuilder.test.tsx`, `apps/grid/src/engine.test.ts`, `packages/theatre/test/seed-missing.test.ts`, `packages/theatre/test/grid-ux.test.ts`. Also the e2e that use the period chip: grep `Periode`, `period-chip`, `nv-period` in `e2e/`. Their landings `#from=` keep working for the matrix and stop narrowing tables. Update them to add a "Plandag ligt tussen" condition, or to land on a date the seed fills.
+- Tests: `FilterBuilder.test.tsx`, `apps/grid/src/engine.test.ts`, `packages/theatre/test/seed-missing.test.ts`, `packages/theatre/test/grid-ux.test.ts`. Also the e2e that use the period chip: grep `Periode`, `period-chip`, `nv-period`, `Vorige periode`, `Volgende periode`, `period=all` in `e2e/`. Their landings `#from=` keep working for the matrix and stop narrowing tables. Update them to add a "Plandag ligt tussen" condition, or to land on a date the seed fills.
 
 **Interfaces:**
 - Consumes: Task 2's operators; `RelationPicker` for relation values, with `before`/`hide` as the people box uses them; the option lists for choices, searched the same way.
@@ -168,7 +187,7 @@
 | `nlike` | `$nlike` |
 | `eq` | `$eq` |
 | `week`, `next_week`, `month` | `$period` |
-| `between` | `$gte` and `$lte` |
+| `between` | `$gte` and `$lte` (on a datetime, `$lte` takes the day's `T23:59:59`, as `api.ts:99` does) |
 
 - One field holds at most one condition per operator (the stored object's keys). The builder does not offer a second condition with the same field and operator.
 
@@ -179,6 +198,9 @@
   - A chip's × removes its condition.
   - There is no Periode chip.
   - The rows request carries the conditions as `filter`.
+  - "ligt tussen" on a datetime keeps a row at 09:00 on the last day.
+  - A landing with `#f=` shows its conditions and does not save them.
+  - An old `v1` local layout is ignored, not misread.
   - A matrix reads the date condition's window, else the current week.
 - [ ] Step 2: Run them. Expected: FAIL.
 - [ ] Step 3: Implement.
@@ -186,32 +208,43 @@
 - [ ] Step 5: E2E flows:
   - `filter-builder @e2e`: add "Soort is Repetitie of Opbouw" by searching; add "Omschrijving bevat 'zaal'"; the rows narrow; remove one chip; reload keeps the rest.
   - `period-is-a-filter @e2e`: Dagplanning opens with "Plandag deze week"; × shows every date; "ligt tussen" two dates narrows again.
+  - `filter-link @e2e`: copy the address of a view with two conditions; open it in a fresh context; the same chips show.
   - Both in `e2e/toolbar.spec.ts`.
 - [ ] Step 6: The task's tests. Commit `feat(grid): a filter builder; the period is a filter`.
 
 ### Task 4: History (R3)
 
 **Files:**
-- Create: `packages/engine/src/history.ts`, `packages/engine/test/history.test.ts`, `apps/grid/src/ui/History.tsx`, `apps/grid/src/ui/History.test.tsx`.
-- Modify: `packages/engine/src/app.ts` (route), `apps/grid/src/api.ts`, `apps/grid/src/ui/Toolbar.tsx` (icon button), `apps/grid/src/ui/App.tsx`.
+- Create: `packages/engine/src/history.ts`, `packages/engine/test/history.test.ts`, `apps/grid/src/ui/HistoryPanel.tsx`, `apps/grid/src/ui/HistoryPanel.test.tsx`. (`ui/history.ts` is the tab's undo stack; the panel's name keeps them apart.)
+- Modify: `packages/engine/src/app.ts` (route), `packages/engine/test/route-matrix.test.ts` (a row: `GET /api/history/<source>`, unauthenticated 401, owner 200 on an owned source, 404 on an unreadable one), `apps/grid/src/api.ts`, `apps/grid/src/ui/Toolbar.tsx` (icon button), `apps/grid/src/ui/App.tsx`, `apps/grid/src/i18n.ts`.
 
 **Interfaces:**
 - `GET /api/history/:source?filter&from&to&limit` (limit ≤ 100, default 50).
 - It reads the source's row ids exactly as `/rows` would, through the caller's scope.
-- For a query, the records are its `of` dataset's (the row id is that dataset's id, as `creates` promises); without `of`, a query has no history (empty list).
-- It answers `{ entries: [{ batch, at, actor: string, mine: boolean, kind, record: { id, title }, changes: [{ field, label, old, new }] }] }`, newest batch first, one entry per batch per record.
-- `actor` is the account's email; for an owner caller it is "planning" for others and "jij" for itself (threat 4).
+- For a query, the records are its `creates` dataset's: the query's `id` is that dataset's id, by the `creates` promise. A query without `creates` (Per productie per dag, Voorstellingen) answers no entries, and neither does one whose `creates` dataset the caller cannot read.
+- It answers `{ entries: [{ batch, at, actor: string | null, mine: boolean, undoable: boolean, kind, record: { id, title }, changes: [{ field, label, old, new }] }] }`, newest batch first, one entry per batch per record.
+  - `changes` hold only the source's columns. For a query these are its mapped `writes.field`s, labelled with the query's labels.
+  - A relation's old and new values come as titles.
+  - A create is one entry whose kind is `create`.
+- `actor` is the account's email; null for an owner reading anyone's but its own (threat 4).
+- The grid renders: `mine` → "jij"; actor id -1 → "systeem"; null for an owner → "planning"; an account that no longer exists → "onbekend".
+- `undoable` follows threat 5.
 
 - [ ] Step 1: Write the engine tests:
   - Entries for the view's rows, newest first.
   - An owner's history holds no entry for a row outside its scope, asserted by record id (threat 3).
   - An owner sees no other account's email (threat 4).
   - `mine` is true only for the caller's batches.
-  - A query without `of` answers no entries.
+  - A query without `creates` (the theatre's `productie_dag`) answers no entries.
+  - A query whose `creates` dataset the caller cannot read answers no entries.
+  - The changes of a query entry hold only its mapped columns.
+  - A `mine` entry that holds a delete, or a seed batch, has `undoable: false`.
+  - The route-matrix row: unauthenticated 401.
   - An unreadable source is 404.
 - [ ] Step 2: Write the grid tests:
   - The panel lists entries grouped by day.
-  - Ongedaan maken shows only when `mine` and calls the batch undo.
+  - Ongedaan maken shows only when `undoable` and calls the batch undo.
+  - The actor renders as "jij", "systeem", "planning" or the email.
   - After an undo the list and the view read again.
 - [ ] Step 3: Run them. Expected: FAIL.
 - [ ] Step 4: Implement.
@@ -224,7 +257,7 @@
 
 **Files:**
 - Create: `apps/grid/src/ui/Share.tsx`, `ui/Share.test.tsx`, `apps/grid/src/export/ics.ts`, `export/ics.test.ts`.
-- Modify: `apps/grid/src/ui/Toolbar.tsx` (icon button; Exporteren leaves `…`), `apps/grid/src/ui/App.tsx`.
+- Modify: `apps/grid/src/ui/Toolbar.tsx` (icon button; Exporteren leaves `…`), `apps/grid/src/ui/App.tsx`, `apps/grid/src/api.ts` (the share-token call, absent today).
 
 **Interfaces:**
 - `toIcs(rows: Row[], view: View, columns: Column[]): string`. It writes one VEVENT per row with a date:
@@ -233,13 +266,18 @@
   - DESCRIPTION is the view's other visible columns as "label: text" lines.
 
   There is no LOCATION: the grid cannot tell which column is a place without a domain word. Lines are CRLF, folded at 75 octets, and text is escaped. The download is `<view>.ics`.
-- Link kopiëren copies `location.href` (view, filters, period are in the hash). Then a toast: "Link gekopieerd".
-- Publiceren shows only for an administrator. It calls the existing `PUT /api/views/:id/share-token` and shows the public link once, with a copy button. On a dataset view the engine answers `not_query`; the menu then says publishing works on a computed view only.
+- Link kopiëren copies the address Task 3 writes: `view` plus `#f=` with the conditions. Then a toast: "Link gekopieerd".
+- Publiceren shows only for an administrator.
+  - It calls the existing `PUT /api/views/:id/share-token` and shows the public data address (`/api/public/views/<token>`, JSON for the website) once, with a copy button.
+  - On a dataset view the engine answers `not_query`; the menu then says publishing works on a computed view only.
+  - A second publish rotates the token and the old address stops (`views.ts:308`), so the menu asks first: "Nieuwe link maken? De vorige stopt."
+  - The grid learns `public` from `ViewOut`.
 
 - [ ] Step 1: Write the tests:
   - `toIcs`: two rows give two VEVENTs with escaped commas and semicolons, folded long lines and CRLF.
   - The menu lists Excel, Agenda, Link kopiëren, and Publiceren only for an administrator.
-  - Link kopiëren writes the address to the clipboard.
+  - Link kopiëren writes the address to the clipboard, conditions included.
+  - Publiceren on a public view asks before rotating.
 - [ ] Step 2: Run them. Expected: FAIL.
 - [ ] Step 3: Implement.
 - [ ] Step 4: Run them. Expected: PASS.
