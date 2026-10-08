@@ -51,6 +51,19 @@ describe('the history panel', () => {
     expect(items()[2]!.textContent).toContain('Afbouw')
   })
 
+  it('names a record once for a run of its entries, again after another record', async () => {
+    shown([
+      entry({ batch: 'b4', record: { id: 7, title: 'Zomerstorm' } }),
+      entry({ batch: 'b3', record: { id: 7, title: 'Zomerstorm' } }),
+      entry({ batch: 'b2', record: { id: 8, title: 'Opbouw' } }),
+      entry({ batch: 'b1', record: { id: 7, title: 'Zomerstorm' } }),
+    ])
+
+    await within(panel()).findAllByRole('listitem')
+    const titles = items().map((li) => li.querySelector('.nv-history__record')?.textContent ?? null)
+    expect(titles).toEqual(['Zomerstorm', null, 'Opbouw', 'Zomerstorm'])
+  })
+
   it('says a creation', async () => {
     shown([entry({ created: true, changes: [] })])
 

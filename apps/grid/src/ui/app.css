@@ -1835,47 +1835,91 @@
   list-style: none;
 }
 
-.nv-history__entry {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+.nv-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.nv-history__head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+.nv-history__entry {
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.nv-history__day .nv-history__entry:first-child,
+.nv-history__entry--same {
+  border-top: 0;
+}
+
+.nv-history__entry--same {
+  padding-top: 2px;
 }
 
 .nv-history__record {
-  flex: 1;
-  min-width: 0;
+  display: block;
+  margin-bottom: 2px;
   overflow-wrap: anywhere;
+}
+
+.nv-history__body {
+  display: flow-root;
+}
+
+/* Floated, so only the lines beside it make room; the rows under it take the full width. */
+.nv-history__meta {
+  float: right;
+  margin-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 20px;
 }
 
 .nv-history__by,
 .nv-history__time,
 .nv-history__created,
-.nv-history__also {
+.nv-history__also,
+.nv-history__old {
   color: var(--color-fg-subtle);
+}
+
+.nv-history__by,
+.nv-history__time,
+.nv-history__also {
   font-size: 12px;
 }
 
-.nv-history__created {
-  margin: 2px 0 0;
+.nv-history__by {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-history__created,
+.nv-history__also {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .nv-history__changes {
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 .nv-history__change {
-  display: grid;
-  grid-template-columns: 100px 1fr;
-  gap: 8px;
+  padding-left: 96px;
   font-size: 13px;
+  line-height: 20px;
 }
 
 .nv-history__change dt {
+  float: left;
+  width: 88px;
+  margin-left: -96px;
   color: var(--color-fg-subtle);
 }
 
@@ -1885,10 +1929,31 @@
 }
 
 .nv-history__undo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+.nv-history__undo:hover:not(:disabled),
+.nv-history__undo:focus-visible {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+.nv-history__slot {
+  width: 22px;
+}
+
+.nv-history__undo:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* A declared action in the drawer: a picker per input opens under its button, in the page. */

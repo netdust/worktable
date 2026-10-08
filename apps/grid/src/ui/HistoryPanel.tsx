@@ -1,4 +1,5 @@
-import { Button, Spinner } from '@sakaniui/react'
+import { Spinner } from '@sakaniui/react'
+import { Undo2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { locale, type StringKey, t } from '../i18n'
 import type { ApiError, Field, HistoryEntry } from '../types'
@@ -89,8 +90,8 @@ export function HistoryPanel({ load, onUndo, onUndone, onRefused, onClose, field
           <section key={day} className="nv-history__day">
             <h3 className="nv-history__date">{day}</h3>
             <ul className="nv-history__list">
-              {entries.map((entry) => (
-                <Item key={`${entry.batch}:${entry.record.id}`} entry={entry} fields={fields} also={alsoUndone(entry)} busy={busy !== null} onUndo={undo} />
+              {entries.map((entry, i) => (
+                <Item key={`${entry.batch}:${entry.record.id}`} entry={entry} named={entries[i - 1]?.record.id !== entry.record.id} fields={fields} also={alsoUndone(entry)} busy={busy !== null} onUndo={undo} />
               ))}
             </ul>
           </section>
@@ -100,31 +101,38 @@ export function HistoryPanel({ load, onUndo, onUndone, onRefused, onClose, field
   )
 }
 
-function Item({ entry, fields, also, busy, onUndo }: { entry: HistoryEntry; fields: Record<string, Field>; also: string | null; busy: boolean; onUndo: (batch: string) => void }) {
+function Item({ entry, named, fields, also, busy, onUndo }: { entry: HistoryEntry; named: boolean; fields: Record<string, Field>; also: string | null; busy: boolean; onUndo: (batch: string) => void }) {
   return (
-    <li className="nv-history__entry">
-      <div className="nv-history__head">
-        <strong className="nv-history__record">{entry.record.title || t('empty')}</strong>
-        <span className="nv-history__by">{whose(entry)}</span>
-        <time className="nv-history__time" dateTime={entry.at}>{timeOf(entry.at)}</time>
-      </div>
-      {entry.created && <p className="nv-history__created">{t('historyCreated')}</p>}
-      {entry.changes.length > 0 && (
-        <dl className="nv-history__changes">
-          {entry.changes.map((change) => (
-            <div key={change.field} className="nv-history__change">
-              <dt>{change.label}</dt>
-              <dd>{entry.created ? '' : `${shown(change.old, fields[change.field])} → `}{shown(change.new, fields[change.field])}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {entry.undoable && (
-        <div className="nv-history__undo">
-          <Button variant="ghost" size="sm" disabled={busy} onClick={() => onUndo(entry.batch)}>{t('undo')}</Button>
-          {also && <span className="nv-history__also">{also}</span>}
+    <li className={named ? 'nv-history__entry' : 'nv-history__entry nv-history__entry--same'}>
+      {named ? <strong className="nv-history__record">{entry.record.title || t('empty')}</strong> : <span className="nv-sr-only">{entry.record.title}</span>}
+      <div className="nv-history__body">
+        <div className="nv-history__meta">
+          <span className="nv-history__by" title={whose(entry)}>{whose(entry)}</span>
+          <time className="nv-history__time" dateTime={entry.at}>{timeOf(entry.at)}</time>
+          {entry.undoable ? (
+            <button type="button" className="nv-history__undo" aria-label={t('undo')} title={t('undo')} disabled={busy} onClick={() => onUndo(entry.batch)}>
+              <Undo2 size={14} aria-hidden="true" />
+            </button>
+          ) : <span className="nv-history__slot" aria-hidden="true" />}
         </div>
-      )}
+        <div>
+          {entry.created && <p className="nv-history__created">{t('historyCreated')}</p>}
+          {entry.changes.length > 0 && (
+            <dl className="nv-history__changes">
+              {entry.changes.map((change) => (
+                <div key={change.field} className="nv-history__change">
+                  <dt>{change.label}</dt>
+                  <dd>
+                    {!entry.created && <><span className="nv-history__old">{shown(change.old, fields[change.field])}</span> → </>}
+                    {shown(change.new, fields[change.field])}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {entry.undoable && also && <p className="nv-history__also">{also}</p>}
+        </div>
+      </div>
     </li>
   )
 }
