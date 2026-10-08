@@ -59,6 +59,15 @@ describe('compileFilter', () => {
   test('an empty filter matches everything', () => {
     expect(ids({})).toEqual([1, 2, 3, 4])
   })
+  test('$or holds when any of its filters holds', () => {
+    expect(ids({ $or: [{ status: 'klaar' }, { prio: { $gt: 2 } }] })).toEqual([2, 4])
+  })
+  test('$or sits beside plain keys, which all still hold', () => {
+    expect(ids({ status: 'open', $or: [{ prio: 1 }, { prio: { $exists: false } }] })).toEqual([3])
+  })
+  test('a filter inside $or with two keys needs both', () => {
+    expect(ids({ $or: [{ status: 'open', prio: 2 }, { afgerond: true }] })).toEqual([1, 2])
+  })
 })
 
 describe('$period resolves against the injected now', () => {

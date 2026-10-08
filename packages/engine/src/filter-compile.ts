@@ -34,9 +34,13 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: s
 
 export type FilterAST =
   | { kind: 'and'; clauses: FilterAST[] }
+  | { kind: 'or'; clauses: FilterAST[] }
   | { kind: 'cmp'; key: string; op: Operator; value: JsonValue }
 
 export type FilterInput = Record<string, JsonValue | Partial<Record<Operator, JsonValue>>>
+
+/** Any of its filters may hold; beside the plain keys, which all hold. One level deep. */
+const OR = '$or'
 
 export class FilterCompileError extends Error {
   constructor(message: string) {
@@ -66,10 +70,36 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 export function filterCompile(input: FilterInput): FilterAST {
-  const clauses: FilterAST[] = []
-  if (Object.keys(input).length > MAX_FILTER_CLAUSES) {
-    throw new FilterCompileError(`filter accepts at most ${MAX_FILTER_CLAUSES} keys (got ${Object.keys(input).length})`)
+  const any = input[OR]
+  const keys = Object.keys(input).filter((key) => key !== OR)
+  if (
+    any !== undefined &&
+    (!Array.isArray(any) ||
+      any.length === 0 ||
+      !any.every((branch) => isPlainObject(branch) && Object.keys(branch).length > 0))
+  ) {
+    throw new FilterCompileError(`${OR} requires a non-empty list of filters`)
   }
+  const branches = (any ?? []) as FilterInput[]
+  if (branches.some((branch) => OR in branch)) throw new FilterCompileError(`${OR} cannot hold another ${OR}`)
+  // The cap counts every key, those inside $or included: nesting must not multiply past it.
+  const total = keys.length + branches.reduce((n, branch) => n + Object.keys(branch).length, 0)
+  if (total > MAX_FILTER_CLAUSES) {
+    throw new FilterCompileError(`filter accepts at most ${MAX_FILTER_CLAUSES} keys (got ${total})`)
+  }
+  const plain = keyClauses(Object.fromEntries(keys.map((key) => [key, input[key] as JsonValue])))
+  if (branches.length === 0) return { kind: 'and', clauses: plain }
+  return {
+    kind: 'and',
+    clauses: [
+      ...plain,
+      { kind: 'or', clauses: branches.map((branch) => ({ kind: 'and', clauses: keyClauses(branch) })) },
+    ],
+  }
+}
+
+function keyClauses(input: FilterInput): FilterAST[] {
+  const clauses: FilterAST[] = []
   for (const [key, raw] of Object.entries(input)) {
     if (raw === null || !isPlainObject(raw)) {
       clauses.push({ kind: 'cmp', key, op: '$eq', value: raw as JsonValue })
@@ -114,5 +144,5 @@ export function filterCompile(input: FilterInput): FilterAST {
       clauses.push({ kind: 'cmp', key, op, value: value as JsonValue })
     }
   }
-  return { kind: 'and', clauses }
+  return clauses
 }

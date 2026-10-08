@@ -66,6 +66,16 @@ describe('an owner reads only its own subject', () => {
     expect([byId.body.rows, byId.body.total, byOwner.body.rows]).toEqual([[], 0, []])
   })
 
+  test("$or never widens past the owner's scope: an any-of naming another subject's rows finds only its own", async () => {
+    const res = await owner('GET', `/api/rows/taak?${filter({ $or: [{ id: 3 }, { id: 1 }] })}`)
+    expect(ids(res.body)).toEqual([1])
+    const notes = await owner(
+      'GET',
+      `/api/rows/note?${filter({ $or: [{ project_id: 2 }, { tekst: { $like: 'other' } }] })}`,
+    )
+    expect(notes.body.rows).toEqual([])
+  })
+
   test('through a query with an owner column', async () => {
     const res = await owner('GET', '/api/rows/per_project')
     expect(res.status).toBe(200)

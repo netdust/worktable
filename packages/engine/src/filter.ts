@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, type SQL, sql } from 'drizzle-orm'
+import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, type SQL, sql } from 'drizzle-orm'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import {
   type FilterAST,
@@ -139,7 +139,8 @@ function clauseOf(ast: FilterAST, source: Source, table: SQLiteTable, now: Date)
     return comparison(resolveKey(ast.key, source, table), ast.key, ast.op, ast.value, table, now)
   }
   const parts = ast.clauses.map((c) => clauseOf(c, source, table, now)).filter((p): p is SQL => p !== undefined)
-  return parts.length ? and(...parts) : undefined
+  if (!parts.length) return undefined
+  return ast.kind === 'or' ? or(...parts) : and(...parts)
 }
 
 export function compileFilter(ast: FilterAST, source: Source, table: SQLiteTable, now = new Date()): SQL | undefined {

@@ -102,6 +102,15 @@ describe('$like, $nlike and $period', () => {
     expect(status).toBe(200)
   })
 
+  test('POST /views stores an $or beside a period, and refuses one inside another', async () => {
+    const filters = { day: { $period: 'week' }, $or: [{ status: 'open' }, { prio: { $gt: 2 } }] }
+    const { status, body } = await postView(filters)
+    expect(status).toBe(201)
+    const stored = sqlite.query('SELECT filters FROM saved_view WHERE id = ?').get(body.id) as { filters: string }
+    expect(JSON.parse(stored.filters)).toEqual(filters)
+    expect((await postView({ $or: [{ $or: [{ status: 'open' }] }] })).body.code).toBe('bad_view')
+  })
+
   test('POST /views stores a $period on the dated source', async () => {
     const { status, body } = await postView({ day: { $period: 'week' } })
     expect(status).toBe(201)
@@ -158,6 +167,18 @@ describe('denials', () => {
   test('object value under $eq is 400 bad_filter', () => badFilter({ status: { $eq: { a: 1 } } }))
   test('object inside $in is 400 bad_filter', () => badFilter({ status: { $in: [{ a: 1 }] } }))
   test('a null filter is 400', () => badFilter('null'))
+
+  test.each([
+    ['$or that is not a list', { $or: { status: 'open' } }],
+    ['an empty $or', { $or: [] }],
+    ['$or holding a value, not a filter', { $or: [1] }],
+    ['$or holding an empty filter', { $or: [{}, { status: 'open' }] }],
+    ['$or inside $or', { $or: [{ $or: [{ status: 'open' }] }] }],
+    ['$or naming an undeclared column', { $or: [{ 'heading) OR 1=1 --': 1 }] }],
+    ['$or as an operator on a column', { status: { $or: ['open'] } }],
+  ])('%s is 400 bad_filter', (_, filter) => badFilter(filter))
+  test('the clauses inside $or count toward the cap of 50', () =>
+    badFilter({ status: 'open', $or: Array.from({ length: 50 }, (_, i) => ({ prio: i })) }))
 
   test('custom.key on a query is 400 bad_filter', () =>
     denied(`/api/rows/per_project?filter=${encodeURIComponent('{"custom.colour":"rood"}')}`, 400, 'bad_filter'))
