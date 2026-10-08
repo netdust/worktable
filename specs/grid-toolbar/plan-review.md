@@ -290,3 +290,141 @@ None.
 - `fiche-renders-as-before` exists → `e2e/grid-ux.spec.ts:643` → holds; it is vacuous for the new builder (S11)
 - `RelationPicker` takes `before`/`hide` → `grid/cells/RelationPicker.tsx:42` → holds
 - Simplest design: `$period` is needed because a stored filter is validated server-side, and per-record `/revisions` costs one request per row → `views.ts:96`, `writes.ts:409` → holds
+
+---
+
+# Plan review — grid-toolbar (round 3)
+Reviewed-plan: d062f5a74c26024a98f41c00b50581f28a4845d6
+Verdict: not ready
+
+Most of round 2 is fixed, but one premise fails against the e2e source. The `#from=` landing rule cannot keep the existing landings working, because those flows land on one view and then open another. That is Blocking. The Should fix items are small: wording and file lists an executor would otherwise build wrong.
+
+## Blocking
+
+1. **The `#from=` landing does not keep today's e2e landings working (Task 3, Tests line 187 and hash.ts lines 185–186).**
+   - The plan's claim (line 187): "Their `#from=` landings keep working through the landing rule above."
+   - The rule (line 185): the day becomes a local condition on the view you land on, and `from` "leaves the hash once applied."
+   - The source does not fit that. The flows land, reload, and then open a different view:
+     - `e2e/dagplanning.spec.ts:56-59` (`openDagplanning`: `goto('/#from=…')`, `reload`, `openView(page, 'Dagplanning', …)`);
+     - `dagplanning.spec.ts:609-611`;
+     - `grid-ux.spec.ts:70-78`: `land` then `pick`, used at 130, 185, 327, 364, 393, 437, 475, 693 and 706.
+   - So the week is spent on whichever view opens first. Dagplanning then opens with its seeded `$period: 'week'` (line 186), which means today's week, not the landed one.
+   - Even on the view you land on, the rule fails. A landed week is a `$gte`/`$lte` condition. The seeded `$period` is a different engine key (line 206), so both are stored and ANDed together. The result is empty unless the landed week is the current week.
+   - Smallest fix, pick one:
+     - (a) Drop the legacy rule. Have Task 3 rewrite those landings to `#view=<key>&f=…` or to "open the view, then set the date condition".
+     - (b) Keep `#from=` as a tab-level default. It applies to each dated view opened until the person changes that view's condition.
+   - Either way, add: a landed or linked date condition **replaces** the field's existing date condition (`$period` or `$gte`/`$lte`). It is never added beside it.
+
+## Should fix
+
+1. **Threat 6 needs `public` in Task 1, but only Task 5 brings it.**
+   - Task 1's tests (line 111) and its Interfaces (line 104) branch on a public view.
+   - The grid's `SavedView` has no `public` today: `apps/grid/src/types.ts:150` and `apps/grid/src/engine.ts:83,327` map only `editable`. The mapping is in Task 5's Files (line 279).
+   - Fix: move `toSavedViews` maps `public` and `SavedView.public` into Task 1's Files.
+   - Also gate "Publieke weergave bijwerken" on `view.public && view.editable`, and name `editable` in threat 6 instead of "the `public_view` rule":
+     - An administrator can publish a seeded or shared view (`packages/engine/src/views.ts:291-294`).
+     - That view is not `editable` (`views.ts:66`).
+     - Saving it answers `read_only_view` or `not_owner` (`views.ts:168-172`).
+
+2. **`limit` is still on the history route (Task 4, line 237).**
+   - Line 237 still reads `GET /api/history/:source?filter&from&to&limit` with "(limit ≤ 100, default 50)".
+   - Line 240 says it is `entries`, "not `limit`".
+   - Fix: change line 237 to `?filter&from&to&entries`.
+
+3. **The new engine test word fails `bun run check` (Task 2 Step 1, line 149).**
+   - The fixture text "Opbouw zaal" is a test word in `packages/engine/test/filter.test.ts`.
+   - I rebuilt the vocabulary the way `scripts/check-vocabulary.ts:44-53` does. `opbouw` is on it; `zaal`, `tekst`, `week`, `entries`, `created`, `batch` and `kind` are not.
+   - Fix: use a word that is not on the list, for example "Grote zaal".
+
+4. **The fixture's denial query has no dataset to create into (Task 4 Files, line 234).**
+   - The plan asks for "a dataset with a writer and no owner column". The fixture has none:
+     - its writers are `project` (delete only) and `note` (which has `owners`) (`packages/engine/test/fixture.ts:175,181,205`);
+     - `merk` and `plat` have no writer;
+     - `checkCreates` refuses a `creates` without a creating writer (`packages/engine/src/validate.ts:69-77`).
+   - The executor must therefore add a writer, or a new dataset plus a query. That changes lists that existing tests assert exactly:
+     - `access.test.ts:99-100` (the owner's and the editor's source lists);
+     - `rows.test.ts:256-265`;
+     - `writes.test.ts:214-229` and `442-450` (the `deletable` and `writable` maps).
+   - "Rerun" should be "update".
+   - Fix:
+     - name the new dataset (no owner column, a `create` writer) and the owner-scoped query that creates into it;
+     - list those four tests in Task 4's Files;
+     - keep the new names off the vocabulary list.
+   - `note_lijst` gaining `creates: 'note'` is safe: only `app.ts:98-100` reads `creates`.
+
+5. **The new-row day would regress (Task 3, line 175).**
+   - The plan says "`newRow`/`madeFrom` take a new row's day from the condition's first day, else today."
+   - Today `newRow` uses today when today is inside the window, and the first day only otherwise (`apps/grid/src/grid/newRow.ts:25-26`).
+   - Built as worded, `+ Nieuw` on Dagplanning's "deze week" lands on Monday.
+   - Fix: "`newRow`/`madeFrom` receive the condition's window where they took `range`, else none."
+
+6. **The matrix can go empty on a long "ligt tussen" (Task 3, line 174).**
+   - Over 92 days, the matrix falls back to the current week as `from`/`to`.
+   - But the `between` condition is still in `filter`: `rowsQuery` merges every layout filter (`apps/grid/src/engine.ts:373-376`), and `rows.ts:36-38` ANDs the filter with the window.
+   - So a range that does not contain today shows nothing, not "the current week".
+   - Fix: a matrix sends its window as `from`/`to` and leaves the date condition out of `filter`.
+
+7. **The `#view=&f=` landing must wait for `settled` (Task 3, line 183).**
+   - `view` resolves against `tables`. Those are built from the schema's starting views first, and from the saved views only when `savedViews()` answers (`apps/grid/src/ui/App.tsx:182,193-194`).
+   - Before that, a saved view's key falls back to `tables[0]?.views[0]` (`App.tsx:194`). A check made at first resolve drops `f` for every own or shared view.
+   - The `filter-link` e2e uses a seeded view, so it would not catch this.
+   - Fix:
+     - "applied or dropped once `settled`";
+     - add a Task 3 Step 1 test that lands on a saved view's key.
+
+## Note
+
+- **Other readers of `range`.** Besides those Task 3 names (lines 172-176), `range` is read by:
+  - the matrix store's `reload` (`App.tsx:250`), which must send the same window as `asked`;
+  - the empty hints `formatWindow(range)` (`App.tsx:405,409`);
+  - `Sheet`'s `period` (`App.tsx:413`).
+  
+  The compiler will flag them once `useWindow` goes, so this is low risk.
+- **A landing must not autosave.** Applying a landing or link is `keepLocal`, which bumps the stored revision (`views.ts:113-116`, `useStoredRevision`). An autosave driven by `changed(view)`/revision would save the landing too, against line 183. So autosave must follow the person's `setLayout`, not the stored state.
+- **`gone`.** Accounts are disabled, never deleted (`packages/engine/src/auth.ts:93`). A disabled account still has its row and its email. So `gone` occurs only for an actor id with no row. Saying "disabled → `account`" removes a judgement call.
+- **The route-matrix entry is two rows.** Each `EXPECTED` row is one path with all four roles (`route-matrix.test.ts:16,201-213`). "Owner 200 on an owned source, 404 on an unreadable one" needs two: for example `/api/history/taak` and `/api/history/plat`.
+- **Line numbers.** `Toolbar.tsx:68-74` (line 103) is `SaveState` at `Toolbar.tsx:72-78`, which is the row store's save word. Harmless.
+
+## Round 2, resolved or not
+
+| # | Finding | Status |
+|---|---|---|
+| S1 | `$nlike` bullets contradict | resolved (line 154 only) |
+| S2 | Theatre words in engine tests | resolved for `productie_dag` and `plandag`; a new hit, `opbouw` (S3) |
+| S3 | Fixture query with `creates` | partly: `fixture.ts` is in Files; no dataset fits the denial, and the listing tests change (S4) |
+| S4 | `by` discriminator, "onbekend" | resolved (lines 242, 246-247, 266) |
+| S5 | `limit` two meanings | resolved at line 240; line 237 still says `limit` (S2) |
+| S6 | Owner scope on the `creates` dataset | resolved (line 241, test line 256) |
+| S7 | `#f=` lifetime and wrong view | resolved (lines 181-184); timing against `settled` open (S7) |
+| S8 | One window source | resolved for table, matrix, export; the `#from=` landing fails (B1); `newRow` wording (S5); matrix intersection (S6) |
+| S9 | Save-as clause, Terugzetten | resolved (lines 89, 104-105, tests 114-115) |
+| S10 | Public view autosave | resolved by threat 6 and spec line 24; `public` arrives too late (S1) |
+| S11 | Review Focus 6 row, vacuous fiche test | resolved (line 79; Task 3 Step 5 assertion) |
+| S12 | `kind` two meanings | resolved (`batch_kind`, `created`) |
+| Notes | `Lhs` type and custom keys; engine-key collisions; undo across records; chunking; Task 5 files; SPEC Sidebar line; matrix navigation | all resolved (lines 41, 206, 248, 240, 279, 188, 187) |
+
+## Premises checked
+
+- An own public view is `editable` only for an administrator; a system or shared one never is → `packages/engine/src/views.ts:62-74,164-176,291-294` → holds (S1)
+- The grid's `SavedView` carries `public` before Task 5 → `apps/grid/src/types.ts:150`, `apps/grid/src/engine.ts:83,327` → does not hold (S1)
+- `save` returns early on `sending.current`; `duplicate` uses `arrangementOf` today → `apps/grid/src/ui/useSavedViews.ts:144-159` → holds
+- The toolbar's `…` holds save-as and revert while modified → `apps/grid/src/ui/Toolbar.tsx:82-85` → holds
+- The window feeds rows, away rows, reload, `newRow`, `madeFrom`, export and the empty hints → `App.tsx:209-212,228-230,250,264-266,294,405,409` → holds; the plan names all but `reload` and the hints (Note)
+- `newRow` keeps today inside the window → `apps/grid/src/grid/newRow.ts:25-26` → holds (S5)
+- `rowsQuery` sends every layout filter plus `from`/`to`; the engine ANDs them → `apps/grid/src/engine.ts:373-386`, `packages/engine/src/rows.ts:29-41` → holds (S6)
+- `hash.ts` has only `readHash`/`writeHash`; `from`/`to`/`period` are written by `useWindow` → `apps/grid/src/ui/hash.ts:1-10`, `ui/Window.tsx:96-125` → holds
+- e2e `#from=` landings apply to the view they then open → `e2e/dagplanning.spec.ts:56-59,609-611`, `e2e/grid-ux.spec.ts:70-78` → does not hold under the plan's rule (B1)
+- App resolves `view` after the saved views load, falling back to `tables[0]` → `App.tsx:182,193-194,201-203` → holds (S7)
+- `parseRowsParams` reads `limit` as a 1–5000 row cap; unknown keys pass → `packages/engine/src/params.ts:28,33-42,52-59` → holds
+- `CHUNK` is 500 in `rows.ts` → `rows.ts:113` → holds
+- `readable` checks only the presence of an owner column; `scopeOf`/`inScope` → `packages/engine/src/access.ts:48-73` → holds
+- `readRevisions` checks `inScope`; revisions carry `actor_id`, `batch_id`; a create is the `id` marker → `writes.ts:409-424,259,275,481` → holds
+- Undo refuses another account's batch, non-undoable kinds, done batches and batches holding `deleted_at` → `writes.ts:458-474` → holds
+- Batch kinds are write, action, undo, import, seed → `packages/engine/src/engine-tables.ts:8` → holds
+- The fixture has a dataset with a create writer and no owner column → `packages/engine/test/fixture.ts:175-205`, `validate.ts:69-77` → does not hold (S4)
+- `note_lijst` can take `creates: 'note'` without side effects → `validate.ts:69-77`, `app.ts:98-100` → holds
+- Engine tests may use "Opbouw" → `scripts/check-vocabulary.ts:44-53` (vocabulary rebuilt and probed) → does not hold (S3)
+- Every route-matrix row gives one path and four roles → `packages/engine/test/route-matrix.test.ts:16-60,201-213` → holds (Note)
+- Spec R2 states the public-view ruling → `specs/grid-toolbar/spec.md:24` → holds
+
+Files: `/home/ntdst/Sites/worktable/specs/grid-toolbar/plan.md`, `/home/ntdst/Sites/worktable/specs/grid-toolbar/plan-review.md`, `/home/ntdst/Sites/worktable/specs/grid-toolbar/spec.md`.

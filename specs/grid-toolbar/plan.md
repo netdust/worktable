@@ -49,7 +49,7 @@
    - it is not undone;
    - it holds no `deleted_at` change (`writes.ts:465-474`).
 
-6. **Autosave on a public view puts rows on the website.** An administrator's own public view is editable, and removing a filter would change what `/api/public/views/:token` serves. **Mitigation:** a public view never autosaves. Its changes stay local like a locked view's; the `…` offers "Publieke weergave bijwerken", which saves them on purpose (administrator only, the engine's existing `public_view` rule, `views.ts`). Test map row 1.
+6. **Autosave on a public view puts rows on the website.** An administrator's own public view is editable, and removing a filter would change what `/api/public/views/:token` serves. **Mitigation:** a public view never autosaves. Its changes stay local like a locked view's; the `…` offers "Publieke weergave bijwerken" only when `view.public && view.editable` (an administrator's own public view, `views.ts:66`), which saves them on purpose. A public seeded or shared view is not `editable`, so it offers only Kopie maken. Test map row 1.
 
 **Deferrals:** none.
 
@@ -91,7 +91,9 @@
   - `apps/grid/src/grid/GridHeader.tsx`: the sorted header in the accent colour.
   - `apps/grid/src/ui/app.css`: scrollbars, `::-webkit-scrollbar` plus `scrollbar-width: thin`, both themes.
   - `apps/grid/src/i18n.ts`.
-- Also modify: `apps/grid/src/ui/useSavedViews.ts` (autosave, the in-flight follow-up, `duplicate` from `currentOf`).
+- Also modify:
+  - `apps/grid/src/ui/useSavedViews.ts`: autosave, the in-flight follow-up, `duplicate` from `currentOf`. Autosave follows the person's own `setLayout`, never the stored local state: a landing or link applied with `keepLocal` does not save.
+  - `apps/grid/src/engine.ts` (`toSavedViews` maps `public`) and `apps/grid/src/types.ts` (`SavedView.public`), for threat 6.
 - Tests: `apps/grid/src/ui/Toolbar.test.tsx`, `ui/App.test.tsx`, and the e2e lines that click "Opslaan" or read "gewijzigd"/"Opgeslagen" (grep `e2e/` for `Opslaan`, `gewijzigd`, `Opgeslagen`, `Start ↑`, `Kolommen`).
 
 **Interfaces:**
@@ -146,7 +148,7 @@
 - Today comes from a `now` that `filterWhere` takes, defaulting to `new Date()`, so tests inject it there.
 
 - [ ] Step 1: Write the tests, at `filterWhere(input, source, table, now)` for the clock and through `GET /api/rows` for the rest:
-  - `$like` matches a fixture `note.tekst` "Opbouw zaal" on "zaal" (the fixture's own words: `bun run check` refuses theatre names in engine tests).
+  - `$like` matches a fixture `note.tekst` "Grote zaal" on "zaal" (the fixture's own words: `bun run check` refuses theatre names in engine tests).
   - `$like` with `50%_\` matches only the literal text: a row containing "50abc" is absent (threat 1).
   - `$like` on a non-text column is 400.
   - `$period` with `now` = 2026-12-31: `week` covers 2026-12-28 to 2027-01-03; `next_week` covers 2027-01-04 to 2027-01-10; `month` covers 2026-12-01 to 2026-12-31; February 2028 ends on the 29th.
@@ -171,8 +173,9 @@
   - `apps/grid/src/ui/App.tsx`, `ui/Period.tsx`: Period leaves the bar.
   - `apps/grid/src/ui/Window.tsx`, `ui/App.tsx:209-229`: the window has one source, the condition on the source's declared `date` column. `useWindow` and Period leave.
     - A table sends no `from`/`to`; its date condition is in `filter`.
-    - A matrix sends the condition's days as `from`/`to`; a "ligt tussen" over 92 days, or no date condition, reads the current week.
-    - `newRow`/`madeFrom` take a new row's day from the condition's first day, else today.
+    - A matrix sends its window as `from`/`to` and leaves the date condition out of `filter`. The window is the condition's days, or the current week when the condition spans over 92 days or there is none.
+    - `newRow`/`madeFrom` receive the condition's window where they took `range`, else none (today stays today inside the window, `newRow.ts:25`).
+    - The matrix store's `reload` (`App.tsx:250`), the empty hints (`App.tsx:405,409`) and `Sheet` (`App.tsx:413`) read the same window.
     - The export's file name takes the condition's days, else none.
   - `apps/grid/src/grid/filter.ts`: `filterFields` gives each field its operators. `filterRows` drops the condition re-filter: the server is the authority (SQLite's LIKE and the grid's `fold` disagree on diacritics). The search text keeps filtering client-side.
   - `apps/grid/src/grid/Grid.tsx:98`, `apps/grid/src/matrix/Matrix.tsx:149`: call `filterRows` with the search only.
@@ -182,9 +185,11 @@
     - Link kopiëren (Task 5) composes it at the click; `f` is never written on an ordinary change.
     - A landing applies `f` only when `view` resolves to that exact key. The conditions become a local change, not saved (an own view saves only on the person's own next change).
     - A malformed `f` is dropped. `f` leaves the hash once applied, so a reload does not apply it again.
-    - An old `#from=<day>` landing becomes a local condition on the source's declared date column: that day's Monday-to-Sunday week. It leaves the hash once applied.
+    - `from`/`to`/`period` are no longer read from the hash: an old address with them lands on the view without a date condition from the address.
+    - A date condition from a link replaces the field's existing date condition (`$period` or `$gte`/`$lte`). It is never stored beside it.
+    - `f` is applied or dropped only once the saved views have answered (`settled`, `App.tsx:182`), so a saved view's key resolves before the check.
   - `packages/theatre/src/seed.ts`: Dagplanning's `filters: { plandag: { $period: 'week' } }`; `--seed-missing` brings the system view up to date.
-- Tests: `FilterBuilder.test.tsx`, `apps/grid/src/engine.test.ts`, `packages/theatre/test/seed-missing.test.ts`, `packages/theatre/test/grid-ux.test.ts`. Also the e2e that use the period chip: grep `Periode`, `period-chip`, `nv-period`, `Vorige periode`, `Volgende periode`, `period=all` in `e2e/`. Their `#from=` landings keep working through the landing rule above. Flows that step with ‹ › ("Vorige/Volgende periode") need a rewrite to a date condition, not a rename.
+- Tests: `FilterBuilder.test.tsx`, `apps/grid/src/engine.test.ts`, `packages/theatre/test/seed-missing.test.ts`, `packages/theatre/test/grid-ux.test.ts`. Also the e2e that use the period chip: grep `Periode`, `period-chip`, `nv-period`, `Vorige periode`, `Volgende periode`, `period=all` in `e2e/`. The `#from=` landings stop narrowing: rewrite the shared helpers (`openDagplanning` in `e2e/dagplanning.spec.ts:56`, `land` in `e2e/grid-ux.spec.ts:70`, and their likes) to open the view and then land on `#view=<key>&f=<the date condition for that week>`. Flows that step with ‹ › ("Vorige/Volgende periode") need the same rewrite.
 - Also amend the `docs/SPEC.md` working-tree Sidebar line ("The period is a filter chip … with the window in the URL"): the period is a condition on the date column, stored in the view; a matrix reads the condition's days, else the current week.
 
 **Interfaces:**
@@ -213,7 +218,8 @@
   - There is no Periode chip.
   - The rows request carries the conditions as `filter`.
   - "ligt tussen" on a datetime keeps a row at 09:00 on the last day.
-  - A landing with `#f=` shows its conditions and does not save them.
+  - A landing with `#view=&f=` shows its conditions and does not save them; on a saved view's key it applies once the saved views have answered.
+  - A linked date condition replaces the view's own (`$period`), not beside it.
   - An old `v1` local layout is ignored, not misread.
   - A matrix reads the date condition's window, else the current week.
 - [ ] Step 2: Run them. Expected: FAIL.
@@ -231,10 +237,10 @@
 
 **Files:**
 - Create: `packages/engine/src/history.ts`, `packages/engine/test/history.test.ts`, `apps/grid/src/ui/HistoryPanel.tsx`, `apps/grid/src/ui/HistoryPanel.test.tsx`. (`ui/history.ts` is the tab's undo stack; the panel's name keeps them apart.)
-- Modify: `packages/engine/test/fixture.ts`. `note_lijst` gains `creates: 'note'` for the mapped-columns case. Add one query with `owners` that `creates` into a dataset with a writer and no owner column, for the denial; rerun `route-matrix.test.ts` and the schema tests, which list the fixture's sources. Also `packages/engine/src/app.ts` (route), `packages/engine/test/route-matrix.test.ts` (a row: `GET /api/history/<source>`, unauthenticated 401, owner 200 on an owned source, 404 on an unreadable one), `apps/grid/src/api.ts`, `apps/grid/src/ui/Toolbar.tsx` (icon button), `apps/grid/src/ui/App.tsx`, `apps/grid/src/i18n.ts`.
+- Modify: `packages/engine/test/fixture.ts`. `note_lijst` gains `creates: 'note'` for the mapped-columns case. For the denial, add a dataset `stempel` (no owner column, a `create` writer) and a query `stempel_lijst` with `owners: { owner: 'project_id' }` and `creates: 'stempel'`. Update the tests that list the fixture's sources exactly: `access.test.ts:99-100`, `rows.test.ts:256-265`, `writes.test.ts:214-229` and `:442-450`, and `route-matrix.test.ts`. Keep the new names off the vocabulary list (`bun run check`). Also `packages/engine/src/app.ts` (route), `packages/engine/test/route-matrix.test.ts` (two rows: `/api/history/taak`, owner 200; `/api/history/plat`, owner 404; both unauthenticated 401), `apps/grid/src/api.ts`, `apps/grid/src/ui/Toolbar.tsx` (icon button), `apps/grid/src/ui/App.tsx`, `apps/grid/src/i18n.ts`.
 
 **Interfaces:**
-- `GET /api/history/:source?filter&from&to&limit` (limit ≤ 100, default 50).
+- `GET /api/history/:source?filter&from&to&entries`.
 - It reads the source's row ids exactly as `/rows` would, through the caller's scope.
 - For a query, the records are its `creates` dataset's: the query's `id` is that dataset's id, by the `creates` promise. A query without `creates` (Per productie per dag, Voorstellingen) answers no entries, and neither does one whose `creates` dataset the caller cannot read.
 - Query: the same parameters `rowsQuery` builds for the view (`filter`, `from`, `to`, scope included). The ids are read at `MAX_LIMIT` and in chunks of 500 (`rows.ts` `CHUNK`). `entries` caps the entries: default 50, at most 100. It is not `limit`, which `parseRowsParams` reads as a row cap.
@@ -244,7 +250,7 @@
   - A relation's old and new values come as titles.
   - A create is one entry with `created: true`.
 - `by` says whose: `self` (the caller), `account` (another account, with `actor` its email), `system` (actor -1), `gone` (an account that no longer exists), or `hidden` (another account, to an owner caller: `actor` null, threat 4).
-- The grid renders `self` → "jij", `system` → "systeem", `hidden` → "planning", `gone` → "onbekend", `account` → the email.
+- The grid renders `self` → "jij", `system` → "systeem", `hidden` → "planning", `gone` → "onbekend", `account` → the email. A disabled account still has its row and email: it is `account`; `gone` is an actor id with no row.
 - One batch spanning several records gives an entry per record, each `undoable`: undoing one undoes the whole batch, and the panel says so ("Dit maakt ook N andere wijzigingen ongedaan"). A refusal (409 `changed_since`) shows as the undo toast does today.
 - `undoable` follows threat 5.
 
@@ -276,7 +282,7 @@
 
 **Files:**
 - Create: `apps/grid/src/ui/Share.tsx`, `ui/Share.test.tsx`, `apps/grid/src/export/ics.ts`, `export/ics.test.ts`.
-- Modify: `apps/grid/src/ui/Toolbar.tsx` (icon button; Exporteren leaves `…`), `apps/grid/src/ui/App.tsx`, `apps/grid/src/api.ts` (the share-token call, absent today), `apps/grid/src/engine.ts` (`toSavedViews` maps `public`), `apps/grid/src/types.ts` (`SavedView.public`).
+- Modify: `apps/grid/src/ui/Toolbar.tsx` (icon button; Exporteren leaves `…`), `apps/grid/src/ui/App.tsx`, `apps/grid/src/api.ts` (the share-token call, absent today). `SavedView.public` comes from Task 1.
 
 **Interfaces:**
 - `toIcs(rows: Row[], view: View, columns: Column[]): string`. It writes one VEVENT per row with a date:
