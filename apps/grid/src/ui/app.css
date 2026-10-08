@@ -928,6 +928,32 @@
   list-style: none;
 }
 
+/* The cell's search box; its list floats under it, as wide, the record Enter would pick marked. */
+#root .nv-picker__field .nv-picker__input {
+  margin: 0;
+}
+
+.nv-picker__before {
+  display: contents;
+}
+
+.nv-pop.nv-picker__pop {
+  width: var(--trigger-width);
+  min-width: 0;
+}
+
+.nv-picker__list:focus,
+.nv-picker__pop .nv-pop__option {
+  outline: none;
+}
+
+#root .nv-picker__pop .nv-pop__option[data-focused],
+#root .nv-picker__list:not(:has([data-focused])) .nv-pop__option:first-child {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+  font-weight: 500;
+}
+
 .nv-picker__note {
   margin: 4px 8px;
   color: var(--color-fg-subtle);

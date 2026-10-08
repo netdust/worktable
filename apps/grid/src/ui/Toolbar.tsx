@@ -56,7 +56,7 @@ type Saving = Pick<StoreState, 'save' | 'error'>
 function SaveState({ state }: { state: Saving }) {
   if (state.save !== 'error') return null
   return (
-    <span className="nv-save nv-save--error" role="status" title={state.error?.message}>
+    <span className="nv-save nv-save--error" role="status" data-react-aria-top-layer title={state.error?.message}>
       {state.error ? `${t('notSaved')}: ${state.error.message}` : t('notSaved')}
     </span>
   )

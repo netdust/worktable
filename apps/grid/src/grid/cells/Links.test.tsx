@@ -97,8 +97,8 @@ describe('a links cell', () => {
     remote.records.mockResolvedValue({ rows: [person(1, 'Lotte'), person(2, 'Jan')], total: 2 })
     renderGrid()
     open()
-    expect(await within(popup()).findByText('Geen resultaten')).toBeTruthy()
-    expect(within(popup()).queryByText(/Meer resultaten/)).toBeNull()
+    expect(await screen.findByText('Geen resultaten')).toBeTruthy()
+    expect(screen.queryByText(/Meer resultaten/)).toBeNull()
   })
 
   it('adds a person picked from the list, and keeps the box open', async () => {

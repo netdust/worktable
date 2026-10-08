@@ -582,6 +582,90 @@ describe('editing', () => {
   })
 })
 
+describe('the to-one picker', () => {
+  const org = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: {} })
+  const picker = () => screen.queryByRole('combobox', { name: 'Locatie' })
+  // React Aria acts on some keys at their release.
+  const press = async (key: string) => {
+    await act(async () => {
+      const target = document.activeElement as HTMLElement
+      type(target, key)
+      fireEvent.keyUp(target, { key })
+    })
+  }
+  async function openLocation(key = 'Enter') {
+    renderGrid()
+    api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: 'b1' }))
+    const location = cell('Lunch bistrot', 'location')
+    fireEvent.click(location)
+    type(location, key)
+    await screen.findAllByRole('option')
+  }
+
+  beforeEach(() => {
+    remote.records.mockResolvedValue({ rows: [org(14, 'Bijloke'), org(15, 'Vooruit'), org(12, 'Le Grenier, Calais')], total: 3 })
+  })
+  afterEach(() => vi.resetAllMocks())
+
+  it('Enter picks the active record and writes once', async () => {
+    await openLocation()
+    await press('ArrowDown')
+    await press('ArrowDown')
+    expect(document.getElementById(picker()!.getAttribute('aria-activedescendant')!)?.textContent).toBe('Vooruit')
+    await press('Enter')
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [15] }, expect.objectContaining({ id: 103 }))
+    expect(picker()).toBeNull()
+  })
+
+  it('Enter with no record moved to picks the first listed', async () => {
+    await openLocation()
+    await press('Enter')
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [14] }, expect.objectContaining({ id: 103 }))
+  })
+
+  it('an option click writes once', async () => {
+    await openLocation()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: 'Vooruit' }))
+    })
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { location: [15] }, expect.objectContaining({ id: 103 }))
+    expect(picker()).toBeNull()
+  })
+
+  it('Escape after typing a search cancels in one press', async () => {
+    await openLocation()
+    fireEvent.change(picker()!, { target: { value: 'bij' } })
+    await press('Escape')
+
+    expect(picker()).toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(cell('Lunch bistrot', 'location').textContent).toBe('Le Grenier, Calais')
+  })
+
+  it('Tab in the to-one picker writes nothing', async () => {
+    await openLocation('b')
+    await press('Tab')
+
+    expect(picker()).toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(cell('Lunch bistrot', 'location').textContent).toBe('Le Grenier, Calais')
+  })
+
+  it('↓ in a picker opened by a letter moves in the list and writes nothing', async () => {
+    await openLocation('b')
+    await press('ArrowDown')
+
+    expect(picker()).not.toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+  })
+})
+
 describe('the group bands', () => {
   const declared: View = {
     ...planning,
@@ -1284,6 +1368,25 @@ describe('a new record with a required relation', () => {
     await act(async () => undefined)
 
     expect(remote.create).toHaveBeenCalledWith('absence', { person: [5], from: '2026-05-19', to: '2026-05-19', title: '' })
+  })
+
+  it('Escape in the to-one picker of a draft row cancels in one press and goes no further', async () => {
+    render(<App />)
+    await screen.findAllByText('Bert')
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw Afwezigheid' }))
+    const heard = vi.fn()
+    window.addEventListener('keydown', heard)
+    const picker = screen.getByRole('combobox', { name: 'Persoon' })
+    fireEvent.change(picker, { target: { value: 'a' } })
+    await act(async () => {
+      fireEvent.keyDown(picker, { key: 'Escape' })
+      fireEvent.keyUp(picker, { key: 'Escape' })
+    })
+    window.removeEventListener('keydown', heard)
+
+    expect(heard).not.toHaveBeenCalled()
+    expect(screen.queryByRole('combobox', { name: 'Persoon' })).toBeNull()
+    expect(remote.create).not.toHaveBeenCalled()
   })
 
   it('keeps the draft when focus leaves its picker, and drops it on Escape', async () => {

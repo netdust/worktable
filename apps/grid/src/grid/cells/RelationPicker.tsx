@@ -1,8 +1,10 @@
 import { Spinner } from '@sakaniui/react'
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { type FocusEvent, type KeyboardEvent, type Key, type MouseEvent, type ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ComboBox, ComboBoxStateContext, Group, Input, ListBox, ListBoxItem } from 'react-aria-components'
 import { records } from '../../api'
 import { t } from '../../i18n'
 import type { Row } from '../../types'
+import { Pop } from '../../ui/Pop'
 
 export const PICKER_CAP = 50
 const DEBOUNCE = 150
@@ -39,15 +41,23 @@ function ordered(rows: Row[], first: Props['first']): Row[] {
   return first ? [...rows.filter(first), ...rows.filter((r) => !first(r))] : rows
 }
 
+/** The list shows from the start: the picker is the search, not a field that may offer one. */
+function OpenOnMount() {
+  const state = useContext(ComboBoxStateContext)
+  useEffect(() => state?.open(null, 'manual'), [])
+  return null
+}
+
+const keepFocus = (event: MouseEvent) => event.preventDefault()
+const stop = (event: MouseEvent) => event.stopPropagation()
+
 /** A search over one model's records with a listbox under it: ↑↓ move, Enter picks, Escape cancels. */
 export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, before, hide, clearOnPick }: Props) {
   const [query, setQuery] = useState(opening)
   const [found, setFound] = useState<Found>({ status: 'loading' })
-  const [active, setActive] = useState(0)
   const input = useRef<HTMLInputElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const [shift, setShift] = useState(0)
-  const id = useId()
 
   useEffect(() => {
     const el = input.current
@@ -72,81 +82,78 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
   // A picker in a column near the right edge would run off the screen: it moves left by what overflows.
   useLayoutEffect(() => {
     const right = box.current?.getBoundingClientRect().right ?? 0
-    setShift((was) => Math.max(0, right + was - (window.innerWidth - 8)))
-  }, [found])
-
-  const pick = (row: Row, how: Pick) => {
-    onPick(row, how)
-    if (clearOnPick) {
-      setQuery('')
-      setActive(0)
-    }
-  }
+    setShift(Math.max(0, right - (window.innerWidth - 8)))
+  }, [])
 
   const rows = found.status === 'ready' ? (hide ? found.rows.filter((row) => !hide(row)) : found.rows) : []
 
-  const keys = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      setActive((i) => Math.max(0, Math.min(rows.length - 1, i + (event.key === 'ArrowDown' ? 1 : -1))))
-    } else if (event.key === 'Enter') {
+  const pick = (row: Row, how: Pick) => {
+    onPick(row, how)
+    if (clearOnPick) setQuery('')
+  }
+
+  const search = (value: string) => {
+    if (value === query) return
+    setQuery(value)
+    setFound({ status: 'loading' })
+  }
+
+  const chosen = (key: Key | null) => {
+    const row = rows.find((r) => r.id === key)
+    if (row) pick(row, 'click')
+  }
+
+  // Enter picks the record the arrows moved to, else the first listed.
+  const active = (): Row | undefined => {
+    const id = input.current?.getAttribute('aria-activedescendant')
+    if (!id) return rows[0]
+    const key = document.getElementById(id)?.dataset.key
+    return rows.find((row) => String(row.id) === key)
+  }
+
+  // React Aria would close its list on Escape and commit on Tab, and the sheet would hear the key as well.
+  const keys = (event: KeyboardEvent) => {
+    const onInput = event.target === input.current
+    if (event.key === 'Escape') onCancel()
+    else if (event.key === 'Tab') onClose()
+    else if ((event.key === 'Delete' || event.key === 'Backspace') && onInput && query === '' && onClear) onClear()
+    else if (event.key === 'Enter' && onInput) {
       // Until the typed search answers, the list is the last one: a pick from it would be a stranger.
-      if (found.status === 'ready' && rows[active]) pick(rows[active], 'key')
-    } else if (event.key === 'Escape') {
-      onCancel()
-    } else if (event.key === 'Tab') {
-      onClose()
-    } else if ((event.key === 'Delete' || event.key === 'Backspace') && query === '' && onClear) {
-      onClear()
-    } else {
-      return
-    }
+      const row = found.status === 'ready' ? active() : undefined
+      if (row) pick(row, 'key')
+    } else return
     event.preventDefault()
     event.stopPropagation()
   }
 
-  const field = (
-      <input
-          ref={input}
-          className="nv-picker__input"
-          role="combobox"
-          aria-label={label}
-          aria-expanded="true"
-          aria-controls={`${id}-list`}
-          aria-activedescendant={rows[active] ? `${id}-${rows[active].id}` : undefined}
-          aria-autocomplete="list"
-          placeholder={`${label}…`}
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value)
-            setActive(0)
-            setFound({ status: 'loading' })
-          }}
-          onKeyDown={keys}
-          onBlur={onClose}
-        />
-  )
+  const blur = (event: FocusEvent) => {
+    const next = event.relatedTarget
+    if (next instanceof Element && next.closest('[data-editor]')) return
+    onClose()
+  }
 
   return (
-    <div ref={box} className="nv-pop nv-picker" data-editor style={shift ? { transform: `translateX(-${shift}px)` } : undefined}>
-      {before ? <div className="nv-picker__box">{before}{field}</div> : field}
-      <ul id={`${id}-list`} role="listbox" aria-label={label} className="nv-picker__list" onMouseDown={(event) => event.preventDefault()}>
-        {rows.map((row, i) => (
-          <li
-            key={row.id}
-            id={`${id}-${row.id}`}
-            role="option"
-            aria-selected={i === active}
-            className="nv-pop__option"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => pick(row, 'click')}
-          >
-            {row.title}
-          </li>
-        ))}
-      </ul>
-      {found.status === 'loading' && <Spinner size="sm" />}
-      {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
-      {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
+    <div ref={box} className="nv-pop nv-picker" data-editor onKeyDownCapture={keys} onBlur={blur} onClick={stop} onDoubleClick={stop}
+      style={shift ? { transform: `translateX(-${shift}px)` } : undefined}>
+      <ComboBox aria-label={label} allowsEmptyCollection menuTrigger="input" inputValue={query} onInputChange={search}
+        items={rows} selectedKey={null} onSelectionChange={chosen}>
+        <OpenOnMount />
+        <Group className={before ? 'nv-picker__box' : 'nv-picker__field'}>
+          {/* An open combobox hides the rest of the page from a screen reader; the chosen records stay heard. */}
+          {before && <span className="nv-picker__before" data-react-aria-top-layer>{before}</span>}
+          <Input ref={input} className="nv-picker__input" placeholder={`${label}…`} />
+        </Group>
+        <Pop triggerRef={box} placement="bottom start" offset={4} className="nv-picker__pop">
+          <div onMouseDown={keepFocus}>
+            <ListBox<Row> className="nv-picker__list">
+              {(row) => <ListBoxItem id={row.id} textValue={row.title} className="nv-pop__option">{row.title}</ListBoxItem>}
+            </ListBox>
+            {found.status === 'loading' && <Spinner size="sm" />}
+            {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
+            {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults')}</p>}
+          </div>
+        </Pop>
+      </ComboBox>
     </div>
   )
 }
