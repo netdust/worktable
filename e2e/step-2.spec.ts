@@ -921,17 +921,18 @@ test.describe('step 2', () => {
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mijn producties')
         await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
         const menu = page.getByRole('menu', { name: 'Exporteren / delen' })
-        const put = answered(page, 'PUT', /^\/api\/views\/\d+\/for-owners$/)
-        await menu
-          .getByRole('menuitem', { name: /Voor eigenaars publiceren|Niet meer voor eigenaars/ })
-          .first()
-          .click()
-        // A view already shown (a rerun) is first taken back, then shown again.
-        if ((await put.catch(() => null)) === null) {
-          await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
-          await menu.getByRole('menuitem', { name: 'Voor eigenaars publiceren' }).click()
+        const publish = menu.getByRole('menuitem', { name: 'Voor eigenaars publiceren' })
+        const withdraw = menu.getByRole('menuitem', { name: 'Niet meer voor eigenaars' })
+        await expect(publish.or(withdraw)).toBeVisible()
+        // On an instance where the view is already shown to owners, it stays shown.
+        if (await publish.isVisible()) {
+          const put = answered(page, 'PUT', /^\/api\/views\/\d+\/for-owners$/)
+          await publish.click()
+          await put
+          await expect(page.getByText('Gepubliceerd voor eigenaars')).toBeVisible()
+        } else {
+          await page.keyboard.press('Escape')
         }
-        await expect(page.getByText('Gepubliceerd voor eigenaars')).toBeVisible()
 
         // Lotte's link, copied from her drawer in Personen.
         await openView(page, 'Personen')
