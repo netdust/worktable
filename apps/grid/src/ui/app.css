@@ -2186,7 +2186,7 @@
 }
 
 .nv-grid .nv-group__count {
-  padding: 0 6px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: var(--color-bg-muted);
   color: var(--color-fg-muted);
@@ -2197,6 +2197,10 @@
 .nv-grid .nv-group__totals {
   color: var(--color-fg-muted);
   font-size: 12px;
+}
+
+.nv-grid .nv-group__count + .nv-group__fact {
+  margin-left: 6px;
 }
 
 .nv-grid .nv-group__fact i {
