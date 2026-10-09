@@ -106,6 +106,7 @@ Inside the engine each shape stays minimal:
 - **Owner accounts with a session** read whole rows on `/rows` until the later cut (assumed Q9); step 2 issues none to persons.
 - **Notes through the link:** a link actor writes nothing.
 - **Editor preview of an owner view:** not built.
+- **Per-address limits behind a proxy** (cutover precondition, ruling R18): every request arrives from the proxy's address, so the `/act`, record-link, `/owner` and Bearer limits become global. A trusted-proxy client address, or failure limits keyed by token as well, must land before real persons reach `/act` or `/owner`.
 
 ## Review Focus
 
