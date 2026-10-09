@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Domain, defineDataset, defineQuery, MigrationError, migrate, seedDomain } from '../src'
@@ -355,6 +355,17 @@ describe('migrate a changed dataset', () => {
     expect(all(copy, 'orders')).toEqual(before)
     expect(copy.query('PRAGMA foreign_key_list(orders)').all()).toEqual([])
     copy.close()
+  })
+
+  test('the copy holds personal data and token hashes, so only the owner may read it: mode 0600', () => {
+    const { file, sqlite } = seeded()
+    const umask = process.umask(0o022)
+    try {
+      migrate(sqlite, domainOf(order({ ...orderCols, client_id: { ...orderCols.client_id, relation: 'client' } })))
+    } finally {
+      process.umask(umask)
+    }
+    expect(statSync(`${file}.pre-migrate`).mode & 0o777).toBe(0o600)
   })
 
   test('a second rebuild replaces the copy with the state just before it', () => {
