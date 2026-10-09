@@ -64,7 +64,7 @@ const ticketOf = (over: Partial<DatasetDecl> = {}): DatasetDecl =>
     owners: { owner: 'member_id' },
     columns: {
       member_id: { type: 'integer', label: 'Member', relation: 'member', nullable: true },
-      state: { type: 'text', label: 'State', default: 'a', options: { a: 'A', b: 'B', c: 'C' } },
+      state: { type: 'text', label: 'State', default: 'a', options: { a: 'A', b: 'B', c: 'C' }, owner_visible: true },
       note: { type: 'text', label: 'Note', nullable: true },
     },
     lifecycle,

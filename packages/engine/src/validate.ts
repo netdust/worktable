@@ -91,6 +91,18 @@ function checkOwners(source: DatasetDecl | QueryDecl): void {
   throw new DomainError(source.name, column, `owner column "${column}" is not id or a relation column`)
 }
 
+// A json column would serve every key in it; the owner column is the scope, never a value.
+function checkOwnerVisible(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.owner_visible) continue
+    if (decl.type === 'json')
+      throw new DomainError(source.name, column, `${column} is json, so it is not owner_visible`)
+    if (column === source.owners?.owner) {
+      throw new DomainError(source.name, column, `${column} is the owner column, so it is not owner_visible`)
+    }
+  }
+}
+
 // Keys the engine adds to every row it answers.
 const OVERWRITTEN = [
   ['title', 'the computed row title'],
@@ -256,7 +268,11 @@ function checkLifecycle(dataset: DatasetDecl): void {
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
   for (const key of Object.keys(lifecycle.hooks ?? {})) checkOption('hook', key)
-  for (const column of lifecycle.token_projection ?? []) checkColumn(dataset, 'token_projection column', column)
+  for (const column of lifecycle.token_projection ?? []) {
+    checkColumn(dataset, 'token_projection column', column)
+    if (!dataset.columns[column]?.owner_visible)
+      throw at(column, `token_projection column "${column}" is not owner_visible`)
+  }
 }
 
 function checkRecordLink(dataset: DatasetDecl): void {
@@ -357,6 +373,7 @@ export function validateDomain(domain: Domain): void {
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
     checkOwners(source)
+    checkOwnerVisible(source)
     checkTones(source)
     checkIcon(source)
     checkFacts(source)

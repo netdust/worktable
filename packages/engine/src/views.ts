@@ -4,7 +4,7 @@ import type { Context, Hono } from 'hono'
 import { forbid, may, readable } from './access'
 import { type AuthEnv, secret, sha256 } from './auth'
 import type { Actor, Domain, SavedViewSeed } from './declare'
-import { filterWhere } from './filter'
+import { filterKeys, filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
 import { ApiError, keysProblem, parseRowsParams } from './params'
 import { checkLimits } from './rate-limit'
@@ -18,6 +18,7 @@ export type SavedViewRow = SavedViewSeed & { id: number }
 export type ViewOut = SavedViewRow & {
   shared: boolean
   public: boolean
+  for_owners: boolean
   owner_id: number
   mine: boolean
   editable: boolean
@@ -60,14 +61,16 @@ export function viewOf(raw: Raw): SavedViewRow {
 export const SYSTEM_OWNER = -1
 
 const isPublic = (raw: Raw): boolean => raw.public === 1
+const isForOwners = (raw: Raw): boolean => raw.for_owners === 1
 
 function outOf(raw: Raw, actor: Actor): ViewOut {
   const mine = raw.owner_id === actor.id
-  const editable = mine && (!isPublic(raw) || actor.role === 'administrator')
+  const editable = mine && ((!isPublic(raw) && !isForOwners(raw)) || actor.role === 'administrator')
   return {
     ...viewOf(raw),
     shared: raw.shared === 1,
     public: isPublic(raw),
+    for_owners: isForOwners(raw),
     owner_id: raw.owner_id as number,
     mine,
     editable,
@@ -174,6 +177,8 @@ export function ownedView(sqlite: Database, id: number, actor: Actor, includeDel
   // An editor must not widen what a published token serves.
   if (isPublic(raw) && actor.role !== 'administrator')
     throw new ApiError(403, 'public_view', `view ${id} is public; only an administrator may change it`)
+  if (isForOwners(raw) && actor.role !== 'administrator')
+    throw new ApiError(403, 'owner_view', `view ${id} is shown to owners; only an administrator may change it`)
   return raw
 }
 
@@ -261,7 +266,11 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
     const patch = patchOf(await bodyOf(c))
     write(() => {
       const current = ownedView(sqlite, id, actor)
-      save(sqlite, actor, id, stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false)), current)
+      const next = stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false))
+      // A view for owners must not gain a hidden column later (attack 13).
+      const problem = isForOwners(current) ? forOwnersProblem(domain, { ...current, ...next }) : null
+      if (problem) throw problem
+      save(sqlite, actor, id, next, current)
     })
     return c.json(outById(id, actor))
   })
@@ -269,8 +278,8 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
   app.delete('/views/:id', (c) => {
     const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
-    // A delete also revokes the share token, so a restore never brings an old link back.
-    const gone = { deleted_at: new Date().toISOString(), public: 0, share_token: null }
+    // A delete also revokes the share token and the owners' access, so a restore never brings either back.
+    const gone = { deleted_at: new Date().toISOString(), public: 0, share_token: null, for_owners: 0 }
     write(() => save(sqlite, actor, id, gone, ownedView(sqlite, id, actor)))
     return c.json({ id })
   })
@@ -297,10 +306,60 @@ function shareable(sqlite: Database, id: number, actor: Actor): Raw {
 
 function checkPublishable(domain: Domain, raw: Raw): void {
   if (raw.source_type !== 'query') throw new ApiError(400, 'not_query', 'only a view on a query can be public')
+  if (isForOwners(raw)) throw new ApiError(400, 'already_for_owners', 'a view for owners cannot also be public')
   const owner = sourceOf(domain, raw.source as string)?.owners?.owner
   if (owner && viewOf(raw).visible_fields.includes(owner)) {
     throw new ApiError(400, 'owner_column_visible', `hide "${owner}" before publishing this view`)
   }
+}
+
+/** A column served to the row's owner: declared owner_visible, and never the owner column. */
+export function ownerVisible(source: Source, key: string): boolean {
+  return (
+    key !== source.owners?.owner && Object.hasOwn(source.columns, key) && source.columns[key]?.owner_visible === true
+  )
+}
+
+export const notOwnerVisible = (key: string): ApiError =>
+  new ApiError(400, 'column_not_owner_visible', `"${key}" is not shown to owners`, { key })
+
+const keysOf = (raw: Raw): string[] => {
+  const view = viewOf(raw)
+  const sort = view.sort.map((key) => key.replace(/^-/, ''))
+  return [...view.visible_fields, ...filterKeys(view.filters), ...sort, ...(view.group_by ? [view.group_by] : [])]
+}
+
+/** Why a view may not be shown to owners, or null: each listed, filtered, sorted or grouped key must be owner-visible. */
+export function forOwnersProblem(domain: Domain, raw: Raw): ApiError | null {
+  if (raw.source_type !== 'query') return new ApiError(400, 'not_query', 'only a view on a query can be for owners')
+  const source = sourceOf(domain, raw.source as string)
+  if (!source?.owners?.owner) return new ApiError(400, 'no_owner_column', `"${raw.source}" declares no owner column`)
+  if (isPublic(raw) || raw.share_token != null)
+    return new ApiError(400, 'already_public', 'a public view cannot also be for owners')
+  const link = viewOf(raw).visible_fields.find((key) => Object.hasOwn(source.links ?? {}, key))
+  if (link) return new ApiError(400, 'link_not_allowed', `"${link}" is a link; owners see columns only`, { key: link })
+  try {
+    const hidden = keysOf(raw).find((key) => !ownerVisible(source, key))
+    return hidden === undefined ? null : notOwnerVisible(hidden)
+  } catch (err) {
+    if (err instanceof ApiError) return err
+    throw err
+  }
+}
+
+// A human administrator only; a service account is refused whatever its role (attack 16).
+function showingToOwners(actor: Actor): Actor {
+  if (actor.role !== 'administrator' || (actor.kind ?? 'user') !== 'user') {
+    forbid('only an administrator may show a view to owners')
+  }
+  return actor
+}
+
+export function setForOwners(sqlite: Database, domain: Domain, id: number, actor: Actor): void {
+  const raw = shareable(sqlite, id, actor)
+  const problem = forOwnersProblem(domain, raw)
+  if (problem) throw problem
+  save(sqlite, actor, id, { for_owners: 1 }, raw)
 }
 
 export function shareRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
@@ -323,6 +382,20 @@ export function shareRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void
     const id = viewId(c.req.param('id'))
     write(() => save(sqlite, actor, id, { public: 0, share_token: null }, shareable(sqlite, id, actor)))
     return c.json({ id })
+  })
+
+  app.put('/views/:id/for-owners', (c) => {
+    const actor = showingToOwners(c.get('actor'))
+    const id = viewId(c.req.param('id'))
+    write(() => setForOwners(sqlite, domain, id, actor))
+    return c.json({ id, for_owners: true })
+  })
+
+  app.delete('/views/:id/for-owners', (c) => {
+    const actor = showingToOwners(c.get('actor'))
+    const id = viewId(c.req.param('id'))
+    write(() => save(sqlite, actor, id, { for_owners: 0 }, shareable(sqlite, id, actor)))
+    return c.json({ id, for_owners: false })
   })
 }
 

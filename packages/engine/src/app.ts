@@ -10,6 +10,7 @@ import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
+import { ownerViewGuard, ownerViewRoutes } from './owner-views'
 import { ApiError, parseRowsParams } from './params'
 import { noStoreHeaders } from './public-headers'
 import { recordLinkRequest, recordLinkRoutes } from './record-link'
@@ -183,6 +184,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   publicRoutes(app, store, ipOf)
   actionTokenRoutes(app, store, ipOf)
   recordLinkRequest(app, store, linkSecret, ipOf)
+  ownerViewGuard(app, store, ipOf)
   authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
   if (linkSecret) recordLinkRoutes(app, store, linkSecret)
 
@@ -255,6 +257,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   displayRoutes(app, store)
   viewRoutes(app, store)
   shareRoutes(app, store)
+  ownerViewRoutes(app, store)
 
   root.onError((err, c) => {
     // Every 401 may answer a presented token, so none is cached or referred on.

@@ -147,6 +147,17 @@ export function compileFilter(ast: FilterAST, source: Source, table: SQLiteTable
   return clauseOf(ast, source, table, now)
 }
 
+/** Every key a filter names, those inside $or included. */
+export function filterKeys(input: FilterInput): string[] {
+  const walk = (ast: FilterAST): string[] => (ast.kind === 'cmp' ? [ast.key] : ast.clauses.flatMap(walk))
+  try {
+    return [...new Set(walk(filterCompile(input)))]
+  } catch (e) {
+    if (e instanceof FilterCompileError) throw new ApiError(400, 'bad_filter', e.message)
+    throw e
+  }
+}
+
 export function filterWhere(input: FilterInput, source: Source, table: SQLiteTable, now = new Date()): SQL | undefined {
   try {
     return compileFilter(filterCompile(input), source, table, now)

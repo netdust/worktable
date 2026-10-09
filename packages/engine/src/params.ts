@@ -24,6 +24,8 @@ export function emailOf(value: unknown): string {
 
 export interface RowsParams {
   filter: FilterInput | null
+  /** A saved view's own filter, which the request's filter narrows. */
+  stored?: FilterInput
   sort: { column: string; desc: boolean }[]
   group: string | null
   from: string | null
@@ -77,7 +79,7 @@ function parseOffset(raw: string | undefined): number {
 const hasColumn = (source: Source, key: string): boolean =>
   Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
 
-function parseFilter(raw: string | undefined): FilterInput | null {
+export function parseFilter(raw: string | undefined): FilterInput | null {
   if (raw === undefined || raw === '') return null
   let parsed: unknown
   try {

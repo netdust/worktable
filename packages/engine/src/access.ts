@@ -13,6 +13,7 @@ export type Surface =
   | 'views.write'
   | 'views.share'
   | 'sources.display'
+  | 'owner.views'
 
 type Role = Actor['role']
 const SIGNED_IN: Role[] = ['owner', 'editor', 'administrator']
@@ -29,6 +30,7 @@ const ALLOWED: Record<Surface, Role[] | 'anyone'> = {
   'views.write': ['editor', 'administrator'],
   'views.share': ['administrator'],
   'sources.display': ['administrator'],
+  'owner.views': ['owner'],
 }
 
 export function may(actor: Actor | null, surface: Surface): boolean {

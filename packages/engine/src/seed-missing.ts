@@ -16,7 +16,7 @@ export type DatasetOutcome = { inserted: number; present: number } | 'not config
 export interface SeedReport {
   datasets: Record<string, DatasetOutcome>
   views: { added: number; updated: number; present: number }
-  // One line per system view it updated or left alone for being public.
+  // One line per system view it updated, or left alone for being public or for owners.
   named: string[]
   batch: string | null
 }
@@ -115,11 +115,18 @@ function addView(run: Run, next: Stored): void {
 
 const isPublic = (view: Stored): boolean => view.public === 1 || view.share_token !== null
 
-// Answers whether the view changed; only the system owner's views are brought up to date, never a public one.
+// What an administrator published, to anyone or to owners, stays as they published it.
+function leftAlone(view: Stored): string | null {
+  if (isPublic(view)) return 'is public'
+  return view.for_owners === 1 ? 'is for owners' : null
+}
+
+// Answers whether the view changed; only the system owner's views are brought up to date, never a published one.
 function updateView(run: Run, current: Stored, next: Stored): boolean {
   const label = `view "${current.name}" (${current.source})`
-  if (isPublic(current)) {
-    run.named.push(`${label} is public, left alone`)
+  const published = leftAlone(current)
+  if (published) {
+    run.named.push(`${label} ${published}, left alone`)
     return false
   }
   const changes = DECLARED.map((key): Change => [key, current[key] ?? null, next[key] ?? null]).filter(
@@ -155,15 +162,16 @@ function seedViews(run: Run): SeedReport['views'] {
   return counts
 }
 
-// A system view whose name and source no seed declares any more (a renamed seed) is removed; a public one stays.
+// A system view whose name and source no seed declares any more (a renamed seed) is removed; a published one stays.
 function removeUndeclared(run: Run): void {
   const declared = new Set(run.store.domain.views.map((seed) => `${seed.name}\u0000${seed.source}`))
   const sql = 'SELECT * FROM saved_view WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
   for (const view of run.store.sqlite.query(sql).all(SYSTEM_OWNER) as Stored[]) {
     if (declared.has(`${view.name}\u0000${view.source}`)) continue
     const label = `view "${view.name}" (${view.source})`
-    if (isPublic(view)) {
-      run.named.push(`${label} is public, left alone`)
+    const published = leftAlone(view)
+    if (published) {
+      run.named.push(`${label} ${published}, left alone`)
       continue
     }
     run.store.sqlite

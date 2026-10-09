@@ -160,6 +160,27 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
   },
   {
     method: 'PUT',
+    path: '/api/views/3/for-owners',
+    body: {},
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/views/3/for-owners',
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
+  },
+  {
+    method: 'GET',
+    path: '/api/owner/views',
+    status: { none: 401, owner: 200, editor: 403, administrator: 403, link: 200 },
+  },
+  {
+    method: 'GET',
+    path: '/api/owner/views/5/rows',
+    status: { none: 401, owner: 200, editor: 403, administrator: 403, link: 200 },
+  },
+  {
+    method: 'PUT',
     path: '/api/sources/taak/display',
     body: { label: 'Werk', icon: 'star' },
     status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
@@ -215,14 +236,15 @@ describe('the permissions matrix', () => {
       test(`${method} ${path} as ${role} is ${status[role]}`, async () => {
         sqlite.run('SAVEPOINT cell')
         try {
-          // Views 2 and 3 belong to whoever signed in, so only the role decides; 4 is public.
+          // Views 2 and 3 belong to whoever signed in, so only the role decides; 4 is public, 5 for owners.
           const row = sqlite.query('SELECT id FROM account WHERE role = ?').get(role) as { id: number } | null
           const account = row?.id ?? 0
           sqlite.run(
-            `INSERT INTO saved_view (name, source_type, source, owner_id, visible_fields, public, share_token)
-             VALUES ('Own', 'dataset', 'taak', ${account}, '[]', 0, NULL),
-                    ('Query', 'query', 'per_project', ${account}, '["name"]', 0, NULL),
-                    ('Public', 'query', 'per_project', ${account}, '["name"]', 1, '${PUBLIC_HASH}')`,
+            `INSERT INTO saved_view (name, source_type, source, owner_id, visible_fields, public, share_token, for_owners)
+             VALUES ('Own', 'dataset', 'taak', ${account}, '[]', 0, NULL, 0),
+                    ('Query', 'query', 'per_project', ${account}, '["name"]', 0, NULL, 0),
+                    ('Public', 'query', 'per_project', ${account}, '["name"]', 1, '${PUBLIC_HASH}', 0),
+                    ('Owners', 'query', 'per_project', ${account}, '["name"]', 0, NULL, 1)`,
           )
           // One batch of the signed-in account's on a note every role may write, and one of another account.
           sqlite.run(

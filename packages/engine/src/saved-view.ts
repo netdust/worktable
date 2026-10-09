@@ -24,5 +24,6 @@ export const savedView = defineDataset({
     share_token: { type: 'text', label: 'Share token', nullable: true },
     format: { type: 'text', label: 'Format', default: 'html', options: { html: 'html', ical: 'ical', pdf: 'pdf' } },
     public: { type: 'boolean', label: 'Public', default: false },
+    for_owners: { type: 'boolean', label: 'For owners', default: false },
   },
 })

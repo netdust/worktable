@@ -107,9 +107,9 @@ const perProject = defineQuery({
   columns: {
     id: { type: 'integer', label: 'Id' },
     project_id: { type: 'integer', label: 'Project', relation: 'project' },
-    name: { type: 'text', label: 'Name' },
-    day: { type: 'date', label: 'Day' },
-    aantal: { type: 'integer', label: 'Aantal' },
+    name: { type: 'text', label: 'Name', owner_visible: true },
+    day: { type: 'date', label: 'Day', owner_visible: true },
+    aantal: { type: 'integer', label: 'Aantal', owner_visible: true },
   },
 })
 

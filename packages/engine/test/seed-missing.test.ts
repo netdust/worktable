@@ -265,6 +265,26 @@ describe('seedMissing: public and updated system views', () => {
     expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
   })
 
+  test('a system view for owners keeps its visible_fields and flag, and is named (attack 13)', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
+    sqlite.query('UPDATE saved_view SET for_owners = 1 WHERE id = ?').run(id)
+    const before = viewsNamed(sqlite, 'Open')
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is for owners, left alone')
+    expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
+  })
+
+  test('a system view for owners that no seed declares any more stays, and is named', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Weg', 'taak', ['day'])
+    sqlite.query('UPDATE saved_view SET for_owners = 1 WHERE id = ?').run(id)
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Weg')).toMatchObject([{ deleted_at: null, for_owners: 1 }])
+    expect(seedLines(report)).toContain('seed-missing: view "Weg" (taak) is for owners, left alone')
+  })
+
   test('a system view holding only a share token counts as public and is left alone', () => {
     const sqlite = existingDb()
     const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])

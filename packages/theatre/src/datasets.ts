@@ -191,16 +191,17 @@ export const toewijzing = defineDataset({
     open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' },
   },
   columns: {
-    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit', owner_visible: true },
     persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
     naam: { type: 'text', label: 'Naam', nullable: true },
-    rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol' },
+    rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol', owner_visible: true },
     aantal: { type: 'integer', label: 'Aantal', default: 1 },
     // The DDL default stays: changing it rebuilds the table. The writer decides the state on create.
     state: {
       type: 'text',
       label: 'Status',
       default: 'uitgenodigd',
+      owner_visible: true,
       options: {
         open: 'Open',
         voorlopig: 'Voorlopig',

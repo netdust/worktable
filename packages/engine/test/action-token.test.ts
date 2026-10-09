@@ -30,7 +30,15 @@ const ticket: DatasetDecl = defineDataset({
   owners: { owner: 'member_id' },
   columns: {
     member_id: { type: 'integer', label: 'Member', relation: 'member', nullable: true },
-    state: { type: 'text', label: 'State', default: 'a', options: { a: 'A', b: 'B', c: 'C', d: 'D' } },
+    // The owner column is never projected; this relation shows the projection answers a title.
+    host_id: { type: 'integer', label: 'Host', relation: 'member', nullable: true, owner_visible: true },
+    state: {
+      type: 'text',
+      label: 'State',
+      default: 'a',
+      options: { a: 'A', b: 'B', c: 'C', d: 'D' },
+      owner_visible: true,
+    },
     note: { type: 'text', label: 'Note', nullable: true },
   },
   lifecycle: {
@@ -50,7 +58,7 @@ const ticket: DatasetDecl = defineDataset({
         },
       }),
     },
-    token_projection: ['member_id', 'state'],
+    token_projection: ['host_id', 'state'],
   },
 })
 
@@ -60,7 +68,7 @@ const domain: Domain = {
   seed: (insert) => {
     insert('member', [{ name: 'Ann' }, { name: 'Bob' }])
     insert('ticket', [
-      { member_id: 1, state: 'a', note: 'eerste' },
+      { member_id: 1, host_id: 2, state: 'a', note: 'eerste' },
       { member_id: null, state: 'a', note: 'leeg' },
     ])
   },
@@ -190,8 +198,8 @@ describe('the action token', () => {
       status: 200,
       body: {
         dataset: 'ticket',
-        projection: { member_id: 'Ann', state: 'B' },
-        labels: { member_id: 'Member', state: 'State' },
+        projection: { host_id: 'Bob', state: 'B' },
+        labels: { host_id: 'Host', state: 'State' },
         to: [
           { value: 'c', label: 'Close' },
           { value: 'd', label: 'D' },
@@ -206,7 +214,7 @@ describe('the action token', () => {
     expect(tokens()[0]?.hash).not.toBe(token)
 
     const shown = await view(token)
-    expect(shown.body).toMatchObject({ dataset: 'ticket', projection: { member_id: 'Ann', state: 'B' } })
+    expect(shown.body).toMatchObject({ dataset: 'ticket', projection: { host_id: 'Bob', state: 'B' } })
 
     const res = await act(token, 'c')
     expect(res.status).toBe(200)
