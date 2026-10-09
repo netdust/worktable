@@ -391,8 +391,8 @@ describe('the inherited locatie', () => {
   })
 })
 
-test('the seeded Dagplanning view shows the resolved locatie; where it comes from is left out (R10)', () => {
-  const view = theatre.views.find((v) => v.name === 'Dagplanning')
+test('the seeded Planning view shows the resolved locatie; where it comes from is left out (R10)', () => {
+  const view = theatre.views.find((v) => v.name === 'Planning')
   expect(view?.visible_fields).toContain('locatie_id')
   expect(view?.visible_fields).not.toContain('locatie_bron')
 })

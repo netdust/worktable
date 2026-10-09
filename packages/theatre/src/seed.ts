@@ -171,26 +171,6 @@ export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) 
 export const views: SavedViewSeed[] = [
   {
     name: 'Planning',
-    source_type: 'dataset',
-    source: 'activiteit',
-    skin: 'table',
-    filters: { status: 'bevestigd' },
-    sort: ['start_at'],
-    group_by: 'plandag',
-    visible_fields: ['productie_id', 'soort', 'start_at', 'eind_at', 'status', 'plaats'],
-  },
-  {
-    name: 'Per productie per dag',
-    source_type: 'query',
-    source: 'productie_dag',
-    skin: 'table',
-    filters: {},
-    sort: ['plandag'],
-    group_by: null,
-    visible_fields: ['productie', 'plandag', 'activiteiten', 'voorstellingen', 'repetities'],
-  },
-  {
-    name: 'Dagplanning',
     source_type: 'query',
     source: 'dagplanning',
     skin: 'table',
@@ -208,16 +188,6 @@ export const views: SavedViewSeed[] = [
     sort: ['plandag', 'start_at'],
     group_by: null,
     visible_fields: ['productie_id', 'soort', 'datum', 'start_at', 'status'],
-  },
-  {
-    name: 'Optie of bevestigd',
-    source_type: 'dataset',
-    source: 'activiteit',
-    skin: 'table',
-    filters: { status: { $in: ['optie', 'bevestigd'] } },
-    sort: ['plandag', 'start_at'],
-    group_by: null,
-    visible_fields: ['productie_id', 'soort', 'datum', 'start_at', 'eind_at', 'status', 'plaats'],
   },
   {
     name: 'Organisaties',

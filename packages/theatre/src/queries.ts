@@ -36,7 +36,7 @@ const writesActiviteit = (field: string) => ({ dataset: 'activiteit', field, key
 export const dagplanning = defineQuery({
   name: 'dagplanning',
   of: 'activiteit',
-  label: 'Dagplanning',
+  label: 'Planning',
   icon: 'query',
   title: 'omschrijving',
   date: 'plandag',
@@ -86,7 +86,6 @@ export const dagplanning = defineQuery({
 
 export const voorstellingen = defineQuery({
   name: 'voorstellingen',
-  of: 'activiteit',
   label: 'Voorstellingen',
   icon: 'table',
   title: 'productie',
