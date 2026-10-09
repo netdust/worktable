@@ -174,10 +174,11 @@ export function ownedView(sqlite: Database, id: number, actor: Actor, includeDel
       throw new ApiError(403, 'not_owner', `view ${id} belongs to someone else`)
     throw unknownView(id)
   }
-  // An editor must not widen what a published token serves.
-  if (isPublic(raw) && actor.role !== 'administrator')
+  // An editor or a service must not widen what a published token serves (attack 16).
+  const human = actor.role === 'administrator' && (actor.kind ?? 'user') === 'user'
+  if (isPublic(raw) && !human)
     throw new ApiError(403, 'public_view', `view ${id} is public; only an administrator may change it`)
-  if (isForOwners(raw) && actor.role !== 'administrator')
+  if (isForOwners(raw) && !human)
     throw new ApiError(403, 'owner_view', `view ${id} is shown to owners; only an administrator may change it`)
   return raw
 }

@@ -258,6 +258,27 @@ describe('an administrator service may not publish or mint links (attack 16)', (
   })
 })
 
+describe('an administrator service may not change a published view it owns (attack 16)', () => {
+  test.each([
+    ['public', 'public = 1', 'public_view'],
+    ['for owners', 'for_owners = 1', 'owner_view'],
+  ])('a %s view: PATCH and DELETE are 403, tables unchanged', async (_, set, code) => {
+    const token = createService(sqlite, 'ops', 'administrator')
+    const id = (sqlite.query("SELECT id FROM account WHERE name = 'ops'").get() as { id: number }).id
+    sqlite.run(
+      `INSERT INTO saved_view (name, source_type, source, owner_id, visible_fields, shared)
+       VALUES ('Lijst', 'query', 'per_project', ${id}, '["name"]', 1)`,
+    )
+    const view = (sqlite.query("SELECT id FROM saved_view WHERE name = 'Lijst'").get() as { id: number }).id
+    sqlite.run(`UPDATE saved_view SET ${set} WHERE id = ${view}`)
+    const before = tablesBut('rate_limit')
+    const patched = await asService(token, 'PATCH', `/api/views/${view}`, { visible_fields: ['name', 'project_id'] })
+    const deleted = await asService(token, 'DELETE', `/api/views/${view}`)
+    expect([patched.status, patched.body.code, deleted.status, deleted.body.code]).toEqual([403, code, 403, code])
+    expect(tablesBut('rate_limit')).toEqual(before)
+  })
+})
+
 describe('the write guard holds for a Bearer request', () => {
   test('a write without JSON is 415, and a cross-site one is 403', async () => {
     const token = createService(sqlite, 'bot', 'editor')
