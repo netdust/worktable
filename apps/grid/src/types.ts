@@ -28,6 +28,8 @@ export interface Field {
   inherited?: { flag: string; own: string }
   /** A `links` field: the rows of `dataset` whose `key` is this row's id, each pointing at a `target_dataset` record. */
   link?: Link
+  /** Served to the row's owner in a view for owners. */
+  owner_visible?: true
 }
 
 export interface Link {
@@ -69,6 +71,8 @@ export interface Model {
   new_label?: string
   /** What the drawer offers to run on one of its records. */
   actions?: ModelAction[]
+  /** Each record has a link its person reads their views through. */
+  record_link?: true
   fields: Record<string, Field>
 }
 
@@ -157,6 +161,8 @@ export interface SavedView extends View {
   editable: boolean
   /** Published with a share token: it never saves itself. */
   public?: boolean
+  /** Shown to the people its rows belong to. */
+  for_owners?: boolean
 }
 
 /** What `POST views` takes: a new view, always of no field. */
@@ -289,6 +295,29 @@ export interface ApiError {
   /** On a 409 `changed_since`: the column that changed, and its label. */
   column?: string
   label?: string
+  /** On a refusal about one column, such as one not shown to owners. */
+  key?: string
+}
+
+/** A column of a view shown to owners, as the engine describes it beside the view. */
+export interface OwnerColumn {
+  key: string
+  label: string
+  type: string
+  options?: Record<string, string>
+}
+
+/** A saved view shown to the people its rows belong to, as `GET /owner/views` lists it. */
+export interface OwnerView {
+  id: number
+  name: string
+  columns: OwnerColumn[]
+}
+
+export interface OwnerRows {
+  columns: OwnerColumn[]
+  rows: Record<string, unknown>[]
+  total: number
 }
 
 /** One record's part of one batch, as `/history/:source` answers it; `actor` is an email, or a link's name, only where the engine may say it. */

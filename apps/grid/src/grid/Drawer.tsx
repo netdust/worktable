@@ -1,7 +1,8 @@
 import { Button } from 'react-aria-components'
 import { type ReactNode, useState } from 'react'
+import { recordLink as readLink, rotateRecordLink } from '../api'
 import { errorText, t } from '../i18n'
-import type { ApiError, ModelAction, Row } from '../types'
+import type { Account, ApiError, Model, ModelAction, Row } from '../types'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
 import { RelationPicker } from './cells/RelationPicker'
@@ -21,10 +22,17 @@ interface Props {
   onAction?: RunAction
   /** False leaves focus where it was: the matrix keeps typing in its cell. */
   focusOnOpen?: boolean
+  /** The dataset whose record link the drawer copies and renews; an administrator's. */
+  recordLink?: string
+}
+
+/** The dataset an administrator copies a record's link of, on one that declares record_link. */
+export function linkedDataset(role: Account['role'], model: Model): string | undefined {
+  return role === 'administrator' && model.record_link ? model.key : undefined
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. */
-export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true }: Props) {
+export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink }: Props) {
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen}>
       {columns.length > 0 && <dl className="nv-drawer__fields">
@@ -35,9 +43,28 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
           </div>
         ))}
       </dl>}
+      {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
     </SidePanel>
+  )
+}
+
+/** Copies the record's link for its person, or a new one that stops the old. */
+function RecordLink({ dataset, id }: { dataset: string; id: number }) {
+  const [said, setSaid] = useState('')
+  const copy = (read: Promise<string>, done: string) => {
+    read.then((link) => navigator.clipboard.writeText(link)).then(
+      () => setSaid(done),
+      () => setSaid(t('recordLinkFailed')),
+    )
+  }
+  return (
+    <div className="nv-action" role="group" aria-label={t('copyLink')}>
+      <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(readLink(dataset, id), t('linkCopied'))}>{t('copyLink')}</Button>
+      <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(rotateRecordLink(dataset, id), t('recordLinkRotated'))}>{t('recordLinkNew')}</Button>
+      <p className="nv-action__said" role="status">{said}</p>
+    </div>
   )
 }
 

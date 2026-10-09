@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { actOn, actView, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
+import { actOn, actView, ownerRows, ownerViews, recordLink, rotateRecordLink, setForOwners, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -490,6 +490,39 @@ describe('writes', () => {
     expect(await publishView(42)).toBe('t-1')
     expect(fetcher.mock.calls[0][0]).toBe('/api/views/42/share-token')
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'PUT', body: '{}', headers: { 'Content-Type': 'application/json' } })
+  })
+
+  it('sets and clears a view for owners, an administrator\'s route', async () => {
+    fetcher.mockImplementation(async () => json({ id: 42, for_owners: true }))
+    await setForOwners(42, true)
+    await setForOwners(42, false)
+    expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['/api/views/42/for-owners', 'PUT'],
+      ['/api/views/42/for-owners', 'DELETE'],
+    ])
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ body: '{}' })
+  })
+
+  it("re-copies and rotates a record's link", async () => {
+    fetcher.mockImplementation(async () => json({ link: 'http://grid.test/#/link/persoon.3.abc' }))
+    expect(await recordLink('persoon', 3)).toBe('http://grid.test/#/link/persoon.3.abc')
+    expect(await rotateRecordLink('persoon', 3)).toBe('http://grid.test/#/link/persoon.3.abc')
+    expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['/api/record-links/persoon/3', 'GET'],
+      ['/api/record-links/persoon/3/rotate', 'POST'],
+    ])
+    expect(fetcher.mock.calls[1][1]).toMatchObject({ body: '{}' })
+  })
+
+  it('reads the views for owners with the link as a RecordLink header, never in the address', async () => {
+    fetcher.mockImplementation(async (url) => json(String(url).endsWith('/rows') ? { columns: [], rows: [], total: 0 } : { views: [] }))
+    expect(await ownerViews('persoon.3.abc')).toEqual([])
+    expect(await ownerRows('persoon.3.abc', 21)).toEqual({ columns: [], rows: [], total: 0 })
+    for (const [url, init] of fetcher.mock.calls) {
+      expect(String(url)).not.toContain('persoon.3.abc')
+      expect(new Headers(init?.headers).get('authorization')).toBe('RecordLink persoon.3.abc')
+    }
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual(['/api/owner/views', '/api/owner/views/21/rows'])
   })
 
   it('undoes a batch with an empty JSON body and answers the undo batch; a changed_since keeps its column and label', async () => {

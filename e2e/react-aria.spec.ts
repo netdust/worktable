@@ -615,11 +615,12 @@ test('edit-long-text @e2e', async ({ page }) => {
   const note = 'eerste regel\ntweede regel — café ☕'
   try {
     await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', WEEK)
+    // Person cells only: the label and the open column carry no data-cell.
     const spot = async () => {
       const column = await columnIndex(page, 'Noor Claes')
       return named(page, title)
         .locator('td[data-cell]')
-        .nth(column - 1)
+        .nth(column - 2)
     }
     const field = page.getByRole('textbox', { name: 'Notitie' })
 

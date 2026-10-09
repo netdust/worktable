@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -22,7 +22,8 @@ function toApiError(error: unknown): ApiError {
     const by = 'by' in error && Array.isArray(error.by) ? { by: error.by.filter(isReferrer) } : {}
     const named = 'label' in error && typeof error.label === 'string' ? { label: error.label } : {}
     const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
-    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column }
+    const key = 'key' in error && typeof error.key === 'string' ? { key: error.key } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
@@ -58,10 +59,12 @@ function heard(reply: Record<string, unknown>): void {
   if (notices.length > 0) noticed(notices)
 }
 
-async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>): Promise<T> {
+/** `authorization` replaces the session cookie's say for this one request, such as a person's link. */
+async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>, authorization?: string): Promise<T> {
   try {
     const body = data === undefined ? undefined : JSON.stringify(data)
-    const response = await fetch(endpoint(path, query), { method, body, headers: body ? { 'Content-Type': 'application/json' } : undefined })
+    const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(authorization ? { Authorization: authorization } : {}) }
+    const response = await fetch(endpoint(path, query), { method, body, headers: Object.keys(headers).length > 0 ? headers : undefined })
     if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     return (await response.json()) as T
@@ -118,6 +121,32 @@ async function viewQuery(view: ViewRead, window: Partial<DateWindow>, scope: Sco
 /** Makes a saved view public, or gives it a new link, the old one stopping: the token comes back once. */
 export async function publishView(id: number): Promise<string> {
   return (await request<{ token: string }>('PUT', `/views/${id}/share-token`, {}, {})).token
+}
+
+/** Shows a saved view to the people its rows belong to, or stops showing it; an administrator's. */
+export async function setForOwners(id: number, on: boolean): Promise<void> {
+  await request(on ? 'PUT' : 'DELETE', `/views/${id}/for-owners`, {}, on ? {} : undefined)
+}
+
+/** A record's current link, as the administrator copies it for its person. */
+export async function recordLink(dataset: string, id: number): Promise<string> {
+  return (await request<{ link: string }>('GET', `/record-links/${encodeURIComponent(dataset)}/${id}`)).link
+}
+
+/** A new link for a record; the old one stops at once. */
+export async function rotateRecordLink(dataset: string, id: number): Promise<string> {
+  return (await request<{ link: string }>('POST', `/record-links/${encodeURIComponent(dataset)}/${id}/rotate`, {}, {})).link
+}
+
+const asLink = (token: string) => `RecordLink ${token}`
+
+/** The views shown to the link's person. The token travels in the Authorization header only, never in an address. */
+export async function ownerViews(token: string): Promise<OwnerView[]> {
+  return (await request<{ views: OwnerView[] }>('GET', '/owner/views', {}, undefined, asLink(token))).views
+}
+
+export function ownerRows(token: string, id: number): Promise<OwnerRows> {
+  return request<OwnerRows>('GET', `/owner/views/${id}/rows`, {}, undefined, asLink(token))
 }
 
 /** The recent changes to the rows the view shows: its filter, scope and window, as `rows` sends them. */

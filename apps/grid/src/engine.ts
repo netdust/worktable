@@ -16,6 +16,7 @@ export interface EngineColumn {
   /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
   writes?: { dataset: string; field: string; key: string }
   inherited?: { flag: string; own: string }
+  owner_visible?: boolean
 }
 
 /** A join dataset's matrix: down and across are its relation columns, cell an options column. */
@@ -64,6 +65,8 @@ export interface EngineSource {
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
   lifecycle?: { column: string }
+  /** Each record has a link its person reads their views through. */
+  record_link?: true
 }
 
 /** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
@@ -86,6 +89,7 @@ export interface EngineView extends EngineArrangement {
   mine: boolean
   editable: boolean
   public?: boolean
+  for_owners?: boolean
 }
 
 export interface EngineSchema {
@@ -144,6 +148,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
     ...(declared.inherited ? { inherited: declared.inherited } : {}),
+    ...(declared.owner_visible ? { owner_visible: true as const } : {}),
   }
 }
 
@@ -170,6 +175,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.creates ? { creates: source.creates } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
+    ...(source.record_link ? { record_link: true as const } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
       ...Object.fromEntries(Object.entries(source.links ?? {}).map(([name, link]) => [name, linkField(link)])),
@@ -348,6 +354,7 @@ export function toSavedViews(views: EngineView[], sources: Sources): SavedView[]
       mine: view.mine,
       editable: view.editable,
       ...(view.public ? { public: true } : {}),
+      ...(view.for_owners ? { for_owners: true } : {}),
     }]
   })
 }

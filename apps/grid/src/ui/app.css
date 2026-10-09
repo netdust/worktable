@@ -2636,6 +2636,11 @@
   overflow-wrap: anywhere;
 }
 
+#root .nv-action__said {
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+
 /* The matrix's editor in the drawer: the drawer's tokens, its fields stacked, long text kept inside. */
 .nv-panel {
   display: flex;
@@ -3273,6 +3278,45 @@
 .nv-act__facts dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.nv-person {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(720px, 100%);
+  padding: 24px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+}
+
+.nv-person__view {
+  overflow-x: auto;
+}
+
+.nv-person__name {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.nv-person__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.nv-person__table th,
+.nv-person__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.nv-person__table th {
+  color: var(--color-fg-muted);
+  font-weight: 500;
 }
 
 .nv-act__answers {

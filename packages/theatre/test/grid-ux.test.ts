@@ -49,13 +49,14 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     expect(body.sources.beschikbaarheid.label).toBe('Beschikbaarheden')
   })
 
-  test('the three queries read activiteit, declared in the order the tree shows them', async () => {
+  test('the planning queries read activiteit and the person page reads toewijzing, in the order the tree shows them', async () => {
     const body = await schemaAs('editor')
     const queries = Object.entries(body.sources).filter(([, s]) => (s as Schema).kind === 'query')
     expect(queries.map(([name, s]) => [name, (s as Schema).of])).toEqual([
       ['dagplanning', 'activiteit'],
       ['productie_dag', 'activiteit'],
       ['voorstellingen', 'activiteit'],
+      ['mijn_producties', 'toewijzing'],
     ])
   })
 
@@ -108,6 +109,7 @@ describe('theatre declares the details: icons, colours, an end time and create-f
       productie_dag: 'table',
       dagplanning: 'query',
       voorstellingen: 'table',
+      mijn_producties: 'star',
     })
   })
 

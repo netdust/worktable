@@ -1,6 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Share } from './Share'
+import type { Model } from '../types'
+
+const remote = vi.hoisted(() => ({ setForOwners: vi.fn() }))
+vi.mock('../api', () => remote)
+const { offersForOwners, Share } = await import('./Share')
 
 afterEach(() => {
   cleanup()
@@ -105,5 +109,54 @@ describe('the share menu', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Publiceren' })).toBeNull()
     expect(document.activeElement).toBe(trigger())
+  })
+})
+
+describe('publishing for owners', () => {
+  const field = (owner_visible?: true) => ({ type: 'text' as const, label: 'Productie', required: false, fact: false, ...(owner_visible ? { owner_visible } : {}) })
+  const model = (query: boolean, owner_visible?: true): Model => ({ key: 'mijn_producties', label: 'Mijn producties', title_label: 'Productie', title_readonly: true, query, fields: { productie: field(owner_visible) } })
+
+  it('is offered to an administrator on a query with owner-visible columns only', () => {
+    expect(offersForOwners('administrator', model(true, true))).toBe(true)
+    expect(offersForOwners('editor', model(true, true))).toBe(false)
+    expect(offersForOwners('owner', model(true, true))).toBe(false)
+    expect(offersForOwners('administrator', model(true))).toBe(false)
+    expect(offersForOwners('administrator', model(false, true))).toBe(false)
+    expect(offersForOwners('administrator', null)).toBe(false)
+  })
+
+  it('"Voor eigenaars publiceren" shows only when offered, and calls the route', async () => {
+    const { unmount } = render(<Share onExcel={vi.fn()} link={() => ''} onCopied={vi.fn()} />)
+    expect(items()).not.toContain('Voor eigenaars publiceren')
+    unmount()
+
+    remote.setForOwners.mockResolvedValue(undefined)
+    const onChanged = vi.fn()
+    render(<Share onExcel={vi.fn()} link={() => ''} onCopied={vi.fn()} owners={{ id: 21, isForOwners: false, onChanged }} />)
+    const item = within(open()).getByRole('menuitem', { name: 'Voor eigenaars publiceren' })
+    await act(async () => fireEvent.click(item))
+
+    expect(remote.setForOwners).toHaveBeenCalledExactlyOnceWith(21, true)
+    expect(onChanged).toHaveBeenCalledWith(true)
+  })
+
+  it('a view for owners offers to take it back', async () => {
+    remote.setForOwners.mockResolvedValue(undefined)
+    const onChanged = vi.fn()
+    render(<Share onExcel={vi.fn()} link={() => ''} onCopied={vi.fn()} owners={{ id: 21, isForOwners: true, onChanged }} />)
+    const item = within(open()).getByRole('menuitem', { name: 'Niet meer voor eigenaars' })
+    await act(async () => fireEvent.click(item))
+
+    expect(remote.setForOwners).toHaveBeenCalledExactlyOnceWith(21, false)
+    expect(onChanged).toHaveBeenCalledWith(false)
+  })
+
+  it('names the hidden column the engine refused', async () => {
+    remote.setForOwners.mockRejectedValue({ code: 'column_not_owner_visible', message: '"notitie" is not shown to owners', key: 'notitie' })
+    render(<Share onExcel={vi.fn()} link={() => ''} onCopied={vi.fn()} owners={{ id: 21, isForOwners: false, onChanged: vi.fn() }} />)
+    const item = within(open()).getByRole('menuitem', { name: 'Voor eigenaars publiceren' })
+    await act(async () => fireEvent.click(item))
+
+    expect(screen.getByRole('alert').textContent).toBe('“notitie” is niet zichtbaar voor eigenaars. Verberg die kolom eerst.')
   })
 })

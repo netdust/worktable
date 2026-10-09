@@ -52,11 +52,14 @@ async function columnIndex(page: Page, label: string): Promise<number> {
 
 const row = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
 
-/** A matrix cell: the row's gridcells follow its label, one per column. */
+/** A matrix cell: one per person column, counted past the label and the open column. */
 async function spot(page: Page, title: string, person: string): Promise<Locator> {
-  return row(page, title)
-    .locator('td[data-cell]')
-    .nth((await columnIndex(page, person)) - 1)
+  await expect(header(page, person).first()).toBeVisible()
+  const index = await page
+    .locator('thead th.nv-mx__head')
+    .evaluateAll((heads, wanted) => heads.findIndex((th) => th.getAttribute('title') === wanted), person)
+  expect(index, `column ${person}`).toBeGreaterThanOrEqual(0)
+  return row(page, title).locator('td[data-cell]').nth(index)
 }
 
 /** The first column of the first row, read straight from the e2e database with bound parameters. */

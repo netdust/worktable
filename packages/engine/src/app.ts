@@ -211,6 +211,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             date: s.date ?? null,
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
             ...(s.kind === 'dataset' && s.lifecycle ? { lifecycle: { column: s.lifecycle.column } } : {}),
+            ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),

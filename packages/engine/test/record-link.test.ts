@@ -306,6 +306,11 @@ describe('the link secret', () => {
     expect(() => createEngine(fresh(domain), domain, { port: 4310, linkSecret: short })).toThrow(/link secret/)
     expect(() => createEngine(fresh(bare), bare, { port: 4310 })).not.toThrow()
   })
+  test('/schema says which datasets carry a record link, so the grid offers its controls there only', async () => {
+    const sources = (await send(app, await signIn(app, 'administrator'))('GET', '/api/schema')).body.sources
+    expect(sources.project.record_link).toBe(true)
+    expect(sources.taak.record_link).toBeUndefined()
+  })
 })
 
 const SERVE = join(import.meta.dir, '..', 'src', 'serve.ts')

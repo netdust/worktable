@@ -269,6 +269,17 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['productie', 'datum', 'start', 'venue', 'adres'],
   },
   {
+    // Not for owners until an administrator publishes it.
+    name: 'Mijn producties',
+    source_type: 'query',
+    source: 'mijn_producties',
+    skin: 'table',
+    filters: {},
+    sort: ['vanaf'],
+    group_by: null,
+    visible_fields: ['productie', 'rollen', 'vanaf', 'laatste_dag', 'toegang_vervalt'],
+  },
+  {
     name: 'Producties',
     source_type: 'dataset',
     source: 'productie',

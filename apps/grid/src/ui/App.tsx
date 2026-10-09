@@ -6,6 +6,7 @@ import { awayRows, create as createRow, history as readHistory, me, publishView,
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
+import { linkedDataset } from '../grid/Drawer'
 import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
@@ -20,6 +21,7 @@ import { useSpace } from '../space'
 import type { Account, ApiError, DateWindow, Model, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
+import { LinkPage } from './LinkPage'
 import { Filters } from './Filters'
 import { NewViewDialog } from './NewViewDialog'
 import { type ModelActions, Rail } from './Rail'
@@ -34,7 +36,7 @@ import { Toast, useNotice } from './Toast'
 import type { Table } from './tables'
 import { type Shown, Toolbar } from './Toolbar'
 import { useFilterNames } from './useFilterNames'
-import { Share } from './Share'
+import { offersForOwners, Share } from './Share'
 import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
@@ -52,24 +54,27 @@ async function titlesOf(view: View, served: Schema | null): Promise<Map<number, 
   return new Map(found.rows.map((row) => [row.id, row.title]))
 }
 
-type Session = { status: 'checking' } | { status: 'out' } | { status: 'link'; token: string } | { status: 'act'; token: string } | { status: 'in'; account: Account; lapsed: boolean }
+type Session = { status: 'checking' } | { status: 'out' } | { status: 'link'; token: string } | { status: 'act'; token: string } | { status: 'record'; token: string } | { status: 'in'; account: Account; lapsed: boolean }
 
 const LINK = /^#\/auth\/([\w-]+)$/
 const ACT = /^#\/act\/([\w-]+)$/
+const RECORD = /^#\/link\/([\w.-]+)$/
 const SIGN_IN = '#/signin'
 
 function tokenLanding(): Session | null {
   const link = LINK.exec(window.location.hash)?.[1]
   if (link) return { status: 'link', token: link }
   const act = ACT.exec(window.location.hash)?.[1]
-  return act ? { status: 'act', token: act } : null
+  if (act) return { status: 'act', token: act }
+  const record = RECORD.exec(window.location.hash)?.[1]
+  return record ? { status: 'record', token: record } : null
 }
 
 function landing(): Session {
   return tokenLanding() ?? (window.location.hash === SIGN_IN ? { status: 'out' } : { status: 'checking' })
 }
 
-/** Routes `#/auth/<token>` to the confirm screen, `#/act/<token>` to the answer page and `#/signin`, or no session, to the form; else the grid. */
+/** Routes `#/auth/<token>` to the confirm screen, `#/act/<token>` to the answer page, `#/link/<token>` to the person page and `#/signin`, or no session, to the form; else the grid. */
 export function App() {
   const [session, setSession] = useState<Session>(landing)
   const signedIn = (account: Account) => setSession({ status: 'in', account, lapsed: false })
@@ -107,6 +112,7 @@ export function App() {
   if (session.status === 'out') return <div className="nv-auth-page"><SignIn /></div>
   if (session.status === 'link') return <div className="nv-auth-page"><Confirm token={session.token} onSignedIn={signedIn} /></div>
   if (session.status === 'act') return <div className="nv-auth-page"><Act token={session.token} /></div>
+  if (session.status === 'record') return <div className="nv-auth-page"><LinkPage token={session.token} /></div>
 
   const signOutNow = () => {
     signOut().catch(() => undefined).finally(() => {
@@ -365,9 +371,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       return token
     }) }
     : undefined
+  const owners = view && isSaved(view) && offersForOwners(role, model)
+    ? { id: view.id, isForOwners: Boolean(view.for_owners), onChanged: (on: boolean) => {
+      notify({ message: t(on ? 'forOwnersDone' : 'forOwnersStopped') })
+      savedViews().then(load, () => undefined)
+    } }
+    : undefined
   const share = view
     ? <Share onExcel={grid ? exportView : undefined} excelBlocked={matrix ? t('matrixNotExported') : grid ? undefined : t('exportNotReady')}
-        onIcs={grid && dated ? exportIcs : undefined} link={shareLink} onCopied={() => notify({ message: t('linkCopied') })} publish={publishing} />
+        onIcs={grid && dated ? exportIcs : undefined} link={shareLink} onCopied={() => notify({ message: t('linkCopied') })} publish={publishing} owners={owners} />
     : null
   // A link is a row of another dataset, created and deleted there through its writer; then the row it sits on is read again.
   const repaint = (row: Row) => {
@@ -481,7 +493,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
               models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act} onNotice={(message) => notify({ message })}
-              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} />
+              cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} recordLink={model ? linkedDataset(role, model) : undefined} />
           ) : (
             <Sheet hasView={view !== undefined} result={result} />
           )}

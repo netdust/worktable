@@ -8,7 +8,7 @@ import theatre from '../src'
 
 const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
-const STEP_ONE = ['Tourstops', 'Rollen', 'Sjablonen']
+const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties']
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
 const PRE_DETAILS_DAGPLANNING = ['productie', 'soort', 'start_at', 'status', 'locatie_id', 'locatie_bron']
 const DAGPLANNING = ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status']
@@ -31,7 +31,7 @@ function existingDb(dagplanning = PRE_STEP_ONE_DAGPLANNING): string {
     `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, -1, 1)`,
   )
-  for (const v of theatre.views.filter((view) => !STEP_ONE.includes(view.name))) {
+  for (const v of theatre.views.filter((view) => !ADDED.includes(view.name))) {
     const visible = v.name === 'Dagplanning' ? dagplanning : v.visible_fields
     const json = JSON.stringify
     insert.run(v.name, v.source_type, v.source, v.skin, json(v.filters), json(v.sort), v.group_by, json(visible))
@@ -54,7 +54,7 @@ test('rol and sjabloon are config datasets, and no demo dataset is', () => {
   expect(config.sort()).toEqual(['rol', 'sjabloon'])
 })
 
-test('an existing database gets the Rol rows, the Sjabloon and the step-1 views, and an updated Dagplanning', async () => {
+test('an existing database gets the Rol rows, the Sjabloon and the later views, and an updated Dagplanning', async () => {
   const db = existingDb()
   const before = kept(db)
   const result = await seedMissing(db)
@@ -63,7 +63,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the step-1 views,
   expect(result.out).toContain('seed-missing: rol 4 inserted, 0 present')
   expect(result.out).toContain('seed-missing: sjabloon 1 inserted, 0 present\n')
   expect(result.out).toContain('seed-missing: persoon skipped (not config)')
-  expect(result.out).toContain('seed-missing: views 3 added, 1 updated, 10 present')
+  expect(result.out).toContain('seed-missing: views 4 added, 1 updated, 10 present')
 
   expect(read(db, 'SELECT naam FROM rol ORDER BY id').map((r) => r.naam)).toEqual([
     'Speler',
@@ -75,7 +75,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the step-1 views,
   expect(kept(db)).toEqual(before)
 
   const views = read(db, 'SELECT name, owner_id, visible_fields FROM saved_view WHERE deleted_at IS NULL')
-  for (const name of STEP_ONE) expect(views.filter((v) => v.name === name)).toHaveLength(1)
+  for (const name of ADDED) expect(views.filter((v) => v.name === name)).toHaveLength(1)
   const dagplanning = views.find((v) => v.name === 'Dagplanning')
   expect(JSON.parse(dagplanning?.visible_fields as string)).toEqual(DAGPLANNING)
 
@@ -84,7 +84,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the step-1 views,
   const again = await seedMissing(db)
   expect(again.code).toBe(0)
   expect(again.out).toContain('seed-missing: rol 0 inserted, 4 present')
-  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 14 present')
+  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 15 present')
   expect(read(db, 'SELECT COUNT(*) AS n FROM batch')).toEqual([{ n: 1 }])
 }, 30_000)
 
