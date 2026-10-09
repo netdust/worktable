@@ -1,6 +1,6 @@
-/* The prototype's tokens (design/grid-prototype.html), and the scale tokens the old
-   Sakani tokens gave. Light on :root (the global focus ring reads these on the admin
-   chrome too); dark on the app's root only, in three layers: canvas, surface, card. */
+/* The prototype's tokens (design/grid-prototype.html), and the grid's scale tokens.
+   Light on :root (the global focus ring reads these on the admin chrome too);
+   dark on the app's root only, in three layers: canvas, surface, card. */
 :root {
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;

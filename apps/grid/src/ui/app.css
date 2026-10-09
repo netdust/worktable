@@ -1,4 +1,4 @@
-/* What Sakani does not lay out: the rail / toolbar / sheet frame of the mockup. Every class carries nv-. */
+/* The grid's whole look: the rail, toolbar and sheet of the mockup, and the React Aria parts. Every class carries nv-. */
 #root {
   --row-h: 40px;
   font: 13px/1.45 var(--font-sans);
@@ -3007,7 +3007,7 @@
   gap: 2px;
 }
 
-/* The grid's own button: four looks and one size, as the Sakani button drew them. */
+/* The grid's own button: four looks and one size. */
 .nv-button {
   display: inline-flex;
   align-items: center;

@@ -54,7 +54,7 @@ export function useNotice(): [Notice | null, (notice: Notice) => void] {
   return [notice, show]
 }
 
-/** After each saved change, for a few seconds: what happened and the way back. Sakani's toast has no action. */
+/** After each saved change, for a few seconds: what happened and the way back. */
 export function Toast({ state, onUndo, onRedo, notice }: Props) {
   const [shown, setShown] = useState(false)
   const was = useRef(state?.save)
