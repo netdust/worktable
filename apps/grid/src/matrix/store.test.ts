@@ -952,6 +952,35 @@ describe('filling an open slot', () => {
     expect(s.store.getState()).toMatchObject({ canUndo: false, canRedo: false })
   })
 
+  it('a fill whose re-read fails keeps its undo step, and the cells come from a refresh', async () => {
+    const s = filling(1)
+    s.onStale.mockRejectedValueOnce(new Error('offline'))
+
+    expect(await s.store.fill(2, 70, 5)).toBe(true)
+    await settled()
+
+    expect(s.store.getState()).toMatchObject({ canUndo: true, error: null })
+    expect(s.onStale).toHaveBeenCalledTimes(2)
+    expect(s.status(2, sien)).toBe('pencilled')
+    await s.store.undo()
+    expect(s.api.undoBatch).toHaveBeenCalledWith('f1')
+  })
+
+  it('an undo whose re-read fails stays undone: the next Ctrl+Z does not re-apply the fill, the step waits on redo', async () => {
+    const s = filling(1)
+    await s.store.fill(2, 70, 5)
+    s.onStale.mockRejectedValueOnce(new Error('offline'))
+
+    await s.store.undo()
+    await settled()
+    expect(s.store.getState()).toMatchObject({ canUndo: false, canRedo: true })
+
+    await s.store.undo()
+    expect(s.api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(s.cell(2, sien)).toBeUndefined()
+    expect(slots(s)).toEqual([1])
+  })
+
   it('a slot filled meanwhile is refused in Dutch on the open cell, refreshes, and leaves no undo step', async () => {
     const s = filling(1)
     s.api.runAction.mockRejectedValueOnce({ code: 'transition_lost', message: '"status" is no longer open' })

@@ -138,12 +138,12 @@ function Cell({ view, models, cell, column, away, date, state }: {
   )
 }
 
-function OpenCell({ slots, error, onFill }: { slots: OpenSlot[]; error: CellError | null; onFill?: () => void }) {
+function OpenCell({ row, slots, error, onFill }: { row: number; slots: OpenSlot[]; error: CellError | null; onFill?: () => void }) {
   const count = slots.reduce((sum, slot) => sum + slot.count, 0)
   const labels = slots.map((slot) => slot.label).filter(Boolean).join(', ')
   const shown = slots.length > 0 && <><b className="nv-cell__tabular">{count}</b> <span className="nv-mx__roles">{labels}</span></>
   return (
-    <td role="gridcell" data-testid="open" className="nv-td nv-mx__open" aria-label={slots.length > 0 ? `${t('openSlots', { count: String(count) })}. ${labels}` : undefined}
+    <td role="gridcell" data-testid="open" data-open-row={row} tabIndex={-1} className="nv-td nv-mx__open" aria-label={slots.length > 0 ? `${t('openSlots', { count: String(count) })}. ${labels}` : undefined}
       aria-invalid={error ? true : undefined}>
       {shown && (onFill ? <button type="button" className="nv-mx__fill" onClick={onFill}>{shown}</button> : shown)}
       {error && <span className="nv-td__error" role="alert">{error.message}</span>}
@@ -157,12 +157,14 @@ function FillPicker({ row, slots, titles, taken, onPick, onClose }: {
 }) {
   const [slot, setSlot] = useState<OpenSlot | null>(slots.length === 1 ? slots[0] : null)
   const [query, setQuery] = useState('')
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => ref.current?.querySelector<HTMLElement>('input, .nv-mx__pick')?.focus(), [slot])
   const words = query.trim().toLocaleLowerCase()
   const people = [...titles]
     .filter(([id, title]) => !taken.includes(id) && title.toLocaleLowerCase().includes(words))
     .sort((a, b) => a[1].localeCompare(b[1]))
   return (
-    <section className="nv-mx__picker" aria-label={t('fillSlot')}>
+    <section ref={ref} className="nv-mx__picker" aria-label={t('fillSlot')} onKeyDown={(event) => event.key === 'Escape' && onClose()}>
       <p className="nv-picker__note">{[row.title, slot?.label].filter(Boolean).join(' · ')}</p>
       {slot === null ? (
         <>
@@ -231,10 +233,21 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const hasOpen = join.open !== undefined
   const openTotal = hasOpen ? rows.reduce((sum, row) => sum + openSlots(view, row).reduce((n, slot) => n + slot.count, 0), 0) : 0
   const fillRow = filling === null ? undefined : rows.find((row) => row.id === filling)
-  const fill = (row: Row, cell: number, record: number) => {
+  // The keyboard goes back to the row's open cell, which stays when its last slot is filled: Ctrl+Z works from there.
+  const refocus = useRef<number | null>(null)
+  const closeFill = (row: number) => {
+    refocus.current = row
     setFilling(null)
+  }
+  const fill = (row: Row, cell: number, record: number) => {
+    closeFill(row.id)
     void store?.fill(row.id, cell, record)
   }
+  useEffect(() => {
+    if (refocus.current === null || filling !== null) return
+    tableRef.current?.querySelector<HTMLElement>(`[data-open-row="${refocus.current}"]`)?.focus()
+    refocus.current = null
+  }, [filling])
   const countWord = models[join.model]?.fields[join.cell_field]?.options?.[join.count] ?? join.count
   const cellClass = (c: number) => (c === firstName && c > 0 ? 'nv-mx__split' : '')
 
@@ -353,6 +366,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
+    if (event.target instanceof Element && event.target.closest('td.nv-mx__open')) return onOpenKey(event)
     if (!(event.target instanceof Element) || !event.target.matches('td[data-cell]') || !here || !rect) return
     const ctrl = event.ctrlKey || event.metaKey
     const arrow = ARROWS[event.key]
@@ -379,6 +393,14 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
     if (action === null || action === 'copy' || action === 'paste') return
     event.preventDefault()
     if (editable) write(action, here, rect)
+  }
+
+  /** The open column is off the arrow grid: from it only undo and redo. */
+  function onOpenKey(event: KeyboardEvent<HTMLTableElement>): void {
+    const action = actionForKey(view, event.key, { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey })
+    if (action !== 'undo' && action !== 'redo') return
+    event.preventDefault()
+    if (editable && store) void store[action]()
   }
 
   const onCopy = (event: ClipboardEvent<HTMLTableElement>) => {
@@ -439,7 +461,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
         {filters}
       </div>
       {fillRow && (
-        <FillPicker key={fillRow.id} row={fillRow} slots={openSlots(view, fillRow)} titles={titles} onClose={() => setFilling(null)}
+        <FillPicker key={fillRow.id} row={fillRow} slots={openSlots(view, fillRow)} titles={titles} onClose={() => closeFill(fillRow.id)}
           taken={everyColumn.flatMap((column) => (column.id && cellFor(view, fillRow, column) ? [column.id] : []))} onPick={(cell, record) => fill(fillRow, cell, record)} />
       )}
       {picking && <ColumnPicker model={models[join.model]?.fields[join.column_field]?.relation?.model ?? ''} taken={everyColumn.flatMap((c) => (c.id ? [c.id] : []))} onPick={pick}
@@ -485,7 +507,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                         <th scope="row" className="nv-td nv-first" onMouseDown={(event) => event.preventDefault()} onClick={() => showRow(r, row.id)}>
                           <span className="nv-cell__title">{row.title}</span>
                         </th>
-                        {hasOpen && <OpenCell slots={openSlots(view, row)} error={store?.cellError(row.id, OPEN) ?? null} onFill={editable ? () => setFilling(row.id) : undefined} />}
+                        {hasOpen && <OpenCell row={row.id} slots={openSlots(view, row)} error={store?.cellError(row.id, OPEN) ?? null} onFill={editable ? () => setFilling(row.id) : undefined} />}
                         {columns.map((column, c) => (
                           <Cell key={column.key} view={view} models={models} cell={grid[at].cells[c]} column={column}
                             away={absentOn(away, view, column, date)} date={date} state={stateOf(r, c, row, column)} />

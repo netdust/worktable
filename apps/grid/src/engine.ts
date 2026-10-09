@@ -155,6 +155,8 @@ function titleLabel(source: EngineSource): string {
 /** The row's own id is the grid's `id`, never a field. */
 function modelOf(name: string, source: EngineSource, sources: Sources): Model {
   const fields = Object.entries(source.columns).filter(([key]) => key !== titleColumn(source) && key !== 'id')
+  // The matrix's open column runs its fill; offered on any row it would only be refused.
+  const actions = source.actions?.filter((action) => action.name !== source.matrix?.open?.fill)
   return {
     key: name,
     label: source.label,
@@ -167,7 +169,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.deletable ? { deletable: true } : {}),
     ...(source.creates ? { creates: source.creates } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
-    ...(source.actions?.length ? { actions: source.actions } : {}),
+    ...(actions?.length ? { actions } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
       ...Object.fromEntries(Object.entries(source.links ?? {}).map(([name, link]) => [name, linkField(link)])),

@@ -558,14 +558,26 @@ describe('the open column', () => {
     expect(writes.runAction).toHaveBeenCalledWith('fill_slot', 23, { person: 7 })
   })
 
-  it('Ctrl+Z after a fill undoes its batch and re-sends no write', async () => {
+  it('takes the keyboard into the picker, and Escape gives it back to the open cell', () => {
+    const { openCell } = setup()
+    fireEvent.click(within(openCell(/Montage/)).getByRole('button'))
+    const picker = screen.getByRole('region', { name: 'Open plek invullen' })
+    expect(picker.contains(document.activeElement)).toBe(true)
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+
+    expect(screen.queryByRole('region', { name: 'Open plek invullen' })).toBeNull()
+    expect(document.activeElement).toBe(openCell(/Montage/))
+  })
+
+  it('Ctrl+Z right after a fill, from the open cell the keyboard is back on, undoes its batch and re-sends no write', async () => {
     const { writes, openCell } = setup()
     fireEvent.click(within(openCell(/Repetitie/)).getByRole('button'))
     await act(async () => {
       fireEvent.click(within(screen.getByRole('region', { name: 'Open plek invullen' })).getByRole('button', { name: 'Marit' }))
     })
 
-    fireEvent.click(within(screen.getByRole('row', { name: /Montage/ })).getByRole('gridcell', { name: /^Sien/ }))
+    expect(document.activeElement).toBe(openCell(/Repetitie/))
     await act(async () => {
       fireEvent.keyDown(document.activeElement!, { key: 'z', ctrlKey: true })
     })

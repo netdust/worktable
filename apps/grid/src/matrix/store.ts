@@ -71,6 +71,8 @@ interface Op {
   replay?: 'undo' | 'redo'
   /** A fill of the open row `record` with the record `put`: the action decides what changes, so the row is read back after each step. */
   fill?: { put: number }
+  /** The write landed but its row could not be read back: a refresh follows once it settles. */
+  reread?: boolean
 }
 
 interface Job {
@@ -275,18 +277,21 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
     const open = join.open!
     const done = await api.runAction(open.action, op.record.id!, { [open.input]: put })
     Object.assign(op.batch!, { id: done.batch, created: done.created.length > 0 })
-    await reload(op.row)
+    await reload(op)
   }
 
-  /** The row's cells as the server now holds them, after a write whose outcome only the server knows. */
-  async function reload(id: number): Promise<void> {
+  /**
+   * The row's cells as the server now holds them, after a write whose outcome only the server knows. The
+   * write has landed, so a failed read never fails the op: it asks for a refresh once the op settles.
+   */
+  async function reload(op: Op): Promise<void> {
     if (!onStale) return
-    const sent = generation.get(id)
-    const fresh = (await onStale()).find((row) => row.id === id)
-    // Another write on this row moved meanwhile: the general refresh sorts it out.
-    if (!fresh || generation.get(id) !== sent) return refresh()
-    confirmed.set(id, cellsOf(fresh))
-    patchRow(id, (painted) => withCells(painted, cellsOf(fresh)))
+    const sent = generation.get(op.row)
+    const fresh = await onStale().then((rows) => rows.find((row) => row.id === op.row), () => undefined)
+    // Unread, or another write on this row moved meanwhile: the general refresh sorts it out.
+    if (!fresh || generation.get(op.row) !== sent) return void (op.reread = true)
+    confirmed.set(op.row, cellsOf(fresh))
+    patchRow(op.row, (painted) => withCells(painted, cellsOf(fresh)))
   }
 
   /** Undoes the change's last batch and lands what that leaves: an undone create is gone, else the cell holds `after`. */
@@ -295,7 +300,7 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
     if (batch.id === null) return
     const id = latestId(op.record.id)
     batch.id = await api.undoBatch(batch.id)
-    if (op.fill) return reload(op.row)
+    if (op.fill) return reload(op)
     const land = (change: (cells: MatrixCell[]) => MatrixCell[]): void => void confirmed.set(op.row, change(confirmed.get(op.row) ?? []))
     if (op.replay === 'undo' && batch.created) return land((cells) => cells.filter((cell) => cell.id !== id))
     const status = op.after?.status ?? ''
@@ -339,6 +344,10 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
       await queued(job.op)
       errors.delete(key)
       end(job)
+      if (job.op.reread) {
+        job.op.reread = false
+        refresh()
+      }
       return true
     } catch (error) {
       const refused = (error ?? {}) as Partial<ApiError>

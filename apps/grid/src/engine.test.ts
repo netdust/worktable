@@ -515,6 +515,16 @@ describe('the matrix and titles through a relation', () => {
     expect(toSchema(unserved).tables.find((t) => t.key === 'activiteit')?.join).not.toHaveProperty('open')
   })
 
+  it('offers the fill as no row action of the join, while the matrix still runs it', () => {
+    const other = { name: 'iets', label: 'Iets', input: {} }
+    const fill = { name: 'vul_slot', label: 'Open plek invullen', input: { persoon_id: { relation: 'persoon', label: 'Persoon' } } }
+    const matrix = { ...theatre.sources.toewijzing.matrix!, open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' } }
+    const schema = toSchema({ sources: { ...theatre.sources, toewijzing: { ...theatre.sources.toewijzing, matrix, actions: [fill, other] } } })
+
+    expect(schema.models.toewijzing.actions?.map((a) => a.name)).toEqual(['iets'])
+    expect(schema.tables.find((t) => t.key === 'activiteit')?.join?.open?.action).toBe('vul_slot')
+  })
+
   it('opens a matrix-skinned saved view as a matrix, with its table\'s join', () => {
     expect(toSavedViews(theatreViews, theatre.sources)[0]).toMatchObject({ key: '4', type: 'matrix', join: { model: 'toewijzing' }, away: { model: 'beschikbaarheid' } })
     expect(toSavedViews(theatreViews, theatre.sources)[1].type).toBe('grid')
