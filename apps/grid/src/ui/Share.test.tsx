@@ -78,16 +78,28 @@ describe('the share menu', () => {
     expect(screen.getByRole('dialog', { name: 'Publiceren' }).textContent).toContain('Publiceren kan alleen op een berekende weergave.')
   })
 
-  it('closes on its close button, and not on Escape', async () => {
+  async function published() {
     const run = vi.fn().mockResolvedValue('tok-3')
     render(<Share onExcel={vi.fn()} link={() => ''} onCopied={vi.fn()} publish={{ isPublic: false, run }} />)
     const item = within(open()).getByRole('menuitem', { name: 'Publiceren' })
     await act(async () => fireEvent.click(item))
+    return screen.getByRole('dialog', { name: 'Publiceren' })
+  }
+  const trigger = () => screen.getByRole('button', { name: 'Exporteren / delen' })
 
-    const dialog = screen.getByRole('dialog', { name: 'Publiceren' })
-    fireEvent.keyDown(within(dialog).getByRole('textbox', { name: 'Publiek adres' }), { key: 'Escape' })
-    expect(screen.getByRole('dialog', { name: 'Publiceren' })).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Sluiten' }))
+  it('closes on its close button, and gives focus back to the share button', async () => {
+    const dialog = await published()
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Sluiten' })))
+
     expect(screen.queryByRole('dialog', { name: 'Publiceren' })).toBeNull()
+    expect(document.activeElement).toBe(trigger())
+  })
+
+  it('closes on Escape, and gives focus back to the share button', async () => {
+    const dialog = await published()
+    await act(async () => fireEvent.keyDown(within(dialog).getByRole('textbox', { name: 'Publiek adres' }), { key: 'Escape' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Publiceren' })).toBeNull()
+    expect(document.activeElement).toBe(trigger())
   })
 })

@@ -1,5 +1,5 @@
 import { Ellipsis, type LucideIcon } from 'lucide-react'
-import { useContext, useRef } from 'react'
+import { type RefObject, useContext, useRef } from 'react'
 import { useInteractOutside } from 'react-aria'
 import { Button, Menu, MenuItem, MenuTrigger, OverlayTriggerStateContext, Popover } from 'react-aria-components'
 import { t } from '../i18n'
@@ -17,10 +17,10 @@ type Placement = 'bottom-start' | 'bottom-end'
 /**
  * The actions that do not fit beside the main one, behind ⋯: Escape closes and gives focus back to it.
  * `label` names the ⋯ where several sit side by side; `placement` turns the menu away from an edge;
- * `icon` and `menu` (the menu's name) make it another trigger, such as a `+`.
+ * `icon` and `menu` (the menu's name) make it another trigger, such as a `+`; `trigger` hands its button out.
  * The menu opens in a popover over the page, so no scrolling box it sits in clips it.
  */
-export function MoreMenu({ actions, label = t('moreActions'), hint = label === t('moreActions') ? t('moreActionsShown') : label, placement = 'bottom-end', icon: Icon = Ellipsis, menu = t('moreActions') }: {
+export function MoreMenu({ actions, label = t('moreActions'), hint = label === t('moreActions') ? t('moreActionsShown') : label, placement = 'bottom-end', icon: Icon = Ellipsis, menu = t('moreActions'), trigger }: {
   actions: Action[]
   label?: string
   /** What hovering it says; the label stays the accessible name. */
@@ -28,11 +28,15 @@ export function MoreMenu({ actions, label = t('moreActions'), hint = label === t
   placement?: Placement
   icon?: LucideIcon
   menu?: string
+  trigger?: RefObject<HTMLButtonElement | null>
 }) {
   return (
     <span className="nv-menu">
       <MenuTrigger>
-        <Button ref={titled(hint)} className="nv-more" aria-label={label} aria-haspopup="menu">
+        <Button ref={(element) => {
+          titled(hint)(element)
+          if (trigger) trigger.current = element
+        }} className="nv-more" aria-label={label} aria-haspopup="menu">
           <Icon size={16} aria-hidden="true" />
         </Button>
         <Popover isNonModal className="nv-menu__layer" placement={placement === 'bottom-start' ? 'bottom start' : 'bottom end'} offset={4}>

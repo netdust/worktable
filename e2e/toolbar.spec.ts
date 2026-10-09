@@ -486,6 +486,9 @@ test('publish-from-share-menu @e2e', async ({ browser }) => {
     const address = dialog.getByRole('textbox', { name: 'Publiek adres' })
     await expect(address).toHaveValue(/\/api\/public\/views\/\S+$/, { timeout: 1000 })
     expect((await admin.request.get(new URL(await address.inputValue()).pathname)).status()).toBe(200)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' })).toBeFocused()
   } finally {
     for (const view of (await views(page)).filter((v) => v.name === copy))
       await admin.request.delete(`/api/views/${view.id}`)

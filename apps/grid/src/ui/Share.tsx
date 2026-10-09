@@ -1,6 +1,6 @@
 import { Button, Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { Share2, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { type Action, MoreMenu } from './MoreMenu'
 
@@ -36,6 +36,18 @@ const refusal = (error: unknown): string => {
 /** Exporteren / delen: Excel, a calendar, the link to this view, and its public address. */
 export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }: Props) {
   const [dialog, setDialog] = useState<Step | null>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const closing = useRef(false)
+  const close = () => {
+    closing.current = true
+    setDialog(null)
+  }
+  // The menu item that opened the dialog is gone, so focus goes back to the menu's button.
+  useEffect(() => {
+    if (dialog || !closing.current) return
+    closing.current = false
+    trigger.current?.focus()
+  }, [dialog])
   const copy = (text: string) => navigator.clipboard.writeText(text).then(onCopied, () => undefined)
   const go = () => {
     if (!publish) return
@@ -53,19 +65,19 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
   ]
   return (
     <>
-      <MoreMenu actions={actions} icon={Share2} label={t('shareMenu')} menu={t('shareMenu')} />
+      <MoreMenu actions={actions} icon={Share2} label={t('shareMenu')} menu={t('shareMenu')} trigger={trigger} />
       {dialog && (
-        <ModalOverlay className="nv-share-over" isOpen isKeyboardDismissDisabled>
+        <ModalOverlay className="nv-share-over" isOpen onOpenChange={(open) => !open && close()}>
           <Modal>
             <Dialog className="nv-share" aria-label={t('publish')}>
-              <button type="button" className="nv-share__close" aria-label={t('close')} title={t('close')} onClick={() => setDialog(null)}>
+              <button type="button" className="nv-share__close" aria-label={t('close')} title={t('close')} onClick={close}>
                 <X size={14} aria-hidden="true" />
               </button>
               {dialog.step === 'ask' && (
                 <>
                   <p>{t('publishAgain')}</p>
                   <div className="nv-share__actions">
-                    <Button className="nv-button nv-button--ghost nv-button--sm" onPress={() => setDialog(null)}>{t('cancel')}</Button>
+                    <Button className="nv-button nv-button--ghost nv-button--sm" onPress={close}>{t('cancel')}</Button>
                     <Button className="nv-button nv-button--primary nv-button--sm" onPress={go}>{t('publishNew')}</Button>
                   </div>
                 </>
