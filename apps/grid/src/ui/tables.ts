@@ -20,12 +20,11 @@ export interface Section {
 
 /**
  * The declared tables in their order, each with its views; a table without a view is kept, `+` makes its first.
- * A query read `of` a table gets no node: its views follow that table's own, in the declared query order.
+ * A query read `of` a table gets no node: its views sit among that table's own, in the order they were served.
  */
 export function groupTables(tables: TableDef[], views: View[]): Table[] {
   const keys = new Set(tables.map((table) => table.key))
   const under = (table: TableDef) => table.of !== undefined && keys.has(table.of)
-  const viewsOf = (key: string) => views.filter((view) => view.table === key)
   return tables.filter((table) => !under(table)).map((table): Table => ({
     key: table.key,
     label: table.label,
@@ -33,7 +32,7 @@ export function groupTables(tables: TableDef[], views: View[]): Table[] {
     types: table.types,
     ...(table.query ? { query: true } : {}),
     ...(table.icon ? { icon: table.icon } : {}),
-    views: [table, ...tables.filter((query) => query.of === table.key)].flatMap((source) => viewsOf(source.key)),
+    views: views.filter((view) => view.table === table.key || tables.some((query) => query.of === table.key && query.key === view.table)),
   }))
 }
 

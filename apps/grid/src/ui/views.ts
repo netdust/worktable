@@ -130,9 +130,11 @@ function blockOf(starting: View[], saved: SavedView[], order: string[]): View[] 
   return [...first, ...all.filter((view) => !first.includes(view))]
 }
 
-/** A table's views: its own block, then each query's; each in the order kept for its own source. */
+/** A table's views: a block per source, in the order their first view was served; each in the order kept for its own source. */
 export function listFor(table: Table, saved: SavedView[], order: Record<string, string[]>): View[] {
-  const sources = [...new Set([table.key, ...table.views.map((view) => view.table)])]
+  const own = new Set([table.key, ...table.views.map((view) => view.table)])
+  const served = [...table.views.filter((view) => !isSaved(view)), ...saved].map((view) => view.table)
+  const sources = [...new Set([...served.filter((source) => own.has(source)), ...own])]
   return sources.flatMap((source) => blockOf(
     table.views.filter((view) => !isSaved(view) && view.table === source),
     saved.filter((view) => view.table === source),
