@@ -207,7 +207,7 @@ The tree runs Productie → Speelreeks → Activiteit → Toewijzing. Organisati
 
 ## The theatre domain: queries
 
-Twelve SQL views, no rows of their own. Each joins datasets, other queries and the engine's generic tables, passes every joined dataset's `custom` through namespaced, and declares which columns write back. The last one exists for consumers outside the engine.
+Thirteen SQL views, no rows of their own. Each joins datasets, other queries and the engine's generic tables, passes every joined dataset's `custom` through namespaced, and declares which columns write back. The last one exists for consumers outside the engine.
 
 | Query | One row per | Built from | Writes back | Feeds |
 | --- | --- | --- | --- | --- |
@@ -222,6 +222,7 @@ Twelve SQL views, no rows of their own. Each joins datasets, other queries and t
 | plan_vs_werkelijk | toewijzing | gepland vs werkelijk time and bedrag, delta, registratie_status | registratie_status, werkelijk_*, bedrag_werkelijk → Toewijzing | The planner's approval view |
 | verrekening_periode | persoon × maand × verrekening | bedrag_werkelijk where goedgekeurd, else bedrag_gepland; activity soort | — | Payroll and expense export, receipts via Attachment |
 | wijzigingen_sinds_publicatie | recipient × row key | persoon_dag EXCEPT last Publication.rows, both directions | — | Send only what changed |
+| mijn_producties | persoon × productie | Toewijzing (bevestigd) ⋈ Activiteit ⋈ Productie; owner column persoon_id → Persoon; open until `toegang_dagen` (organisation parameter, default 30) after the production's last activity; date column the production's last day | — | The person's view for owners, read through their record link |
 | voorstellingen | confirmed voorstelling | Activiteit (soort voorstelling, status bevestigd) ⋈ Productie ⋈ Organisatie as venue; public columns only | — | Any website's calendar and ICS feed, by REST or view token |
 
 **Conflict types**
@@ -243,7 +244,7 @@ Twelve SQL views, no rows of their own. Each joins datasets, other queries and t
 A planner's week touches every layer in a fixed order. Each step names what it writes and what it reads.
 
 1. **Plan a block.** Create a Speelreeks under the Productie, locatie set once, and apply a Sjabloon. One batch writes the activities of every day with inherited locatie (and, from step 2, open Toewijzingen per role slot). Revision records the batch under one `batch_id`: one undo, kept in the browser tab's undo history of batch ids and undone on the server.
-2. **Fill the slots.** In the Toewijzingen view (table or matrix) the kandidaten dropdown lists who can fill each open slot, available and conflict-free. Assigning sets state to `uitgenodigd` and sends the invite; the person confirms or declines from the action token's link, without signing in. Activiteit.status stays about the booking, Toewijzing.state about the person.
+2. **Fill the slots.** In the Toewijzingen view (table or matrix) the planner fills each open slot with a person, and the kandidaten dropdown (from step 3) lists who can fill it, available and conflict-free. Assigning sets state to `uitgenodigd` and sends the invite; the person confirms or declines from the action token's link, without signing in. Activiteit.status stays about the booking, Toewijzing.state about the person.
 3. **Clear conflicts.** conflicten runs on every grid render and badges affected rows. The planner works the Conflicten view to zero on Monday morning.
 4. **Publish.** From any view on persoon_dag, Publish for a period renders each recipient's rows (names, call times, custom fields and attachments flagged for publication, the location block from Organisatie), writes a Publication row with those rendered rows, and sends by channel. A venue as recipient gets its block in its own language. The share token also serves the same view as ical and pdf.
 5. **Handle change.** Shift the block by a day. Revision logs it; wijzigingen_sinds_publicatie returns, per recipient, the rows that differ from their last snapshot. The next Publish sends only the diff and writes a new snapshot.
@@ -290,14 +291,14 @@ This is what gets built. Anything not in the "in" column is out until this docum
 | --- | --- |
 | Standalone engine service with the four shapes, five generic tables, four actors, its own database and REST; skins table, calendar, matrix and list; lifecycle, record links, action tokens, views for owners and service accounts (built in step 2) | Admin-created datasets; public create and the board skin until a domain needs them (specified above, not built) |
 | One-off JSON export from the private Laika repo and a generic import command; the private CPTs and the baseline views module deleted afterwards | Any engine code inside WordPress; any sync from the website into the engine; multi-tenant hosting |
-| Theatre domain: 3 reference, 6 core, 2 config datasets, 12 queries, 7 conflict types | Resources (vehicles, equipment, inventory) |
+| Theatre domain: 3 reference, 6 core, 2 config datasets, 13 queries, 7 conflict types | Resources (vehicles, equipment, inventory) |
 | voorstellingen query for websites; a WordPress shortcode and YOOtheme element that render a public view by a site-side name | Run-of-show, cueing, minute-level blocks |
 | Publication with person and organisation recipients, language, html/ical/pdf | Child spaces of a venue (zaal, foyer) |
 | Plan and actual on Toewijzing, approval, receipts as Attachment | Hour balance and overtime owed (urensaldo) |
 | Working-time parameters per organisation, defaults for PC 304 | Production-skeleton templates anchored to a première |
 | Record links per person; optional engine account per person | Leave-request approval on Beschikbaarheid |
 
-**Acceptance per build step.** Each step is done when its gate passes in a real browser (netdust-gates), not when the code exists. The gates run in worktable's own browser e2e harness, built in step 0 (one day, counted there); each later gate is about a day of e2e work inside its step; step 6 also needs a signed-link actor in the harness.
+**Acceptance per build step.** Each step is done when its gate passes in a real browser (netdust-gates), not when the code exists. The gates run in worktable's own browser e2e harness, built in step 0 (one day, counted there); each later gate is about a day of e2e work inside its step; step 6 also needs a record-link or action-token actor in the harness.
 
 | Step | Done when |
 | --- | --- |
