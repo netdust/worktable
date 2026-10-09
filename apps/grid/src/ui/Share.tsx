@@ -88,7 +88,7 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
                 <>
                   <p>{t('publishedOnce')}</p>
                   <div className="nv-share__address">
-                    <input type="text" readOnly aria-label={t('publicAddress')} value={dialog.address} onFocus={(event) => event.target.select()} />
+                    <textarea readOnly rows={2} aria-label={t('publicAddress')} value={dialog.address} onFocus={(event) => event.target.select()} />
                     <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => void copy(dialog.address)}>{t('copy')}</Button>
                   </div>
                 </>

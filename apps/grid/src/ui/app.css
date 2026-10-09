@@ -3848,14 +3848,19 @@
 
 #root .nv-share__address {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
 }
 
-#root .nv-share__address input {
+/* The address wraps anywhere, so the owner reads it whole without the dialog growing. */
+#root .nv-share__address textarea {
   flex: 1;
   min-width: 0;
-  height: 30px;
-  padding: 0 8px;
+  min-height: 30px;
+  padding: 6px 8px;
+  field-sizing: content;
+  overflow-wrap: anywhere;
+  resize: none;
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);

@@ -48,7 +48,11 @@ describe('the share menu', () => {
     await act(async () => fireEvent.click(item))
 
     const dialog = screen.getByRole('dialog', { name: 'Publiceren' })
-    expect(within(dialog).getByRole('textbox', { name: 'Publiek adres' }).getAttribute('value')).toBe(`${window.location.origin}/api/public/views/tok-1`)
+    const address = within(dialog).getByRole('textbox', { name: 'Publiek adres' }) as HTMLTextAreaElement
+    expect(address.value).toBe(`${window.location.origin}/api/public/views/tok-1`)
+    // Read whole: a long address wraps in its field, where a one-line input would cut it.
+    expect(address.tagName).toBe('TEXTAREA')
+    expect(address.readOnly).toBe(true)
     expect(within(dialog).getByRole('button', { name: 'Kopiëren' })).toBeTruthy()
   })
 

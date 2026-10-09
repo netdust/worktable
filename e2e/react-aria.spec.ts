@@ -967,7 +967,6 @@ test.describe('the Publiceren dialog as an administrator', () => {
   test.use({ storageState: state('admin') })
 
   test('publish-address-reads-in-full @e2e', async ({ page }) => {
-    test.fail(true, 'shakeout row: the public address is cut at its field: 590 px of text in a 330 px field')
     const copy = 'Dagplanning (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
