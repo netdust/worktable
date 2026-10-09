@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
+import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
@@ -171,6 +172,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)
+  actionTokenRoutes(app, store, ipOf)
   authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf })
 
   app.get('/schema', (c) => {

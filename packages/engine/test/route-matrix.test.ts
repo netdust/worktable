@@ -26,6 +26,18 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
     body: { token: 'not-a-link' },
     status: { none: 400, owner: 400, editor: 400, administrator: 400 },
   },
+  {
+    method: 'POST',
+    path: '/api/act/view',
+    body: { token: 'not-a-token' },
+    status: { none: 401, owner: 401, editor: 401, administrator: 401 },
+  },
+  {
+    method: 'POST',
+    path: '/api/act',
+    body: { token: 'not-a-token', to: 'klaar' },
+    status: { none: 401, owner: 401, editor: 401, administrator: 401 },
+  },
   { method: 'GET', path: '/api/auth/me', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
   {
     method: 'POST',

@@ -6,7 +6,7 @@ import { CHUNK, readIds, titlesOf, withLookups } from './rows'
 import { SYSTEM_OWNER } from './views'
 import { CREATED, type Store } from './writes'
 
-type By = 'self' | 'account' | 'system' | 'gone' | 'hidden'
+type By = 'self' | 'account' | 'link' | 'system' | 'gone' | 'hidden'
 type Raw = Record<string, unknown>
 
 export interface HistoryEntry {
@@ -119,9 +119,24 @@ function recordTitles(store: Store, source: Source, ids: number[]): Map<number, 
 function whose(store: Store, actorId: number, caller: Actor): Pick<HistoryEntry, 'by' | 'actor'> {
   if (actorId === SYSTEM_OWNER) return { by: 'system', actor: null }
   if (actorId !== caller.id && caller.role === 'owner') return { by: 'hidden', actor: null }
-  const found = store.sqlite.query('SELECT email FROM account WHERE id = ?').get(actorId) as { email: string } | null
-  if (actorId === caller.id) return { by: 'self', actor: found?.email ?? null }
-  return found ? { by: 'account', actor: found.email } : { by: 'gone', actor: null }
+  const sql = 'SELECT kind, COALESCE(email, name) AS label, subject_dataset, subject_id FROM account WHERE id = ?'
+  const found = store.sqlite.query(sql).get(actorId) as AccountLabel | null
+  // A link account has no address: it is named by its subject's title.
+  if (found?.kind === 'link') return { by: 'link', actor: subjectTitle(store, found) }
+  if (actorId === caller.id) return { by: 'self', actor: found?.label ?? null }
+  return found ? { by: 'account', actor: found.label } : { by: 'gone', actor: null }
+}
+
+interface AccountLabel {
+  kind: string
+  label: string | null
+  subject_dataset: string | null
+  subject_id: number | null
+}
+
+function subjectTitle(store: Store, { subject_dataset, subject_id }: AccountLabel): string | null {
+  if (subject_dataset === null || subject_id === null) return null
+  return titlesOf(store.db, store.domain, subject_dataset, [subject_id]).get(subject_id) ?? null
 }
 
 interface BatchRow {

@@ -102,6 +102,7 @@ describe('migrate', () => {
     }[]
     expect(rows.map((r) => r.source)).toEqual([
       'account',
+      'action_token',
       'auth_session',
       'batch',
       'bestelling',

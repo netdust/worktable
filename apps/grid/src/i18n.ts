@@ -227,6 +227,7 @@ const strings = {
   historySystem: 'systeem',
   historyHidden: 'planning',
   historyGone: 'onbekend',
+  historyLink: 'bevestigd door {name}',
   historyAlsoOne: 'Dit maakt ook 1 andere wijziging ongedaan',
   historyAlso: 'Dit maakt ook {n} andere wijzigingen ongedaan',
 }

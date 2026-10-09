@@ -18,14 +18,18 @@ interface Props {
 
 type Read = { status: 'loading' } | { status: 'ready'; entries: HistoryEntry[] } | { status: 'error' }
 
-const WHO: Record<Exclude<HistoryEntry['by'], 'account'>, StringKey> = {
+const WHO: Record<Exclude<HistoryEntry['by'], 'account' | 'link'>, StringKey> = {
   self: 'historySelf',
   system: 'historySystem',
   hidden: 'historyHidden',
   gone: 'historyGone',
 }
 
-const whose = (entry: HistoryEntry): string => (entry.by === 'account' ? (entry.actor ?? '') : t(WHO[entry.by]))
+function whose(entry: HistoryEntry): string {
+  if (entry.by === 'account') return entry.actor ?? ''
+  if (entry.by === 'link') return t('historyLink', { name: entry.actor ?? '' })
+  return t(WHO[entry.by])
+}
 
 const dayOf = (at: string): string => new Date(at).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })
 const timeOf = (at: string): string => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })

@@ -24,7 +24,9 @@ export interface AuthOptions {
 
 interface AccountRow {
   id: number
-  email: string
+  email: string | null
+  name: string | null
+  kind: NonNullable<Actor['kind']>
   role: Actor['role']
   subject_dataset: string | null
   subject_id: number | null
@@ -32,7 +34,7 @@ interface AccountRow {
 
 export type AuthEnv = { Variables: { actor: Actor; account: AccountRow; session: string } }
 
-const ACCOUNT = 'a.id, a.email, a.role, a.subject_dataset, a.subject_id'
+const ACCOUNT = 'a.id, a.email, a.name, a.kind, a.role, a.subject_dataset, a.subject_id'
 
 const iso = (ms: number): string => new Date(ms).toISOString()
 export const sha256 = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex')
@@ -49,6 +51,7 @@ const actorOf = (row: AccountRow): Actor => ({
   id: row.id,
   role: row.role,
   subject: row.subject_dataset === null ? null : { dataset: row.subject_dataset, id: row.subject_id as number },
+  kind: row.kind,
 })
 
 function accountOut(row: AccountRow) {
@@ -105,7 +108,7 @@ async function deliver(sqlite: Database, { mailer, appUrl }: AuthOptions, email:
       .query('INSERT INTO magic_link (account_id, token_hash, expires_at) VALUES (?, ?, ?)')
       .run(account.id, sha256(token), iso(Date.now() + LINK_LIFE))
     const link = `${appUrl.replace(/\/+$/, '')}/#/auth/${token}`
-    await mailer.send({ to: account.email, subject: 'Inloggen', text: link })
+    await mailer.send({ to: account.email as string, subject: 'Inloggen', text: link })
   } catch (err) {
     console.error(err)
   }
@@ -170,7 +173,7 @@ async function consumeLink(c: Context, sqlite: Database, options: AuthOptions): 
 // Re-reads the account on every request, so a changed role or a disabled account takes effect at once.
 function sessionMiddleware(sqlite: Database, cookieName: string) {
   const sql = `SELECT ${ACCOUNT} FROM auth_session s JOIN account a ON a.id = s.account_id
-               WHERE s.id_hash = ? AND s.expires_at > ? AND a.disabled_at IS NULL`
+               WHERE s.id_hash = ? AND s.expires_at > ? AND a.disabled_at IS NULL AND a.kind = 'user'`
   return createMiddleware<AuthEnv>(async (c, next) => {
     const value = getCookie(c, cookieName)
     const session = value ? sha256(value) : ''

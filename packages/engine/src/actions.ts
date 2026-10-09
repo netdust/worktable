@@ -69,7 +69,7 @@ function createAs(
   const ctx = contextOf(store, actor, null)
   const checked = valuesOf(store, target, 'create', values, ctx, scopeOf(actor, target.dataset))
   const { id } = create(store.sqlite, target.dataset, encodeAll(target.dataset, checked), now, actor.id, key)
-  enterState(store, target.dataset, id, ctx, hooked)
+  enterState(store, target.dataset, id, ctx, hooked, key)
   return { dataset, id }
 }
 

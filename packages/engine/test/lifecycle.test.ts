@@ -27,7 +27,6 @@ type Request = ReturnType<typeof send>
 
 const ANN = { dataset: 'member', id: 1 }
 const hookCalls: { id: unknown; state: unknown }[] = []
-const links: (string | null)[] = []
 
 const lifecycle: LifecycleDecl = {
   column: 'state',
@@ -41,10 +40,7 @@ const lifecycle: LifecycleDecl = {
       hookCalls.push({ id: row.id, state: row.state })
       return {
         token: { to: ['c'], days: 7 },
-        mail: (link) => {
-          links.push(link)
-          return { to: 'ann@example.test', subject: 'Uitnodiging', text: `ticket ${String(row.id)}` }
-        },
+        mail: () => ({ to: 'ann@example.test', subject: 'Uitnodiging', text: `ticket ${String(row.id)}` }),
         notice: 'invited',
       }
     },
@@ -156,7 +152,6 @@ const undo = (as: Request, batch: string) => as('POST', `/api/batches/${batch}/u
 
 beforeEach(async () => {
   hookCalls.length = 0
-  links.length = 0
   sent = []
   sqlite = new Database(':memory:')
   migrate(sqlite, domain)
@@ -363,14 +358,6 @@ describe('hooks', () => {
     }
     expect(importExport(db, domain, data, admin, { acceptReport: false }).committed).toBe(true)
     expect(hookCalls).toEqual([])
-  })
-
-  // Pinning, deleted in Task 3: until the action token exists, a hook's token mints nothing and the link is null.
-  test("a hook's token mints nothing yet", async () => {
-    const before = sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all()
-    await patch(editor, 1, { state: 'b' })
-    expect(links).toEqual([null])
-    expect(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all()).toEqual(before)
   })
 })
 

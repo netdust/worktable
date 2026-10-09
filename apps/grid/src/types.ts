@@ -287,11 +287,11 @@ export interface ApiError {
   label?: string
 }
 
-/** One record's part of one batch, as `/history/:source` answers it; `actor` is an email only where the engine may say it. */
+/** One record's part of one batch, as `/history/:source` answers it; `actor` is an email, or a link's name, only where the engine may say it. */
 export interface HistoryEntry {
   batch: string
   at: string
-  by: 'self' | 'account' | 'system' | 'gone' | 'hidden'
+  by: 'self' | 'account' | 'link' | 'system' | 'gone' | 'hidden'
   actor: string | null
   undoable: boolean
   /** On an undoable entry: the other records its undo changes too. */

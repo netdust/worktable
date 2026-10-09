@@ -149,6 +149,8 @@ export interface Actor {
   id: number
   role: Role
   subject: { dataset: string; id: number } | null
+  /** Who signs in: a person by mail (`user`, the default), an agent by Bearer, or a record's link. */
+  kind?: 'user' | 'service' | 'link'
 }
 
 /** What a hook asks the engine to do; `link` is null while no token was minted. */
