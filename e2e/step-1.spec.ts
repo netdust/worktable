@@ -525,8 +525,8 @@ test('apply-undo-changed-since @e2e', async ({ page, browser }) => {
   await page.keyboard.press('ControlOrMeta+z')
   const response = await undone
   expect(response.status()).toBe(409)
-  expect(await response.json()).toMatchObject({ code: 'changed_since', column: 'locatie_id', label: 'Locatie' })
-  await expect(page.getByText('Locatie is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
+  expect(await response.json()).toMatchObject({ code: 'changed_since', column: 'locatie_id', label: 'Eigen locatie' })
+  await expect(page.getByText('Eigen locatie is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(7)
 })
 

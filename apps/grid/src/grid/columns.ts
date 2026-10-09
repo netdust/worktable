@@ -209,6 +209,11 @@ function fieldColumn(key: string, field: Field, writable: boolean, model: Model)
     column.via = viaOf(field.inherited, model.fields[field.inherited.flag])
     column.width = INHERITED_WIDTH
   }
+  const { via } = field
+  if (via) {
+    column.via = (row) => (row.inherited?.includes(key) ? via : '')
+    column.width = INHERITED_WIDTH
+  }
   if (kind === 'links') {
     column.editable = writable
     column.sortable = false

@@ -19,6 +19,9 @@ export interface EngineColumn {
   owner_visible?: boolean
 }
 
+/** A dataset's lookup: the related row's field, typed as that field; an inherited one is the row's own when set. */
+export type EngineLookup = Omit<EngineColumn, 'inherited'> & { inherited?: true; from?: string }
+
 /** A join dataset's matrix: down and across are its relation columns, cell an options column. */
 export interface EngineMatrix {
   down: string
@@ -61,6 +64,7 @@ export interface EngineSource {
   new_label?: string
   group_facts?: GroupFact[]
   columns: Record<string, EngineColumn>
+  lookups?: Record<string, EngineLookup>
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
@@ -110,6 +114,7 @@ export interface EngineRow {
   revision?: { batch_id: string | null; changed: string[] }
   /** Per link name, the linked rows the caller may read. */
   links?: Record<string, LinkItem[]>
+  inherited?: string[]
   [column: string]: unknown
 }
 
@@ -152,6 +157,10 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
   }
 }
 
+function lookupField({ inherited, from, ...column }: EngineLookup, source: EngineSource, sources: Sources): Field {
+  return { ...fieldOf(column, source, sources), ...(inherited && from ? { via: from } : {}) }
+}
+
 function titleLabel(source: EngineSource): string {
   const label = (column: string) => source.columns[column]?.label ?? column
   return source.title_via ? `${label(source.title_via)} / ${label(source.title)}` : label(source.title)
@@ -178,6 +187,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.record_link ? { record_link: true as const } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
+      ...Object.fromEntries(Object.entries(source.lookups ?? {}).map(([key, lookup]) => [key, lookupField(lookup, source, sources)])),
       ...Object.fromEntries(Object.entries(source.links ?? {}).map(([name, link]) => [name, linkField(link)])),
     },
   }
@@ -249,7 +259,7 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 /** What a source's column is, for the operators the filter builder offers on it. */
 export function kindOf(source: EngineSource | undefined): (field: string) => Kind {
   return (field) => {
-    const column = source?.columns[field]
+    const column = source?.columns[field] ?? source?.lookups?.[field]
     if (!column) return 'text'
     if (column.relation || column.options) return 'choice'
     if (column.type === 'boolean') return 'bool'
@@ -267,6 +277,7 @@ function splitFilters(filters: Record<string, unknown>, source: EngineSource): {
 /** The grid's field ids, in declared order: never the title column nor `id`. */
 const fieldsOf = (source: EngineSource): string[] => [
   ...Object.keys(source.columns).filter((key) => key !== titleColumn(source) && key !== 'id'),
+  ...Object.keys(source.lookups ?? {}),
   ...Object.keys(source.links ?? {}),
 ]
 
@@ -365,13 +376,14 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
 
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, ...fields } = r
   return {
     id,
     title: title ?? '',
     status: '',
     fields: { ...fields, ...links },
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
+    ...(inherited ? { inherited } : {}),
     ...(cells ? { rollups: { cells: cells.map(toRow) } } : {}),
   }
 }
@@ -387,7 +399,7 @@ export function toEngineData(data: Record<string, unknown>, source: EngineSource
   return Object.fromEntries(Object.entries(data).flatMap(([key, value]) => {
     const name = key === 'title' ? titleColumn(source) : key
     if (name === null) return []
-    const declared = source.columns[name]
+    const declared = source.columns[name] ?? source.lookups?.[name]
     const target = declared?.writes ? sources[declared.writes.dataset]?.columns[declared.writes.field] : declared
     return [[name, wireValue(target ?? declared, value)]]
   }))

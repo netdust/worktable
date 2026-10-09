@@ -617,3 +617,52 @@ describe('links', () => {
     expect(toStoredView(hidden, fixed, dag).visible_fields).toEqual(['omschrijving', 'locatie_id', 'status'])
   })
 })
+
+describe('lookups', () => {
+  const LOCATIE = { type: 'integer' as const, label: 'Locatie', nullable: true, relation: 'organisatie', inherited: true as const, from: 'Tourstop' }
+  const act = {
+    kind: 'dataset' as const, label: 'Activiteiten', title: 'omschrijving', date: 'plandag',
+    columns: {
+      omschrijving: { type: 'text' as const, label: 'Omschrijving' },
+      start_at: { type: 'datetime' as const, label: 'Start' },
+      status: { type: 'text' as const, label: 'Status' },
+    },
+    lookups: {
+      locatie: LOCATIE,
+      plaats: { type: 'text' as const, label: 'Plaats', nullable: true, readonly: true as const },
+    },
+  }
+  const stored = {
+    id: 9, name: 'Activiteiten', source_type: 'dataset' as const, source: 'activiteit', skin: 'table' as const,
+    filters: {}, sort: [], group_by: null, visible_fields: ['omschrijving', 'start_at', 'locatie', 'status'],
+    shared: true, owner_id: -1, mine: false, editable: false,
+  }
+
+  it('toSchema maps a served lookup to a field', () => {
+    const { models } = toSchema({ sources: { x: act } } as unknown as EngineSchema)
+    const locatie = models.x?.fields.locatie
+    expect(locatie).toMatchObject({ type: 'relation', label: 'Locatie', via: 'Tourstop', relation: { model: 'organisatie', multiple: false } })
+    expect(locatie?.readonly).toBeUndefined()
+    expect(models.x?.fields.plaats).toMatchObject({ type: 'text', readonly: true })
+  })
+
+  it('toRow keeps inherited off the fields', () => {
+    const row = toRow({ id: 1, omschrijving: 'x', title: 'x', custom: {}, lookups: {}, locatie: 4, inherited: ['locatie'] })
+    expect(row.fields.inherited).toBeUndefined()
+    expect(row.fields.locatie).toBe(4)
+    expect(row.inherited).toEqual(['locatie'])
+  })
+
+  it('a stored view keeps a lookup in place', () => {
+    const { arrangement, fixed } = fromStoredView(stored, act)
+    expect(arrangement.order).toEqual(['title', 'start_at', 'locatie', 'status'])
+    expect(toStoredView(arrangement, fixed, act).visible_fields).toEqual(['omschrijving', 'start_at', 'locatie', 'status'])
+    const hidden = { ...arrangement, hidden: [...arrangement.hidden, 'locatie'] }
+    expect(toStoredView(hidden, fixed, act).visible_fields).toEqual(['omschrijving', 'start_at', 'status'])
+  })
+
+  it('kindOf types a relation lookup as a choice', () => {
+    const { arrangement } = fromStoredView({ ...stored, filters: { locatie: 7 } }, act)
+    expect(arrangement.filters).toEqual([{ field: 'locatie', op: 'in', values: ['7'] }])
+  })
+})
