@@ -1922,6 +1922,24 @@ describe('opening a related record', () => {
     expect(screen.queryByRole('combobox')).toBeNull()
   })
 
+  it('a double-click on it opens one drawer and no editor', async () => {
+    let answer: (row: Row) => void = () => undefined
+    remote.rowOf.mockReturnValue(new Promise<Row>((resolve) => { answer = resolve }))
+    renderGrid(calais, { models })
+    const location = cell('Lunch bistrot', 'location')
+    const button = openButton()
+    fireEvent.click(button, { detail: 1 })
+    fireEvent.click(button, { detail: 2 })
+    fireEvent.doubleClick(button, { detail: 2 })
+
+    expect(location.getAttribute('aria-selected')).toBe('false')
+    expect(location.querySelector('[data-editor], [role="combobox"]')).toBeNull()
+    expect(document.querySelector('[role="combobox"]')).toBeNull()
+    await act(async () => answer(record))
+    expect(screen.getAllByRole('complementary', { name: 'Le Grenier, Calais' })).toHaveLength(1)
+    expect(remote.rowOf).toHaveBeenCalledTimes(1)
+  })
+
   it.each([['is gone', () => remote.rowOf.mockResolvedValueOnce(null)], ['is refused', () => remote.rowOf.mockRejectedValueOnce({ code: 'not_found', message: 'x' })]])('a record that %s opens no drawer and says so', async (_name, arrange) => {
     arrange()
     const onNotice = vi.fn()

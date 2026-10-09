@@ -14,6 +14,7 @@ export const RelationContext = createContext<{
 /**
  * The open button joins the tab order only on the active cell, as the grid's roving focus has it.
  * A plain button, as the title's Openen is: one sits in every filled cell, and a React Aria Button there doubled what each render of the sheet costs.
+ * A double-click on it opens the record once and never reaches the cell, which would open its editor.
  */
 export function RelationCell({ column, row, active = false }: CellProps & { active?: boolean }) {
   const { models, openRelated } = useContext(RelationContext)
@@ -27,8 +28,8 @@ export function RelationCell({ column, row, active = false }: CellProps & { acti
       {openable && (
         <button type="button" className="nv-related" tabIndex={active ? 0 : -1} aria-label={t('openRecord', { title })} onClick={(event) => {
           event.stopPropagation()
-          openRelated(target, id)
-        }}>
+          if (event.detail < 2) openRelated(target, id)
+        }} onDoubleClick={(event) => event.stopPropagation()}>
           <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3h7v7M13 3 5 11" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
         </button>
       )}
