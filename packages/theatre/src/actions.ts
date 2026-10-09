@@ -69,3 +69,27 @@ export const sjabloonToepassen: ActionDecl = {
     )
   },
 }
+
+const STILL_OPEN = { state: 'open' }
+
+// Pencilled in, nothing mailed: one of an open row's places goes to the person, the rest stay open.
+export const vulSlot: ActionDecl = {
+  label: 'Open plek invullen',
+  on: 'toewijzing',
+  input: { persoon_id: { relation: 'persoon', label: 'Persoon' } },
+  run(slot, { persoon_id }) {
+    const filled = { persoon_id: persoon_id?.id, state: 'voorlopig' }
+    const aantal = Number(slot.aantal)
+    if (aantal <= 1)
+      return { updates: [{ dataset: 'toewijzing', id: Number(slot.id), values: filled, expect: STILL_OPEN }] }
+    return {
+      updates: [{ dataset: 'toewijzing', id: Number(slot.id), values: { aantal: aantal - 1 }, expect: STILL_OPEN }],
+      creates: [
+        {
+          dataset: 'toewijzing',
+          values: { activiteit_id: slot.activiteit_id, rol_id: slot.rol_id, aantal: 1, ...filled },
+        },
+      ],
+    }
+  },
+}

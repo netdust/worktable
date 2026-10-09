@@ -323,7 +323,7 @@ describe('the matrix arrangement', () => {
 describe('the matrix, edited from the keyboard', () => {
   function setup(extra: Partial<Parameters<typeof Matrix>[0]> = {}, rows: Row[] = week) {
     let next = 500
-    const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>() }
+    const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
     writes.create.mockImplementation(async (_m, data) => ({ row: { id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }, batch: null }))
     writes.update.mockImplementation(async (_m, id, data) => ({ row: { id, title: 'j', status: 'publish', fields: { name: '', note: '', person: [5], ...data } }, batch: null }))
     writes.remove.mockImplementation(async (_m, id) => ({ deleted: true, id }))
@@ -477,5 +477,101 @@ describe('the matrix, edited from the keyboard', () => {
 
     expect(at(/Leeg/, 'record:5').textContent).toContain('Deze persoon staat al op deze activiteit')
     expect(at(/Leeg/, 'record:5').getAttribute('aria-invalid')).toBe('true')
+  })
+})
+
+describe('the open column', () => {
+  // 'pencilled' stands for voorlopig: what a fill writes.
+  const openView: View = {
+    ...view,
+    join: { ...view.join!, lifecycle: 'status', marks: { ...view.join!.marks, pencilled: '~' }, open: { match_field: 'role', count_field: 'size', action: 'fill_slot', input: 'person' } },
+  }
+  const slot = (id: number, role: number, label: string, size: number) => ({
+    ...join(id, { role: [role], size, status: 'open' }), lookups: { role: { id: role, title: label, status: '', fields: {} } },
+  })
+  const rows = [
+    activity(1, 'Montage', '2026-05-18', [join(11, { person: [5], status: 'pencilled' }), join(12, { name: 'Lieve', status: 'maybe' }), slot(21, 8, 'Speler', 2), slot(24, 8, 'Speler', 1), slot(22, 9, 'Licht', 1)]),
+    activity(2, 'Repetitie', '2026-05-19', [slot(23, 8, 'Speler', 1)]),
+    activity(3, 'Leeg', '2026-05-19'),
+  ]
+
+  function setup() {
+    const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
+    writes.runAction.mockResolvedValue({ batch: 'f1', created: [] })
+    writes.undoBatch.mockResolvedValue('uf1')
+    const store = createMatrixStore({ view: openView, rows, api: writes, onStale: async () => rows })
+    function Live() {
+      const state = useSyncExternalStore(store.subscribe, store.getState)
+      return <Matrix {...props} view={openView} rows={state.rows} store={store} writable />
+    }
+    render(<Live />)
+    const openCell = (title: RegExp) => within(screen.getByRole('row', { name: title })).getByTestId('open')
+    return { writes, store, openCell }
+  }
+
+  it('leads with the summed count and the role labels; records next, free-text names last', () => {
+    const { openCell } = setup()
+
+    expect(headers().slice(0, 4)).toEqual(['Activiteit', 'Open', 'Sien', 'Lieve'])
+    expect(openCell(/Montage/).textContent).toContain('4')
+    expect(openCell(/Montage/).textContent).toContain('Speler, Licht')
+    expect(openCell(/Repetitie/).textContent).toContain('1')
+    expect(openCell(/Leeg/).textContent).toBe('')
+    expect(within(screen.getByTestId('total')).getByTestId('open-count').textContent).toBe('5')
+  })
+
+  it('shows a pencilled cell with its mark', () => {
+    setup()
+
+    expect(within(screen.getByRole('row', { name: /Montage/ })).getByRole('gridcell', { name: /^Sien/ }).textContent).toContain('~')
+  })
+
+  it('with two open roles asks the role first, in Dutch, then fills the lowest open row of that role', async () => {
+    const { writes, openCell } = setup()
+
+    fireEvent.click(within(openCell(/Montage/)).getByRole('button'))
+    const picker = screen.getByRole('region', { name: 'Open plek invullen' })
+    expect(within(picker).getByText('Kies eerst een rol')).toBeTruthy()
+    expect(within(picker).getByRole('button', { name: /Speler/ }).textContent).toBe('Speler · 3')
+    expect(within(picker).queryByRole('button', { name: 'Marit' })).toBeNull()
+
+    fireEvent.click(within(picker).getByRole('button', { name: /Speler/ }))
+    expect(within(picker).getAllByRole('button', { name: 'Sien' })).toHaveLength(1)
+    await act(async () => {
+      fireEvent.click(within(picker).getByRole('button', { name: 'Marit' }))
+    })
+
+    expect(writes.runAction).toHaveBeenCalledWith('fill_slot', 21, { person: 7 })
+    expect(screen.queryByRole('region', { name: 'Open plek invullen' })).toBeNull()
+  })
+
+  it('with one open role goes straight to the people', async () => {
+    const { writes, openCell } = setup()
+
+    fireEvent.click(within(openCell(/Repetitie/)).getByRole('button'))
+    const picker = screen.getByRole('region', { name: 'Open plek invullen' })
+    expect(within(picker).queryByText('Kies eerst een rol')).toBeNull()
+    await act(async () => {
+      fireEvent.click(within(picker).getByRole('button', { name: 'Marit' }))
+    })
+
+    expect(writes.runAction).toHaveBeenCalledWith('fill_slot', 23, { person: 7 })
+  })
+
+  it('Ctrl+Z after a fill undoes its batch and re-sends no write', async () => {
+    const { writes, openCell } = setup()
+    fireEvent.click(within(openCell(/Repetitie/)).getByRole('button'))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Open plek invullen' })).getByRole('button', { name: 'Marit' }))
+    })
+
+    fireEvent.click(within(screen.getByRole('row', { name: /Montage/ })).getByRole('gridcell', { name: /^Sien/ }))
+    await act(async () => {
+      fireEvent.keyDown(document.activeElement!, { key: 'z', ctrlKey: true })
+    })
+
+    expect(writes.undoBatch).toHaveBeenCalledWith('f1')
+    expect(writes.runAction).toHaveBeenCalledTimes(1)
+    expect([writes.create, writes.update, writes.remove].map((f) => f.mock.calls.length)).toEqual([0, 0, 0])
   })
 })

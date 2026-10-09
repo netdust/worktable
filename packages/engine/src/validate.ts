@@ -188,6 +188,32 @@ function checkMatrix(domain: Domain, join: DatasetDecl, downs: Set<string>): voi
   if (downs.has(downTarget)) throw at(m.down, `down source "${downTarget}" already has a matrix`)
   downs.add(downTarget)
   if (m.away) checkAway(domain, join, m, m.away, at)
+  if (m.open) checkOpen(domain, join, m, m.open, at)
+}
+
+// The fill acts on the open row itself, and its one input is the record it puts across.
+function checkOpen(
+  domain: Domain,
+  join: DatasetDecl,
+  m: NonNullable<DatasetDecl['matrix']>,
+  open: NonNullable<NonNullable<DatasetDecl['matrix']>['open']>,
+  at: (bad: string, message: string) => DomainError,
+): void {
+  if (!join.columns[open.match]?.relation) {
+    throw at(open.match, `open match "${open.match}" is not a relation column of "${join.name}"`)
+  }
+  if (join.columns[open.count]?.type !== 'integer') {
+    throw at(open.count, `open count "${open.count}" is not an integer column`)
+  }
+  const action = domain.actions && Object.hasOwn(domain.actions, open.fill) ? domain.actions[open.fill] : undefined
+  if (!action) throw at(open.fill, `open fill "${open.fill}" is not a declared action`)
+  if (action.on !== join.name)
+    throw at(open.fill, `open fill "${open.fill}" acts on "${action.on}", not "${join.name}"`)
+  const across = join.columns[m.across]?.relation
+  const inputs = Object.values(action.input)
+  if (inputs.length !== 1 || inputs[0]?.relation !== across) {
+    throw at(open.fill, `open fill "${open.fill}" must take one input, a "${across}"`)
+  }
 }
 
 function checkAway(

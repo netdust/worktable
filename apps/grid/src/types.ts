@@ -191,6 +191,8 @@ export interface MatrixJoin {
   count: string
   /** The join's lifecycle column: when it is the cell field, a cell's undo goes through the batch undo. */
   lifecycle?: string
+  /** A join row with neither record nor name is open: it waits for a `match_field` record, `count_field` times; `action` fills it, its record put under `input`. */
+  open?: { match_field: string; count_field: string; action: string; input: string }
 }
 
 export interface MatrixAway {
@@ -202,13 +204,13 @@ export interface MatrixAway {
   end_field: string
 }
 
-/** A join record as a row carries it under `rollups.cells`. */
-export type MatrixCell = Lookup
+/** A join record as a row carries it under `rollups.cells`; its lookups title what its relations point at. */
+export type MatrixCell = Lookup & { lookups?: Record<string, Lookup | null> }
 
 export interface MatrixColumn {
-  /** `record:<id>` or `name:<normalised name>`. */
+  /** `record:<id>`, `name:<normalised name>`, or `open`. */
   key: string
-  kind: 'record' | 'name'
+  kind: 'record' | 'name' | 'open'
   id?: number
   title: string
 }

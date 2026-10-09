@@ -49,7 +49,7 @@ const away = (reason = 'Examen'): Row[] => [{ id: 90, title: 'x', status: 'publi
 
 function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: Row[] } = {}) {
   let next = 500
-  const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>() }
+  const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
   writes.create.mockImplementation(async (_m, data) => ({ row: { id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }, batch: null }))
   writes.update.mockImplementation(async (_m, id, data) => ({ row: { id, title: 'j', status: 'publish', fields: { name: '', note: '', person: [5], status: 'confirmed', ...data } }, batch: null }))
   writes.remove.mockImplementation(async (_m, id) => ({ deleted: true, id }))

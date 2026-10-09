@@ -2333,6 +2333,41 @@
   text-align: left;
 }
 
+/* The open column: what still waits for someone, before the people. */
+.nv-mx .nv-mx__open {
+  border-right: 1px solid var(--color-border-default);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nv-mx td.nv-mx__open {
+  padding: 0 10px;
+}
+
+#root .nv-mx__fill {
+  max-width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+#root .nv-mx__fill:hover .nv-mx__roles {
+  text-decoration: underline;
+}
+
+.nv-mx .nv-mx__roles {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
 .nv-mx__picker {
   padding: 8px 16px;
   border-bottom: 1px solid var(--color-border-subtle);

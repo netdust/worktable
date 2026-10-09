@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
 import type { MatrixColumn, Row, Saved, View } from '../types'
-import { cellFor } from './columns'
+import { cellFor, cellsFor, OPEN } from './columns'
 import { createMatrixStore, type MatrixApi } from './store'
 
 const view: View = {
@@ -46,10 +46,10 @@ const stored = (id: number, fields: Record<string, unknown>): Saved => ({ row: {
 /** A batch the fake server wrote: the record, and its fields before and after (null: absent). */
 type Written = { id: number; before: Record<string, unknown> | null; after: Record<string, unknown> | null }
 
-function setup(on: View = view) {
-  const api = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>() }
+function setup(on: View = view, start: Row[] = rows) {
+  const api = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
   // The server keeps every record whole: an update answers with all of its fields.
-  const server = new Map<number, Record<string, unknown>>(rows.flatMap((row) => (row.rollups?.cells as ReturnType<typeof join>[]).map((cell) => [cell.id, cell.fields])))
+  const server = new Map<number, Record<string, unknown>>(start.flatMap((row) => (row.rollups?.cells as ReturnType<typeof join>[]).map((cell) => [cell.id, cell.fields])))
   const batches = new Map<string, Written>()
   const keep = (saved: Saved, before: Record<string, unknown> | null = null) => {
     server.set(saved.row.id, saved.row.fields)
@@ -70,7 +70,7 @@ function setup(on: View = view) {
     return undone
   })
   // The rows route: each row with the records the server holds for it now.
-  const window = () => rows.map((row) => activity(row.id, [...server].filter(([, f]) => (f.activity as number[])?.[0] === row.id).map(([id, f]) => join(id, f))))
+  const window = () => start.map((row) => activity(row.id, [...server].filter(([, f]) => (f.activity as number[])?.[0] === row.id).map(([id, f]) => join(id, f))))
   const onStale = vi.fn(async () => window())
   const onNotice = vi.fn<(message: string) => void>()
   // Another tab puts Sien, confirmed, on activities 2 (record 400) and 4 (record 401).
@@ -78,7 +78,7 @@ function setup(on: View = view) {
     server.set(400, join(400, { activity: [2], person: [5], status: 'confirmed' }).fields)
     server.set(401, join(401, { activity: [4], person: [5], status: 'confirmed' }).fields)
   }
-  const store = createMatrixStore({ view: on, rows, api, onStale, onNotice })
+  const store = createMatrixStore({ view: on, rows: start, api, onStale, onNotice })
   const cell = (row: number, column: MatrixColumn) => cellFor(on, store.getState().rows.find((r) => r.id === row)!, column)
   const status = (row: number, column: MatrixColumn) => cell(row, column)?.fields.status
   const held = (id: number) => server.get(id)?.status
@@ -874,5 +874,93 @@ describe('a lifecycle undo the server refuses', () => {
     expect(store.cellError(1, sien)?.message).toBe('Status is intussen gewijzigd; ongedaan maken kan niet.')
     expect(onStale).toHaveBeenCalledTimes(1)
     expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false })
+  })
+})
+
+describe('filling an open slot', () => {
+  // 'pencilled' stands for voorlopig: the fill writes it, and an open row has no person and no name.
+  const open: View = {
+    ...view,
+    join: { ...view.join!, lifecycle: 'status', marks: { ...view.join!.marks, pencilled: '~' }, open: { match_field: 'role', count_field: 'size', action: 'fill_slot', input: 'person' } },
+  }
+  const REDO_SKIPPED = 'Opnieuw doen kan hier niet'
+  const start = (size: number): Row[] => [activity(1), activity(2, [join(70, { activity: [2], role: [8], size, status: 'open' })])]
+  const slots = (s: ReturnType<typeof setup>) => cellsFor(open, s.store.getState().rows.find((r) => r.id === 2)!, OPEN).map((c) => c.fields.size)
+
+  function filling(size: number) {
+    const s = setup(open, start(size))
+    const before = { ...s.server.get(70)! }
+    s.api.runAction.mockImplementation(async (_name, id, input) => {
+      const filled = { activity: [2], role: [8], size: 1, person: [input.person], status: 'pencilled' }
+      if (size === 1) return s.server.set(id, { ...s.server.get(id), ...filled }), { batch: 'f1', created: [] }
+      s.server.set(id, { ...s.server.get(id), size: size - 1 })
+      s.server.set(71, filled)
+      return { batch: 'f1', created: [{ dataset: 'assignment', id: 71 }] }
+    })
+    s.api.undoBatch.mockImplementation(async (batch) => {
+      s.server.set(70, before)
+      s.server.delete(71)
+      return `u${batch}`
+    })
+    return s
+  }
+
+  it('fills in place through the action, and paints what the server then holds', async () => {
+    const s = filling(1)
+
+    expect(await s.store.fill(2, 70, 5)).toBe(true)
+
+    expect(s.api.runAction).toHaveBeenCalledWith('fill_slot', 70, { person: 5 })
+    expect(s.status(2, sien)).toBe('pencilled')
+    expect(slots(s)).toEqual([])
+  })
+
+  it('undoes the fill by its batch, re-sending no write; redo undoes the undo', async () => {
+    const s = filling(1)
+    await s.store.fill(2, 70, 5)
+
+    await s.store.undo()
+    expect(s.api.undoBatch).toHaveBeenCalledWith('f1')
+    expect([s.api.update, s.api.create, s.api.remove].map((f) => f.mock.calls.length)).toEqual([0, 0, 0])
+    expect(s.api.runAction).toHaveBeenCalledTimes(1)
+    expect(s.cell(2, sien)).toBeUndefined()
+    expect(slots(s)).toEqual([1])
+
+    s.api.undoBatch.mockImplementationOnce(async (batch) => {
+      s.server.set(70, { ...s.server.get(70), person: [5], status: 'pencilled' })
+      return `u${batch}`
+    })
+    await s.store.redo()
+    expect(s.api.undoBatch).toHaveBeenLastCalledWith('uf1')
+    expect(s.api.runAction).toHaveBeenCalledTimes(1)
+    expect(s.status(2, sien)).toBe('pencilled')
+  })
+
+  it('a split fill undoes by its batch to the one open row; its redo would re-create, so it is skipped with the notice', async () => {
+    const s = filling(3)
+    await s.store.fill(2, 70, 5)
+    expect([s.status(2, sien), slots(s)]).toEqual(['pencilled', [2]])
+
+    await s.store.undo()
+    expect(s.api.undoBatch).toHaveBeenCalledWith('f1')
+    expect([s.cell(2, sien), slots(s)]).toEqual([undefined, [3]])
+
+    await s.store.redo()
+    expect(s.onNotice).toHaveBeenCalledWith(REDO_SKIPPED)
+    expect(s.api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(s.api.runAction).toHaveBeenCalledTimes(1)
+    expect(s.store.getState()).toMatchObject({ canUndo: false, canRedo: false })
+  })
+
+  it('a slot filled meanwhile is refused in Dutch on the open cell, refreshes, and leaves no undo step', async () => {
+    const s = filling(1)
+    s.api.runAction.mockRejectedValueOnce({ code: 'transition_lost', message: '"status" is no longer open' })
+
+    expect(await s.store.fill(2, 70, 5)).toBe(false)
+    await settled()
+
+    expect(s.store.cellError(2, OPEN)?.message).toBe('De status is intussen gewijzigd. De cel toont nu wat er staat.')
+    expect(s.onStale).toHaveBeenCalledTimes(1)
+    expect(s.store.getState().canUndo).toBe(false)
   })
 })

@@ -59,6 +59,8 @@ export interface MatrixDecl {
   marks: Record<string, string>
   count: string
   away?: { dataset: string; across: string; label: string; end: string }
+  /** A join row with neither across nor label is open: `match` says what it waits for, `count` how many, `fill` the action that fills it. */
+  open?: { match: string; count: string; fill: string }
 }
 
 /** The rows of `dataset` whose `key` column is this row's id; `item` is the word for one of them. */

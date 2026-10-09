@@ -29,6 +29,7 @@ export interface EngineMatrix {
   marks: Record<string, string>
   count: string
   away?: { dataset: string; across: string; label: string; end: string }
+  open?: { match: string; count: string; fill: string }
 }
 
 export interface EngineSource {
@@ -178,13 +179,23 @@ function linkField({ label, ...link }: Link & { label: string }): Field {
   return { type: 'links', label, required: false, fact: false, link }
 }
 
-function joinOf(model: string, m: EngineMatrix, lifecycle?: string): MatrixJoin {
+function joinOf(model: string, m: EngineMatrix, joined: EngineSource): MatrixJoin {
+  const lifecycle = joined.lifecycle?.column
   return {
     model, row_field: m.down, column_field: m.across, cell_field: m.cell, keys: m.keys, marks: m.marks, count: m.count,
     ...(m.label ? { name_field: m.label } : {}),
     ...(m.note ? { note_field: m.note } : {}),
     ...(lifecycle ? { lifecycle } : {}),
+    ...openOf(m, joined),
   }
+}
+
+/** The open column, when the fill action is served with its one input. */
+function openOf(m: EngineMatrix, joined: EngineSource): Pick<MatrixJoin, 'open'> {
+  const fill = joined.actions?.find((action) => action.name === m.open?.fill)
+  const [input] = Object.keys(fill?.input ?? {})
+  if (!m.open || !fill || input === undefined) return {}
+  return { open: { match_field: m.open.match, count_field: m.open.count, action: fill.name, input } }
 }
 
 function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): MatrixAway {
@@ -205,8 +216,8 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
   }
   const joined = source.matrix_join ? sources[source.matrix_join] : undefined
   const matrix = joined?.matrix
-  if (!source.matrix_join || !matrix) return table
-  const join = joinOf(source.matrix_join, matrix, joined?.lifecycle?.column)
+  if (!source.matrix_join || !joined || !matrix) return table
+  const join = joinOf(source.matrix_join, matrix, joined)
   return { ...table, types: ['grid', 'matrix'], join, ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
 }
 

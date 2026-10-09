@@ -1,7 +1,7 @@
 import type { CellError, SaveState } from '../grid/store'
 import { errorText, type StringKey, t, undoText } from '../i18n'
 import type { ApiError, MatrixCell, MatrixColumn, Row, Saved, View } from '../types'
-import { cellsFor, cellsOf } from './columns'
+import { cellsFor, cellsOf, OPEN } from './columns'
 import { keyed } from './keys'
 
 export interface MatrixApi {
@@ -11,6 +11,8 @@ export interface MatrixApi {
   remove: (model: string, id: number) => Promise<unknown>
   /** Answers the undo's own batch, which undoes it in turn. */
   undoBatch: (batch: string) => Promise<string>
+  /** Runs a declared action on one record, in one batch. */
+  runAction: (name: string, id: number, input: Record<string, unknown>) => Promise<{ batch: string; created: { dataset: string; id: number }[] }>
 }
 
 export interface MatrixState {
@@ -29,6 +31,8 @@ export interface MatrixStore {
   /** null removes the cell's join record. True when the server took it. */
   set: (row: number, column: MatrixColumn, status: string | null) => Promise<boolean>
   setNote: (row: number, column: MatrixColumn, note: string) => Promise<boolean>
+  /** Puts `record` on the open join row `cell` through the join's fill action: one undo step, undone by its batch. */
+  fill: (row: number, cell: number, record: number) => Promise<boolean>
   /** The first row's status copied into the rest, in the order given: one undo step. */
   fillDown: (column: MatrixColumn, rowIds: number[]) => Promise<void>
   /** A block of keys, marks or values from the top-left of `at`: one undo step. */
@@ -65,6 +69,8 @@ interface Op {
   batch?: { id: string | null; created: boolean }
   /** An undo or redo of a lifecycle change: undoes `batch` instead of writing the cell. */
   replay?: 'undo' | 'redo'
+  /** A fill of the open row `record` with the record `put`: the action decides what changes, so the row is read back after each step. */
+  fill?: { put: number }
 }
 
 interface Job {
@@ -83,7 +89,7 @@ function same(a: Content, b: Content): boolean {
 }
 
 function asCell(row: Row): MatrixCell {
-  return { id: row.id, title: row.title, status: row.status, fields: row.fields }
+  return { id: row.id, title: row.title, status: row.status, fields: row.fields, ...(row.lookups ? { lookups: row.lookups } : {}) }
 }
 
 function keyOf(row: number, column: MatrixColumn): string {
@@ -176,6 +182,7 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
   }
 
   function paint(op: Op): void {
+    if (op.fill) return
     patchRow(op.row, (row) => {
       const current = cellsFor(view, row, op.column)
       const target = current.find((cell) => cell.id === latestId(op.record.id)) ?? current[0]
@@ -224,6 +231,7 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
 
   async function decide(op: Op): Promise<void> {
     if (op.replay) return replay(op)
+    if (op.fill) return runFill(op, op.fill.put)
     const { row, column, after, record } = op
     const known = latestId(record.id)
     const current = currentOf(op)
@@ -263,12 +271,31 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
     return { [join.cell_field]: contentOf(cell)!.status }
   }
 
+  async function runFill(op: Op, put: number): Promise<void> {
+    const open = join.open!
+    const done = await api.runAction(open.action, op.record.id!, { [open.input]: put })
+    Object.assign(op.batch!, { id: done.batch, created: done.created.length > 0 })
+    await reload(op.row)
+  }
+
+  /** The row's cells as the server now holds them, after a write whose outcome only the server knows. */
+  async function reload(id: number): Promise<void> {
+    if (!onStale) return
+    const sent = generation.get(id)
+    const fresh = (await onStale()).find((row) => row.id === id)
+    // Another write on this row moved meanwhile: the general refresh sorts it out.
+    if (!fresh || generation.get(id) !== sent) return refresh()
+    confirmed.set(id, cellsOf(fresh))
+    patchRow(id, (painted) => withCells(painted, cellsOf(fresh)))
+  }
+
   /** Undoes the change's last batch and lands what that leaves: an undone create is gone, else the cell holds `after`. */
   async function replay(op: Op): Promise<void> {
     const batch = op.batch!
     if (batch.id === null) return
     const id = latestId(op.record.id)
     batch.id = await api.undoBatch(batch.id)
+    if (op.fill) return reload(op.row)
     const land = (change: (cells: MatrixCell[]) => MatrixCell[]): void => void confirmed.set(op.row, change(confirmed.get(op.row) ?? []))
     if (op.replay === 'undo' && batch.created) return land((cells) => cells.filter((cell) => cell.id !== id))
     const status = op.after?.status ?? ''
@@ -401,6 +428,7 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
    * note change whose record is gone: re-creating it would enter a hooked state too.
    */
   function skipped(op: Op, forward: boolean): StringKey | null {
+    if (op.fill) return forward && op.batch!.created ? 'redoSkipped' : null
     if (!op.batch) return lifecycle && !currentOf(op) ? 'undoDeleteSkipped' : null
     if (!forward && op.after === null) return 'undoDeleteSkipped'
     if (forward && op.batch.created) return 'redoSkipped'
@@ -454,6 +482,11 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
       return () => listeners.delete(listener)
     },
     set: (row, column, status) => single(opFor({ row, column, status })),
+    fill(row, cell, record) {
+      if (!join.open) return Promise.resolve(false)
+      const batch = { id: null, created: false }
+      return single({ row, column: OPEN, before: null, after: null, record: { id: cell }, batch, fill: { put: record } })
+    },
     setNote(row, column, note) {
       const before = shown(row, column)
       if (before === null || before.note === note) return Promise.resolve(before !== null)

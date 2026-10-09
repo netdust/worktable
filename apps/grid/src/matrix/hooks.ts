@@ -1,5 +1,5 @@
 import { useMemo, useRef, useSyncExternalStore } from 'react'
-import { create, remove, undoBatch, update } from '../api'
+import { create, remove, runAction, undoBatch, update } from '../api'
 import type { Row, View } from '../types'
 import { createMatrixStore, type MatrixApi, type MatrixState, type MatrixStore } from './store'
 
@@ -8,6 +8,7 @@ export const matrixWrites: MatrixApi = {
   update: (model, id, data, expect) => update(model, id, data, undefined, expect),
   remove,
   undoBatch,
+  runAction,
 }
 
 const idle: MatrixState = { rows: [], save: 'saved', error: null, canUndo: false, canRedo: false }

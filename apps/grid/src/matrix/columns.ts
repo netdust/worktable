@@ -55,14 +55,41 @@ export function visibleColumns(columns: MatrixColumn[], hidden: string[]): Matri
   return columns.filter((column) => !hidden.includes(column.key))
 }
 
+/** The join rows with neither record nor name: a view whose join declares `open` shows them in its own column. */
+export const OPEN: MatrixColumn = { key: 'open', kind: 'open', title: '' }
+
 function onColumn(view: View, cell: MatrixCell, column: MatrixColumn): boolean {
   const id = recordOf(view, cell)
-  return column.kind === 'record' ? id === column.id : id === null && normalise(nameOf(view, cell)) === column.key.slice('name:'.length)
+  if (column.kind === 'record') return id === column.id
+  const name = normalise(nameOf(view, cell))
+  return id === null && (column.kind === 'open' ? name === '' : name === column.key.slice('name:'.length))
 }
 
 /** Every join of one cell, the lowest id first: that one is shown, the rest are for the panel. */
 export function cellsFor(view: View, row: Row, column: MatrixColumn): MatrixCell[] {
   return cellsOf(row).filter((cell) => onColumn(view, cell, column)).sort((a, b) => a.id - b.id)
+}
+
+/** What a row's open cells wait for, one entry per matched record: its title, its summed count, and the open row a fill acts on. */
+export interface OpenSlot {
+  key: string
+  label: string
+  count: number
+  cell: number
+}
+
+export function openSlots(view: View, row: Row): OpenSlot[] {
+  const open = view.join?.open
+  if (!open) return []
+  const slots = new Map<string, OpenSlot>()
+  for (const cell of cellsFor(view, row, OPEN)) {
+    const key = firstId(cell.fields[open.match_field])
+    const count = Math.max(0, Number(cell.fields[open.count_field] ?? 1) || 0)
+    const slot = slots.get(key)
+    if (slot) slot.count += count
+    else slots.set(key, { key, label: cell.lookups?.[open.match_field]?.title ?? '', count, cell: cell.id })
+  }
+  return [...slots.values()]
 }
 
 export function cellFor(view: View, row: Row, column: MatrixColumn): MatrixCell | undefined {
