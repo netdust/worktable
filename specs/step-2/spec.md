@@ -2,7 +2,7 @@
 
 Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 grid, 151 e2e). The design is `specs/step-2/findings.md` (40d91ed). Stefan's brief of 2026-10-09 is the source quoted below as "brief".
 
-**Working assumptions.** Stefan has not yet answered the findings' questions. This spec takes each recommended answer, marked `assumed (Qn)`. An answer that differs changes the requirement first, then the plan. Question 1 follows the brief: Beschikbaarheid.soort and Persoon_rol move to step 3 with kandidaten.
+**Working assumptions.** Stefan has not yet answered the findings' questions; the plan lists the load-bearing ones (Q1, Q4, Q5, Q11, Q12) and two new ones (Q13, Q14) to answer before Task 0. This spec takes each recommended answer, marked `assumed (Qn)`. An answer that differs changes the requirement first, then the plan. Question 1 follows the brief: Beschikbaarheid.soort and Persoon_rol move to step 3 with kandidaten.
 
 ## Requirements
 
@@ -25,7 +25,7 @@ Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 
 - A create is not a transition.
 - A write may carry `expect: { <column>: <from> }`. A mismatch with the current value is 409 `transition_lost`. The grid sends the value it showed; a write without `expect` is judged on the current value.
 - Each transition appends to Revision.
-- Hooks are declarative (mint an action token, send a mail) and their mail goes out after commit.
+- Hooks are declarative (mint an action token, send a mail). They fire on entering a hooked state, by a transition or by a create through the API or an action, never through import, `--seed-missing` or undo. Their mail goes out after commit.
 - Source: brief "A dataset declares transitions on a status column, the roles that may make each, and hooks. Each transition is a conditional update (WHERE status = from), a lost race answers 409, and each appends to Revision. Opt-in."; findings F3; assumed (Q10).
 
 **R3. Undo of a transition.**
@@ -40,7 +40,7 @@ Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 
   - `POST /act` performs confirm or decline.
   - Reused, expired and other-record tokens all get one identical 401.
 - Public, rate-limited, no CORS headers, Host check kept.
-- The transition is made as the record owner's link account. Its batch can only be undone by that account, which has no undo route.
+- The token stores its record and its owner subject at mint. The transition is made as that subject's link account, on that record only; a token whose record changed owner is refused. Its batch can only be undone by that account, which has no undo route. A refused transition does not use up the token, and minting revokes the record's earlier tokens.
 - Source: brief "Single-purpose action tokens for confirm and decline, bound to one Toewijzing: 256-bit, hashed, constant-time compare, expiring, consumed on first use, acted on by POST from a confirm page with the token in the URL fragment (never GET). The confirm page shows only a minimal projection. Public routes are rate-limited, send no CORS headers, and keep the Host check."; assumed (Q11).
 
 **R5. Toewijzing, slot-first (theatre).**
@@ -63,7 +63,7 @@ Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 
 - Source: brief "Invites. A mailer interface that writes an outbox file in development … A person without an email gets no invite, and the reply says so in Dutch."
 
 **R7. Templates with slots.**
-- Sjabloon items take an optional `slots: [{ rol_id, aantal }]`, validated by the writer.
+- Sjabloon items take an optional `slots: [{ rol, aantal }]`, the role by its title (the natural key, so a seeded template works on any database), validated by the writer.
 - Applying creates the open Toewijzingen in the same batch, so one undo removes everything.
 - `--seed-missing` adds config rows by missing natural key, never updating, so a migrated database gets a slotted "speeldag".
 - Source: brief "Templates with slots …".
