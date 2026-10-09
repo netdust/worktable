@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite'
-import { eq } from 'drizzle-orm'
+import { eq, getTableColumns } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
@@ -16,6 +16,7 @@ import type {
   Writer,
 } from './declare'
 import type { BatchKind } from './engine-tables'
+import { lookupSelect } from './lookups'
 import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
 import { retireDelivered } from './record-link'
@@ -565,7 +566,11 @@ export function runWrite(
 export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow {
   const table = tableOf(dataset)
   const idColumn = (table as unknown as Record<string, SQLiteColumn>).id as SQLiteColumn
-  const raw = store.db.select().from(table).where(eq(idColumn, id)).get() as Values
+  const raw = store.db
+    .select({ ...getTableColumns(table), ...lookupSelect(dataset) })
+    .from(table)
+    .where(eq(idColumn, id))
+    .get() as Values
   return withLookups(store.db, store.domain, dataset, [raw])[0] as EngineRow
 }
 

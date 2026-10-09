@@ -9,6 +9,7 @@ import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
+import { lookupColumn } from './lookups'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
 import { openApiOf } from './openapi'
 import { ownerViewGuard, ownerViewRoutes } from './owner-views'
@@ -139,6 +140,17 @@ function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Re
   return served.length ? { links: Object.fromEntries(served) } : {}
 }
 
+type ServedLookup = Omit<ColumnDecl, 'inherited'> & { inherited?: true; from?: string }
+
+function servedLookups(domain: Domain, source: Source): { lookups?: Record<string, ServedLookup> } {
+  if (source.kind !== 'dataset' || !source.lookups) return {}
+  const served = Object.entries(source.lookups).map(([name, { own, from }]): [string, ServedLookup] => {
+    const column: Omit<ColumnDecl, 'inherited'> = lookupColumn(domain, source, name)
+    return [name, { ...column, ...(own ? { inherited: true } : {}), ...(from ? { from } : {}) }]
+  })
+  return served.length ? { lookups: Object.fromEntries(served) } : {}
+}
+
 export interface EngineOptions {
   port: number
   appUrl?: string
@@ -222,6 +234,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...createsOf(domain, s, actor),
             ...ofOf(domain, s, actor),
             ...servedLinks(domain, s, actor),
+            ...servedLookups(domain, s),
             ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
               ? { new_label: s.new_label }
               : {}),

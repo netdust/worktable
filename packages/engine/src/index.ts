@@ -16,6 +16,7 @@ export type {
   Icon,
   LifecycleDecl,
   LinkDecl,
+  LookupDecl,
   MatrixDecl,
   Owners,
   QueryDecl,

@@ -108,6 +108,7 @@ const OVERWRITTEN = [
   ['title', 'the computed row title'],
   ['revision', 'the write reply'],
   ['links', "the row's link rows"],
+  ['inherited', "the row's inherited lookups"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -148,6 +149,47 @@ function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
       throw at(link.target, `target "${link.target}" is not a relation column`)
     if (link.state !== undefined && !linked.columns[link.state]?.options) {
       throw at(link.state, `state "${link.state}" is not an options column`)
+    }
+  }
+}
+
+// Keys every row or write body already carries.
+const LOOKUP_RESERVED = new Set([
+  'id',
+  'custom',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'lookups',
+  'inherited',
+  'cells',
+  'title',
+  'links',
+  'revision',
+  'notices',
+  'expect',
+])
+
+// One hop through a live relation; a boolean field is refused because the subquery answers 0 or 1.
+function checkLookups(domain: Domain, dataset: DatasetDecl): void {
+  for (const [name, lookup] of Object.entries(dataset.lookups ?? {})) {
+    const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lookup ${name} ${message}`)
+    if (dataset.owners) throw at(name, 'is on a dataset with owners, which reads only titles through a relation')
+    if (LOOKUP_RESERVED.has(name)) throw at(name, 'has a name the engine uses on every row')
+    if (declared(dataset, name) || Object.hasOwn(dataset.links ?? {}, name)) {
+      throw at(name, 'has the name of a column or a link')
+    }
+    const target = domain.datasets.find((d) => d.name === dataset.columns[lookup.via]?.relation)
+    if (!target) throw at(lookup.via, `via "${lookup.via}" is not a relation column`)
+    const field = Object.hasOwn(target.columns, lookup.field) ? target.columns[lookup.field] : undefined
+    if (!field) throw at(lookup.field, `field "${lookup.field}" is not a column of "${target.name}"`)
+    if (field.type === 'json' || field.type === 'boolean') {
+      throw at(lookup.field, `field "${lookup.field}" is ${field.type}`)
+    }
+    if (lookup.own === undefined) continue
+    const own = Object.hasOwn(dataset.columns, lookup.own) ? dataset.columns[lookup.own] : undefined
+    if (own?.type !== field.type || own.relation !== field.relation) {
+      throw at(lookup.own, `own "${lookup.own}" is not a column of the field's type and relation`)
     }
   }
 }
@@ -393,6 +435,7 @@ export function validateDomain(domain: Domain): void {
     checkLifecycle(dataset)
     checkRecordLink(dataset)
     checkConfig(domain, dataset)
+    checkLookups(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {
