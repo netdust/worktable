@@ -149,8 +149,29 @@ describe('Mijn producties for owners', () => {
     }
   })
 
-  for (const hidden of ['notitie', 'dietary', 'dagtarief']) {
-    test(`a view listing ${hidden} is refused for owners, naming it`, async () => {
+  const published = async (admin: { cookie: string }) => {
+    expect((await request('PUT', `/api/views/${seeded().id}/for-owners`, admin, {})).status).toBe(200)
+    return seeded().id
+  }
+
+  test("from and to narrow a person's productions on the production's last day", async () => {
+    const id = await published({ cookie: await signIn(app, 'administrator') })
+    const tine = person('Tine')
+    assign(activity(production('Kort'), daysAgo(-3)), tine, 'bevestigd')
+    assign(activity(production('Lang'), daysAgo(-60)), tine, 'bevestigd')
+    const asTine = { authorization: `RecordLink ${recordLinkFor(sqlite, TEST_LINK_SECRET, 'persoon', tine)}` }
+    const titles = async (query: string) =>
+      (await request('GET', `/api/owner/views/${id}/rows${query}`, asTine)).body.rows.map(
+        (row: { productie: string }) => row.productie,
+      )
+
+    expect((await titles('')).sort()).toEqual(['Kort', 'Lang'])
+    expect(await titles(`?from=${daysAgo(0)}&to=${daysAgo(-10)}`)).toEqual(['Kort'])
+    expect(await titles(`?from=${daysAgo(-50)}&to=${daysAgo(-70)}`)).toEqual(['Lang'])
+  })
+
+  for (const hidden of ['productie_id', 'persoon_id']) {
+    test(`a view listing the hidden ${hidden} is refused for owners, naming it`, async () => {
       const admin = { cookie: await signIn(app, 'administrator') }
       const made = await request('POST', '/api/views', admin, {
         name: `Met ${hidden}`,
@@ -162,4 +183,13 @@ describe('Mijn producties for owners', () => {
       expect(refused).toMatchObject({ status: 400, body: { code: 'column_not_owner_visible', key: hidden } })
     })
   }
+
+  test('a stored view naming a column the query does not have, such as notitie, is refused for owners too', async () => {
+    const admin = { cookie: await signIn(app, 'administrator') }
+    const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, filters, sort, group_by, visible_fields)
+                 VALUES ('Rauw', 'query', 'mijn_producties', -1, 1, '{}', '[]', NULL, '["productie","notitie"]')`
+    const id = Number(sqlite.query(sql).run().lastInsertRowid)
+    const refused = await request('PUT', `/api/views/${id}/for-owners`, admin, {})
+    expect(refused).toMatchObject({ status: 400, body: { code: 'column_not_owner_visible', key: 'notitie' } })
+  })
 })

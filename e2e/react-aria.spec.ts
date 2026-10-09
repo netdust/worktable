@@ -615,12 +615,13 @@ test('edit-long-text @e2e', async ({ page }) => {
   const note = 'eerste regel\ntweede regel — café ☕'
   try {
     await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', WEEK)
-    // Person cells only: the label and the open column carry no data-cell.
+    // One cell per person column, counted past the label and the open column.
     const spot = async () => {
-      const column = await columnIndex(page, 'Noor Claes')
-      return named(page, title)
-        .locator('td[data-cell]')
-        .nth(column - 2)
+      await expect(page.locator('thead th.nv-mx__head[title="Noor Claes"]')).toBeVisible()
+      const column = await page
+        .locator('thead th.nv-mx__head')
+        .evaluateAll((heads) => heads.findIndex((th) => th.getAttribute('title') === 'Noor Claes'))
+      return named(page, title).locator('td[data-cell]').nth(column)
     }
     const field = page.getByRole('textbox', { name: 'Notitie' })
 

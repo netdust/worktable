@@ -104,13 +104,14 @@ export const voorstellingen = defineQuery({
 
 const shown = (type: 'text' | 'date', label: string) => ({ type, label, nullable: true, owner_visible: true })
 
-// A person's productions: names as text, since a link actor reads no lookups. Notes, diet and rate stay admin-only.
+// A person's productions: names as text, since a link actor reads no lookups.
 export const mijnProducties = defineQuery({
   name: 'mijn_producties',
   of: 'toewijzing',
   label: 'Mijn producties',
   icon: 'star',
   title: 'productie',
+  date: 'laatste_dag',
   owners: { owner: 'persoon_id' },
   sql: readFileSync(new URL('./queries/mijn_producties.sql', import.meta.url), 'utf8'),
   columns: {
@@ -122,8 +123,5 @@ export const mijnProducties = defineQuery({
     vanaf: shown('date', 'Eerste dag'),
     laatste_dag: shown('date', 'Laatste dag'),
     toegang_vervalt: shown('date', 'Toegang tot'),
-    notitie: { type: 'text', label: 'Notitie', nullable: true },
-    dietary: { type: 'text', label: 'Dieet', nullable: true },
-    dagtarief: { type: 'real', label: 'Dagtarief', nullable: true },
   },
 })
