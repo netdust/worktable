@@ -4,9 +4,9 @@ import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
-import type { Actor, ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
+import type { Actor, ColumnDecl, DatasetDecl, Domain, TransitionMode, WriteContext, Writer } from './declare'
 import type { BatchKind } from './engine-tables'
-import type { Mailer } from './mailer'
+import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
@@ -199,12 +199,86 @@ function existence(store: Store): WriteContext['exists'] {
   }
 }
 
-export const contextOf = (store: Store, actor: Actor, current: Values | null): WriteContext => ({
+export const contextOf = (
+  store: Store,
+  actor: Actor,
+  current: Values | null,
+  lifecycle?: TransitionMode,
+): WriteContext => ({
+  ...(lifecycle ? { lifecycle } : {}),
   actor,
   current,
   find: finder(store),
   exists: existence(store),
 })
+
+function allowed(dataset: DatasetDecl, from: unknown, to: unknown, actor: Actor): boolean {
+  return (dataset.lifecycle?.transitions ?? []).some(
+    (t) =>
+      t.to === to &&
+      (t.from === '*' || (typeof from === 'string' && t.from.includes(from))) &&
+      t.roles.includes(actor.role),
+  )
+}
+
+// A create is no transition. Undo may write only the exact inverse of its batch's own transition.
+export function checkTransition(
+  dataset: DatasetDecl,
+  current: Values | null,
+  next: Values,
+  actor: Actor,
+  mode: TransitionMode,
+): void {
+  const column = dataset.lifecycle?.column
+  if (column === undefined || current === null) return
+  const from = current[column]
+  if (mode.kind === 'write' && mode.expect !== undefined && from !== mode.expect) {
+    throw new ApiError(409, 'transition_lost', `"${column}" is no longer ${mode.expect}`)
+  }
+  if (!Object.hasOwn(next, column) || next[column] === from) return
+  const to = next[column]
+  const inverse = mode.kind === 'undo' && from === mode.to && to === mode.from
+  if (mode.kind === 'undo' ? inverse : allowed(dataset, from, to, actor)) return
+  throw new ApiError(422, 'transition_not_allowed', `"${column}" may not go from ${String(from)} to ${String(to)}`)
+}
+
+function expectedOf(dataset: DatasetDecl, expect: unknown): string | undefined {
+  if (expect === undefined) return undefined
+  const column = dataset.lifecycle?.column
+  const given = typeof expect === 'object' && expect !== null && !Array.isArray(expect) ? (expect as Values) : null
+  const keys = given ? Object.keys(given) : []
+  if (!given || column === undefined || keys.length !== 1 || keys[0] !== column || typeof given[column] !== 'string') {
+    throw new ApiError(400, 'bad_body', '"expect" must name the lifecycle column and the value it holds')
+  }
+  return given[column] as string
+}
+
+/** What hooks left to do after the commit. */
+export interface Hooked {
+  notices: string[]
+  mails: Mail[]
+}
+
+export const noneHooked = (): Hooked => ({ notices: [], mails: [] })
+
+// Only runWrite and runAction call this: import, seed-missing and undo never fire a hook.
+export function enterState(store: Store, dataset: DatasetDecl, id: number, ctx: WriteContext, hooked: Hooked): void {
+  const lifecycle = dataset.lifecycle
+  if (!lifecycle?.hooks) return
+  const row = finder(store)(dataset.name, id)
+  const state = row?.[lifecycle.column]
+  if (!row || state === null || state === ctx.current?.[lifecycle.column]) return
+  const hook = Object.hasOwn(lifecycle.hooks, String(state)) ? lifecycle.hooks[String(state)] : undefined
+  const result = hook?.(row, ctx)
+  if (result?.notice) hooked.notices.push(result.notice)
+  // No action token is minted yet, so there is no link.
+  const mail = result?.mail?.(null)
+  if (mail) hooked.mails.push(mail)
+}
+
+export function sendAfterCommit(store: Store, hooked: Hooked): void {
+  for (const mail of hooked.mails) store.mailer.send(mail).catch((err) => console.error(err))
+}
 
 type Referrer = { label: string; count: number }
 
@@ -252,6 +326,7 @@ export interface Written {
   id: number
   batch_id: string | null
   changed: string[]
+  notices: string[]
 }
 
 export function recordBatch(sqlite: Database, key: string, actorId: number, kind: BatchKind, now: string): void {
@@ -330,10 +405,13 @@ export function valuesOf(
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
   checkValues(dataset, cut, false)
+  const mode = ctx.lifecycle ?? { kind: 'write' }
+  checkTransition(dataset, ctx.current, cut, ctx.actor, mode)
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
   checkOwner(scope, returned ?? {})
   // Forced again on what is stored: a writer may return a fresh object without the owner column.
   const values = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
+  checkTransition(dataset, ctx.current, values, ctx.actor, mode)
   checkValues(dataset, values)
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
@@ -372,20 +450,24 @@ export function runWrite(
   id: number | null,
   body: Values,
   actor: Actor,
+  opts: { expect?: Record<string, unknown> } = {},
 ): Written {
   const { sqlite } = store
   const table = target.dataset.name
   const scope = scopeOf(actor, target.dataset)
-  return sqlite
-    .transaction((): Written => {
+  const mode: TransitionMode = { kind: 'write', expect: expectedOf(target.dataset, opts.expect) }
+  const hooked = noneHooked()
+  const written = sqlite
+    .transaction((): Omit<Written, 'notices'> => {
       const current = currentOf(sqlite, target, id, scope)
-      const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current))
+      const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current), mode)
       const now = new Date().toISOString()
       const stored = storedOf(store, target, op, body, ctx, scope, now)
       const key = crypto.randomUUID()
       if (id === null || current === null) {
         const made = create(sqlite, target.dataset, stored, now, actor.id, key)
         recordBatch(sqlite, key, actor.id, 'write', now)
+        enterState(store, target.dataset, made.id, ctx, hooked)
         return { ...made, batch_id: key }
       }
       const changes = diff(stored, current)
@@ -393,9 +475,12 @@ export function runWrite(
       update(sqlite, table, id, stored, now)
       revise(sqlite, target.dataset, id, changes, now, actor.id, key)
       recordBatch(sqlite, key, actor.id, 'write', now)
+      if (op === 'update') enterState(store, target.dataset, id, ctx, hooked)
       return { id, batch_id: key, changed: changes.map(([field]) => field) }
     })
     .immediate()
+  sendAfterCommit(store, hooked)
+  return { ...written, notices: hooked.notices }
 }
 
 export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow {
@@ -511,11 +596,16 @@ function planUndo(store: Store, record: Touched, actor: Actor): Planned {
   return { ...record, target, scope }
 }
 
+function undoModeOf({ dataset, fields }: Planned): TransitionMode | undefined {
+  const changed = dataset.lifecycle && fields.get(dataset.lifecycle.column)
+  return changed ? { kind: 'undo', from: parsed(changed.old) as string, to: parsed(changed.new) as string } : undefined
+}
+
 function restore(store: Store, planned: Planned, actor: Actor, now: string, key: string): void {
   const { sqlite } = store
   const { dataset, id, target, scope } = planned
   const current = liveRow(sqlite, dataset.name, id) as Stored
-  const ctx = contextOf(store, actor, decodeAll(dataset, current))
+  const ctx = contextOf(store, actor, decodeAll(dataset, current), undoModeOf(planned))
   let stored: Stored
   if (planned.created) {
     target.writer.delete?.(ctx)

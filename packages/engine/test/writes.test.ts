@@ -322,6 +322,7 @@ describe('writes', () => {
           batch_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
           changed: ['project_id', 'tekst', 'lengte', 'klaar', 'kind'],
         },
+        notices: [],
       },
     })
     const rows = await revisionsOf('note', 2)

@@ -34,9 +34,10 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
-  const reply = (dataset: DatasetDecl, { id, batch_id, changed }: Written) => ({
+  const reply = (dataset: DatasetDecl, { id, batch_id, changed, notices }: Written) => ({
     ...rowOf(store, dataset, id),
     revision: { batch_id, changed },
+    notices,
   })
 
   app.post('/rows/:dataset', async (c) => {
@@ -47,7 +48,10 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
 
   app.patch('/rows/:dataset/:id', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'update', c.get('actor'))
-    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c), c.get('actor'))
+    // cutBody would drop it silently, so the expected value is taken out here; runWrite checks its shape.
+    const { expect, ...body } = await bodyOf(c)
+    const opts = { expect: expect as Record<string, unknown> | undefined }
+    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, c.get('actor'), opts)
     return c.json(reply(target.dataset, written))
   })
 
@@ -191,6 +195,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
             date: s.date ?? null,
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
+            ...(s.kind === 'dataset' && s.lifecycle ? { lifecycle: { column: s.lifecycle.column } } : {}),
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),

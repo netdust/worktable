@@ -1,3 +1,4 @@
+import { ROLES } from './auth-tables'
 import { type ColumnDecl, type DatasetDecl, type Domain, ICONS, type QueryDecl, TONES } from './declare'
 import { reservedNames } from './engine-tables'
 import { sourceOf, sourcesOf, writerOf } from './registry'
@@ -211,6 +212,24 @@ function checkAway(
   }
 }
 
+function checkLifecycle(dataset: DatasetDecl): void {
+  const lifecycle = dataset.lifecycle
+  if (!lifecycle) return
+  const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lifecycle ${message}`)
+  const options = dataset.columns[lifecycle.column]?.options
+  if (!options) throw at(lifecycle.column, `column "${lifecycle.column}" is not an options column`)
+  const checkOption = (what: string, key: string) => {
+    if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${lifecycle.column}"`)
+  }
+  for (const { from, to, roles } of lifecycle.transitions) {
+    if (from !== '*') for (const key of from) checkOption('from', key)
+    checkOption('to', to)
+    for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
+  }
+  for (const key of Object.keys(lifecycle.hooks ?? {})) checkOption('hook', key)
+  for (const column of lifecycle.token_projection ?? []) checkColumn(dataset, 'token_projection column', column)
+}
+
 const ACTION_NAME = /^[a-z][a-z0-9_]*$/
 
 function checkActions(domain: Domain): void {
@@ -312,6 +331,7 @@ export function validateDomain(domain: Domain): void {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
+    checkLifecycle(dataset)
     checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }

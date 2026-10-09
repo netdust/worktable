@@ -1,4 +1,5 @@
 import type { FilterInput } from './filter-compile'
+import type { Mail } from './mailer'
 
 /** The generic icons an administrator picks a source's icon from. */
 export const ICONS = [
@@ -96,6 +97,7 @@ export interface DatasetDecl {
   /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
   new_label?: string
   links?: Record<string, LinkDecl>
+  lifecycle?: LifecycleDecl
 }
 
 export interface QueryDecl {
@@ -141,13 +143,34 @@ export interface Domain {
   sections?: { label: string; sources: string[] }[]
 }
 
+export type Role = 'administrator' | 'editor' | 'owner'
+
 export interface Actor {
   id: number
-  role: 'administrator' | 'editor' | 'owner'
+  role: Role
   subject: { dataset: string; id: number } | null
 }
 
+/** What a hook asks the engine to do; `link` is null while no token was minted. */
+export interface HookResult {
+  token?: { to: string[]; days: number }
+  mail?: (link: string | null) => Mail | null
+  notice?: string
+}
+
+/** A write to `column` on an existing row is a transition; a create is not. Hooks run on entering their state. */
+export interface LifecycleDecl {
+  column: string
+  transitions: { from: string[] | '*'; to: string; roles: Role[] }[]
+  hooks?: Record<string, (row: Record<string, unknown>, ctx: WriteContext) => HookResult>
+  token_projection?: string[]
+}
+
+/** How the engine judges a transition: by the table, or in undo as the exact inverse of `from` → `to`. */
+export type TransitionMode = { kind: 'write'; expect?: string } | { kind: 'undo'; from: string; to: string }
+
 export interface WriteContext {
+  readonly lifecycle?: TransitionMode
   actor: Actor
   current: Record<string, unknown> | null
   find(dataset: string, id: number): Record<string, unknown> | null

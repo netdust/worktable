@@ -1,13 +1,26 @@
 import { inScope, scopeOf, visibleSource } from './access'
 import type { ActionDecl, Actor, Domain } from './declare'
 import { ApiError } from './params'
-import { contextOf, create, encodeAll, recordBatch, type Store, valuesOf, writableOf } from './writes'
+import {
+  contextOf,
+  create,
+  encodeAll,
+  enterState,
+  type Hooked,
+  noneHooked,
+  recordBatch,
+  type Store,
+  sendAfterCommit,
+  valuesOf,
+  writableOf,
+} from './writes'
 
 type Values = Record<string, unknown>
 
 export interface ActionRun {
   batch_id: string
   created: { dataset: string; id: number }[]
+  notices: string[]
 }
 
 const badBody = (message: string) => new ApiError(400, 'bad_body', message)
@@ -43,14 +56,21 @@ function readRecord(store: Store, dataset: string, id: number, actor: Actor): Va
   return record
 }
 
-function createAs(store: Store, actor: Actor, dataset: string, values: Values, now: string, key: string) {
+function createAs(
+  store: Store,
+  actor: Actor,
+  dataset: string,
+  values: Values,
+  now: string,
+  key: string,
+  hooked: Hooked,
+) {
   const target = writableOf(store.domain, dataset, 'create', actor)
   const ctx = contextOf(store, actor, null)
   const checked = valuesOf(store, target, 'create', values, ctx, scopeOf(actor, target.dataset))
-  return {
-    dataset,
-    id: create(store.sqlite, target.dataset, encodeAll(target.dataset, checked), now, actor.id, key).id,
-  }
+  const { id } = create(store.sqlite, target.dataset, encodeAll(target.dataset, checked), now, actor.id, key)
+  enterState(store, target.dataset, id, ctx, hooked)
+  return { dataset, id }
 }
 
 // Runs as the caller, never with the import's 'all' scope; one transaction, so any refusal rolls back every create.
@@ -58,8 +78,9 @@ export function runAction(store: Store, name: string, body: Values, actor: Actor
   const action = actionOf(store.domain, name)
   visibleSource(store.domain, action.on, actor)
   const ids = idsOf(action, body)
-  return store.sqlite
-    .transaction((): ActionRun => {
+  const hooked = noneHooked()
+  const run = store.sqlite
+    .transaction((): Omit<ActionRun, 'notices'> => {
       const record = readRecord(store, action.on, ids.id, actor)
       const input = Object.fromEntries(
         Object.entries(action.input).map(([key, { relation }]) => [
@@ -70,11 +91,13 @@ export function runAction(store: Store, name: string, body: Values, actor: Actor
       const now = new Date().toISOString()
       const key = crypto.randomUUID()
       const creates = action.run(record, input, contextOf(store, actor, record))
-      const created = creates.map(({ dataset, values }) => createAs(store, actor, dataset, values, now, key))
+      const created = creates.map(({ dataset, values }) => createAs(store, actor, dataset, values, now, key, hooked))
       recordBatch(store.sqlite, key, actor.id, 'action', now)
       return { batch_id: key, created }
     })
     .immediate()
+  sendAfterCommit(store, hooked)
+  return { ...run, notices: hooked.notices }
 }
 
 export function actionsOn(domain: Domain, dataset: string): ({ name: string } & Pick<ActionDecl, 'label' | 'input'>)[] {

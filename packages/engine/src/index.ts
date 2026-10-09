@@ -9,11 +9,14 @@ export type {
   DatasetDecl,
   Domain,
   GroupFact,
+  HookResult,
   Icon,
+  LifecycleDecl,
   LinkDecl,
   MatrixDecl,
   Owners,
   QueryDecl,
+  Role,
   SavedViewSeed,
   Tone,
   WriteContext,
@@ -23,6 +26,7 @@ export { defineDataset, defineQuery, ICONS, TONES } from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'
 export { FilterCompileError, filterCompile } from './filter-compile'
 export { type ImportResult, importExport, type Refusal, readExportFile } from './import'
+export type { Mail } from './mailer'
 export { migrate, seedDomain } from './migrate'
 export { MigrationError } from './migration-error'
 export type { LinkRow } from './rows'
