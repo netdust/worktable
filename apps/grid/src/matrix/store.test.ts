@@ -809,6 +809,43 @@ describe('on a join whose cell is its lifecycle column', () => {
     expect(status(2, sien)).toBe('confirmed')
   })
 
+  it('a note on a cell later cleared: Ctrl+Z skips the clear, then the note, never re-creating; a third reaches the older state change', async () => {
+    const { api, store, onNotice, cell, status } = setup(lifecycle)
+    await store.set(2, sien, 'invited')
+    await store.setNote(1, sien, 'vroeg')
+    await store.set(1, sien, null)
+
+    await store.undo()
+    await store.undo()
+    expect(onNotice.mock.calls).toEqual([[DELETE_SKIPPED], [DELETE_SKIPPED]])
+    expect(api.create).toHaveBeenCalledTimes(1)
+    expect(cell(1, sien)).toBeUndefined()
+
+    await store.undo()
+    expect(api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(cell(2, sien)).toBeUndefined()
+    expect(status(1, lieve)).toBe('maybe')
+    expect(api.create).toHaveBeenCalledTimes(1)
+    expect(store.getState().canUndo).toBe(false)
+  })
+
+  it('empty → u, a note, Ctrl+Z twice, then Ctrl+Shift+Z twice: both redos are skipped and nothing is re-created', async () => {
+    const { api, store, onNotice, cell } = setup(lifecycle)
+    await store.set(2, sien, 'invited')
+    await store.setNote(2, sien, 'vroeg')
+
+    await store.undo()
+    await store.undo()
+    expect(cell(2, sien)).toBeUndefined()
+    await store.redo()
+    await store.redo()
+
+    expect(onNotice.mock.calls).toEqual([[REDO_SKIPPED], [DELETE_SKIPPED]])
+    expect(api.create).toHaveBeenCalledTimes(1)
+    expect(cell(2, sien)).toBeUndefined()
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false })
+  })
+
   it('a state key on a cell whose state moved on the server is 409: the cell refreshes and the Dutch message shows', async () => {
     const { api, store, status, server, onStale } = setup(lifecycle)
     server.set(11, { ...server.get(11), status: 'declined' })

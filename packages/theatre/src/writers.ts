@@ -133,6 +133,7 @@ function checkAssignee(values: Values, ctx: WriteContext): void {
   const { persoon_id, activiteit_id, naam, rol_id, state } = merged(values, ctx)
   const hasPersoon = isSet(persoon_id)
   if (hasPersoon && filled(naam)) refuse('Kies een persoon of een naam, niet allebei.')
+  if (state === 'open' && (hasPersoon || filled(naam))) refuse('Een open plaats heeft nog geen persoon of naam.')
   if (!hasPersoon && !filled(naam)) {
     if (state !== 'open') refuse('Kies een persoon of een naam.')
     if (!isSet(rol_id)) refuse('Een open plek heeft een rol nodig.')

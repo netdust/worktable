@@ -215,12 +215,18 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
     }
   }
 
+  /** The confirmed join record the op acts on: its own once known, else the cell's lowest. */
+  function currentOf(op: Op): MatrixCell | undefined {
+    const mine = cellsFor(view, withCells({ id: op.row, title: '', status: '', fields: {} }, confirmed.get(op.row) ?? []), op.column)
+    const known = latestId(op.record.id)
+    return known === null ? mine[0] : mine.find((cell) => cell.id === known)
+  }
+
   async function decide(op: Op): Promise<void> {
     if (op.replay) return replay(op)
     const { row, column, after, record } = op
-    const mine = cellsFor(view, withCells({ id: row, title: '', status: '', fields: {} }, confirmed.get(row) ?? []), column)
     const known = latestId(record.id)
-    const current = known === null ? mine[0] : mine.find((cell) => cell.id === known)
+    const current = currentOf(op)
     // Re-read after the await: another cell of this row may have landed meanwhile.
     const land = (change: (cells: MatrixCell[]) => MatrixCell[]): void => void confirmed.set(row, change(confirmed.get(row) ?? []))
     if (after === null) {
@@ -230,6 +236,8 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
       return land((cells) => cells.filter((cell) => cell.id !== current.id))
     }
     if (!current) {
+      // A note's undo or redo on a lifecycle join never re-creates: that would enter a hooked state again.
+      if (lifecycle && !op.batch) return
       const made = await api.create(join.model, created(row, column, after))
       const saved = asCell(made.row)
       if (known !== null) renamed.set(known, saved.id)
@@ -389,10 +397,11 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
 
   /**
    * A lifecycle change undone by its batch would otherwise re-create into a hooked state (a re-invite), and
-   * an undone create's batch holds a delete, which has no undo: both are left out, with a word why.
+   * an undone create's batch holds a delete, which has no undo: both are left out, with a word why. So is a
+   * note change whose record is gone: re-creating it would enter a hooked state too.
    */
   function skipped(op: Op, forward: boolean): StringKey | null {
-    if (!op.batch) return null
+    if (!op.batch) return lifecycle && !currentOf(op) ? 'undoDeleteSkipped' : null
     if (!forward && op.after === null) return 'undoDeleteSkipped'
     if (forward && op.batch.created) return 'redoSkipped'
     return null

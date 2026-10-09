@@ -79,6 +79,25 @@ describe('an open slot', () => {
     expect(stored(await created({ naam: 'Gast' })).state).toBe('uitgenodigd')
   })
 
+  test('an open row carrying a person or a name is refused in Dutch, on create and on update', async () => {
+    const message = 'Een open plaats heeft nog geen persoon of naam.'
+    const slot = await created({ rol_id: 1 })
+    const refusals = [
+      post(editor, { activiteit_id: 5, rol_id: 1, persoon_id: 3, state: 'open' }),
+      post(editor, { activiteit_id: 5, rol_id: 1, naam: 'Gast', state: 'open' }),
+    ]
+    for (const call of refusals) expect((await refusedWith(call, 422, 'refused')).body.message).toBe(message)
+    expect((await refusedWith(patch(editor, slot, { persoon_id: 3 }), 422, 'refused')).body.message).toBe(message)
+    expect((await refusedWith(patch(editor, slot, { naam: 'Gast' }), 422, 'refused')).body.message).toBe(message)
+    expect(stored(slot)).toMatchObject({ state: 'open', rol_id: 1, persoon_id: null, naam: null })
+  })
+
+  test('filling an open slot moves it on in the same write, as the fill will', async () => {
+    const slot = await created({ rol_id: 1 })
+    expect((await patch(editor, slot, { persoon_id: 3, state: 'voorlopig' })).status).toBe(200)
+    expect(stored(slot)).toMatchObject({ persoon_id: 3, state: 'voorlopig', rol_id: 1 })
+  })
+
   test('two open slots for one role on one activity are both accepted: the duplicate rule is for persons', async () => {
     await created({ rol_id: 1 })
     await created({ rol_id: 1 })
