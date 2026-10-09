@@ -399,6 +399,68 @@ describe('editing', () => {
     expect(api.update).toHaveBeenCalledWith('activity', 102, { start: '09:30' }, expect.objectContaining({ id: 102 }))
   })
 
+  describe('the time editor', () => {
+    const segments = () => screen.getAllByRole('spinbutton')
+
+    function openStart() {
+      renderGrid()
+      api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
+      const start = cell('Montage', 'start')
+      fireEvent.click(start)
+      type(start, 'Enter')
+    }
+
+    function halfTyped() {
+      openStart()
+      segments()[0].focus()
+      type(segments()[0], 'Backspace')
+      type(segments()[0], 'Backspace')
+    }
+
+    const press = async (key: string) => {
+      await act(async () => {
+        type(document.activeElement as HTMLElement, key)
+      })
+    }
+
+    it('Enter commits once', async () => {
+      openStart()
+      typeKeys('0930')
+      await press('Enter')
+
+      expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 102, { start: '09:30' }, expect.objectContaining({ id: 102 }))
+    })
+
+    it('Escape writes nothing', async () => {
+      openStart()
+      typeKeys('0930')
+      await press('Escape')
+
+      expect(api.update).not.toHaveBeenCalled()
+      expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+      expect(cell('Montage', 'start').textContent).toBe('10:00')
+    })
+
+    it('Tab on an incomplete time writes nothing and keeps the editor', async () => {
+      halfTyped()
+      await press('Tab')
+
+      expect(api.update).not.toHaveBeenCalled()
+      expect(segments()).toHaveLength(2)
+    })
+
+    it('leaving an incomplete time writes nothing', async () => {
+      halfTyped()
+      await act(async () => {
+        fireEvent.blur(segments()[0])
+      })
+
+      expect(api.update).not.toHaveBeenCalled()
+      expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+      expect(cell('Montage', 'start').textContent).toBe('10:00')
+    })
+  })
+
   it('empties an optional field on Delete and leaves a required one', async () => {
     renderGrid()
     api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
@@ -1608,6 +1670,57 @@ describe('a date cell', () => {
 
     expect(api.update).not.toHaveBeenCalled()
     expect(segments()).toHaveLength(3)
+  })
+
+  const timed: Model = { ...dated, fields: { ...dated.fields, due: { ...dated.fields.due, type: 'datetime' } } }
+  const timedRows = rows.map((r) => ({ ...r, fields: { ...r.fields, due: '2026-05-22T10:00' } }))
+
+  function halfTyped(moment = false) {
+    if (moment) {
+      renderGrid(timedRows, { model: timed, view: withDue })
+      fireEvent.click(cell('Montage', 'due'))
+      type(cell('Montage', 'due'), 'Enter')
+    } else openDue()
+    segments()[0].focus()
+    type(segments()[0], 'Backspace')
+    type(segments()[0], 'Backspace')
+  }
+
+  it('Tab on an incomplete date writes nothing and keeps the editor', async () => {
+    halfTyped()
+    await press('Tab')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(segments()).toHaveLength(3)
+  })
+
+  it('leaving an incomplete date writes nothing', async () => {
+    halfTyped()
+    await act(async () => {
+      fireEvent.blur(segments()[0])
+    })
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+    expect(cell('Montage', 'due').textContent).toBe(cell('Auto Pavel + Sien', 'due').textContent)
+  })
+
+  it('Tab on an incomplete datetime writes nothing and keeps the editor', async () => {
+    halfTyped(true)
+    await press('Tab')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(segments()).toHaveLength(5)
+  })
+
+  it('leaving an incomplete datetime writes nothing', async () => {
+    halfTyped(true)
+    await act(async () => {
+      fireEvent.blur(segments()[0])
+    })
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
   })
 
   // A date column sends what Delete sends for it ('', columns.ts); a datetime's momentOf makes it null.

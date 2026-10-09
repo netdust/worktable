@@ -56,9 +56,9 @@ function focusFirst(root: HTMLElement | null): HTMLElement | undefined {
   return first
 }
 
-/** The frame of a segmented editor: its keys reach the key machine, its clicks stay in the cell, leaving it commits. */
+/** The frame of a segmented editor: its keys reach the key machine, its clicks stay in the cell, leaving it commits a whole value. */
 export function SegmentShell({ props, shown, root, children }: { props: EditorProps; shown: string; root: RefObject<HTMLDivElement | null>; children: ReactNode }) {
-  const { editing, onDraft, onCommit, onLeave } = props
+  const { editing, onDraft, onCommit, onLeave, onClose } = props
 
   useEffect(() => {
     if (shown !== editing.draft) onDraft(shown)
@@ -69,18 +69,23 @@ export function SegmentShell({ props, shown, root, children }: { props: EditorPr
     }
   }, [])
 
-  // React Aria's segments swallow Enter, so the editor commits it as the sheet would; a half-typed value waits.
+  // React Aria's segments swallow Enter, so the editor commits it as the sheet would. A half-typed value waits on
+  // Enter and Tab alike: the draft still holds the last whole value, one that was never on screen.
   const keys = (event: KeyboardEvent) => {
-    if (event.key !== 'Enter' || !segmentsOf(root.current).includes(event.target as HTMLElement)) return
+    if (!segmentsOf(root.current).includes(event.target as HTMLElement)) return
+    if (event.key !== 'Enter' && event.key !== 'Tab') return
+    const incomplete = partial(root.current)
+    if (event.key === 'Tab' && !incomplete) return
     event.preventDefault()
     event.stopPropagation()
-    if (!partial(root.current)) onCommit(editing.draft, 'down')
+    if (!incomplete) onCommit(editing.draft, 'down')
   }
 
   const blur = (event: FocusEvent) => {
     const next = event.relatedTarget
     if (next instanceof Element && next.closest('[data-editor]')) return
-    onLeave()
+    if (partial(root.current)) onClose()
+    else onLeave()
   }
 
   return (
