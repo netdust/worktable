@@ -6,8 +6,8 @@ import { openWeek } from './tree'
 test.use({ storageState: state('admin'), viewport: { width: 1280, height: 800 } })
 
 test('title-line-reads-in-full @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
-  const title = page.getByRole('heading', { level: 1, name: 'Dagplanning' })
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+  const title = page.getByRole('heading', { level: 1, name: 'Planning' })
   await expect(title).toBeVisible()
   await expect(page.getByText(/^\d+ rijen · \d+ groepen$/)).toBeVisible()
   const { scrollWidth, clientWidth } = await title.evaluate((el) => ({
@@ -20,7 +20,7 @@ test('title-line-reads-in-full @e2e', async ({ page }) => {
 
 // Shake-out row 20: at 1280px Dagplanning's toolbar must not overflow; "Nieuwe activiteit" stays on screen.
 test('title-line-fits-at-1280 @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   const toolbar = page.locator('header.nv-toolbar')
   await expect(page.getByRole('button', { name: 'Nieuwe activiteit' })).toBeInViewport({ ratio: 1, timeout: 2000 })

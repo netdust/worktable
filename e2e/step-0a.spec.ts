@@ -77,7 +77,7 @@ function iso(day: string): string {
 const ascending = (values: string[]) => [...values].sort()
 
 test('planning-grouped-sorted', async ({ page }) => {
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 
   const found = await sections(page)
@@ -95,7 +95,7 @@ test('planning-grouped-sorted', async ({ page }) => {
 })
 
 test('planning-status-filter', async ({ page }) => {
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   expect(new Set(await columnTexts(page, 'Status'))).toEqual(new Set(['Bevestigd']))
 
@@ -113,11 +113,11 @@ test('planning-status-filter', async ({ page }) => {
 
 test('query-view-loads', async ({ page }) => {
   await page.goto('/')
-  const response = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/rows/productie_dag')
-  await openView(page, 'Per productie per dag', 'Activiteiten')
+  const response = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/rows/voorstellingen')
+  await openView(page, 'Voorstellingen')
   expect((await response).status()).toBe(200)
 
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   expect(await page.locator('tbody tr.nv-tr').count()).toBeGreaterThan(0)
-  await expect(page.locator('thead th', { hasText: 'Plandag' })).toBeVisible()
+  await expect(page.locator('thead th', { hasText: 'Aanvang' })).toBeVisible()
 })

@@ -401,8 +401,8 @@ test('edit-select-cell @e2e', async ({ page }) => {
 })
 
 async function openDagplanning(page: Page) {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
 }
 
 test('edit-relation-cell @e2e', async ({ page }) => {
@@ -758,7 +758,7 @@ test.describe('the chrome as an administrator', () => {
   test.use({ storageState: state('admin') })
 
   test('chrome-light-and-dark @e2e', async ({ page }) => {
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2026-10-12')
     await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 
     await inBothThemes(
@@ -851,13 +851,13 @@ test.describe('the chrome as an administrator', () => {
   })
 
   test('share-dialog-light-and-dark @e2e', async ({ page }) => {
-    const copy = 'Dagplanning (kopie)'
+    const copy = 'Planning (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
     try {
       await page.goto('/')
-      await openView(page, 'Dagplanning', 'Activiteiten')
-      await page.getByRole('button', { name: 'More actions: Dagplanning', exact: true }).click()
+      await openView(page, 'Planning', 'Activiteiten')
+      await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
       await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
       await openView(page, copy, 'Activiteiten')
@@ -996,13 +996,13 @@ test.describe('the Publiceren dialog as an administrator', () => {
   test.use({ storageState: state('admin') })
 
   test('publish-address-reads-in-full @e2e', async ({ page }) => {
-    const copy = 'Dagplanning (kopie)'
+    const copy = 'Planning (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
     try {
       await page.goto('/')
-      await openView(page, 'Dagplanning', 'Activiteiten')
-      await page.getByRole('button', { name: 'More actions: Dagplanning', exact: true }).click()
+      await openView(page, 'Planning', 'Activiteiten')
+      await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
       await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
       await openView(page, copy, 'Activiteiten')

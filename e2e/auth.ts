@@ -49,6 +49,17 @@ export function createAccount(at: Instance, email: string, role: string, subject
   cli(at, subject ? [...args, '--subject', subject] : args, `--create-account ${email}`)
 }
 
+/** Adds the e2e's own read-only activiteit views (e2e/fixture-views.ts) to the database the engine has open. */
+export function addFixtureViews(at: Instance): void {
+  const run = spawnSync('bun', ['e2e/fixture-views.ts', at.db], {
+    encoding: 'utf8',
+    timeout: 20_000,
+    killSignal: 'SIGKILL',
+  })
+  if (run.error || run.signal || run.status !== 0)
+    throw new Error(`fixture views failed: ${run.error?.message ?? run.stderr}`)
+}
+
 export const SERVICE = { name: 'e2e-agent', role: 'editor', token: 'e2e/.tmp/service-token' }
 
 /** Creates the service account and keeps its token, shown once, in a file only its owner reads. */

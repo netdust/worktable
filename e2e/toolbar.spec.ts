@@ -18,10 +18,10 @@ test('autosave-own-view @e2e', async ({ page }) => {
   const name = 'Eigen e2e autosave'
   try {
     await page.goto('/')
-    await openView(page, 'Planning', 'Activiteiten')
-    await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+    await openView(page, 'Bevestigd', 'Activiteiten')
+    await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-    await page.getByRole('button', { name: 'More actions: Planning (kopie)', exact: true }).click()
+    await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
     await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
     await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
@@ -38,8 +38,8 @@ test('autosave-own-view @e2e', async ({ page }) => {
     await shot(page, 'autosave-own-view')
 
     // The seeded view keeps a change in this browser only.
-    const seeded = (await views(page)).find((v) => v.name === 'Planning')
-    await openView(page, 'Planning', 'Activiteiten')
+    const seeded = (await views(page)).find((v) => v.name === 'Bevestigd')
+    await openView(page, 'Bevestigd', 'Activiteiten')
     await page.getByRole('button', { name: /^Groep/ }).click()
     await page.getByRole('group', { name: 'Groeperen' }).getByRole('button', { name: 'Soort' }).click()
     await page.waitForTimeout(800)
@@ -72,7 +72,7 @@ test('filter-builder @e2e', async ({ page }) => {
   try {
     for (const [at, soort] of ['repetitie', 'opbouw', 'reis', 'repetitie'].entries())
       made.push(await activity(page, soort, '2031-03-04', titles[at] as string))
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', week)
     for (const title of titles) await expect(named(page, title)).toHaveCount(1)
 
     // "Soort is Repetitie of Opbouw", the second value found by searching.
@@ -121,9 +121,9 @@ test('filter-builder @e2e', async ({ page }) => {
 })
 
 test('filter-link @e2e', async ({ page, browser }) => {
-  const before = (await views(page)).find((v) => v.name === 'Dagplanning')
+  const before = (await views(page)).find((v) => v.name === 'Planning')
   await page.goto('/')
-  await openView(page, 'Dagplanning', 'Activiteiten')
+  await openView(page, 'Planning', 'Activiteiten')
   await expect.poll(() => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view')).not.toBeNull()
   const key = new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view') as string
   const f = [
@@ -136,7 +136,7 @@ test('filter-link @e2e', async ({ page, browser }) => {
   try {
     const fresh = await other.newPage()
     await fresh.goto(address)
-    await expect(fresh.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+    await expect(fresh.getByRole('heading', { level: 1 })).toHaveText('Planning')
     await expect(fresh.locator('.nv-bar .nv-chip--filter')).toHaveText([
       'Plandag tussen 2026-10-12 en 2026-10-18',
       'Soort is Repetitie',
@@ -157,7 +157,7 @@ test('filter-or @e2e', async ({ page }) => {
   try {
     for (const [at, soort] of ['reis', 'repetitie', 'repetitie'].entries())
       made.push(await activity(page, soort, '2031-03-11', titles[at] as string))
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', week)
     await page.locator('.nv-bar').getByRole('button', { name: 'Filter Status wissen' }).click()
     await addCondition(page, 'Soort', 'Reis')
     await page
@@ -214,7 +214,7 @@ test('history-undo-own @e2e', async ({ page }) => {
   const [letter, value, label] = before.status === 'optie' ? ['b', 'bevestigd', 'Bevestigd'] : ['o', 'optie', 'Optie']
   const was = before.status === 'optie' ? 'Optie' : 'Bevestigd'
   try {
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2026-10-12')
     await page.getByRole('button', { name: 'Filter Status wissen' }).click()
     const status = await statusCell(page, name)
     await status.click()
@@ -253,7 +253,7 @@ test.describe('the share menu', () => {
   }
 
   test('share-menu @e2e', async ({ page, browser }) => {
-    await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
+    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
     await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
     expect(await items(page)).toEqual(['Excel', 'Agenda (.ics)', 'Link kopiëren'])
 
@@ -261,7 +261,7 @@ test.describe('the share menu', () => {
     const download = page.waitForEvent('download')
     await page.getByRole('menuitem', { name: 'Agenda (.ics)' }).click()
     const file = await download
-    expect(file.suggestedFilename()).toBe('Dagplanning.ics')
+    expect(file.suggestedFilename()).toBe('Planning.ics')
     const ics = readFileSync(await file.path(), 'utf8')
     const shown = await page.locator('tbody tr.nv-tr').count()
     expect(ics.split('\r\n').filter((line) => line === 'BEGIN:VEVENT')).toHaveLength(shown)
@@ -271,7 +271,7 @@ test.describe('the share menu', () => {
     const admin = await browser.newContext({ storageState: state('admin') })
     try {
       const other = await admin.newPage()
-      await openWeek(other, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
+      await openWeek(other, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
       expect(await items(other)).toEqual(['Excel', 'Agenda (.ics)', 'Link kopiëren', 'Publiceren'])
       await other.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
       await expect(other.getByRole('menu', { name: 'Exporteren / delen' })).toBeVisible()
@@ -286,7 +286,7 @@ test.describe('the share menu', () => {
 // At the narrowest supported width the builder, its value list and its last row stay inside the viewport.
 test('builder-fits-at-1280 @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+  await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2026-10-12')
   await page
     .locator('.nv-bar')
     .getByRole('button', { name: /^Filter\s*\d*$/ })
@@ -393,7 +393,7 @@ test('or-with-period-narrows @e2e', async ({ page }) => {
     made.push(await activity(page, 'reis', '2031-03-18', inWeek))
     made.push(await activity(page, 'reis', '2031-03-26', outside[0] as string))
     made.push(await activity(page, 'repetitie', '2031-03-05', outside[1] as string))
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', week)
     await page.locator('.nv-bar').getByRole('button', { name: 'Filter Status wissen' }).click()
     await addCondition(page, 'Soort', 'Reis')
     await page
@@ -441,7 +441,7 @@ test('history-other-has-no-undo @e2e', async ({ page, browser }) => {
     const changed = await admin.request.patch(`/api/rows/activiteit/${id}`, { data: { status: 'bevestigd' } })
     expect(changed.status(), await changed.text()).toBe(200)
 
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2031-03-31')
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2031-03-31')
     await expect(named(page, title)).toHaveCount(1)
     await page.getByRole('button', { name: 'Geschiedenis', exact: true }).click()
     const panel = page.getByRole('complementary', { name: 'Geschiedenis' })
@@ -461,8 +461,8 @@ test('history-other-has-no-undo @e2e', async ({ page, browser }) => {
 
 async function copyOfDagplanning(page: Page, copy: string): Promise<number> {
   await page.goto('/')
-  await openView(page, 'Dagplanning', 'Activiteiten')
-  await page.getByRole('button', { name: 'More actions: Dagplanning', exact: true }).click()
+  await openView(page, 'Planning', 'Activiteiten')
+  await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await expect.poll(async () => (await views(page)).find((v) => v.name === copy)?.mine).toBe(true)
   await openView(page, copy, 'Activiteiten')
@@ -472,7 +472,7 @@ async function copyOfDagplanning(page: Page, copy: string): Promise<number> {
 
 // Publiceren from the menu: the write guard takes a PUT only with a JSON body, an empty one too.
 test('publish-from-share-menu @e2e', async ({ browser }) => {
-  const copy = 'Dagplanning (kopie)'
+  const copy = 'Planning (kopie)'
   const admin = await browser.newContext({ storageState: state('admin') })
   const page = await admin.newPage()
   try {
@@ -498,7 +498,7 @@ test('publish-from-share-menu @e2e', async ({ browser }) => {
 
 // A published view never saves itself: a removed condition stays in this browser until "Publieke weergave bijwerken".
 test('published-view-stays-put @e2e', async ({ browser }) => {
-  const copy = 'Dagplanning (kopie)'
+  const copy = 'Planning (kopie)'
   const admin = await browser.newContext({ storageState: state('admin') })
   const page = await admin.newPage()
   try {

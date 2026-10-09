@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { shot } from './shots'
-import { modelNode, openView } from './tree'
+import { modelNode } from './tree'
 
 test('tree-scrolls-in-rail @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 })
@@ -24,23 +24,25 @@ test('tree-scrolls-in-rail @e2e', async ({ page }) => {
 })
 
 test('query-views-under-model @e2e', async ({ page }) => {
+  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/dagplanning')
   await page.goto('/')
   const node = modelNode(page, 'Activiteiten')
   await expect(node).toHaveAttribute('aria-expanded', 'true')
+  // The landing view is Planning, the dagplanning query's view, first under Activiteiten.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   // The views' own buttons: each row also holds its drag button, "Verplaats <view>".
   const names = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: /^(?!Verplaats )/ })
-  const queries = ['Dagplanning', 'Per productie per dag', 'Voorstellingen']
-  await expect(names.last()).toHaveText('Voorstellingen')
-  expect((await names.allTextContents()).slice(-3)).toEqual(queries)
+  await expect(names.first()).toHaveText('Planning')
+  expect(await names.allTextContents()).toContain('Toewijzingen per activiteit')
+  expect(await names.allTextContents()).not.toContain('Voorstellingen')
+  expect(await names.allTextContents()).not.toContain('Per productie per dag')
 
-  for (const query of queries) await expect(modelNode(page, query)).toHaveCount(0)
+  for (const query of ['Planning', 'Per productie per dag']) await expect(modelNode(page, query)).toHaveCount(0)
+  // Voorstellingen reads no dataset: its own node, after the sections' sources.
   const nodes = page.getByRole('tree', { name: 'Views' }).getByRole('treeitem')
-  await expect(nodes.last()).toHaveAccessibleName('Sjablonen')
+  await expect(nodes.last()).toHaveAccessibleName('Voorstellingen')
 
-  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/dagplanning')
-  await openView(page, 'Dagplanning', 'Activiteiten')
   expect((await rows).status()).toBe(200)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
   await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag deze week'])
   await shot(page, 'query-views-under-model')
 })

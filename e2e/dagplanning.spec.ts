@@ -57,8 +57,8 @@ const cellOf = async (page: Page, title: string, label: string): Promise<Locator
     .nth(await columnIndex(page, label))
 
 async function openDagplanning(page: Page) {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
 }
 
 async function pickRelation(cell: Locator, page: Page, search: string, option: string) {
@@ -93,7 +93,7 @@ test('edit-dagplanning @e2e', async ({ page }) => {
   await expect(soort).toHaveText('Opbouw')
 
   await page.reload()
-  await openView(page, 'Dagplanning', 'Activiteiten')
+  await openView(page, 'Planning', 'Activiteiten')
   await expect(await cellOf(page, 'dagplanning bewerkt', 'Soort')).toHaveText('Opbouw')
   const [stored] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'dagplanning bewerkt' })
   expect(stored).toMatchObject({ soort: 'opbouw', omschrijving: 'dagplanning bewerkt' })
@@ -151,7 +151,7 @@ test('period-is-a-filter @e2e', async ({ page }) => {
   ]
   try {
     await page.goto('/')
-    await openView(page, 'Dagplanning', 'Activiteiten')
+    await openView(page, 'Planning', 'Activiteiten')
     const bar = page.locator('.nv-bar')
     await expect(bar.locator('.nv-chip--filter')).toHaveText(['Plandag deze week'])
     await shot(page, 'period-is-a-filter')
@@ -194,7 +194,7 @@ async function cleanUp(api: Api) {
     await api.delete(`/api/rows/activiteit/${activity}`)
   }
   const { views } = (await (await api.get('/api/views')).json()) as { views: { id: number; name: string }[] }
-  const copies = views.filter((v) => v.name === 'Dagplanning (kopie)')
+  const copies = views.filter((v) => v.name === 'Planning (kopie)')
   for (const view of copies) await api.delete(`/api/views/${view.id}`)
 }
 
@@ -280,10 +280,10 @@ async function peopleTags(page: Page) {
   await search.press('Escape')
 
   // A copy of the view keeps Mensen after Locatie.
-  await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
+  await page.getByRole('button', { name: 'More actions: Planning' }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await page.reload()
-  await openView(page, 'Dagplanning (kopie)', 'Activiteiten')
+  await openView(page, 'Planning (kopie)', 'Activiteiten')
   const heads = (await page.locator('thead th').allTextContents()).map((h) => h.replace(/\s*[↑↓]$/, '').trim())
   expect(heads.indexOf('Mensen')).toBe(heads.indexOf('Locatie') + 1)
 }
@@ -597,7 +597,7 @@ test('tourstop-first-in-planning @e2e', async ({ page }) => {
 })
 
 test('period-empty-result @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2030-01-07')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2030-01-07')
   const empty = page.locator('.nv-center').getByText('Geen rijen in deze periode', { exact: true })
   await expect(empty).toBeVisible()
   await expect(page.locator('.nv-center')).toContainText('Week 2 · 7–13 jan')
@@ -651,7 +651,7 @@ test.describe('as the owner', () => {
     await page.goto('/')
     const tree = page.getByRole('tree', { name: 'Views' })
     await expect(tree.getByRole('treeitem').first()).toBeVisible()
-    await expect(tree.getByRole('button', { name: 'Dagplanning', exact: true })).toHaveCount(0)
+    await expect(tree.getByRole('button', { name: 'Planning', exact: true })).toHaveCount(0)
     await expect(modelNode(page, 'Activiteiten')).toHaveCount(0)
     await expect(modelNode(page, 'Tourstops')).toHaveCount(0)
     await shot(page, 'owner-no-dagplanning')

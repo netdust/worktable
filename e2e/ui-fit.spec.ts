@@ -171,7 +171,7 @@ test('space-switcher-fits @e2e', async ({ page }) => {
 })
 
 test('chips-fit @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   const row = page.locator('tbody tr.nv-tr[data-title="voorstelling Gent"]').first()
   await expect(row).toBeVisible()
 
@@ -219,7 +219,7 @@ const widthsOf = (cell: Locator) =>
 
 test('date-editors-fit @e2e', async ({ page }) => {
   // Bug 6: a date editor is its cell's width while its content fits, and grows by no more than its content needs.
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   const row = page.locator('tbody tr.nv-tr[data-title="voorstelling Gent"]').first()
   await expect(row).toBeVisible()
   const start = await cellOf(page, row, 'Tijd')
@@ -271,7 +271,7 @@ const centres = (row: Locator, parts: string) =>
   }, parts)
 
 test('filter-row-fits @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   await page
     .locator('.nv-bar')
     .getByRole('button', { name: /^Filter\s*\d*$/ })

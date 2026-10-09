@@ -166,7 +166,7 @@ test('voorstellingen-public', async ({ page }) => {
     ])
   }
 
-  await open(page, 'Voorstellingen', '', 'Activiteiten')
+  await open(page, 'Voorstellingen')
   await expect(page.locator('tbody tr.nv-tr')).toHaveCount(confirmed.length)
   await expect(page.locator('tbody')).toContainText('Zaal De Spiegel')
 })

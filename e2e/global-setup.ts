@@ -1,5 +1,15 @@
 import { chromium } from '@playwright/test'
-import { ACCOUNTS, createAccount, createService, FICHE, type Instance, signIn, state, THEATRE } from './auth'
+import {
+  ACCOUNTS,
+  addFixtureViews,
+  createAccount,
+  createService,
+  FICHE,
+  type Instance,
+  signIn,
+  state,
+  THEATRE,
+} from './auth'
 
 export default async function globalSetup(): Promise<void> {
   const browser = await chromium.launch()
@@ -10,6 +20,7 @@ export default async function globalSetup(): Promise<void> {
     await context.close()
   }
   try {
+    addFixtureViews(THEATRE)
     for (const name of ['admin', 'editor', 'owner'] as const) {
       const { email, role, ...rest } = ACCOUNTS[name]
       createAccount(THEATRE, email, role, 'subject' in rest ? rest.subject : undefined)
