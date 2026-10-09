@@ -62,7 +62,7 @@ describe('parity', () => {
     expect(md).toMatch(/assignments_per_person: pass, 5 compared, 0 mismatched keys/)
     expect(md).toMatch(/absences_per_person: pass, 2 compared, 0 mismatched keys/)
     expect(md).toMatch(/plandag shifted: 1/)
-    expect(md).toMatch(/Planning: pass, 2 rows, expected 2 \(activiteit where status = bevestigd\)/)
+    expect(md).toMatch(/Bevestigde activiteiten: pass, 2 rows, expected 2 \(activiteit where status = bevestigd\)/)
     expect(md).toMatch(/Toewijzingen: pass, 7 rows, expected 7 \(toewijzing, no filter\)/)
     expect(md).toMatch(/Afwezigheden: pass, 2 rows, expected 2 \(beschikbaarheid, no filter\)/)
   }, 20_000)
@@ -73,16 +73,16 @@ describe('parity', () => {
       week['2026-W53'] = { ...week['2026-W53'], bevestigd: 3 }
     })
     expect(code).toBe(1)
-    expect(md).toMatch(/Planning: fail, 2 rows, expected 3 \(activiteit where status = bevestigd\)/)
+    expect(md).toMatch(/Bevestigde activiteiten: fail, 2 rows, expected 3 \(activiteit where status = bevestigd\)/)
   }, 20_000)
 
   test("a view filter the export's checks cannot count fails as not comparable", async () => {
     const { code, md } = await parity({
-      views: "theatre.views.map((v) => v.name === 'Planning' ? { ...v, filters: { soort: 'voorstelling' } } : v)",
+      views: "theatre.views.map((v) => v.name === 'Toewijzingen' ? { ...v, filters: { naam: 'Iemand' } } : v)",
     })
     expect(code).toBe(1)
     expect(md).toMatch(
-      /Planning: fail, \d+ rows, filter not comparable with the export's checks \(activiteit where soort = voorstelling\)/,
+      /Toewijzingen: fail, \d+ rows, filter not comparable with the export's checks \(toewijzing where naam = Iemand\)/,
     )
   }, 20_000)
 
@@ -101,7 +101,7 @@ describe('parity', () => {
   }, 20_000)
 
   test('a read failure leaves no temp directory with imported data', async () => {
-    const views = "theatre.views.map((v) => (v.name === 'Planning' ? { ...v, source: 'bogus' } : v))"
+    const views = "theatre.views.map((v) => (v.name === 'Toewijzingen' ? { ...v, source: 'bogus' } : v))"
     const { code, text, leftover } = await parity({ views })
     expect(code).toBe(1)
     expect(text).toMatch(/answered/)

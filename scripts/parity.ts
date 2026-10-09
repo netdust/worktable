@@ -8,7 +8,9 @@ import { createAccount, createEngine, type Domain, importExport, migrate, readEx
 const PORT = 4310
 const HOST = `127.0.0.1:${PORT}`
 const EMAIL = 'parity@example.test'
-const VIEWS = ['Planning', 'Toewijzingen', 'Afwezigheden']
+const VIEWS = ['Toewijzingen', 'Afwezigheden']
+// No seeded view filters activiteit on status any more; parity reads it straight, counted the way a view was.
+const BEVESTIGD = { name: 'Bevestigde activiteiten', source: 'activiteit', filters: { status: 'bevestigd' } }
 
 type Row = Record<string, unknown>
 type Counts = Record<string, number>
@@ -197,17 +199,13 @@ function predicted(checks: Checks, source: string, filters: Record<string, unkno
 
 async function viewOutcomes(read: ReturnType<typeof reader>, domain: Domain, checks: Checks): Promise<ViewOutcome[]> {
   const result: ViewOutcome[] = []
-  for (const name of VIEWS) {
-    const view = domain.views.find((v) => v.name === name)
-    if (!view) fail(`the view ${name} is missing from the domain`)
-    const filters = (view.filters ?? {}) as Record<string, unknown>
-    const rows = (await read(view.source, view.filters)).total
-    result.push({
-      name,
-      rows,
-      expected: predicted(checks, view.source, filters),
-      filter: describeFilter(view.source, filters),
-    })
+  const views = VIEWS.map(
+    (name) => domain.views.find((v) => v.name === name) ?? fail(`the view ${name} is missing from the domain`),
+  )
+  for (const { name, source, filters: given } of [BEVESTIGD, ...views]) {
+    const filters = (given ?? {}) as Record<string, unknown>
+    const rows = (await read(source, given)).total
+    result.push({ name, rows, expected: predicted(checks, source, filters), filter: describeFilter(source, filters) })
   }
   return result
 }
