@@ -187,14 +187,14 @@ function finder(store: Store): WriteContext['find'] {
   }
 }
 
-function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: string | number][] {
+function matchOf(dataset: DatasetDecl, match: Values, caller: string): [sql: string, value: string | number][] {
   const entries = Object.entries(match)
-  if (entries.length === 0) throw new Error('exists: a match names no column')
+  if (entries.length === 0) throw new Error(`${caller}: a match names no column`)
   return entries.map(([key, value]) => {
     const column = columnOf(dataset, key)
-    if (!column) throw new Error(`exists: "${key}" is not a declared column of ${dataset.name}`)
-    if (value === null || value === undefined) throw new Error(`exists: "${key}" may not be matched against null`)
-    if (!fits(column.type, value)) throw new Error(`exists: "${key}" must be ${column.type}`)
+    if (!column) throw new Error(`${caller}: "${key}" is not a declared column of ${dataset.name}`)
+    if (value === null || value === undefined) throw new Error(`${caller}: "${key}" may not be matched against null`)
+    if (!fits(column.type, value)) throw new Error(`${caller}: "${key}" must be ${column.type}`)
     return [`"${key}" = ?`, encode(column, value) as string | number]
   })
 }
@@ -202,7 +202,7 @@ function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: stri
 function matcher(store: Store): WriteContext['findBy'] {
   return (name, match) => {
     const dataset = domainDataset(store, name, 'findBy')
-    const pairs = matchOf(dataset, match)
+    const pairs = matchOf(dataset, match, 'findBy')
     const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
     const raw = store.sqlite
       .query(`SELECT * FROM "${name}" WHERE ${where} ORDER BY id LIMIT 1`)
@@ -213,7 +213,7 @@ function matcher(store: Store): WriteContext['findBy'] {
 
 function existence(store: Store): WriteContext['exists'] {
   return (name, match, exceptId) => {
-    const pairs = matchOf(domainDataset(store, name, 'exists'), match)
+    const pairs = matchOf(domainDataset(store, name, 'exists'), match, 'exists')
     if (exceptId !== undefined) pairs.push(['id <> ?', exceptId])
     const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
     const values = pairs.map(([, value]) => value)

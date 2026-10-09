@@ -120,6 +120,22 @@ describe('slots', () => {
     })
   })
 
+  test('a fractional aantal is refused in Dutch', async () => {
+    const res = await withSlots([{ rol: 'Speler', aantal: 1.5 }])
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Item 1: een plaats heeft een aantal van minstens 1 nodig.',
+    })
+  })
+
+  test('slots that are not a list are refused in Dutch', async () => {
+    const res = await withSlots({ rol: 'Speler', aantal: 1 })
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Item 1: plaatsen moeten een lijst zijn.',
+    })
+  })
+
   test('a renamed Rol: apply by the new title works, by a title no live Rol has it refuses naming it', async () => {
     sqlite.run("UPDATE rol SET naam = 'Acteur' WHERE naam = 'Speler'")
     const id = await reeks()
