@@ -1,4 +1,4 @@
-import { defineDataset, type GroupFact } from '@worktable/engine'
+import { defineDataset, type GroupFact, type HookResult, type WriteContext } from '@worktable/engine'
 
 // A day band's facts on the planning sources.
 export const dagFacts: GroupFact[] = [
@@ -131,12 +131,13 @@ export const persoon = defineDataset({
   title: 'weergavenaam',
   custom: true,
   owners: { owner: 'id' },
+  record_link: { email: 'email' },
   columns: {
-    voornaam: { type: 'text', label: 'Voornaam' },
-    achternaam: { type: 'text', label: 'Achternaam' },
-    weergavenaam: { type: 'text', label: 'Naam', readonly: true },
-    email: { type: 'text', label: 'E-mail', nullable: true },
-    telefoon: { type: 'text', label: 'Telefoon', nullable: true },
+    voornaam: { type: 'text', label: 'Voornaam', owner_visible: true },
+    achternaam: { type: 'text', label: 'Achternaam', owner_visible: true },
+    weergavenaam: { type: 'text', label: 'Naam', readonly: true, owner_visible: true },
+    email: { type: 'text', label: 'E-mail', nullable: true, owner_visible: true },
+    telefoon: { type: 'text', label: 'Telefoon', nullable: true, owner_visible: true },
     organisatie_id: { type: 'integer', label: 'Organisatie', nullable: true, relation: 'organisatie' },
     contract_type: {
       type: 'text',
@@ -149,6 +150,26 @@ export const persoon = defineDataset({
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
 })
+
+// A person without an email, or a name-only row, gets no invite: the planner reads why, and no token is minted.
+function invite(row: Record<string, unknown>, ctx: WriteContext): HookResult {
+  const person = typeof row.persoon_id === 'number' ? ctx.find('persoon', row.persoon_id) : null
+  const email = typeof person?.email === 'string' ? person.email.trim() : ''
+  if (email === '')
+    return { notice: `Geen uitnodiging: ${person?.weergavenaam ?? row.naam ?? ''} heeft geen e-mailadres.` }
+  const activity = typeof row.activiteit_id === 'number' ? ctx.find('activiteit', row.activiteit_id) : null
+  return {
+    token: { to: ['bevestigd', 'geweigerd'], days: 14 },
+    mail: (link) =>
+      link
+        ? {
+            to: email,
+            subject: 'Uitnodiging',
+            text: `Je bent uitgenodigd: ${activity?.omschrijving ?? 'een activiteit'}.\nBevestig of weiger via ${link}`,
+          }
+        : null,
+  }
+}
 
 export const toewijzing = defineDataset({
   name: 'toewijzing',
@@ -164,30 +185,51 @@ export const toewijzing = defineDataset({
     label: 'naam',
     cell: 'state',
     note: 'notitie',
-    keys: { u: 'uitgenodigd', b: 'bevestigd', g: 'geweigerd', x: 'geannuleerd' },
-    marks: { uitgenodigd: '?', bevestigd: '✓', geweigerd: '✗', geannuleerd: '–' },
+    keys: { v: 'voorlopig', u: 'uitgenodigd', b: 'bevestigd', g: 'geweigerd', x: 'geannuleerd' },
+    marks: { voorlopig: '~', uitgenodigd: '?', bevestigd: '✓', geweigerd: '✗', geannuleerd: '–' },
     count: 'bevestigd',
     away: { dataset: 'beschikbaarheid', across: 'persoon_id', label: 'reden', end: 'eind_at' },
+    open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' },
   },
   columns: {
-    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit', owner_visible: true },
     persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
     naam: { type: 'text', label: 'Naam', nullable: true },
+    rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol', owner_visible: true },
+    aantal: { type: 'integer', label: 'Aantal', default: 1 },
+    // The DDL default stays: changing it rebuilds the table. The writer decides the state on create.
     state: {
       type: 'text',
       label: 'Status',
       default: 'uitgenodigd',
+      owner_visible: true,
       options: {
         open: 'Open',
+        voorlopig: 'Voorlopig',
         uitgenodigd: 'Uitgenodigd',
         bevestigd: 'Bevestigd',
         geweigerd: 'Geweigerd',
         geannuleerd: 'Geannuleerd',
       },
-      tones: { uitgenodigd: 'warn', bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' },
+      tones: { voorlopig: 'sky', uitgenodigd: 'warn', bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' },
     },
     notitie: { type: 'text', label: 'Notitie', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
+  },
+  lifecycle: {
+    column: 'state',
+    transitions: [
+      { from: ['open', 'uitgenodigd', 'bevestigd', 'geweigerd'], to: 'voorlopig', roles: ['editor', 'administrator'] },
+      { from: ['open', 'voorlopig'], to: 'uitgenodigd', roles: ['editor', 'administrator'] },
+      { from: ['open', 'voorlopig'], to: 'bevestigd', roles: ['editor', 'administrator'] },
+      { from: ['uitgenodigd'], to: 'bevestigd', roles: ['editor', 'administrator', 'owner'], label: 'Bevestigen' },
+      { from: ['uitgenodigd'], to: 'geweigerd', roles: ['editor', 'administrator', 'owner'], label: 'Weigeren' },
+      { from: ['geweigerd'], to: 'uitgenodigd', roles: ['editor', 'administrator'] },
+      { from: '*', to: 'geannuleerd', roles: ['editor', 'administrator'] },
+    ],
+    hooks: { uitgenodigd: invite },
+    // The activity's title carries its day and place.
+    token_projection: ['activiteit_id', 'rol_id', 'state'],
   },
   indexes: [['persoon_id'], ['activiteit_id']],
 })
@@ -203,8 +245,8 @@ export const beschikbaarheid = defineDataset({
   owners: { owner: 'persoon_id' },
   columns: {
     persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
-    start_at: { type: 'datetime', label: 'Start' },
-    eind_at: { type: 'datetime', label: 'Einde' },
+    start_at: { type: 'datetime', label: 'Start', owner_visible: true },
+    eind_at: { type: 'datetime', label: 'Einde', owner_visible: true },
     reden: { type: 'text', label: 'Reden', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },

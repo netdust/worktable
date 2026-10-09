@@ -101,3 +101,27 @@ export const voorstellingen = defineQuery({
     adres: { type: 'text', label: 'Adres', nullable: true },
   },
 })
+
+const shown = (type: 'text' | 'date', label: string) => ({ type, label, nullable: true, owner_visible: true })
+
+// A person's productions: names as text, since a link actor reads no lookups.
+export const mijnProducties = defineQuery({
+  name: 'mijn_producties',
+  of: 'toewijzing',
+  label: 'Mijn producties',
+  icon: 'star',
+  title: 'productie',
+  date: 'laatste_dag',
+  owners: { owner: 'persoon_id' },
+  sql: readFileSync(new URL('./queries/mijn_producties.sql', import.meta.url), 'utf8'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
+    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+    productie: { type: 'text', label: 'Productie', owner_visible: true },
+    rollen: shown('text', 'Rollen'),
+    vanaf: shown('date', 'Eerste dag'),
+    laatste_dag: shown('date', 'Laatste dag'),
+    toegang_vervalt: shown('date', 'Toegang tot'),
+  },
+})

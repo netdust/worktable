@@ -1,5 +1,5 @@
 import { chromium } from '@playwright/test'
-import { ACCOUNTS, createAccount, FICHE, type Instance, signIn, state, THEATRE } from './auth'
+import { ACCOUNTS, createAccount, createService, FICHE, type Instance, signIn, state, THEATRE } from './auth'
 
 export default async function globalSetup(): Promise<void> {
   const browser = await chromium.launch()
@@ -15,6 +15,7 @@ export default async function globalSetup(): Promise<void> {
       createAccount(THEATRE, email, role, 'subject' in rest ? rest.subject : undefined)
       await signedIn(name, THEATRE, ACCOUNTS[name])
     }
+    createService(THEATRE)
     createAccount(FICHE, ACCOUNTS.fiche.email, ACCOUNTS.fiche.role)
     // step-0c drives both grids: the fiche editor's state carries the theatre editor's cookie too.
     await signedIn('fiche-editor', FICHE, ACCOUNTS.fiche, 'editor')

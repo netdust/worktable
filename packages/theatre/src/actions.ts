@@ -1,4 +1,4 @@
-import { type ActionDecl, refuse } from '@worktable/engine'
+import { type ActionCreate, type ActionDecl, refuse, type WriteContext } from '@worktable/engine'
 import { validateItems } from './writers'
 
 type Values = Record<string, unknown>
@@ -9,6 +9,7 @@ interface Item {
   offset_dag: number
   start_tijd?: string
   duur?: number
+  slots?: { rol: string; aantal: number }[]
 }
 
 const MINUTE = 60_000
@@ -41,6 +42,13 @@ function activiteitOf(reeks: Values, day: string, item: Item): Values {
   }
 }
 
+function slotsOf(item: Item, ctx: WriteContext): ((activiteitId: number) => ActionCreate[]) | undefined {
+  if (!item.slots) return undefined
+  const slots = item.slots.map(({ rol, aantal }) => ({ rol_id: ctx.findBy('rol', { naam: rol })?.id, aantal }))
+  return (activiteit_id) =>
+    slots.map((slot) => ({ dataset: 'toewijzing', values: { activiteit_id, ...slot, state: 'open' } }))
+}
+
 export const sjabloonToepassen: ActionDecl = {
   label: 'Sjabloon toepassen',
   on: 'speelreeks',
@@ -51,10 +59,37 @@ export const sjabloonToepassen: ActionDecl = {
         'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.',
       )
     }
-    validateItems(sjabloon_id?.items)
+    validateItems(sjabloon_id?.items, ctx)
     const items = sjabloon_id?.items as Item[]
     return days(String(reeks.start_datum), String(reeks.eind_datum)).flatMap((day) =>
-      items.map((item) => ({ dataset: 'activiteit', values: activiteitOf(reeks, day, item) })),
+      items.map((item) => {
+        const children = slotsOf(item, ctx)
+        return { dataset: 'activiteit', values: activiteitOf(reeks, day, item), ...(children && { children }) }
+      }),
     )
+  },
+}
+
+const STILL_OPEN = { state: 'open' }
+
+// Pencilled in, nothing mailed: one of an open row's places goes to the person, the rest stay open.
+export const vulSlot: ActionDecl = {
+  label: 'Open plek invullen',
+  on: 'toewijzing',
+  input: { persoon_id: { relation: 'persoon', label: 'Persoon' } },
+  run(slot, { persoon_id }) {
+    const filled = { persoon_id: persoon_id?.id, state: 'voorlopig' }
+    const aantal = Number(slot.aantal)
+    if (aantal <= 1)
+      return { updates: [{ dataset: 'toewijzing', id: Number(slot.id), values: filled, expect: STILL_OPEN }] }
+    return {
+      updates: [{ dataset: 'toewijzing', id: Number(slot.id), values: { aantal: aantal - 1 }, expect: STILL_OPEN }],
+      creates: [
+        {
+          dataset: 'toewijzing',
+          values: { activiteit_id: slot.activiteit_id, rol_id: slot.rol_id, aantal: 1, ...filled },
+        },
+      ],
+    }
   },
 }

@@ -1,9 +1,9 @@
 import { Database } from 'bun:sqlite'
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
-import { createAccount, disableAccount, findAccount } from './auth'
+import { createAccount, createService, disableAccount, disableService, findAccount, rotateService } from './auth'
 import type { Actor, Domain } from './declare'
 import { importExport, readExportFile } from './import'
 import { migrate, seedDomain } from './migrate'
@@ -24,6 +24,9 @@ const { values } = parseArgs({
     'create-admin': { type: 'string' },
     'create-account': { type: 'string' },
     'disable-account': { type: 'string' },
+    'create-service': { type: 'string' },
+    'disable-service': { type: 'string' },
+    'rotate-service': { type: 'string' },
     role: { type: 'string' },
     subject: { type: 'string' },
     import: { type: 'string' },
@@ -31,6 +34,7 @@ const { values } = parseArgs({
     report: { type: 'string' },
     'accept-report': { type: 'boolean', default: false },
     'seed-missing': { type: 'boolean', default: false },
+    'link-secret-file': { type: 'string' },
   },
 })
 
@@ -42,21 +46,29 @@ function fail(message: string): never {
 if (!values.domain || !values.db) {
   fail(
     'usage: serve.ts --domain <module> --db <file> [--port 4310] [--hostname 127.0.0.1] [--fresh]\n' +
-      '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>]\n' +
+      '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>] [--link-secret-file <file>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
-      '   | --disable-account <email>]\n' +
+      '   | --disable-account <email> | --create-service <name> [--role editor|administrator]\n' +
+      '   | --disable-service <name> | --rotate-service <name>]\n' +
       '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]\n' +
       '  [--seed-missing]',
   )
 }
-if (values.import && (values['create-admin'] || values['create-account'] || values['disable-account'])) {
-  fail('--import cannot be combined with --create-admin, --create-account or --disable-account: run them one at a time')
+const ACCOUNT_COMMANDS = [
+  'create-admin',
+  'create-account',
+  'disable-account',
+  'create-service',
+  'disable-service',
+  'rotate-service',
+] as const
+const accountCommands = ACCOUNT_COMMANDS.filter((flag) => values[flag] !== undefined)
+if (accountCommands.length > 1) fail(`run one account command at a time, not ${accountCommands.join(' and ')}`)
+if (values.import && accountCommands.length > 0) {
+  fail('--import cannot be combined with an account command: run them one at a time')
 }
 if (values['seed-missing'] && values.fresh) fail('--seed-missing cannot be combined with --fresh')
-if (
-  values['seed-missing'] &&
-  (values.import || values['create-admin'] || values['create-account'] || values['disable-account'])
-) {
+if (values['seed-missing'] && (values.import || accountCommands.length > 0)) {
   fail('--seed-missing cannot be combined with --import or an account command: run them one at a time')
 }
 // The Host allowlist names these two; any other address would need a mailer, and 0e has none.
@@ -103,13 +115,22 @@ function disable(email: string): void {
   if (!disableAccount(sqlite, email)) throw new Error(`no account ${email}`)
 }
 
+// The token goes to stdout alone, once; nothing else stores it.
+function createServiceFromFlags(serviceName: string): void {
+  console.log(createService(sqlite, serviceName, (values.role ?? 'editor') as Actor['role']))
+}
+
 // Answers the exit code of an account command, or null when none was given.
 function runAccountCommand(): number | null {
   const { 'create-admin': admin, 'create-account': account, 'disable-account': off } = values
+  const { 'create-service': service, 'disable-service': serviceOff, 'rotate-service': rotate } = values
   try {
     if (admin) createAdmin(admin)
     else if (account) createFromFlags(account)
     else if (off) disable(off)
+    else if (service !== undefined) createServiceFromFlags(service)
+    else if (serviceOff !== undefined) disableService(sqlite, serviceOff)
+    else if (rotate !== undefined) console.log(rotateService(sqlite, rotate))
     else return null
     return 0
   } catch (err) {
@@ -185,6 +206,27 @@ if (code !== null) {
 }
 if (values.outbox) mkdirSync(values.outbox, { recursive: true, mode: 0o700 })
 
+// Read only when serving: the one-shot commands above sign no link.
+function readLinkSecret(file: string | undefined): Uint8Array | undefined {
+  if (file === undefined) {
+    if (domain.datasets.some((d) => d.record_link)) fail('this domain declares record links: pass --link-secret-file')
+    return undefined
+  }
+  const orRefuse = <T>(read: () => T): T => {
+    try {
+      return read()
+    } catch {
+      fail(`--link-secret-file ${file} cannot be read`)
+    }
+  }
+  const mode = orRefuse(() => statSync(file).mode)
+  if ((mode & 0o077) !== 0) fail(`--link-secret-file ${file} is readable by group or others: chmod 600 it`)
+  const secret = orRefuse(() => new Uint8Array(readFileSync(file)))
+  if (secret.length < 32) fail(`--link-secret-file ${file} holds fewer than 32 bytes`)
+  return secret
+}
+const linkSecret = readLinkSecret(values['link-secret-file'])
+
 const port = Number(values.port)
 const server = Bun.serve({
   hostname: values.hostname,
@@ -194,6 +236,7 @@ const server = Bun.serve({
     appUrl: values['app-url'],
     outbox: values.outbox,
     cookieName: values['cookie-name'],
+    linkSecret,
   }).fetch,
 })
 console.log(`engine listening on http://${server.hostname}:${server.port}`)

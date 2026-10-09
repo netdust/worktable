@@ -4,9 +4,21 @@ import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
-import type { Actor, ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
+import { mintActionToken, ownerSubject, revokeMintedBy } from './action-token'
+import type {
+  Actor,
+  ColumnDecl,
+  DatasetDecl,
+  Domain,
+  HookResult,
+  TransitionMode,
+  WriteContext,
+  Writer,
+} from './declare'
 import type { BatchKind } from './engine-tables'
+import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
+import { retireDelivered } from './record-link'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
@@ -31,6 +43,8 @@ export interface Store {
   sqlite: Database
   db: BunSQLiteDatabase
   domain: Domain
+  mailer: Mailer
+  appUrl: string
 }
 
 export interface Writable {
@@ -174,21 +188,33 @@ function finder(store: Store): WriteContext['find'] {
   }
 }
 
-function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: string | number][] {
+function matchOf(dataset: DatasetDecl, match: Values, caller: string): [sql: string, value: string | number][] {
   const entries = Object.entries(match)
-  if (entries.length === 0) throw new Error('exists: a match names no column')
+  if (entries.length === 0) throw new Error(`${caller}: a match names no column`)
   return entries.map(([key, value]) => {
     const column = columnOf(dataset, key)
-    if (!column) throw new Error(`exists: "${key}" is not a declared column of ${dataset.name}`)
-    if (value === null || value === undefined) throw new Error(`exists: "${key}" may not be matched against null`)
-    if (!fits(column.type, value)) throw new Error(`exists: "${key}" must be ${column.type}`)
+    if (!column) throw new Error(`${caller}: "${key}" is not a declared column of ${dataset.name}`)
+    if (value === null || value === undefined) throw new Error(`${caller}: "${key}" may not be matched against null`)
+    if (!fits(column.type, value)) throw new Error(`${caller}: "${key}" must be ${column.type}`)
     return [`"${key}" = ?`, encode(column, value) as string | number]
   })
 }
 
+function matcher(store: Store): WriteContext['findBy'] {
+  return (name, match) => {
+    const dataset = domainDataset(store, name, 'findBy')
+    const pairs = matchOf(dataset, match, 'findBy')
+    const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
+    const raw = store.sqlite
+      .query(`SELECT * FROM "${name}" WHERE ${where} ORDER BY id LIMIT 1`)
+      .get(...pairs.map(([, value]) => value)) as Stored | null
+    return raw && decodeAll(dataset, raw)
+  }
+}
+
 function existence(store: Store): WriteContext['exists'] {
   return (name, match, exceptId) => {
-    const pairs = matchOf(domainDataset(store, name, 'exists'), match)
+    const pairs = matchOf(domainDataset(store, name, 'exists'), match, 'exists')
     if (exceptId !== undefined) pairs.push(['id <> ?', exceptId])
     const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
     const values = pairs.map(([, value]) => value)
@@ -196,12 +222,112 @@ function existence(store: Store): WriteContext['exists'] {
   }
 }
 
-export const contextOf = (store: Store, actor: Actor, current: Values | null): WriteContext => ({
+export const contextOf = (
+  store: Store,
+  actor: Actor,
+  current: Values | null,
+  lifecycle?: TransitionMode,
+): WriteContext => ({
+  ...(lifecycle ? { lifecycle } : {}),
   actor,
   current,
   find: finder(store),
+  findBy: matcher(store),
   exists: existence(store),
 })
+
+function allowed(dataset: DatasetDecl, from: unknown, to: unknown, actor: Actor): boolean {
+  return (dataset.lifecycle?.transitions ?? []).some(
+    (t) =>
+      t.to === to &&
+      (t.from === '*' || (typeof from === 'string' && t.from.includes(from))) &&
+      t.roles.includes(actor.role),
+  )
+}
+
+// A create is no transition. Undo may write only the exact inverse of its batch's own transition.
+export function checkTransition(
+  dataset: DatasetDecl,
+  current: Values | null,
+  next: Values,
+  actor: Actor,
+  mode: TransitionMode,
+): void {
+  const column = dataset.lifecycle?.column
+  if (column === undefined || current === null) return
+  const from = current[column]
+  if (mode.kind === 'write' && mode.expect !== undefined && from !== mode.expect) {
+    throw new ApiError(409, 'transition_lost', `"${column}" is no longer ${mode.expect}`)
+  }
+  if (!Object.hasOwn(next, column) || next[column] === from) return
+  const to = next[column]
+  const inverse = mode.kind === 'undo' && from === mode.to && to === mode.from
+  if (mode.kind === 'undo' ? inverse : allowed(dataset, from, to, actor)) return
+  throw new ApiError(422, 'transition_not_allowed', `"${column}" may not go from ${String(from)} to ${String(to)}`)
+}
+
+export function expectedOf(dataset: DatasetDecl, expect: unknown): string | undefined {
+  if (expect === undefined) return undefined
+  const column = dataset.lifecycle?.column
+  const given = typeof expect === 'object' && expect !== null && !Array.isArray(expect) ? (expect as Values) : null
+  const keys = given ? Object.keys(given) : []
+  if (!given || column === undefined || keys.length !== 1 || keys[0] !== column || typeof given[column] !== 'string') {
+    throw new ApiError(400, 'bad_body', '"expect" must name the lifecycle column and the value it holds')
+  }
+  return given[column] as string
+}
+
+// An agent cannot see a person's answer land between its read and its write, so it must say what it read (attack 3).
+function expectFromService(dataset: DatasetDecl, body: Values, actor: Actor, expect: unknown): void {
+  const column = dataset.lifecycle?.column
+  if (actor.kind !== 'service' || column === undefined || !Object.hasOwn(body, column) || expect !== undefined) return
+  throw new ApiError(400, 'bad_body', `a service account writes "${column}" with "expect"`)
+}
+
+type HookToken = NonNullable<HookResult['token']>
+
+/** What hooks left to do after the commit. */
+export interface Hooked {
+  notices: string[]
+  mails: Mail[]
+}
+
+export const noneHooked = (): Hooked => ({ notices: [], mails: [] })
+
+// A record whose owner column is empty has no one to act on the token, so none is minted and the link is null.
+function linkOf(store: Store, dataset: DatasetDecl, row: Values, from: string, token: HookToken, batch: string) {
+  const subject = ownerSubject(dataset, row)
+  if (!subject) return null
+  const minted = { dataset: dataset.name, record_id: row.id as number, subject, from, ...token, batch }
+  return `${store.appUrl.replace(/\/+$/, '')}/#/act/${mintActionToken(store.sqlite, minted)}`
+}
+
+// Only runWrite and runAction call this: import, seed-missing and undo never fire a hook.
+export function enterState(
+  store: Store,
+  dataset: DatasetDecl,
+  id: number,
+  ctx: WriteContext,
+  hooked: Hooked,
+  batch: string,
+): void {
+  const lifecycle = dataset.lifecycle
+  if (!lifecycle?.hooks) return
+  const row = finder(store)(dataset.name, id)
+  const state = row?.[lifecycle.column]
+  if (!row || state === null || state === ctx.current?.[lifecycle.column]) return
+  const hook = Object.hasOwn(lifecycle.hooks, String(state)) ? lifecycle.hooks[String(state)] : undefined
+  const result = hook?.(row, ctx)
+  if (!result) return
+  if (result.notice) hooked.notices.push(result.notice)
+  const link = result.token ? linkOf(store, dataset, row, String(state), result.token, batch) : null
+  const mail = result.mail?.(link)
+  if (mail) hooked.mails.push(mail)
+}
+
+export function sendAfterCommit(store: Store, hooked: Hooked): void {
+  for (const mail of hooked.mails) store.mailer.send(mail).catch((err) => console.error(err))
+}
 
 type Referrer = { label: string; count: number }
 
@@ -249,6 +375,7 @@ export interface Written {
   id: number
   batch_id: string | null
   changed: string[]
+  notices: string[]
 }
 
 export function recordBatch(sqlite: Database, key: string, actorId: number, kind: BatchKind, now: string): void {
@@ -314,6 +441,21 @@ function forcedOwner(scope: Scope, cut: Values): Values {
   return { ...cut, [scope.column]: scope.id }
 }
 
+// The address a record link is mailed to delivers credentials, so only a human administrator changes it (attack 16).
+function checkLinkAddress(dataset: DatasetDecl, current: Values | null, values: Values, actor: Actor): void {
+  const column = dataset.record_link?.email
+  if (column === undefined || current === null || !Object.hasOwn(values, column)) return
+  if (values[column] === current[column]) return
+  if (actor.role === 'administrator' && (actor.kind ?? 'user') === 'user') return
+  forbid(`Only an administrator changes "${column}"`)
+}
+
+function retireOnNewAddress(store: Store, dataset: DatasetDecl, id: number, changes: Change[], actor: Actor): void {
+  const column = dataset.record_link?.email
+  if (column === undefined || !changes.some(([field]) => field === column)) return
+  retireDelivered(store.sqlite, dataset, liveRow(store.sqlite, dataset.name, id) as Stored, actor)
+}
+
 export function valuesOf(
   store: Store,
   target: Writable,
@@ -327,10 +469,14 @@ export function valuesOf(
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
   checkValues(dataset, cut, false)
+  const mode = ctx.lifecycle ?? { kind: 'write' }
+  checkTransition(dataset, ctx.current, cut, ctx.actor, mode)
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
   checkOwner(scope, returned ?? {})
   // Forced again on what is stored: a writer may return a fresh object without the owner column.
   const values = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
+  checkTransition(dataset, ctx.current, values, ctx.actor, mode)
+  checkLinkAddress(dataset, ctx.current, values, ctx.actor)
   checkValues(dataset, values)
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
@@ -361,6 +507,41 @@ function currentOf(sqlite: Database, target: Writable, id: number | null, scope:
   return current
 }
 
+/** One write; the caller holds the immediate transaction and sends the hooked mails after its commit. A given `batch` is recorded by the caller. */
+export function applyWrite(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  id: number | null,
+  body: Values,
+  actor: Actor,
+  mode: TransitionMode,
+  hooked: Hooked,
+  batch?: string,
+): Omit<Written, 'notices'> {
+  const { sqlite } = store
+  const scope = scopeOf(actor, target.dataset)
+  const current = currentOf(sqlite, target, id, scope)
+  const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current), mode)
+  const now = new Date().toISOString()
+  const stored = storedOf(store, target, op, body, ctx, scope, now)
+  const key = batch ?? crypto.randomUUID()
+  if (id === null || current === null) {
+    const made = create(sqlite, target.dataset, stored, now, actor.id, key)
+    if (!batch) recordBatch(sqlite, key, actor.id, 'write', now)
+    enterState(store, target.dataset, made.id, ctx, hooked, key)
+    return { ...made, batch_id: key }
+  }
+  const changes = diff(stored, current)
+  if (changes.length === 0) return { id, batch_id: null, changed: [] }
+  update(sqlite, target.dataset.name, id, stored, now)
+  revise(sqlite, target.dataset, id, changes, now, actor.id, key)
+  retireOnNewAddress(store, target.dataset, id, changes, actor)
+  if (!batch) recordBatch(sqlite, key, actor.id, 'write', now)
+  if (op === 'update') enterState(store, target.dataset, id, ctx, hooked, key)
+  return { id, batch_id: key, changed: changes.map(([field]) => field) }
+}
+
 // One transaction: a refusal or a failed Revision insert leaves the table and revision untouched.
 export function runWrite(
   store: Store,
@@ -369,30 +550,16 @@ export function runWrite(
   id: number | null,
   body: Values,
   actor: Actor,
+  opts: { expect?: Record<string, unknown> } = {},
 ): Written {
-  const { sqlite } = store
-  const table = target.dataset.name
-  const scope = scopeOf(actor, target.dataset)
-  return sqlite
-    .transaction((): Written => {
-      const current = currentOf(sqlite, target, id, scope)
-      const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current))
-      const now = new Date().toISOString()
-      const stored = storedOf(store, target, op, body, ctx, scope, now)
-      const key = crypto.randomUUID()
-      if (id === null || current === null) {
-        const made = create(sqlite, target.dataset, stored, now, actor.id, key)
-        recordBatch(sqlite, key, actor.id, 'write', now)
-        return { ...made, batch_id: key }
-      }
-      const changes = diff(stored, current)
-      if (changes.length === 0) return { id, batch_id: null, changed: [] }
-      update(sqlite, table, id, stored, now)
-      revise(sqlite, target.dataset, id, changes, now, actor.id, key)
-      recordBatch(sqlite, key, actor.id, 'write', now)
-      return { id, batch_id: key, changed: changes.map(([field]) => field) }
-    })
+  if (op === 'update') expectFromService(target.dataset, body, actor, opts.expect)
+  const mode: TransitionMode = { kind: 'write', expect: expectedOf(target.dataset, opts.expect) }
+  const hooked = noneHooked()
+  const written = store.sqlite
+    .transaction(() => applyWrite(store, target, op, id, body, actor, mode, hooked))
     .immediate()
+  sendAfterCommit(store, hooked)
+  return { ...written, notices: hooked.notices }
 }
 
 export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow {
@@ -464,6 +631,13 @@ function undoableBatch(sqlite: Database, key: string, actor: Actor): void {
     forbid('only the account that made a batch may undo it')
   if (!UNDOABLE.has(batch.kind)) throw notUndoable(`a batch of kind ${batch.kind} cannot be undone`)
   if (batch.undone_by !== null) throw new ApiError(409, 'already_undone', 'this batch is already undone')
+  if (batch.kind === 'undo' && undidMinting(sqlite, key)) throw notUndoable('a batch that minted tokens is not redone')
+}
+
+// Undo revoked the tokens and hooks never fire in undo, so a redo would land the state with a dead token.
+function undidMinting(sqlite: Database, undo: string): boolean {
+  const sql = 'SELECT 1 FROM action_token t JOIN batch b ON b.key = t.minted_batch WHERE b.undone_by = ? LIMIT 1'
+  return sqlite.query(sql).get(undo) !== null
 }
 
 // In revision order; a delete in the batch makes it not undoable, since undoing a delete is out.
@@ -508,11 +682,16 @@ function planUndo(store: Store, record: Touched, actor: Actor): Planned {
   return { ...record, target, scope }
 }
 
+function undoModeOf({ dataset, fields }: Planned): TransitionMode | undefined {
+  const changed = dataset.lifecycle && fields.get(dataset.lifecycle.column)
+  return changed ? { kind: 'undo', from: parsed(changed.old) as string, to: parsed(changed.new) as string } : undefined
+}
+
 function restore(store: Store, planned: Planned, actor: Actor, now: string, key: string): void {
   const { sqlite } = store
   const { dataset, id, target, scope } = planned
   const current = liveRow(sqlite, dataset.name, id) as Stored
-  const ctx = contextOf(store, actor, decodeAll(dataset, current))
+  const ctx = contextOf(store, actor, decodeAll(dataset, current), undoModeOf(planned))
   let stored: Stored
   if (planned.created) {
     target.writer.delete?.(ctx)
@@ -526,6 +705,7 @@ function restore(store: Store, planned: Planned, actor: Actor, now: string, key:
   if (changes.length === 0) return
   update(sqlite, dataset.name, id, stored, now)
   revise(sqlite, dataset, id, changes, now, actor.id, key)
+  retireOnNewAddress(store, dataset, id, changes, actor)
 }
 
 // One transaction: every check runs before any write, and any refusal rolls the whole undo back.
@@ -544,6 +724,7 @@ export function undoBatch(
       const now = new Date().toISOString()
       const undone = crypto.randomUUID()
       for (const record of planned) restore(store, record, actor, now, undone)
+      revokeMintedBy(sqlite, key, now)
       recordBatch(sqlite, undone, actor.id, 'undo', now)
       sqlite.query('UPDATE batch SET undone_by = ? WHERE key = ?').run(undone, key)
       return { batch_id: undone, affected: planned.map(({ dataset, id }) => ({ dataset: dataset.name, id })) }

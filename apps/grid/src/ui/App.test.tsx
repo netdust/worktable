@@ -7,7 +7,7 @@ import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 const api = vi.hoisted(() => ({
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
-  me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(),
+  me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(), onNotices: vi.fn(),
   rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(),
 }))
 vi.mock('../api', () => api)
@@ -106,6 +106,17 @@ const fieldNames = (row: HTMLElement) => {
 }
 
 describe('App shell', () => {
+  it("shows a write's notices, such as an invite that could not go out", async () => {
+    let noticed: (notices: string[]) => void = () => undefined
+    api.onNotices.mockImplementation((callback: (notices: string[]) => void) => {
+      noticed = callback
+      return () => undefined
+    })
+    await shell()
+    act(() => noticed(['Geen uitnodiging: Noor Claes heeft geen e-mailadres.']))
+    expect(await screen.findByRole('status', { name: 'Geen uitnodiging: Noor Claes heeft geen e-mailadres.' })).toBeTruthy()
+  })
+
   it('renders the rail with the views from the schema', async () => {
     await shell()
 

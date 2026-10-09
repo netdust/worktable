@@ -10,6 +10,9 @@ export interface Limit {
 // The sweep keeps a row this long, so no limit may use a longer window.
 const LONGEST_WINDOW = 15 * 60_000
 
+/** Every request of one service account, whatever its route (attack 17). */
+export const serviceLimit = (accountId: number): Limit => ({ key: `service:${accountId}`, max: 600, windowMs: 60_000 })
+
 function hit(sqlite: Database, { key, windowMs }: Limit, now: number): number {
   const start = now - (now % windowMs)
   const row = sqlite
@@ -41,4 +44,45 @@ export function checkLimits(sqlite: Database, limits: () => Limit[], failOpen: b
     over = !failOpen
   }
   if (over) throw new ApiError(429, 'rate_limited', 'Too many requests; try again later')
+}
+
+function failuresIn(sqlite: Database, key: string, start: number): number {
+  const row = sqlite.query('SELECT count FROM rate_limit WHERE key = ? AND window_start = ?').get(key, start) as {
+    count: number
+  } | null
+  return row?.count ?? 0
+}
+
+function countFailure(sqlite: Database, limit: Limit, now: number): void {
+  try {
+    isOver(sqlite, () => [limit], now)
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+/**
+ * Counts only the 401s of `work`, after its transaction has rolled back, and refuses once `max` were counted.
+ * Fails closed: a broken limiter refuses.
+ */
+export function failureLimiter(key: string, max: number, windowMinutes: number) {
+  const windowMs = windowMinutes * 60_000
+  if (windowMs > LONGEST_WINDOW) throw new Error(`a limit window is at most ${LONGEST_WINDOW / 60_000} minutes`)
+  return async <T>(sqlite: Database, work: () => T | Promise<T>, now = Date.now()): Promise<T> => {
+    const start = now - (now % windowMs)
+    let over: boolean
+    try {
+      over = failuresIn(sqlite, key, start) >= max
+    } catch (err) {
+      console.error(err)
+      over = true
+    }
+    if (over) throw new ApiError(429, 'rate_limited', 'Too many requests; try again later')
+    try {
+      return await work()
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) countFailure(sqlite, { key, max, windowMs }, now)
+      throw err
+    }
+  }
 }

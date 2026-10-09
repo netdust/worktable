@@ -16,6 +16,7 @@ export interface EngineColumn {
   /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
   writes?: { dataset: string; field: string; key: string }
   inherited?: { flag: string; own: string }
+  owner_visible?: boolean
 }
 
 /** A join dataset's matrix: down and across are its relation columns, cell an options column. */
@@ -29,6 +30,7 @@ export interface EngineMatrix {
   marks: Record<string, string>
   count: string
   away?: { dataset: string; across: string; label: string; end: string }
+  open?: { match: string; count: string; fill: string }
 }
 
 export interface EngineSource {
@@ -61,6 +63,10 @@ export interface EngineSource {
   columns: Record<string, EngineColumn>
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
+  /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
+  lifecycle?: { column: string }
+  /** Each record has a link its person reads their views through. */
+  record_link?: true
 }
 
 /** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
@@ -83,6 +89,7 @@ export interface EngineView extends EngineArrangement {
   mine: boolean
   editable: boolean
   public?: boolean
+  for_owners?: boolean
 }
 
 export interface EngineSchema {
@@ -141,6 +148,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
     ...(declared.inherited ? { inherited: declared.inherited } : {}),
+    ...(declared.owner_visible ? { owner_visible: true as const } : {}),
   }
 }
 
@@ -152,6 +160,8 @@ function titleLabel(source: EngineSource): string {
 /** The row's own id is the grid's `id`, never a field. */
 function modelOf(name: string, source: EngineSource, sources: Sources): Model {
   const fields = Object.entries(source.columns).filter(([key]) => key !== titleColumn(source) && key !== 'id')
+  // The matrix's open column runs its fill; offered on any row it would only be refused.
+  const actions = source.actions?.filter((action) => action.name !== source.matrix?.open?.fill)
   return {
     key: name,
     label: source.label,
@@ -164,7 +174,8 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.deletable ? { deletable: true } : {}),
     ...(source.creates ? { creates: source.creates } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
-    ...(source.actions?.length ? { actions: source.actions } : {}),
+    ...(actions?.length ? { actions } : {}),
+    ...(source.record_link ? { record_link: true as const } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
       ...Object.fromEntries(Object.entries(source.links ?? {}).map(([name, link]) => [name, linkField(link)])),
@@ -176,12 +187,23 @@ function linkField({ label, ...link }: Link & { label: string }): Field {
   return { type: 'links', label, required: false, fact: false, link }
 }
 
-function joinOf(model: string, m: EngineMatrix): MatrixJoin {
+function joinOf(model: string, m: EngineMatrix, joined: EngineSource): MatrixJoin {
+  const lifecycle = joined.lifecycle?.column
   return {
     model, row_field: m.down, column_field: m.across, cell_field: m.cell, keys: m.keys, marks: m.marks, count: m.count,
     ...(m.label ? { name_field: m.label } : {}),
     ...(m.note ? { note_field: m.note } : {}),
+    ...(lifecycle ? { lifecycle } : {}),
+    ...openOf(m, joined),
   }
+}
+
+/** The open column, when the fill action is served with its one input. */
+function openOf(m: EngineMatrix, joined: EngineSource): Pick<MatrixJoin, 'open'> {
+  const fill = joined.actions?.find((action) => action.name === m.open?.fill)
+  const [input] = Object.keys(fill?.input ?? {})
+  if (!m.open || !fill || input === undefined) return {}
+  return { open: { match_field: m.open.match, count_field: m.open.count, action: fill.name, input } }
 }
 
 function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): MatrixAway {
@@ -200,9 +222,11 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: ['grid'],
   }
-  const matrix = source.matrix_join ? sources[source.matrix_join]?.matrix : undefined
-  if (!source.matrix_join || !matrix) return table
-  return { ...table, types: ['grid', 'matrix'], join: joinOf(source.matrix_join, matrix), ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
+  const joined = source.matrix_join ? sources[source.matrix_join] : undefined
+  const matrix = joined?.matrix
+  if (!source.matrix_join || !joined || !matrix) return table
+  const join = joinOf(source.matrix_join, matrix, joined)
+  return { ...table, types: ['grid', 'matrix'], join, ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
 }
 
 /** A table for every source: the rail lists those a saved view is on. */
@@ -330,6 +354,7 @@ export function toSavedViews(views: EngineView[], sources: Sources): SavedView[]
       mine: view.mine,
       editable: view.editable,
       ...(view.public ? { public: true } : {}),
+      ...(view.for_owners ? { for_owners: true } : {}),
     }]
   })
 }

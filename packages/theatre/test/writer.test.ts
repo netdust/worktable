@@ -237,7 +237,7 @@ describe('dagplanning', () => {
       target_dataset: 'persoon',
       state: {
         options: body.sources.toewijzing.columns.state.options,
-        tones: { uitgenodigd: 'warn', bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' },
+        tones: { voorlopig: 'sky', uitgenodigd: 'warn', bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' },
         default: 'uitgenodigd',
       },
     })

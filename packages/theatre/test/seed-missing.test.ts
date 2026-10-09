@@ -6,9 +6,11 @@ import { join } from 'node:path'
 import { migrate } from '@worktable/engine'
 import theatre from '../src'
 
+// The slotted template's own title, so a database holding the step-1 unslotted one still gets it.
+const SPEELDAG = 'speeldag op locatie (met plaatsen)'
 const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
-const STEP_ONE = ['Tourstops', 'Rollen', 'Sjablonen']
+const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties']
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
 const PRE_DETAILS_DAGPLANNING = ['productie', 'soort', 'start_at', 'status', 'locatie_id', 'locatie_bron']
 const DAGPLANNING = ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status']
@@ -31,7 +33,7 @@ function existingDb(dagplanning = PRE_STEP_ONE_DAGPLANNING): string {
     `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, -1, 1)`,
   )
-  for (const v of theatre.views.filter((view) => !STEP_ONE.includes(view.name))) {
+  for (const v of theatre.views.filter((view) => !ADDED.includes(view.name))) {
     const visible = v.name === 'Dagplanning' ? dagplanning : v.visible_fields
     const json = JSON.stringify
     insert.run(v.name, v.source_type, v.source, v.skin, json(v.filters), json(v.sort), v.group_by, json(visible))
@@ -54,16 +56,16 @@ test('rol and sjabloon are config datasets, and no demo dataset is', () => {
   expect(config.sort()).toEqual(['rol', 'sjabloon'])
 })
 
-test('an existing database gets the Rol rows, the Sjabloon and the step-1 views, and an updated Dagplanning', async () => {
+test('an existing database gets the Rol rows, the Sjabloon and the later views, and an updated Dagplanning', async () => {
   const db = existingDb()
   const before = kept(db)
   const result = await seedMissing(db)
   expect(result.err).toBe('')
   expect(result.code).toBe(0)
-  expect(result.out).toContain('seed-missing: rol 4 rows')
-  expect(result.out).toContain('seed-missing: sjabloon 1 row\n')
+  expect(result.out).toContain('seed-missing: rol 4 inserted, 0 present')
+  expect(result.out).toContain('seed-missing: sjabloon 1 inserted, 0 present\n')
   expect(result.out).toContain('seed-missing: persoon skipped (not config)')
-  expect(result.out).toContain('seed-missing: views 3 added, 1 updated, 10 present')
+  expect(result.out).toContain('seed-missing: views 4 added, 1 updated, 10 present')
 
   expect(read(db, 'SELECT naam FROM rol ORDER BY id').map((r) => r.naam)).toEqual([
     'Speler',
@@ -71,11 +73,11 @@ test('an existing database gets the Rol rows, the Sjabloon and the step-1 views,
     'Productieleider',
     'Chauffeur',
   ])
-  expect(read(db, 'SELECT naam FROM sjabloon')).toEqual([{ naam: 'speeldag op locatie' }])
+  expect(read(db, 'SELECT naam FROM sjabloon')).toEqual([{ naam: SPEELDAG }])
   expect(kept(db)).toEqual(before)
 
   const views = read(db, 'SELECT name, owner_id, visible_fields FROM saved_view WHERE deleted_at IS NULL')
-  for (const name of STEP_ONE) expect(views.filter((v) => v.name === name)).toHaveLength(1)
+  for (const name of ADDED) expect(views.filter((v) => v.name === name)).toHaveLength(1)
   const dagplanning = views.find((v) => v.name === 'Dagplanning')
   expect(JSON.parse(dagplanning?.visible_fields as string)).toEqual(DAGPLANNING)
 
@@ -83,8 +85,8 @@ test('an existing database gets the Rol rows, the Sjabloon and the step-1 views,
 
   const again = await seedMissing(db)
   expect(again.code).toBe(0)
-  expect(again.out).toContain('seed-missing: rol skipped (has rows)')
-  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 14 present')
+  expect(again.out).toContain('seed-missing: rol 0 inserted, 4 present')
+  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 15 present')
   expect(read(db, 'SELECT COUNT(*) AS n FROM batch')).toEqual([{ n: 1 }])
 }, 30_000)
 
@@ -99,4 +101,78 @@ test('an existing system Dagplanning view is brought up to the details pass colu
   )
   expect(JSON.parse(view?.visible_fields as string)).toEqual(DAGPLANNING)
   expect(JSON.parse(view?.filters as string)).toEqual({ plandag: { $period: 'week' } })
+}, 30_000)
+
+const slotsOf = (db: string) =>
+  (read(db, `SELECT items FROM sjabloon WHERE naam = '${SPEELDAG}'`).map((r) => JSON.parse(r.items as string))[0] ?? [])
+    .filter((item: { slots?: unknown }) => item.slots)
+    .map((item: { omschrijving: string; slots: unknown }) => [item.omschrijving, item.slots])
+
+test('a database with the Rol rows and another Sjabloon gets the speeldag with slots, and a second run adds nothing', async () => {
+  const db = existingDb()
+  const sqlite = new Database(db)
+  sqlite.run("INSERT INTO rol (naam, categorie) VALUES ('Speler', 'artistiek'), ('Lichttechnicus', 'techniek')")
+  sqlite.run("INSERT INTO sjabloon (naam, items) VALUES ('eigen sjabloon', '[]')")
+  sqlite.close()
+  const result = await seedMissing(db)
+  expect(result.err).toBe('')
+  expect(result.out).toContain('seed-missing: rol 2 inserted, 2 present')
+  expect(result.out).toContain('seed-missing: sjabloon 1 inserted, 0 present')
+  expect(read(db, 'SELECT naam FROM sjabloon ORDER BY id').map((r) => r.naam)).toEqual(['eigen sjabloon', SPEELDAG])
+  expect(slotsOf(db)).toEqual([
+    ['Voorbereiding', [{ rol: 'Lichttechnicus', aantal: 1 }]],
+    ['Voorstelling', [{ rol: 'Speler', aantal: 2 }]],
+  ])
+  const after = kept(db)
+  const again = await seedMissing(db)
+  expect(again.out).toContain('seed-missing: sjabloon 0 inserted, 1 present')
+  expect(kept(db)).toEqual(after)
+  expect(read(db, 'SELECT COUNT(*) AS n FROM sjabloon')).toEqual([{ n: 2 }])
+}, 30_000)
+
+test('a step-1 unslotted "speeldag op locatie" stays as it is, and the slotted one is added beside it', async () => {
+  const db = existingDb()
+  const sqlite = new Database(db)
+  sqlite.run("INSERT INTO sjabloon (naam, items) VALUES ('speeldag op locatie', '[]')")
+  const old = sqlite.query('SELECT * FROM sjabloon').all()
+  sqlite.close()
+  const first = await seedMissing(db)
+  expect(first.out).toContain('seed-missing: sjabloon 1 inserted, 0 present')
+  expect(read(db, "SELECT * FROM sjabloon WHERE naam = 'speeldag op locatie'")).toEqual(old)
+  expect(read(db, 'SELECT naam FROM sjabloon ORDER BY id').map((r) => r.naam)).toEqual([
+    'speeldag op locatie',
+    SPEELDAG,
+  ])
+  expect(slotsOf(db)).toEqual([
+    ['Voorbereiding', [{ rol: 'Lichttechnicus', aantal: 1 }]],
+    ['Voorstelling', [{ rol: 'Speler', aantal: 2 }]],
+  ])
+}, 30_000)
+
+test('a planner-deleted seeded speeldag counts as present', async () => {
+  const db = existingDb()
+  const sqlite = new Database(db)
+  sqlite.run(`INSERT INTO sjabloon (naam, items, deleted_at) VALUES ('${SPEELDAG}', '[]', '2026-01-01T00:00:00Z')`)
+  sqlite.close()
+  const result = await seedMissing(db)
+  expect(result.out).toContain('seed-missing: sjabloon 0 inserted, 1 present')
+  expect(read(db, 'SELECT COUNT(*) AS n FROM sjabloon')).toEqual([{ n: 1 }])
+}, 30_000)
+
+test('a renamed seeded Rol: its original title is added again', async () => {
+  const db = existingDb()
+  const first = await seedMissing(db)
+  expect(first.code).toBe(0)
+  const sqlite = new Database(db)
+  sqlite.run("UPDATE rol SET naam = 'Acteur' WHERE naam = 'Speler'")
+  sqlite.close()
+  const again = await seedMissing(db)
+  expect(again.out).toContain('seed-missing: rol 1 inserted, 3 present')
+  expect(read(db, 'SELECT naam FROM rol ORDER BY id').map((r) => r.naam)).toEqual([
+    'Acteur',
+    'Lichttechnicus',
+    'Productieleider',
+    'Chauffeur',
+    'Speler',
+  ])
 }, 30_000)

@@ -14,8 +14,18 @@ export class ApiError extends Error {
   }
 }
 
+const MAX_EMAIL = 254
+
+export function emailOf(value: unknown): string {
+  const email = typeof value === 'string' ? value.trim() : ''
+  if (email.length > MAX_EMAIL || !email.includes('@')) throw new ApiError(400, 'bad_email', 'Not an email address')
+  return email
+}
+
 export interface RowsParams {
   filter: FilterInput | null
+  /** A saved view's own filter, which the request's filter narrows. */
+  stored?: FilterInput
   sort: { column: string; desc: boolean }[]
   group: string | null
   from: string | null
@@ -69,7 +79,7 @@ function parseOffset(raw: string | undefined): number {
 const hasColumn = (source: Source, key: string): boolean =>
   Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
 
-function parseFilter(raw: string | undefined): FilterInput | null {
+export function parseFilter(raw: string | undefined): FilterInput | null {
   if (raw === undefined || raw === '') return null
   let parsed: unknown
   try {

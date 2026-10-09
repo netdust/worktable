@@ -11,7 +11,7 @@ import { defaults, type Layout } from './layout'
 import { createStore, type StoreApi } from './store'
 
 const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
-  me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined,
+  me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
   rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))
 vi.mock('../api', () => remote)
@@ -271,6 +271,26 @@ describe('editing', () => {
 
     fireEvent.click(within(refused).getByRole('button', { name: 'Negeren' }))
     expect(within(cell('Montage', 'title')).queryByRole('alert')).toBeNull()
+  })
+
+  it('sends a state edit with the row it showed; a lost race reads the row again and says so in Dutch', async () => {
+    renderGrid()
+    api.update.mockRejectedValue({ code: 'transition_lost', message: '"status" is no longer confirmed' })
+    api.read.mockResolvedValue({ ...calais[1], fields: { ...calais[1].fields, status: 'option' } })
+    const data = new Map([['text/plain', 'Geannuleerd']])
+    const clipboardData = { setData: () => undefined, getData: (k: string) => data.get(k) ?? '' }
+
+    fireEvent.click(cell('Montage', 'status'))
+    await act(async () => {
+      fireEvent.paste(cell('Montage', 'status'), { clipboardData })
+    })
+
+    const shown = expect.objectContaining({ id: 102, fields: expect.objectContaining({ status: 'confirmed' }) })
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { status: 'cancelled' }, shown)
+    expect(api.read).toHaveBeenCalledWith('activity', 102)
+    const refreshed = cell('Montage', 'status')
+    expect(refreshed.textContent).toContain('Optie')
+    expect(within(refreshed).getByRole('alert').textContent).toContain('De status is intussen gewijzigd. De cel toont nu wat er staat.')
   })
 
   it('cancels on Escape without a write', () => {

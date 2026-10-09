@@ -1,3 +1,4 @@
+import { ROLES } from './auth-tables'
 import { type ColumnDecl, type DatasetDecl, type Domain, ICONS, type QueryDecl, TONES } from './declare'
 import { reservedNames } from './engine-tables'
 import { sourceOf, sourcesOf, writerOf } from './registry'
@@ -88,6 +89,18 @@ function checkOwners(source: DatasetDecl | QueryDecl): void {
   const column = source.owners?.owner
   if (column === undefined || column === 'id' || source.columns[column]?.relation) return
   throw new DomainError(source.name, column, `owner column "${column}" is not id or a relation column`)
+}
+
+// A json column would serve every key in it; the owner column is the scope, never a value.
+function checkOwnerVisible(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.owner_visible) continue
+    if (decl.type === 'json')
+      throw new DomainError(source.name, column, `${column} is json, so it is not owner_visible`)
+    if (column === source.owners?.owner) {
+      throw new DomainError(source.name, column, `${column} is the owner column, so it is not owner_visible`)
+    }
+  }
 }
 
 // Keys the engine adds to every row it answers.
@@ -187,6 +200,32 @@ function checkMatrix(domain: Domain, join: DatasetDecl, downs: Set<string>): voi
   if (downs.has(downTarget)) throw at(m.down, `down source "${downTarget}" already has a matrix`)
   downs.add(downTarget)
   if (m.away) checkAway(domain, join, m, m.away, at)
+  if (m.open) checkOpen(domain, join, m, m.open, at)
+}
+
+// The fill acts on the open row itself, and its one input is the record it puts across.
+function checkOpen(
+  domain: Domain,
+  join: DatasetDecl,
+  m: NonNullable<DatasetDecl['matrix']>,
+  open: NonNullable<NonNullable<DatasetDecl['matrix']>['open']>,
+  at: (bad: string, message: string) => DomainError,
+): void {
+  if (!join.columns[open.match]?.relation) {
+    throw at(open.match, `open match "${open.match}" is not a relation column of "${join.name}"`)
+  }
+  if (join.columns[open.count]?.type !== 'integer') {
+    throw at(open.count, `open count "${open.count}" is not an integer column`)
+  }
+  const action = domain.actions && Object.hasOwn(domain.actions, open.fill) ? domain.actions[open.fill] : undefined
+  if (!action) throw at(open.fill, `open fill "${open.fill}" is not a declared action`)
+  if (action.on !== join.name)
+    throw at(open.fill, `open fill "${open.fill}" acts on "${action.on}", not "${join.name}"`)
+  const across = join.columns[m.across]?.relation
+  const inputs = Object.values(action.input)
+  if (inputs.length !== 1 || inputs[0]?.relation !== across) {
+    throw at(open.fill, `open fill "${open.fill}" must take one input, a "${across}"`)
+  }
 }
 
 function checkAway(
@@ -208,6 +247,41 @@ function checkAway(
     ['end', away.end],
   ] as const) {
     if (!Object.hasOwn(target.columns, column)) throw at(column, `away ${what} "${column}" is not a declared column`)
+  }
+}
+
+function checkLifecycle(dataset: DatasetDecl): void {
+  const lifecycle = dataset.lifecycle
+  if (!lifecycle) return
+  const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lifecycle ${message}`)
+  const options = dataset.columns[lifecycle.column]?.options
+  if (!options) throw at(lifecycle.column, `column "${lifecycle.column}" is not an options column`)
+  const checkOption = (what: string, key: string) => {
+    if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${lifecycle.column}"`)
+  }
+  for (const { from, to, roles, label } of lifecycle.transitions) {
+    if (from !== '*') for (const key of from) checkOption('from', key)
+    checkOption('to', to)
+    if (label !== undefined && (typeof label !== 'string' || label.trim() === '')) {
+      throw at(to, `label of the transition to "${to}" must be a non-empty string`)
+    }
+    for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
+  }
+  for (const key of Object.keys(lifecycle.hooks ?? {})) checkOption('hook', key)
+  for (const column of lifecycle.token_projection ?? []) {
+    checkColumn(dataset, 'token_projection column', column)
+    if (!dataset.columns[column]?.owner_visible)
+      throw at(column, `token_projection column "${column}" is not owner_visible`)
+  }
+}
+
+function checkRecordLink(dataset: DatasetDecl): void {
+  const link = dataset.record_link
+  if (!link) return
+  if (!dataset.owners?.owner) throw new DomainError(dataset.name, 'record_link', 'record_link needs an owner column')
+  const { email } = link
+  if (email !== undefined && dataset.columns[email]?.type !== 'text') {
+    throw new DomainError(dataset.name, email, `record_link email "${email}" is not a text column`)
   }
 }
 
@@ -299,6 +373,7 @@ export function validateDomain(domain: Domain): void {
     checkColumn(source, 'date', source.date)
     checkRelations(domain, source)
     checkOwners(source)
+    checkOwnerVisible(source)
     checkTones(source)
     checkIcon(source)
     checkFacts(source)
@@ -310,8 +385,13 @@ export function validateDomain(domain: Domain): void {
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
+    if (Object.hasOwn(dataset.columns, 'expect')) {
+      throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
+    }
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
+    checkLifecycle(dataset)
+    checkRecordLink(dataset)
     checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }

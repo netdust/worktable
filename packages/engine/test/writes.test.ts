@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createEngine, defineQuery, migrate, seedDomain } from '../src'
 import { contents, domain, freshDb, probes, projectDeleteHook, projectDeletes, send } from './fixture'
-import { signIn, testEngine } from './sign-in'
+import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
 let sqlite: Database
 let request: ReturnType<typeof send>
@@ -154,7 +154,7 @@ describe('write denials', () => {
     const own = new Database(':memory:')
     migrate(own, domain)
     own.run('PRAGMA foreign_keys = OFF')
-    createEngine(own, domain, { port: 4310 })
+    createEngine(own, domain, { port: 4310, linkSecret: TEST_LINK_SECRET })
     expect(own.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
   })
 })
@@ -322,6 +322,7 @@ describe('writes', () => {
           batch_id: expect.stringMatching(/^[0-9a-f-]{36}$/),
           changed: ['project_id', 'tekst', 'lengte', 'klaar', 'kind'],
         },
+        notices: [],
       },
     })
     const rows = await revisionsOf('note', 2)

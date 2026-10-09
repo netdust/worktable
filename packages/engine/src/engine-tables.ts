@@ -38,6 +38,44 @@ export const sourceDisplay = defineDataset({
   checks: ['UNIQUE (source)'],
 })
 
-export const engineTables = [savedView, revision, batch, sourceDisplay, ...authTables]
+// A single-purpose token: one record, one owner subject, the states it may move the record to, used once.
+export const actionToken = defineDataset({
+  name: 'action_token',
+  label: 'Action token',
+  title: 'hash',
+  custom: false,
+  columns: {
+    hash: { type: 'text', label: 'Hash' },
+    dataset: { type: 'text', label: 'Dataset' },
+    record_id: { type: 'integer', label: 'Record' },
+    subject_dataset: { type: 'text', label: 'Subject dataset' },
+    subject_id: { type: 'integer', label: 'Subject id' },
+    from_state: { type: 'text', label: 'From' },
+    to_states: { type: 'json', label: 'To' },
+    expires_at: { type: 'datetime', label: 'Expires at' },
+    used_at: { type: 'datetime', label: 'Used at', nullable: true },
+    minted_batch: { type: 'text', label: 'Minted by batch' },
+  },
+  checks: ['UNIQUE (hash)'],
+  indexes: [['dataset', 'record_id'], ['minted_batch']],
+})
+
+// A record's link version; no row is version 0. Outside every batch, so a rotation is never undone.
+export const recordLink = defineDataset({
+  name: 'record_link',
+  label: 'Record link',
+  title: 'dataset',
+  custom: false,
+  columns: {
+    dataset: { type: 'text', label: 'Dataset' },
+    record_id: { type: 'integer', label: 'Record' },
+    version: { type: 'integer', label: 'Version' },
+    rotated_at: { type: 'datetime', label: 'Rotated at' },
+    rotated_by: { type: 'integer', label: 'Rotated by' },
+  },
+  checks: ['UNIQUE (dataset, record_id)'],
+})
+
+export const engineTables = [savedView, revision, batch, sourceDisplay, ...authTables, actionToken, recordLink]
 
 export const reservedNames = new Set([MIGRATIONS, ...engineTables.map((t) => t.name)])

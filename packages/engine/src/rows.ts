@@ -33,6 +33,7 @@ function whereOf(source: Source, table: SQLiteTable, params: RowsParams, scope: 
   const parts = [
     source.kind === 'dataset' ? isNull(columnOf(table, 'deleted_at')) : undefined,
     scopeWhere(table, scope),
+    params.stored ? filterWhere(params.stored, source, table) : undefined,
     params.filter ? filterWhere(params.filter, source, table) : undefined,
     window('>=', params.from),
     window('<=', params.to),

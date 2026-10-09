@@ -126,13 +126,20 @@ export const persoonWriter = forPlanners(
   'personen',
 )
 
-// Name-only rows are exempt from the duplicate rule: an external name is not a record to count.
+const isSet = (value: unknown): boolean => value !== null && value !== undefined
+
+// An open slot is a role waiting for someone. Name-only rows are exempt from the duplicate rule: an external name is not a record to count.
 function checkAssignee(values: Values, ctx: WriteContext): void {
-  const { persoon_id, activiteit_id, naam } = merged(values, ctx)
-  const hasPersoon = persoon_id !== null && persoon_id !== undefined
+  const { persoon_id, activiteit_id, naam, rol_id, state } = merged(values, ctx)
+  const hasPersoon = isSet(persoon_id)
   if (hasPersoon && filled(naam)) refuse('Kies een persoon of een naam, niet allebei.')
-  if (!hasPersoon && !filled(naam)) refuse('Kies een persoon of een naam.')
-  if (!hasPersoon || activiteit_id === null || activiteit_id === undefined) return
+  if (state === 'open' && (hasPersoon || filled(naam))) refuse('Een open plaats heeft nog geen persoon of naam.')
+  if (!hasPersoon && !filled(naam)) {
+    if (state !== 'open' && state !== 'geannuleerd') refuse('Kies een persoon of een naam.')
+    if (!isSet(rol_id)) refuse('Een open plek heeft een rol nodig.')
+    return
+  }
+  if (!hasPersoon || !isSet(activiteit_id)) return
   if (ctx.exists('toewijzing', { persoon_id, activiteit_id }, ctx.current?.id as number | undefined)) {
     refuse('Deze persoon is al toegewezen aan deze activiteit.')
   }
@@ -144,23 +151,53 @@ function switchAssignee(values: Values): void {
   if (sets('naam') && filled(values.naam) && !sets('persoon_id')) values.persoon_id = null
 }
 
-export const toewijzingWriter = forPlanners(
+// A row with no one on it is an open slot, whatever state was asked; else the given state, else the column default.
+function stateOnCreate(values: Values): Values {
+  return !isSet(values.persoon_id) && !filled(values.naam) ? { ...values, state: 'open' } : values
+}
+
+// States whose meaning belongs to the person on the row: another one was not invited, nor did they answer.
+const PERSONAL = ['uitgenodigd', 'bevestigd', 'geweigerd']
+
+// Someone landing on an open slot pencils it in; another one on a personal row is pencilled in too (R21).
+function stateOnUpdate(values: Values, ctx: WriteContext): Values {
+  if (Object.hasOwn(values, 'state')) return values
+  const { persoon_id, naam } = merged(values, ctx)
+  if (!isSet(persoon_id) && !filled(naam)) return values
+  const state = ctx.current?.state as string
+  const moved = changes(values, ctx, 'persoon_id') || changes(values, ctx, 'naam')
+  return state === 'open' || (PERSONAL.includes(state) && moved) ? { ...values, state: 'voorlopig' } : values
+}
+
+const toewijzingPlanned = forPlanners(
   {
-    create: (values, ctx) => toewijzingAccept(values, ctx),
+    create: (values, ctx) => toewijzingAccept(stateOnCreate(values), ctx),
     update(values, ctx) {
       switchAssignee(values)
-      return toewijzingAccept(values, ctx)
+      return toewijzingAccept(stateOnUpdate(values, ctx), ctx)
     },
     delete() {},
   },
   'toewijzingen',
 )
 
+// The person answers its own invitation: the engine has scoped the row to it and judged the transition.
+const answersInvite = (values: Values, ctx: WriteContext): boolean =>
+  ctx.actor.role === 'owner' && Object.hasOwn(values, 'state') && Object.keys(values).every((key) => key === 'state')
+
+export const toewijzingWriter: Required<Writer> = {
+  ...toewijzingPlanned,
+  update: (values, ctx) =>
+    answersInvite(values, ctx) ? toewijzingAccept(values, ctx) : toewijzingPlanned.update(values, ctx),
+}
+
 function toewijzingAccept(values: Values, ctx: WriteContext): Values {
   checkOption(toewijzing, 'state', values, 'Ongeldige status.')
   checkRequired(values, ctx, 'activiteit_id', 'Activiteit is verplicht.')
   checkLive(ctx, 'activiteit', values.activiteit_id, 'Activiteit bestaat niet.')
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+  checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
+  if (typeof values.aantal === 'number' && values.aantal < 1) refuse('Een aantal is minstens 1.')
   checkAssignee(values, ctx)
   return values
 }
@@ -247,8 +284,15 @@ const MAX_ITEMS = 50
 const MAX_OFFSET_DAG = 366
 const TIJD = /^([01]\d|2[0-3]):[0-5]\d$/
 
-function checkItem(item: unknown, n: number): void {
-  const at = (message: string) => refuse(`Item ${n}: ${message}`)
+function checkSlot(slot: unknown, at: (message: string) => never, ctx: WriteContext): void {
+  if (typeof slot !== 'object' || slot === null || Array.isArray(slot)) at('ongeldige plaats.')
+  const { rol, aantal } = slot as Values
+  if (typeof rol !== 'string' || !ctx.findBy('rol', { naam: rol })) at(`de rol "${String(rol)}" bestaat niet.`)
+  if (!Number.isInteger(aantal) || (aantal as number) <= 0) at('een plaats heeft een aantal van minstens 1 nodig.')
+}
+
+function checkItem(item: unknown, n: number, ctx: WriteContext): void {
+  const at = (message: string): never => refuse(`Item ${n}: ${message}`)
   if (typeof item !== 'object' || item === null || Array.isArray(item)) at('ongeldig item.')
   const { soort, omschrijving, offset_dag, start_tijd, duur, locatie_regel } = item as Values
   if (!Object.hasOwn(activiteit.columns.soort?.options ?? {}, String(soort))) at('ongeldige soort.')
@@ -260,12 +304,16 @@ function checkItem(item: unknown, n: number): void {
   if (duur != null && start_tijd == null) at('een duur heeft een starttijd nodig.')
   if (duur != null && (!Number.isInteger(duur) || (duur as number) <= 0)) at('ongeldige duur.')
   if (locatie_regel !== 'speelreeks') at('ongeldige locatieregel.')
+  const { slots } = item as Values
+  if (slots === undefined) return
+  if (!Array.isArray(slots)) at('plaatsen moeten een lijst zijn.')
+  for (const slot of slots as unknown[]) checkSlot(slot, at, ctx)
 }
 
-export function validateItems(items: unknown): void {
+export function validateItems(items: unknown, ctx: WriteContext): void {
   if (!Array.isArray(items)) refuse('Items moeten een lijst zijn.')
   if (items.length > MAX_ITEMS) refuse(`Een sjabloon heeft hoogstens ${MAX_ITEMS} items.`)
-  for (const [i, item] of items.entries()) checkItem(item, i + 1)
+  for (const [i, item] of items.entries()) checkItem(item, i + 1, ctx)
 }
 
 // Create only: without update or delete the grid shows Sjabloon read-only.
@@ -273,7 +321,7 @@ export const sjabloonWriter: Writer = {
   create(values, ctx) {
     if (ctx.actor.role === 'owner') forbid('Alleen de planning wijzigt sjablonen.')
     if (!filled(values.naam)) refuse('Naam is verplicht.')
-    validateItems(values.items)
+    validateItems(values.items, ctx)
     return values
   },
 }

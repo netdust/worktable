@@ -102,6 +102,11 @@ const strings = {
   shortcuts: 'Sneltoetsen',
   changed: 'Gewijzigd',
   addColumn: '+ Kolom',
+  openColumn: 'Open',
+  openSlots: 'Open plaatsen: {count}',
+  fillSlot: 'Open plek invullen',
+  fillPickRole: 'Kies eerst een rol',
+  fillPickPerson: 'Kies een persoon',
   hideColumn: 'Verbergen',
   showColumn: 'Tonen',
   awayReason: 'Afwezig: {reason}',
@@ -148,6 +153,28 @@ const strings = {
   checkMail: 'Als dit adres een account heeft, staat er nu een link in je mailbox. Hij werkt 15 minuten.',
   confirmHint: 'Druk op de knop om je aan te melden.',
   linkDead: 'Deze link werkt niet meer. Vraag een nieuwe aan.',
+  actTitle: 'Je antwoord',
+  actHint: 'Kies je antwoord.',
+  actDead: 'Deze link werkt niet meer',
+  actAnswered: 'Al beantwoord',
+  actClosed: 'Deze uitnodiging is niet meer open.',
+  actDone: 'Bedankt. Je antwoord is doorgegeven: {answer}.',
+  actRetryLater: 'Te veel pogingen. Probeer het zo meteen opnieuw.',
+  actFailed: 'Dat lukte niet. Probeer het opnieuw.',
+  personTitle: 'Je overzicht',
+  personDead: 'Deze link werkt niet meer',
+  personNothing: 'Er is nog niets voor je gedeeld.',
+  personFailed: 'Dat lukte niet. Probeer het later opnieuw.',
+  forOwnersPublish: 'Voor eigenaars publiceren',
+  forOwnersStop: 'Niet meer voor eigenaars',
+  forOwnersDone: 'Gepubliceerd voor eigenaars',
+  forOwnersStopped: 'Niet meer zichtbaar voor eigenaars',
+  forOwnersHidden: '“{key}” is niet zichtbaar voor eigenaars. Verberg die kolom eerst.',
+  forOwnersFailed: 'Publiceren voor eigenaars lukte niet.',
+  forOwnersPublic: 'Een publieke weergave kan niet ook voor eigenaars zijn.',
+  recordLinkNew: 'Nieuwe link',
+  recordLinkRotated: 'Nieuwe link gekopieerd; de vorige werkt niet meer',
+  recordLinkFailed: 'De link ophalen lukte niet.',
   sessionLapsed: 'Je bent afgemeld. Meld je opnieuw aan in een ander tabblad; wat je hier niet bewaarde, blijft staan.',
   signOut: 'Afmelden',
   changedSince: '{label} is intussen gewijzigd; ongedaan maken kan niet.',
@@ -227,8 +254,13 @@ const strings = {
   historySystem: 'systeem',
   historyHidden: 'planning',
   historyGone: 'onbekend',
+  historyLink: 'bevestigd door {name}',
   historyAlsoOne: 'Dit maakt ook 1 andere wijziging ongedaan',
   historyAlso: 'Dit maakt ook {n} andere wijzigingen ongedaan',
+  transitionNotAllowed: 'Deze statuswijziging is niet toegestaan.',
+  transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
+  undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
+  redoSkipped: 'Opnieuw doen kan hier niet',
 }
 
 export type StringKey = keyof typeof strings
@@ -250,9 +282,16 @@ export function setStrings(given: Record<string, unknown> | undefined): void {
   refusals = words(given, (key) => key.startsWith(ERROR) && key.length > ERROR.length)
 }
 
-/** A refusal in the site's words (`error.<code>`), else as the server said it. */
+// The engine says these in English: it knows no domain words.
+const ENGINE_CODES: Record<string, StringKey> = {
+  transition_not_allowed: 'transitionNotAllowed',
+  transition_lost: 'transitionLost',
+}
+
+/** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */
 export function errorText(code: string, message: string): string {
-  return refusals[ERROR + code] ?? message
+  const own = Object.hasOwn(ENGINE_CODES, code) ? t(ENGINE_CODES[code]) : message
+  return refusals[ERROR + code] ?? own
 }
 
 export function t(key: StringKey, vars: Record<string, string | number> = {}): string {

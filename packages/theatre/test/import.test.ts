@@ -39,6 +39,9 @@ test('the invented export imports with zero refusals', async () => {
   const body = (await res.json()) as { total: number; rows: Row[] }
   expect({ status: res.status, total: body.total }).toEqual({ status: 200, total: 7 })
   expect(body.rows.find((r) => r.legacy_post_id === 502)?.notitie).toBe('Laika: maybe')
+  // Imported rows are filled assignments: no role, one place each, their state as exported.
+  expect(sqlite.query('SELECT DISTINCT rol_id, aantal FROM toewijzing').all()).toEqual([{ rol_id: null, aantal: 1 }])
+  expect(sqlite.query("SELECT COUNT(*) AS n FROM toewijzing WHERE state = 'open'").get()).toEqual({ n: 0 })
 })
 
 test('derived columns, relations, legacy ids and custom land as the writers make them', () => {

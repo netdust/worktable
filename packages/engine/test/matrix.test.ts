@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import {
+  type ActionDecl,
   type ColumnDecl,
   type DatasetDecl,
   type Domain,
@@ -128,6 +129,63 @@ describe('validateDomain: matrix', () => {
     const second = join({ name: 'tweede' })
     expect(failure(domainOf(member, taak, verlof, join(), second)).bad).toBe('taak_id')
   })
+})
+
+const kind = defineDataset({ name: 'kind', label: 'K', title: 'name', custom: false, columns: { name: text } })
+const pass = { create: (v: Record<string, unknown>) => v, update: (v: Record<string, unknown>) => v, delete() {} }
+const action = (on: string, input: ActionDecl['input']): ActionDecl => ({ label: 'F', on, input, run: () => [] })
+const open = { match: 'kind_id', count: 'size', fill: 'fill_slot' }
+const openDomain = (over: Record<string, unknown> = {}, actions: Record<string, ActionDecl> = {}): Domain => ({
+  ...domainOf(
+    member,
+    taak,
+    verlof,
+    kind,
+    join({
+      columns: {
+        taak_id: rel('taak'),
+        member_id: rel('member'),
+        name: text,
+        state: states,
+        note: text,
+        kind_id: rel('kind'),
+        size: { type: 'integer', label: 'N', default: 1 },
+      },
+      matrix: { ...matrix, open: { ...open, ...over } },
+    }),
+  ),
+  writers: { koppel: pass, taak: pass },
+  actions: {
+    fill_slot: action('koppel', { member_id: { relation: 'member', label: 'M' } }),
+    on_taak: action('taak', { member_id: { relation: 'member', label: 'M' } }),
+    wrong_input: action('koppel', { taak_id: { relation: 'taak', label: 'T' } }),
+    two_inputs: action('koppel', {
+      member_id: { relation: 'member', label: 'M' },
+      taak_id: { relation: 'taak', label: 'T' },
+    }),
+    ...actions,
+  },
+})
+
+describe('validateDomain: matrix open', () => {
+  test('a valid open block passes', () => expect(() => validateDomain(openDomain())).not.toThrow())
+
+  const bad: [string, Record<string, unknown>, string][] = [
+    ['match not a relation', { match: 'name' }, 'name'],
+    ['match undeclared', { match: 'nope' }, 'nope'],
+    ['count not an integer', { count: 'name' }, 'name'],
+    ['fill naming no action', { fill: 'nope' }, 'nope'],
+    ['fill on another dataset', { fill: 'on_taak' }, 'on_taak'],
+    ['fill whose input is no relation to the across', { fill: 'wrong_input' }, 'wrong_input'],
+    ['fill with more than one input', { fill: 'two_inputs' }, 'two_inputs'],
+  ]
+  for (const [name, over, word] of bad) {
+    test(`${name} is refused`, () => {
+      const e = failure(openDomain(over))
+      expect(e.declaration).toBe('koppel')
+      expect(e.bad).toBe(word)
+    })
+  }
 })
 
 describe('GET /rows/<down>?cells=1', () => {

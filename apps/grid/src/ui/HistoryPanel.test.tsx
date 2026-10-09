@@ -70,18 +70,19 @@ describe('the history panel', () => {
     expect((await within(panel()).findByRole('listitem')).textContent).toContain('aangemaakt')
   })
 
-  it('says whose change it was: jij, systeem, planning, onbekend or the email', async () => {
+  it('says whose change it was: jij, systeem, planning, onbekend, the email or bevestigd door <naam>', async () => {
     shown([
       entry({ batch: 'a', by: 'self' }),
       entry({ batch: 'b', by: 'system', actor: null }),
       entry({ batch: 'c', by: 'hidden', actor: null }),
       entry({ batch: 'd', by: 'gone', actor: null }),
       entry({ batch: 'e', by: 'account', actor: 'collega@example.test' }),
+      entry({ batch: 'f', by: 'link', actor: 'Ann Peeters' }),
     ])
 
     await within(panel()).findAllByRole('listitem')
     const whose = items().map((li) => li.querySelector('.nv-history__by')?.textContent)
-    expect(whose).toEqual(['jij', 'systeem', 'planning', 'onbekend', 'collega@example.test'])
+    expect(whose).toEqual(['jij', 'systeem', 'planning', 'onbekend', 'collega@example.test', 'bevestigd door Ann Peeters'])
   })
 
   it('offers Ongedaan maken only where the entry is undoable, and it undoes the batch', async () => {

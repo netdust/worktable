@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite'
-import { rmSync } from 'node:fs'
+import { chmodSync, rmSync, writeFileSync } from 'node:fs'
 import { datasetDdl, viewDdl } from './ddl'
 import type { DatasetDecl, Domain, QueryDecl } from './declare'
 import { engineTables, MIGRATIONS } from './engine-tables'
@@ -48,7 +48,10 @@ function backUp(sqlite: Database): void {
   if (!file || file === ':memory:') return
   const copy = `${file}.pre-migrate`
   rmSync(copy, { force: true })
+  // It holds personal data and token hashes: made empty and owner-only first, so it is never readable by others.
+  writeFileSync(copy, '', { mode: 0o600 })
   sqlite.query('VACUUM INTO ?').run(copy)
+  chmodSync(copy, 0o600)
   console.log(`migrate: copied the database to ${copy} before rebuilding`)
 }
 

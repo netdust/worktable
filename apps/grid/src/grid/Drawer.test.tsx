@@ -1,10 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ModelAction, Row } from '../types'
+import type { Model, ModelAction, Row } from '../types'
 
-const remote = vi.hoisted(() => ({ records: vi.fn() }))
+const remote = vi.hoisted(() => ({ records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn() }))
 vi.mock('../api', () => remote)
-const { Drawer } = await import('./Drawer')
+const { Drawer, linkedDataset } = await import('./Drawer')
 import { columnsFor } from './columns'
 import { activity, planning } from './calais.test.data'
 
@@ -134,5 +134,41 @@ describe("the drawer's actions", () => {
 
     rerender(<Drawer row={row(3, 'Calais')} columns={[]} onAction={vi.fn()} onClose={() => undefined} />)
     expect(screen.queryByRole('button', { name: 'Sjabloon toepassen' })).toBeNull()
+  })
+})
+
+describe("a person's link in the drawer", () => {
+  const persoon = (record_link?: true): Model => ({ key: 'persoon', label: 'Personen', title_label: 'Naam', title_readonly: true, fields: {}, ...(record_link ? { record_link } : {}) })
+  const LINK = 'http://grid.test/#/link/persoon.3.abc'
+
+  it('is offered to an administrator on a dataset declaring record_link only', () => {
+    expect(linkedDataset('administrator', persoon(true))).toBe('persoon')
+    expect(linkedDataset('editor', persoon(true))).toBeUndefined()
+    expect(linkedDataset('owner', persoon(true))).toBeUndefined()
+    expect(linkedDataset('administrator', persoon())).toBeUndefined()
+  })
+
+  it('shows no link controls without a linked dataset', () => {
+    render(<Drawer row={row(3, 'Noor Claes')} columns={[]} onClose={() => undefined} />)
+    expect(screen.queryByRole('button', { name: 'Link kopiëren' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Nieuwe link' })).toBeNull()
+  })
+
+  it('"Link kopiëren" reads the current link and copies it; "Nieuwe link" rotates and copies the new one', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    remote.recordLink.mockResolvedValue(LINK)
+    remote.rotateRecordLink.mockResolvedValue(`${LINK}-new`)
+    render(<Drawer row={row(3, 'Noor Claes')} columns={[]} recordLink="persoon" onClose={() => undefined} />)
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Link kopiëren' })))
+    expect(remote.recordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
+    expect(writeText).toHaveBeenLastCalledWith(LINK)
+    expect(screen.getByRole('status').textContent).toBe('Link gekopieerd')
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Nieuwe link' })))
+    expect(remote.rotateRecordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
+    expect(writeText).toHaveBeenLastCalledWith(`${LINK}-new`)
+    expect(screen.getByRole('status').textContent).toBe('Nieuwe link gekopieerd; de vorige werkt niet meer')
   })
 })

@@ -1,4 +1,5 @@
 import type { FilterInput } from './filter-compile'
+import type { Mail } from './mailer'
 
 /** The generic icons an administrator picks a source's icon from. */
 export const ICONS = [
@@ -38,6 +39,8 @@ export interface ColumnDecl {
   writes?: { dataset: string; field: string; key: string }
   /** Query columns only: the value is taken over from elsewhere when the row's `flag` column is neither `own` nor empty. */
   inherited?: { flag: string; own: string }
+  /** Served to the row's owner in a view for owners; never on json or on the owner column. */
+  owner_visible?: boolean
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -58,6 +61,8 @@ export interface MatrixDecl {
   marks: Record<string, string>
   count: string
   away?: { dataset: string; across: string; label: string; end: string }
+  /** A join row with neither across nor label is open: `match` says what it waits for, `count` how many, `fill` the action that fills it. */
+  open?: { match: string; count: string; fill: string }
 }
 
 /** The rows of `dataset` whose `key` column is this row's id; `item` is the word for one of them. */
@@ -96,6 +101,9 @@ export interface DatasetDecl {
   /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
   new_label?: string
   links?: Record<string, LinkDecl>
+  lifecycle?: LifecycleDecl
+  /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
+  record_link?: { email?: string }
 }
 
 export interface QueryDecl {
@@ -141,27 +149,69 @@ export interface Domain {
   sections?: { label: string; sources: string[] }[]
 }
 
+export type Role = 'administrator' | 'editor' | 'owner'
+
 export interface Actor {
   id: number
-  role: 'administrator' | 'editor' | 'owner'
+  role: Role
   subject: { dataset: string; id: number } | null
+  /** Who signs in: a person by mail (`user`, the default), an agent by Bearer, or a record's link. */
+  kind?: 'user' | 'service' | 'link'
 }
 
+/** What a hook asks the engine to do; `link` is null while no token was minted. */
+export interface HookResult {
+  token?: { to: string[]; days: number }
+  mail?: (link: string | null) => Mail | null
+  notice?: string
+}
+
+/** A write to `column` on an existing row is a transition; a create is not. Hooks run on entering their state. */
+export interface LifecycleDecl {
+  column: string
+  /** `label` is the transition's verb, shown on the action token's page. */
+  transitions: { from: string[] | '*'; to: string; roles: Role[]; label?: string }[]
+  hooks?: Record<string, (row: Record<string, unknown>, ctx: WriteContext) => HookResult>
+  token_projection?: string[]
+}
+
+/** How the engine judges a transition: by the table, or in undo as the exact inverse of `from` → `to`. */
+export type TransitionMode = { kind: 'write'; expect?: string } | { kind: 'undo'; from: string; to: string }
+
 export interface WriteContext {
+  readonly lifecycle?: TransitionMode
   actor: Actor
   current: Record<string, unknown> | null
   find(dataset: string, id: number): Record<string, unknown> | null
+  /** The first live row whose columns equal `match`. */
+  findBy(dataset: string, match: Record<string, unknown>): Record<string, unknown> | null
   exists(dataset: string, match: Record<string, unknown>, exceptId?: number): boolean
 }
 
 type Values = Record<string, unknown>
 
-/** Runs as the caller: `run` answers the creates, and each goes through its dataset's writer. */
+/** A create; `children` makes creates once this row exists and has its id. */
+export interface ActionCreate {
+  dataset: string
+  values: Values
+  children?: (id: number) => ActionCreate[]
+}
+
+export interface ActionUpdate {
+  dataset: string
+  id: number
+  values: Values
+  expect?: Record<string, unknown>
+}
+
+export type ActionResult = ActionCreate[] | { creates?: ActionCreate[]; updates?: ActionUpdate[] }
+
+/** Runs as the caller: `run` answers the creates and updates, and each goes through its dataset's writer. */
 export interface ActionDecl {
   label: string
   on: string
   input: Record<string, { relation: string; label: string }>
-  run(record: Values, input: Record<string, Values>, ctx: WriteContext): { dataset: string; values: Values }[]
+  run(record: Values, input: Record<string, Values>, ctx: WriteContext): ActionResult
 }
 
 export interface Writer {

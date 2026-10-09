@@ -1,5 +1,5 @@
 import type { Domain } from '@worktable/engine'
-import { sjabloonToepassen } from './actions'
+import { sjabloonToepassen, vulSlot } from './actions'
 import {
   activiteit,
   beschikbaarheid,
@@ -11,7 +11,7 @@ import {
   speelreeks,
   toewijzing,
 } from './datasets'
-import { dagplanning, productieDag, voorstellingen } from './queries'
+import { dagplanning, mijnProducties, productieDag, voorstellingen } from './queries'
 import { seed, views } from './seed'
 import {
   activiteitWriter,
@@ -29,7 +29,7 @@ export { plandag } from './plandag'
 
 const theatre: Domain = {
   datasets: [organisatie, productie, speelreeks, activiteit, persoon, toewijzing, beschikbaarheid, rol, sjabloon],
-  queries: [dagplanning, productieDag, voorstellingen],
+  queries: [dagplanning, productieDag, voorstellingen, mijnProducties],
   writers: {
     organisatie: organisatieWriter,
     productie: productieWriter,
@@ -41,7 +41,7 @@ const theatre: Domain = {
     speelreeks: speelreeksWriter,
     sjabloon: sjabloonWriter,
   },
-  actions: { sjabloon_toepassen: sjabloonToepassen },
+  actions: { sjabloon_toepassen: sjabloonToepassen, vul_slot: vulSlot },
   space: { dataset: 'productie' },
   // Section names and order are a draft, pending Stefan's approval.
   sections: [

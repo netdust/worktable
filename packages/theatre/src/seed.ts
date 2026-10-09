@@ -129,27 +129,30 @@ const rollen = [
   { naam: 'Chauffeur', categorie: 'logistiek', standaard_verrekening: 'factuur', uurtarief: 24, kleur: '#239b56' },
 ]
 
-type Item = [soort: string, omschrijving: string, startTijd?: string, duur?: number]
+type Plaats = { rol: string; aantal: number }
+type Item = [soort: string, omschrijving: string, startTijd?: string, duur?: number, slots?: Plaats[]]
 
 const speeldag: Item[] = [
   ['maaltijd', 'Lunch', '13:00', 60],
-  ['repetitie', 'Voorbereiding', '14:00', 210],
+  ['repetitie', 'Voorbereiding', '14:00', 210, [{ rol: 'Lichttechnicus', aantal: 1 }]],
   ['maaltijd', 'Diner', '17:30', 60],
   ['repetitie', 'Voorbereiding avond', '18:30', 90],
-  ['voorstelling', 'Voorstelling', '20:00', 75],
+  ['voorstelling', 'Voorstelling', '20:00', 75, [{ rol: 'Speler', aantal: 2 }]],
   ['andere', 'Afwas', '21:15', 60],
   ['overnachting', 'Overnachting'],
 ]
 
+// Its own title: --seed-missing never updates, so a database holding step 1's unslotted "speeldag op locatie" gets this beside it.
 const sjablonen = [
   {
-    naam: 'speeldag op locatie',
-    items: speeldag.map(([soort, omschrijving, start_tijd, duur]) => ({
+    naam: 'speeldag op locatie (met plaatsen)',
+    items: speeldag.map(([soort, omschrijving, start_tijd, duur, slots]) => ({
       soort,
       omschrijving,
       offset_dag: 0,
       ...(start_tijd ? { start_tijd, duur } : {}),
       locatie_regel: 'speelreeks',
+      ...(slots ? { slots } : {}),
     })),
   },
 ]
@@ -265,6 +268,17 @@ export const views: SavedViewSeed[] = [
     sort: ['datum', 'start'],
     group_by: null,
     visible_fields: ['productie', 'datum', 'start', 'venue', 'adres'],
+  },
+  {
+    // Not for owners until an administrator publishes it.
+    name: 'Mijn producties',
+    source_type: 'query',
+    source: 'mijn_producties',
+    skin: 'table',
+    filters: {},
+    sort: ['vanaf'],
+    group_by: null,
+    visible_fields: ['productie', 'rollen', 'vanaf', 'laatste_dag', 'toegang_vervalt'],
   },
   {
     name: 'Producties',

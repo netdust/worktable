@@ -1,6 +1,7 @@
 import { defineDataset } from './declare'
 
 export const ROLES = { administrator: 'administrator', editor: 'editor', owner: 'owner' } as const
+export const ACCOUNT_KINDS = { user: 'user', service: 'service', link: 'link' } as const
 
 export const account = defineDataset({
   name: 'account',
@@ -8,7 +9,10 @@ export const account = defineDataset({
   title: 'email',
   custom: false,
   columns: {
-    email: { type: 'text', label: 'Email' },
+    email: { type: 'text', label: 'Email', nullable: true },
+    kind: { type: 'text', label: 'Kind', default: 'user', options: ACCOUNT_KINDS },
+    name: { type: 'text', label: 'Name', nullable: true },
+    token_hash: { type: 'text', label: 'Token hash', nullable: true },
     role: { type: 'text', label: 'Role', options: ROLES },
     subject_dataset: { type: 'text', label: 'Subject dataset', nullable: true },
     subject_id: { type: 'integer', label: 'Subject id', nullable: true },
@@ -19,8 +23,14 @@ export const account = defineDataset({
     `CHECK (role IN (${Object.keys(ROLES)
       .map((r) => `'${r}'`)
       .join(', ')}))`,
+    `CHECK (kind IN (${Object.keys(ACCOUNT_KINDS)
+      .map((k) => `'${k}'`)
+      .join(', ')}))`,
+    // Only a user signs in by mail; a service or link account has no address.
+    "CHECK ((kind = 'user') = (email IS NOT NULL))",
     'UNIQUE (email COLLATE NOCASE)',
   ],
+  indexes: [['token_hash']],
 })
 
 export const magicLink = defineDataset({

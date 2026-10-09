@@ -74,9 +74,12 @@ function ctxOf(role: Actor['role']): WriteContext {
     actor: { id: 1, role, subject: role === 'owner' ? LOTTE : null },
     current: null,
     find: () => null,
+    findBy: () => null,
     exists: () => false,
   }
 }
+
+const knowing: WriteContext = { ...ctxOf('editor'), findBy: () => ({ id: 1 }) }
 
 function statusOf(call: () => unknown): number | undefined {
   try {
@@ -297,7 +300,7 @@ describe('validateItems refuses', () => {
   }
   const message = (items: unknown) => {
     try {
-      validateItems(items)
+      validateItems(items, knowing)
     } catch (err) {
       return (err as Error).message
     }
@@ -333,7 +336,7 @@ describe('the seeds', () => {
 
   test('every seeded Sjabloon passes validateItems', () => {
     expect(seeded('sjabloon').length).toBeGreaterThan(0)
-    for (const row of seeded('sjabloon')) validateItems(row.items)
+    for (const row of seeded('sjabloon')) validateItems(row.items, knowing)
   })
 
   test('every seeded Rol row passes the Rol writer', () => {

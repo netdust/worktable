@@ -106,3 +106,68 @@ describe('the matrix view', () => {
     expect(body.sources.activiteit.matrix_join).toBe('toewijzing')
   })
 })
+
+describe('vul_slot', () => {
+  const rolId = () => (sqlite.query("SELECT id FROM rol WHERE naam = 'Speler'").get() as { id: number }).id
+  const persoonOff = (activiteit: number) =>
+    (
+      sqlite
+        .query(
+          'SELECT id FROM persoon WHERE id NOT IN (SELECT persoon_id FROM toewijzing WHERE activiteit_id = ? AND persoon_id IS NOT NULL) ORDER BY id',
+        )
+        .get(activiteit) as { id: number }
+    ).id
+  const openSlot = async (aantal: number) => {
+    const res = await post({ activiteit_id: 4, rol_id: rolId(), aantal })
+    expect({ status: res.status, state: res.body.row?.state ?? stored(res.body.id).state }).toEqual({
+      status: 201,
+      state: 'open',
+    })
+    return (res.body.row?.id ?? res.body.id) as number
+  }
+  const fill = (id: number, persoon_id: number) =>
+    request('POST', '/api/actions/vul_slot', { id, input: { persoon_id } })
+  const onActiviteit = () =>
+    sqlite
+      .query(
+        'SELECT persoon_id, rol_id, aantal, state FROM toewijzing WHERE activiteit_id = 4 AND rol_id IS NOT NULL AND deleted_at IS NULL ORDER BY id',
+      )
+      .all() as Body[]
+  const undo = (batch: string) => request('POST', `/api/batches/${batch}/undo`, {})
+
+  test('on aantal 3 it leaves 2 open plus one filled row, voorlopig; one undo restores the 3', async () => {
+    const id = await openSlot(3)
+    const persoon = persoonOff(4)
+    const res = await fill(id, persoon)
+    expect(res.status).toBe(201)
+    expect(onActiviteit()).toEqual([
+      { persoon_id: null, rol_id: rolId(), aantal: 2, state: 'open' },
+      { persoon_id: persoon, rol_id: rolId(), aantal: 1, state: 'voorlopig' },
+    ])
+
+    expect((await undo(res.body.batch_id)).status).toBe(200)
+    expect(onActiviteit()).toEqual([{ persoon_id: null, rol_id: rolId(), aantal: 3, state: 'open' }])
+  })
+
+  test('on aantal 1 the row is filled in place, and undo empties it', async () => {
+    const id = await openSlot(1)
+    const persoon = persoonOff(4)
+    const res = await fill(id, persoon)
+    expect(res.status).toBe(201)
+    expect(res.body.created).toEqual([])
+    expect(stored(id)).toMatchObject({ persoon_id: persoon, state: 'voorlopig', aantal: 1, naam: null })
+
+    expect((await undo(res.body.batch_id)).status).toBe(200)
+    expect(stored(id)).toMatchObject({ persoon_id: null, state: 'open', aantal: 1 })
+  })
+
+  test('a slot filled meanwhile is 409 transition_lost, and nothing changes', async () => {
+    const id = await openSlot(1)
+    const first = persoonOff(4)
+    expect((await fill(id, first)).status).toBe(201)
+    const other = persoonOff(4)
+    const again = await fill(id, other)
+    expect({ status: again.status, code: again.body.code }).toEqual({ status: 409, code: 'transition_lost' })
+    expect(stored(id)).toMatchObject({ persoon_id: first, state: 'voorlopig' })
+  })
+})

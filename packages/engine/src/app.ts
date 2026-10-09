@@ -3,12 +3,18 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
+import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
+import { type Mailer, outboxMailer, silentMailer } from './mailer'
+import { openApiOf } from './openapi'
+import { ownerViewGuard, ownerViewRoutes } from './owner-views'
 import { ApiError, parseRowsParams } from './params'
+import { noStoreHeaders } from './public-headers'
+import { recordLinkRequest, recordLinkRoutes } from './record-link'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, linksOf, matrixOf, readRows } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
@@ -33,9 +39,10 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
-  const reply = (dataset: DatasetDecl, { id, batch_id, changed }: Written) => ({
+  const reply = (dataset: DatasetDecl, { id, batch_id, changed, notices }: Written) => ({
     ...rowOf(store, dataset, id),
     revision: { batch_id, changed },
+    notices,
   })
 
   app.post('/rows/:dataset', async (c) => {
@@ -46,7 +53,10 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
 
   app.patch('/rows/:dataset/:id', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'update', c.get('actor'))
-    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), await bodyOf(c), c.get('actor'))
+    // cutBody would drop it silently, so the expected value is taken out here; runWrite checks its shape.
+    const { expect, ...body } = await bodyOf(c)
+    const opts = { expect: expect as Record<string, unknown> | undefined }
+    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, c.get('actor'), opts)
     return c.json(reply(target.dataset, written))
   })
 
@@ -133,9 +143,14 @@ export interface EngineOptions {
   port: number
   appUrl?: string
   outbox?: string
+  mailer?: Mailer
   cookieName?: string
   clientIp?: (req: Request) => string
+  /** Signs record links; required, at least 32 bytes, when a dataset declares record_link. */
+  linkSecret?: Uint8Array
 }
+
+const MIN_LINK_SECRET = 32
 
 // Bun's own peer address; proxy headers are never read.
 function peerAddress(c: Context): string {
@@ -145,7 +160,10 @@ function peerAddress(c: Context): string {
 }
 
 export function createEngine(sqlite: Database, domain: Domain, options: EngineOptions): Hono<AuthEnv> {
-  const { port, appUrl = 'http://127.0.0.1:5173', outbox, cookieName = 'wt_session', clientIp } = options
+  const { port, appUrl = 'http://127.0.0.1:5173', outbox, cookieName = 'wt_session', clientIp, linkSecret } = options
+  if (domain.datasets.some((d) => d.record_link) && (linkSecret?.length ?? 0) < MIN_LINK_SECRET) {
+    throw new Error(`a dataset declares record_link, so the engine needs a link secret of ${MIN_LINK_SECRET} bytes`)
+  }
   sqlite.run('PRAGMA foreign_keys = ON')
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
@@ -160,13 +178,22 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   })
 
   const app = root.basePath('/api')
-  const store: Store = { sqlite, db, domain }
+  const mailer = options.mailer ?? (outbox ? outboxMailer(outbox) : undefined)
+  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl }
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)
-  authRoutes(app, sqlite, { appUrl, outbox, cookieName, clientIp: ipOf })
+  actionTokenRoutes(app, store, ipOf)
+  recordLinkRequest(app, store, linkSecret, ipOf)
+  ownerViewGuard(app, store, ipOf)
+  authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
+  if (linkSecret) recordLinkRoutes(app, store, linkSecret)
 
   app.get('/schema', (c) => {
+    const format = c.req.query('format')
+    if (format !== undefined && format !== 'openapi') {
+      throw new ApiError(400, 'bad_format', 'format is openapi, or left out')
+    }
     const actor = c.get('actor')
     const space = spaceOf(domain, actor)
     const sections = sectionsOf(domain, actor)
@@ -188,6 +215,8 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
             date: s.date ?? null,
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
+            ...(s.kind === 'dataset' && s.lifecycle ? { lifecycle: { column: s.lifecycle.column } } : {}),
+            ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),
@@ -204,6 +233,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
           },
         ]),
     )
+    if (format === 'openapi') return c.json(openApiOf(domain, sources, cookieName))
     return c.json({ sources, ...(space ? { space } : {}), ...(sections ? { sections } : {}) })
   })
 
@@ -234,8 +264,13 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   displayRoutes(app, store)
   viewRoutes(app, store)
   shareRoutes(app, store)
+  ownerViewRoutes(app, store)
 
   root.onError((err, c) => {
+    // Every 401 may answer a presented token, so none is cached or referred on.
+    if (err instanceof ApiError && err.status === 401) {
+      for (const [name, value] of Object.entries(noStoreHeaders())) c.header(name, value)
+    }
     if (err instanceof ApiError) return c.json({ ...err.details, code: err.code, message: err.message }, err.status)
     console.error(err)
     return c.json({ code: 'internal', message: 'Internal error' }, 500)

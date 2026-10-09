@@ -1,4 +1,4 @@
-import { errorText, inUse, undoText } from '../i18n'
+import { errorText, inUse, t, undoText } from '../i18n'
 import type { ApiError, Lookup, Row, Saved } from '../types'
 import { createHistory, type Entry, type History } from '../ui/history'
 
@@ -212,6 +212,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
         return write(r, change.field, server ? read(server, change.field) : read(row, change.field), server?.lookups?.[change.field])
       }
       set({ rows: patch(change.id, revert), errors: { ...state.errors, [key]: raised }, error: raised })
+      // The state moved on meanwhile: show what it holds now, never the value this tab still had.
+      if (raised.code === 'transition_lost') await reread(change.id)
       set({ save: settle() })
       return undefined
     }
@@ -222,6 +224,11 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     set({ rows: patch(row.id, () => row) })
   }
 
+  async function reread(id: number): Promise<void> {
+    const found = api.read ? await api.read(model, id).catch(() => null) : null
+    if (found) replace(found)
+  }
+
   /** Repaints the undone step's row as the server now has it; a step on another view's rows, or an action, reloads. */
   async function repaint(entry: Entry): Promise<void> {
     const found = entry.model === model && entry.id !== null && api.read ? await api.read(model, entry.id).catch(() => null) : null
@@ -229,7 +236,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     else reload()
   }
 
-  async function travel(step: () => Promise<Entry | null>): Promise<void> {
+  async function travel(step: () => Promise<Entry | null>, forward: boolean): Promise<void> {
     track(UNDOING, 1)
     set({ save: 'saving', error: null })
     try {
@@ -237,7 +244,10 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       if (entry) await repaint(entry)
     } catch (error) {
       const refused = (error ?? {}) as Partial<ApiError>
-      set({ error: { id: 0, field: '', code: String(refused.code ?? 'unknown'), message: undoText(refused) } })
+      const code = String(refused.code ?? 'unknown')
+      // A redo is an undo of the undo; the server refuses it after a batch that minted tokens.
+      const message = forward && code === 'not_undoable' ? t('redoSkipped') : undoText(refused)
+      set({ error: { id: 0, field: '', code, message } })
     }
     track(UNDOING, -1)
     set({ save: settle() })
@@ -283,8 +293,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       answered(batch ?? null)
       if (!batch) history.drop(entry)
     },
-    undo: () => travel(history.undo),
-    redo: () => travel(history.redo),
+    undo: () => travel(history.undo, false),
+    redo: () => travel(history.redo, true),
     replace,
     draft(fields, needs = ['title'], offered = []) {
       const open = state.rows.some((r) => r.id === DRAFT)

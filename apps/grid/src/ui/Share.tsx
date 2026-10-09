@@ -1,7 +1,9 @@
 import { Button, Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { Share2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { setForOwners } from '../api'
 import { t } from '../i18n'
+import type { Account, ApiError, Model } from '../types'
 import { type Action, MoreMenu } from './MoreMenu'
 
 interface Publish {
@@ -9,6 +11,19 @@ interface Publish {
   isPublic: boolean
   /** Makes the view public and answers its token. */
   run: () => Promise<string>
+}
+
+interface Owners {
+  /** The saved view's id. */
+  id: number
+  isForOwners: boolean
+  /** After the engine took the change: whether the view is shown to owners now. */
+  onChanged: (on: boolean) => void
+}
+
+/** An administrator may show a view to the people its rows belong to, on a query that declares columns for them. */
+export function offersForOwners(role: Account['role'], model: Model | null | undefined): boolean {
+  return role === 'administrator' && Boolean(model?.query) && Object.values(model?.fields ?? {}).some((field) => field.owner_visible)
 }
 
 interface Props {
@@ -22,9 +37,11 @@ interface Props {
   onCopied: () => void
   /** For an administrator only. */
   publish?: Publish
+  /** For an administrator only, on a view that can be shown to owners. */
+  owners?: Owners
 }
 
-type Step = { step: 'ask' } | { step: 'busy' } | { step: 'done'; address: string } | { step: 'refused'; message: string }
+type Step = { step: 'ask' } | { step: 'busy' } | { step: 'done'; address: string } | { step: 'refused'; message: string; owners?: true }
 
 const publicAddress = (token: string) => `${window.location.origin}/api/public/views/${token}`
 
@@ -33,8 +50,13 @@ const refusal = (error: unknown): string => {
   return code === 'not_query' ? t('publishQueryOnly') : message || t('publishFailed')
 }
 
-/** Exporteren / delen: Excel, a calendar, the link to this view, and its public address. */
-export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }: Props) {
+function ownersRefusal(error: ApiError): string {
+  if (error.code === 'column_not_owner_visible' && error.key) return t('forOwnersHidden', { key: error.key })
+  return t(error.code === 'already_public' ? 'forOwnersPublic' : 'forOwnersFailed')
+}
+
+/** Exporteren / delen: Excel, a calendar, the link to this view, its public address, and showing it to owners. */
+export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish, owners }: Props) {
   const [dialog, setDialog] = useState<Step | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const closing = useRef(false)
@@ -57,11 +79,19 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
       (error) => setDialog({ step: 'refused', message: refusal(error) }),
     )
   }
+  const toOwners = (on: boolean) => {
+    if (!owners) return
+    setForOwners(owners.id, on).then(
+      () => owners.onChanged(on),
+      (error: ApiError) => setDialog({ step: 'refused', message: ownersRefusal(error), owners: true }),
+    )
+  }
   const actions: Action[] = [
     { label: t('excel'), run: () => onExcel?.(), blocked: excelBlocked },
     ...(onIcs ? [{ label: t('calendar'), run: onIcs }] : []),
     { label: t('copyLink'), run: () => void copy(link()) },
     ...(publish ? [{ label: t('publish'), run: () => (publish.isPublic ? setDialog({ step: 'ask' }) : go()) }] : []),
+    ...(owners ? [owners.isForOwners ? { label: t('forOwnersStop'), run: () => toOwners(false) } : { label: t('forOwnersPublish'), run: () => toOwners(true) }] : []),
   ]
   return (
     <>
@@ -69,7 +99,7 @@ export function Share({ onExcel, excelBlocked, onIcs, link, onCopied, publish }:
       {dialog && (
         <ModalOverlay className="nv-share-over" isOpen onOpenChange={(open) => !open && close()}>
           <Modal>
-            <Dialog className="nv-share" aria-label={t('publish')}>
+            <Dialog className="nv-share" aria-label={dialog.step === 'refused' && dialog.owners ? t('forOwnersPublish') : t('publish')}>
               <button type="button" className="nv-share__close" aria-label={t('close')} title={t('close')} onClick={close}>
                 <X size={14} aria-hidden="true" />
               </button>

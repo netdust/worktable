@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import type { Actor, DatasetDecl, Domain, SavedViewSeed } from './declare'
+import { silentMailer } from './mailer'
 import { ApiError } from './params'
 import { savedView } from './saved-view'
 import { SYSTEM_OWNER } from './views'
@@ -10,12 +11,12 @@ type Row = Record<string, unknown>
 type Stored = Record<string, string | number | null>
 type Change = [field: string, old: string | number | null, value: string | number | null]
 
-export type DatasetOutcome = number | 'not config' | 'has rows'
+export type DatasetOutcome = { inserted: number; present: number } | 'not config'
 
 export interface SeedReport {
   datasets: Record<string, DatasetOutcome>
   views: { added: number; updated: number; present: number }
-  // One line per system view it updated or left alone for being public.
+  // One line per system view it updated, or left alone for being public or for owners.
   named: string[]
   batch: string | null
 }
@@ -45,8 +46,9 @@ function seedRows(domain: Domain): Map<string, Row[]> {
   return rows
 }
 
-const hasRows = (sqlite: Database, table: string): boolean =>
-  sqlite.query(`SELECT 1 FROM "${table}" LIMIT 1`).get() !== null
+// Deleted rows count: a planner's deletion is not undone by a seed.
+const carries = (sqlite: Database, table: string, key: string, title: unknown): boolean =>
+  sqlite.query(`SELECT 1 FROM "${table}" WHERE "${key}" = ? LIMIT 1`).get(title as string) !== null
 
 function writeRow(run: Run, dataset: DatasetDecl, row: Row): void {
   const { store } = run
@@ -57,25 +59,29 @@ function writeRow(run: Run, dataset: DatasetDecl, row: Row): void {
 }
 
 // A refusal names the dataset and the row's position, never a value.
-function writeRows(run: Run, dataset: DatasetDecl, rows: Row[]): number {
-  rows.forEach((row, i) => {
-    try {
-      writeRow(run, dataset, row)
-    } catch (err) {
-      if (err instanceof ApiError) throw new SeedRefused(`${dataset.name} row ${i + 1}: ${err.message}`)
-      throw err
-    }
-  })
-  run.written += rows.length
-  return rows.length
+function writeChecked(run: Run, dataset: DatasetDecl, row: Row, n: number): void {
+  try {
+    writeRow(run, dataset, row)
+  } catch (err) {
+    if (err instanceof ApiError) throw new SeedRefused(`${dataset.name} row ${n}: ${err.message}`)
+    throw err
+  }
 }
 
 function seedDataset(run: Run, name: string, rows: Row[]): DatasetOutcome {
   const dataset = run.store.domain.datasets.find((d) => d.name === name)
   if (!dataset) throw new SeedRefused(`${name} is not a declared dataset`)
   if (!dataset.config) return 'not config'
-  if (hasRows(run.store.sqlite, name)) return 'has rows'
-  return writeRows(run, dataset, rows)
+  const key = typeof dataset.title === 'string' ? dataset.title : dataset.title.else
+  let inserted = 0
+  rows.forEach((row, i) => {
+    if (row[key] == null) throw new SeedRefused(`${name} row ${i + 1}: no ${key} to match it by`)
+    if (carries(run.store.sqlite, name, key, row[key])) return
+    writeChecked(run, dataset, row, i + 1)
+    inserted++
+  })
+  run.written += inserted
+  return { inserted, present: rows.length - inserted }
 }
 
 function storedView(seed: SavedViewSeed): Stored {
@@ -109,11 +115,18 @@ function addView(run: Run, next: Stored): void {
 
 const isPublic = (view: Stored): boolean => view.public === 1 || view.share_token !== null
 
-// Answers whether the view changed; only the system owner's views are brought up to date, never a public one.
+// What an administrator published, to anyone or to owners, stays as they published it.
+function leftAlone(view: Stored): string | null {
+  if (isPublic(view)) return 'is public'
+  return view.for_owners === 1 ? 'is for owners' : null
+}
+
+// Answers whether the view changed; only the system owner's views are brought up to date, never a published one.
 function updateView(run: Run, current: Stored, next: Stored): boolean {
   const label = `view "${current.name}" (${current.source})`
-  if (isPublic(current)) {
-    run.named.push(`${label} is public, left alone`)
+  const published = leftAlone(current)
+  if (published) {
+    run.named.push(`${label} ${published}, left alone`)
     return false
   }
   const changes = DECLARED.map((key): Change => [key, current[key] ?? null, next[key] ?? null]).filter(
@@ -149,15 +162,16 @@ function seedViews(run: Run): SeedReport['views'] {
   return counts
 }
 
-// A system view whose name and source no seed declares any more (a renamed seed) is removed; a public one stays.
+// A system view whose name and source no seed declares any more (a renamed seed) is removed; a published one stays.
 function removeUndeclared(run: Run): void {
   const declared = new Set(run.store.domain.views.map((seed) => `${seed.name}\u0000${seed.source}`))
   const sql = 'SELECT * FROM saved_view WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
   for (const view of run.store.sqlite.query(sql).all(SYSTEM_OWNER) as Stored[]) {
     if (declared.has(`${view.name}\u0000${view.source}`)) continue
     const label = `view "${view.name}" (${view.source})`
-    if (isPublic(view)) {
-      run.named.push(`${label} is public, left alone`)
+    const published = leftAlone(view)
+    if (published) {
+      run.named.push(`${label} ${published}, left alone`)
       continue
     }
     run.store.sqlite
@@ -180,7 +194,7 @@ function removeUndeclared(run: Run): void {
 // One transaction under one seed batch; a second run finds everything present and records nothing.
 export function seedMissing(sqlite: Database, domain: Domain): SeedReport {
   const run: Run = {
-    store: { sqlite, db: drizzle(sqlite), domain },
+    store: { sqlite, db: drizzle(sqlite), domain, mailer: silentMailer, appUrl: '' },
     now: new Date().toISOString(),
     batch: crypto.randomUUID(),
     written: 0,
@@ -201,8 +215,8 @@ export function seedMissing(sqlite: Database, domain: Domain): SeedReport {
 // Counts and declared view names only: no row value reaches the log.
 export function seedLines(report: SeedReport): string[] {
   const lines = Object.entries(report.datasets).map(([name, outcome]) => {
-    if (typeof outcome !== 'number') return `${name} skipped (${outcome})`
-    return `${name} ${outcome} ${outcome === 1 ? 'row' : 'rows'}`
+    if (outcome === 'not config') return `${name} skipped (${outcome})`
+    return `${name} ${outcome.inserted} inserted, ${outcome.present} present`
   })
   const { added, updated, present } = report.views
   lines.push(...report.named, `views ${added} added, ${updated} updated, ${present} present`)

@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite'
+import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -131,9 +132,23 @@ async function portAnswers(): Promise<boolean> {
   )
 }
 
+// Theatre declares record links, so the engine refuses to serve without a secret. A leftover file keeps its old mode
+// through writeFileSync, hence the chmod.
+function linkSecretFile(): string {
+  mkdirSync(OUT, { recursive: true, mode: 0o700 })
+  const file = join(OUT, 'link-secret')
+  writeFileSync(file, randomBytes(32), { mode: 0o600 })
+  chmodSync(file, 0o600)
+  return file
+}
+
 async function startEngine(): Promise<void> {
   if (await portAnswers()) throw new Error(`something already answers on port ${PORT}`)
-  const proc = Bun.spawn(serveArgs([]), { cwd: REPO, stdout: 'ignore', stderr: 'pipe' })
+  const proc = Bun.spawn(serveArgs(['--link-secret-file', linkSecretFile()]), {
+    cwd: REPO,
+    stdout: 'ignore',
+    stderr: 'pipe',
+  })
   engine = proc
   engineErrors = new Response(proc.stderr).text()
   for (let tries = 0; tries < 200; tries++) {

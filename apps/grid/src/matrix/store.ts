@@ -1,13 +1,18 @@
 import type { CellError, SaveState } from '../grid/store'
-import { errorText } from '../i18n'
-import type { ApiError, MatrixCell, MatrixColumn, Row, View } from '../types'
-import { cellsFor, cellsOf } from './columns'
+import { errorText, type StringKey, t, undoText } from '../i18n'
+import type { ApiError, MatrixCell, MatrixColumn, Row, Saved, View } from '../types'
+import { cellsFor, cellsOf, OPEN } from './columns'
 import { keyed } from './keys'
 
 export interface MatrixApi {
-  create: (model: string, data: Record<string, unknown>) => Promise<Row>
-  update: (model: string, id: number, data: Record<string, unknown>) => Promise<Row>
+  create: (model: string, data: Record<string, unknown>) => Promise<Saved>
+  /** `expect`: the lifecycle value the cell held, sent only when the write changes it. */
+  update: (model: string, id: number, data: Record<string, unknown>, expect?: Record<string, string>) => Promise<Saved>
   remove: (model: string, id: number) => Promise<unknown>
+  /** Answers the undo's own batch, which undoes it in turn. */
+  undoBatch: (batch: string) => Promise<string>
+  /** Runs a declared action on one record, in one batch. */
+  runAction: (name: string, id: number, input: Record<string, unknown>) => Promise<{ batch: string; created: { dataset: string; id: number }[] }>
 }
 
 export interface MatrixState {
@@ -26,6 +31,8 @@ export interface MatrixStore {
   /** null removes the cell's join record. True when the server took it. */
   set: (row: number, column: MatrixColumn, status: string | null) => Promise<boolean>
   setNote: (row: number, column: MatrixColumn, note: string) => Promise<boolean>
+  /** Puts `record` on the open join row `cell` through the join's fill action: one undo step, undone by its batch. */
+  fill: (row: number, cell: number, record: number) => Promise<boolean>
   /** The first row's status copied into the rest, in the order given: one undo step. */
   fillDown: (column: MatrixColumn, rowIds: number[]) => Promise<void>
   /** A block of keys, marks or values from the top-left of `at`: one undo step. */
@@ -41,6 +48,8 @@ interface Options {
   api: MatrixApi
   /** The window's rows again: asked after a refusal, which may mean this tab's cells are stale. */
   onStale?: () => Promise<Row[]>
+  /** Says why an undo or redo left a change out. */
+  onNotice?: (message: string) => void
 }
 
 /** What a cell holds; null is no join record. */
@@ -53,6 +62,19 @@ interface Op {
   after: Content
   /** The join record this change acts on, shared with its undo: null until known (a cell still being created). */
   record: { id: number | null }
+  /**
+   * On a lifecycle cell: the batch that last wrote this change, shared with its undo and redo, which go
+   * through the batch undo and replace it. `created`: the first write made the record.
+   */
+  batch?: { id: string | null; created: boolean }
+  /** An undo or redo of a lifecycle change: undoes `batch` instead of writing the cell. */
+  replay?: 'undo' | 'redo'
+  /** A fill of the open row `record` with the record `put`: the action decides what changes, so the row is read back after each step. */
+  fill?: { put: number }
+  /** The write landed but its row could not be read back: a refresh follows once it settles. */
+  reread?: boolean
+  /** The server refused this redo for good (its batch minted tokens): the step leaves the history. */
+  dropped?: boolean
 }
 
 interface Job {
@@ -71,15 +93,16 @@ function same(a: Content, b: Content): boolean {
 }
 
 function asCell(row: Row): MatrixCell {
-  return { id: row.id, title: row.title, status: row.status, fields: row.fields }
+  return { id: row.id, title: row.title, status: row.status, fields: row.fields, ...(row.lookups ? { lookups: row.lookups } : {}) }
 }
 
 function keyOf(row: number, column: MatrixColumn): string {
   return `${row}:${column.key}`
 }
 
-export function createMatrixStore({ view, rows, api, onStale }: Options): MatrixStore {
+export function createMatrixStore({ view, rows, api, onStale, onNotice }: Options): MatrixStore {
   const join = view.join!
+  const lifecycle = join.lifecycle !== undefined && join.lifecycle === join.cell_field
   let state: MatrixState = { rows, save: 'saved', error: null, canUndo: false, canRedo: false }
   const listeners = new Set<() => void>()
   const undoStack: Op[][] = []
@@ -163,6 +186,7 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
   }
 
   function paint(op: Op): void {
+    if (op.fill) return
     patchRow(op.row, (row) => {
       const current = cellsFor(view, row, op.column)
       const target = current.find((cell) => cell.id === latestId(op.record.id)) ?? current[0]
@@ -202,11 +226,19 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
     }
   }
 
+  /** The confirmed join record the op acts on: its own once known, else the cell's lowest. */
+  function currentOf(op: Op): MatrixCell | undefined {
+    const mine = cellsFor(view, withCells({ id: op.row, title: '', status: '', fields: {} }, confirmed.get(op.row) ?? []), op.column)
+    const known = latestId(op.record.id)
+    return known === null ? mine[0] : mine.find((cell) => cell.id === known)
+  }
+
   async function decide(op: Op): Promise<void> {
+    if (op.replay) return replay(op)
+    if (op.fill) return runFill(op, op.fill.put)
     const { row, column, after, record } = op
-    const mine = cellsFor(view, withCells({ id: row, title: '', status: '', fields: {} }, confirmed.get(row) ?? []), column)
     const known = latestId(record.id)
-    const current = known === null ? mine[0] : mine.find((cell) => cell.id === known)
+    const current = currentOf(op)
     // Re-read after the await: another cell of this row may have landed meanwhile.
     const land = (change: (cells: MatrixCell[]) => MatrixCell[]): void => void confirmed.set(row, change(confirmed.get(row) ?? []))
     if (after === null) {
@@ -216,9 +248,13 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
       return land((cells) => cells.filter((cell) => cell.id !== current.id))
     }
     if (!current) {
-      const saved = asCell(await api.create(join.model, created(row, column, after)))
+      // A note's undo or redo on a lifecycle join never re-creates: that would enter a hooked state again.
+      if (lifecycle && !op.batch) return
+      const made = await api.create(join.model, created(row, column, after))
+      const saved = asCell(made.row)
       if (known !== null) renamed.set(known, saved.id)
       record.id = saved.id
+      if (op.batch) Object.assign(op.batch, { id: made.batch, created: true })
       return land((cells) => [...cells, saved])
     }
     record.id = current.id
@@ -226,8 +262,51 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
     if (op.before === null) op.before = contentOf(current)
     const data = changed(current, after)
     if (Object.keys(data).length === 0) return
-    const saved = asCell(await api.update(join.model, current.id, data))
+    const expect = expectOf(current, data)
+    const written = await (expect ? api.update(join.model, current.id, data, expect) : api.update(join.model, current.id, data))
+    if (op.batch) op.batch.id = written.batch
+    const saved = asCell(written.row)
     land((cells) => cells.map((cell) => (cell.id === saved.id ? saved : cell)))
+  }
+
+  /** The state the server last confirmed, when this write changes it: a write after another tab's lands as 409. */
+  function expectOf(cell: MatrixCell, data: Record<string, unknown>): Record<string, string> | undefined {
+    if (!lifecycle || !Object.hasOwn(data, join.cell_field)) return undefined
+    return { [join.cell_field]: contentOf(cell)!.status }
+  }
+
+  async function runFill(op: Op, put: number): Promise<void> {
+    const open = join.open!
+    const done = await api.runAction(open.action, op.record.id!, { [open.input]: put })
+    Object.assign(op.batch!, { id: done.batch, created: done.created.length > 0 })
+    await reload(op)
+  }
+
+  /**
+   * The row's cells as the server now holds them, after a write whose outcome only the server knows. The
+   * write has landed, so a failed read never fails the op: it asks for a refresh once the op settles.
+   */
+  async function reload(op: Op): Promise<void> {
+    if (!onStale) return
+    const sent = generation.get(op.row)
+    const fresh = await onStale().then((rows) => rows.find((row) => row.id === op.row), () => undefined)
+    // Unread, or another write on this row moved meanwhile: the general refresh sorts it out.
+    if (!fresh || generation.get(op.row) !== sent) return void (op.reread = true)
+    confirmed.set(op.row, cellsOf(fresh))
+    patchRow(op.row, (painted) => withCells(painted, cellsOf(fresh)))
+  }
+
+  /** Undoes the change's last batch and lands what that leaves: an undone create is gone, else the cell holds `after`. */
+  async function replay(op: Op): Promise<void> {
+    const batch = op.batch!
+    if (batch.id === null) return
+    const id = latestId(op.record.id)
+    batch.id = await api.undoBatch(batch.id)
+    if (op.fill) return reload(op)
+    const land = (change: (cells: MatrixCell[]) => MatrixCell[]): void => void confirmed.set(op.row, change(confirmed.get(op.row) ?? []))
+    if (op.replay === 'undo' && batch.created) return land((cells) => cells.filter((cell) => cell.id !== id))
+    const status = op.after?.status ?? ''
+    land((cells) => cells.map((cell) => (cell.id === id ? { ...cell, fields: { ...cell.fields, [join.cell_field]: status } } : cell)))
   }
 
   /** One write in flight per cell: two connections could otherwise land an undo before the write it undoes. */
@@ -267,11 +346,22 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
       await queued(job.op)
       errors.delete(key)
       end(job)
+      if (job.op.reread) {
+        job.op.reread = false
+        refresh()
+      }
       return true
     } catch (error) {
-      const { code, message } = (error ?? {}) as Partial<ApiError>
-      const known = String(code ?? 'unknown')
-      const raised: CellError = { id: job.op.row, field: job.op.column.key, code: known, message: errorText(known, String(message ?? error)) }
+      const refused = (error ?? {}) as Partial<ApiError>
+      const known = String(refused.code ?? 'unknown')
+      if (job.op.replay === 'redo' && known === 'not_undoable') {
+        job.op.dropped = true
+        onNotice?.(t('redoSkipped'))
+        end(job)
+        return false
+      }
+      const said = job.op.replay ? undoText(refused) : errorText(known, String(refused.message ?? error))
+      const raised: CellError = { id: job.op.row, field: job.op.column.key, code: known, message: said }
       errors.set(key, raised)
       publish({ error: raised })
       end(job)
@@ -323,7 +413,8 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
   function opFor({ row, column, status }: Target): Op | null {
     const before = shown(row, column)
     const after: Content = status === null ? null : { status, note: before?.note ?? '' }
-    return same(before, after) ? null : { row, column, before, after, record: recordAt(row, column) }
+    if (same(before, after)) return null
+    return { row, column, before, after, record: recordAt(row, column), ...(lifecycle ? { batch: { id: null, created: false } } : {}) }
   }
 
   async function block(targets: Target[]): Promise<void> {
@@ -348,14 +439,36 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
     return false
   }
 
-  /** A step crosses at the press; what a refusal leaves undone stays behind as its own step. */
+  /**
+   * A lifecycle change undone by its batch would otherwise re-create into a hooked state (a re-invite), and
+   * an undone create's batch holds a delete, which has no undo: both are left out, with a word why. So is a
+   * note change whose record is gone: re-creating it would enter a hooked state too.
+   */
+  function skipped(op: Op, forward: boolean): StringKey | null {
+    if (op.fill) return forward && op.batch!.created ? 'redoSkipped' : null
+    if (!op.batch) return lifecycle && !currentOf(op) ? 'undoDeleteSkipped' : null
+    if (!forward && op.after === null) return 'undoDeleteSkipped'
+    if (forward && op.batch.created) return 'redoSkipped'
+    return null
+  }
+
+  function turn(op: Op, forward: boolean): Op {
+    const replay = op.batch ? { replay: forward ? 'redo' as const : 'undo' as const } : {}
+    return forward ? { ...op, ...replay } : { ...op, before: op.after, after: op.before, ...replay }
+  }
+
+  /** A step crosses at the press; what a refusal leaves undone stays behind as its own step, and a skipped change is dropped. */
   async function step(from: Op[][], to: Op[][], forward: boolean): Promise<void> {
-    const taken = from.pop()
-    if (!taken) return
+    const pressed = from.pop()
+    if (!pressed) return
+    const skips = new Set(pressed.map((op) => skipped(op, forward)).filter((key): key is StringKey => key !== null))
+    skips.forEach((key) => onNotice?.(t(key)))
+    const taken = skips.size === 0 ? pressed : pressed.filter((op) => skipped(op, forward) === null)
+    if (taken.length === 0) return publish({})
     to.push(taken)
     publish({})
     const ops = forward ? taken : [...taken].reverse()
-    const turned = ops.map((op) => (forward ? op : { ...op, before: op.after, after: op.before }))
+    const turned = ops.map((op) => turn(op, forward))
     const count = (await execute(turned)).length
     if (count === ops.length) return
     const at = to.indexOf(taken)
@@ -365,7 +478,8 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
     const moved = forward ? taken.slice(0, count) : taken.slice(taken.length - count)
     const left = forward ? taken.slice(count) : taken.slice(0, taken.length - count)
     if (moved.length > 0) to.push(moved)
-    from.push(left)
+    const kept = turned[count]?.dropped ? left.filter((op) => op !== ops[count]) : left
+    if (kept.length > 0) from.push(kept)
     publish({})
   }
 
@@ -386,6 +500,11 @@ export function createMatrixStore({ view, rows, api, onStale }: Options): Matrix
       return () => listeners.delete(listener)
     },
     set: (row, column, status) => single(opFor({ row, column, status })),
+    fill(row, cell, record) {
+      if (!join.open) return Promise.resolve(false)
+      const batch = { id: null, created: false }
+      return single({ row, column: OPEN, before: null, after: null, record: { id: cell }, batch, fill: { put: record } })
+    },
     setNote(row, column, note) {
       const before = shown(row, column)
       if (before === null || before.note === note) return Promise.resolve(before !== null)

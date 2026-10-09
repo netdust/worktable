@@ -40,6 +40,8 @@ function isoWeek(day: string): string {
 }
 
 type Engine = ReturnType<typeof createEngine>
+// An invented secret: parity signs no link it hands out.
+const LINK_SECRET = new TextEncoder().encode('worktable-parity-link-secret-not-a-real-one')
 
 async function signIn(engine: Engine, outbox: string): Promise<string> {
   const post = (path: string, body: unknown) =>
@@ -257,7 +259,12 @@ async function run(file: string): Promise<number> {
     }
     const outbox = join(dir, 'outbox')
     mkdirSync(outbox, { recursive: true })
-    const engine = createEngine(sqlite, domain, { port: PORT, outbox, clientIp: () => '127.0.0.1' })
+    const engine = createEngine(sqlite, domain, {
+      port: PORT,
+      outbox,
+      clientIp: () => '127.0.0.1',
+      linkSecret: LINK_SECRET,
+    })
     const read = reader(engine, await signIn(engine, outbox))
     const measured = await measure(read, domain)
     const checks = data.checks ?? {}

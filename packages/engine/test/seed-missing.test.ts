@@ -49,8 +49,8 @@ describe('seedMissing: config rows', () => {
       taak: 'not config',
       plat: 'not config',
       note: 'not config',
-      badge: 2,
-      kit: 1,
+      badge: { inserted: 2, present: 0 },
+      kit: { inserted: 1, present: 0 },
     })
     const after = everything(sqlite)
     for (const table of ['project', 'taak', 'plat', 'note']) expect(after[table]).toEqual(before[table])
@@ -58,14 +58,20 @@ describe('seedMissing: config rows', () => {
     expect(after.kit).toMatchObject([{ name: 'starter', badge_id: 1 }])
   })
 
-  test('a config table holding rows, or only a deleted row, counts as filled and is skipped', () => {
+  test('a row is added by its missing title; a present one, live or deleted, is kept as it is', () => {
     const sqlite = existingDb()
-    sqlite.run("INSERT INTO badge (name, size, maker) VALUES ('oud', 3, 'x')")
-    sqlite.run("INSERT INTO kit (name, badge_id, deleted_at) VALUES ('oud', 1, '2026-01-01T00:00:00Z')")
-    const before = { badge: contents(sqlite, 'badge'), kit: contents(sqlite, 'kit') }
+    sqlite.run("INSERT INTO badge (name, size, maker) VALUES ('gold', 3, 'x')")
+    sqlite.run("INSERT INTO kit (name, badge_id, deleted_at) VALUES ('starter', 1, '2026-01-01T00:00:00Z')")
     const report = seedMissing(sqlite, seedDomain)
-    expect(report.datasets).toMatchObject({ badge: 'has rows', kit: 'has rows' })
-    expect({ badge: contents(sqlite, 'badge'), kit: contents(sqlite, 'kit') }).toEqual(before)
+    expect(report.datasets).toMatchObject({
+      badge: { inserted: 1, present: 1 },
+      kit: { inserted: 0, present: 1 },
+    })
+    expect(sqlite.query('SELECT name, size, maker FROM badge ORDER BY id').all()).toEqual([
+      { name: 'gold', size: 3, maker: 'x' },
+      { name: 'silver', size: 6, maker: `${SYSTEM_OWNER}:administrator` },
+    ])
+    expect(sqlite.query('SELECT COUNT(*) AS n FROM kit').get()).toEqual({ n: 1 })
   })
 
   test('every row goes through its writer as the system owner, with the administrator role', () => {
@@ -133,8 +139,8 @@ describe('seedMissing: one seed batch', () => {
         taak: 'not config',
         plat: 'not config',
         note: 'not config',
-        badge: 'has rows',
-        kit: 'has rows',
+        badge: { inserted: 0, present: 2 },
+        kit: { inserted: 0, present: 1 },
       },
       views: { added: 0, updated: 0, present: 2 },
       named: [],
@@ -259,6 +265,26 @@ describe('seedMissing: public and updated system views', () => {
     expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
   })
 
+  test('a system view for owners keeps its visible_fields and flag, and is named (attack 13)', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
+    sqlite.query('UPDATE saved_view SET for_owners = 1 WHERE id = ?').run(id)
+    const before = viewsNamed(sqlite, 'Open')
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is for owners, left alone')
+    expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
+  })
+
+  test('a system view for owners that no seed declares any more stays, and is named', () => {
+    const sqlite = existingDb()
+    const id = insertView(sqlite, SYSTEM_OWNER, 'Weg', 'taak', ['day'])
+    sqlite.query('UPDATE saved_view SET for_owners = 1 WHERE id = ?').run(id)
+    const report = seedMissing(sqlite, seedDomain)
+    expect(viewsNamed(sqlite, 'Weg')).toMatchObject([{ deleted_at: null, for_owners: 1 }])
+    expect(seedLines(report)).toContain('seed-missing: view "Weg" (taak) is for owners, left alone')
+  })
+
   test('a system view holding only a share token counts as public and is left alone', () => {
     const sqlite = existingDb()
     const id = insertView(sqlite, SYSTEM_OWNER, 'Open', 'taak', ['day'])
@@ -312,8 +338,8 @@ describe('serve.ts --seed-missing', () => {
     const db = existingFile()
     const result = await cli('seed-domain.ts', db, '--seed-missing')
     expect(result.code).toBe(0)
-    expect(result.out).toContain('seed-missing: badge 2 rows')
-    expect(result.out).toContain('seed-missing: kit 1 row\n')
+    expect(result.out).toContain('seed-missing: badge 2 inserted, 0 present')
+    expect(result.out).toContain('seed-missing: kit 1 inserted, 0 present\n')
     expect(result.out).toContain('seed-missing: project skipped (not config)')
     expect(result.out).toContain('seed-missing: views 2 added, 0 updated, 0 present')
     expect(result.out).not.toContain('gold')
@@ -321,13 +347,13 @@ describe('serve.ts --seed-missing', () => {
     expect(fileContents(db).badge).toHaveLength(2)
   }, 20_000)
 
-  test('a second run writes nothing and logs only skips', async () => {
+  test('a second run writes nothing and logs nothing inserted', async () => {
     const db = existingFile()
     await cli('seed-domain.ts', db, '--seed-missing')
     const before = fileContents(db)
     const result = await cli('seed-domain.ts', db, '--seed-missing')
     expect(result.code).toBe(0)
-    expect(result.out).toContain('seed-missing: badge skipped (has rows)')
+    expect(result.out).toContain('seed-missing: badge 0 inserted, 2 present')
     expect(result.out).toContain('seed-missing: views 0 added, 0 updated, 2 present')
     expect(fileContents(db)).toEqual(before)
   }, 20_000)

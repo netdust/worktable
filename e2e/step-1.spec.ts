@@ -7,7 +7,7 @@ import { openView, openWeek } from './tree'
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
 const APPLY_WEEK = '2026-11-02'
 const UNDO_WEEK = '2026-11-16'
-const SJABLOON = 'speeldag op locatie'
+const SJABLOON = 'speeldag op locatie (met plaatsen)'
 const VENUE = 'Zaal De Spiegel'
 const TWICE =
   'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.'
@@ -214,7 +214,11 @@ test('apply-template @e2e', async ({ page }) => {
   const answered = await applyInDrawer(page, naam)
   expect(answered.status()).toBe(201)
   const reply = (await answered.json()) as { batch_id: string; created: { dataset: string; id: number }[] }
-  expect(reply.created).toHaveLength(28)
+  const activities = reply.created.filter((c) => c.dataset === 'activiteit')
+  const slotIds = reply.created.filter((c) => c.dataset === 'toewijzing').map((c) => c.id)
+  expect(activities).toHaveLength(28)
+  expect(slotIds).toHaveLength(8)
+  expect(reply.created).toHaveLength(36)
   await expect(page.getByText(`Sjabloon toepassen uitgevoerd.`)).toBeVisible()
 
   // The 28 activities, as the server holds them: every day the pattern, at its times, the venue left to inherit.
@@ -229,8 +233,22 @@ test('apply-template @e2e', async ({ page }) => {
     expect(a.status).toBe('optie')
   }
 
+  // The 8 open slots, two a day: a light technician once and two players, none with a person or a name.
+  const rollen = await rowsOf<{ id: number; naam: string }>(page.request, 'rol')
+  const roleOf = (id: unknown) => rollen.find((r) => r.id === id)?.naam
+  const slots = (await rowsOf<Values>(page.request, 'toewijzing')).filter((t) => slotIds.includes(t.id as number))
+  expect(slots).toHaveLength(8)
+  for (const t of slots) {
+    expect(t.state).toBe('open')
+    expect(t.persoon_id ?? null).toBeNull()
+    expect(t.naam ?? null).toBeNull()
+  }
+  expect(slots.map((t) => `${roleOf(t.rol_id)} ${t.aantal}`).sort()).toEqual(
+    days.flatMap(() => ['Lichttechnicus 1', 'Speler 2']).sort(),
+  )
+
   // Their Revision rows share the action's one batch.
-  for (const { id } of reply.created) {
+  for (const { id } of activities) {
     const response = await page.request.get(`/api/revisions/activiteit/${id}`)
     expect(response.status()).toBe(200)
     const revisions = ((await response.json()) as { revisions: Revision[] }).revisions
@@ -251,13 +269,16 @@ test('apply-template @e2e', async ({ page }) => {
     expect(rows.map((r) => `${r.title}|${r.start}|${r.locatie}`).sort()).toEqual(want.sort())
   }
 
-  // One undo, from a cell of Dagplanning, removes the 28.
+  // One undo, from a cell of Dagplanning, removes the 28 and their open slots.
   await (await cellOf(page, gridRows(page).first(), 'Soort')).click()
   const undone = undoOf(page)
   await page.keyboard.press('ControlOrMeta+z')
   expect((await undone).status()).toBe(200)
   await expect(gridRows(page)).toHaveCount(0)
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: reeks?.id })).toHaveLength(0)
+  expect(
+    (await rowsOf<Values>(page.request, 'toewijzing')).filter((t) => slotIds.includes(t.id as number)),
+  ).toHaveLength(0)
 
   await page.reload()
   await pick(page, 'Dagplanning', 'Activiteiten')
@@ -525,7 +546,8 @@ test('apply-redo-refused @e2e', async ({ page }) => {
   const response = await redone
   expect(response.status()).toBe(422)
   expect(((await response.json()) as { code: string }).code).toBe('not_undoable')
-  await expect(page.locator('.nv-toolbar')).toContainText('Dit kan niet ongedaan gemaakt worden.')
+  // A refused redo reads as such in the table grid, whatever the batch held (review S1).
+  await expect(page.locator('.nv-toolbar')).toContainText('Opnieuw doen kan hier niet')
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(0)
 })
 

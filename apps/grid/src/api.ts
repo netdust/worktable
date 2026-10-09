@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -22,7 +22,8 @@ function toApiError(error: unknown): ApiError {
     const by = 'by' in error && Array.isArray(error.by) ? { by: error.by.filter(isReferrer) } : {}
     const named = 'label' in error && typeof error.label === 'string' ? { label: error.label } : {}
     const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
-    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column }
+    const key = 'key' in error && typeof error.key === 'string' ? { key: error.key } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
@@ -43,10 +44,27 @@ export function onUnauthenticated(callback: () => void): () => void {
   }
 }
 
-async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>): Promise<T> {
+let noticed: (notices: string[]) => void = () => {}
+
+/** Called with what a write's reply says beside the row, such as an invite that could not go out. */
+export function onNotices(callback: (notices: string[]) => void): () => void {
+  noticed = callback
+  return () => {
+    if (noticed === callback) noticed = () => {}
+  }
+}
+
+function heard(reply: Record<string, unknown>): void {
+  const notices = Array.isArray(reply.notices) ? reply.notices.filter((n): n is string => typeof n === 'string') : []
+  if (notices.length > 0) noticed(notices)
+}
+
+/** `authorization` replaces the session cookie's say for this one request, such as a person's link. */
+async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>, authorization?: string): Promise<T> {
   try {
     const body = data === undefined ? undefined : JSON.stringify(data)
-    const response = await fetch(endpoint(path, query), { method, body, headers: body ? { 'Content-Type': 'application/json' } : undefined })
+    const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(authorization ? { Authorization: authorization } : {}) }
+    const response = await fetch(endpoint(path, query), { method, body, headers: Object.keys(headers).length > 0 ? headers : undefined })
     if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     return (await response.json()) as T
@@ -105,6 +123,32 @@ export async function publishView(id: number): Promise<string> {
   return (await request<{ token: string }>('PUT', `/views/${id}/share-token`, {}, {})).token
 }
 
+/** Shows a saved view to the people its rows belong to, or stops showing it; an administrator's. */
+export async function setForOwners(id: number, on: boolean): Promise<void> {
+  await request(on ? 'PUT' : 'DELETE', `/views/${id}/for-owners`, {}, on ? {} : undefined)
+}
+
+/** A record's current link, as the administrator copies it for its person. */
+export async function recordLink(dataset: string, id: number): Promise<string> {
+  return (await request<{ link: string }>('GET', `/record-links/${encodeURIComponent(dataset)}/${id}`)).link
+}
+
+/** A new link for a record; the old one stops at once. */
+export async function rotateRecordLink(dataset: string, id: number): Promise<string> {
+  return (await request<{ link: string }>('POST', `/record-links/${encodeURIComponent(dataset)}/${id}/rotate`, {}, {})).link
+}
+
+const asLink = (token: string) => `RecordLink ${token}`
+
+/** The views shown to the link's person. The token travels in the Authorization header only, never in an address. */
+export async function ownerViews(token: string): Promise<OwnerView[]> {
+  return (await request<{ views: OwnerView[] }>('GET', '/owner/views', {}, undefined, asLink(token))).views
+}
+
+export function ownerRows(token: string, id: number): Promise<OwnerRows> {
+  return request<OwnerRows>('GET', `/owner/views/${id}/rows`, {}, undefined, asLink(token))
+}
+
 /** The recent changes to the rows the view shows: its filter, scope and window, as `rows` sends them. */
 export async function history(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null, layout: Layout | null): Promise<HistoryEntry[]> {
   const { filter, from, to } = await viewQuery(view, window, scope, layout)
@@ -141,6 +185,7 @@ export async function records(model: string, search: string): Promise<RowsRespon
 
 /** A write's row, and the batch an undo names it by: none when the write changed nothing. */
 function writtenOf(reply: EngineRow): Saved {
+  heard(reply)
   return { row: toRow(reply), batch: reply.revision?.batch_id ?? null }
 }
 
@@ -150,12 +195,23 @@ export async function create(model: string, data: Record<string, unknown>): Prom
   return writtenOf(await request<EngineRow>('POST', `/rows/${model}`, {}, sent))
 }
 
-/** A query's row is written through its mapped column, so `row` is needed to find the target record. */
-export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row): Promise<Saved> {
+/** A lifecycle write expects the value the row showed; the engine answers 409 when it moved on meanwhile. */
+function expectedOf(source: EngineSource, sent: Record<string, unknown>, row?: Row): Record<string, string> | undefined {
+  const column = source.lifecycle?.column
+  const shown = column && Object.hasOwn(sent, column) ? row?.fields[column] : undefined
+  return column && typeof shown === 'string' && shown !== '' ? { [column]: shown } : undefined
+}
+
+/**
+ * A query's row is written through its mapped column, so `row` is needed to find the target record.
+ * `expect` goes beside the engine data, never through `toEngineData`; without it, it is read off `row`.
+ */
+export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row, expect?: Record<string, string>): Promise<Saved> {
   const source = await sourceOf(model)
   const sent = toEngineData(data, source, (await engineSchema()).sources)
   if (source.kind === 'query') return updateThrough(model, source, id, sent, row)
-  return writtenOf(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent))
+  const expected = expect ?? expectedOf(source, sent, row)
+  return writtenOf(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, expected ? { ...sent, expect: expected } : sent))
 }
 
 /** One row as its source computes it now; null once it left the source. */
@@ -172,6 +228,7 @@ async function updateThrough(model: string, source: EngineSource, id: number, se
   const target = writes.key === 'id' ? row.id : row.fields[writes.key]
   if (target === null || target === undefined) throw { code: 'read_only', message: `"${column}" of "${model}" has no ${writes.key}` } satisfies ApiError
   const reply = await request<EngineRow>('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
+  heard(reply)
   const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.
   const found = await rowOf(model, id).catch(() => null)
@@ -185,7 +242,8 @@ export async function undoBatch(batch: string): Promise<string> {
 
 /** Runs a dataset's declared action on one record, in one batch. */
 export async function runAction(name: string, id: number, input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
-  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })
+  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[]; notices?: string[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })
+  heard(reply)
   return { batch: reply.batch_id, created: reply.created }
 }
 
@@ -252,6 +310,15 @@ export function requestLink(email: string): Promise<unknown> {
 
 export async function consumeLink(token: string): Promise<Account> {
   return (await request<{ account: Account }>('POST', '/auth/consume', {}, { token })).account
+}
+
+/** What an action token shows its holder, and the answers it allows. The token travels in POST bodies only. */
+export function actView(token: string): Promise<ActView> {
+  return request<ActView>('POST', '/act/view', {}, { token })
+}
+
+export function actOn(token: string, to: string): Promise<unknown> {
+  return request('POST', '/act', {}, { token, to })
 }
 
 export function me(): Promise<Account> {

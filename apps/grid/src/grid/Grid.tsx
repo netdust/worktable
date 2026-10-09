@@ -61,6 +61,8 @@ export interface GridProps {
   links?: LinkActions
   /** Told when a related record cannot be opened. */
   onNotice?: (message: string) => void
+  /** The model's dataset when the drawer copies and renews its records' links; an administrator's. */
+  recordLink?: string
 }
 
 const NO_MODELS: Record<string, Model> = {}
@@ -75,7 +77,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links, onNotice }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links, onNotice, recordLink }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -332,7 +334,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
           </table>
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} />}
-        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} recordLink={open.id === DRAFT ? undefined : recordLink}
           onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>

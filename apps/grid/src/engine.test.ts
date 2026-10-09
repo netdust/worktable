@@ -500,6 +500,31 @@ describe('the matrix and titles through a relation', () => {
     expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')).toMatchObject({ types: ['grid'] })
   })
 
+  it("gives the join the lifecycle column /schema serves on the join dataset, and none without one", () => {
+    const served: EngineSchema = { sources: { ...theatre.sources, toewijzing: { ...theatre.sources.toewijzing, lifecycle: { column: 'state' } } } }
+    expect(toSchema(served).tables.find((t) => t.key === 'activiteit')?.join?.lifecycle).toBe('state')
+    expect(toSchema(theatre).tables.find((t) => t.key === 'activiteit')?.join).not.toHaveProperty('lifecycle')
+  })
+
+  it('gives the join its open column with the fill action\'s one input, and none when the action is not served', () => {
+    const toewijzing = { ...theatre.sources.toewijzing, matrix: { ...theatre.sources.toewijzing.matrix!, open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' } } }
+    const served: EngineSchema = { sources: { ...theatre.sources, toewijzing: { ...toewijzing, actions: [{ name: 'vul_slot', label: 'Open plek invullen', input: { persoon_id: { relation: 'persoon', label: 'Persoon' } } }] } } }
+    const unserved: EngineSchema = { sources: { ...theatre.sources, toewijzing } }
+
+    expect(toSchema(served).tables.find((t) => t.key === 'activiteit')?.join?.open).toEqual({ match_field: 'rol_id', count_field: 'aantal', action: 'vul_slot', input: 'persoon_id' })
+    expect(toSchema(unserved).tables.find((t) => t.key === 'activiteit')?.join).not.toHaveProperty('open')
+  })
+
+  it('offers the fill as no row action of the join, while the matrix still runs it', () => {
+    const other = { name: 'iets', label: 'Iets', input: {} }
+    const fill = { name: 'vul_slot', label: 'Open plek invullen', input: { persoon_id: { relation: 'persoon', label: 'Persoon' } } }
+    const matrix = { ...theatre.sources.toewijzing.matrix!, open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' } }
+    const schema = toSchema({ sources: { ...theatre.sources, toewijzing: { ...theatre.sources.toewijzing, matrix, actions: [fill, other] } } })
+
+    expect(schema.models.toewijzing.actions?.map((a) => a.name)).toEqual(['iets'])
+    expect(schema.tables.find((t) => t.key === 'activiteit')?.join?.open?.action).toBe('vul_slot')
+  })
+
   it('opens a matrix-skinned saved view as a matrix, with its table\'s join', () => {
     expect(toSavedViews(theatreViews, theatre.sources)[0]).toMatchObject({ key: '4', type: 'matrix', join: { model: 'toewijzing' }, away: { model: 'beschikbaarheid' } })
     expect(toSavedViews(theatreViews, theatre.sources)[1].type).toBe('grid')

@@ -9,10 +9,19 @@ type App = ReturnType<typeof createEngine>
 const engines = new WeakMap<App, { sqlite: Database; domain: Domain; outbox: string }>()
 let accounts = 0
 
+/** An invented secret for test engines; never a real one. */
+export const TEST_LINK_SECRET = new TextEncoder().encode('worktable-test-link-secret-not-a-real-one')
+
 // An engine whose links land in a fresh outbox and whose client address is fixed, so signIn can follow a link.
 export function testEngine(sqlite: Database, domain: Domain, options: Partial<EngineOptions> = {}): App {
   const outbox = options.outbox ?? mkdtempSync(join(tmpdir(), 'wt-outbox-'))
-  const app = createEngine(sqlite, domain, { port: 4310, outbox, clientIp: () => '127.0.0.1', ...options })
+  const app = createEngine(sqlite, domain, {
+    port: 4310,
+    outbox,
+    clientIp: () => '127.0.0.1',
+    linkSecret: TEST_LINK_SECRET,
+    ...options,
+  })
   engines.set(app, { sqlite, domain, outbox })
   return app
 }
