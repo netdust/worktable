@@ -1,11 +1,10 @@
 import type { Database } from 'bun:sqlite'
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import { ROLES } from './auth-tables'
 import type { Actor, Domain } from './declare'
+import type { Mailer } from './mailer'
 import { ApiError } from './params'
 import { checkLimits } from './rate-limit'
 import { bodyOf } from './writes'
@@ -18,7 +17,7 @@ const MAX_TOKEN = 128
 
 export interface AuthOptions {
   appUrl: string
-  outbox?: string
+  mailer?: Mailer
   cookieName: string
   clientIp: (c: Context) => string
 }
@@ -95,8 +94,8 @@ export function disableAccount(sqlite: Database, email: string): boolean {
   return sqlite.query(sql).run(now, now, email).changes > 0
 }
 
-function deliver(sqlite: Database, { outbox, appUrl }: AuthOptions, email: string): void {
-  if (!outbox) return
+async function deliver(sqlite: Database, { mailer, appUrl }: AuthOptions, email: string): Promise<void> {
+  if (!mailer) return
   try {
     const sql = `SELECT ${ACCOUNT} FROM account a WHERE a.email = ? COLLATE NOCASE AND a.disabled_at IS NULL`
     const account = sqlite.query(sql).get(email) as AccountRow | null
@@ -106,9 +105,7 @@ function deliver(sqlite: Database, { outbox, appUrl }: AuthOptions, email: strin
       .query('INSERT INTO magic_link (account_id, token_hash, expires_at) VALUES (?, ?, ?)')
       .run(account.id, sha256(token), iso(Date.now() + LINK_LIFE))
     const link = `${appUrl.replace(/\/+$/, '')}/#/auth/${token}`
-    const file = join(outbox, `${Date.now()}-${secret().slice(0, 8)}.txt`)
-    writeFileSync(file, `To: ${account.email}\n\n${link}\n`, { mode: 0o600 })
-    console.log(`sign-in link for ${account.email}: ${link}`)
+    await mailer.send({ to: account.email, subject: 'Inloggen', text: link })
   } catch (err) {
     console.error(err)
   }

@@ -6,6 +6,7 @@ import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, WriteContext, Writer } from './declare'
 import type { BatchKind } from './engine-tables'
+import type { Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
@@ -31,6 +32,8 @@ export interface Store {
   sqlite: Database
   db: BunSQLiteDatabase
   domain: Domain
+  mailer: Mailer
+  appUrl: string
 }
 
 export interface Writable {

@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { Hono } from 'hono'
 import { type Actor, type ColumnDecl, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
 import type { AuthEnv } from '../src/auth'
+import { silentMailer } from '../src/mailer'
 import { viewRoutes } from '../src/views'
 import { contents, type Sent, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
@@ -486,7 +487,7 @@ test('view writes credit the actor of the request', async () => {
     c.set('actor', actor)
     return next()
   })
-  viewRoutes(api, { sqlite, db: drizzle(sqlite), domain })
+  viewRoutes(api, { sqlite, db: drizzle(sqlite), domain, mailer: silentMailer, appUrl: '' })
   const as5 = send(api)
   const created = await as5('POST', '/api/views', body(NEW))
   expect(created.body).toMatchObject({ owner_id: 5, mine: true })

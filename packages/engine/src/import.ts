@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { forbid } from './access'
 import type { Actor, DatasetDecl, Domain, Writer } from './declare'
 import { CUSTOM_KEY } from './filter'
+import { silentMailer } from './mailer'
 import { ApiError } from './params'
 import { writerOf } from './registry'
 import { contextOf, create, encodeAll, recordBatch, type Store, valuesOf, WriteRefused } from './writes'
@@ -212,7 +213,7 @@ export function importExport(
   if (actor.role !== 'administrator') forbid('only an administrator imports')
   const plans = ordered(plansOf(domain, datasetsOf(data)))
   const run: Run = {
-    store: { sqlite, db: drizzle(sqlite), domain },
+    store: { sqlite, db: drizzle(sqlite), domain, mailer: silentMailer, appUrl: '' },
     actor,
     now: new Date().toISOString(),
     batch: crypto.randomUUID(),

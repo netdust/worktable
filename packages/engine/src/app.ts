@@ -8,6 +8,7 @@ import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
+import { type Mailer, outboxMailer, silentMailer } from './mailer'
 import { ApiError, parseRowsParams } from './params'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, linksOf, matrixOf, readRows } from './rows'
@@ -133,6 +134,7 @@ export interface EngineOptions {
   port: number
   appUrl?: string
   outbox?: string
+  mailer?: Mailer
   cookieName?: string
   clientIp?: (req: Request) => string
 }
@@ -160,11 +162,12 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   })
 
   const app = root.basePath('/api')
-  const store: Store = { sqlite, db, domain }
+  const mailer = options.mailer ?? (outbox ? outboxMailer(outbox) : undefined)
+  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl }
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)
-  authRoutes(app, sqlite, { appUrl, outbox, cookieName, clientIp: ipOf })
+  authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf })
 
   app.get('/schema', (c) => {
     const actor = c.get('actor')

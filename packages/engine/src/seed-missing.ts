@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import type { Actor, DatasetDecl, Domain, SavedViewSeed } from './declare'
+import { silentMailer } from './mailer'
 import { ApiError } from './params'
 import { savedView } from './saved-view'
 import { SYSTEM_OWNER } from './views'
@@ -180,7 +181,7 @@ function removeUndeclared(run: Run): void {
 // One transaction under one seed batch; a second run finds everything present and records nothing.
 export function seedMissing(sqlite: Database, domain: Domain): SeedReport {
   const run: Run = {
-    store: { sqlite, db: drizzle(sqlite), domain },
+    store: { sqlite, db: drizzle(sqlite), domain, mailer: silentMailer, appUrl: '' },
     now: new Date().toISOString(),
     batch: crypto.randomUUID(),
     written: 0,
