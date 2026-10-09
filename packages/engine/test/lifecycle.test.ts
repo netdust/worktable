@@ -86,7 +86,11 @@ const domainOf = (ticket: DatasetDecl = ticketOf()): Domain => ({
     member: { create: (values) => values },
     ticket: {
       create: (values) => (values.note === 'weiger' ? refuse('geweigerd') : values),
-      update: (values) => (values.note === 'weiger' ? refuse('geweigerd') : values),
+      update: (values) => {
+        if (values.note === 'weiger') refuse('geweigerd')
+        // A writer-made transition: b back to a is declared for no one.
+        return values.note === 'terug' ? { ...values, state: 'a' } : values
+      },
     },
   },
   actions: {
@@ -254,6 +258,11 @@ describe('transitions', () => {
   test('a stale expect is 409 transition_lost, tables unchanged', async () => {
     await denied(patch(editor, 2, { state: 'c', expect: { state: 'a' } }), 409, 'transition_lost')
     await denied(patch(editor, 2, { note: 'x', expect: { state: 'a' } }), 409, 'transition_lost')
+  })
+
+  test("a writer's returned state is judged too: an undeclared one is 422, tables unchanged", async () => {
+    await denied(patch(editor, 2, { note: 'terug' }), 422, 'transition_not_allowed')
+    expect(stateOf(2)).toBe('b')
   })
 
   test('a matching expect is 200, revised', async () => {

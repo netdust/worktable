@@ -87,8 +87,11 @@ describe('an open slot', () => {
       post(editor, { activiteit_id: 5, rol_id: 1, naam: 'Gast', state: 'open' }),
     ]
     for (const call of refusals) expect((await refusedWith(call, 422, 'refused')).body.message).toBe(message)
-    expect((await refusedWith(patch(editor, slot, { persoon_id: 3 }), 422, 'refused')).body.message).toBe(message)
-    expect((await refusedWith(patch(editor, slot, { naam: 'Gast' }), 422, 'refused')).body.message).toBe(message)
+    const keepsOpen = [
+      patch(editor, slot, { persoon_id: 3, state: 'open' }),
+      patch(editor, slot, { naam: 'Gast', state: 'open' }),
+    ]
+    for (const call of keepsOpen) expect((await refusedWith(call, 422, 'refused')).body.message).toBe(message)
     expect(stored(slot)).toMatchObject({ state: 'open', rol_id: 1, persoon_id: null, naam: null })
   })
 
@@ -96,6 +99,27 @@ describe('an open slot', () => {
     const slot = await created({ rol_id: 1 })
     expect((await patch(editor, slot, { persoon_id: 3, state: 'voorlopig' })).status).toBe(200)
     expect(stored(slot)).toMatchObject({ persoon_id: 3, state: 'voorlopig', rol_id: 1 })
+  })
+
+  test('a person or a name landing on it alone pencils it in as voorlopig, one cell at a time as the grid writes', async () => {
+    const forPerson = await created({ rol_id: 1 })
+    const forName = await created({ rol_id: 1 })
+    expect((await patch(editor, forPerson, { persoon_id: 3 })).status).toBe(200)
+    expect((await patch(editor, forName, { naam: 'Gast' })).status).toBe(200)
+    expect(stored(forPerson)).toMatchObject({ persoon_id: 3, naam: null, state: 'voorlopig', rol_id: 1 })
+    expect(stored(forName)).toMatchObject({ persoon_id: null, naam: 'Gast', state: 'voorlopig', rol_id: 1 })
+  })
+
+  test('it is cancelled while still empty', async () => {
+    const slot = await created({ rol_id: 1 })
+    expect((await patch(editor, slot, { state: 'geannuleerd', expect: { state: 'open' } })).status).toBe(200)
+    expect(stored(slot)).toMatchObject({ persoon_id: null, naam: null, rol_id: 1, state: 'geannuleerd' })
+  })
+
+  test('an empty cancelled row still needs its role', async () => {
+    const slot = await created({ rol_id: 1 })
+    const res = await refusedWith(patch(editor, slot, { state: 'geannuleerd', rol_id: null }), 422, 'refused')
+    expect(res.body.message).toBe('Een open plek heeft een rol nodig.')
   })
 
   test('two open slots for one role on one activity are both accepted: the duplicate rule is for persons', async () => {
@@ -148,6 +172,19 @@ describe('the transitions', () => {
       409,
       'transition_lost',
     )
+  })
+})
+
+describe('aantal', () => {
+  test('below 1 is refused in Dutch, on create and on update', async () => {
+    const slot = await created({ rol_id: 1, aantal: 2 })
+    for (const call of [
+      post(editor, { activiteit_id: 5, rol_id: 1, aantal: 0 }),
+      patch(editor, slot, { aantal: -1 }),
+    ]) {
+      expect((await refusedWith(call, 422, 'refused')).body.message).toBe('Een aantal is minstens 1.')
+    }
+    expect((await patch(editor, slot, { aantal: 1 })).status).toBe(200)
   })
 })
 

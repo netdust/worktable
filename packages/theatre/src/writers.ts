@@ -135,7 +135,7 @@ function checkAssignee(values: Values, ctx: WriteContext): void {
   if (hasPersoon && filled(naam)) refuse('Kies een persoon of een naam, niet allebei.')
   if (state === 'open' && (hasPersoon || filled(naam))) refuse('Een open plaats heeft nog geen persoon of naam.')
   if (!hasPersoon && !filled(naam)) {
-    if (state !== 'open') refuse('Kies een persoon of een naam.')
+    if (state !== 'open' && state !== 'geannuleerd') refuse('Kies een persoon of een naam.')
     if (!isSet(rol_id)) refuse('Een open plek heeft een rol nodig.')
     return
   }
@@ -156,12 +156,22 @@ function stateOnCreate(values: Values): Values {
   return !isSet(values.persoon_id) && !filled(values.naam) ? { ...values, state: 'open' } : values
 }
 
+// Someone landing on an open slot pencils it in; another one on an invited row was not invited, so it is pencilled in too.
+function stateOnUpdate(values: Values, ctx: WriteContext): Values {
+  if (Object.hasOwn(values, 'state')) return values
+  const { persoon_id, naam } = merged(values, ctx)
+  if (!isSet(persoon_id) && !filled(naam)) return values
+  const state = ctx.current?.state
+  const moved = changes(values, ctx, 'persoon_id') || changes(values, ctx, 'naam')
+  return state === 'open' || (state === 'uitgenodigd' && moved) ? { ...values, state: 'voorlopig' } : values
+}
+
 const toewijzingPlanned = forPlanners(
   {
     create: (values, ctx) => toewijzingAccept(stateOnCreate(values), ctx),
     update(values, ctx) {
       switchAssignee(values)
-      return toewijzingAccept(values, ctx)
+      return toewijzingAccept(stateOnUpdate(values, ctx), ctx)
     },
     delete() {},
   },
@@ -184,6 +194,7 @@ function toewijzingAccept(values: Values, ctx: WriteContext): Values {
   checkLive(ctx, 'activiteit', values.activiteit_id, 'Activiteit bestaat niet.')
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
   checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
+  if (typeof values.aantal === 'number' && values.aantal < 1) refuse('Een aantal is minstens 1.')
   checkAssignee(values, ctx)
   return values
 }

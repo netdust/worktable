@@ -106,6 +106,30 @@ describe('the invite', () => {
   })
 })
 
+describe('another person on an invited row', () => {
+  test('pencils the row back in as voorlopig and mails no one; the move to uitgenodigd then invites the new person', async () => {
+    const { id, token } = await invited(BRAM)
+    sqlite.run("UPDATE persoon SET email = 'noor@voorbeeld.test' WHERE id = ?", [NOOR])
+    mails = []
+
+    const swapped = await patch(id, { persoon_id: NOOR })
+    expect(swapped.status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
+    expect(mails).toEqual([])
+    const old = await anyone('POST', '/api/act', { token, to: 'bevestigd' })
+    expect({ status: old.status, code: old.body.code }).toEqual({ status: 401, code: 'bad_token' })
+
+    expect((await patch(id, { state: 'uitgenodigd', expect: { state: 'voorlopig' } })).status).toBe(200)
+    expect(mails.map((mail) => mail.to)).toEqual(['noor@voorbeeld.test'])
+  })
+
+  test('a name in place of the person pencils it in too', async () => {
+    const { id } = await invited(BRAM)
+    expect((await patch(id, { naam: 'Gastzanger' })).status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
+  })
+})
+
 describe('the confirm page routes', () => {
   test('/act/view carries only the projection: the activity, the role and the state', async () => {
     const { token } = await invited(BRAM)

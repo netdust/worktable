@@ -219,7 +219,7 @@ export const toewijzing = defineDataset({
   lifecycle: {
     column: 'state',
     transitions: [
-      { from: ['open'], to: 'voorlopig', roles: ['editor', 'administrator'] },
+      { from: ['open', 'uitgenodigd'], to: 'voorlopig', roles: ['editor', 'administrator'] },
       { from: ['open', 'voorlopig'], to: 'uitgenodigd', roles: ['editor', 'administrator'] },
       { from: ['open', 'voorlopig'], to: 'bevestigd', roles: ['editor', 'administrator'] },
       { from: ['uitgenodigd'], to: 'bevestigd', roles: ['editor', 'administrator', 'owner'], label: 'Bevestigen' },
