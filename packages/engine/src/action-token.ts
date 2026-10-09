@@ -115,8 +115,11 @@ function lifecycleDataset(
 
 const subjectOf = (row: TokenRow): Subject => ({ dataset: row.subject_dataset, id: row.subject_id })
 
+type Answer = { value: string; label: string }
+type Shown = { dataset: string; projection: Raw; labels: Record<string, string>; to: Answer[] }
+
 // Read as the stored subject's link account reads: a record whose owner moved is no longer this token's.
-function projectionOf(store: Store, token: unknown): { dataset: string; projection: Raw } {
+function projectionOf(store: Store, token: unknown): Shown {
   const row = liveToken(store.sqlite, token, Date.now())
   const dataset = lifecycleDataset(store, row.dataset)
   const scope = scopeOf(linkActor(0, subjectOf(row)), dataset)
@@ -133,7 +136,10 @@ function projectionOf(store: Store, token: unknown): { dataset: string; projecti
       return [key, titlesOf(store.db, store.domain, relation, [value]).get(value) ?? null]
     }),
   )
-  return { dataset: dataset.name, projection }
+  const labels = Object.fromEntries(keys.map((key) => [key, dataset.columns[key]?.label ?? key]))
+  const options = dataset.columns[dataset.lifecycle.column]?.options ?? {}
+  const to = (JSON.parse(row.to_states) as string[]).map((value) => ({ value, label: options[value] ?? value }))
+  return { dataset: dataset.name, projection, labels, to }
 }
 
 function consume(sqlite: Database, row: TokenRow, now: number): void {

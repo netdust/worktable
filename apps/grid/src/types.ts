@@ -318,6 +318,14 @@ export interface DateWindow {
   to: string
 }
 
+/** An action token's page: the record's projection with its column labels, and one answer per allowed state. */
+export interface ActView {
+  dataset: string
+  projection: Record<string, unknown>
+  labels: Record<string, string>
+  to: { value: string; label: string }[]
+}
+
 /** The signed-in account, as `/auth/me` serves it. */
 export interface Account {
   id: number

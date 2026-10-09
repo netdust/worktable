@@ -1,4 +1,4 @@
-import { defineDataset, type GroupFact } from '@worktable/engine'
+import { defineDataset, type GroupFact, type HookResult, type WriteContext } from '@worktable/engine'
 
 // A day band's facts on the planning sources.
 export const dagFacts: GroupFact[] = [
@@ -150,6 +150,26 @@ export const persoon = defineDataset({
   },
 })
 
+// A person without an email, or a name-only row, gets no invite: the planner reads why, and no token is minted.
+function invite(row: Record<string, unknown>, ctx: WriteContext): HookResult {
+  const person = typeof row.persoon_id === 'number' ? ctx.find('persoon', row.persoon_id) : null
+  const email = typeof person?.email === 'string' ? person.email.trim() : ''
+  if (email === '')
+    return { notice: `Geen uitnodiging: ${person?.weergavenaam ?? row.naam ?? ''} heeft geen e-mailadres.` }
+  const activity = typeof row.activiteit_id === 'number' ? ctx.find('activiteit', row.activiteit_id) : null
+  return {
+    token: { to: ['bevestigd', 'geweigerd'], days: 14 },
+    mail: (link) =>
+      link
+        ? {
+            to: email,
+            subject: 'Uitnodiging',
+            text: `Je bent uitgenodigd: ${activity?.omschrijving ?? 'een activiteit'}.\nBevestig of weiger via ${link}`,
+          }
+        : null,
+  }
+}
+
 export const toewijzing = defineDataset({
   name: 'toewijzing',
   label: 'Toewijzingen',
@@ -205,6 +225,7 @@ export const toewijzing = defineDataset({
       { from: ['geweigerd'], to: 'uitgenodigd', roles: ['editor', 'administrator'] },
       { from: '*', to: 'geannuleerd', roles: ['editor', 'administrator'] },
     ],
+    hooks: { uitgenodigd: invite },
     // The activity's title carries its day and place.
     token_projection: ['activiteit_id', 'rol_id', 'state'],
   },

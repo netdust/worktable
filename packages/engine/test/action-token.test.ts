@@ -184,13 +184,29 @@ describe('the account table', () => {
 })
 
 describe('the action token', () => {
+  test('the view answers the projection, its column labels and each allowed state with its option label', async () => {
+    const { token } = await invite()
+    expect(await view(token)).toEqual({
+      status: 200,
+      body: {
+        dataset: 'ticket',
+        projection: { member_id: 'Ann', state: 'b' },
+        labels: { member_id: 'Member', state: 'State' },
+        to: [
+          { value: 'c', label: 'C' },
+          { value: 'd', label: 'D' },
+        ],
+      },
+    })
+  })
+
   test('mint, view, act: the row moves and the batch actor is the link account', async () => {
     const { token } = await invite()
     expect(tokens()).toHaveLength(1)
     expect(tokens()[0]?.hash).not.toBe(token)
 
     const shown = await view(token)
-    expect(shown).toEqual({ status: 200, body: { dataset: 'ticket', projection: { member_id: 'Ann', state: 'b' } } })
+    expect(shown.body).toMatchObject({ dataset: 'ticket', projection: { member_id: 'Ann', state: 'b' } })
 
     const res = await act(token, 'c')
     expect(res.status).toBe(200)

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
+import { actOn, actView, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -662,6 +662,38 @@ describe('signing in', () => {
       ['/api/auth/request', 'POST', JSON.stringify({ email: 'an@example.test' })],
       ['/api/auth/consume', 'POST', JSON.stringify({ token: 'tok' })],
       ['/api/auth/signout', 'POST', '{}'],
+    ])
+  })
+})
+
+describe('notices and the action token', () => {
+  it("a write's notices reach the listener; a write without any calls nothing", async () => {
+    const stored = { id: 7, omschrijving: 'x', title: 'x', status: 'optie', custom: {}, lookups: {} }
+    const heard = vi.fn()
+    const stop = onNotices(heard)
+    fetcher.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/schema') return json(engine)
+      return json(init?.method === 'POST' ? { ...stored, notices: ['Geen uitnodiging: X heeft geen e-mailadres.'] } : { ...stored, notices: [] })
+    })
+
+    await create('activiteit', { title: 'x' })
+    await update('activiteit', 7, { status: 'optie' })
+    stop()
+    await create('activiteit', { title: 'x' })
+
+    expect(heard.mock.calls).toEqual([[['Geen uitnodiging: X heeft geen e-mailadres.']]])
+  })
+
+  it('the token goes in POST bodies only, never in a URL', async () => {
+    const shown = { dataset: 'slot', projection: { state: 'asked' }, labels: { state: 'Status' }, to: [{ value: 'yes', label: 'Ja' }] }
+    fetcher.mockImplementation(async (input) => json(String(input) === '/api/act/view' ? shown : { ok: true }))
+
+    expect(await actView('tok')).toEqual(shown)
+    await actOn('tok', 'yes')
+
+    expect(fetcher.mock.calls.map(([input, init]) => [String(input), init?.method, init?.body])).toEqual([
+      ['/api/act/view', 'POST', JSON.stringify({ token: 'tok' })],
+      ['/api/act', 'POST', JSON.stringify({ token: 'tok', to: 'yes' })],
     ])
   })
 })

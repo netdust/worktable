@@ -3254,6 +3254,33 @@
   color: var(--color-fg-muted);
 }
 
+.nv-act__facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.nv-act__facts div {
+  display: grid;
+  grid-template-columns: 7em 1fr;
+  gap: 8px;
+}
+
+.nv-act__facts dt {
+  color: var(--color-fg-muted);
+}
+
+.nv-act__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nv-act__answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .nv-auth__label {
   font-size: 12px;
   color: var(--color-fg-muted);

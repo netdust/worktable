@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -41,6 +41,21 @@ export function onUnauthenticated(callback: () => void): () => void {
   return () => {
     if (unauthenticated === callback) unauthenticated = () => {}
   }
+}
+
+let noticed: (notices: string[]) => void = () => {}
+
+/** Called with what a write's reply says beside the row, such as an invite that could not go out. */
+export function onNotices(callback: (notices: string[]) => void): () => void {
+  noticed = callback
+  return () => {
+    if (noticed === callback) noticed = () => {}
+  }
+}
+
+function heard(reply: Record<string, unknown>): void {
+  const notices = Array.isArray(reply.notices) ? reply.notices.filter((n): n is string => typeof n === 'string') : []
+  if (notices.length > 0) noticed(notices)
 }
 
 async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>): Promise<T> {
@@ -141,6 +156,7 @@ export async function records(model: string, search: string): Promise<RowsRespon
 
 /** A write's row, and the batch an undo names it by: none when the write changed nothing. */
 function writtenOf(reply: EngineRow): Saved {
+  heard(reply)
   return { row: toRow(reply), batch: reply.revision?.batch_id ?? null }
 }
 
@@ -183,6 +199,7 @@ async function updateThrough(model: string, source: EngineSource, id: number, se
   const target = writes.key === 'id' ? row.id : row.fields[writes.key]
   if (target === null || target === undefined) throw { code: 'read_only', message: `"${column}" of "${model}" has no ${writes.key}` } satisfies ApiError
   const reply = await request<EngineRow>('PATCH', `/rows/${writes.dataset}/${target}`, {}, { [writes.field]: value })
+  heard(reply)
   const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.
   const found = await rowOf(model, id).catch(() => null)
@@ -196,7 +213,8 @@ export async function undoBatch(batch: string): Promise<string> {
 
 /** Runs a dataset's declared action on one record, in one batch. */
 export async function runAction(name: string, id: number, input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
-  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })
+  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[]; notices?: string[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })
+  heard(reply)
   return { batch: reply.batch_id, created: reply.created }
 }
 
@@ -263,6 +281,15 @@ export function requestLink(email: string): Promise<unknown> {
 
 export async function consumeLink(token: string): Promise<Account> {
   return (await request<{ account: Account }>('POST', '/auth/consume', {}, { token })).account
+}
+
+/** What an action token shows its holder, and the answers it allows. The token travels in POST bodies only. */
+export function actView(token: string): Promise<ActView> {
+  return request<ActView>('POST', '/act/view', {}, { token })
+}
+
+export function actOn(token: string, to: string): Promise<unknown> {
+  return request('POST', '/act', {}, { token, to })
 }
 
 export function me(): Promise<Account> {

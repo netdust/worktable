@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, history as readHistory, me, publishView, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -18,6 +18,7 @@ import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
 import type { Account, ApiError, DateWindow, Model, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
+import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { Filters } from './Filters'
 import { NewViewDialog } from './NewViewDialog'
@@ -51,18 +52,24 @@ async function titlesOf(view: View, served: Schema | null): Promise<Map<number, 
   return new Map(found.rows.map((row) => [row.id, row.title]))
 }
 
-type Session = { status: 'checking' } | { status: 'out' } | { status: 'link'; token: string } | { status: 'in'; account: Account; lapsed: boolean }
+type Session = { status: 'checking' } | { status: 'out' } | { status: 'link'; token: string } | { status: 'act'; token: string } | { status: 'in'; account: Account; lapsed: boolean }
 
 const LINK = /^#\/auth\/([\w-]+)$/
+const ACT = /^#\/act\/([\w-]+)$/
 const SIGN_IN = '#/signin'
 
-function landing(): Session {
-  const token = LINK.exec(window.location.hash)?.[1]
-  if (token) return { status: 'link', token }
-  return window.location.hash === SIGN_IN ? { status: 'out' } : { status: 'checking' }
+function tokenLanding(): Session | null {
+  const link = LINK.exec(window.location.hash)?.[1]
+  if (link) return { status: 'link', token: link }
+  const act = ACT.exec(window.location.hash)?.[1]
+  return act ? { status: 'act', token: act } : null
 }
 
-/** Routes `#/auth/<token>` to the confirm screen and `#/signin`, or no session, to the form; else the grid. */
+function landing(): Session {
+  return tokenLanding() ?? (window.location.hash === SIGN_IN ? { status: 'out' } : { status: 'checking' })
+}
+
+/** Routes `#/auth/<token>` to the confirm screen, `#/act/<token>` to the answer page and `#/signin`, or no session, to the form; else the grid. */
 export function App() {
   const [session, setSession] = useState<Session>(landing)
   const signedIn = (account: Account) => setSession({ status: 'in', account, lapsed: false })
@@ -80,8 +87,8 @@ export function App() {
   // A link pasted into a tab where the app is already open changes only the hash, so nothing reloads.
   useEffect(() => {
     const follow = () => {
-      const token = LINK.exec(window.location.hash)?.[1]
-      if (token) setSession({ status: 'link', token })
+      const landed = tokenLanding()
+      if (landed) setSession(landed)
     }
     window.addEventListener('hashchange', follow)
     return () => window.removeEventListener('hashchange', follow)
@@ -99,6 +106,7 @@ export function App() {
   if (session.status === 'checking') return <div className="nv-app"><div className="nv-center"><Spinner /></div></div>
   if (session.status === 'out') return <div className="nv-auth-page"><SignIn /></div>
   if (session.status === 'link') return <div className="nv-auth-page"><Confirm token={session.token} onSignedIn={signedIn} /></div>
+  if (session.status === 'act') return <div className="nv-auth-page"><Act token={session.token} /></div>
 
   const signOutNow = () => {
     signOut().catch(() => undefined).finally(() => {
@@ -156,6 +164,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [viewNote, setViewNote] = useState<string | null>(null)
   const [shown, setShown] = useState<Shown | null>(null)
   const [notice, notify] = useNotice()
+  useEffect(() => onNotices((notices) => notify({ message: notices.join(' ') })), [])
   // A revert remounts the matrix, whose picked columns are its own state.
   const [resets, setResets] = useState(0)
   const [historyOpen, setHistoryOpen] = useState(false)
