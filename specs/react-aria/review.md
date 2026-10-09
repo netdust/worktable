@@ -19,7 +19,7 @@ None.
    - Repro: on 22-05-2026, press Backspace twice on the day, then Tab. The cell gets `2026-05-02`, a value that was never on screen.
    - This breaks the field contract ("an incomplete date … writes nothing") and Review Focus 4.
 2. **R5 is not fully met** (code reviewer). FilterBuilder's `Choices`/`Related` list (`apps/grid/src/ui/FilterBuilder.tsx:163`) is still hand-built. The plan scoped Task 10 to the range only. **Owner decision:** add a follow-up task, or narrow R5 in the spec.
-3. **R1's `docs/SPEC.md` line is not written** (code reviewer). `docs/SPEC.md` holds the owner's uncommitted edits, so this is left for the owner.
+3. ~~R1's `docs/SPEC.md` line is not written~~ Withdrawn: already on the branch at `docs/SPEC.md:37` (0e96e48).
 4. **Share is modal and Escape cannot close it** (code reviewer).
    - Where: `apps/grid/src/ui/Share.tsx:58`, which sets `isKeyboardDismissDisabled`.
    - The modality is plan-mandated by R5 and is an owner sign-off. While it stays modal, Escape should close it.
@@ -53,4 +53,4 @@ All Low; nothing Critical, High or Medium. The earlier M1 (ics CR) is fixed.
 - `apps/grid/src/grid/conditions.ts:34-43`: conditions carried in a link are autosaved on the receiver's next change to a shared view.
 - `apps/grid/src/ui/app.css:3190`: rows loaded before a session lapse stay readable under the 40% backdrop.
 
-Findings: 0 Blocking · 4 Should fix · 18 Note
+Findings: 0 Blocking · 3 Should fix · 18 Note
