@@ -49,7 +49,7 @@ Inside the engine each shape stays minimal:
   - `createEngine` throws when the domain declares `record_link` and none is given.
   - `serve.ts --link-secret-file <path>` reads it (at least 32 bytes, refused when group- or world-readable), only when serving. One-shot CLI commands (`--create-account`, `--import`, `--seed-missing`) do not need it.
   - `test/sign-in.ts` and `scripts/parity.ts` pass a fixed invented test secret.
-  - The e2e web-server command writes `e2e/.tmp/link-secret` before starting the engine, since Playwright starts servers before global setup.
+  - The e2e web-server command writes `e2e/.tmp/link-secret` under `umask 077` before starting the engine, since Playwright starts servers before global setup. `scripts/shakeout/edit-session.ts:111-125` gets the flag too (Task 10).
 - Real data is Stefan's: the plan writes `specs/step-2/real-data.md` with the commands and runs none.
 - E2E flows are written and registered by `/shakeout` after the review, per the house process. Tasks write unit and vitest tests.
 
@@ -146,8 +146,8 @@ Inside the engine each shape stays minimal:
   - the Toewijzing row (HEAD:166): states with `voorlopig`, the transitions, `rol_id`, `aantal`;
   - the Lifecycle paragraph (HEAD:60): hooks return data and mail after commit, `expect` instead of "a conditional update", and grids refusing (not hiding) a transition;
   - "Who may write what" (HEAD:174): an owner's confirm and decline on its own slot, through the action token;
-  - the record token paragraph (HEAD:43, 66) as two shapes;
-  - Persoon without `token` and `user_id` (HEAD:160 area);
+  - the record token paragraph (HEAD:62) as two shapes, and the Access paragraph (HEAD:66);
+  - Persoon without `token` and `user_id` (HEAD:156);
   - the Access table: kinds `link` and `service`, and the owner-account column cut as a later step;
   - the matrix's `open` replacing the generic fill rule (HEAD:46, 60 area);
   - Actions: updates and nested creates;
@@ -183,6 +183,7 @@ Inside the engine each shape stays minimal:
 - Produces `checkTransition(dataset, current: Values | null, next: Values, actor: Actor, mode: { kind: 'write'; expect?: string } | { kind: 'undo'; from: string; to: string }): void`. It throws 422 `transition_not_allowed` or 409 `transition_lost`. Called from `valuesOf` through `ctx.lifecycle`.
 - Produces `runWrite(store, …, opts?: { expect?: Record<string, unknown> })`. `/act` (Task 3) and action updates (Task 5) pass `expect` the same way.
 - The write reply gains `notices: string[]`.
+- `/schema` serves `lifecycle: { column }` per source (hooks are functions and are not served). Task 4's grid reads it.
 - Hooks fire on entering a hooked state (transition, or create through `POST /rows` or an action), never in undo, import or seed-missing.
 - Validation: `column` is an options column; every `from` and `to` is an option; `token_projection` ⊆ columns (Task 9b adds the owner-visible rule).
 
@@ -222,6 +223,9 @@ Inside the engine each shape stays minimal:
   - `POST /act/view { token }` → `{ dataset, projection }`, where `token_projection` columns are served with relation columns as their titles.
   - `POST /act { token, to }`: consume and `runWrite`, in one transaction, as `linkAccount(token's subject)`, on the token's record, with `expect` set to `from_state`.
     - A `to` not in `to_states` is 422 `transition_not_allowed`.
+    - `/act/view` reads as the same link account, so a reassigned token is 401 there too.
+    - A failure is counted outside the transaction (a 401 rolls it back).
+    - A record with an empty owner column mints no token.
     - Bad, used, expired tokens, or ones whose record's owner moved, get one identical `401 bad_token`.
     - A refused transition leaves the token unused.
 - `whose()`: `by: 'link'` with `actor` = the subject's title; `COALESCE(email, name)` otherwise. The grid's history shows "bevestigd door <naam>".
@@ -259,8 +263,9 @@ Inside the engine each shape stays minimal:
   - `forPlanners` `:62-80`: admit an owner's transition on its own row.
 - `apps/grid`:
   - a lifecycle cell edit sends `expect`, routed around `toEngineData` in `api.update` (`api.ts:154`, `engine.ts:361-369`);
-  - the matrix store's `changed()` sends `expect` too;
-  - the matrix's undo of a state edit goes through `undoBatch` and the tab history (`App.tsx:176`), not the op stack, which keeps note edits only;
+  - the grid reads `lifecycle.column` from `/schema` (`EngineSource`);
+  - the matrix store's `changed()` sends `expect` only when the cell field changes (a note edit's body stays exactly `{ notitie }`, `e2e/react-aria.spec.ts:640`);
+  - **the matrix keeps one op stack** (`matrix/store.ts:328-389`). An op that changed the lifecycle column keeps its write's batch (`Saved.batch`, api.ts:143-145), and its undo and redo go through `undoBatch(batch)` instead of re-sending a PATCH. Note edits, fill-down and paste keep today's path. **A cleared lifecycle cell (a delete) is not undoable** from the matrix: re-creating it would be a create into a hooked state and re-invite (threat 7), and undo of a delete is out of scope. The undo is skipped with the Dutch notice "Verwijderen kan niet ongedaan gemaakt worden";
   - `i18n.ts` gets `transition_not_allowed` and `transition_lost` in Dutch.
 
 Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, `parity.test.ts:61-77`, `apps/grid/src/grid/Grid.test.tsx`, `apps/grid/src/matrix/store.test.ts`.
@@ -275,7 +280,8 @@ Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, 
   - two PATCHes with the same `expect`: one 200, one 409;
   - the import of `packages/theatre/test/fixtures/invented-export.json` is unchanged (`rol_id` null, `aantal` 1, no mail);
   - grid: a state edit sends `expect`; a 409 refreshes the row and shows the Dutch message;
-  - matrix: `u` then `b` then Ctrl+Z restores through batch undo with no 422; a note edit still undoes through the op stack.
+  - matrix: `u` then `b` then Ctrl+Z restores through batch undo with no 422, and Ctrl+Shift+Z redoes it; a note edit still undoes by re-sending; interleaved state and note edits undo in order from one stack; Ctrl+Z after clearing a lifecycle cell shows the notice and writes nothing (`store.test.ts:234, 274, 316` rewritten for lifecycle cells);
+  - matrix: a state key on a cell whose state moved on the server is 409, the cell refreshes, and the Dutch message shows;
 - [ ] **Step 2:** Run `bun test packages/theatre && bun run --filter @worktable/grid test`; expect them to fail.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run the same commands, plus `bunx playwright test e2e/step-0d.spec.ts e2e/step-0e.spec.ts` (the matrix undo flows); expect them to pass. Run `bun run check`.
@@ -284,7 +290,7 @@ Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, 
 
 ### Task 5: Actions update and nest
 
-**Files:** Modify `declare.ts` (`ActionDecl.run` `:160-165`), `actions.ts` (`:56-96`). Test `packages/engine/test/actions.test.ts`.
+**Files:** Modify `declare.ts` (`ActionDecl.run` `:160-165`), `actions.ts` (`runAction`, `:57-78`). Test `packages/engine/test/actions.test.ts`.
 
 **Interfaces:**
 - Produces `type ActionCreate = { dataset: string; values: Values; then?: (id: number) => ActionCreate[] }`.
@@ -298,7 +304,8 @@ Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, 
   - an update outside an owner's scope is 404;
   - a nested create gets its parent's id;
   - one undo reverses an update, a create and a nested create;
-  - `copy_notes` is unchanged.
+  - `copy_notes` is unchanged;
+  - an update entering a hooked state fires the hook after commit.
 - [ ] **Step 2:** Run `bun test packages/engine/test/actions.test.ts`; expect it to fail.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run `bun test packages`; expect it to pass.
@@ -339,7 +346,7 @@ Test `packages/theatre/test/apply.test.ts`, `seed-missing.test.ts` (engine and t
 - `types.ts`: `MatrixJoin.open`.
 - `matrix/store.ts`:
   - `asCell` keeps `lookups` for the role label;
-  - a fourth `MatrixApi` call, `runAction`, whose batch goes onto the tab history.
+  - a fourth `MatrixApi` call, `runAction`; the fill pushes a batch op onto the same op stack (Task 4's design).
 - `matrix/columns.ts`: open rows kept.
 - `matrix/Matrix.tsx`: a fixed leading open column in header, body and footer; the person picker for an open cell, asking the role first when there is more than one.
 
@@ -370,7 +377,7 @@ Test `packages/engine/test/matrix.test.ts`, `packages/theatre/test/matrix.test.t
 - `packages/theatre/src/datasets.ts`: the Toewijzing hook on `uitgenodigd`:
   - `token: { to: ['bevestigd', 'geweigerd'], days: 14 }`;
   - `mail` to the person's email with the link;
-  - `notice` "Geen uitnodiging: <naam> heeft geen e-mailadres." when there is none.
+  - `notice` "Geen uitnodiging: <naam> heeft geen e-mailadres." when there is none, and then no `token` (a name-only row has no owner and mints nothing).
 - `apps/grid/src/ui/App.tsx`: `landing()` handles `#/act/<token>`.
 - Create `apps/grid/src/ui/Act.tsx`: strip the hash first, POST `/act/view`, show the projection, and Bevestigen and Weigeren as POSTs to `/act`.
 - `api.ts`, `i18n.ts`.
@@ -406,6 +413,8 @@ Test `packages/theatre/test/invite.test.ts`, `apps/grid/src/ui/Act.test.tsx`.
   - `serve.ts` refuses a missing, short or readable file when serving, and `--create-account` runs without one;
   - a link actor gets 403 on `/schema`, `/rows`, `/views`, `/history`, `/revisions`, writes, `/actions` and undo, with tables unchanged;
   - the request route answers byte-identically for known, unknown and deleted addresses, with nothing written before the response and one outbox mail per live match (two records sharing an email get one each, with their own links); 429 per its two limits;
+  - `Cache-Control: no-store`, `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex` on every `/record-links/*` response, the request route and every 401;
+  - revoke is the version bump (rotate without handing out the new link): the old link is 401;
   - validation refuses `record_link` without `owners`, or a non-text `email`;
   - `route-matrix` rows.
 - [ ] **Step 2:** Run `bun test packages/engine`; expect it to fail.
@@ -421,10 +430,11 @@ Test `packages/theatre/test/invite.test.ts`, `apps/grid/src/ui/Act.test.tsx`.
 - `DELETE /views/:id` clears `for_owners` (views.ts:273);
 - the `public_view` guard (views.ts:174-176) covers `for_owners`.
 
-Also `seed-missing.ts` (leave a for-owners system view alone) and `app.ts` (`GET /owner/views`, `GET /owner/views/:id/rows`, `PUT` and `DELETE /views/:id/for-owners`). Test `packages/engine/test/owner-views.test.ts`, `route-matrix.test.ts`.
+Also `packages/theatre/src/datasets.ts` (`owner_visible` on `toewijzing.activiteit_id`, `rol_id` and `state`, so theatre's `token_projection` still validates; `migrate` runs `validateDomain`, migrate.ts:92), `seed-missing.ts` (leave a for-owners system view alone) and `app.ts` (`GET /owner/views`, `GET /owner/views/:id/rows`, `PUT` and `DELETE /views/:id/for-owners`). Test `packages/engine/test/owner-views.test.ts`, `route-matrix.test.ts`.
 
 **Interfaces:**
 - Produces `ownerRows(db, domain, view, actor, params)`: scoped with `scopeOf(actor, source)`, never `'all'`; the listed keys only.
+- `GET /owner/views` answers each view's column keys, labels and types itself: a link actor cannot read `/schema`.
 - `owner.views` is open to role `owner` of any kind; an editor or administrator session gets 403.
 - Reads are limited to 60 per address per minute, counting every request, failing closed.
 
@@ -433,6 +443,7 @@ Also `seed-missing.ts` (leave a for-owners system view alone) and `app.ts` (`GET
   - The leak script as a test: for every view for owners, every key of every row is owner-visible, with no `id`, `title`, `lookups`, `custom` or `links`. Filter, sort and group on anything else, inside `$or` too, are 400 naming it.
   - An owner session and a link for the same subject read the same list; an editor session is 403.
   - The 61st read in a minute is 429.
+  - The three headers on every `/owner/views*` response, 401 included.
   - `--seed-missing` leaves a for-owners system view's `visible_fields` alone.
   - Validation refusals.
 - [ ] **Step 2:** Run `bun test packages/engine`; expect it to fail.
@@ -443,13 +454,14 @@ Also `seed-missing.ts` (leave a for-owners system view alone) and `app.ts` (`GET
 ### Task 10: Person pages: theatre, `#/link`, the admin's controls
 
 **Files:**
-- `packages/theatre/src/datasets.ts`: `persoon.record_link = { email: 'email' }`; `owner_visible` on the member-facing columns.
+- `packages/theatre/src/datasets.ts`: `persoon.record_link = { email: 'email' }`; `owner_visible` on the member-facing columns (beyond the three Task 9b marked).
 - `queries.ts`: `mijn_producties`.
   - `owners: { owner: 'persoon_id' }`, with `persoon_id: { relation: 'persoon' }` so `pointsAt` scopes it (access.ts:58-61).
   - A `date` column (the production's last day).
   - `toegang_dagen` read as `COALESCE(json_extract(o.parameters, '$.toegang_dagen'), 30)` from the organisation with `soort = 'eigen'`.
 - `seed.ts`: the "Mijn producties" view, not for owners; the admin publishes it.
 - `scripts/parity.ts`: passes a test secret.
+- `scripts/shakeout/edit-session.ts` (`:111-125`): passes `--link-secret-file`.
 - `apps/grid`:
   - `App.tsx`: `#/link/<token>`;
   - `ui/LinkPage.tsx`: the token kept in memory, sent as `Authorization: RecordLink`, hash stripped; lists the views for owners and renders their rows read-only;
@@ -486,7 +498,7 @@ Test `packages/theatre/test/person-pages.test.ts`, `apps/grid/src/ui/LinkPage.te
   - a write is logged as the service and shows its name in history; it undoes its own batch, and a human's undo of it is 403; after disable its next write is 401; the 601st request in a minute is 429;
   - an administrator service gets 403 on record links, share-token and for-owners, with tables unchanged;
   - write guard: 415 without JSON, 403 cross-site;
-  - OpenAPI: writable paths and enums match the declaration; an owner's document lists only its sources; a link actor is 403; plain `/schema` is unchanged (snapshot).
+  - OpenAPI: writable paths and enums match the declaration; an owner's document lists only its sources; a link actor is 403; plain `/schema` carries no OpenAPI keys.
 - [ ] **Step 2:** Run `bun test packages/engine`; expect it to fail.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run `bun test packages`; expect it to pass. Run `bun run check`.
@@ -496,7 +508,7 @@ Test `packages/theatre/test/person-pages.test.ts`, `apps/grid/src/ui/LinkPage.te
 
 **Files:** Test `packages/theatre/test/migrate.test.ts`; create `specs/step-2/real-data.md`.
 
-- [ ] **Step 1: Test** (write it first, red until the seeded step-1 file is built):
+- [ ] **Step 1: Test** (a characterisation test of code the earlier tasks built, so it may pass on its first run):
   - a seeded step-1 theatre file migrates: `rol_id` and `aantal` by ALTER; `record_link`, `action_token` and `saved_view.for_owners` added; the `account` rebuild as Task 3 pins it;
   - every row, revision and id survives;
   - imported Toewijzingen keep a null role;
