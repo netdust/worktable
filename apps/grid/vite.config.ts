@@ -15,5 +15,6 @@ export default defineConfig({
     // The one chunk past the default is exceljs, fetched only when Export is pressed.
     chunkSizeWarningLimit: 1000,
   },
-  test: { environment: 'jsdom', setupFiles: ['src/test-setup.ts'], testTimeout: 15000 },
+  // Half the cores: jsdom waits starve and time out on a loaded machine with a worker per core (R15).
+  test: { environment: 'jsdom', setupFiles: ['src/test-setup.ts'], testTimeout: 15000, maxWorkers: '50%' },
 })
