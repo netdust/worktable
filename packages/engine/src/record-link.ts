@@ -91,6 +91,16 @@ function linkedRecord(c: Context<AuthEnv>, store: Store): { dataset: string; id:
   return { dataset: dataset.name, id }
 }
 
+/** A new address for the link: the old link and the subject's outstanding action tokens stop working. */
+export function retireDelivered(sqlite: Database, dataset: DatasetDecl, row: Raw, actor: Actor): void {
+  rotate(sqlite, dataset.name, row.id as number, actor)
+  const subject = ownerSubject(dataset, row)
+  if (!subject) return
+  sqlite
+    .query('UPDATE action_token SET used_at = ? WHERE subject_dataset = ? AND subject_id = ? AND used_at IS NULL')
+    .run(new Date().toISOString(), subject.dataset, subject.id)
+}
+
 /** Re-copy and rotate. Revoking is rotating without handing the new link on. */
 export function recordLinkRoutes(app: Hono<AuthEnv>, store: Store, secret: Uint8Array): void {
   const answer = ({ dataset, id }: { dataset: string; id: number }) => ({

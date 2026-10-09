@@ -29,7 +29,11 @@ const withInbox = (d: DatasetDecl): DatasetDecl =>
         columns: { ...d.columns, inbox: { type: 'text', label: 'Inbox', nullable: true } },
       }
     : d
-const domain: Domain = { ...fixture, datasets: fixture.datasets.map(withInbox) }
+const domain: Domain = {
+  ...fixture,
+  datasets: fixture.datasets.map(withInbox),
+  writers: { ...fixture.writers, project: { ...fixture.writers?.project, update: (values) => values } },
+}
 
 const HOST = { host: '127.0.0.1:4310', 'content-type': 'application/json' }
 const APP_URL = 'http://127.0.0.1:5173'
@@ -366,6 +370,23 @@ describe('serve.ts --link-secret-file', () => {
   test('a one-shot command runs without one', async () => {
     expect((await cli('--fresh', '--create-account', 'a@example.test', '--role', 'editor')).code).toBe(0)
   }, 20_000)
+})
+
+describe('the address a link is mailed to (attack 16)', () => {
+  test('only a human administrator changes it, and the change rotates the link', async () => {
+    const editor = send(app, await signIn(app, 'editor'))
+    const old = linkOf(1)
+    const before = tables()
+    const refused = await editor('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'x@evil.test' }) })
+    expect({ status: refused.status, code: refused.body.code }).toEqual({ status: 403, code: 'forbidden' })
+    expect(tables()).toEqual(before)
+
+    const admin = send(app, await signIn(app, 'administrator'))
+    const moved = await admin('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'new@example.test' }) })
+    expect(moved.status).toBe(200)
+    expect((await asLink(old)).status).toBe(401)
+    expect((await asLink(linkOf(1))).status).toBe(200)
+  })
 })
 
 describe('POST /record-links/request (attack 14)', () => {

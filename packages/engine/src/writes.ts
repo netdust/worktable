@@ -18,6 +18,7 @@ import type {
 import type { BatchKind } from './engine-tables'
 import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
+import { retireDelivered } from './record-link'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
@@ -433,6 +434,21 @@ function forcedOwner(scope: Scope, cut: Values): Values {
   return { ...cut, [scope.column]: scope.id }
 }
 
+// The address a record link is mailed to delivers credentials, so only a human administrator changes it (attack 16).
+function checkLinkAddress(dataset: DatasetDecl, current: Values | null, values: Values, actor: Actor): void {
+  const column = dataset.record_link?.email
+  if (column === undefined || current === null || !Object.hasOwn(values, column)) return
+  if (values[column] === current[column]) return
+  if (actor.role === 'administrator' && (actor.kind ?? 'user') === 'user') return
+  forbid(`Only an administrator changes "${column}"`)
+}
+
+function retireOnNewAddress(store: Store, dataset: DatasetDecl, id: number, changes: Change[], actor: Actor): void {
+  const column = dataset.record_link?.email
+  if (column === undefined || !changes.some(([field]) => field === column)) return
+  retireDelivered(store.sqlite, dataset, liveRow(store.sqlite, dataset.name, id) as Stored, actor)
+}
+
 export function valuesOf(
   store: Store,
   target: Writable,
@@ -453,6 +469,7 @@ export function valuesOf(
   // Forced again on what is stored: a writer may return a fresh object without the owner column.
   const values = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
   checkTransition(dataset, ctx.current, values, ctx.actor, mode)
+  checkLinkAddress(dataset, ctx.current, values, ctx.actor)
   checkValues(dataset, values)
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
@@ -512,6 +529,7 @@ export function applyWrite(
   if (changes.length === 0) return { id, batch_id: null, changed: [] }
   update(sqlite, target.dataset.name, id, stored, now)
   revise(sqlite, target.dataset, id, changes, now, actor.id, key)
+  retireOnNewAddress(store, target.dataset, id, changes, actor)
   if (!batch) recordBatch(sqlite, key, actor.id, 'write', now)
   if (op === 'update') enterState(store, target.dataset, id, ctx, hooked, key)
   return { id, batch_id: key, changed: changes.map(([field]) => field) }
@@ -672,6 +690,7 @@ function restore(store: Store, planned: Planned, actor: Actor, now: string, key:
   if (changes.length === 0) return
   update(sqlite, dataset.name, id, stored, now)
   revise(sqlite, dataset, id, changes, now, actor.id, key)
+  retireOnNewAddress(store, dataset, id, changes, actor)
 }
 
 // One transaction: every check runs before any write, and any refusal rolls the whole undo back.

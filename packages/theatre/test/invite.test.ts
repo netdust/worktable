@@ -4,7 +4,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Mail, migrate, seedDomain } from '@worktable/engine'
-import { signIn, testEngine } from '@worktable/engine/test/sign-in'
+import { createService } from '@worktable/engine/src/auth'
+import { recordLinkFor } from '@worktable/engine/src/record-link'
+import { signIn, TEST_LINK_SECRET, testEngine } from '@worktable/engine/test/sign-in'
 import theatre from '../src'
 
 type Body = Record<string, unknown>
@@ -142,5 +144,59 @@ describe('the confirm page routes', () => {
 
     const again = await anyone('POST', '/api/act', { token: yes.token, to: 'geweigerd' })
     expect({ status: again.status, code: again.body.code }).toEqual({ status: 401, code: 'bad_token' })
+  })
+})
+
+describe('the address a link is mailed to (B1)', () => {
+  const bram = () => sqlite.query('SELECT * FROM persoon WHERE id = ?').get(BRAM)
+  const asLink = (token: string) =>
+    app.request('/api/auth/me', {
+      headers: { host: '127.0.0.1:4310', authorization: `RecordLink ${token}` },
+    })
+  const bearer =
+    (token: string): Request =>
+    async (method, path, body) => {
+      const res = await app.request(path, {
+        method,
+        headers: { host: '127.0.0.1:4310', 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      return { status: res.status, body: (await res.json()) as Body }
+    }
+
+  test('an editor may not change it: 403, the row unchanged', async () => {
+    const before = bram()
+    const res = await editor('PATCH', `/api/rows/persoon/${BRAM}`, { email: 'attacker@evil.test' })
+    expect({ status: res.status, code: res.body.code }).toEqual({ status: 403, code: 'forbidden' })
+    expect(bram()).toEqual(before)
+  })
+
+  test('an editor service account may not change it, nor an administrator service account: 403', async () => {
+    const before = bram()
+    for (const role of ['editor', 'administrator'] as const) {
+      const service = bearer(createService(sqlite, `bot-${role}`, role))
+      const res = await service('PATCH', `/api/rows/persoon/${BRAM}`, { email: 'attacker@evil.test' })
+      expect({ status: res.status, code: res.body.code }).toEqual({ status: 403, code: 'forbidden' })
+    }
+    expect(bram()).toEqual(before)
+  })
+
+  test('an editor may still echo it unchanged and edit the other columns', async () => {
+    const res = await editor('PATCH', `/api/rows/persoon/${BRAM}`, { email: 'bram@voorbeeld.test', telefoon: '0470' })
+    expect(res.status).toBe(200)
+  })
+
+  test("an administrator's change kills the old link and the outstanding invite", async () => {
+    const { token } = await invited(BRAM)
+    const oldLink = recordLinkFor(sqlite, TEST_LINK_SECRET, 'persoon', BRAM)
+    expect((await asLink(oldLink)).status).toBe(200)
+    const admin = requester(await signIn(app, 'administrator'))
+
+    const res = await admin('PATCH', `/api/rows/persoon/${BRAM}`, { email: 'bram.nieuw@voorbeeld.test' })
+    expect(res.status).toBe(200)
+    expect((await asLink(oldLink)).status).toBe(401)
+    const act = await anyone('POST', '/api/act', { token, to: 'bevestigd' })
+    expect({ status: act.status, code: act.body.code }).toEqual({ status: 401, code: 'bad_token' })
+    expect((await asLink(recordLinkFor(sqlite, TEST_LINK_SECRET, 'persoon', BRAM))).status).toBe(200)
   })
 })

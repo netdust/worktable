@@ -8,15 +8,12 @@ type Body = Record<string, unknown>
 type Res = { status: number; body: Body }
 
 let sqlite: Database
+let app: ReturnType<typeof testEngine>
 let request: (method: string, path: string, body?: unknown) => Promise<Res>
 
-beforeEach(async () => {
-  sqlite = new Database(':memory:')
-  migrate(sqlite, theatre)
-  seedDomain(sqlite, theatre)
-  const app = testEngine(sqlite, theatre)
-  const cookie = await signIn(app)
-  request = async (method, path, body) => {
+const requester =
+  (cookie: string) =>
+  async (method: string, path: string, body?: unknown): Promise<Res> => {
     const headers: Record<string, string> = { host: '127.0.0.1:4310', cookie }
     if (body !== undefined) headers['content-type'] = 'application/json'
     const res = await app.request(path, {
@@ -26,6 +23,13 @@ beforeEach(async () => {
     })
     return { status: res.status, body: (await res.json()) as Body }
   }
+
+beforeEach(async () => {
+  sqlite = new Database(':memory:')
+  migrate(sqlite, theatre)
+  seedDomain(sqlite, theatre)
+  app = testEngine(sqlite, theatre)
+  request = requester(await signIn(app))
 })
 
 const post = (dataset: string, body: unknown) => request('POST', `/api/rows/${dataset}`, body)
@@ -156,10 +160,12 @@ describe('the Toewijzing writer accepts', () => {
 })
 
 describe('Persoon email', () => {
+  // Only an administrator changes the address a link is mailed to.
   test('an empty string or null is accepted', async () => {
-    expect((await patch('persoon', 1, { email: '' })).status).toBe(200)
+    const admin = requester(await signIn(app, 'administrator'))
+    expect((await admin('PATCH', '/api/rows/persoon/1', { email: '' })).status).toBe(200)
     expect(stored('persoon', 1).email).toBe('')
-    expect((await patch('persoon', 1, { email: null })).status).toBe(200)
+    expect((await admin('PATCH', '/api/rows/persoon/1', { email: null })).status).toBe(200)
     expect(stored('persoon', 1).email).toBeNull()
   })
 })
