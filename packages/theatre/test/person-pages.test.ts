@@ -113,6 +113,23 @@ describe('mijn_producties', () => {
   })
 })
 
+describe('mijn_producties, edge rows', () => {
+  test('a role name holding a comma reads as written', () => {
+    const tine = person('Tine')
+    sqlite.run("UPDATE rol SET naam = 'Licht, geluid' WHERE id = 1")
+    assign(activity(production('Proef'), daysAgo(-1)), tine, 'bevestigd')
+    const row = sqlite.query('SELECT rollen FROM mijn_producties WHERE persoon_id = ?').get(tine) as { rollen: string }
+    expect(row.rollen).toBe('Licht, geluid')
+  })
+
+  test('a soft-deleted person has no productions', () => {
+    const tine = person('Tine')
+    assign(activity(production('Proef'), daysAgo(-1)), tine, 'bevestigd')
+    sqlite.run("UPDATE persoon SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = ?", [tine])
+    expect(productionsOf(tine)).toEqual([])
+  })
+})
+
 describe('Mijn producties for owners', () => {
   const request = async (method: string, path: string, headers: Record<string, string>, body?: unknown) => {
     const res = await app.request(path, {
