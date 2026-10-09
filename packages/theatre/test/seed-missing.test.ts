@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAccount, migrate, type SavedViewSeed } from '@worktable/engine'
+import { signIn, testEngine } from '@worktable/engine/test/sign-in'
 import theatre from '../src'
 
 // The slotted template's own title, so a database holding the step-1 unslotted one still gets it.
@@ -184,6 +185,17 @@ test('one planning: the old activity views go, Planning on dagplanning comes, an
   expect(JSON.parse(planning?.visible_fields as string)).toEqual(DAGPLANNING)
   expect(JSON.parse(planning?.filters as string)).toEqual({ plandag: { $period: 'week' } })
   expect(activiteitViews(db).filter((v) => v.owner_id === user)).toEqual(mine)
+
+  // Served in the declared seed order although Planning was added last: it leads Activiteiten on this database too.
+  const served = new Database(db)
+  const app = testEngine(served, theatre)
+  const cookie = await signIn(app)
+  const res = await app.request('/api/views', { headers: { host: '127.0.0.1:4310', cookie } })
+  const names = ((await res.json()) as { views: { name: string; source: string }[] }).views
+    .filter((v) => v.source === 'activiteit' || v.source === 'dagplanning')
+    .map((v) => v.name)
+  served.close()
+  expect(names.slice(0, 2)).toEqual(['Planning', 'Toewijzingen per activiteit'])
 }, 30_000)
 
 const slotsOf = (db: string) =>

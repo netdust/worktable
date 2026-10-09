@@ -240,7 +240,18 @@ function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
     const source = sourceOf(domain, raw.source as string)
     return source !== null && readable(actor, source)
   }
-  return (sqlite.query(sql).all(actor.id) as Raw[]).filter(onReadable).map((raw) => outOf(raw, actor))
+  return seedOrdered(domain, (sqlite.query(sql).all(actor.id) as Raw[]).filter(onReadable)).map((raw) =>
+    outOf(raw, actor),
+  )
+}
+
+// The system's seeded views come first, in the order the domain declares them; every other view follows by id.
+function seedOrdered(domain: Domain, rows: Raw[]): Raw[] {
+  const declared = new Map(domain.views.map((seed, at) => [`${seed.name}\u0000${seed.source}`, at]))
+  const at = (raw: Raw) => (raw.owner_id === SYSTEM_OWNER ? declared.get(`${raw.name}\u0000${raw.source}`) : undefined)
+  const seeded = rows.filter((raw) => at(raw) !== undefined)
+  seeded.sort((a, b) => (at(a) as number) - (at(b) as number))
+  return [...seeded, ...rows.filter((raw) => at(raw) === undefined)]
 }
 
 function changing(actor: Actor): Actor {
