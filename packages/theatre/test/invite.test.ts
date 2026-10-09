@@ -113,11 +113,11 @@ describe('the confirm page routes', () => {
     expect(res.body.projection).toEqual({
       activiteit_id: activity.omschrijving,
       rol_id: 'Speler',
-      state: 'uitgenodigd',
+      state: 'Uitgenodigd',
     })
     expect(res.body.to).toEqual([
-      { value: 'bevestigd', label: 'Bevestigd' },
-      { value: 'geweigerd', label: 'Geweigerd' },
+      { value: 'bevestigd', label: 'Bevestigen' },
+      { value: 'geweigerd', label: 'Weigeren' },
     ])
   })
 

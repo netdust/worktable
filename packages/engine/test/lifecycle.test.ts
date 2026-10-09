@@ -206,6 +206,18 @@ describe('lifecycle validation', () => {
     refused(ticketOf({ lifecycle: { ...lifecycle, transitions: [{ from: '*', to: 'b', roles }] } }), 'planner')
   })
 
+  test('a transition label is a non-empty string', () => {
+    refused(
+      ticketOf({ lifecycle: { ...lifecycle, transitions: [{ from: '*', to: 'b', roles: ['editor'], label: '' }] } }),
+      'b',
+    )
+    const labelled = {
+      ...lifecycle,
+      transitions: [{ from: '*' as const, to: 'b', roles: ['editor' as const], label: 'Go' }],
+    }
+    expect(() => validateDomain(domainOf(ticketOf({ lifecycle: labelled })))).not.toThrow()
+  })
+
   test('token_projection names declared columns', () => {
     refused(ticketOf({ lifecycle: { ...lifecycle, token_projection: ['state', 'secret'] } }), 'secret')
     expect(() =>

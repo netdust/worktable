@@ -158,6 +158,8 @@ const strings = {
   actDead: 'Deze link werkt niet meer',
   actAnswered: 'Al beantwoord',
   actDone: 'Bedankt. Je antwoord is doorgegeven: {answer}.',
+  actRetryLater: 'Te veel pogingen. Probeer het zo meteen opnieuw.',
+  actFailed: 'Dat lukte niet. Probeer het opnieuw.',
   sessionLapsed: 'Je bent afgemeld. Meld je opnieuw aan in een ander tabblad; wat je hier niet bewaarde, blijft staan.',
   signOut: 'Afmelden',
   changedSince: '{label} is intussen gewijzigd; ongedaan maken kan niet.',

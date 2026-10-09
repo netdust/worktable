@@ -37,7 +37,7 @@ const ticket: DatasetDecl = defineDataset({
     column: 'state',
     transitions: [
       { from: ['a'], to: 'b', roles: ['editor'] },
-      { from: ['b'], to: 'c', roles: ['owner', 'editor'] },
+      { from: ['b'], to: 'c', roles: ['owner', 'editor'], label: 'Close' },
       { from: ['b'], to: 'd', roles: ['owner'] },
       { from: '*', to: 'a', roles: ['editor'] },
     ],
@@ -184,16 +184,16 @@ describe('the account table', () => {
 })
 
 describe('the action token', () => {
-  test('the view answers the projection, its column labels and each allowed state with its option label', async () => {
+  test("the view answers the projection with the state's label, its column labels, and each allowed state with its transition's label, else its option label", async () => {
     const { token } = await invite()
     expect(await view(token)).toEqual({
       status: 200,
       body: {
         dataset: 'ticket',
-        projection: { member_id: 'Ann', state: 'b' },
+        projection: { member_id: 'Ann', state: 'B' },
         labels: { member_id: 'Member', state: 'State' },
         to: [
-          { value: 'c', label: 'C' },
+          { value: 'c', label: 'Close' },
           { value: 'd', label: 'D' },
         ],
       },
@@ -206,7 +206,7 @@ describe('the action token', () => {
     expect(tokens()[0]?.hash).not.toBe(token)
 
     const shown = await view(token)
-    expect(shown.body).toMatchObject({ dataset: 'ticket', projection: { member_id: 'Ann', state: 'b' } })
+    expect(shown.body).toMatchObject({ dataset: 'ticket', projection: { member_id: 'Ann', state: 'B' } })
 
     const res = await act(token, 'c')
     expect(res.status).toBe(200)

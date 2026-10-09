@@ -165,7 +165,8 @@ export interface HookResult {
 /** A write to `column` on an existing row is a transition; a create is not. Hooks run on entering their state. */
 export interface LifecycleDecl {
   column: string
-  transitions: { from: string[] | '*'; to: string; roles: Role[] }[]
+  /** `label` is the transition's verb, shown on the action token's page. */
+  transitions: { from: string[] | '*'; to: string; roles: Role[]; label?: string }[]
   hooks?: Record<string, (row: Record<string, unknown>, ctx: WriteContext) => HookResult>
   token_projection?: string[]
 }

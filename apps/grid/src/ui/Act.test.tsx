@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 
@@ -77,5 +77,22 @@ describe('the confirm page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Nee' }))
     expect(await screen.findByText('Al beantwoord')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('a passing failure keeps the answers: the refusal reads in Dutch, and a retry lands', async () => {
+    let tries = 0
+    answer({
+      '/api/act/view': () => json(shown),
+      '/api/act': () => (++tries === 1 ? json({ code: 'rate_limited', message: 'Too many requests; try again later' }, 429) : json({ ok: true })),
+    })
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ja' }))
+    expect(await screen.findByText('Te veel pogingen. Probeer het zo meteen opnieuw.')).toBeTruthy()
+    const retry = screen.getByRole('button', { name: 'Ja' })
+    await waitFor(() => expect(retry.hasAttribute('disabled')).toBe(false))
+    fireEvent.click(retry)
+    expect(await screen.findByText(/Je antwoord is doorgegeven: Ja/)).toBeTruthy()
+    expect(seen.filter((call) => call.url === '/api/act')).toHaveLength(2)
   })
 })

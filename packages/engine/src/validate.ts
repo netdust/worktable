@@ -247,9 +247,12 @@ function checkLifecycle(dataset: DatasetDecl): void {
   const checkOption = (what: string, key: string) => {
     if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${lifecycle.column}"`)
   }
-  for (const { from, to, roles } of lifecycle.transitions) {
+  for (const { from, to, roles, label } of lifecycle.transitions) {
     if (from !== '*') for (const key of from) checkOption('from', key)
     checkOption('to', to)
+    if (label !== undefined && (typeof label !== 'string' || label.trim() === '')) {
+      throw at(to, `label of the transition to "${to}" must be a non-empty string`)
+    }
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
   for (const key of Object.keys(lifecycle.hooks ?? {})) checkOption('hook', key)

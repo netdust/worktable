@@ -128,17 +128,25 @@ function projectionOf(store: Store, token: unknown): Shown {
     .get(row.record_id) as Raw | null
   if (!record || !inScope(scope, record)) throw badToken()
   const keys = dataset.lifecycle.token_projection ?? []
+  const options = dataset.columns[dataset.lifecycle.column]?.options ?? {}
   const projection = Object.fromEntries(
     keys.map((key) => {
       const relation = dataset.columns[key]?.relation
       const value = record[key] ?? null
+      if (key === dataset.lifecycle.column && typeof value === 'string') return [key, options[value] ?? value]
       if (!relation || typeof value !== 'number') return [key, value]
       return [key, titlesOf(store.db, store.domain, relation, [value]).get(value) ?? null]
     }),
   )
   const labels = Object.fromEntries(keys.map((key) => [key, dataset.columns[key]?.label ?? key]))
-  const options = dataset.columns[dataset.lifecycle.column]?.options ?? {}
-  const to = (JSON.parse(row.to_states) as string[]).map((value) => ({ value, label: options[value] ?? value }))
+  const verb = (value: string) =>
+    dataset.lifecycle.transitions.find(
+      (t) => t.to === value && (t.from === '*' || t.from.includes(row.from_state)) && t.label !== undefined,
+    )?.label
+  const to = (JSON.parse(row.to_states) as string[]).map((value) => ({
+    value,
+    label: verb(value) ?? options[value] ?? value,
+  }))
   return { dataset: dataset.name, projection, labels, to }
 }
 
