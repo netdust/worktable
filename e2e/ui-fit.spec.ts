@@ -106,7 +106,6 @@ test('select-and-picker-fit @e2e', async ({ page }) => {
     const field = await rectOf(picker)
     const under = await rectOf(list)
     const own = await rectOf(person)
-    console.log(density, 'picker', JSON.stringify({ cell: own, field, list: under }))
     expect.soft(Math.abs(field.left - own.left), `picker at the cell's left, ${density}`).toBeLessThanOrEqual(1)
     expect.soft(field.top, `picker under the cell, ${density}`).toBeGreaterThanOrEqual(own.bottom - 0.5)
     expect.soft(Math.abs(under.width - field.width), `list as wide as the search, ${density}`).toBeLessThanOrEqual(1)
@@ -152,7 +151,6 @@ test('space-switcher-fits @e2e', async ({ page }) => {
       .toEqual([])
     const trigger = await rectOf(button)
     const panel = await rectOf(pop)
-    console.log(density, 'space', JSON.stringify({ trigger, panel }))
     expect
       .soft(Math.abs(panel.width - trigger.width), `panel as wide as the switcher, ${density}`)
       .toBeLessThanOrEqual(1)
@@ -196,7 +194,6 @@ test('chips-fit @e2e', async ({ page }) => {
       )
       .map(({ what, r: p }) => ({ what, top: p.top, bottom: p.bottom, boxTop: top, boxBottom: bottom }))
   })
-  console.log('chips cut', JSON.stringify(cut))
   expect.soft(cut, 'no chip row cut by the box').toEqual([])
   expect.soft(await outside(box, '[role="row"]'), 'chips clear of the scrollbar').toEqual([])
   await page.keyboard.press('Escape')
@@ -229,7 +226,6 @@ test('date-editors-fit @e2e', async ({ page }) => {
   await edit(start)
   await expect(start.locator('.nv-datefield').getByRole('spinbutton').first()).toBeFocused()
   const moment = await widthsOf(start)
-  console.log('datetime widths', JSON.stringify(moment))
   expect
     .soft(moment.editor, 'datetime: its cell or its content, no more')
     .toBeLessThanOrEqual(Math.max(moment.cell, moment.need) + 0.5)
@@ -252,7 +248,6 @@ test('date-editors-fit @e2e', async ({ page }) => {
   await edit(datum)
   await expect(datum.locator('.nv-datefield').getByRole('spinbutton').first()).toBeFocused()
   const day = await widthsOf(datum)
-  console.log('date widths', JSON.stringify(day))
   expect.soft(day.need, 'a date fits its cell').toBeLessThanOrEqual(day.cell)
   expect.soft(Math.abs(day.editor - day.cell), 'date: as wide as its cell').toBeLessThanOrEqual(0.5)
   await page.keyboard.press('Escape')
@@ -260,7 +255,6 @@ test('date-editors-fit @e2e', async ({ page }) => {
   await edit(moment2)
   await expect(moment2.locator('.nv-datefield').getByRole('spinbutton').first()).toBeFocused()
   const wide = await widthsOf(moment2)
-  console.log('datetime widths (Optie of bevestigd)', JSON.stringify(wide))
   expect
     .soft(wide.editor, 'datetime: its cell or its content, no more')
     .toBeLessThanOrEqual(Math.max(wide.cell, wide.need) + 0.5)
@@ -288,7 +282,6 @@ test('filter-row-fits @e2e', async ({ page }) => {
 
   // Bug 5: "Waar", the pickers' words and the range's fields share one centre line.
   const line = await centres(first, '.nv-fb__join, .nv-pick__text, .nv-datefield__group')
-  console.log('filter centres', JSON.stringify(line))
   const middle = line[0].centre
   for (const part of line)
     expect.soft(Math.abs(part.centre - middle), `${part.what} on Waar's line`).toBeLessThanOrEqual(1)
@@ -358,23 +351,28 @@ test('drawer-picker-keeps-its-frame @e2e', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Naam' }).press('Enter')
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
   await page.getByRole('option', { name: 'Nachtwacht' }).click()
-  expect((await created).status()).toBe(201)
-  await page.locator('tbody tr.nv-tr[data-title="Kader e2e"]').getByRole('button', { name: 'Openen' }).click()
-  const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
-  const open = async () => {
-    await action.getByRole('button', { name: /^Sjabloon: / }).click()
-    await expect(page.locator('.nv-picker__pop').getByRole('option').first()).toBeVisible()
-  }
+  const answer = await created
+  expect(answer.status()).toBe(201)
+  const id = ((await answer.json()) as { id: number }).id
+  try {
+    await page.locator('tbody tr.nv-tr[data-title="Kader e2e"]').getByRole('button', { name: 'Openen' }).click()
+    const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
+    const open = async () => {
+      await action.getByRole('button', { name: /^Sjabloon: / }).click()
+      await expect(page.locator('.nv-picker__pop').getByRole('option').first()).toBeVisible()
+    }
 
-  // Outside a cell the picker keeps its panel: a border and a shadow around the search.
-  await open()
-  const frame = await action.locator('.nv-pop.nv-picker').evaluate((el) => {
-    const style = getComputedStyle(el)
-    return { border: style.borderTopWidth, shadow: style.boxShadow }
-  })
-  console.log('drawer picker frame', JSON.stringify(frame))
-  expect.soft(frame.border, 'a border around the search').not.toBe('0px')
-  expect.soft(frame.shadow, 'a shadow under the panel').not.toBe('none')
-  await page.keyboard.press('Escape')
-  await bothThemes(page, 'drawer-picker', open, () => page.keyboard.press('Escape'))
+    // Outside a cell the picker keeps its panel: a border and a shadow around the search.
+    await open()
+    const frame = await action.locator('.nv-pop.nv-picker').evaluate((el) => {
+      const style = getComputedStyle(el)
+      return { border: style.borderTopWidth, shadow: style.boxShadow }
+    })
+    expect.soft(frame.border, 'a border around the search').not.toBe('0px')
+    expect.soft(frame.shadow, 'a shadow under the panel').not.toBe('none')
+    await page.keyboard.press('Escape')
+    await bothThemes(page, 'drawer-picker', open, () => page.keyboard.press('Escape'))
+  } finally {
+    expect((await page.request.delete(`/api/rows/speelreeks/${id}`)).status()).toBe(200)
+  }
 })
