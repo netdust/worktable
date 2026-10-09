@@ -271,12 +271,13 @@ function sessionAccount(c: Context, sqlite: Database, cookieName: string): { acc
   return { account, session }
 }
 
-// A header, when present, wins and the cookie is ignored.
+// A header, when present, wins and the cookie is ignored, whatever its scheme (attack 18).
 async function credentialOf(c: Context, sqlite: Database, options: AuthOptions) {
   const link = recordLinkOf(c)
   if (link !== null) return { account: await linkedAccount(c, sqlite, options, link), session: '' }
   const token = bearerOf(c)
   if (token !== null) return { account: await bearerAccount(c, sqlite, options, token), session: '' }
+  if (c.req.header('authorization')) throw unauthenticated()
   return sessionAccount(c, sqlite, options.cookieName)
 }
 

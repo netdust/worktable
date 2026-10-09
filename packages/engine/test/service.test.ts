@@ -151,6 +151,18 @@ describe('Bearer authentication (attacks 17, 18)', () => {
     expect(mixed.body).toEqual(UNAUTHENTICATED)
   })
 
+  test('a valid cookie with any other Authorization scheme is 401: the header still wins', async () => {
+    const cookie = await signIn(app, 'administrator')
+    for (const authorization of ['Basic x', 'Bearer', 'Token abc', '']) {
+      const mixed = await call('GET', '/api/auth/me', { cookie, authorization })
+      expect({ authorization, status: mixed.status, body: mixed.body }).toEqual({
+        authorization,
+        status: authorization === '' ? 200 : 401,
+        body: authorization === '' ? expect.anything() : UNAUTHENTICATED,
+      })
+    }
+  })
+
   test('the 21st bad Bearer from one address in 15 minutes is 429, even with a good token', async () => {
     const token = createService(sqlite, 'bot', 'editor')
     for (let i = 0; i < 20; i++) expect((await asService(`wrong-${i}`)).status).toBe(401)
