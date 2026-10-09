@@ -49,9 +49,9 @@ const away = (reason = 'Examen'): Row[] => [{ id: 90, title: 'x', status: 'publi
 
 function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: Row[] } = {}) {
   let next = 500
-  const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>() }
-  writes.create.mockImplementation(async (_m, data) => ({ id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }))
-  writes.update.mockImplementation(async (_m, id, data) => ({ id, title: 'j', status: 'publish', fields: { name: '', note: '', person: [5], status: 'confirmed', ...data } }))
+  const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>() }
+  writes.create.mockImplementation(async (_m, data) => ({ row: { id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }, batch: null }))
+  writes.update.mockImplementation(async (_m, id, data) => ({ row: { id, title: 'j', status: 'publish', fields: { name: '', note: '', person: [5], status: 'confirmed', ...data } }, batch: null }))
   writes.remove.mockImplementation(async (_m, id) => ({ deleted: true, id }))
   const store = createMatrixStore({ view, rows, api: writes })
   vi.spyOn(store, 'set')
@@ -309,7 +309,7 @@ describe('the matrix side panel', () => {
 
   it('extends the selection on a real Shift+click (mousedown, focus, click), leaves the panel, and fills and clears the block', async () => {
     const { at, panel, writes } = setup()
-    writes.update.mockImplementation(async (_m, id, data) => ({ id, title: 'j', status: 'publish', fields: { name: 'Lieve', note: '', person: [], status: 'confirmed', ...data } }))
+    writes.update.mockImplementation(async (_m, id, data) => ({ row: { id, title: 'j', status: 'publish', fields: { name: 'Lieve', note: '', person: [], status: 'confirmed', ...data } }, batch: null }))
     const selected = () => [...document.querySelectorAll<HTMLElement>('[aria-selected="true"]')].map((el) => `${el.closest('tr')?.dataset.title}/${el.dataset.column}`)
     realClick(at(/Montage/, 'record:5'))
 
@@ -331,7 +331,7 @@ describe('the matrix side panel', () => {
 
   it('moves an open cell panel with the arrows, without taking focus, so a typed key and the panel agree', async () => {
     const { at, panel, checked, writes } = setup()
-    writes.update.mockImplementation(async (_m, id, data) => ({ id, title: 'j', status: 'publish', fields: { name: 'Lieve', note: '', person: [], status: 'maybe', ...data } }))
+    writes.update.mockImplementation(async (_m, id, data) => ({ row: { id, title: 'j', status: 'publish', fields: { name: 'Lieve', note: '', person: [], status: 'maybe', ...data } }, batch: null }))
     fireEvent.click(at(/Montage/, 'record:5'))
     expect(checked().textContent).toBe('Bevestigd')
 

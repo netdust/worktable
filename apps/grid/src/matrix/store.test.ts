@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { MatrixColumn, Row, View } from '../types'
+import type { MatrixColumn, Row, Saved, View } from '../types'
 import { cellFor } from './columns'
 import { createMatrixStore, type MatrixApi } from './store'
 
@@ -39,29 +39,50 @@ const lieve: MatrixColumn = { key: 'name:lieve', kind: 'name', title: 'Lieve' }
 const mira: MatrixColumn = { key: 'record:9', kind: 'record', id: 9, title: 'Mira' }
 
 let next = 100
-/** The server's answer: the record it stored, as the rows route returns it. */
-const stored = (id: number, fields: Record<string, unknown>): Row => ({ id, title: `join ${id}`, status: 'publish', fields: { name: '', note: '', person: [], ...fields } })
+let batches = 0
+/** The server's answer: the record it stored, as the rows route returns it, and the batch it wrote it in. */
+const stored = (id: number, fields: Record<string, unknown>): Saved => ({ row: { id, title: `join ${id}`, status: 'publish', fields: { name: '', note: '', person: [], ...fields } }, batch: `b${++batches}` })
 
-function setup() {
-  const api = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>() }
+/** A batch the fake server wrote: the record, and its fields before and after (null: absent). */
+type Written = { id: number; before: Record<string, unknown> | null; after: Record<string, unknown> | null }
+
+function setup(on: View = view) {
+  const api = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>() }
   // The server keeps every record whole: an update answers with all of its fields.
   const server = new Map<number, Record<string, unknown>>(rows.flatMap((row) => (row.rollups?.cells as ReturnType<typeof join>[]).map((cell) => [cell.id, cell.fields])))
-  const keep = (row: Row) => (server.set(row.id, row.fields), row)
+  const batches = new Map<string, Written>()
+  const keep = (saved: Saved, before: Record<string, unknown> | null = null) => {
+    server.set(saved.row.id, saved.row.fields)
+    if (saved.batch) batches.set(saved.batch, { id: saved.row.id, before, after: saved.row.fields })
+    return saved
+  }
   api.create.mockImplementation(async (_model, data) => keep(stored(++next, data)))
-  api.update.mockImplementation(async (_model, id, data) => keep(stored(id, { ...server.get(id), ...data })))
+  api.update.mockImplementation(async (_model, id, data) => keep(stored(id, { ...server.get(id), ...data }), server.get(id) ?? null))
   api.remove.mockImplementation(async (_model, id) => (server.delete(id), { deleted: true, id }))
+  // Undo puts the record back as the batch found it, and is itself a batch a redo undoes.
+  api.undoBatch.mockImplementation(async (batch) => {
+    const done = batches.get(batch)
+    if (!done) throw { code: 'unknown_batch', message: batch }
+    if (done.before === null) server.delete(done.id)
+    else server.set(done.id, done.before)
+    const undone = `u${batch}`
+    batches.set(undone, { id: done.id, before: done.after, after: done.before })
+    return undone
+  })
   // The rows route: each row with the records the server holds for it now.
   const window = () => rows.map((row) => activity(row.id, [...server].filter(([, f]) => (f.activity as number[])?.[0] === row.id).map(([id, f]) => join(id, f))))
   const onStale = vi.fn(async () => window())
+  const onNotice = vi.fn<(message: string) => void>()
   // Another tab puts Sien, confirmed, on activities 2 (record 400) and 4 (record 401).
   const otherTab = () => {
     server.set(400, join(400, { activity: [2], person: [5], status: 'confirmed' }).fields)
     server.set(401, join(401, { activity: [4], person: [5], status: 'confirmed' }).fields)
   }
-  const store = createMatrixStore({ view, rows, api, onStale })
-  const cell = (row: number, column: MatrixColumn) => cellFor(view, store.getState().rows.find((r) => r.id === row)!, column)
+  const store = createMatrixStore({ view: on, rows, api, onStale, onNotice })
+  const cell = (row: number, column: MatrixColumn) => cellFor(on, store.getState().rows.find((r) => r.id === row)!, column)
   const status = (row: number, column: MatrixColumn) => cell(row, column)?.fields.status
-  return { api, store, cell, status, onStale, otherTab, window, keep }
+  const held = (id: number) => server.get(id)?.status
+  return { api, store, cell, status, onStale, onNotice, otherTab, window, keep, server, held }
 }
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -125,7 +146,7 @@ describe('set', () => {
 
   it('paints the cell before the server answers, then takes the record it returns', async () => {
     const { api, store, cell } = setup()
-    const answer = deferred<Row>()
+    const answer = deferred<Saved>()
     api.create.mockReturnValueOnce(answer.promise)
 
     const done = store.set(2, sien, 'confirmed')
@@ -181,7 +202,7 @@ describe('set', () => {
 
   it('sends one write at a time per cell: a change after a create waits for its id', async () => {
     const { api, store, status } = setup()
-    const answer = deferred<Row>()
+    const answer = deferred<Saved>()
     api.create.mockReturnValueOnce(answer.promise)
     api.update.mockImplementationOnce(async (_m, id, data) => stored(id, { activity: [2], person: [5], ...data }))
 
@@ -202,8 +223,8 @@ describe('set', () => {
 describe('undo and redo', () => {
   it('keeps both records when two cells of one row land out of step, and changes and undoes the first one by its id', async () => {
     const { api, store, status } = setup()
-    const first = deferred<Row>()
-    const second = deferred<Row>()
+    const first = deferred<Saved>()
+    const second = deferred<Saved>()
     api.create.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
 
     const a = store.set(2, sien, 'confirmed')
@@ -229,7 +250,7 @@ describe('undo and redo', () => {
   })
 
   const createdIds = (api: { create: { mock: { results: { value: unknown }[] } } }) =>
-    Promise.all(api.create.mock.results.map(async (result) => (await result.value as Row).id))
+    Promise.all(api.create.mock.results.map(async (result) => (await result.value as Saved).row.id))
 
   it('undoes a change, a Delete, then the change again on the record the undo re-created; redo walks the same record', async () => {
     const { api, store, status } = setup()
@@ -280,7 +301,7 @@ describe('undo and redo', () => {
 
     expect(api.create).toHaveBeenCalledWith('assignment', { activity: [3], person: [5], status: 'confirmed', note: 'vroeg' })
     expect(api.update).not.toHaveBeenCalled()
-    const made = (await api.create.mock.results[0].value as Row).id
+    const made = (await api.create.mock.results[0].value as Saved).row.id
 
     await store.redo()
     expect(api.remove).toHaveBeenLastCalledWith('assignment', made)
@@ -479,7 +500,7 @@ describe('a refresh racing a write on another row', () => {
 
   it('keeps a create that landed while the refresh was out, and its undo removes that record', async () => {
     const t = setup()
-    const created = deferred<Row>()
+    const created = deferred<Saved>()
     t.api.create.mockReturnValueOnce(created.promise)
     const writing = t.store.set(4, mira, 'confirmed')
     const answer = await refusalWithHeldRefresh(t, t.window())
@@ -499,7 +520,7 @@ describe('a refresh racing a write on another row', () => {
 
   it('keeps an update that landed while the refresh was out', async () => {
     const t = setup()
-    const updated = deferred<Row>()
+    const updated = deferred<Saved>()
     t.api.update.mockReturnValueOnce(updated.promise)
     const writing = t.store.set(1, sien, 'maybe')
     const answer = await refusalWithHeldRefresh(t, t.window())
@@ -529,7 +550,7 @@ describe('a refresh racing a write on another row', () => {
 
   it('counts a write refused while the refresh was out: that row is not overwritten either', async () => {
     const t = setup()
-    const updated = deferred<Row>()
+    const updated = deferred<Saved>()
     t.api.update.mockReturnValueOnce(updated.promise)
     const writing = t.store.set(1, sien, 'maybe')
     const snapshot = t.window().map((row) => (row.id === 1
@@ -547,7 +568,7 @@ describe('a refresh racing a write on another row', () => {
 
   it('refreshes a row nothing touched while the refresh was out', async () => {
     const t = setup()
-    const updated = deferred<Row>()
+    const updated = deferred<Saved>()
     t.api.update.mockReturnValueOnce(updated.promise)
     const writing = t.store.set(1, sien, 'maybe')
     t.otherTab()
@@ -574,7 +595,7 @@ describe('refusals while a refresh is out', () => {
     t.otherTab()
     const held = deferred<Row[]>()
     t.onStale.mockReturnValueOnce(held.promise)
-    const created = deferred<Row>()
+    const created = deferred<Saved>()
     t.api.create.mockReturnValueOnce(created.promise).mockRejectedValueOnce(refused)
     const row4 = t.store.set(4, sien, 'confirmed')
     await t.store.set(2, sien, 'confirmed')
@@ -597,8 +618,8 @@ describe('refusals while a refresh is out', () => {
     const t = setup()
     const held = deferred<Row[]>()
     t.onStale.mockReturnValueOnce(held.promise)
-    const writes = [deferred<Row>(), deferred<Row>()]
-    const changed = deferred<Row>()
+    const writes = [deferred<Saved>(), deferred<Saved>()]
+    const changed = deferred<Saved>()
     t.api.create.mockReturnValueOnce(writes[0].promise).mockReturnValueOnce(writes[1].promise).mockRejectedValueOnce(refused)
     t.api.update.mockReturnValueOnce(changed.promise)
     const pending = [t.store.set(4, sien, 'confirmed'), t.store.set(5, sien, 'confirmed'), t.store.set(1, sien, 'maybe')]
@@ -633,7 +654,7 @@ describe('refusals while a refresh is out', () => {
 
     const held = deferred<Row[]>()
     t.onStale.mockReturnValueOnce(held.promise)
-    const created = deferred<Row>()
+    const created = deferred<Saved>()
     t.api.create.mockReturnValueOnce(created.promise).mockRejectedValueOnce(refused)
     const row4 = t.store.set(4, sien, 'confirmed')
     await t.store.set(2, sien, 'confirmed')
@@ -645,4 +666,176 @@ describe('refusals while a refresh is out', () => {
     expect(t.onStale).toHaveBeenCalledTimes(3)
   })
 
+})
+
+describe('on a join whose cell is its lifecycle column', () => {
+  // 'invited' and 'confirmed' stand for uitgenodigd and bevestigd; a write-mode PATCH back would be a refused transition.
+  const lifecycle: View = { ...view, join: { ...view.join!, lifecycle: 'status', keys: { u: 'invited', b: 'confirmed' }, marks: { ...view.join!.marks, invited: '?' } } }
+  const DELETE_SKIPPED = 'Verwijderen kan niet ongedaan gemaakt worden'
+  const REDO_SKIPPED = 'Opnieuw doen kan hier niet'
+  const madeId = async (api: ReturnType<typeof setup>['api'], nth: number) => ((await api.create.mock.results[nth].value) as Saved).row.id
+
+  it('u then b, then Ctrl+Z restores through the batch undo and sends no PATCH back; redo undoes the undo', async () => {
+    const { api, store, status, held } = setup(lifecycle)
+
+    await store.set(2, sien, 'invited')
+    await store.set(2, sien, 'confirmed')
+    const made = await madeId(api, 0)
+    const changed = ((await api.update.mock.results[0].value) as Saved).batch
+    expect(api.update).toHaveBeenCalledWith('assignment', made, { status: 'confirmed' }, { status: 'invited' })
+
+    await store.undo()
+    expect(api.undoBatch).toHaveBeenCalledWith(changed)
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect([status(2, sien), held(made)]).toEqual(['invited', 'invited'])
+
+    await store.redo()
+    expect(api.undoBatch).toHaveBeenLastCalledWith(`u${changed}`)
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect([status(2, sien), held(made)]).toEqual(['confirmed', 'confirmed'])
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false })
+  })
+
+  it('undoes interleaved state and note edits in order from one stack; a note goes back by its PATCH, without expect', async () => {
+    const { api, store, status, cell, held } = setup(lifecycle)
+
+    await store.set(1, sien, 'invited')
+    await store.setNote(1, sien, 'vroeg')
+    await store.set(1, sien, 'confirmed')
+    expect(api.update.mock.calls[1]).toEqual(['assignment', 11, { note: 'vroeg' }])
+    const [first, , third] = await Promise.all(api.update.mock.results.map(async (r) => ((await r.value) as Saved).batch))
+
+    await store.undo()
+    expect(api.undoBatch.mock.calls).toEqual([[third]])
+    await store.undo()
+    expect(api.update.mock.calls[3]).toEqual(['assignment', 11, { note: 'laat' }])
+    await store.undo()
+    expect(api.undoBatch.mock.calls).toEqual([[third], [first]])
+    expect([status(1, sien), cell(1, sien)?.fields.note, held(11)]).toEqual(['confirmed', 'laat', 'confirmed'])
+    expect(store.getState().canUndo).toBe(false)
+  })
+
+  it('Ctrl+Z after clearing a cell shows the notice and writes nothing; the step is gone', async () => {
+    const { api, store, onNotice, cell } = setup(lifecycle)
+
+    await store.set(1, sien, null)
+    await store.undo()
+
+    expect(onNotice).toHaveBeenCalledWith(DELETE_SKIPPED)
+    expect(api.create).not.toHaveBeenCalled()
+    expect(api.undoBatch).not.toHaveBeenCalled()
+    expect(cell(1, sien)).toBeUndefined()
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false })
+  })
+
+  it('paste empty over an invited cell, Ctrl+Z: the notice shows and nothing is written', async () => {
+    const { api, store, onNotice, cell } = setup(lifecycle)
+    await store.set(2, sien, 'invited')
+
+    await store.paste([['']], { rows: [2], columns: [sien] })
+    expect(api.remove).toHaveBeenCalledWith('assignment', await madeId(api, 0))
+    await store.undo()
+
+    expect(onNotice).toHaveBeenCalledWith(DELETE_SKIPPED)
+    expect(api.create).toHaveBeenCalledTimes(1)
+    expect(api.undoBatch).not.toHaveBeenCalled()
+    expect(cell(2, sien)).toBeUndefined()
+    expect(store.getState().canRedo).toBe(false)
+  })
+
+  it('a fill-down of b over three u cells undoes per op through the batch undo, last first', async () => {
+    const { api, store, status } = setup(lifecycle)
+    for (const row of [2, 4, 5]) await store.set(row, sien, 'invited')
+    await store.set(1, sien, 'confirmed')
+
+    await store.fillDown(sien, [1, 2, 4, 5])
+    const ids = await Promise.all([0, 1, 2].map((n) => madeId(api, n)))
+    expect(api.update.mock.calls).toEqual(ids.map((id) => ['assignment', id, { status: 'confirmed' }, { status: 'invited' }]))
+    const filled = await Promise.all(api.update.mock.results.map(async (r) => ((await r.value) as Saved).batch))
+
+    await store.undo()
+    expect(api.undoBatch.mock.calls).toEqual([...filled].reverse().map((batch) => [batch]))
+    expect([2, 4, 5].map((row) => status(row, sien))).toEqual(['invited', 'invited', 'invited'])
+    expect(api.update).toHaveBeenCalledTimes(3)
+  })
+
+  it('empty → u, Ctrl+Z, Ctrl+Shift+Z: the undo removes it by its batch, the redo is skipped with its notice', async () => {
+    const { api, store, onNotice, cell } = setup(lifecycle)
+
+    await store.set(2, sien, 'invited')
+    await store.undo()
+    expect(api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(cell(2, sien)).toBeUndefined()
+
+    await store.redo()
+    expect(onNotice).toHaveBeenCalledWith(REDO_SKIPPED)
+    expect(api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(api.create).toHaveBeenCalledTimes(1)
+    expect(cell(2, sien)).toBeUndefined()
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false })
+  })
+
+  it('clear a cell after an earlier u → b: Ctrl+Z shows the notice, a second Ctrl+Z undoes the u → b', async () => {
+    const { api, store, onNotice, status } = setup(lifecycle)
+    await store.set(2, sien, 'invited')
+    await store.set(2, sien, 'confirmed')
+    await store.set(1, lieve, null)
+
+    await store.undo()
+    expect(onNotice).toHaveBeenCalledWith(DELETE_SKIPPED)
+    expect(api.undoBatch).not.toHaveBeenCalled()
+
+    await store.undo()
+    expect(api.undoBatch).toHaveBeenCalledWith(((await api.update.mock.results[0].value) as Saved).batch)
+    expect(status(2, sien)).toBe('invited')
+  })
+
+  it('paste b and empty over two u cells: Ctrl+Z restores the b cell to u and skips the cleared one', async () => {
+    const { api, store, onNotice, status, cell } = setup(lifecycle)
+    await store.set(2, sien, 'invited')
+    await store.set(4, sien, 'invited')
+
+    await store.paste([['b'], ['']], { rows: [2, 4], columns: [sien] })
+    await store.undo()
+
+    expect(api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(onNotice).toHaveBeenCalledWith(DELETE_SKIPPED)
+    expect(status(2, sien)).toBe('invited')
+    expect(cell(4, sien)).toBeUndefined()
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: true })
+
+    await store.redo()
+    expect(api.undoBatch).toHaveBeenCalledTimes(2)
+    expect(status(2, sien)).toBe('confirmed')
+  })
+
+  it('a state key on a cell whose state moved on the server is 409: the cell refreshes and the Dutch message shows', async () => {
+    const { api, store, status, server, onStale } = setup(lifecycle)
+    server.set(11, { ...server.get(11), status: 'declined' })
+    api.update.mockRejectedValueOnce({ code: 'transition_lost', message: '"status" is no longer confirmed' })
+
+    expect(await store.set(1, sien, 'invited')).toBe(false)
+    await settled()
+
+    expect(api.update).toHaveBeenCalledWith('assignment', 11, { status: 'invited' }, { status: 'confirmed' })
+    expect(onStale).toHaveBeenCalledTimes(1)
+    expect(status(1, sien)).toBe('declined')
+    expect(store.cellError(1, sien)?.message).toBe('De status is intussen gewijzigd. De cel toont nu wat er staat.')
+  })
+})
+
+describe('a lifecycle undo the server refuses', () => {
+  it('says why in Dutch on the cell, refreshes, and keeps the step to try again', async () => {
+    const lifecycle: View = { ...view, join: { ...view.join!, lifecycle: 'status' } }
+    const { api, store, onStale } = setup(lifecycle)
+    await store.set(1, sien, 'maybe')
+    api.undoBatch.mockRejectedValueOnce({ code: 'changed_since', message: 'changed since', column: 'status', label: 'Status' })
+
+    await store.undo()
+    await settled()
+
+    expect(store.cellError(1, sien)?.message).toBe('Status is intussen gewijzigd; ongedaan maken kan niet.')
+    expect(onStale).toHaveBeenCalledTimes(1)
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: false })
+  })
 })

@@ -88,14 +88,15 @@ describe('an owner writes only its own Beschikbaarheid', () => {
     await denied(owner('DELETE', '/api/rows/beschikbaarheid/2'), 404, 'unknown_record')
   })
 
-  test('a Toewijzing, even its own, is forbidden', async () => {
+  test('a Toewijzing, even its own, takes only a declared state transition from it', async () => {
     const res = await denied(
       owner('POST', '/api/rows/toewijzing', { activiteit_id: 5, persoon_id: 1 }),
       403,
       'forbidden',
     )
     expect(res.body.message).toBe('Alleen de planning wijzigt toewijzingen.')
-    await denied(owner('PATCH', '/api/rows/toewijzing/1', { state: 'geweigerd' }), 403, 'forbidden')
+    await denied(owner('PATCH', '/api/rows/toewijzing/1', { notitie: 'Later' }), 403, 'forbidden')
+    await denied(owner('PATCH', '/api/rows/toewijzing/1', { state: 'geweigerd' }), 422, 'transition_not_allowed')
     await denied(owner('DELETE', '/api/rows/toewijzing/1'), 403, 'forbidden')
   })
 

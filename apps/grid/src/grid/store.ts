@@ -212,6 +212,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
         return write(r, change.field, server ? read(server, change.field) : read(row, change.field), server?.lookups?.[change.field])
       }
       set({ rows: patch(change.id, revert), errors: { ...state.errors, [key]: raised }, error: raised })
+      // The state moved on meanwhile: show what it holds now, never the value this tab still had.
+      if (raised.code === 'transition_lost') await reread(change.id)
       set({ save: settle() })
       return undefined
     }
@@ -220,6 +222,11 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
   function replace(row: Row): void {
     confirmed.set(row.id, row)
     set({ rows: patch(row.id, () => row) })
+  }
+
+  async function reread(id: number): Promise<void> {
+    const found = api.read ? await api.read(model, id).catch(() => null) : null
+    if (found) replace(found)
   }
 
   /** Repaints the undone step's row as the server now has it; a step on another view's rows, or an action, reloads. */

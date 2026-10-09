@@ -189,6 +189,8 @@ export interface MatrixJoin {
   marks: Record<string, string>
   /** The cell value the counts add up. */
   count: string
+  /** The join's lifecycle column: when it is the cell field, a cell's undo goes through the batch undo. */
+  lifecycle?: string
 }
 
 export interface MatrixAway {

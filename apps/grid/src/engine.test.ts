@@ -500,6 +500,12 @@ describe('the matrix and titles through a relation', () => {
     expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')).toMatchObject({ types: ['grid'] })
   })
 
+  it("gives the join the lifecycle column /schema serves on the join dataset, and none without one", () => {
+    const served: EngineSchema = { sources: { ...theatre.sources, toewijzing: { ...theatre.sources.toewijzing, lifecycle: { column: 'state' } } } }
+    expect(toSchema(served).tables.find((t) => t.key === 'activiteit')?.join?.lifecycle).toBe('state')
+    expect(toSchema(theatre).tables.find((t) => t.key === 'activiteit')?.join).not.toHaveProperty('lifecycle')
+  })
+
   it('opens a matrix-skinned saved view as a matrix, with its table\'s join', () => {
     expect(toSavedViews(theatreViews, theatre.sources)[0]).toMatchObject({ key: '4', type: 'matrix', join: { model: 'toewijzing' }, away: { model: 'beschikbaarheid' } })
     expect(toSavedViews(theatreViews, theatre.sources)[1].type).toBe('grid')

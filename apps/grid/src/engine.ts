@@ -61,6 +61,8 @@ export interface EngineSource {
   columns: Record<string, EngineColumn>
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
+  /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
+  lifecycle?: { column: string }
 }
 
 /** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
@@ -176,11 +178,12 @@ function linkField({ label, ...link }: Link & { label: string }): Field {
   return { type: 'links', label, required: false, fact: false, link }
 }
 
-function joinOf(model: string, m: EngineMatrix): MatrixJoin {
+function joinOf(model: string, m: EngineMatrix, lifecycle?: string): MatrixJoin {
   return {
     model, row_field: m.down, column_field: m.across, cell_field: m.cell, keys: m.keys, marks: m.marks, count: m.count,
     ...(m.label ? { name_field: m.label } : {}),
     ...(m.note ? { note_field: m.note } : {}),
+    ...(lifecycle ? { lifecycle } : {}),
   }
 }
 
@@ -200,9 +203,11 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: ['grid'],
   }
-  const matrix = source.matrix_join ? sources[source.matrix_join]?.matrix : undefined
+  const joined = source.matrix_join ? sources[source.matrix_join] : undefined
+  const matrix = joined?.matrix
   if (!source.matrix_join || !matrix) return table
-  return { ...table, types: ['grid', 'matrix'], join: joinOf(source.matrix_join, matrix), ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
+  const join = joinOf(source.matrix_join, matrix, joined?.lifecycle?.column)
+  return { ...table, types: ['grid', 'matrix'], join, ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
 }
 
 /** A table for every source: the rail lists those a saved view is on. */

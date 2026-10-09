@@ -126,13 +126,19 @@ export const persoonWriter = forPlanners(
   'personen',
 )
 
-// Name-only rows are exempt from the duplicate rule: an external name is not a record to count.
+const isSet = (value: unknown): boolean => value !== null && value !== undefined
+
+// An open slot is a role waiting for someone. Name-only rows are exempt from the duplicate rule: an external name is not a record to count.
 function checkAssignee(values: Values, ctx: WriteContext): void {
-  const { persoon_id, activiteit_id, naam } = merged(values, ctx)
-  const hasPersoon = persoon_id !== null && persoon_id !== undefined
+  const { persoon_id, activiteit_id, naam, rol_id, state } = merged(values, ctx)
+  const hasPersoon = isSet(persoon_id)
   if (hasPersoon && filled(naam)) refuse('Kies een persoon of een naam, niet allebei.')
-  if (!hasPersoon && !filled(naam)) refuse('Kies een persoon of een naam.')
-  if (!hasPersoon || activiteit_id === null || activiteit_id === undefined) return
+  if (!hasPersoon && !filled(naam)) {
+    if (state !== 'open') refuse('Kies een persoon of een naam.')
+    if (!isSet(rol_id)) refuse('Een open plek heeft een rol nodig.')
+    return
+  }
+  if (!hasPersoon || !isSet(activiteit_id)) return
   if (ctx.exists('toewijzing', { persoon_id, activiteit_id }, ctx.current?.id as number | undefined)) {
     refuse('Deze persoon is al toegewezen aan deze activiteit.')
   }
@@ -144,9 +150,14 @@ function switchAssignee(values: Values): void {
   if (sets('naam') && filled(values.naam) && !sets('persoon_id')) values.persoon_id = null
 }
 
-export const toewijzingWriter = forPlanners(
+// A row with no one on it is an open slot, whatever state was asked; else the given state, else the column default.
+function stateOnCreate(values: Values): Values {
+  return !isSet(values.persoon_id) && !filled(values.naam) ? { ...values, state: 'open' } : values
+}
+
+const toewijzingPlanned = forPlanners(
   {
-    create: (values, ctx) => toewijzingAccept(values, ctx),
+    create: (values, ctx) => toewijzingAccept(stateOnCreate(values), ctx),
     update(values, ctx) {
       switchAssignee(values)
       return toewijzingAccept(values, ctx)
@@ -156,11 +167,22 @@ export const toewijzingWriter = forPlanners(
   'toewijzingen',
 )
 
+// The person answers its own invitation: the engine has scoped the row to it and judged the transition.
+const answersInvite = (values: Values, ctx: WriteContext): boolean =>
+  ctx.actor.role === 'owner' && Object.hasOwn(values, 'state') && Object.keys(values).every((key) => key === 'state')
+
+export const toewijzingWriter: Required<Writer> = {
+  ...toewijzingPlanned,
+  update: (values, ctx) =>
+    answersInvite(values, ctx) ? toewijzingAccept(values, ctx) : toewijzingPlanned.update(values, ctx),
+}
+
 function toewijzingAccept(values: Values, ctx: WriteContext): Values {
   checkOption(toewijzing, 'state', values, 'Ongeldige status.')
   checkRequired(values, ctx, 'activiteit_id', 'Activiteit is verplicht.')
   checkLive(ctx, 'activiteit', values.activiteit_id, 'Activiteit bestaat niet.')
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+  checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
   checkAssignee(values, ctx)
   return values
 }

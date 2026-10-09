@@ -323,9 +323,9 @@ describe('the matrix arrangement', () => {
 describe('the matrix, edited from the keyboard', () => {
   function setup(extra: Partial<Parameters<typeof Matrix>[0]> = {}, rows: Row[] = week) {
     let next = 500
-    const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>() }
-    writes.create.mockImplementation(async (_m, data) => ({ id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }))
-    writes.update.mockImplementation(async (_m, id, data) => ({ id, title: 'j', status: 'publish', fields: { name: '', note: '', person: [5], ...data } }))
+    const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>() }
+    writes.create.mockImplementation(async (_m, data) => ({ row: { id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }, batch: null }))
+    writes.update.mockImplementation(async (_m, id, data) => ({ row: { id, title: 'j', status: 'publish', fields: { name: '', note: '', person: [5], ...data } }, batch: null }))
     writes.remove.mockImplementation(async (_m, id) => ({ deleted: true, id }))
     const store = createMatrixStore({ view, rows, api: writes })
     function Live({ store }: { store: MatrixStore }) {

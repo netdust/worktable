@@ -292,7 +292,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const live = useRef(store)
   live.current = store
   const reload = () => (view ? rows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
-  const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload)
+  const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
   const fields = useMemo(

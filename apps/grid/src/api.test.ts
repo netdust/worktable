@@ -3,8 +3,9 @@ import { awayRows, consumeLink, create, createView, deleteView, forgetSchema, hi
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
+import { matrixWrites } from './matrix/hooks'
 import { createMatrixStore } from './matrix/store'
-import type { MatrixAway, MatrixColumn, Row, Saved, View } from './types'
+import type { MatrixAway, MatrixColumn, Row, View } from './types'
 
 const toRowShape = (row: EngineRow): Row => toRow(row)
 
@@ -529,6 +530,7 @@ describe('the matrix on the engine', () => {
           state: { type: 'text', label: 'Status', options: { uitgenodigd: 'Uitgenodigd', bevestigd: 'Bevestigd' } },
         },
         matrix: { down: 'activiteit_id', across: 'persoon_id', label: 'naam', cell: 'state', keys: { b: 'bevestigd' }, marks: { bevestigd: '✓' }, count: 'bevestigd' },
+        lifecycle: { column: 'state' },
       },
     },
   }
@@ -540,8 +542,6 @@ describe('the matrix on the engine', () => {
   const cell: EngineRow = { id: 4, activiteit_id: 2, persoon_id: 1, naam: null, state: 'bevestigd', title: 'Lotte Verhaegen', custom: {}, lookups: {} }
   const activiteit = (cells: EngineRow[]): EngineRow => ({ id: 2, omschrijving: 'repetitie Gent', plandag: '2026-10-12', title: 'repetitie Gent', custom: {}, lookups: {}, cells })
   const sent = () => fetcher.mock.calls.filter(([input]) => String(input) !== '/api/schema').map(([input, init]) => [decodeURIComponent(String(input)), init?.method ?? 'GET', init?.body])
-  // The matrix takes the row a write returns, as its hooks hand it.
-  const unwrapped = <A extends unknown[]>(write: (...args: A) => Promise<Saved>) => (...args: A) => write(...args).then((saved) => saved.row)
   const on = (reply: (path: string, init?: RequestInit) => Response) =>
     fetcher.mockImplementation(async (input, init) => (String(input) === '/api/schema' ? json(matrixEngine) : reply(String(input), init)))
 
@@ -569,7 +569,7 @@ describe('the matrix on the engine', () => {
 
   it('a cell create sends one id per relation; clearing it sends DELETE', async () => {
     on((_path, init) => (init?.method === 'DELETE' ? json({ id: 9 }) : json({ ...cell, id: 9, activiteit_id: 2 })))
-    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create: unwrapped(create), update: unwrapped(update), remove } })
+    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: matrixWrites })
 
     expect(await store.set(2, lotte, 'bevestigd')).toBe(true)
     expect(await store.set(2, lotte, null)).toBe(true)
@@ -580,9 +580,38 @@ describe('the matrix on the engine', () => {
     ])
   })
 
+  it('a state change sends expect, the value the row showed, beside the engine data; any other write sends none', async () => {
+    on((_path, init) => json({ ...cell, ...JSON.parse(String(init?.body)), revision: { batch_id: 'b1', changed: ['state'] } }))
+    const shown = toRowShape({ ...cell, state: 'uitgenodigd' })
+
+    expect((await update('toewijzing', 4, { state: 'bevestigd' }, shown)).batch).toBe('b1')
+    await update('toewijzing', 4, { naam: 'Gast', persoon_id: [] }, shown)
+    await update('toewijzing', 4, { state: 'bevestigd' })
+
+    expect(sent()).toEqual([
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ state: 'bevestigd', expect: { state: 'uitgenodigd' } })],
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ naam: 'Gast', persoon_id: null })],
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ state: 'bevestigd' })],
+    ])
+  })
+
+  it('the matrix on a lifecycle join sends the confirmed state as expect, and undoes by the batch', async () => {
+    on((path, init) => (path.endsWith('/undo') ? json({ batch_id: 'u1' }) : json({ ...cell, ...JSON.parse(String(init?.body)), revision: { batch_id: 'b1', changed: ['state'] } })))
+    const view: View = { ...matrixView, join: { ...matrixView.join!, lifecycle: 'state', keys: { u: 'uitgenodigd', b: 'bevestigd' } } }
+    const store = createMatrixStore({ view, rows: [toRowShape(activiteit([cell]))], api: matrixWrites })
+
+    expect(await store.set(2, lotte, 'uitgenodigd')).toBe(true)
+    await store.undo()
+
+    expect(sent()).toEqual([
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ state: 'uitgenodigd', expect: { state: 'bevestigd' } })],
+      ['/api/batches/b1/undo', 'POST', '{}'],
+    ])
+  })
+
   it("a 422 reverts the cell with the writer's message", async () => {
     on(() => json({ code: 'refused', message: 'Deze persoon staat al op deze activiteit.' }, 422))
-    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: { create: unwrapped(create), update: unwrapped(update), remove } })
+    const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: matrixWrites })
 
     expect(await store.set(2, lotte, 'bevestigd')).toBe(false)
 

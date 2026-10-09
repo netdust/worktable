@@ -230,6 +230,10 @@ const strings = {
   historyLink: 'bevestigd door {name}',
   historyAlsoOne: 'Dit maakt ook 1 andere wijziging ongedaan',
   historyAlso: 'Dit maakt ook {n} andere wijzigingen ongedaan',
+  transitionNotAllowed: 'Deze statuswijziging is niet toegestaan.',
+  transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
+  undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
+  redoSkipped: 'Opnieuw doen kan hier niet',
 }
 
 export type StringKey = keyof typeof strings
@@ -251,9 +255,16 @@ export function setStrings(given: Record<string, unknown> | undefined): void {
   refusals = words(given, (key) => key.startsWith(ERROR) && key.length > ERROR.length)
 }
 
-/** A refusal in the site's words (`error.<code>`), else as the server said it. */
+// The engine says these in English: it knows no domain words.
+const ENGINE_CODES: Record<string, StringKey> = {
+  transition_not_allowed: 'transitionNotAllowed',
+  transition_lost: 'transitionLost',
+}
+
+/** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */
 export function errorText(code: string, message: string): string {
-  return refusals[ERROR + code] ?? message
+  const own = Object.hasOwn(ENGINE_CODES, code) ? t(ENGINE_CODES[code]) : message
+  return refusals[ERROR + code] ?? own
 }
 
 export function t(key: StringKey, vars: Record<string, string | number> = {}): string {

@@ -273,6 +273,26 @@ describe('editing', () => {
     expect(within(cell('Montage', 'title')).queryByRole('alert')).toBeNull()
   })
 
+  it('sends a state edit with the row it showed; a lost race reads the row again and says so in Dutch', async () => {
+    renderGrid()
+    api.update.mockRejectedValue({ code: 'transition_lost', message: '"status" is no longer confirmed' })
+    api.read.mockResolvedValue({ ...calais[1], fields: { ...calais[1].fields, status: 'option' } })
+    const data = new Map([['text/plain', 'Geannuleerd']])
+    const clipboardData = { setData: () => undefined, getData: (k: string) => data.get(k) ?? '' }
+
+    fireEvent.click(cell('Montage', 'status'))
+    await act(async () => {
+      fireEvent.paste(cell('Montage', 'status'), { clipboardData })
+    })
+
+    const shown = expect.objectContaining({ id: 102, fields: expect.objectContaining({ status: 'confirmed' }) })
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { status: 'cancelled' }, shown)
+    expect(api.read).toHaveBeenCalledWith('activity', 102)
+    const refreshed = cell('Montage', 'status')
+    expect(refreshed.textContent).toContain('Optie')
+    expect(within(refreshed).getByRole('alert').textContent).toContain('De status is intussen gewijzigd. De cel toont nu wat er staat.')
+  })
+
   it('cancels on Escape without a write', () => {
     renderGrid()
 

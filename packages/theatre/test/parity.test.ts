@@ -62,8 +62,11 @@ describe('the Toewijzing writer refuses', () => {
   test('both a persoon and a naam', () =>
     refused(() => post('toewijzing', { activiteit_id: 5, persoon_id: 3, naam: 'Gast' }), BOTH))
 
-  test('neither a persoon nor a naam', () =>
-    refused(() => post('toewijzing', { activiteit_id: 5 }), 'Kies een persoon of een naam.'))
+  test('neither a persoon nor a naam, nor a rol for an open slot', () =>
+    refused(() => post('toewijzing', { activiteit_id: 5 }), 'Een open plek heeft een rol nodig.'))
+
+  test('a filled row emptied of both persoon and naam', () =>
+    refused(() => patch('toewijzing', 1, { persoon_id: null }), 'Kies een persoon of een naam.'))
 
   test('a persoon and a naam in one update', () =>
     refused(() => patch('toewijzing', 3, { persoon_id: 3, naam: 'Gast' }), BOTH))
@@ -78,7 +81,7 @@ describe('the Toewijzing writer refuses', () => {
     refused(() => patch('toewijzing', 4, { activiteit_id: 4 }), DUPLICATE))
 
   test('a state outside its options', () =>
-    refused(() => patch('toewijzing', 1, { state: 'misschien' }), 'Ongeldige status.'))
+    refused(() => post('toewijzing', { activiteit_id: 5, naam: 'Gast', state: 'misschien' }), 'Ongeldige status.'))
 
   test('an unknown persoon', () =>
     refused(() => post('toewijzing', { activiteit_id: 5, persoon_id: 99 }), 'Persoon bestaat niet.'))

@@ -150,12 +150,23 @@ export async function create(model: string, data: Record<string, unknown>): Prom
   return writtenOf(await request<EngineRow>('POST', `/rows/${model}`, {}, sent))
 }
 
-/** A query's row is written through its mapped column, so `row` is needed to find the target record. */
-export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row): Promise<Saved> {
+/** A lifecycle write expects the value the row showed; the engine answers 409 when it moved on meanwhile. */
+function expectedOf(source: EngineSource, sent: Record<string, unknown>, row?: Row): Record<string, string> | undefined {
+  const column = source.lifecycle?.column
+  const shown = column && Object.hasOwn(sent, column) ? row?.fields[column] : undefined
+  return column && typeof shown === 'string' && shown !== '' ? { [column]: shown } : undefined
+}
+
+/**
+ * A query's row is written through its mapped column, so `row` is needed to find the target record.
+ * `expect` goes beside the engine data, never through `toEngineData`; without it, it is read off `row`.
+ */
+export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row, expect?: Record<string, string>): Promise<Saved> {
   const source = await sourceOf(model)
   const sent = toEngineData(data, source, (await engineSchema()).sources)
   if (source.kind === 'query') return updateThrough(model, source, id, sent, row)
-  return writtenOf(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, sent))
+  const expected = expect ?? expectedOf(source, sent, row)
+  return writtenOf(await request<EngineRow>('PATCH', `/rows/${model}/${id}`, {}, expected ? { ...sent, expect: expected } : sent))
 }
 
 /** One row as its source computes it now; null once it left the source. */
