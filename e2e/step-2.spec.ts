@@ -579,9 +579,16 @@ test.describe('step 2', () => {
       const card = tab.getByRole('region', { name: 'Je antwoord' })
       await expect(card).toContainText('Geannuleerd')
       await expect(card.getByRole('status')).toHaveText('Deze uitnodiging is niet meer open.')
-      await shot(tab, 'cancelled-invite-offers-answers')
+      await shot(tab, 'cancelled-invite-offers-no-answer')
       await expect(card.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0, { timeout: 2000 })
       await expect(card.getByRole('button', { name: 'Weigeren' })).toHaveCount(0, { timeout: 2000 })
+      const view = await outsider.request.post(`${API}/act/view`, { data: { token: tokenOf(link) } })
+      expect(view.status()).toBe(200)
+      expect(await view.json()).toMatchObject({ answerable: false, to: [] })
+      // A replayed answer is still refused, and the row keeps the planner's state.
+      const replay = await outsider.request.post(`${API}/act`, { data: { token: tokenOf(link), to: 'bevestigd' } })
+      expect(replay.status()).toBe(409)
+      expect((await stored(api, 'toewijzing', slot))?.state).toBe('geannuleerd')
     } finally {
       await outsider.close()
       await removeActivity(api, id)
@@ -704,6 +711,112 @@ test.describe('step 2', () => {
     } finally {
       await removeActivity(api, id)
       await api.delete(`/api/rows/persoon/${wout}`)
+    }
+  })
+
+  test('swap-pencils-back-in @e2e', async ({ page, browser }) => {
+    // Ruling R21: another person on an uitgenodigd, bevestigd or geweigerd row is pencilled in; geannuleerd stays.
+    const api = page.request
+    const id = await activity(api, 'e2e wissel', WEEK.stale, '11:00')
+    const joppe = await person(api, 'Joppe', 'Wisselaar', 'joppe.wisselaar@e2e-invite.test')
+    const mona = await person(api, 'Mona', 'Ruilvink', 'mona.ruilvink@e2e-invite.test')
+    const jules = await person(api, 'Jules', 'Afgezegd')
+    const hanne = await person(api, 'Hanne', 'Invaller', 'hanne.invaller@e2e-invite.test')
+    const ilse = await person(api, 'Ilse', 'Gevraagd', 'ilse.gevraagd@e2e-invite.test')
+    const confirmed = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: joppe, state: 'bevestigd' })
+    const cancelled = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: jules, state: 'geannuleerd' })
+    const admin = await signedIn(browser, 'admin')
+    const outsider = await stranger(browser)
+    type View = { id: number; name: string; for_owners: boolean }
+    let shown: number | undefined
+    let wasShown = true
+    try {
+      const views = (await (await admin.request.get(`${API}/views`)).json()) as { views: View[] }
+      const view = views.views.find((v) => v.name === 'Mijn producties') as View
+      wasShown = view.for_owners
+      shown = view.id
+      expect((await admin.request.put(`${API}/views/${shown}/for-owners`, { data: {} })).status()).toBe(200)
+      const pageOf = async (persoon: number) => {
+        const response = await admin.request.get(`${API}/record-links/persoon/${persoon}`)
+        expect(response.status()).toBe(200)
+        const tab = await outsider.newPage()
+        await tab.goto(((await response.json()) as { link: string }).link)
+        const table = tab.getByRole('table', { name: 'Mijn producties' })
+        await expect(table).toBeVisible()
+        return { tab, table }
+      }
+      // Before the swap, Joppe's confirmed row gives him Nachtwacht on his page.
+      const before = await pageOf(joppe)
+      await expect(before.table.locator('tbody tr td').first()).toHaveText('Nachtwacht')
+      await before.tab.close()
+
+      await page.goto('/')
+      await openView(page, 'Toewijzingen')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen')
+      const sent = mails()
+      const tokens = readDb('SELECT count(*) FROM action_token')
+      const swap = async (from: string, to: string, slot: number) => {
+        const persoon = await cellOf(page, from, 'Persoon')
+        await persoon.click()
+        await persoon.press('Enter')
+        await page.getByRole('combobox', { name: 'Persoon' }).fill(to.split(' ')[0] as string)
+        const reply = answered(page, 'PATCH', new RegExp(`^/api/rows/toewijzing/${slot}$`))
+        await page.getByRole('option', { name: to, exact: true }).click()
+        const answer = await reply
+        expect(answer.status()).toBe(200)
+        expect(answer.request().postDataJSON()).not.toHaveProperty('state')
+      }
+
+      await expect(await cellOf(page, 'Joppe Wisselaar', 'Status')).toHaveText(/^Bevestigd/)
+      await swap('Joppe Wisselaar', 'Mona Ruilvink', confirmed)
+      await expect(await cellOf(page, 'Mona Ruilvink', 'Status')).toHaveText(/^Voorlopig/)
+      await row(page, 'Mona Ruilvink').scrollIntoViewIfNeeded()
+      await shot(page, 'swap-pencils-back-in')
+      expect((await stored(api, 'toewijzing', confirmed))?.state).toBe('voorlopig')
+      // Re-entry: one undo puts Joppe back, confirmed; the swap is then made again.
+      const undo = answered(page, 'POST', /^\/api\/batches\/[^/]+\/undo$/)
+      await page.keyboard.press('Control+z')
+      expect((await undo).status()).toBe(200)
+      await expect(await cellOf(page, 'Joppe Wisselaar', 'Status')).toHaveText(/^Bevestigd/)
+      expect((await stored(api, 'toewijzing', confirmed))?.state).toBe('bevestigd')
+      await swap('Joppe Wisselaar', 'Mona Ruilvink', confirmed)
+      await expect(await cellOf(page, 'Mona Ruilvink', 'Status')).toHaveText(/^Voorlopig/)
+
+      // Geannuleerd edge: the planner's cancellation outlives a change of person.
+      await expect(await cellOf(page, 'Jules Afgezegd', 'Status')).toHaveText(/^Geannuleerd/)
+      await swap('Jules Afgezegd', 'Hanne Invaller', cancelled)
+      await expect(await cellOf(page, 'Hanne Invaller', 'Status')).toHaveText(/^Geannuleerd/)
+      expect((await stored(api, 'toewijzing', cancelled))?.state).toBe('geannuleerd')
+
+      // Nobody was invited by either swap: no mail, no token.
+      await page.waitForTimeout(500)
+      expect(mails().filter((name) => !sent.includes(name))).toEqual([])
+      expect(readDb('SELECT count(*) FROM action_token')).toBe(tokens)
+
+      // Joppe lost Nachtwacht with his row; Mona has nothing until she confirms.
+      for (const who of [joppe, mona]) {
+        const after = await pageOf(who)
+        await expect(after.table.locator('tbody tr')).toHaveCount(0)
+        await expect(after.tab.getByRole('region', { name: 'Je overzicht' })).not.toContainText('Nachtwacht')
+        await after.tab.close()
+      }
+
+      // The other personal states on the wire: an invited person swapped, a declined free-text name renamed.
+      const asked = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: ilse, state: 'uitgenodigd' })
+      const moved = await api.patch(`/api/rows/toewijzing/${asked}`, { data: { persoon_id: joppe } })
+      expect(moved.status()).toBe(200)
+      expect((await stored(api, 'toewijzing', asked))?.state).toBe('voorlopig')
+      const guest = await idOf(api, 'toewijzing', { activiteit_id: id, naam: 'Gast Weigeraar', state: 'geweigerd' })
+      const renamed = await api.patch(`/api/rows/toewijzing/${guest}`, { data: { naam: 'Gast Vervanger' } })
+      expect(renamed.status()).toBe(200)
+      expect((await stored(api, 'toewijzing', guest))?.state).toBe('voorlopig')
+    } finally {
+      // The person-page flows publish the view themselves: leave it as found.
+      if (shown !== undefined && !wasShown) await admin.request.delete(`${API}/views/${shown}/for-owners`)
+      await outsider.close()
+      await admin.close()
+      await removeActivity(api, id)
+      for (const one of [joppe, mona, jules, hanne, ilse]) await api.delete(`/api/rows/persoon/${one}`)
     }
   })
 
