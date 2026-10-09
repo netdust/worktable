@@ -11,3 +11,5 @@ post # the HTTP method; theatre declares legacy_post_id
 legacy # generic English; theatre declares legacy_post_id
 aantal # a count; the engine test fixture declares it, and theatre's Toewijzing will (step 2)
 mijn # Dutch 'my': the engine's tests name views 'Mijn …'; theatre declares mijn_producties
+ref # OpenAPI's $ref in the generated description
+items # JSON Schema's array items in the generated description

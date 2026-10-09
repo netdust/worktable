@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserContext } from '@playwright/test'
 
@@ -29,29 +29,33 @@ export const state = (name: string) => `e2e/.tmp/state/${name}.json`
 
 const mails = (outbox: string) => (existsSync(outbox) ? readdirSync(outbox).sort() : [])
 
-// The CLI writes to the database the running engine has open; SQLite allows it.
-export function createAccount(at: Instance, email: string, role: string, subject?: string): void {
-  const args = [
-    'packages/engine/src/serve.ts',
-    '--domain',
-    at.domain,
-    '--db',
-    at.db,
-    '--create-account',
-    email,
-    '--role',
-    role,
-  ]
-  const run = spawnSync('bun', subject ? [...args, '--subject', subject] : args, {
+// The CLI writes to the database the running engine has open; SQLite allows it. Answers its stdout.
+function cli(at: Instance, args: string[], what: string): string {
+  const run = spawnSync('bun', ['packages/engine/src/serve.ts', '--domain', at.domain, '--db', at.db, ...args], {
     encoding: 'utf8',
     timeout: 20_000,
     killSignal: 'SIGKILL',
   })
   // A hung CLI must fail the setup, not hang the gate.
   if (run.error || run.signal) {
-    throw new Error(`--create-account ${email} did not finish: ${run.error?.message ?? `killed by ${run.signal}`}`)
+    throw new Error(`${what} did not finish: ${run.error?.message ?? `killed by ${run.signal}`}`)
   }
-  if (run.status !== 0) throw new Error(`--create-account ${email} exited ${run.status}: ${run.stderr}`)
+  if (run.status !== 0) throw new Error(`${what} exited ${run.status}: ${run.stderr}`)
+  return run.stdout
+}
+
+export function createAccount(at: Instance, email: string, role: string, subject?: string): void {
+  const args = ['--create-account', email, '--role', role]
+  cli(at, subject ? [...args, '--subject', subject] : args, `--create-account ${email}`)
+}
+
+export const SERVICE = { name: 'e2e-agent', role: 'editor', token: 'e2e/.tmp/service-token' }
+
+/** Creates the service account and keeps its token, shown once, in a file only its owner reads. */
+export function createService(at: Instance): void {
+  const token = cli(at, ['--create-service', SERVICE.name, '--role', SERVICE.role], '--create-service').trim()
+  writeFileSync(SERVICE.token, `${token}\n`, { mode: 0o600 })
+  chmodSync(SERVICE.token, 0o600)
 }
 
 async function linkFor(outbox: string, email: string, before: string[]): Promise<string> {

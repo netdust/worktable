@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite'
+import { timingSafeEqual } from 'node:crypto'
 import type { Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
@@ -7,7 +8,7 @@ import type { Actor, Domain } from './declare'
 import type { Mailer } from './mailer'
 import { ApiError, emailOf } from './params'
 import { noStoreHeaders } from './public-headers'
-import { checkLimits, failureLimiter } from './rate-limit'
+import { checkLimits, failureLimiter, serviceLimit } from './rate-limit'
 import { badLink, confineLinkActor, verifyRecordLink } from './record-link'
 import { bodyOf } from './writes'
 
@@ -53,7 +54,8 @@ const actorOf = (row: AccountRow): Actor => ({
 
 function accountOut(row: AccountRow) {
   const { role, subject } = actorOf(row)
-  return { id: row.id, email: row.email, role, subject }
+  const service = row.kind === 'service' ? { kind: row.kind, name: row.name } : {}
+  return { id: row.id, email: row.email, role, subject, ...service }
 }
 
 function checkSubject(sqlite: Database, domain: Domain, role: Actor['role'], subject: Actor['subject']): void {
@@ -92,6 +94,49 @@ export function disableAccount(sqlite: Database, email: string): boolean {
   const sql = 'UPDATE account SET disabled_at = ?, updated_at = ? WHERE email = ? COLLATE NOCASE'
   const now = iso(Date.now())
   return sqlite.query(sql).run(now, now, email).changes > 0
+}
+
+const SERVICE_ROLES: Actor['role'][] = ['editor', 'administrator']
+const MAX_NAME = 60
+
+function serviceNameOf(name: string): string {
+  if (name.length < 1 || name.length > MAX_NAME) throw new Error(`a service name is 1 to ${MAX_NAME} characters`)
+  if (/[\p{Cc}\p{Cf}]/u.test(name)) throw new Error('a service name holds no control or format characters')
+  return name
+}
+
+/** A service account signs in by Bearer token only; answers the token, which nothing stores. */
+export function createService(sqlite: Database, name: string, role: Actor['role']): string {
+  const label = serviceNameOf(name)
+  if (!SERVICE_ROLES.includes(role)) throw new Error(`a service account is an editor or an administrator, not ${role}`)
+  const token = secret()
+  sqlite
+    .transaction(() => {
+      if (sqlite.query("SELECT 1 FROM account WHERE kind = 'service' AND name = ?").get(label)) {
+        throw new Error(`a service account named ${label} exists`)
+      }
+      sqlite
+        .query("INSERT INTO account (kind, name, role, token_hash) VALUES ('service', ?, ?, ?)")
+        .run(label, role, sha256(token))
+    })
+    .immediate()
+  return token
+}
+
+/** Replaces the stored hash, so the old token is refused on its next request. */
+export function rotateService(sqlite: Database, name: string): string {
+  const token = secret()
+  const sql = "UPDATE account SET token_hash = ?, updated_at = ? WHERE kind = 'service' AND name = ?"
+  if (sqlite.query(sql).run(sha256(token), iso(Date.now()), name).changes === 0) {
+    throw new Error(`no service account ${name}`)
+  }
+  return token
+}
+
+export function disableService(sqlite: Database, name: string): void {
+  const now = iso(Date.now())
+  const sql = "UPDATE account SET disabled_at = ?, updated_at = ? WHERE kind = 'service' AND name = ?"
+  if (sqlite.query(sql).run(now, now, name).changes === 0) throw new Error(`no service account ${name}`)
 }
 
 async function deliver(sqlite: Database, { mailer, appUrl }: AuthOptions, email: string): Promise<void> {
@@ -187,24 +232,58 @@ async function linkedAccount(c: Context, sqlite: Database, options: AuthOptions,
   })
 }
 
+const BEARER = /^Bearer(?: (.*))?$/i
+
+function bearerOf(c: Context): string | null {
+  const match = BEARER.exec(c.req.header('authorization') ?? '')
+  return match ? (match[1] ?? '') : null
+}
+
+const unauthenticated = () => new ApiError(401, 'unauthenticated', 'Sign in first')
+
+function serviceByToken(sqlite: Database, token: string): AccountRow {
+  if (token.length < 1 || token.length > MAX_TOKEN) throw unauthenticated()
+  const hash = sha256(token)
+  const sql = `SELECT ${ACCOUNT}, a.token_hash FROM account a
+               WHERE a.token_hash = ? AND a.kind = 'service' AND a.disabled_at IS NULL`
+  const found = sqlite.query(sql).get(hash) as (AccountRow & { token_hash: string }) | null
+  const same = found !== null && timingSafeEqual(Buffer.from(found.token_hash), Buffer.from(hash))
+  if (!found || !same) throw unauthenticated()
+  const { token_hash: _, ...account } = found
+  return account
+}
+
+// A session id is no token: it is hashed into another table, so it never matches a service's hash (attack 18).
+async function bearerAccount(c: Context, sqlite: Database, options: AuthOptions, token: string): Promise<AccountRow> {
+  const limited = failureLimiter(`bearer:ip:${options.clientIp(c)}`, 20, 15)
+  const account = await limited(sqlite, () => serviceByToken(sqlite, token))
+  checkLimits(sqlite, () => [serviceLimit(account.id)], false)
+  return account
+}
+
 function sessionAccount(c: Context, sqlite: Database, cookieName: string): { account: AccountRow; session: string } {
   const sql = `SELECT ${ACCOUNT} FROM auth_session s JOIN account a ON a.id = s.account_id
                WHERE s.id_hash = ? AND s.expires_at > ? AND a.disabled_at IS NULL AND a.kind = 'user'`
   const value = getCookie(c, cookieName)
   const session = value ? sha256(value) : ''
   const account = value ? (sqlite.query(sql).get(session, iso(Date.now())) as AccountRow | null) : null
-  if (!account) throw new ApiError(401, 'unauthenticated', 'Sign in first')
+  if (!account) throw unauthenticated()
   return { account, session }
+}
+
+// A header, when present, wins and the cookie is ignored.
+async function credentialOf(c: Context, sqlite: Database, options: AuthOptions) {
+  const link = recordLinkOf(c)
+  if (link !== null) return { account: await linkedAccount(c, sqlite, options, link), session: '' }
+  const token = bearerOf(c)
+  if (token !== null) return { account: await bearerAccount(c, sqlite, options, token), session: '' }
+  return sessionAccount(c, sqlite, options.cookieName)
 }
 
 // Re-reads the account on every request, so a changed role, a disabled account or a rotated link takes effect at once.
 function authenticate(sqlite: Database, options: AuthOptions) {
   return createMiddleware<AuthEnv>(async (c, next) => {
-    const token = recordLinkOf(c)
-    const { account, session } =
-      token === null
-        ? sessionAccount(c, sqlite, options.cookieName)
-        : { account: await linkedAccount(c, sqlite, options, token), session: '' }
+    const { account, session } = await credentialOf(c, sqlite, options)
     c.set('account', account)
     c.set('actor', actorOf(account))
     c.set('session', session)

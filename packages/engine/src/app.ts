@@ -10,6 +10,7 @@ import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
+import { openApiOf } from './openapi'
 import { ownerViewGuard, ownerViewRoutes } from './owner-views'
 import { ApiError, parseRowsParams } from './params'
 import { noStoreHeaders } from './public-headers'
@@ -189,6 +190,10 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   if (linkSecret) recordLinkRoutes(app, store, linkSecret)
 
   app.get('/schema', (c) => {
+    const format = c.req.query('format')
+    if (format !== undefined && format !== 'openapi') {
+      throw new ApiError(400, 'bad_format', 'format is openapi, or left out')
+    }
     const actor = c.get('actor')
     const space = spaceOf(domain, actor)
     const sections = sectionsOf(domain, actor)
@@ -228,6 +233,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
           },
         ]),
     )
+    if (format === 'openapi') return c.json(openApiOf(domain, sources, cookieName))
     return c.json({ sources, ...(space ? { space } : {}), ...(sections ? { sections } : {}) })
   })
 

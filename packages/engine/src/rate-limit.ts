@@ -10,6 +10,9 @@ export interface Limit {
 // The sweep keeps a row this long, so no limit may use a longer window.
 const LONGEST_WINDOW = 15 * 60_000
 
+/** Every request of one service account, whatever its route (attack 17). */
+export const serviceLimit = (accountId: number): Limit => ({ key: `service:${accountId}`, max: 600, windowMs: 60_000 })
+
 function hit(sqlite: Database, { key, windowMs }: Limit, now: number): number {
   const start = now - (now % windowMs)
   const row = sqlite

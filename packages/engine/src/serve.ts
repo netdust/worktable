@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } f
 import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
-import { createAccount, disableAccount, findAccount } from './auth'
+import { createAccount, createService, disableAccount, disableService, findAccount, rotateService } from './auth'
 import type { Actor, Domain } from './declare'
 import { importExport, readExportFile } from './import'
 import { migrate, seedDomain } from './migrate'
@@ -24,6 +24,9 @@ const { values } = parseArgs({
     'create-admin': { type: 'string' },
     'create-account': { type: 'string' },
     'disable-account': { type: 'string' },
+    'create-service': { type: 'string' },
+    'disable-service': { type: 'string' },
+    'rotate-service': { type: 'string' },
     role: { type: 'string' },
     subject: { type: 'string' },
     import: { type: 'string' },
@@ -45,19 +48,27 @@ if (!values.domain || !values.db) {
     'usage: serve.ts --domain <module> --db <file> [--port 4310] [--hostname 127.0.0.1] [--fresh]\n' +
       '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>] [--link-secret-file <file>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
-      '   | --disable-account <email>]\n' +
+      '   | --disable-account <email> | --create-service <name> [--role editor|administrator]\n' +
+      '   | --disable-service <name> | --rotate-service <name>]\n' +
       '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]\n' +
       '  [--seed-missing]',
   )
 }
-if (values.import && (values['create-admin'] || values['create-account'] || values['disable-account'])) {
-  fail('--import cannot be combined with --create-admin, --create-account or --disable-account: run them one at a time')
+const ACCOUNT_COMMANDS = [
+  'create-admin',
+  'create-account',
+  'disable-account',
+  'create-service',
+  'disable-service',
+  'rotate-service',
+] as const
+const accountCommands = ACCOUNT_COMMANDS.filter((flag) => values[flag] !== undefined)
+if (accountCommands.length > 1) fail(`run one account command at a time, not ${accountCommands.join(' and ')}`)
+if (values.import && accountCommands.length > 0) {
+  fail('--import cannot be combined with an account command: run them one at a time')
 }
 if (values['seed-missing'] && values.fresh) fail('--seed-missing cannot be combined with --fresh')
-if (
-  values['seed-missing'] &&
-  (values.import || values['create-admin'] || values['create-account'] || values['disable-account'])
-) {
+if (values['seed-missing'] && (values.import || accountCommands.length > 0)) {
   fail('--seed-missing cannot be combined with --import or an account command: run them one at a time')
 }
 // The Host allowlist names these two; any other address would need a mailer, and 0e has none.
@@ -104,13 +115,22 @@ function disable(email: string): void {
   if (!disableAccount(sqlite, email)) throw new Error(`no account ${email}`)
 }
 
+// The token goes to stdout alone, once; nothing else stores it.
+function createServiceFromFlags(serviceName: string): void {
+  console.log(createService(sqlite, serviceName, (values.role ?? 'editor') as Actor['role']))
+}
+
 // Answers the exit code of an account command, or null when none was given.
 function runAccountCommand(): number | null {
   const { 'create-admin': admin, 'create-account': account, 'disable-account': off } = values
+  const { 'create-service': service, 'disable-service': serviceOff, 'rotate-service': rotate } = values
   try {
     if (admin) createAdmin(admin)
     else if (account) createFromFlags(account)
     else if (off) disable(off)
+    else if (service !== undefined) createServiceFromFlags(service)
+    else if (serviceOff !== undefined) disableService(sqlite, serviceOff)
+    else if (rotate !== undefined) console.log(rotateService(sqlite, rotate))
     else return null
     return 0
   } catch (err) {

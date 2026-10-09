@@ -30,6 +30,7 @@ export const account = defineDataset({
     "CHECK ((kind = 'user') = (email IS NOT NULL))",
     'UNIQUE (email COLLATE NOCASE)',
   ],
+  indexes: [['token_hash']],
 })
 
 export const magicLink = defineDataset({

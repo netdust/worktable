@@ -292,8 +292,10 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
   })
 }
 
+// A human administrator only; a service account is refused whatever its role (attack 16).
 function sharing(actor: Actor): Actor {
-  if (!may(actor, 'views.share')) forbid('only an administrator may publish a view')
+  if (!may(actor, 'views.share') || (actor.kind ?? 'user') !== 'user')
+    forbid('only an administrator may publish a view')
   return actor
 }
 
