@@ -891,7 +891,6 @@ test.describe('the chrome as an administrator', () => {
 // Defects this shake-out found, each driven as a hand drives it. test.fail() keeps the gate green until the fix pass turns them.
 
 test('calendar-clears-its-cell @e2e', async ({ page }) => {
-  test.fail(true, 'shakeout row: the calendar opens 2-3 px over the edited cell and its editor frame')
   const api = page.request
   const title = 'ra kalender'
   const id = await activity(api, title, { datum: day(6), start_at: `${day(6)}T10:00` })

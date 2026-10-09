@@ -148,7 +148,8 @@ function PickerEditor<T extends DateValue>({ reads, writes, granularity, ...prop
           <Segments />
           <Button className="nv-datefield__open"><CalendarDays size={14} aria-hidden="true" /></Button>
         </Group>
-        <Pop placement="bottom start">
+        {/* Under the editor's frame, as the other editors open under their cell; React Aria would anchor it to the segments. */}
+        <Pop triggerRef={root} placement="bottom start">
           {/* Focusable, so a press on the calendar's heading or padding keeps focus inside the editor. */}
           <Dialog className="nv-calendar__dialog">
             <Month />
