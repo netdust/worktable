@@ -156,14 +156,17 @@ function stateOnCreate(values: Values): Values {
   return !isSet(values.persoon_id) && !filled(values.naam) ? { ...values, state: 'open' } : values
 }
 
-// Someone landing on an open slot pencils it in; another one on an invited row was not invited, so it is pencilled in too.
+// States whose meaning belongs to the person on the row: another one was not invited, nor did they answer.
+const PERSONAL = ['uitgenodigd', 'bevestigd', 'geweigerd']
+
+// Someone landing on an open slot pencils it in; another one on a personal row is pencilled in too (R21).
 function stateOnUpdate(values: Values, ctx: WriteContext): Values {
   if (Object.hasOwn(values, 'state')) return values
   const { persoon_id, naam } = merged(values, ctx)
   if (!isSet(persoon_id) && !filled(naam)) return values
-  const state = ctx.current?.state
+  const state = ctx.current?.state as string
   const moved = changes(values, ctx, 'persoon_id') || changes(values, ctx, 'naam')
-  return state === 'open' || (state === 'uitgenodigd' && moved) ? { ...values, state: 'voorlopig' } : values
+  return state === 'open' || (PERSONAL.includes(state) && moved) ? { ...values, state: 'voorlopig' } : values
 }
 
 const toewijzingPlanned = forPlanners(

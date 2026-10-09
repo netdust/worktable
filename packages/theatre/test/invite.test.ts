@@ -130,6 +130,60 @@ describe('another person on an invited row', () => {
   })
 })
 
+// Ruling R21: a swap on an answered row pencils it back in; the person who answered loses what the answer gave.
+describe('another person on an answered row', () => {
+  // Activiteit 5 alone in a production of its own, today, so the production opens exactly through its one row.
+  let proef: number
+  const opens = (persoon: number) =>
+    sqlite.query('SELECT 1 FROM mijn_producties WHERE persoon_id = ? AND productie_id = ?').get(persoon, proef) !== null
+
+  async function answered(state: 'bevestigd' | 'geweigerd'): Promise<number> {
+    proef = Number(sqlite.query("INSERT INTO productie (titel) VALUES ('Proef R21')").run().lastInsertRowid)
+    sqlite.run("UPDATE activiteit SET productie_id = ?, datum = date('now') WHERE id = 5", [proef])
+    const { id } = await invited(BRAM)
+    expect((await patch(id, { state, expect: { state: 'uitgenodigd' } })).status).toBe(200)
+    mails = []
+    return id
+  }
+
+  test('bevestigd: A for B pencils it in; A loses the production, B has none until confirmed', async () => {
+    const id = await answered('bevestigd')
+    expect(opens(BRAM)).toBe(true)
+
+    expect((await patch(id, { persoon_id: NOOR })).status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
+    expect([opens(BRAM), opens(NOOR)]).toEqual([false, false])
+    expect(mails).toEqual([])
+
+    expect((await patch(id, { state: 'bevestigd', expect: { state: 'voorlopig' } })).status).toBe(200)
+    expect(opens(NOOR)).toBe(true)
+  })
+
+  test('bevestigd: a name in place of the person pencils it in too', async () => {
+    const id = await answered('bevestigd')
+    expect((await patch(id, { naam: 'Gastzanger' })).status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
+    expect(opens(BRAM)).toBe(false)
+  })
+
+  test('geweigerd: A for B pencils it in, and B has no production', async () => {
+    const id = await answered('geweigerd')
+    expect((await patch(id, { persoon_id: NOOR })).status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
+    expect(opens(NOOR)).toBe(false)
+    expect(mails).toEqual([])
+  })
+
+  test('geannuleerd keeps its state', async () => {
+    const { id } = await invited(BRAM)
+    expect((await patch(id, { state: 'geannuleerd', expect: { state: 'uitgenodigd' } })).status).toBe(200)
+    expect((await patch(id, { persoon_id: NOOR })).status).toBe(200)
+    expect(stateOf(id)).toBe('geannuleerd')
+    expect((await patch(id, { naam: 'Gastzanger' })).status).toBe(200)
+    expect(stateOf(id)).toBe('geannuleerd')
+  })
+})
+
 describe('the confirm page routes', () => {
   test('/act/view carries only the projection: the activity, the role and the state', async () => {
     const { token } = await invited(BRAM)

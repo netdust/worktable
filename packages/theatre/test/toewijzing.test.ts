@@ -140,6 +140,8 @@ const TRANSITIONS: [string, string][] = [
   ['uitgenodigd', 'bevestigd'],
   ['uitgenodigd', 'geweigerd'],
   ['geweigerd', 'uitgenodigd'],
+  ['bevestigd', 'voorlopig'],
+  ['geweigerd', 'voorlopig'],
   ...['open', 'voorlopig', 'uitgenodigd', 'bevestigd', 'geweigerd'].map((from): [string, string] => [
     from,
     'geannuleerd',
