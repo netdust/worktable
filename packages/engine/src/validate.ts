@@ -385,6 +385,9 @@ export function validateDomain(domain: Domain): void {
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
+    if (Object.hasOwn(dataset.columns, 'expect')) {
+      throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
+    }
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkLifecycle(dataset)

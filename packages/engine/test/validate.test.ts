@@ -56,6 +56,11 @@ describe('validateDomain', () => {
     expect([e.declaration, e.bad]).toEqual(['a', 'checks'])
   })
 
+  test('a dataset column named expect is refused: a PATCH body reads expect as the state it expects', () => {
+    const e = failure(withDomain({ datasets: [dataset({ columns: { name: text, expect: text } })], queries: [] }))
+    expect([e.declaration, e.bad]).toEqual(['a', 'expect'])
+  })
+
   const viaOf = (over: Partial<Parameters<typeof defineDataset>[0]>) =>
     withDomain({
       datasets: [...domain.datasets, dataset(), defineDataset({ name: 'b', label: 'B', custom: false, ...over })],
