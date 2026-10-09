@@ -44,3 +44,19 @@ R1 Task 1 (names: S2); R2 Tasks 1, 3; R3 Task 4; R4 Tasks 2, 4 (B2); R5 Tasks 2,
 ## Simplest design
 
 Honest; no simpler design meets R4/R5. `title: { via, else }` is prior art for a one-hop inherited read.
+
+---
+
+# Re-review
+
+Reviewed-plan: db6a6539c19e1c74d8b1339f9660065e6c8d1cf0
+Verdict: ready with fixes; nothing Blocking. B1 (re-probed: self-relation reads 'Root'), B2, S1–S6 and M2 resolved.
+
+- **SF1.** `lookupColumn` copied the target's label, `default`, `owner_visible`, `writes`; the grid takes the label from it (`apps/grid/src/engine.ts:141,143`). Fixed: the lookup's own label, those three dropped, asserted.
+- **SF2.** Two "Locatie" entries in Activiteiten's picker (`datasets.ts:110`). Fixed: `locatie_id` relabelled "Eigen locatie" (ruling, below).
+- **M-a.** No seeded `done` line for the transition test; fixed in the seeds.
+- **M-b.** An inherited lookup on the lifecycle column cannot be cleared (null is no transition target, `writes.ts:262-266`); named in Task 4.
+- **M-c.** The link-row test was vacuous (`rows.ts:179-187`); replaced by a direct `withLookups` test.
+- **M-d.** Only `--seed-missing` goes through `valuesOf`; a fresh seed inserts raw rows (`migrate.ts:131-153`); wording fixed.
+
+Ruling: the own column reads "Eigen locatie" — two columns labelled "Locatie" would be ambiguous in the picker and in tests — cost if wrong: one label change.

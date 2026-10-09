@@ -37,7 +37,7 @@ Assets: fields of related records; the write path's checks.
 |---|---|---|---|
 | 1 | An owner account reads a related record's field through a lookup. Owners otherwise read titles only. | Validation refuses `lookups` on a dataset with `owners`. Only owners have a scope other than `all` (`access.ts:65-71`). Public views and views for owners exist only on queries (`views.ts:322`, `views.ts:348`), so no lookup can be projected there. | T1 `refuses lookups on an owned dataset` |
 | 2 | A lookup shows a soft-deleted related row's value. | The subquery requires `deleted_at IS NULL`. | T1 `a deleted target reads null` |
-| 3 | An edit through an inherited lookup skips the writer, the transition check or the relation check. | `valuesOf` renames the key before `cutBody`, so everything after it (`writes.ts:466-484`) runs on `own`. Actions' updates, import and seeds take the same path. | T4 `inherited write goes through the writer`, `a transition on own is checked` |
+| 3 | An edit through an inherited lookup skips the writer, the transition check or the relation check. | `valuesOf` renames the key before `cutBody`, so everything after it (`writes.ts:466-484`) runs on `own`. Actions' updates, import and `--seed-missing` take the same path (a fresh seed inserts raw rows, `migrate.ts:131-153`). | T4 `inherited write goes through the writer`, `a transition on own is checked` |
 | 4 | SQL injection through a lookup key. | A key from a request only selects a declared lookup. Identifiers are code, asserted by `defineDataset`'s `IDENTIFIER`. Values are bound. | T3 `unknown key stays 400` |
 | 5 | A lookup name overwrites a key the engine puts on every row, or a physical column in the spread select. | Validation refuses lookup names in `OVERWRITTEN` plus `id`, `custom`, `created_at`, `updated_at`, `deleted_at`, `lookups`, `inherited` and `cells`. | T1 reserved-name cases |
 
@@ -71,7 +71,7 @@ Assets: fields of related records; the write path's checks.
 - Produces, in `lookups.ts`:
   - `lookupOf(source: Source, key: string): LookupDecl | undefined`: undefined for a query or an undeclared key.
   - `targetOf(source: DatasetDecl, lookup: LookupDecl): string`: `source.columns[lookup.via].relation`.
-  - `lookupColumn(domain: Domain, source: DatasetDecl, name: string): ColumnDecl`: the target's `field` declaration with `nullable: true`, plus `readonly: true` unless `own`. A boolean `field` is refused by validation (the subquery would answer 0/1).
+  - `lookupColumn(domain: Domain, source: DatasetDecl, name: string): ColumnDecl`: the target's `field` declaration (type, options, tones, relation) with the lookup's own `label`, `nullable: true`, no `default`, `owner_visible` or `writes`, plus `readonly: true` unless `own`. A boolean `field` is refused by validation (the subquery would answer 0/1).
   - `lookupValue(source: DatasetDecl, name: string): SQL`: `(SELECT "t"."field" FROM "target" AS "t" WHERE "t"."id" = <table.via> AND "t"."deleted_at" IS NULL)`, wrapped in `COALESCE(<table.own>, …)` when `own`. Alias the inner table, and print every outer column as `${sql.identifier(source.name)}.${sql.identifier(column)}`, never `${table[column]}`. In a select field drizzle prints a template column without its table, and SQLite would then bind it to the inner alias (plan review B1, probed).
   - `lookupInherited(source: DatasetDecl, name: string): SQL`: `(<own> IS NULL AND <subquery> IS NOT NULL)`, with the outer side qualified the same way.
   - `lookupSelect(source: Source): Record<string, SQL>`: `{ [name]: value }`, plus `{ ['inherited:' + name]: inheritedFlag }` per inherited lookup; `{}` for a query.
@@ -84,15 +84,15 @@ Assets: fields of related records; the write path's checks.
   - on `line`: `lookups.team = { label: 'Team', via: 'item_id', field: 'team_id', own: 'team_id', from: 'Item' }` and `lookups.stage = { label: 'Stage', via: 'item_id', field: 'phase', own: 'phase', from: 'Item' }`;
   - on `node`: `lookups.parent_name = { label: 'Parent', via: 'parent_id', field: 'name' }` (a self-relation: the target has the outer row's columns);
   - writers that accept every create and update, except `line` refuses `team_id === 99`;
-  - seeds: two teams ('One', 'Two'); an item in team 1; two lines, one with its own team 2, one without; a node 'Root' and a node 'Leaf' under it.
+  - seeds: two teams ('One', 'Two'); an item in team 1 with phase `open`; two lines, one with its own team 2, one without; a third line with own phase `done`; a node 'Root' and a node 'Leaf' under it.
 - [ ] **Step 2: Failing tests** in `lookups.test.ts`, through the app (`createEngine` + an editor session, as `links.test.ts` does):
   - `a plain lookup reads the related field`: `GET /rows/item` → `rows[0].team_name === 'One'`.
   - `an inherited lookup reads own, else the relation`: the line with its own team → `team === 2` and `inherited` lacks `'team'`. The other → `team === 1`, `inherited` contains `'team'`, and `lookups.team.title === 'One'`.
   - `a self-relation reads the parent`: `GET /rows/node` → Leaf's `parent_name === 'Root'`, Root's is null.
   - `a deleted target reads null`: soft-delete the item (direct SQL `UPDATE item SET deleted_at = …`) → the inheriting line's `team === null`, `lookups.team === null`, `inherited` lacks `'team'`.
-  - `schema serves lookups`: `sources.line.lookups.team` has `type: 'integer'`, `relation: 'team'`, `inherited: true`, `from: 'Item'`, and no `readonly`. `sources.item.lookups.team_name` has `readonly: true`. `sources.line.columns` has no `team`.
+  - `schema serves lookups`: `sources.line.lookups.team` has `type: 'integer'`, `relation: 'team'`, `inherited: true`, `from: 'Item'`, and no `readonly`. `sources.item.lookups.team_name` has `readonly: true` and `label: 'Team name'`, and no `default`. `sources.line.columns` has no `team`.
   - `a write reply carries the lookup`: `PATCH /rows/line/<own>` with `{ name: 'x' }` → reply `team === 2`.
-  - `link and cell rows carry no lookup keys`: rows read through `pointingAt` (a link on `team` to its `item`s) carry no `team_name` key and no `inherited`.
+  - `a raw without lookup keys gets none`: `withLookups` on an `item` raw read with `SELECT *` (as `pointingAt` and history read) returns a row with no `team_name` key and no `inherited`.
 - [ ] **Step 3: Failing validation tests** in `lookups.test.ts`. Each mutated copy of the fixture is refused with a `DomainError` naming the bad key:
   - `via` not a relation;
   - `field` not a target column;
@@ -117,7 +117,7 @@ Assets: fields of related records; the write path's checks.
 
 **Files:**
 - Modify: `apps/grid/src/engine.ts` (`EngineSource.lookups`, `fieldOf` for lookups, `modelOf` fields, `toRow` takes `inherited` off the fields; `fieldsOf` at 268-271 and `kindOf` at 250-258 read `source.lookups`, so the saved-view round trip and filter chips know them), `apps/grid/src/types.ts` (`Field.via?: string`, `Row.inherited?: string[]`), `apps/grid/src/grid/columns.ts:208-211` (a column's `via` from `field.via`)
-- Modify: `packages/theatre/src/datasets.ts` (`activiteit`: `links.mensen`, `lookups.locatie`)
+- Modify: `packages/theatre/src/datasets.ts` (`activiteit`: `links.mensen`, `lookups.locatie` labelled 'Locatie'; the own column `locatie_id` relabelled 'Eigen locatie', so the picker never offers two 'Locatie' entries)
 - Test: `apps/grid/src/engine.test.ts`, `apps/grid/src/grid/cells/Inherited.test.tsx`, `packages/theatre/test/lookups.test.ts` (create)
 
 **Interfaces:**
@@ -190,7 +190,7 @@ Assets: fields of related records; the write path's checks.
     - `inherited write lands on own`: `PATCH /rows/line/<inheriting>` with `{ team: 2 }` → the reply has `team === 2` and no `'team'` in `inherited`, and `GET /revisions/line/<id>` shows `team_id`.
     - `null inherits again`: then `{ team: null }` → `team === 1`, and `inherited` contains `'team'`.
     - `inherited write goes through the writer`: `{ team: 99 }` → 422 from the fixture writer; `{ team: 98 }` (no such team, not refused by the writer) → 400 `bad_relation`. The writer runs before `checkRelations` (`writes.ts:474,482`).
-    - `a transition on own is checked`: a line whose own `phase` is `done` written `{ stage: 'open' }` → 422 (the lifecycle allows open→done only).
+    - `a transition on own is checked`: the line whose own `phase` is `done`, written `{ stage: 'open' }` → 422 (the lifecycle allows open→done only). An inherited lookup whose `own` is the lifecycle column can never be cleared (null is no transition target, `writes.ts:262-266`); no test asserts that it can.
     - `the related row is untouched`: after the write, `GET /rows/item` shows the item's `team_id` unchanged.
     - `both names are 400`: `{ team: 2, team_id: 2 }` → 400, nothing written.
     - `a plain lookup is dropped`: `PATCH /rows/item/1` with `{ team_name: 'x' }` → 200 with `changed: []`.
