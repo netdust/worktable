@@ -623,6 +623,13 @@ function undoableBatch(sqlite: Database, key: string, actor: Actor): void {
     forbid('only the account that made a batch may undo it')
   if (!UNDOABLE.has(batch.kind)) throw notUndoable(`a batch of kind ${batch.kind} cannot be undone`)
   if (batch.undone_by !== null) throw new ApiError(409, 'already_undone', 'this batch is already undone')
+  if (batch.kind === 'undo' && undidMinting(sqlite, key)) throw notUndoable('a batch that minted tokens is not redone')
+}
+
+// Undo revoked the tokens and hooks never fire in undo, so a redo would land the state with a dead token.
+function undidMinting(sqlite: Database, undo: string): boolean {
+  const sql = 'SELECT 1 FROM action_token t JOIN batch b ON b.key = t.minted_batch WHERE b.undone_by = ? LIMIT 1'
+  return sqlite.query(sql).get(undo) !== null
 }
 
 // In revision order; a delete in the batch makes it not undoable, since undoing a delete is out.

@@ -715,6 +715,22 @@ describe('on a join whose cell is its lifecycle column', () => {
     expect(store.getState().canUndo).toBe(false)
   })
 
+  it('a redo the server refuses as not_undoable (an undone invite) shows the notice; the step is gone, the cell as undone', async () => {
+    const { api, store, onNotice, status, held } = setup(lifecycle)
+    await store.set(1, sien, 'invited')
+    await store.undo()
+    expect([status(1, sien), held(11)]).toEqual(['confirmed', 'confirmed'])
+
+    api.undoBatch.mockRejectedValueOnce({ code: 'not_undoable', message: 'a batch that minted tokens is not redone' })
+    await store.redo()
+    await settled()
+
+    expect(onNotice).toHaveBeenCalledWith(REDO_SKIPPED)
+    expect(store.cellError(1, sien)).toBeNull()
+    expect([status(1, sien), held(11)]).toEqual(['confirmed', 'confirmed'])
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false })
+  })
+
   it('Ctrl+Z after clearing a cell shows the notice and writes nothing; the step is gone', async () => {
     const { api, store, onNotice, cell } = setup(lifecycle)
 

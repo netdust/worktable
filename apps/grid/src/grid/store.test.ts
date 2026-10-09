@@ -133,10 +133,10 @@ describe('undo and redo, by batch on the server', () => {
     expect(api.undo).toHaveBeenLastCalledWith('b-redo')
   })
 
-  it('a redo answered not_undoable drops the redo entry and shows the localised message', async () => {
+  it('a redo answered not_undoable (an undone invite) drops the redo entry and says redo cannot be done here', async () => {
     const { api, store } = setup()
     api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
-    api.undo.mockResolvedValueOnce('b-undo').mockRejectedValueOnce({ code: 'not_undoable', message: 'a batch holding a delete cannot be undone' })
+    api.undo.mockResolvedValueOnce('b-undo').mockRejectedValueOnce({ code: 'not_undoable', message: 'a batch that minted tokens is not redone' })
     api.read.mockResolvedValue(meal)
 
     await store.apply({ id: 103, field: 'kind', value: 'show' })
@@ -144,7 +144,7 @@ describe('undo and redo, by batch on the server', () => {
     await store.redo()
 
     expect(store.getState()).toMatchObject({ canUndo: false, canRedo: false, save: 'error' })
-    expect(store.getState().error).toMatchObject({ code: 'not_undoable', message: 'Dit kan niet ongedaan gemaakt worden.' })
+    expect(store.getState().error).toMatchObject({ code: 'not_undoable', message: 'Opnieuw doen kan hier niet' })
   })
 
   it('already_undone drops the entry and says so in Dutch', async () => {

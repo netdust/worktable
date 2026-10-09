@@ -302,6 +302,22 @@ describe('undo of a transition', () => {
     expect(hookCalls).toEqual([])
     expect(sent).toEqual([])
   })
+
+  test('a redo of an undone minting batch is 422 not_undoable: it would invite with a dead token', async () => {
+    const res = await patch(editor, 1, { state: 'b' })
+    const undone = await undo(editor, res.body.revision.batch_id)
+    expect(undone.status).toBe(200)
+    expect(stateOf(1)).toBe('a')
+    await denied(undo(editor, undone.body.batch_id), 422, 'not_undoable')
+    expect(stateOf(1)).toBe('a')
+  })
+
+  test('a redo of an undone batch that minted nothing still works', async () => {
+    const res = await patch(editor, 2, { state: 'c' })
+    const undone = await undo(editor, res.body.revision.batch_id)
+    expect((await undo(editor, undone.body.batch_id)).status).toBe(200)
+    expect(stateOf(2)).toBe('c')
+  })
 })
 
 describe('checkTransition', () => {

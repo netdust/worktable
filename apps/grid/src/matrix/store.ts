@@ -73,6 +73,8 @@ interface Op {
   fill?: { put: number }
   /** The write landed but its row could not be read back: a refresh follows once it settles. */
   reread?: boolean
+  /** The server refused this redo for good (its batch minted tokens): the step leaves the history. */
+  dropped?: boolean
 }
 
 interface Job {
@@ -352,6 +354,12 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
     } catch (error) {
       const refused = (error ?? {}) as Partial<ApiError>
       const known = String(refused.code ?? 'unknown')
+      if (job.op.replay === 'redo' && known === 'not_undoable') {
+        job.op.dropped = true
+        onNotice?.(t('redoSkipped'))
+        end(job)
+        return false
+      }
       const said = job.op.replay ? undoText(refused) : errorText(known, String(refused.message ?? error))
       const raised: CellError = { id: job.op.row, field: job.op.column.key, code: known, message: said }
       errors.set(key, raised)
@@ -470,7 +478,8 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
     const moved = forward ? taken.slice(0, count) : taken.slice(taken.length - count)
     const left = forward ? taken.slice(count) : taken.slice(0, taken.length - count)
     if (moved.length > 0) to.push(moved)
-    from.push(left)
+    const kept = turned[count]?.dropped ? left.filter((op) => op !== ops[count]) : left
+    if (kept.length > 0) from.push(kept)
     publish({})
   }
 
