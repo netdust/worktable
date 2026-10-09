@@ -129,14 +129,15 @@ const rollen = [
   { naam: 'Chauffeur', categorie: 'logistiek', standaard_verrekening: 'factuur', uurtarief: 24, kleur: '#239b56' },
 ]
 
-type Item = [soort: string, omschrijving: string, startTijd?: string, duur?: number]
+type Plaats = { rol: string; aantal: number }
+type Item = [soort: string, omschrijving: string, startTijd?: string, duur?: number, slots?: Plaats[]]
 
 const speeldag: Item[] = [
   ['maaltijd', 'Lunch', '13:00', 60],
-  ['repetitie', 'Voorbereiding', '14:00', 210],
+  ['repetitie', 'Voorbereiding', '14:00', 210, [{ rol: 'Lichttechnicus', aantal: 1 }]],
   ['maaltijd', 'Diner', '17:30', 60],
   ['repetitie', 'Voorbereiding avond', '18:30', 90],
-  ['voorstelling', 'Voorstelling', '20:00', 75],
+  ['voorstelling', 'Voorstelling', '20:00', 75, [{ rol: 'Speler', aantal: 2 }]],
   ['andere', 'Afwas', '21:15', 60],
   ['overnachting', 'Overnachting'],
 ]
@@ -144,12 +145,13 @@ const speeldag: Item[] = [
 const sjablonen = [
   {
     naam: 'speeldag op locatie',
-    items: speeldag.map(([soort, omschrijving, start_tijd, duur]) => ({
+    items: speeldag.map(([soort, omschrijving, start_tijd, duur, slots]) => ({
       soort,
       omschrijving,
       offset_dag: 0,
       ...(start_tijd ? { start_tijd, duur } : {}),
       locatie_regel: 'speelreeks',
+      ...(slots ? { slots } : {}),
     })),
   },
 ]

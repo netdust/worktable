@@ -69,6 +69,72 @@ const live = (id: number) =>
     )
     .all(id) as Body[]
 
+const slots = (id: number) =>
+  sqlite
+    .query(
+      `SELECT t.rol_id, t.aantal, t.state, t.persoon_id, t.naam, t.activiteit_id FROM toewijzing t
+       JOIN activiteit a ON a.id = t.activiteit_id WHERE a.speelreeks_id = ? AND t.deleted_at IS NULL ORDER BY t.id`,
+    )
+    .all(id) as Body[]
+
+const rolId = (naam: string) => (sqlite.query('SELECT id FROM rol WHERE naam = ?').get(naam) as { id: number }).id
+
+const withSlots = (slots: unknown) =>
+  editor('POST', '/api/rows/sjabloon', {
+    naam: 'met plaatsen',
+    items: [{ soort: 'repetitie', omschrijving: 'Opbouw', offset_dag: 0, locatie_regel: 'speelreeks', slots }],
+  })
+
+describe('slots', () => {
+  test('a four-day template with two slots per day makes the open Toewijzingen in the batch', async () => {
+    const id = await reeks()
+    const res = await apply(id)
+    const made = slots(id)
+    expect(made).toHaveLength(8)
+    const speler = rolId('Speler')
+    const licht = rolId('Lichttechnicus')
+    expect(made.map((r) => [r.rol_id, r.aantal])).toEqual(
+      DAYS.flatMap(() => [
+        [licht, 1],
+        [speler, 2],
+      ]),
+    )
+    for (const row of made) expect(row).toMatchObject({ state: 'open', persoon_id: null, naam: null })
+    expect(new Set(made.map((r) => r.activiteit_id)).size).toBe(8)
+    expect(res.body.batch_id).toBeString()
+  })
+
+  test('a slot naming an unknown role is refused in Dutch', async () => {
+    const res = await withSlots([{ rol: 'Bestaat Niet', aantal: 1 }])
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Item 1: de rol "Bestaat Niet" bestaat niet.',
+    })
+  })
+
+  test('a slot with aantal 0 is refused in Dutch', async () => {
+    const res = await withSlots([{ rol: 'Speler', aantal: 0 }])
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Item 1: een plaats heeft een aantal van minstens 1 nodig.',
+    })
+  })
+
+  test('a renamed Rol: apply by the new title works, by a title no live Rol has it refuses naming it', async () => {
+    sqlite.run("UPDATE rol SET naam = 'Acteur' WHERE naam = 'Speler'")
+    const id = await reeks()
+    const old = await apply(id)
+    expect({ status: old.status, message: old.body.message }).toEqual({
+      status: 422,
+      message: 'Item 5: de rol "Speler" bestaat niet.',
+    })
+    const made = await withSlots([{ rol: 'Acteur', aantal: 3 }])
+    expect(made.status).toBe(201)
+    expect((await apply(id, made.body.id as number)).status).toBe(201)
+    expect(slots(id).map((r) => [r.rol_id, r.aantal])).toEqual(DAYS.map(() => [rolId('Acteur'), 3]))
+  })
+})
+
 describe('sjabloon_toepassen', () => {
   test('a 4-day speelreeks gets the speeldag pattern on every day', async () => {
     const id = await reeks()
@@ -99,15 +165,16 @@ describe('sjabloon_toepassen', () => {
     expect(bron).toEqual(Array(28).fill({ locatie_id: 3, locatie_bron: 'speelreeks' }))
   })
 
-  test('one batch for all 28, and the reply names them', async () => {
+  test('one batch for all 28 and the 8 open slots, and the reply names them', async () => {
     const id = await reeks()
     const res = await apply(id)
     const created = res.body.created as { dataset: string; id: number }[]
-    expect(created).toHaveLength(28)
-    expect(created.every((c) => c.dataset === 'activiteit')).toBe(true)
+    expect(created.filter((c) => c.dataset === 'activiteit')).toHaveLength(28)
+    expect(created.filter((c) => c.dataset === 'toewijzing')).toHaveLength(8)
+    expect(created).toHaveLength(36)
     const batches = sqlite
       .query(
-        `SELECT DISTINCT batch_id FROM revision WHERE entity = 'activiteit' AND record_id IN (${created.map((c) => c.id).join(',')})`,
+        `SELECT DISTINCT batch_id FROM revision WHERE entity IN ('activiteit', 'toewijzing') AND record_id IN (${created.map((c) => c.id).join(',')})`,
       )
       .all()
     expect(batches).toEqual([{ batch_id: res.body.batch_id }])
@@ -134,6 +201,7 @@ describe('sjabloon_toepassen', () => {
     const undo = await editor('POST', `/api/batches/${res.body.batch_id}/undo`, {})
     expect(undo.status).toBe(200)
     expect(live(id)).toHaveLength(0)
+    expect(slots(id)).toHaveLength(0)
     expect((await apply(id)).status).toBe(201)
   })
 

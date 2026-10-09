@@ -176,6 +176,8 @@ export interface WriteContext {
   actor: Actor
   current: Record<string, unknown> | null
   find(dataset: string, id: number): Record<string, unknown> | null
+  /** The first live row whose columns equal `match`. */
+  findBy(dataset: string, match: Record<string, unknown>): Record<string, unknown> | null
   exists(dataset: string, match: Record<string, unknown>, exceptId?: number): boolean
 }
 

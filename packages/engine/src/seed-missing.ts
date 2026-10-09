@@ -11,7 +11,7 @@ type Row = Record<string, unknown>
 type Stored = Record<string, string | number | null>
 type Change = [field: string, old: string | number | null, value: string | number | null]
 
-export type DatasetOutcome = number | 'not config' | 'has rows'
+export type DatasetOutcome = { inserted: number; present: number } | 'not config'
 
 export interface SeedReport {
   datasets: Record<string, DatasetOutcome>
@@ -46,8 +46,9 @@ function seedRows(domain: Domain): Map<string, Row[]> {
   return rows
 }
 
-const hasRows = (sqlite: Database, table: string): boolean =>
-  sqlite.query(`SELECT 1 FROM "${table}" LIMIT 1`).get() !== null
+// Deleted rows count: a planner's deletion is not undone by a seed.
+const carries = (sqlite: Database, table: string, key: string, title: unknown): boolean =>
+  sqlite.query(`SELECT 1 FROM "${table}" WHERE "${key}" = ? LIMIT 1`).get(title as string) !== null
 
 function writeRow(run: Run, dataset: DatasetDecl, row: Row): void {
   const { store } = run
@@ -58,25 +59,29 @@ function writeRow(run: Run, dataset: DatasetDecl, row: Row): void {
 }
 
 // A refusal names the dataset and the row's position, never a value.
-function writeRows(run: Run, dataset: DatasetDecl, rows: Row[]): number {
-  rows.forEach((row, i) => {
-    try {
-      writeRow(run, dataset, row)
-    } catch (err) {
-      if (err instanceof ApiError) throw new SeedRefused(`${dataset.name} row ${i + 1}: ${err.message}`)
-      throw err
-    }
-  })
-  run.written += rows.length
-  return rows.length
+function writeChecked(run: Run, dataset: DatasetDecl, row: Row, n: number): void {
+  try {
+    writeRow(run, dataset, row)
+  } catch (err) {
+    if (err instanceof ApiError) throw new SeedRefused(`${dataset.name} row ${n}: ${err.message}`)
+    throw err
+  }
 }
 
 function seedDataset(run: Run, name: string, rows: Row[]): DatasetOutcome {
   const dataset = run.store.domain.datasets.find((d) => d.name === name)
   if (!dataset) throw new SeedRefused(`${name} is not a declared dataset`)
   if (!dataset.config) return 'not config'
-  if (hasRows(run.store.sqlite, name)) return 'has rows'
-  return writeRows(run, dataset, rows)
+  const key = typeof dataset.title === 'string' ? dataset.title : dataset.title.else
+  let inserted = 0
+  rows.forEach((row, i) => {
+    if (row[key] == null) throw new SeedRefused(`${name} row ${i + 1}: no ${key} to match it by`)
+    if (carries(run.store.sqlite, name, key, row[key])) return
+    writeChecked(run, dataset, row, i + 1)
+    inserted++
+  })
+  run.written += inserted
+  return { inserted, present: rows.length - inserted }
 }
 
 function storedView(seed: SavedViewSeed): Stored {
@@ -202,8 +207,8 @@ export function seedMissing(sqlite: Database, domain: Domain): SeedReport {
 // Counts and declared view names only: no row value reaches the log.
 export function seedLines(report: SeedReport): string[] {
   const lines = Object.entries(report.datasets).map(([name, outcome]) => {
-    if (typeof outcome !== 'number') return `${name} skipped (${outcome})`
-    return `${name} ${outcome} ${outcome === 1 ? 'row' : 'rows'}`
+    if (outcome === 'not config') return `${name} skipped (${outcome})`
+    return `${name} ${outcome.inserted} inserted, ${outcome.present} present`
   })
   const { added, updated, present } = report.views
   lines.push(...report.named, `views ${added} added, ${updated} updated, ${present} present`)

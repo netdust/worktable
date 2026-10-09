@@ -199,6 +199,18 @@ function matchOf(dataset: DatasetDecl, match: Values): [sql: string, value: stri
   })
 }
 
+function matcher(store: Store): WriteContext['findBy'] {
+  return (name, match) => {
+    const dataset = domainDataset(store, name, 'findBy')
+    const pairs = matchOf(dataset, match)
+    const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
+    const raw = store.sqlite
+      .query(`SELECT * FROM "${name}" WHERE ${where} ORDER BY id LIMIT 1`)
+      .get(...pairs.map(([, value]) => value)) as Stored | null
+    return raw && decodeAll(dataset, raw)
+  }
+}
+
 function existence(store: Store): WriteContext['exists'] {
   return (name, match, exceptId) => {
     const pairs = matchOf(domainDataset(store, name, 'exists'), match)
@@ -219,6 +231,7 @@ export const contextOf = (
   actor,
   current,
   find: finder(store),
+  findBy: matcher(store),
   exists: existence(store),
 })
 

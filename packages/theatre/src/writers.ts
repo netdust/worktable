@@ -270,8 +270,15 @@ const MAX_ITEMS = 50
 const MAX_OFFSET_DAG = 366
 const TIJD = /^([01]\d|2[0-3]):[0-5]\d$/
 
-function checkItem(item: unknown, n: number): void {
-  const at = (message: string) => refuse(`Item ${n}: ${message}`)
+function checkSlot(slot: unknown, at: (message: string) => never, ctx: WriteContext): void {
+  if (typeof slot !== 'object' || slot === null || Array.isArray(slot)) at('ongeldige plaats.')
+  const { rol, aantal } = slot as Values
+  if (typeof rol !== 'string' || !ctx.findBy('rol', { naam: rol })) at(`de rol "${String(rol)}" bestaat niet.`)
+  if (!Number.isInteger(aantal) || (aantal as number) <= 0) at('een plaats heeft een aantal van minstens 1 nodig.')
+}
+
+function checkItem(item: unknown, n: number, ctx: WriteContext): void {
+  const at = (message: string): never => refuse(`Item ${n}: ${message}`)
   if (typeof item !== 'object' || item === null || Array.isArray(item)) at('ongeldig item.')
   const { soort, omschrijving, offset_dag, start_tijd, duur, locatie_regel } = item as Values
   if (!Object.hasOwn(activiteit.columns.soort?.options ?? {}, String(soort))) at('ongeldige soort.')
@@ -283,12 +290,16 @@ function checkItem(item: unknown, n: number): void {
   if (duur != null && start_tijd == null) at('een duur heeft een starttijd nodig.')
   if (duur != null && (!Number.isInteger(duur) || (duur as number) <= 0)) at('ongeldige duur.')
   if (locatie_regel !== 'speelreeks') at('ongeldige locatieregel.')
+  const { slots } = item as Values
+  if (slots === undefined) return
+  if (!Array.isArray(slots)) at('plaatsen moeten een lijst zijn.')
+  for (const slot of slots as unknown[]) checkSlot(slot, at, ctx)
 }
 
-export function validateItems(items: unknown): void {
+export function validateItems(items: unknown, ctx: WriteContext): void {
   if (!Array.isArray(items)) refuse('Items moeten een lijst zijn.')
   if (items.length > MAX_ITEMS) refuse(`Een sjabloon heeft hoogstens ${MAX_ITEMS} items.`)
-  for (const [i, item] of items.entries()) checkItem(item, i + 1)
+  for (const [i, item] of items.entries()) checkItem(item, i + 1, ctx)
 }
 
 // Create only: without update or delete the grid shows Sjabloon read-only.
@@ -296,7 +307,7 @@ export const sjabloonWriter: Writer = {
   create(values, ctx) {
     if (ctx.actor.role === 'owner') forbid('Alleen de planning wijzigt sjablonen.')
     if (!filled(values.naam)) refuse('Naam is verplicht.')
-    validateItems(values.items)
+    validateItems(values.items, ctx)
     return values
   },
 }
