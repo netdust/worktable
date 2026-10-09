@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import { t } from '../../i18n'
 import type { Model, Row, Scope } from '../../types'
-import { firstId } from '../columns'
+import { type Column, firstId } from '../columns'
 import type { CellProps, EditorProps } from './props'
 import { RelationPicker } from './RelationPicker'
 
@@ -18,23 +18,28 @@ export const RelationContext = createContext<{
  */
 export function RelationCell({ column, row, active = false }: CellProps & { active?: boolean }) {
   const { models, openRelated } = useContext(RelationContext)
-  const target = column.relation?.model
-  const id = Number(column.edit(row))
   const title = column.text(row)
-  const openable = openRelated && target && target in models && id > 0 && title !== ''
+  const related = openRelated && relatedOf(column, row, models)
   return (
     <>
       <span className="nv-cell__text">{title}</span>
-      {openable && (
+      {related && (
         <button type="button" className="nv-related" tabIndex={active ? 0 : -1} aria-label={t('openRecord', { title })} onClick={(event) => {
           event.stopPropagation()
-          if (event.detail < 2) openRelated(target, id)
+          if (event.detail < 2) openRelated(related.target, related.id)
         }} onDoubleClick={(event) => event.stopPropagation()}>
           <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3h7v7M13 3 5 11" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
         </button>
       )}
     </>
   )
+}
+
+/** The record a filled to-one cell points at, when its model is one this user may read. */
+export function relatedOf(column: Column, row: Row, models: Record<string, Model>): { target: string; id: number } | null {
+  const target = column.relation?.model
+  const id = Number(column.edit(row))
+  return column.kind === 'relation' && target && target in models && id > 0 && column.text(row) !== '' ? { target, id } : null
 }
 
 function holds(value: unknown, id: number): boolean {

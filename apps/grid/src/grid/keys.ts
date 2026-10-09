@@ -24,6 +24,8 @@ export interface Sheet {
   required: (cell: Cell) => boolean
   toggles: (cell: Cell) => boolean
   value: (cell: Cell) => string
+  /** The cell shows a related record it can open. */
+  opens: (cell: Cell) => boolean
 }
 
 export type Move = 'down' | 'right' | 'left' | 'stay'
@@ -43,6 +45,7 @@ export type Effect =
   | { type: 'clear'; cell: Cell }
   | { type: 'toggle'; cell: Cell }
   | { type: 'cancel'; cell: Cell }
+  | { type: 'open'; cell: Cell }
   | { type: 'undo' }
   | { type: 'redo' }
 
@@ -108,6 +111,7 @@ function idleKey(state: KeyState, cell: Cell, input: Extract<Input, { type: 'key
 
   if (command && lower === 'z') return { state, effect: { type: input.shift ? 'redo' : 'undo' } }
   if (command && lower === 'y') return { state, effect: { type: 'redo' } }
+  if (command && input.key === 'Enter' && sheet.opens(cell)) return { state, effect: { type: 'open', cell } }
   if (command) return { state, effect: IGNORE }
 
   const arrow = ARROWS[input.key]

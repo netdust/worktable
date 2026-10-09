@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { type Cell, type Effect, type Input, type KeyState, initial, reduce, type Sheet } from './keys'
 
-// 3 rows × 4 columns: col 0 the title, col 1 required, col 2 optional, col 3 a read-only lookup; col 2 on row 2 a toggle.
+// 3 rows × 4 columns: col 0 the title, col 1 required, col 2 optional, col 3 a read-only lookup; col 2 on row 2 a toggle; col 2 on row 0 opens a record.
 const sheet: Sheet = {
   rows: 3,
   cols: 4,
@@ -9,6 +9,7 @@ const sheet: Sheet = {
   required: (c) => c.col <= 1,
   toggles: (c) => c.row === 2 && c.col === 2,
   value: (c) => `r${c.row}c${c.col}`,
+  opens: (c) => c.row === 0 && c.col === 2,
 }
 
 const at = (row: number, col: number): Cell => ({ row, col })
@@ -143,6 +144,22 @@ describe('undo and redo', () => {
 
   it("leaves Ctrl+Z inside an open editor to the input's own undo", () => {
     expect(run(on(at(1, 2)), key('x'), key('z', { ctrl: true })).effect).toEqual({ type: 'ignore' })
+  })
+})
+
+describe('opening a related record', () => {
+  it('opens the record on Ctrl+Enter or Cmd+Enter on a cell that has one, and opens no editor', () => {
+    expect(run(on(at(0, 2)), key('Enter', { ctrl: true }))).toEqual({ state: on(at(0, 2)), effect: { type: 'open', cell: at(0, 2) } })
+    expect(run(on(at(0, 2)), key('Enter', { meta: true }))).toEqual({ state: on(at(0, 2)), effect: { type: 'open', cell: at(0, 2) } })
+  })
+
+  it('leaves Ctrl+Enter to the browser on a cell with no record, and opens no editor', () => {
+    expect(run(on(at(1, 2)), key('Enter', { ctrl: true }))).toEqual({ state: on(at(1, 2)), effect: { type: 'ignore' } })
+    expect(run(on(at(2, 2)), key('Enter', { meta: true }))).toEqual({ state: on(at(2, 2)), effect: { type: 'ignore' } })
+  })
+
+  it('commits an open editor on Ctrl+Enter, as before', () => {
+    expect(run(on(at(0, 2)), key('x'), key('Enter', { ctrl: true })).effect).toEqual({ type: 'write', cell: at(0, 2), draft: 'x' })
   })
 })
 

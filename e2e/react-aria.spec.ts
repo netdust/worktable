@@ -918,18 +918,45 @@ test('calendar-clears-its-cell @e2e', async ({ page }) => {
 })
 
 test('open-related-record-by-keyboard @e2e', async ({ page }) => {
-  test.fail(true, 'shakeout row: no key reaches the open-panel icon; the sheet takes Tab, Ctrl+Enter does nothing')
   const api = page.request
   const title = 'ra openen toetsen'
   const anker = await idByName(api, 'organisatie', 'naam', 'Theater Het Anker')
   const id = await activity(api, title, { datum: day(6), start_at: `${day(6)}T11:00`, locatie_id: anker })
+  const patches = writes(page, 'PATCH', /^\/api\/rows\//)
   try {
     await openDagplanning(page)
     const locatie = await cellOf(page, title, 'Locatie')
+    const drawer = page.locator('.nv-drawer')
+    const picker = page.getByRole('combobox', { name: 'Locatie' })
+
+    // The owner's key (2026-10-09): Ctrl+Enter, Cmd+Enter on a Mac, opens the related record's panel, not the editor.
+    for (const key of ['Control+Enter', 'Meta+Enter']) {
+      await locatie.click()
+      await expect(locatie).toBeFocused()
+      await page.keyboard.press(key)
+      await expect(drawer).toHaveCount(1)
+      await expect(drawer).toContainText('Theater Het Anker')
+      await expect(drawer).toContainText('Ankerdijk 8, 8000 Brugge')
+      await expect(picker).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      await expect(drawer).toHaveCount(0)
+    }
+
+    // Plain Enter still opens the picker.
     await locatie.click()
-    await expect(locatie).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(locatie.getByRole('button', { name: 'Open Theater Het Anker' })).toBeFocused({ timeout: 2000 })
+    await page.keyboard.press('Enter')
+    await expect(picker).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(picker).toHaveCount(0)
+
+    // An empty to-one: the key opens nothing, neither the panel nor the editor.
+    await locatie.click()
+    await locatie.press('Delete')
+    await expect(locatie.getByRole('button', { name: /^Open / })).toHaveCount(0)
+    await page.keyboard.press('Control+Enter')
+    await expect(drawer).toHaveCount(0)
+    await expect(picker).toHaveCount(0)
+    expect(patches.length, 'only the Delete wrote').toBe(1)
   } finally {
     await removeActivity(api, id)
   }

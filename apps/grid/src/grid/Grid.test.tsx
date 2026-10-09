@@ -1940,6 +1940,54 @@ describe('opening a related record', () => {
     expect(remote.rowOf).toHaveBeenCalledTimes(1)
   })
 
+  it('Ctrl+Enter on a filled to-one cell opens its record in the drawer and no editor', async () => {
+    remote.rowOf.mockResolvedValueOnce(record)
+    renderGrid(calais, { models })
+    const location = cell('Lunch bistrot', 'location')
+    fireEvent.click(location)
+    await act(async () => {
+      type(location, 'Enter', { ctrlKey: true })
+    })
+
+    expect(remote.rowOf).toHaveBeenCalledWith('organisation', 12)
+    expect(await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })).toBeTruthy()
+    expect(document.querySelector('[role="combobox"]')).toBeNull()
+  })
+
+  it('Ctrl+Enter on an empty to-one cell does nothing', async () => {
+    const rows = calais.map((r) => (r.title === 'Lunch bistrot' ? { ...r, fields: { ...r.fields, location: '' }, lookups: { location: null } } : r))
+    renderGrid(rows as Row[], { models })
+    const location = cell('Lunch bistrot', 'location')
+    fireEvent.click(location)
+    await act(async () => {
+      type(location, 'Enter', { ctrlKey: true })
+      type(location, 'Enter', { metaKey: true })
+    })
+
+    expect(remote.rowOf).not.toHaveBeenCalled()
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(document.querySelector('[role="combobox"]')).toBeNull()
+    expect(api.update).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Enter in the long-text editor still commits', async () => {
+    renderGrid(calais, { models, view: { ...planning, columns: [...planning.columns!, 'notes'] } })
+    api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: 'b1' }))
+    const notes = cell('Montage', 'notes')
+    fireEvent.click(notes)
+    type(notes, 'Enter')
+    const area = screen.getByRole('textbox', { name: 'Notities' })
+    fireEvent.change(area, { target: { value: 'twee' } })
+    await act(async () => {
+      type(area, 'Enter', { ctrlKey: true })
+    })
+
+    expect(api.update).toHaveBeenCalledTimes(1)
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { notes: 'twee' }, expect.objectContaining({ id: 102 }))
+    expect(remote.rowOf).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox', { name: 'Notities' })).toBeNull()
+  })
+
   it.each([['is gone', () => remote.rowOf.mockResolvedValueOnce(null)], ['is refused', () => remote.rowOf.mockRejectedValueOnce({ code: 'not_found', message: 'x' })]])('a record that %s opens no drawer and says so', async (_name, arrange) => {
     arrange()
     const onNotice = vi.fn()

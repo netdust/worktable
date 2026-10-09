@@ -3,7 +3,7 @@ import { type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
-import { RelationContext } from './cells/Relation'
+import { RelationContext, relatedOf } from './cells/Relation'
 import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { rowOf } from '../api'
 import { Drawer, type RunAction } from './Drawer'
@@ -144,6 +144,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     required: (c) => Boolean(visible[c.col]?.required || visible[c.col]?.kind === 'links'),
     toggles: (c) => visible[c.col]?.kind === 'bool',
     value: (c) => (ordered[c.row] && visible[c.col] ? visible[c.col].edit(ordered[c.row]) : ''),
+    opens: (c) => Boolean(ordered[c.row] && visible[c.col] && relatedOf(visible[c.col] as Column, ordered[c.row] as Row, models)),
   }
 
   // The record a picker chose, so its title paints with the id before the server answers.
@@ -170,6 +171,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     if (effect.type === 'clear') apply(row, column, column.kind === 'bool' ? false : column.parse(''))
     if (effect.type === 'toggle') apply(row, column, !column.value(row))
     if (effect.type === 'cancel' && row.id === DRAFT) store.discard()
+    const related = effect.type === 'open' && relatedOf(column, row, models)
+    if (related) openRelated(related.target, related.id)
   }
 
   function locate(): Cell | null {
