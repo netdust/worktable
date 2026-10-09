@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { openEditor } from './editor'
 import { fillDate } from './segments'
+import { shot } from './shots'
 import { openWeek } from './tree'
 
 const MONDAY = '2026-10-12'
@@ -172,6 +173,7 @@ test('day-line-move', async ({ page }) => {
   await typeInto(await cell(page, name, 'Start'), '2026-10-13T06:00')
   await expect.poll(async () => (await activiteit(page, name)).plandag).toBe('2026-10-13')
   await expect.poll(() => sectionOf(page, name)).toContain('13 oktober')
+  await shot(page, 'cell-date-step-0b')
 
   const fields = (await revisions(page, before.id)).map((revision) => revision.field)
   expect(fields).toContain('start_at')

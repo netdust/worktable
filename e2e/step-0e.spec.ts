@@ -1,6 +1,7 @@
 import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test'
 import { ACCOUNTS, requestAndOpenLink, state, THEATRE } from './auth'
 import { fillDate } from './segments'
+import { shot } from './shots'
 import { addCondition, openModel, openView, openWeek } from './tree'
 
 const LOTTE = 'Lotte Verhaegen'
@@ -411,6 +412,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
     await segments[0].press('Enter')
     expect((await cleared).postDataJSON()).toEqual({ start_at: null })
     await expect(await cellOf(page, row(), 'Start')).toHaveText('')
+    await shot(page, 'cell-date-step-0e')
 
     await reopen(page)
     await expect(await cellOf(page, row(), 'Start')).toHaveText('')

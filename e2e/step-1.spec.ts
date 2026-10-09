@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
 import { fillDate } from './segments'
+import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
@@ -318,6 +319,7 @@ test('speelreeks-end-before-start @e2e', async ({ page }) => {
   await typeInto(await cellOf(page, row, 'Einde'), '2026-11-28')
   expect((await refused).status()).toBe(422)
   await expect(row.getByRole('alert')).toContainText('Einde ligt voor de start.')
+  await shot(page, 'cell-date-step-1')
 
   const [held] = await rowsOf<Values>(page.request, 'speelreeks', { id })
   expect(held.eind_datum).toBe('2026-12-02')
