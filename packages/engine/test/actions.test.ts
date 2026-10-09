@@ -43,6 +43,12 @@ const accept = (values: Record<string, unknown>) => values
 
 const noteOf = (project: unknown, tekst: string) => ({ dataset: 'note', values: { project_id: project, tekst } })
 
+const parentOf = (project: unknown, tekst: string) => ({
+  ...noteOf(project, tekst),
+  // biome-ignore lint/suspicious/noThenProperty: `then` is the ActionCreate field under test
+  then: (id: number) => [noteOf(project, `kind van ${id}`)],
+})
+
 const actions: Record<string, ActionDecl> = {
   ...domain.actions,
   // The third create repeats the first, which the note writer refuses.
@@ -55,6 +61,50 @@ const actions: Record<string, ActionDecl> = {
   // A create naming another project than the record's.
   elsewhere: { label: 'Elsewhere', on: 'project', input: {}, run: () => [noteOf(3, 'elders')] },
   on_flat: { label: 'On flat', on: 'plat', input: {}, run: () => [noteOf(1, 'flat')] },
+  // An update of a note, then a create.
+  rename: {
+    label: 'Rename',
+    on: 'project',
+    input: {},
+    run: (record) => ({
+      updates: [{ dataset: 'note', id: 1, values: { tekst: 'hernoemd' } }],
+      creates: [noteOf(record.id, 'nieuw')],
+    }),
+  },
+  // The update moves the note to project Beta, which the writer refuses, after a create.
+  rename_refused: {
+    label: 'Rename refused',
+    on: 'project',
+    input: {},
+    run: (record) => ({
+      creates: [noteOf(record.id, 'tijdelijk')],
+      updates: [{ dataset: 'note', id: 1, values: { project_id: 2 } }],
+    }),
+  },
+  // An update of a note on another project than the record's.
+  update_elsewhere: {
+    label: 'Update elsewhere',
+    on: 'project',
+    input: {},
+    run: () => ({ updates: [{ dataset: 'note', id: 2, values: { tekst: 'x' } }] }),
+  },
+  // A note, and a note under it pointing at it by tekst.
+  nested: {
+    label: 'Nested',
+    on: 'project',
+    input: {},
+    run: (record) => [parentOf(record.id, 'ouder')],
+  },
+  // An update, a create and a nested create.
+  all_three: {
+    label: 'All three',
+    on: 'project',
+    input: {},
+    run: (record) => ({
+      updates: [{ dataset: 'note', id: 1, values: { tekst: 'hernoemd' } }],
+      creates: [parentOf(record.id, 'ouder')],
+    }),
+  },
   // A note an owner may create, then an entry its writer refuses to an owner.
   make_entry: {
     label: 'Make entry',
@@ -148,6 +198,56 @@ describe('action denials', () => {
 
   test('a cross-site action is 403 forbidden_site', () =>
     denied(() => act(editor, 'copy_notes', COPY, 'cross-site'), 403, 'forbidden_site'))
+})
+
+describe('action updates and nested creates', () => {
+  const tekst = () => sqlite.query('SELECT id, tekst FROM note WHERE deleted_at IS NULL ORDER BY id').all()
+
+  test('an update goes through the writer, and the batch holds it with the create', async () => {
+    const res = await act(editor, 'rename', { id: 1 })
+    expect(res.status).toBe(201)
+    expect(tekst()).toEqual([
+      { id: 1, tekst: 'hernoemd' },
+      { id: 2, tekst: 'tweede' },
+      { id: 3, tekst: 'nieuw' },
+    ])
+    expect(sqlite.query('SELECT lengte FROM note WHERE id = 1').get()).toEqual({ lengte: 8 })
+    const key = res.body.batch_id as string
+    const rows = sqlite.query('SELECT record_id FROM revision WHERE batch_id = ?').all(key)
+    expect(new Set(rows.map((r) => (r as { record_id: number }).record_id))).toEqual(new Set([1, 3]))
+    expect(
+      sqlite
+        .query('SELECT COUNT(DISTINCT batch_id) AS n FROM revision WHERE record_id IN (1, 3) AND batch_id = ?')
+        .get(key),
+    ).toEqual({ n: 1 })
+  })
+
+  test('a refusing writer on the update rolls back the create too', () =>
+    denied(() => act(editor, 'rename_refused', { id: 1 }), 422, 'refused'))
+
+  test("an update outside an owner's scope is 404 unknown_record", () =>
+    denied(() => act(owner, 'update_elsewhere', { id: 1 }), 404, 'unknown_record'))
+
+  test("a nested create gets its parent's id", async () => {
+    const res = await act(editor, 'nested', { id: 1 })
+    expect(res.body.created).toEqual([
+      { dataset: 'note', id: 3 },
+      { dataset: 'note', id: 4 },
+    ])
+    expect(tekst().slice(2)).toEqual([
+      { id: 3, tekst: 'ouder' },
+      { id: 4, tekst: 'kind van 3' },
+    ])
+  })
+
+  test('one undo reverses an update, a create and a nested create', async () => {
+    const before = tekst()
+    const key = (await act(editor, 'all_three', { id: 1 })).body.batch_id as string
+    expect(tekst()).toHaveLength(4)
+    const res = await editor('POST', `/api/batches/${key}/undo`, { body: '{}' })
+    expect(res.status).toBe(200)
+    expect(tekst()).toEqual(before)
+  })
 })
 
 describe('actions', () => {

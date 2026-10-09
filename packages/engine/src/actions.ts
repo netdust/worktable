@@ -1,21 +1,21 @@
 import { inScope, scopeOf, visibleSource } from './access'
-import type { ActionDecl, Actor, Domain } from './declare'
+import type { ActionCreate, ActionDecl, ActionUpdate, Actor, Domain, TransitionMode } from './declare'
 import { ApiError } from './params'
 import {
+  applyWrite,
   contextOf,
-  create,
-  encodeAll,
-  enterState,
+  expectedOf,
   type Hooked,
   noneHooked,
   recordBatch,
   type Store,
   sendAfterCommit,
-  valuesOf,
   writableOf,
 } from './writes'
 
 type Values = Record<string, unknown>
+type Step = { key: string; hooked: Hooked }
+const WRITE: TransitionMode = { kind: 'write' }
 
 export interface ActionRun {
   batch_id: string
@@ -56,21 +56,20 @@ function readRecord(store: Store, dataset: string, id: number, actor: Actor): Va
   return record
 }
 
-function createAs(
-  store: Store,
-  actor: Actor,
-  dataset: string,
-  values: Values,
-  now: string,
-  key: string,
-  hooked: Hooked,
-) {
-  const target = writableOf(store.domain, dataset, 'create', actor)
-  const ctx = contextOf(store, actor, null)
-  const checked = valuesOf(store, target, 'create', values, ctx, scopeOf(actor, target.dataset))
-  const { id } = create(store.sqlite, target.dataset, encodeAll(target.dataset, checked), now, actor.id, key)
-  enterState(store, target.dataset, id, ctx, hooked, key)
-  return { dataset, id }
+type Done = { dataset: string; id: number }
+
+// Every write joins the action's batch; a create then makes its children under the id it got.
+function createAs(store: Store, actor: Actor, step: ActionCreate, at: Step): Done[] {
+  const target = writableOf(store.domain, step.dataset, 'create', actor)
+  const { id } = applyWrite(store, target, 'create', null, step.values, actor, WRITE, at.hooked, at.key)
+  const children = (step.then?.(id) ?? []).flatMap((child) => createAs(store, actor, child, at))
+  return [{ dataset: step.dataset, id }, ...children]
+}
+
+function updateAs(store: Store, actor: Actor, step: ActionUpdate, at: Step): void {
+  const target = writableOf(store.domain, step.dataset, 'update', actor)
+  const mode: TransitionMode = { kind: 'write', expect: expectedOf(target.dataset, step.expect) }
+  applyWrite(store, target, 'update', step.id, step.values, actor, mode, at.hooked, at.key)
 }
 
 // Runs as the caller, never with the import's 'all' scope; one transaction, so any refusal rolls back every create.
@@ -90,8 +89,11 @@ export function runAction(store: Store, name: string, body: Values, actor: Actor
       )
       const now = new Date().toISOString()
       const key = crypto.randomUUID()
-      const creates = action.run(record, input, contextOf(store, actor, record))
-      const created = creates.map(({ dataset, values }) => createAs(store, actor, dataset, values, now, key, hooked))
+      const result = action.run(record, input, contextOf(store, actor, record))
+      const { creates = [], updates = [] } = Array.isArray(result) ? { creates: result } : result
+      const at = { key, hooked }
+      const created = creates.flatMap((step) => createAs(store, actor, step, at))
+      for (const step of updates) updateAs(store, actor, step, at)
       recordBatch(store.sqlite, key, actor.id, 'action', now)
       return { batch_id: key, created }
     })

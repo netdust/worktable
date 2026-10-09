@@ -252,7 +252,7 @@ export function checkTransition(
   throw new ApiError(422, 'transition_not_allowed', `"${column}" may not go from ${String(from)} to ${String(to)}`)
 }
 
-function expectedOf(dataset: DatasetDecl, expect: unknown): string | undefined {
+export function expectedOf(dataset: DatasetDecl, expect: unknown): string | undefined {
   if (expect === undefined) return undefined
   const column = dataset.lifecycle?.column
   const given = typeof expect === 'object' && expect !== null && !Array.isArray(expect) ? (expect as Values) : null
@@ -470,7 +470,7 @@ function currentOf(sqlite: Database, target: Writable, id: number | null, scope:
   return current
 }
 
-/** One write; the caller holds the immediate transaction and sends the hooked mails after its commit. */
+/** One write; the caller holds the immediate transaction and sends the hooked mails after its commit. A given `batch` is recorded by the caller. */
 export function applyWrite(
   store: Store,
   target: Writable,
@@ -480,6 +480,7 @@ export function applyWrite(
   actor: Actor,
   mode: TransitionMode,
   hooked: Hooked,
+  batch?: string,
 ): Omit<Written, 'notices'> {
   const { sqlite } = store
   const scope = scopeOf(actor, target.dataset)
@@ -487,10 +488,10 @@ export function applyWrite(
   const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current), mode)
   const now = new Date().toISOString()
   const stored = storedOf(store, target, op, body, ctx, scope, now)
-  const key = crypto.randomUUID()
+  const key = batch ?? crypto.randomUUID()
   if (id === null || current === null) {
     const made = create(sqlite, target.dataset, stored, now, actor.id, key)
-    recordBatch(sqlite, key, actor.id, 'write', now)
+    if (!batch) recordBatch(sqlite, key, actor.id, 'write', now)
     enterState(store, target.dataset, made.id, ctx, hooked, key)
     return { ...made, batch_id: key }
   }
@@ -498,7 +499,7 @@ export function applyWrite(
   if (changes.length === 0) return { id, batch_id: null, changed: [] }
   update(sqlite, target.dataset.name, id, stored, now)
   revise(sqlite, target.dataset, id, changes, now, actor.id, key)
-  recordBatch(sqlite, key, actor.id, 'write', now)
+  if (!batch) recordBatch(sqlite, key, actor.id, 'write', now)
   if (op === 'update') enterState(store, target.dataset, id, ctx, hooked, key)
   return { id, batch_id: key, changed: changes.map(([field]) => field) }
 }

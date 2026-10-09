@@ -181,12 +181,28 @@ export interface WriteContext {
 
 type Values = Record<string, unknown>
 
-/** Runs as the caller: `run` answers the creates, and each goes through its dataset's writer. */
+/** A create; `then` makes children once this row exists and has its id. */
+export interface ActionCreate {
+  dataset: string
+  values: Values
+  then?: (id: number) => ActionCreate[]
+}
+
+export interface ActionUpdate {
+  dataset: string
+  id: number
+  values: Values
+  expect?: Record<string, unknown>
+}
+
+export type ActionResult = ActionCreate[] | { creates?: ActionCreate[]; updates?: ActionUpdate[] }
+
+/** Runs as the caller: `run` answers the creates and updates, and each goes through its dataset's writer. */
 export interface ActionDecl {
   label: string
   on: string
   input: Record<string, { relation: string; label: string }>
-  run(record: Values, input: Record<string, Values>, ctx: WriteContext): { dataset: string; values: Values }[]
+  run(record: Values, input: Record<string, Values>, ctx: WriteContext): ActionResult
 }
 
 export interface Writer {

@@ -2,7 +2,10 @@ export { forbid } from './access'
 export { createEngine, type EngineOptions } from './app'
 export { createAccount } from './auth'
 export type {
+  ActionCreate,
   ActionDecl,
+  ActionResult,
+  ActionUpdate,
   Actor,
   ColumnDecl,
   ColumnType,

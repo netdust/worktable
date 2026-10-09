@@ -96,6 +96,15 @@ const domainOf = (ticket: DatasetDecl = ticketOf()): Domain => ({
       input: {},
       run: (r) => [{ dataset: 'ticket', values: { member_id: r.id, state: 'b' } }],
     },
+    advance: {
+      label: 'Advance',
+      on: 'member',
+      input: {},
+      run: () => ({
+        updates: [{ dataset: 'ticket', id: 1, values: { state: 'b' }, expect: { state: 'a' } }],
+        creates: [],
+      }),
+    },
     invite_broken: {
       label: 'Invite, then refused',
       on: 'member',
@@ -321,6 +330,15 @@ describe('hooks', () => {
     expect(sent).toEqual([
       { mail: { to: 'ann@example.test', subject: 'Uitnodiging', text: 'ticket 1' }, inTransaction: false },
     ])
+  })
+
+  test('an action update into b fires the hook after commit, and a stale expect is 409', async () => {
+    const res = await editor('POST', '/api/actions/advance', { body: JSON.stringify({ id: 1 }) })
+    expect(res.status).toBe(201)
+    expect(res.body.notices).toEqual(['invited'])
+    await Bun.sleep(5)
+    expect(sent.map((s) => s.inTransaction)).toEqual([false])
+    await denied(editor('POST', '/api/actions/advance', { body: JSON.stringify({ id: 1 }) }), 409, 'transition_lost')
   })
 
   test("a hook's notice is in the reply", async () => {
