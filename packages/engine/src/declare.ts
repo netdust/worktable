@@ -181,11 +181,11 @@ export interface WriteContext {
 
 type Values = Record<string, unknown>
 
-/** A create; `then` makes children once this row exists and has its id. */
+/** A create; `children` makes creates once this row exists and has its id. */
 export interface ActionCreate {
   dataset: string
   values: Values
-  then?: (id: number) => ActionCreate[]
+  children?: (id: number) => ActionCreate[]
 }
 
 export interface ActionUpdate {

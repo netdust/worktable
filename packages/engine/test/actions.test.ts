@@ -45,8 +45,7 @@ const noteOf = (project: unknown, tekst: string) => ({ dataset: 'note', values: 
 
 const parentOf = (project: unknown, tekst: string) => ({
   ...noteOf(project, tekst),
-  // biome-ignore lint/suspicious/noThenProperty: `then` is the ActionCreate field under test
-  then: (id: number) => [noteOf(project, `kind van ${id}`)],
+  children: (id: number) => [noteOf(project, `kind van ${id}`)],
 })
 
 const actions: Record<string, ActionDecl> = {
@@ -222,8 +221,12 @@ describe('action updates and nested creates', () => {
     ).toEqual({ n: 1 })
   })
 
-  test('a refusing writer on the update rolls back the create too', () =>
-    denied(() => act(editor, 'rename_refused', { id: 1 }), 422, 'refused'))
+  test('a refusing writer on the update rolls back the create too', async () => {
+    await denied(() => act(editor, 'rename_refused', { id: 1 }), 422, 'refused')
+    expect(tekst().map((n) => (n as { tekst: string }).tekst)).toEqual(['eerste', 'tweede'])
+    expect(sqlite.query("SELECT id FROM note WHERE tekst = 'tijdelijk'").all()).toEqual([])
+    expect(sqlite.query('SELECT project_id FROM note WHERE id = 1').get()).toEqual({ project_id: 1 })
+  })
 
   test("an update outside an owner's scope is 404 unknown_record", () =>
     denied(() => act(owner, 'update_elsewhere', { id: 1 }), 404, 'unknown_record'))

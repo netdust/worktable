@@ -62,7 +62,7 @@ type Done = { dataset: string; id: number }
 function createAs(store: Store, actor: Actor, step: ActionCreate, at: Step): Done[] {
   const target = writableOf(store.domain, step.dataset, 'create', actor)
   const { id } = applyWrite(store, target, 'create', null, step.values, actor, WRITE, at.hooked, at.key)
-  const children = (step.then?.(id) ?? []).flatMap((child) => createAs(store, actor, child, at))
+  const children = (step.children?.(id) ?? []).flatMap((child) => createAs(store, actor, child, at))
   return [{ dataset: step.dataset, id }, ...children]
 }
 

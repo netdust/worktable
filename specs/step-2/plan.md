@@ -299,10 +299,10 @@ Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, 
 **Files:** Modify `declare.ts` (`ActionDecl.run` `:160-165`), `actions.ts` (`runAction`, `:57-78`). Test `packages/engine/test/actions.test.ts`.
 
 **Interfaces:**
-- Produces `type ActionCreate = { dataset: string; values: Values; then?: (id: number) => ActionCreate[] }`.
+- Produces `type ActionCreate = { dataset: string; values: Values; children?: (id: number) => ActionCreate[] }`.
 - Produces `type ActionResult = ActionCreate[] | { creates?: ActionCreate[]; updates?: { dataset: string; id: number; values: Values; expect?: Record<string, unknown> }[] }`.
 - An update's row is read in the caller's scope (404 outside it) with `ctx.current` the live row. It goes through `writableOf('update')`, `valuesOf` and the transition check.
-- `then` runs after its parent is created, with its id.
+- `children` runs after its parent is created, with its id.
 - Everything is one `action` batch, and one undo reverses it.
 
 - [ ] **Step 1: Tests:**
