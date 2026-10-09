@@ -259,6 +259,16 @@ function checkLifecycle(dataset: DatasetDecl): void {
   for (const column of lifecycle.token_projection ?? []) checkColumn(dataset, 'token_projection column', column)
 }
 
+function checkRecordLink(dataset: DatasetDecl): void {
+  const link = dataset.record_link
+  if (!link) return
+  if (!dataset.owners?.owner) throw new DomainError(dataset.name, 'record_link', 'record_link needs an owner column')
+  const { email } = link
+  if (email !== undefined && dataset.columns[email]?.type !== 'text') {
+    throw new DomainError(dataset.name, email, `record_link email "${email}" is not a text column`)
+  }
+}
+
 const ACTION_NAME = /^[a-z][a-z0-9_]*$/
 
 function checkActions(domain: Domain): void {
@@ -361,6 +371,7 @@ export function validateDomain(domain: Domain): void {
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkLifecycle(dataset)
+    checkRecordLink(dataset)
     checkConfig(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }

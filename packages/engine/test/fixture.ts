@@ -18,6 +18,7 @@ const project = defineDataset({
   title: 'name',
   custom: true,
   owners: { owner: 'id' },
+  record_link: {},
   columns: { name: { type: 'text', label: 'Name' } },
 })
 

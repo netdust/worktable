@@ -1,13 +1,15 @@
 import type { Database } from 'bun:sqlite'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import type { Actor } from '../src'
+import { recordLinkFor } from '../src/record-link'
 import { domain, freshDb, send } from './fixture'
-import { signIn, testEngine } from './sign-in'
+import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
 const OWN = { dataset: 'project', id: 1 }
 const json = (value: unknown) => JSON.stringify(value)
 
-type Role = 'none' | Actor['role']
+// `link` is the link actor of project 1, authenticated by its RecordLink header.
+type Role = 'none' | Actor['role'] | 'link'
 
 const PUBLIC_TOKEN = 'matrix-token'
 const PUBLIC_HASH = new Bun.CryptoHasher('sha256').update(PUBLIC_TOKEN).digest('hex')
@@ -18,128 +20,181 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
     method: 'POST',
     path: '/api/auth/request',
     body: { email: 'x@example.test' },
-    status: { none: 200, owner: 200, editor: 200, administrator: 200 },
+    status: { none: 200, owner: 200, editor: 200, administrator: 200, link: 200 },
   },
   {
     method: 'POST',
     path: '/api/auth/consume',
     body: { token: 'not-a-link' },
-    status: { none: 400, owner: 400, editor: 400, administrator: 400 },
+    status: { none: 400, owner: 400, editor: 400, administrator: 400, link: 400 },
   },
   {
     method: 'POST',
     path: '/api/act/view',
     body: { token: 'not-a-token' },
-    status: { none: 401, owner: 401, editor: 401, administrator: 401 },
+    status: { none: 401, owner: 401, editor: 401, administrator: 401, link: 401 },
   },
   {
     method: 'POST',
     path: '/api/act',
     body: { token: 'not-a-token', to: 'klaar' },
-    status: { none: 401, owner: 401, editor: 401, administrator: 401 },
+    status: { none: 401, owner: 401, editor: 401, administrator: 401, link: 401 },
   },
-  { method: 'GET', path: '/api/auth/me', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
+  {
+    method: 'GET',
+    path: '/api/auth/me',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 200 },
+  },
   {
     method: 'POST',
     path: '/api/auth/signout',
     body: {},
-    status: { none: 401, owner: 200, editor: 200, administrator: 200 },
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
   },
-  { method: 'GET', path: '/api/schema', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
-  { method: 'GET', path: '/api/rows/taak', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
-  { method: 'GET', path: '/api/rows/plat', status: { none: 401, owner: 404, editor: 200, administrator: 200 } },
-  { method: 'GET', path: '/api/history/taak', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
-  { method: 'GET', path: '/api/history/plat', status: { none: 401, owner: 404, editor: 200, administrator: 200 } },
-  { method: 'GET', path: '/api/revisions/note/1', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
+  { method: 'GET', path: '/api/schema', status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 } },
+  {
+    method: 'GET',
+    path: '/api/rows/taak',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
+  },
+  {
+    method: 'GET',
+    path: '/api/rows/plat',
+    status: { none: 401, owner: 404, editor: 200, administrator: 200, link: 403 },
+  },
+  {
+    method: 'GET',
+    path: '/api/history/taak',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
+  },
+  {
+    method: 'GET',
+    path: '/api/history/plat',
+    status: { none: 401, owner: 404, editor: 200, administrator: 200, link: 403 },
+  },
+  {
+    method: 'GET',
+    path: '/api/revisions/note/1',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
+  },
   {
     method: 'POST',
     path: '/api/rows/note',
     body: { project_id: 1, tekst: 'fresh' },
-    status: { none: 401, owner: 201, editor: 201, administrator: 201 },
+    status: { none: 401, owner: 201, editor: 201, administrator: 201, link: 403 },
   },
   {
     method: 'PATCH',
     path: '/api/rows/note/1',
     body: { tekst: 'changed' },
-    status: { none: 401, owner: 200, editor: 200, administrator: 200 },
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
   },
-  { method: 'DELETE', path: '/api/rows/note/1', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
-  { method: 'DELETE', path: '/api/rows/project/1', status: { none: 401, owner: 403, editor: 409, administrator: 409 } },
+  {
+    method: 'DELETE',
+    path: '/api/rows/note/1',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/rows/project/1',
+    status: { none: 401, owner: 403, editor: 409, administrator: 409, link: 403 },
+  },
   {
     method: 'POST',
     path: '/api/batches/matrix-own/undo',
     body: {},
-    status: { none: 401, owner: 200, editor: 200, administrator: 200 },
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 },
   },
   {
     method: 'POST',
     path: '/api/batches/matrix-other/undo',
     body: {},
-    status: { none: 401, owner: 403, editor: 403, administrator: 403 },
+    status: { none: 401, owner: 403, editor: 403, administrator: 403, link: 403 },
   },
   {
     method: 'POST',
     path: '/api/actions/copy_notes',
     body: { id: 1, input: { source: 1 } },
-    status: { none: 401, owner: 201, editor: 201, administrator: 201 },
+    status: { none: 401, owner: 201, editor: 201, administrator: 201, link: 403 },
   },
   {
     method: 'POST',
     path: '/api/actions/nope',
     body: { id: 1, input: {} },
-    status: { none: 401, owner: 404, editor: 404, administrator: 404 },
+    status: { none: 401, owner: 404, editor: 404, administrator: 404, link: 403 },
   },
-  { method: 'GET', path: '/api/views', status: { none: 401, owner: 200, editor: 200, administrator: 200 } },
+  { method: 'GET', path: '/api/views', status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403 } },
   {
     method: 'POST',
     path: '/api/views',
     body: { name: 'Mine', source: 'taak' },
-    status: { none: 401, owner: 403, editor: 201, administrator: 201 },
+    status: { none: 401, owner: 403, editor: 201, administrator: 201, link: 403 },
   },
   {
     method: 'PATCH',
     path: '/api/views/2',
     body: { name: 'Renamed' },
-    status: { none: 401, owner: 403, editor: 200, administrator: 200 },
+    status: { none: 401, owner: 403, editor: 200, administrator: 200, link: 403 },
   },
-  { method: 'DELETE', path: '/api/views/2', status: { none: 401, owner: 403, editor: 200, administrator: 200 } },
+  {
+    method: 'DELETE',
+    path: '/api/views/2',
+    status: { none: 401, owner: 403, editor: 200, administrator: 200, link: 403 },
+  },
   {
     method: 'POST',
     path: '/api/views/2/restore',
     body: {},
-    status: { none: 401, owner: 403, editor: 200, administrator: 200 },
+    status: { none: 401, owner: 403, editor: 200, administrator: 200, link: 403 },
   },
   {
     method: 'PUT',
     path: '/api/views/3/share-token',
     body: {},
-    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
   },
   {
     method: 'DELETE',
     path: '/api/views/3/share-token',
-    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
   },
   {
     method: 'PUT',
     path: '/api/sources/taak/display',
     body: { label: 'Werk', icon: 'star' },
-    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
   },
   {
     method: 'PUT',
     path: '/api/sources/plat/display',
     body: { label: 'Werk' },
-    status: { none: 401, owner: 403, editor: 403, administrator: 200 },
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
+  },
+  {
+    method: 'POST',
+    path: '/api/record-links/request',
+    body: { email: 'x@example.test' },
+    status: { none: 200, owner: 200, editor: 200, administrator: 200, link: 200 },
+  },
+  {
+    method: 'GET',
+    path: '/api/record-links/project/1',
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
+  },
+  {
+    method: 'POST',
+    path: '/api/record-links/project/1/rotate',
+    body: {},
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403 },
   },
   {
     method: 'GET',
     path: `/api/public/views/${PUBLIC_TOKEN}`,
-    status: { none: 200, owner: 200, editor: 200, administrator: 200 },
+    status: { none: 200, owner: 200, editor: 200, administrator: 200, link: 200 },
   },
 ]
 
-const roles: Role[] = ['none', 'owner', 'editor', 'administrator']
+const roles: Role[] = ['none', 'owner', 'editor', 'administrator', 'link']
 
 describe('the permissions matrix', () => {
   let sqlite: Database
@@ -150,7 +205,7 @@ describe('the permissions matrix', () => {
   beforeAll(async () => {
     sqlite = freshDb()
     app = testEngine(sqlite, domain)
-    for (const role of roles.slice(1) as Actor['role'][]) {
+    for (const role of ['owner', 'editor', 'administrator'] as const) {
       cookies[role] = await signIn(app, role, role === 'owner' ? OWN : null)
     }
   })
@@ -178,11 +233,19 @@ describe('the permissions matrix', () => {
              VALUES ('note', 1, 'tekst', '"oud"', '"eerste"', ${account}, 'x', 'matrix-own'),
                     ('note', 1, 'tekst', '"oud"', '"eerste"', 999, 'x', 'matrix-other')`,
           )
-          const res = await send(app, cookies[role])(
-            method,
-            path,
-            body === undefined ? { type: null } : { body: json(body) },
-          )
+          const sent = body === undefined ? { type: null } : { body: json(body) }
+          const res =
+            role === 'link'
+              ? await app.request(path, {
+                  method,
+                  headers: {
+                    host: '127.0.0.1:4310',
+                    authorization: `RecordLink ${recordLinkFor(sqlite, TEST_LINK_SECRET, 'project', 1)}`,
+                    ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+                  },
+                  body: body === undefined ? undefined : json(body),
+                })
+              : await send(app, cookies[role])(method, path, sent)
           expect(res.status).toBe(status[role])
         } finally {
           sqlite.run('ROLLBACK TO cell')
@@ -211,7 +274,7 @@ describe('every route has a row in the matrix', () => {
     expect(registered.filter((r) => !listed(r)).map((r) => `${r.method} ${r.path}`)).toEqual([])
   })
 
-  test('every EXPECTED row names a registered route and gives all four roles', () => {
+  test('every EXPECTED row names a registered route and gives every role', () => {
     for (const e of EXPECTED) {
       const name = `${e.method} ${e.path}`
       expect(

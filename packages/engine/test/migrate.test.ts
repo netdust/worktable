@@ -110,6 +110,7 @@ describe('migrate', () => {
       'magic_link',
       'per_klant',
       'rate_limit',
+      'record_link',
       'revision',
       'saved_view',
       'source_display',

@@ -60,6 +60,22 @@ export const actionToken = defineDataset({
   indexes: [['dataset', 'record_id'], ['minted_batch']],
 })
 
-export const engineTables = [savedView, revision, batch, sourceDisplay, ...authTables, actionToken]
+// A record's link version; no row is version 0. Outside every batch, so a rotation is never undone.
+export const recordLink = defineDataset({
+  name: 'record_link',
+  label: 'Record link',
+  title: 'dataset',
+  custom: false,
+  columns: {
+    dataset: { type: 'text', label: 'Dataset' },
+    record_id: { type: 'integer', label: 'Record' },
+    version: { type: 'integer', label: 'Version' },
+    rotated_at: { type: 'datetime', label: 'Rotated at' },
+    rotated_by: { type: 'integer', label: 'Rotated by' },
+  },
+  checks: ['UNIQUE (dataset, record_id)'],
+})
+
+export const engineTables = [savedView, revision, batch, sourceDisplay, ...authTables, actionToken, recordLink]
 
 export const reservedNames = new Set([MIGRATIONS, ...engineTables.map((t) => t.name)])

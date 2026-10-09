@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite'
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from './app'
@@ -31,6 +31,7 @@ const { values } = parseArgs({
     report: { type: 'string' },
     'accept-report': { type: 'boolean', default: false },
     'seed-missing': { type: 'boolean', default: false },
+    'link-secret-file': { type: 'string' },
   },
 })
 
@@ -42,7 +43,7 @@ function fail(message: string): never {
 if (!values.domain || !values.db) {
   fail(
     'usage: serve.ts --domain <module> --db <file> [--port 4310] [--hostname 127.0.0.1] [--fresh]\n' +
-      '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>]\n' +
+      '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>] [--link-secret-file <file>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
       '   | --disable-account <email>]\n' +
       '  [--import <export.json> --as <administrator email> [--report <file>] [--accept-report]]\n' +
@@ -185,6 +186,25 @@ if (code !== null) {
 }
 if (values.outbox) mkdirSync(values.outbox, { recursive: true, mode: 0o700 })
 
+// Read only when serving: the one-shot commands above sign no link.
+function readLinkSecret(file: string | undefined): Uint8Array | undefined {
+  if (file === undefined) {
+    if (domain.datasets.some((d) => d.record_link)) fail('this domain declares record links: pass --link-secret-file')
+    return undefined
+  }
+  let mode: number
+  try {
+    mode = statSync(file).mode
+  } catch {
+    fail(`--link-secret-file ${file} cannot be read`)
+  }
+  if ((mode & 0o077) !== 0) fail(`--link-secret-file ${file} is readable by group or others: chmod 600 it`)
+  const secret = new Uint8Array(readFileSync(file))
+  if (secret.length < 32) fail(`--link-secret-file ${file} holds fewer than 32 bytes`)
+  return secret
+}
+const linkSecret = readLinkSecret(values['link-secret-file'])
+
 const port = Number(values.port)
 const server = Bun.serve({
   hostname: values.hostname,
@@ -194,6 +214,7 @@ const server = Bun.serve({
     appUrl: values['app-url'],
     outbox: values.outbox,
     cookieName: values['cookie-name'],
+    linkSecret,
   }).fetch,
 })
 console.log(`engine listening on http://${server.hostname}:${server.port}`)

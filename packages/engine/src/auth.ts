@@ -5,14 +5,15 @@ import { createMiddleware } from 'hono/factory'
 import { ROLES } from './auth-tables'
 import type { Actor, Domain } from './declare'
 import type { Mailer } from './mailer'
-import { ApiError } from './params'
-import { checkLimits } from './rate-limit'
+import { ApiError, emailOf } from './params'
+import { noStoreHeaders } from './public-headers'
+import { checkLimits, failureLimiter } from './rate-limit'
+import { badLink, confineLinkActor, verifyRecordLink } from './record-link'
 import { bodyOf } from './writes'
 
 const MINUTE = 60_000
 const LINK_LIFE = 15 * MINUTE
 const SESSION_LIFE = 30 * 24 * 60 * MINUTE
-const MAX_EMAIL = 254
 const MAX_TOKEN = 128
 
 export interface AuthOptions {
@@ -20,6 +21,8 @@ export interface AuthOptions {
   mailer?: Mailer
   cookieName: string
   clientIp: (c: Context) => string
+  domain: Domain
+  linkSecret?: Uint8Array
 }
 
 interface AccountRow {
@@ -40,12 +43,6 @@ const iso = (ms: number): string => new Date(ms).toISOString()
 export const sha256 = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex')
 export const secret = (): string => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url')
 const badToken = (): ApiError => new ApiError(400, 'bad_token', 'This link is not valid any more')
-
-function emailOf(value: unknown): string {
-  const email = typeof value === 'string' ? value.trim() : ''
-  if (email.length > MAX_EMAIL || !email.includes('@')) throw new ApiError(400, 'bad_email', 'Not an email address')
-  return email
-}
 
 const actorOf = (row: AccountRow): Actor => ({
   id: row.id,
@@ -170,15 +167,44 @@ async function consumeLink(c: Context, sqlite: Database, options: AuthOptions): 
   return c.json({ account: accountOut(account) })
 }
 
-// Re-reads the account on every request, so a changed role or a disabled account takes effect at once.
-function sessionMiddleware(sqlite: Database, cookieName: string) {
+// The header's value loses its trailing space, so a bare scheme is an empty token.
+const RECORD_LINK = /^RecordLink(?: (.*))?$/
+
+// A header sibling is checked before the cookie, and when it is present the cookie is ignored.
+function recordLinkOf(c: Context): string | null {
+  const match = RECORD_LINK.exec(c.req.header('authorization') ?? '')
+  return match ? (match[1] ?? '') : null
+}
+
+async function linkedAccount(c: Context, sqlite: Database, options: AuthOptions, token: string): Promise<AccountRow> {
+  for (const [name, value] of Object.entries(noStoreHeaders())) c.header(name, value)
+  const limited = failureLimiter(`record-link:ip:${options.clientIp(c)}`, 20, 15)
+  return limited(sqlite, () => {
+    const { linkSecret, domain } = options
+    if (!linkSecret) throw badLink()
+    const { id } = verifyRecordLink(sqlite, domain, linkSecret, token)
+    return sqlite.query(`SELECT ${ACCOUNT} FROM account a WHERE a.id = ?`).get(id) as AccountRow
+  })
+}
+
+function sessionAccount(c: Context, sqlite: Database, cookieName: string): { account: AccountRow; session: string } {
   const sql = `SELECT ${ACCOUNT} FROM auth_session s JOIN account a ON a.id = s.account_id
                WHERE s.id_hash = ? AND s.expires_at > ? AND a.disabled_at IS NULL AND a.kind = 'user'`
+  const value = getCookie(c, cookieName)
+  const session = value ? sha256(value) : ''
+  const account = value ? (sqlite.query(sql).get(session, iso(Date.now())) as AccountRow | null) : null
+  if (!account) throw new ApiError(401, 'unauthenticated', 'Sign in first')
+  return { account, session }
+}
+
+// Re-reads the account on every request, so a changed role, a disabled account or a rotated link takes effect at once.
+function authenticate(sqlite: Database, options: AuthOptions) {
   return createMiddleware<AuthEnv>(async (c, next) => {
-    const value = getCookie(c, cookieName)
-    const session = value ? sha256(value) : ''
-    const account = value ? (sqlite.query(sql).get(session, iso(Date.now())) as AccountRow | null) : null
-    if (!account) throw new ApiError(401, 'unauthenticated', 'Sign in first')
+    const token = recordLinkOf(c)
+    const { account, session } =
+      token === null
+        ? sessionAccount(c, sqlite, options.cookieName)
+        : { account: await linkedAccount(c, sqlite, options, token), session: '' }
     c.set('account', account)
     c.set('actor', actorOf(account))
     c.set('session', session)
@@ -190,7 +216,7 @@ export function authRoutes(app: Hono<AuthEnv>, sqlite: Database, options: AuthOp
   // Registered before the session middleware, so these two answer without a session.
   app.post('/auth/request', (c) => requestLink(c, sqlite, options))
   app.post('/auth/consume', (c) => consumeLink(c, sqlite, options))
-  app.use('/*', sessionMiddleware(sqlite, options.cookieName))
+  app.use('/*', authenticate(sqlite, options), confineLinkActor)
 
   app.get('/auth/me', (c) => c.json(accountOut(c.get('account'))))
   app.post('/auth/signout', (c) => {

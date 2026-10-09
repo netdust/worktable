@@ -173,7 +173,7 @@ describe('the account table', () => {
   test('a link account is created once per subject', () => {
     const first = linkAccount(sqlite, { dataset: 'member', id: 1 })
     expect(linkAccount(sqlite, { dataset: 'member', id: 1 })).toEqual(first)
-    expect(linkAccount(sqlite, { dataset: 'member', id: 2 }).id).not.toBe(first.id)
+    expect(linkAccount(sqlite, { dataset: 'member', id: 2 })?.id).not.toBe(first?.id)
     expect(first).toMatchObject({ role: 'owner', kind: 'link', subject: { dataset: 'member', id: 1 } })
     const rows = sqlite.query("SELECT email, role, subject_id FROM account WHERE kind = 'link' ORDER BY id").all()
     expect(rows).toEqual([
@@ -213,7 +213,7 @@ describe('the action token', () => {
     expect(stateOf(1)).toBe('c')
     const link = linkAccount(sqlite, { dataset: 'member', id: 1 })
     const last = sqlite.query('SELECT actor_id, kind FROM batch ORDER BY rowid DESC LIMIT 1').get()
-    expect(last).toEqual({ actor_id: link.id, kind: 'write' })
+    expect(last).toEqual({ actor_id: link?.id, kind: 'write' })
     expect(tokens()[0]?.used_at).not.toBeNull()
 
     const history = await editor('GET', '/api/history/ticket')
@@ -242,6 +242,15 @@ describe('the action token', () => {
     bodies.push((await denied(view(token), 401, 'bad_token')).body)
     expect(stateOf(1)).toBe('c')
     expect(new Set(bodies.map((b) => JSON.stringify(b))).size).toBe(1)
+  })
+
+  test('a disabled link account is the same 401, and the token stays unused', async () => {
+    const { token } = await invite()
+    linkAccount(sqlite, { dataset: 'member', id: 1 })
+    sqlite.run("UPDATE account SET disabled_at = '2026-10-01T00:00:00Z' WHERE kind = 'link'")
+    expect(linkAccount(sqlite, { dataset: 'member', id: 1 })).toBeNull()
+    await denied(act(token, 'c'), 401, 'bad_token')
+    expect(tokens()[0]?.used_at).toBeNull()
   })
 
   test('a to outside the token is 422 transition_not_allowed and leaves the token unused', async () => {

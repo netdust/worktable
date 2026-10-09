@@ -11,6 +11,8 @@ import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
 import { ApiError, parseRowsParams } from './params'
+import { noStoreHeaders } from './public-headers'
+import { recordLinkRequest, recordLinkRoutes } from './record-link'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
 import { cellsOf, linksOf, matrixOf, readRows } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
@@ -142,7 +144,11 @@ export interface EngineOptions {
   mailer?: Mailer
   cookieName?: string
   clientIp?: (req: Request) => string
+  /** Signs record links; required, at least 32 bytes, when a dataset declares record_link. */
+  linkSecret?: Uint8Array
 }
+
+const MIN_LINK_SECRET = 32
 
 // Bun's own peer address; proxy headers are never read.
 function peerAddress(c: Context): string {
@@ -152,7 +158,10 @@ function peerAddress(c: Context): string {
 }
 
 export function createEngine(sqlite: Database, domain: Domain, options: EngineOptions): Hono<AuthEnv> {
-  const { port, appUrl = 'http://127.0.0.1:5173', outbox, cookieName = 'wt_session', clientIp } = options
+  const { port, appUrl = 'http://127.0.0.1:5173', outbox, cookieName = 'wt_session', clientIp, linkSecret } = options
+  if (domain.datasets.some((d) => d.record_link) && (linkSecret?.length ?? 0) < MIN_LINK_SECRET) {
+    throw new Error(`a dataset declares record_link, so the engine needs a link secret of ${MIN_LINK_SECRET} bytes`)
+  }
   sqlite.run('PRAGMA foreign_keys = ON')
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
@@ -173,7 +182,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)
   actionTokenRoutes(app, store, ipOf)
-  authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf })
+  recordLinkRequest(app, store, linkSecret, ipOf)
+  authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
+  if (linkSecret) recordLinkRoutes(app, store, linkSecret)
 
   app.get('/schema', (c) => {
     const actor = c.get('actor')
@@ -246,6 +257,10 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   shareRoutes(app, store)
 
   root.onError((err, c) => {
+    // Every 401 may answer a presented token, so none is cached or referred on.
+    if (err instanceof ApiError && err.status === 401) {
+      for (const [name, value] of Object.entries(noStoreHeaders())) c.header(name, value)
+    }
     if (err instanceof ApiError) return c.json({ ...err.details, code: err.code, message: err.message }, err.status)
     console.error(err)
     return c.json({ code: 'internal', message: 'Internal error' }, 500)

@@ -14,6 +14,14 @@ export class ApiError extends Error {
   }
 }
 
+const MAX_EMAIL = 254
+
+export function emailOf(value: unknown): string {
+  const email = typeof value === 'string' ? value.trim() : ''
+  if (email.length > MAX_EMAIL || !email.includes('@')) throw new ApiError(400, 'bad_email', 'Not an email address')
+  return email
+}
+
 export interface RowsParams {
   filter: FilterInput | null
   sort: { column: string; desc: boolean }[]

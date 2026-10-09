@@ -1,11 +1,11 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAccount, createEngine, migrate, seedDomain } from '../src'
 import { contents, domain, freshDb, send } from './fixture'
-import { linkFor, signIn, signInAs, testEngine } from './sign-in'
+import { linkFor, signIn, signInAs, TEST_LINK_SECRET, testEngine } from './sign-in'
 
 let sqlite: Database
 let app: ReturnType<typeof testEngine>
@@ -369,7 +369,11 @@ describe('the cookie name and the outbox', () => {
 
   test('without an outbox a link request prints nothing, writes nothing, and answers the same 200', async () => {
     createAccount(sqlite, domain, 'known@example.test', 'editor')
-    const quiet = createEngine(sqlite, domain, { port: 4310, clientIp: () => '127.0.0.1' })
+    const quiet = createEngine(sqlite, domain, {
+      port: 4310,
+      clientIp: () => '127.0.0.1',
+      linkSecret: TEST_LINK_SECRET,
+    })
     const spies = (['log', 'info', 'warn', 'error'] as const).map((m) => spyOn(console, m))
     try {
       const res = await quiet.request('/api/auth/request', {
@@ -510,6 +514,8 @@ describe('serve.ts', () => {
   test('--hostname 127.0.0.1 starts, --cookie-name names the cookie over real HTTP, and --outbox is owner-only', async () => {
     const port = 20_000 + Math.floor(Math.random() * 20_000)
     const box = join(outbox, 'new')
+    const secret = join(mkdtempSync(join(tmpdir(), 'wt-secret-')), 'link-secret')
+    writeFileSync(secret, 'x'.repeat(32), { mode: 0o600 })
     expect((await cli('--fresh', '--create-account', 'a@example.test', '--role', 'editor')).code).toBe(0)
     const server = Bun.spawn(
       [
@@ -527,6 +533,8 @@ describe('serve.ts', () => {
         'wt_cli',
         '--outbox',
         box,
+        '--link-secret-file',
+        secret,
       ],
       { stdout: 'pipe', stderr: 'pipe' },
     )

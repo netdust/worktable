@@ -100,6 +100,8 @@ export interface DatasetDecl {
   new_label?: string
   links?: Record<string, LinkDecl>
   lifecycle?: LifecycleDecl
+  /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
+  record_link?: { email?: string }
 }
 
 export interface QueryDecl {

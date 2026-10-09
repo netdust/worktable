@@ -6,6 +6,7 @@ import { inScope, scopeOf } from './access'
 import { type AuthEnv, secret, sha256 } from './auth'
 import type { Actor, DatasetDecl } from './declare'
 import { ApiError } from './params'
+import { noStoreHeaders } from './public-headers'
 import { failureLimiter } from './rate-limit'
 import { titlesOf } from './rows'
 import { applyWrite, bodyOf, noneHooked, type Store, sendAfterCommit, writableOf } from './writes'
@@ -26,31 +27,29 @@ interface TokenRow {
   to_states: string
 }
 
-/** What every public response carries, so neither a cache, a Referer nor a crawler keeps the token. */
-export function noStoreHeaders(): Record<string, string> {
-  return { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' }
-}
-
 const iso = (ms: number): string => new Date(ms).toISOString()
 const badToken = (): ApiError => new ApiError(401, 'bad_token', 'This link is not valid any more')
 const linkActor = (id: number, subject: Subject): Actor => ({ id, role: 'owner', subject, kind: 'link' })
 
-function findLink(sqlite: Database, { dataset, id }: Subject): number | null {
-  const sql = "SELECT id FROM account WHERE kind = 'link' AND subject_dataset = ? AND subject_id = ?"
-  return (sqlite.query(sql).get(dataset, id) as { id: number } | null)?.id ?? null
+function findLink(sqlite: Database, { dataset, id }: Subject): { id: number; disabled_at: string | null } | null {
+  const sql = "SELECT id, disabled_at FROM account WHERE kind = 'link' AND subject_dataset = ? AND subject_id = ?"
+  return sqlite.query(sql).get(dataset, id) as { id: number; disabled_at: string | null } | null
 }
 
-// One per subject, kept here rather than by a table UNIQUE, which would bind the subject's user owners too.
-export function linkAccount(sqlite: Database, subject: Subject): Actor {
-  const findOrInsert = (): number => {
+/**
+ * The subject's link account, made on first use; null when it was disabled.
+ * One per subject, kept here rather than by a table UNIQUE, which would bind the subject's user owners too.
+ */
+export function linkAccount(sqlite: Database, subject: Subject): Actor | null {
+  const findOrInsert = (): number | null => {
     const found = findLink(sqlite, subject)
-    if (found !== null) return found
+    if (found !== null) return found.disabled_at === null ? found.id : null
     const sql =
       "INSERT INTO account (kind, role, subject_dataset, subject_id) VALUES ('link', 'owner', ?, ?) RETURNING id"
     return (sqlite.query(sql).get(subject.dataset, subject.id) as { id: number }).id
   }
   const id = sqlite.inTransaction ? findOrInsert() : sqlite.transaction(findOrInsert).immediate()
-  return linkActor(id, subject)
+  return id === null ? null : linkActor(id, subject)
 }
 
 /** The record's owner subject, read from its owner column; null when the dataset has none or the column is empty. */
@@ -168,6 +167,7 @@ function actOn(store: Store, token: unknown, to: unknown): { ok: true } {
         throw new ApiError(422, 'transition_not_allowed', `"${column}" may not go to ${String(to)}`)
       }
       const actor = linkAccount(store.sqlite, subjectOf(row))
+      if (!actor) throw badToken()
       try {
         const target = writableOf(store.domain, dataset.name, 'update', actor)
         const mode = { kind: 'write', expect: row.from_state } as const
