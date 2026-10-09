@@ -19,6 +19,7 @@ import {
   seedDomain,
   validateDomain,
 } from '../src'
+import { createService } from '../src/auth'
 import { checkTransition } from '../src/writes'
 import { contents, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
@@ -263,6 +264,22 @@ describe('transitions', () => {
   test("a writer's returned state is judged too: an undeclared one is 422, tables unchanged", async () => {
     await denied(patch(editor, 2, { note: 'terug' }), 422, 'transition_not_allowed')
     expect(stateOf(2)).toBe('b')
+  })
+
+  test('a service account names the lifecycle column only with expect: 400 bad_body without, tables unchanged', async () => {
+    const token = createService(sqlite, 'bot', 'editor')
+    const asService = async (body: unknown) => {
+      const res = await app.request('/api/rows/ticket/1', {
+        method: 'PATCH',
+        headers: { host: '127.0.0.1:4310', 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      })
+      return { status: res.status, body: (await res.json()) as Record<string, unknown> }
+    }
+    await denied(asService({ state: 'b' }), 400, 'bad_body')
+    expect((await asService({ note: 'zonder status' })).status).toBe(200)
+    expect((await asService({ state: 'b', expect: { state: 'a' } })).status).toBe(200)
+    expect(stateOf(1)).toBe('b')
   })
 
   test('a matching expect is 200, revised', async () => {

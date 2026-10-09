@@ -277,6 +277,13 @@ export function expectedOf(dataset: DatasetDecl, expect: unknown): string | unde
   return given[column] as string
 }
 
+// An agent cannot see a person's answer land between its read and its write, so it must say what it read (attack 3).
+function expectFromService(dataset: DatasetDecl, body: Values, actor: Actor, expect: unknown): void {
+  const column = dataset.lifecycle?.column
+  if (actor.kind !== 'service' || column === undefined || !Object.hasOwn(body, column) || expect !== undefined) return
+  throw new ApiError(400, 'bad_body', `a service account writes "${column}" with "expect"`)
+}
+
 type HookToken = NonNullable<HookResult['token']>
 
 /** What hooks left to do after the commit. */
@@ -545,6 +552,7 @@ export function runWrite(
   actor: Actor,
   opts: { expect?: Record<string, unknown> } = {},
 ): Written {
+  if (op === 'update') expectFromService(target.dataset, body, actor, opts.expect)
   const mode: TransitionMode = { kind: 'write', expect: expectedOf(target.dataset, opts.expect) }
   const hooked = noneHooked()
   const written = store.sqlite
