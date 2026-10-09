@@ -199,7 +199,8 @@ Inside the engine each shape stays minimal:
   - a hook's mail reaches the recording mailer only after commit, and a later writer refusal leaves none;
   - a create into `b` fires the hook; an import into `b` does not;
   - a hook's notice is in the reply;
-  - pinning (deleted in Task 3): a hook's `token` mints nothing yet.
+  - pinning (deleted in Task 3): a hook's `token` mints nothing yet;
+  - `/schema` serves `lifecycle: { column }` for a source declaring one, and nothing for one that doesn't.
 - [ ] **Step 2:** Run `bun test packages/engine/test/lifecycle.test.ts`; expect it to fail.
 - [ ] **Step 3:** Implement. `restore` sets the undo mode from the batch's own revision (first `old`, last `new`, writes.ts:478-482).
 - [ ] **Step 4:** Run `bun test packages`; expect it to pass. Run `bun run check`.
@@ -239,6 +240,7 @@ Inside the engine each shape stays minimal:
   - an editor's undo of the token batch is 403;
   - an undo of the minting batch marks the token used, and `/act` is then 401;
   - a re-mint revokes the earlier token;
+  - a hooked state entered on a record whose owner column is empty mints no token, and the hook's mail gets a null link;
   - the 21st failure from one address is 429;
   - `route-matrix` rows;
   - no `Access-Control-*`; the three headers on every response, 401 included;
@@ -265,7 +267,8 @@ Inside the engine each shape stays minimal:
   - a lifecycle cell edit sends `expect`, routed around `toEngineData` in `api.update` (`api.ts:154`, `engine.ts:361-369`);
   - the grid reads `lifecycle.column` from `/schema` (`EngineSource`);
   - the matrix store's `changed()` sends `expect` only when the cell field changes (a note edit's body stays exactly `{ notitie }`, `e2e/react-aria.spec.ts:640`);
-  - **the matrix keeps one op stack** (`matrix/store.ts:328-389`). An op that changed the lifecycle column keeps its write's batch (`Saved.batch`, api.ts:143-145), and its undo and redo go through `undoBatch(batch)` instead of re-sending a PATCH. Note edits, fill-down and paste keep today's path. **A cleared lifecycle cell (a delete) is not undoable** from the matrix: re-creating it would be a create into a hooked state and re-invite (threat 7), and undo of a delete is out of scope. The undo is skipped with the Dutch notice "Verwijderen kan niet ongedaan gemaakt worden";
+  - **the matrix keeps one op stack** (`matrix/store.ts:328-389`). On a join whose cell field is the lifecycle column (theatre's), every op that writes that field (a key, fill-down, paste) keeps its write's batch, and its undo and redo go through `undoBatch(batch)` per op in reverse, instead of re-sending a PATCH (which would be a refused write-mode transition). Three cases are skipped with the Dutch notice "Verwijderen kan niet ongedaan gemaakt worden" and write nothing, because each would be a create into a hooked state (a re-invite, threat 7) and undo of a delete is out of scope (spec.md Out): undoing a cleared cell, including a cleared cell inside a fill or paste; and redoing an undone create (whose undo batch holds a delete, which cannot be undone, writes.ts:473). Note edits, and every op on a join whose cell field is not a lifecycle column, keep today's path;
+  - the matrix's API carries the batch: `MatrixApi.create` and `update` return `{ row, batch }`, and `MatrixApi` gains `undoBatch` (`matrix/store.ts:7-11`); the adapter in `matrix/hooks.ts:7-11` stops stripping `Saved.batch`, and its comment (`:6`) goes;
   - `i18n.ts` gets `transition_not_allowed` and `transition_lost` in Dutch.
 
 Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, `parity.test.ts:61-77`, `apps/grid/src/grid/Grid.test.tsx`, `apps/grid/src/matrix/store.test.ts`.
@@ -280,7 +283,8 @@ Test `packages/theatre/test/toewijzing.test.ts`, `access.test.ts:91` rewritten, 
   - two PATCHes with the same `expect`: one 200, one 409;
   - the import of `packages/theatre/test/fixtures/invented-export.json` is unchanged (`rol_id` null, `aantal` 1, no mail);
   - grid: a state edit sends `expect`; a 409 refreshes the row and shows the Dutch message;
-  - matrix: `u` then `b` then Ctrl+Z restores through batch undo with no 422, and Ctrl+Shift+Z redoes it; a note edit still undoes by re-sending; interleaved state and note edits undo in order from one stack; Ctrl+Z after clearing a lifecycle cell shows the notice and writes nothing (`store.test.ts:234, 274, 316` rewritten for lifecycle cells);
+  - matrix, on a lifecycle join: `u` then `b` then Ctrl+Z restores through batch undo with no 422, and Ctrl+Shift+Z redoes it; interleaved state and note edits undo in order from one stack; Ctrl+Z after clearing a cell shows the notice and writes nothing; paste empty over an `uitgenodigd` cell, Ctrl+Z: the notice shows, nothing is written, no mail; a fill-down of `b` over three `u` cells undoes per op through batch undo; empty→`u`, Ctrl+Z, Ctrl+Shift+Z: the redo is skipped with the notice, no mail;
+  - matrix, on a non-lifecycle join: today's re-create undo is unchanged (`store.test.ts:234, 254, 274, 316` kept as they are; lifecycle variants added beside them);
   - matrix: a state key on a cell whose state moved on the server is 409, the cell refreshes, and the Dutch message shows;
 - [ ] **Step 2:** Run `bun test packages/theatre && bun run --filter @worktable/grid test`; expect them to fail.
 - [ ] **Step 3:** Implement.
@@ -346,7 +350,7 @@ Test `packages/theatre/test/apply.test.ts`, `seed-missing.test.ts` (engine and t
 - `types.ts`: `MatrixJoin.open`.
 - `matrix/store.ts`:
   - `asCell` keeps `lookups` for the role label;
-  - a fourth `MatrixApi` call, `runAction`; the fill pushes a batch op onto the same op stack (Task 4's design).
+  - a fifth `MatrixApi` call, `runAction`; the fill pushes a batch op onto the same op stack (Task 4's design).
 - `matrix/columns.ts`: open rows kept.
 - `matrix/Matrix.tsx`: a fixed leading open column in header, body and footer; the person picker for an open cell, asking the role first when there is more than one.
 
@@ -461,7 +465,7 @@ Also `packages/theatre/src/datasets.ts` (`owner_visible` on `toewijzing.activite
   - `toegang_dagen` read as `COALESCE(json_extract(o.parameters, '$.toegang_dagen'), 30)` from the organisation with `soort = 'eigen'`.
 - `seed.ts`: the "Mijn producties" view, not for owners; the admin publishes it.
 - `scripts/parity.ts`: passes a test secret.
-- `scripts/shakeout/edit-session.ts` (`:111-125`): passes `--link-secret-file`.
+- `scripts/shakeout/edit-session.ts` (`:111-125`): writes its secret file under `umask 077` and passes `--link-secret-file`.
 - `apps/grid`:
   - `App.tsx`: `#/link/<token>`;
   - `ui/LinkPage.tsx`: the token kept in memory, sent as `Authorization: RecordLink`, hash stripped; lists the views for owners and renders their rows read-only;

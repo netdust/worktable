@@ -1,121 +1,62 @@
-# Plan review: step-2, second review
-Reviewed-plan: d7077e41d050c270868bdb828132eadbabe74992 specs/step-2/plan.md
-Verdict: ready with fixes. B1 is a one-line edit and should land before Stefan reads the plan.
+# Plan review: step-2, third review (the 87b22ce diff only)
+Reviewed-plan: 10612c92936be3b37e0bd1481148ffccc1cf92fe specs/step-2/plan.md
+Verdict: ready with fixes
 
-Every Blocking finding from both earlier reviews is resolved in the plan text, and the fixes hold against the source. Of the earlier Should-fix items, only the matrix undo (formal S4 / advisor B3) is still not fully designed. The rewrite added one ordering bug between Task 9b and Task 10.
+Five of the six findings are resolved: B1, S2, S3 and S4, plus every Note except one. The exception is S1, the matrix undo. The one-stack design is the right call, and the delete ruling matches the spec's Out list ("The assignee tag list and undo of a delete", spec.md:116). But the new text exempts fill-down and paste from that rule, and on theatre those two write the lifecycle column. It also leaves out redo of an undone create and the adapter that strips the batch.
 
 ## Blocking
 
-**B1. After Task 9b, `bun test packages` fails because theatre's `token_projection` columns are not yet owner-visible.**
-- **Plan:**
-  - Task 4 sets `token_projection: ['activiteit_id', 'rol_id', 'state']` on Toewijzing.
-  - Task 9b adds the validation rule "`token_projection` columns must be owner-visible".
-  - Only Task 10 adds "`owner_visible` on the member-facing columns".
-  - Task 9b Step 4 expects `bun test packages` to pass.
-- **Source:** `migrate()` runs `validateDomain(domain)` (`packages/engine/src/migrate.ts:92`), and every theatre test migrates the theatre domain. Between Task 9b and Task 10 the theatre domain is refused, so every theatre test fails.
-- **Smallest change:** Task 9b also marks `owner_visible` on `toewijzing.activiteit_id`, `rol_id` and `state` in `packages/theatre/src/datasets.ts`. The other way is to move the rule into Task 10. Either way, Task 10's "member-facing columns" should name these three.
+**B1. "Note edits, fill-down and paste keep today's path" puts back the re-invite that threat 7 exists to prevent.**
+- **Plan:** Task 4, Files, the matrix op-stack bullet (plan.md:268).
+- **Source:**
+  - On theatre the matrix cell field *is* the lifecycle column. `fillDown` and `paste` write `join.cell_field` (`matrix/store.ts:146`, `:153`).
+  - A pasted empty word clears a cell ("empty clears", `store.ts:369-371`), and so does `fillDown` from an empty first row (`store.ts:393-396`).
+  - Today's path undoes a removal by sending `api.create` again (`store.ts:218-219`, through `step()` at `:353-370`).
+- **What goes wrong:** paste empty over an `uitgenodigd` cell, then press Ctrl+Z. The engine receives a `POST /rows` create into a hooked state, so the hook fires and the invite mail goes out again. That is exactly what the plan's own sentence rules out for a single delete. A pasted or filled state change has a second problem: undoing it by sending the inverse PATCH is a write-mode transition, so b→u comes back as 422. That is the bug S1 was about.
+- **Smallest change:** limit the exemption to non-lifecycle columns. Reword it as: "Note edits, and fill-down and paste on a join whose cell field is not the lifecycle column, keep today's path. On a lifecycle join, each op that lands in a fill or paste keeps its own batch, and the step undoes through `undoBatch` per op in reverse; cleared cells are skipped with the notice." Then add one test: "paste empty over a lifecycle cell, Ctrl+Z: the notice shows, nothing is written, no mail".
 
 ## Should fix
 
-**S1. The matrix undo design in Task 4 (and Task 7) is half a design.**
-- **Plan, Task 4:** "the matrix's undo of a state edit goes through `undoBatch` and the tab history (`App.tsx:176`), not the op stack, which keeps note edits only".
+**S1. The matrix's API strips the batch, and no task changes that.**
+- **Plan:** Task 4 says the op "keeps its write's batch (`Saved.batch`, api.ts:143-145)".
 - **Source:**
-  - The matrix's Ctrl+Z goes to `cells.undo` (`App.tsx:297`, `Matrix.tsx:275`), never to the tab history.
-  - `matrix/hooks.ts:6` says outright "The matrix keeps its own undo: it needs the rows a write returns, not its batch".
-  - The op stack also carries creates, deletes, `fillDown` and paste as single undo steps, plus redo (`matrix/store.ts:328-389`, `step()` at about line 376).
-  - `store.test.ts` pins "undoes a Delete by creating the record again" (`:234`, `:274`, `:316`). A batch holding a delete cannot be undone (`writes.ts:474`).
-- **What the plan leaves open:**
-  - With two stacks behind one key, which undo goes first when a state edit and a note edit are interleaved?
-  - What happens to delete, fill, paste and redo?
-  - Under Q13, re-creating a deleted `uitgenodigd` cell through `POST /rows` fires the invite hook again. To the engine that undo is a create, which threat 7 says must not happen.
-- **Smallest change:** keep one op stack.
-  - An op that changed the lifecycle column keeps its write's batch (`api.update` already returns `Saved.batch`, `api.ts:143-145`). Its undo and redo go through `undoBatch(batch)` instead of re-sending a PATCH.
-  - Task 7's fill pushes a batch op onto the same stack.
-  - Decide the delete case in a sentence, with a test: either the re-create re-invites (accepted), or a cleared lifecycle cell is not undoable (the spec's Out list has "undo of a delete").
+  - `api.ts:142-145` does return `Saved.batch`.
+  - But the matrix never sees it. The adapter in `apps/grid/src/matrix/hooks.ts:7-11` maps `create` and `update` to `saved.row`.
+  - `MatrixApi` (`matrix/store.ts:7-11`) has `create`, `update` and `remove`, all returning `Row`, and no `undoBatch`.
+  - `hooks.ts:6` still says "it needs the rows a write returns, not its batch".
+- **Change:**
+  - Add `matrix/hooks.ts` and the `MatrixApi` change to Task 4's files: `create` and `update` return `{ row, batch }`, plus an `undoBatch` call, and the stale comment goes.
+  - Task 7's "a fourth `MatrixApi` call, `runAction`" then becomes the fifth.
 
-**S2. No task tells the grid which column is the lifecycle column.**
-- **Plan:** Task 4 says "a lifecycle cell edit sends `expect`" and "the matrix store's `changed()` sends `expect` too". Task 2's Interfaces never serve the lifecycle.
-- **Source:** `/schema` serves columns, matrix, links and so on, and no lifecycle (`app.ts:178-205`). Hooks are functions, so the declaration cannot be served whole.
-- **Smallest change:**
-  - Task 2 serves `lifecycle: { column }` on `/schema`, and Task 4 reads it in `EngineSource`.
-  - State that the matrix sends `expect` only when the cell field changes. `e2e/react-aria.spec.ts:640` asserts the note PATCH body is exactly `{ notitie: note }`.
-
-**S3. Test map row 9a claims denial 15, but no test asserts the three headers on link-authenticated routes.**
-- Task 3 tests the headers on `/act`, and Task 10 tests the `index.html` meta tags.
-- Neither Task 9a nor Task 9b checks `Cache-Control`, `Referrer-Policy` or `X-Robots-Tag` on `/owner/views*`, `/record-links/*` or their 401s. R9 asks for exactly those headers.
-- **Change:** add one test line to 9a (record-links, the request route, 401) and one to 9b (owner views).
-
-**S4. The matrix half of Review Focus 2 is not tested.**
-- Review Focus 2 says a stale lifecycle write answers 409 "in the grid and in the matrix".
-- Task 4 has a grid 409 test only. Its matrix tests cover undo.
-- **Change:** add "matrix: a state key on a cell whose state moved on the server is 409, the cell refreshes, and the Dutch message shows".
+**S2. Redo of an undone lifecycle create is not decided.**
+- **Plan:** Task 4 says an op that changed the lifecycle column is undone and redone "through `undoBatch(batch)`".
+- **Source:** undoing a create's batch deletes the record (`writes.ts:518-521`, `planned.created`). Its undo batch therefore holds a `deleted_at` revision, and undoing that batch is refused: "a batch holding a delete cannot be undone" (`writes.ts:473`).
+- **What goes wrong:** Ctrl+Shift+Z after undoing an empty→`u` create is either a 422, or, if redo sends the create again, a create into a hooked state that re-invites. The plan's own test sequence `u`, `b`, Ctrl+Z, Ctrl+Shift+Z stops just short of this case.
+- **Change:** one sentence and one test. A redo that would re-create a lifecycle record is skipped with the same notice. This is the same ruling as the delete, and the same Out-list item.
 
 ## Note
 
-- **The failure counter must be written outside `/act`'s transaction.** `/act` runs the consume and `runWrite` in one transaction, and a 401 rolls it back, so a counter written inside it is lost. Task 3's "21st failure is 429" test will catch this. It is library mechanics.
-- **The e2e secret file will be refused for its mode.** `head -c 32 /dev/urandom > e2e/.tmp/link-secret` creates 0644 under umask 022, and Task 9a refuses group- or world-readable files. The web-server command needs `umask 077` or a `chmod 600`.
-- **One more spawn site.** `scripts/shakeout/edit-session.ts:111-125` starts the theatre engine with no `--link-secret-file`. It is not in the gate, but it breaks after Task 10. Add it to Task 10's files or name it in `real-data.md`.
-- **A record with an empty owner column.** A name-only row moved to `uitgenodigd` has no `persoon_id`. Say the engine mints nothing in that case, and that the theatre hook asks for no token when there is no email (the notice alone).
-- **`/act/view` after a reassignment.** Say it reads as the link account too, so a reassigned token gets the same 401 on view as on act.
-- **Revoke.** Gate 10 and R9 say "revoked or rotated", but Task 9a has only rotate. One line: revoke is the version bump, i.e. rotate without handing out the new link.
-- **The link page cannot read `/schema`.** A link actor gets 403 there, so `/owner/views` must answer the column labels itself. Name it in 9b's Interfaces.
-- **Space-cycle on the state column.** It now walks `open → voorlopig → … → geannuleerd → open`, so several steps are 422. This fits "grids refuse, not hide", but someone may want the cycle order trimmed.
-- **Stale references.**
-  - Task 5 cites `actions.ts:56-96`; the file has 84 lines and `runAction` is at 57-78.
-  - Task 0 cites "record token paragraph (HEAD:43, 66)". The record token paragraph is HEAD:62; HEAD:66 is the Access paragraph, which is also relevant. Persoon is HEAD:156, not "160 area".
-- **Task 11's `/schema` snapshot** will churn with every later schema change. Asserting that plain `/schema` carries no OpenAPI keys would last longer.
-- **Task 12 has no RED step.** It is a characterisation test of code that already exists, so it passes on its first run. That is acceptable; say so instead of "red until".
-- **Hooks on action updates.** Task 5 has no test of a hook firing on an action update. Threat 7 names `runAction`, and `vul_slot` writes an unhooked state, so the gap is latent.
-
-## Earlier findings: resolved?
-
-- **Formal review:**
-  - B1 confinement middleware: resolved (see premises).
-  - B2 token subject: resolved, with a test for the reassigned token.
-  - S1, S2, S3 (with Q13), S5 (Q14 plus HEAD line numbers, minor slips noted above), S6, S7, S8, S9, S10, S11, S12: resolved.
-  - S4: the `voorlopig` mark is resolved; the undo is not (S1 above).
-- **Advisor review:**
-  - B1 secret file before global setup: resolved, with the mode caveat in the Notes.
-  - B2 one token cannot race itself: resolved.
-  - B3 matrix undo: only partly resolved (S1 above).
-  - S1–S12, N2, N3, N4, N5, N8: resolved.
+- **The store-test rewrite list.**
+  - `store.test.ts:254` ("undoes a create, a Delete, then the create again…") also undoes a Delete, and it is not in the list "234, 274, 316".
+  - Non-lifecycle joins keep re-create undo, so those four tests stay valid as they are. Adding lifecycle variants is safer than rewriting them, which would leave the non-lifecycle behaviour untested.
+- **`/schema` `lifecycle: { column }` (Task 2) has no engine test.**
+  - The premise holds: `app.ts:178-205` builds each source's object, so adding one key is trivial.
+  - No Task 2 test asserts it, and the grid tests will mock it. One line in `lifecycle.test.ts` would pin it.
+- **"A record with an empty owner column mints no token"** (Task 3 Interfaces) has no engine-side test. Task 10 covers only the theatre half (no email, no token request).
+- **`edit-session.ts` needs a 0600 file, not just the flag.** Task 10 should note that it writes the file under `umask 077` or with `chmod 600`, since Task 9a refuses a group- or world-readable file. Otherwise shakeout fails on its first run.
+- **No other breakage found.** Task 9b's theatre `owner_visible` marks resolve the earlier B1 (`migrate.ts:92`). The S3 headers, the S4 matrix 409, the Task 11 snapshot replacement, Task 12's RED wording, the Task 5 hook test, and the Task 0 and Task 5 line refs are all fine.
 
 ## Premises checked
 
-- `may()` guards only three handlers → `views.ts:241,287`, `display.ts:83` → holds
-- `confineLinkActor` right after authentication → `authRoutes` installs `sessionMiddleware` on `/*` at `auth.ts:193`, called at `app.ts:167`; later routes run after it, and `/auth/me` and `/auth/signout` are registered before it (`auth.ts:195-200`) → holds
-- Out-of-scope `currentOf` refuses a moved owner → `writes.ts:357-362` throws 404 `unknown_record`; `/act` must map it to 401 → holds (the mapping is the plan's)
-- Consume plus `runWrite` in one transaction rolls back together → `runWrite` is `transaction().immediate()` (`writes.ts:376-395`) and nests as a savepoint inside the outer one → holds
-- `checkLimits` counts every request; a failure limiter is new code → `rate-limit.ts:13-44` → holds
-- Hooks can tell `POST /rows` and action creates from import, seed-missing and undo:
-  - creates go through `runWrite` (`app.ts:41-45`) and `createAs` (`actions.ts:46-54`);
-  - import goes through `importRow` (`import.ts:162`), seed-missing through `writeRow` (`seed-missing.ts:51-57`), undo through `restore` (`writes.ts:511-529`), and `seedDomain` uses raw inserts (`migrate.ts:141-150`)
-  - → holds, provided hooks fire in `runWrite` and `runAction`, not in `valuesOf`
-- `linkSecret` needed only when serving → one-shot commands exit at `serve.ts:181-185`, before `createEngine` at `:192` → holds
-- Other `createEngine` callers → `scripts/parity.ts:260`, `test/sign-in.ts:15`, and two fixture-domain tests (`auth.test.ts:372`, `writes.test.ts:157`) → holds
-- Playwright starts web servers before global setup → `playwright.config.ts:7` → holds
-- Matrix undo through `undoBatch` and the tab history → Ctrl+Z goes to the store's op stack (`App.tsx:297`, `matrix/hooks.ts:6`) → partly holds (S1)
-- `expect` sent around `toEngineData` → `api.ts:154-159`, `engine.ts:361-369` → holds
-- `/schema` carries the lifecycle column for the grid → `app.ts:178-205` → does not hold today, and no task adds it (S2)
-- `token_projection` owner-visible rule vs theatre marks → `migrate.ts:92` validates; marks arrive in Task 10 → does not hold in task order (B1)
-- `Store` at `writes.ts:30-34`, built at `app.ts:163` → holds
-- `WriteContext` carries no mode → `declare.ts:150-155` → holds
-- `undoableBatch` refuses other accounts → `writes.ts:463-464` → holds
-- First old, last new per field → `writes.ts:478-482` → holds
-- `createAccount` needs an email → `auth.ts:80` → holds
-- `whose()` reads the email → `history.ts:119-125` → holds
-- Public-view guard, delete clears the token, `checkPublishable` → `views.ts:174-176`, `:273`, `:298-304` → holds
-- Token cap 128 → `views.ts:33` → holds
-- `seedDataset` "has rows" → `seed-missing.ts:48-49, 73-79` → holds
-- Changing a default rebuilds the table → `schema-diff.ts:44-47` → holds
-- `forPlanners`, `checkAssignee`, `checkItem` → `writers.ts:62-80, 130-139, 250-263` → holds
-- `sjabloon_toepassen` → `packages/theatre/src/actions.ts:323-339` → holds
-- Matrix validation → `validate.ts:160-190` → holds
-- `pointsAt` → `access.ts:58-61` → holds
-- Engine fixture `aantal` → `test/fixture.ts:111` → holds
-- `state` already allowlisted, so `from_state` and `to_states` pass the vocabulary check → `scripts/vocabulary-allow.txt` → holds
-- Toewijzing owner `persoon_id`, Persoon owner `id` → `packages/theatre/src/datasets.ts:133,160` → holds
-- `actions.ts:56-96` → file has 84 lines → stale reference (Note)
-- Task 0 line refs → record token is HEAD:62, Persoon HEAD:156 → minor slips (Note)
+- Op stack, one undo step per op group, redo by `step()` → `matrix/store.ts:328-370` → holds
+- `api.update` returns `Saved.batch` → `api.ts:142-145` → holds in `api.ts`, but `matrix/hooks.ts:7-11` strips it before the store (S1)
+- `undoBatch` returns the undo's own batch, which a redo undoes → `api.ts:181-184`; `UNDOABLE` includes `'undo'` (`writes.ts:454`) → holds for updates
+- A redo of an undone create through `undoBatch` → `writes.ts:473` refuses a batch holding a delete → does not hold (S2)
+- Fill-down and paste on today's path are safe on a lifecycle join → `store.ts:146, 153, 218-219, 369-371` write the cell field and undo a clear by re-create → does not hold (B1)
+- "Undo of a delete" is out of scope → `spec.md:116` → holds
+- `changed()` can send `expect` only when the cell field changes → `store.ts:151-157` builds the field diff → holds; the note body stays `{ notitie }` (`e2e/react-aria.spec.ts:640`)
+- `/schema` can serve `lifecycle.column` → `app.ts:178-205` → holds (it adds one key)
+- `migrate` validates the domain, so 9b's theatre marks are needed → `migrate.ts:92` → holds
+- `edit-session.ts:111-125` spawns `serve.ts` with no secret flag → `scripts/shakeout/edit-session.ts:111-125` → holds
 
-The first review (of blob 670d905) is in git at fbc0af1; the advisor's fidelity review at `specs/step-2/plan-review-advisor.md`.
+Earlier reviews are in git: the first at fbc0af1, the second at 87b22ce; the advisor's fidelity review at `specs/step-2/plan-review-advisor.md`.
