@@ -1,62 +1,58 @@
-# Plan review: step-2, third review (the 87b22ce diff only)
-Reviewed-plan: 10612c92936be3b37e0bd1481148ffccc1cf92fe specs/step-2/plan.md
+# Plan review: step-2, fourth review (the 87b22ce..6f5c767 diff only)
+Reviewed-plan: 5bb5ba014b6c608619c3c367b7375c317851818a specs/step-2/plan.md
 Verdict: ready with fixes
 
-Five of the six findings are resolved: B1, S2, S3 and S4, plus every Note except one. The exception is S1, the matrix undo. The one-stack design is the right call, and the delete ruling matches the spec's Out list ("The assignee tag list and undo of a delete", spec.md:116). But the new text exempts fill-down and paste from that rule, and on theatre those two write the lifecycle column. It also leaves out redo of an undone create and the adapter that strips the batch.
+All third-review findings are addressed in substance: B1, S1, S2 and the four Notes. The diff breaks nothing elsewhere in the plan. One gap is left. The text says what happens when an undo is skipped, but not what happens to the step on the stack afterwards. Because of how `step()` and `execute()` behave today, the plan's tests as written would pass even if the undo stack jams for good.
 
 ## Blocking
-
-**B1. "Note edits, fill-down and paste keep today's path" puts back the re-invite that threat 7 exists to prevent.**
-- **Plan:** Task 4, Files, the matrix op-stack bullet (plan.md:268).
-- **Source:**
-  - On theatre the matrix cell field *is* the lifecycle column. `fillDown` and `paste` write `join.cell_field` (`matrix/store.ts:146`, `:153`).
-  - A pasted empty word clears a cell ("empty clears", `store.ts:369-371`), and so does `fillDown` from an empty first row (`store.ts:393-396`).
-  - Today's path undoes a removal by sending `api.create` again (`store.ts:218-219`, through `step()` at `:353-370`).
-- **What goes wrong:** paste empty over an `uitgenodigd` cell, then press Ctrl+Z. The engine receives a `POST /rows` create into a hooked state, so the hook fires and the invite mail goes out again. That is exactly what the plan's own sentence rules out for a single delete. A pasted or filled state change has a second problem: undoing it by sending the inverse PATCH is a write-mode transition, so b→u comes back as 422. That is the bug S1 was about.
-- **Smallest change:** limit the exemption to non-lifecycle columns. Reword it as: "Note edits, and fill-down and paste on a join whose cell field is not the lifecycle column, keep today's path. On a lifecycle join, each op that lands in a fill or paste keeps its own batch, and the step undoes through `undoBatch` per op in reverse; cleared cells are skipped with the notice." Then add one test: "paste empty over a lifecycle cell, Ctrl+Z: the notice shows, nothing is written, no mail".
+None.
 
 ## Should fix
 
-**S1. The matrix's API strips the batch, and no task changes that.**
-- **Plan:** Task 4 says the op "keeps its write's batch (`Saved.batch`, api.ts:143-145)".
+**S1. A skipped undo or redo has no stated effect on the stack. With today's `step()` it jams the undo stack.**
+- **Plan:** Task 4, Files, the op-stack bullet (plan.md:270), the words "Three cases are skipped … and write nothing". Also the Step 1 tests at plan.md:286.
 - **Source:**
-  - `api.ts:142-145` does return `Saved.batch`.
-  - But the matrix never sees it. The adapter in `apps/grid/src/matrix/hooks.ts:7-11` maps `create` and `update` to `saved.row`.
-  - `MatrixApi` (`matrix/store.ts:7-11`) has `create`, `update` and `remove`, all returning `Row`, and no `undoBatch`.
-  - `hooks.ts:6` still says "it needs the rows a write returns, not its batch".
-- **Change:**
-  - Add `matrix/hooks.ts` and the `MatrixApi` change to Task 4's files: `create` and `update` return `{ row, batch }`, plus an `undoBatch` call, and the stale comment goes.
-  - Task 7's "a fourth `MatrixApi` call, `runAction`" then becomes the fifth.
-
-**S2. Redo of an undone lifecycle create is not decided.**
-- **Plan:** Task 4 says an op that changed the lifecycle column is undone and redone "through `undoBatch(batch)`".
-- **Source:** undoing a create's batch deletes the record (`writes.ts:518-521`, `planned.created`). Its undo batch therefore holds a `deleted_at` revision, and undoing that batch is refused: "a batch holding a delete cannot be undone" (`writes.ts:473`).
-- **What goes wrong:** Ctrl+Shift+Z after undoing an empty→`u` create is either a 422, or, if redo sends the create again, a create into a hooked state that re-invites. The plan's own test sequence `u`, `b`, Ctrl+Z, Ctrl+Shift+Z stops just short of this case.
-- **Change:** one sentence and one test. A redo that would re-create a lifecycle record is skipped with the same notice. This is the same ruling as the delete, and the same Out-list item.
+  - `execute()` stops at the first op that does not land and returns only the prefix before it (`apps/grid/src/matrix/store.ts:285-289`).
+  - `step()` then leaves the remainder of the step on the stack it came from (`store.ts:360-368`).
+- **What goes wrong:** if the skip is implemented as an op that did not land, which is the natural fit, three things follow:
+  - The cleared-cell op stays on top of the undo stack. Every later Ctrl+Z shows the notice again, so nothing older on the stack can ever be undone.
+  - The same applies when the cleared cell is part of a paste or fill. Ops are undone in reverse (`:357`), so the ops that come after the cleared one in that reversed order are never undone either.
+  - The redo of an undone create stays stuck on top of the redo stack in the same way. That is milder, because a new edit clears the redo stack (`:335`, `:344`).
+- **Why the tests miss it:** "Ctrl+Z after clearing a cell shows the notice and writes nothing" and the paste-empty test both pass with a jammed stack.
+- **Smallest change:**
+  - Add one sentence: "A skipped op is dropped from its step. The step's other ops still undo or redo through batch undo, and the step moves to the other stack minus the skipped op."
+  - Add one test: "clear a lifecycle cell after an earlier `u`→`b`; Ctrl+Z shows the notice; a second Ctrl+Z undoes the `u`→`b`."
+  - Optionally add a mixed case: "paste `b` and empty over two `u` cells; Ctrl+Z restores the `b` cell to `u` and skips the cleared one."
 
 ## Note
 
-- **The store-test rewrite list.**
-  - `store.test.ts:254` ("undoes a create, a Delete, then the create again…") also undoes a Delete, and it is not in the list "234, 274, 316".
-  - Non-lifecycle joins keep re-create undo, so those four tests stay valid as they are. Adding lifecycle variants is safer than rewriting them, which would leave the non-lifecycle behaviour untested.
-- **`/schema` `lifecycle: { column }` (Task 2) has no engine test.**
-  - The premise holds: `app.ts:178-205` builds each source's object, so adding one key is trivial.
-  - No Task 2 test asserts it, and the grid tests will mock it. One line in `lifecycle.test.ts` would pin it.
-- **"A record with an empty owner column mints no token"** (Task 3 Interfaces) has no engine-side test. Task 10 covers only the theatre half (no email, no token request).
-- **`edit-session.ts` needs a 0600 file, not just the flag.** Task 10 should note that it writes the file under `umask 077` or with `chmod 600`, since Task 9a refuses a group- or world-readable file. Otherwise shakeout fails on its first run.
-- **No other breakage found.** Task 9b's theatre `owner_visible` marks resolve the earlier B1 (`migrate.ts:92`). The S3 headers, the S4 matrix 409, the Task 11 snapshot replacement, Task 12's RED wording, the Task 5 hook test, and the Task 0 and Task 5 line refs are all fine.
+- **The store cannot tell a lifecycle join from any other yet.**
+  - The new rule hinges on "a join whose cell field is the lifecycle column". `MatrixJoin` has no field for that (`apps/grid/src/types.ts:179-191`). It is built at `apps/grid/src/engine.ts:181` from the schema.
+  - Task 4 names only `EngineSource` reading `lifecycle.column`. The flag, or the column, still has to reach `MatrixJoin`, so `types.ts` and `engine.ts:181` belong in Task 4's files.
+  - The implementer will hit this through the plan's own lifecycle-join tests.
+- **The "kept as they are" store tests still need their fake changed.**
+  - `store.test.ts:46-52` types its fake on `MatrixApi['create']` and `MatrixApi['update']` and resolves them to a `Row`.
+  - Once those return `{ row, batch }`, the fake's return value has to change, and `undoBatch` needs adding.
+  - The assertions at 234, 254, 274 and 316 stay as they are, so "kept" is right for the behaviour, though not literally for the file.
+- **The notice text does not fit the redo case.** The redo of an undone create shows "Verwijderen kan niet ongedaan gemaakt worden" ("deleting cannot be undone"), but the user pressed redo on a create. It is the same Out-list ruling, so this is a wording choice for the owner, not a defect.
+- **The redo needs the undo's own batch.** A redo of a batch undo has to undo the batch that the undo returned (`api.ts:181-184` answers it; `UNDOABLE` includes `'undo'`, `writes.ts:454`). The next undo then needs the redo's batch. So the op has to carry its current batch and replace it on each step. The `u`, `b`, Ctrl+Z, Ctrl+Shift+Z test drives this.
+- **`umask 077` in `edit-session.ts`.**
+  - The script is TypeScript run by Bun, so `umask 077` is a shell idiom here. The file already writes files with `writeFileSync(file, text, { mode: 0o600 })` (`scripts/shakeout/edit-session.ts:761`), and the same call fits the secret file.
+  - Caveat: `mode` applies only when the file is created. A leftover file with looser permissions would keep them, and Task 9a would refuse it. Either `chmodSync`, which the script already imports (`:2`), or deleting the file first closes this.
 
 ## Premises checked
+- Fill-down and paste write `join.cell_field` through the shared `created()`/`changed()` → `store.ts:146, 154, 394-407` → holds. On a lifecycle join, the plan now routes these ops through batch undo.
+- Each op in a fill or paste is its own `api.create`/`api.update` call, so each has its own batch, and "per op in reverse" is possible → `store.ts:219, 229, 329-337, 357` → holds
+- An empty pasted word clears the cell, and so does a fill from an empty first row → `store.ts:375, 396-397` → holds. The plan now covers both with the skip.
+- `execute()` stops at the first op that does not land, and `step()` leaves the rest on the stack it came from → `store.ts:283-292, 352-370` → holds. This is S1.
+- `MatrixApi` has create, update and remove, all returning `Row` → `store.ts:7-11` → holds, and the plan changes it
+- The adapter strips `Saved.batch`, and its comment says so → `matrix/hooks.ts:6-11` → holds, and the plan removes both
+- `create` and `update` return `Saved { row, batch }`, including through a query → `api.ts:142-145, 160-179` → holds
+- `undoBatch` returns the undo's own batch → `api.ts:181-184` → holds
+- Undoing a create's batch deletes the record, so a redo would undo a batch holding a delete, which is refused → `writes.ts:518-521, 473` → holds. The plan skips that redo.
+- Task 7's `runAction` as the fifth `MatrixApi` call (create, update, remove, undoBatch, runAction) → holds
+- `/schema` `lifecycle: { column }` now has an engine test (plan.md:203) → matches the Interfaces line at plan.md:186 → holds
+- An empty owner means no token and a null link → plan.md:182 (`mail?: (link: string | null)`), plan.md:229 and the new test at plan.md:243 agree → holds
+- The secret file must not be readable by group or others → plan.md:50 refuses such a file; plan.md:468 now writes it 0600 → holds, with the caveat above
 
-- Op stack, one undo step per op group, redo by `step()` → `matrix/store.ts:328-370` → holds
-- `api.update` returns `Saved.batch` → `api.ts:142-145` → holds in `api.ts`, but `matrix/hooks.ts:7-11` strips it before the store (S1)
-- `undoBatch` returns the undo's own batch, which a redo undoes → `api.ts:181-184`; `UNDOABLE` includes `'undo'` (`writes.ts:454`) → holds for updates
-- A redo of an undone create through `undoBatch` → `writes.ts:473` refuses a batch holding a delete → does not hold (S2)
-- Fill-down and paste on today's path are safe on a lifecycle join → `store.ts:146, 153, 218-219, 369-371` write the cell field and undo a clear by re-create → does not hold (B1)
-- "Undo of a delete" is out of scope → `spec.md:116` → holds
-- `changed()` can send `expect` only when the cell field changes → `store.ts:151-157` builds the field diff → holds; the note body stays `{ notitie }` (`e2e/react-aria.spec.ts:640`)
-- `/schema` can serve `lifecycle.column` → `app.ts:178-205` → holds (it adds one key)
-- `migrate` validates the domain, so 9b's theatre marks are needed → `migrate.ts:92` → holds
-- `edit-session.ts:111-125` spawns `serve.ts` with no secret flag → `scripts/shakeout/edit-session.ts:111-125` → holds
-
-Earlier reviews are in git: the first at fbc0af1, the second at 87b22ce; the advisor's fidelity review at `specs/step-2/plan-review-advisor.md`.
+Earlier reviews are in git: the first at fbc0af1, the second at 87b22ce, the third at 6f5c767; the advisor's fidelity review at `specs/step-2/plan-review-advisor.md`.
