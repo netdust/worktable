@@ -546,7 +546,8 @@ test('apply-redo-refused @e2e', async ({ page }) => {
   const response = await redone
   expect(response.status()).toBe(422)
   expect(((await response.json()) as { code: string }).code).toBe('not_undoable')
-  await expect(page.locator('.nv-toolbar')).toContainText('Dit kan niet ongedaan gemaakt worden.')
+  // A refused redo reads as such in the table grid, whatever the batch held (review S1).
+  await expect(page.locator('.nv-toolbar')).toContainText('Opnieuw doen kan hier niet')
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(0)
 })
 
