@@ -132,7 +132,8 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
   return {
     type,
     label: column.label,
-    required: !column.nullable && column.default === undefined,
+    required: !column.nullable,
+    ...(column.default !== undefined ? { defaulted: true } : {}),
     fact: false,
     ...(column.options ? { options: column.options } : {}),
     ...(column.tones ? { tones: column.tones } : {}),

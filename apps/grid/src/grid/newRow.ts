@@ -35,7 +35,7 @@ export function newRow(model: Model, view: View, window: Partial<DateWindow> | n
     if (scope && key === scope.field && field.type === 'relation') fields[key] = [scope.id]
     else if (field.type === 'date' && (field.required || key === view.date_field)) fields[key] = day
     else if (single) offers.push(key)
-    if (key in fields || !field.required) continue
+    if (key in fields || !field.required || field.defaulted) continue
     if (field.type === 'select' && field.options && Object.keys(field.options).length > 0) fields[key] = Object.keys(field.options)[0]
     else if (field.type === 'bool') fields[key] = false
     else if (fillable(field)) needs.push(key)

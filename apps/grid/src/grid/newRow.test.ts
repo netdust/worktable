@@ -103,5 +103,7 @@ describe('newRow', () => {
 
     expect(newRow(models.activiteit, view, week, new Date(2026, 4, 20))).toMatchObject({ fields: { datum: '2026-05-20' }, needs: ['productie_id'] })
     expect(newRow(models.activiteit, view, week, new Date(2026, 6, 1))).toMatchObject({ fields: { datum: '2026-05-18' }, needs: ['productie_id'] })
+    // Status may not be emptied, but the engine fills its default: + New leaves it out.
+    expect(newRow(models.activiteit, view, week, new Date(2026, 4, 20))).not.toHaveProperty('fields.status')
   })
 })

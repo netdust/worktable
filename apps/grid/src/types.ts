@@ -10,7 +10,10 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'rose' | 'violet' | 'amber' | 'sky' |
 export interface Field {
   type: FieldType
   label: string
+  /** Never emptied: the engine refuses null and '' alike. */
   required: boolean
+  /** Filled by the engine when a new record leaves it out. */
+  defaulted?: boolean
   fact: boolean
   options?: Record<string, string>
   /** A tone per option key; an option not listed falls back to the built-in defaults. */

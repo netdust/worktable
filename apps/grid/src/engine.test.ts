@@ -125,6 +125,17 @@ describe('toSchema: a query over a dataset', () => {
 })
 
 describe('toSchema', () => {
+  it('requires every column that may not be null, a default or not: only a nullable one can be emptied', () => {
+    const fields = toSchema(engine).models.activiteit.fields
+
+    expect(fields.status).toMatchObject({ required: true, defaulted: true })
+    expect(fields.betaald).toMatchObject({ required: true, defaulted: true })
+    expect(fields.soort.required).toBe(true)
+    expect(fields.soort.defaulted).toBeUndefined()
+    expect(fields.extra.required).toBe(false)
+    expect(fields.uren.required).toBe(false)
+  })
+
   it("maps a dataset's columns to model fields by type", () => {
     const fields = toSchema(engine).models.activiteit.fields
 

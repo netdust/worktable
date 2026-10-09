@@ -991,10 +991,6 @@ test.describe('the Publiceren dialog as an administrator', () => {
 })
 
 test('not-nullable-select-offers-no-leeg @e2e', async ({ page }) => {
-  test.fail(
-    true,
-    'shakeout row: Status (not nullable, with a default) offers "—"; it and Delete send status "" and are refused',
-  )
   const api = page.request
   const title = 'ra status leeg'
   const id = await activity(api, title, { datum: day(6) })

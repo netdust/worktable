@@ -195,14 +195,20 @@ test('select-clear-refused', async ({ page }) => {
 
   const target = page.locator('tbody tr.nv-tr', { hasText: 'Sam Peeters' })
   const state = target.locator('td').nth(await columnIndex(page, 'Status'))
+  // State may not be empty (not nullable, with a default): the grid offers no clear, so none is sent to be refused.
+  const patches: string[] = []
+  page.on('request', (request) => request.method() === 'PATCH' && patches.push(request.url()))
   await state.click()
+  await state.press('Delete')
   await state.press('Enter')
   const list = openEditor(page).getByRole('listbox')
-  await list.press('ArrowUp')
-  await list.press('ArrowUp')
-  await list.press('Enter')
+  await expect(list.getByRole('option').first()).toBeVisible()
+  await expect(list.getByRole('option', { name: '—' })).toHaveCount(0)
+  await list.press('Escape')
+  await page.waitForTimeout(400)
 
-  await expect(page.locator('tbody').getByRole('alert')).toContainText('Ongeldige status.')
+  expect(patches).toEqual([])
+  await expect(state).toContainText('Uitgenodigd')
   expect((await rows<{ id: number; state: string }>(page, 'toewijzing')).find((r) => r.id === 5)?.state).toBe(
     'uitgenodigd',
   )
