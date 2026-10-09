@@ -192,14 +192,16 @@ function readLinkSecret(file: string | undefined): Uint8Array | undefined {
     if (domain.datasets.some((d) => d.record_link)) fail('this domain declares record links: pass --link-secret-file')
     return undefined
   }
-  let mode: number
-  try {
-    mode = statSync(file).mode
-  } catch {
-    fail(`--link-secret-file ${file} cannot be read`)
+  const orRefuse = <T>(read: () => T): T => {
+    try {
+      return read()
+    } catch {
+      fail(`--link-secret-file ${file} cannot be read`)
+    }
   }
+  const mode = orRefuse(() => statSync(file).mode)
   if ((mode & 0o077) !== 0) fail(`--link-secret-file ${file} is readable by group or others: chmod 600 it`)
-  const secret = new Uint8Array(readFileSync(file))
+  const secret = orRefuse(() => new Uint8Array(readFileSync(file)))
   if (secret.length < 32) fail(`--link-secret-file ${file} holds fewer than 32 bytes`)
   return secret
 }

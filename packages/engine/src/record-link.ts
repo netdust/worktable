@@ -140,8 +140,8 @@ export function recordLinkRequest(
   app.post('/record-links/request', async (c) => {
     const email = emailOf((await bodyOf(c)).email)
     const limits = () => [
-      { key: `record-link:ip:${clientIp(c)}`, max: 20, windowMs: WINDOW },
-      { key: `record-link:email:${email.toLowerCase()}`, max: 5, windowMs: WINDOW },
+      { key: `record-link-request:ip:${clientIp(c)}`, max: 20, windowMs: WINDOW },
+      { key: `record-link-request:email:${email.toLowerCase()}`, max: 5, windowMs: WINDOW },
     ]
     checkLimits(store.sqlite, limits, true)
     // A timer, not a microtask: every read and mail happens after the response is out, for every address alike.

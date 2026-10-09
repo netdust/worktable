@@ -167,8 +167,8 @@ async function consumeLink(c: Context, sqlite: Database, options: AuthOptions): 
   return c.json({ account: accountOut(account) })
 }
 
-// The header's value loses its trailing space, so a bare scheme is an empty token.
-const RECORD_LINK = /^RecordLink(?: (.*))?$/
+// A scheme is case-insensitive (RFC 9110); the value loses its trailing space, so a bare scheme is an empty token.
+const RECORD_LINK = /^RecordLink(?: (.*))?$/i
 
 // A header sibling is checked before the cookie, and when it is present the cookie is ignored.
 function recordLinkOf(c: Context): string | null {

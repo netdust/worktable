@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
@@ -234,6 +234,17 @@ describe('a bad link (attack 9)', () => {
     for (let i = 0; i < 25; i++) expect((await asLink(linkOf(1))).status).toBe(200)
   })
 
+  test('the scheme matches in any case', async () => {
+    const res = await raw('GET', '/api/auth/me', { authorization: `recordlink ${linkOf(1)}` })
+    expect(res.status).toBe(200)
+  })
+
+  test('20 bad links from one address leave the link request open', async () => {
+    for (let i = 0; i < 20; i++) expect((await asLink(`bad-${i}`)).status).toBe(401)
+    const res = await raw('POST', '/api/record-links/request', {}, { email: 'alfa@example.test' })
+    expect({ status: res.status, body: await res.text() }).toEqual({ status: 200, body: '{"ok":true}' })
+  })
+
   test('a disabled link account is refused with the same 401', async () => {
     expect((await asLink(linkOf(1))).status).toBe(200)
     sqlite.run("UPDATE account SET disabled_at = '2026-10-01T00:00:00Z' WHERE kind = 'link'")
@@ -321,6 +332,12 @@ describe('serve.ts --link-secret-file', () => {
     chmodSync(file, mode)
     return file
   }
+  // stat succeeds and the read fails, as for a file the server user may not read.
+  const unreadable = () => {
+    const path = join(dir, 'secret-dir')
+    mkdirSync(path, { mode: 0o700 })
+    return path
+  }
 
   test.each([
     ['missing', () => []],
@@ -328,12 +345,15 @@ describe('serve.ts --link-secret-file', () => {
     ['short', () => ['--link-secret-file', secretFile(31, 0o600)]],
     ['group-readable', () => ['--link-secret-file', secretFile(32, 0o640)]],
     ['world-readable', () => ['--link-secret-file', secretFile(32, 0o604)]],
+    ['unreadable (a directory)', () => ['--link-secret-file', unreadable()]],
+    ['unreadable (mode 000)', () => ['--link-secret-file', secretFile(32, 0o000)]],
   ])(
     'refuses to serve with a %s secret file, naming the flag',
     async (_, args) => {
       const run = await cli('--fresh', ...args())
       expect(run.code).toBe(1)
-      expect(run.err).toMatch(/--link-secret-file/)
+      // One line naming the flag, never a stack trace.
+      expect(run.err.trim().split('\n')).toEqual([expect.stringContaining('--link-secret-file')])
     },
     20_000,
   )
@@ -367,6 +387,11 @@ describe('POST /record-links/request (attack 14)', () => {
   test('the 6th request for one email in 15 minutes is 429', async () => {
     for (let i = 0; i < 5; i++) expect((await ask('alfa@example.test')).status).toBe(200)
     await denied(() => ask('ALFA@example.test'), 429, 'rate_limited')
+  })
+
+  test('20 link requests from one address leave a valid link working', async () => {
+    for (let i = 0; i < 20; i++) expect((await ask(`n${i}@example.test`)).status).toBe(200)
+    expect((await asLink(linkOf(1))).status).toBe(200)
   })
 
   test('the 21st request from one address in 15 minutes is 429', async () => {
