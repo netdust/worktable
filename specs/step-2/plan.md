@@ -146,6 +146,7 @@ Inside the engine each shape stays minimal:
   - the Toewijzing row (HEAD:166): states with `voorlopig`, the transitions, `rol_id`, `aantal`;
   - the Lifecycle paragraph (HEAD:60): hooks return data and mail after commit, `expect` instead of "a conditional update", and grids refusing (not hiding) a transition;
   - "Who may write what" (HEAD:174): an owner's confirm and decline on its own slot, through the action token;
+  - the "no app, no account" line (HEAD:306 area): the link account is an internal actor row, never a sign-in (Q11);
   - the record token paragraph (HEAD:62) as two shapes, and the Access paragraph (HEAD:66);
   - Persoon without `token` and `user_id` (HEAD:156);
   - the Access table: kinds `link` and `service`, and the owner-account column cut as a later step;
@@ -543,13 +544,14 @@ Per `netdust-gates:policy`. This repo has no Makefile, so the review is `/featur
 
 ## Questions Stefan answers before Task 0
 
-From the findings (load-bearing per the formal review):
-- **Q1:** Beschikbaarheid.soort and Persoon_rol in step 2, or step 3 with kandidaten? (Assumed: step 3.)
-- **Q4:** the names `for_owners` and `owner_visible`, or `published` and `member_visible`? (They go into routes, columns, `/schema`, the grid and the spec.)
-- **Q5:** the link version in the `record_link` engine table, or `link_versie` on Persoon?
-- **Q11:** a person's confirmation logged as their link account? (The whole `/act` actor design rests on it.)
-- **Q12:** the matrix fill writes `voorlopig`?
+Narrowed after the advisor's independent view (`specs/step-2/questions-advisor.md`), which agrees with every recommendation:
 
-New, from the reviews:
-- **Q13:** **assigning in the grid invites at once.** Today the people picker and the matrix `u` key create `uitgenodigd` rows. With "a create into a hooked state fires the hook", that create mails the invite, and gate 2 ("assign a person … invite in the outbox") holds in one step. Recommended. The alternative: the writer creates `voorlopig` when no state is given, and the planner moves it to `uitgenodigd` to mail.
-- **Q14:** **your staged `docs/SPEC.md` edits.** They touch the rows Task 0 rewrites (Dataset, Query, Skin needs). Commit them first (recommended), or tell me to fold them into Task 0's commit?
+- **Q14 (his action):** commit his staged `docs/SPEC.md` edits on `feature/step-2` first, or say "fold them in". If he is away, Task 0 builds the blob from `HEAD:docs/SPEC.md` and keeps his edits in the working file.
+- **Q1 (his nod):** Beschikbaarheid.soort, Persoon_rol and plan-side cost move to step 3 with kandidaten.
+
+**Taken as defaults, reported to Stefan:**
+- **Q4:** `for_owners` / `owner_visible`.
+- **Q5:** the `record_link` engine table.
+- **Q11:** the confirmation is logged as the person's link account. Task 0 also rewords `docs/SPEC.md:306` ("no app, no account") to say the link account is an internal actor row, never a sign-in.
+- **Q12:** the fill writes `voorlopig`.
+- **Q13:** a create into `uitgenodigd` through the grid invites at once (SPEC.md:232). The brief's "(no invite)" is read as qualifying a direct `bevestigd` only.
