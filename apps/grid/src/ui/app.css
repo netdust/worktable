@@ -2055,9 +2055,9 @@
   cursor: pointer;
 }
 
-.nv-tr:hover .nv-open,
-.nv-td--active .nv-open,
-.nv-open:focus-visible {
+#root .nv-tr:hover .nv-open,
+#root .nv-td--active .nv-open,
+#root .nv-open:focus-visible {
   opacity: 1;
 }
 

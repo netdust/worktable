@@ -376,3 +376,16 @@ test('drawer-picker-keeps-its-frame @e2e', async ({ page }) => {
     expect((await page.request.delete(`/api/rows/speelreeks/${id}`)).status()).toBe(200)
   }
 })
+
+// The row's open button shows on hover; a rule with #root once kept it at opacity 0 for good.
+test('open-button-shows-on-hover @e2e', async ({ page }) => {
+  await page.goto('/')
+  await openView(page, 'Personen')
+  const row = page.locator('tbody tr.nv-tr').first()
+  const open = row.getByRole('button', { name: 'Openen' })
+  const opacity = () => open.evaluate((el) => Number(getComputedStyle(el).opacity))
+  await page.mouse.move(0, 0)
+  await expect.poll(opacity).toBe(0)
+  await row.hover()
+  await expect.poll(opacity).toBe(1)
+})
