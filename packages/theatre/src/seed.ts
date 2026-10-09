@@ -142,9 +142,10 @@ const speeldag: Item[] = [
   ['overnachting', 'Overnachting'],
 ]
 
+// Its own title: --seed-missing never updates, so a database holding step 1's unslotted "speeldag op locatie" gets this beside it.
 const sjablonen = [
   {
-    naam: 'speeldag op locatie',
+    naam: 'speeldag op locatie (met plaatsen)',
     items: speeldag.map(([soort, omschrijving, start_tijd, duur, slots]) => ({
       soort,
       omschrijving,

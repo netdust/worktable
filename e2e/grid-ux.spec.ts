@@ -50,7 +50,7 @@ const plusDays = (iso: string, days: number) => {
   return at.toISOString().slice(0, 10)
 }
 
-/** An invented four-day Speelreeks of Nachtwacht at the venue, with "speeldag op locatie" applied: 28 activities. */
+/** An invented four-day Speelreeks of Nachtwacht at the venue, with "speeldag op locatie (met plaatsen)" applied: 28 activities. */
 async function speeldagen(api: Api, naam: string, monday: string): Promise<number> {
   const id = await idOf(api, 'speelreeks', {
     naam,
@@ -60,7 +60,7 @@ async function speeldagen(api: Api, naam: string, monday: string): Promise<numbe
     eind_datum: plusDays(monday, 3),
   })
   const applied = await api.post('/api/actions/sjabloon_toepassen', {
-    data: { id, input: { sjabloon_id: await idByName(api, 'sjabloon', 'naam', 'speeldag op locatie') } },
+    data: { id, input: { sjabloon_id: await idByName(api, 'sjabloon', 'naam', 'speeldag op locatie (met plaatsen)') } },
   })
   expect(applied.status(), await applied.text()).toBe(201)
   return id

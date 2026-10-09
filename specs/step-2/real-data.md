@@ -21,10 +21,10 @@ bun packages/engine/src/serve.ts --domain @worktable/theatre --db ~/laika-export
 
 # 3. Seed what is missing (inserts config rows by missing title; needs no secret)
 bun packages/engine/src/serve.ts --domain @worktable/theatre --db ~/laika-export/step2-copy.db --seed-missing
-#    expected: lines per dataset with counts: the Rol rows and the slotted "speeldag op locatie" are added when
-#    their titles are absent, and views are added. Run it twice: the second run reports 0 added.
-#    A database that already holds an UNSLOTTED "speeldag op locatie" keeps it: seed-missing never updates a
-#    row, so it does not add the slotted one under that title. Say so if you see it; the row stays as it is.
+#    expected: lines per dataset with counts: the Rol rows and the slotted "speeldag op locatie (met plaatsen)"
+#    are added when their titles are absent, and views are added. Run it twice: the second run reports 0 added.
+#    The step-1 UNSLOTTED "speeldag op locatie" stays as it is (seed-missing never updates a row); the slotted
+#    template is added beside it under its own title, so both are listed under Sjablonen.
 
 # 4. Parity on the real export (counts only; the report goes outside the repo)
 bun run parity ~/laika-export/<export>.json --out ~/laika-export/shakeout/step2/parity.md

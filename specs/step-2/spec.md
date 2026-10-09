@@ -65,7 +65,7 @@ Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 
 **R7. Templates with slots.**
 - Sjabloon items take an optional `slots: [{ rol, aantal }]`, the role by its title (the natural key, so a seeded template works on any database), validated by the writer.
 - Applying creates the open Toewijzingen in the same batch, so one undo removes everything.
-- `--seed-missing` adds config rows by missing natural key, never updating, so a migrated database gets a slotted "speeldag".
+- `--seed-missing` adds config rows by missing natural key, never updating, so a migrated database gets a slotted "speeldag". The slotted template has its own title, "speeldag op locatie (met plaatsen)", so a database holding step 1's unslotted "speeldag op locatie" gains it beside that row, which stays untouched (Stefan's ruling on review Important 4).
 - Source: brief "Templates with slots …".
 
 **R8. The matrix open column and the fill action.**

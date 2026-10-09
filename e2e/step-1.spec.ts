@@ -7,7 +7,7 @@ import { openView, openWeek } from './tree'
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
 const APPLY_WEEK = '2026-11-02'
 const UNDO_WEEK = '2026-11-16'
-const SJABLOON = 'speeldag op locatie'
+const SJABLOON = 'speeldag op locatie (met plaatsen)'
 const VENUE = 'Zaal De Spiegel'
 const TWICE =
   'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.'

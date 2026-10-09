@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { migrate } from '@worktable/engine'
 import theatre from '../src'
 
+// The slotted template's own title, so a database holding the step-1 unslotted one still gets it.
+const SPEELDAG = 'speeldag op locatie (met plaatsen)'
 const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
 const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties']
@@ -71,7 +73,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
     'Productieleider',
     'Chauffeur',
   ])
-  expect(read(db, 'SELECT naam FROM sjabloon')).toEqual([{ naam: 'speeldag op locatie' }])
+  expect(read(db, 'SELECT naam FROM sjabloon')).toEqual([{ naam: SPEELDAG }])
   expect(kept(db)).toEqual(before)
 
   const views = read(db, 'SELECT name, owner_id, visible_fields FROM saved_view WHERE deleted_at IS NULL')
@@ -101,7 +103,6 @@ test('an existing system Dagplanning view is brought up to the details pass colu
   expect(JSON.parse(view?.filters as string)).toEqual({ plandag: { $period: 'week' } })
 }, 30_000)
 
-const SPEELDAG = 'speeldag op locatie'
 const slotsOf = (db: string) =>
   (read(db, `SELECT items FROM sjabloon WHERE naam = '${SPEELDAG}'`).map((r) => JSON.parse(r.items as string))[0] ?? [])
     .filter((item: { slots?: unknown }) => item.slots)
@@ -129,20 +130,32 @@ test('a database with the Rol rows and another Sjabloon gets the speeldag with s
   expect(read(db, 'SELECT COUNT(*) AS n FROM sjabloon')).toEqual([{ n: 2 }])
 }, 30_000)
 
-test('an unslotted speeldag stays as it is, and a planner-deleted one counts as present', async () => {
+test('a step-1 unslotted "speeldag op locatie" stays as it is, and the slotted one is added beside it', async () => {
   const db = existingDb()
   const sqlite = new Database(db)
-  sqlite.run(`INSERT INTO sjabloon (naam, items) VALUES ('${SPEELDAG}', '[]')`)
+  sqlite.run("INSERT INTO sjabloon (naam, items) VALUES ('speeldag op locatie', '[]')")
+  const old = sqlite.query('SELECT * FROM sjabloon').all()
   sqlite.close()
   const first = await seedMissing(db)
-  expect(first.out).toContain('seed-missing: sjabloon 0 inserted, 1 present')
-  expect(read(db, 'SELECT items FROM sjabloon')).toEqual([{ items: '[]' }])
+  expect(first.out).toContain('seed-missing: sjabloon 1 inserted, 0 present')
+  expect(read(db, "SELECT * FROM sjabloon WHERE naam = 'speeldag op locatie'")).toEqual(old)
+  expect(read(db, 'SELECT naam FROM sjabloon ORDER BY id').map((r) => r.naam)).toEqual([
+    'speeldag op locatie',
+    SPEELDAG,
+  ])
+  expect(slotsOf(db)).toEqual([
+    ['Voorbereiding', [{ rol: 'Lichttechnicus', aantal: 1 }]],
+    ['Voorstelling', [{ rol: 'Speler', aantal: 2 }]],
+  ])
+}, 30_000)
 
-  const gone = new Database(db)
-  gone.run("UPDATE sjabloon SET deleted_at = '2026-01-01T00:00:00Z'")
-  gone.close()
-  const second = await seedMissing(db)
-  expect(second.out).toContain('seed-missing: sjabloon 0 inserted, 1 present')
+test('a planner-deleted seeded speeldag counts as present', async () => {
+  const db = existingDb()
+  const sqlite = new Database(db)
+  sqlite.run(`INSERT INTO sjabloon (naam, items, deleted_at) VALUES ('${SPEELDAG}', '[]', '2026-01-01T00:00:00Z')`)
+  sqlite.close()
+  const result = await seedMissing(db)
+  expect(result.out).toContain('seed-missing: sjabloon 0 inserted, 1 present')
   expect(read(db, 'SELECT COUNT(*) AS n FROM sjabloon')).toEqual([{ n: 1 }])
 }, 30_000)
 
