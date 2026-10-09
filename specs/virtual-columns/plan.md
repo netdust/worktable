@@ -10,7 +10,7 @@
 
 **Spec:** `specs/virtual-columns/spec.md`. Design: `specs/virtual-columns/findings.md`. Spec of record: `docs/SPEC.md` (117e29a, Dataset row and step 2b).
 
-**First working version:** Task 2. An Activiteiten view shows "Locatie" (via Tourstop, greyed when inherited) and Mensen in the running grid. Task 1 is the engine it stands on.
+**First working version:** Task 2. An Activiteiten view shows "Locatie" (via Tourstop, greyed when inherited) and Mensen in the running grid. Task 1 is the engine it stands on. Until Task 3, a view that holds the lookup cannot be saved (`views.ts:40-44` refuses an undeclared key).
 
 **Simplest design:** Keep `dagplanning` and relabel it (the parked `feature/one-planning`). Stefan rejected that: a new view on Activiteiten stays a plain grid ("this is not it"). The next simplest is a theatre-only SQL VIEW per dataset. That is still a second source, which is the confusion he named. The plan instead adds the narrowest engine shape that removes the second source:
 - one hop;
@@ -35,15 +35,16 @@ Assets: fields of related records; the write path's checks.
 
 | # | Threat | Mitigation | Test |
 |---|---|---|---|
-| 1 | An owner account reads a related record's field through a lookup. Owners otherwise read titles only. | Validation refuses `lookups` on a dataset with `owners`. Only owners have a scope other than `all` (`access.ts:63-69`). Views for owners and public views exist only on queries (`views.ts:311`, owner-views), so no lookup can be projected there. | T1 `refuses lookups on an owned dataset` |
+| 1 | An owner account reads a related record's field through a lookup. Owners otherwise read titles only. | Validation refuses `lookups` on a dataset with `owners`. Only owners have a scope other than `all` (`access.ts:65-71`). Public views and views for owners exist only on queries (`views.ts:322`, `views.ts:348`), so no lookup can be projected there. | T1 `refuses lookups on an owned dataset` |
 | 2 | A lookup shows a soft-deleted related row's value. | The subquery requires `deleted_at IS NULL`. | T1 `a deleted target reads null` |
-| 3 | An edit through an inherited lookup skips the writer, the transition check or the relation check. | `valuesOf` renames the key before `cutBody`, so everything after it (`writes.ts:466-484`) runs on `own`. Actions' updates take the same path. | T4 `inherited write goes through the writer` |
+| 3 | An edit through an inherited lookup skips the writer, the transition check or the relation check. | `valuesOf` renames the key before `cutBody`, so everything after it (`writes.ts:466-484`) runs on `own`. Actions' updates, import and seeds take the same path. | T4 `inherited write goes through the writer`, `a transition on own is checked` |
 | 4 | SQL injection through a lookup key. | A key from a request only selects a declared lookup. Identifiers are code, asserted by `defineDataset`'s `IDENTIFIER`. Values are bound. | T3 `unknown key stays 400` |
+| 5 | A lookup name overwrites a key the engine puts on every row, or a physical column in the spread select. | Validation refuses lookup names in `OVERWRITTEN` plus `id`, `custom`, `created_at`, `updated_at`, `deleted_at`, `lookups`, `inherited` and `cells`. | T1 reserved-name cases |
 
 ## Review Focus
 
 - A relation lookup whose target row was deleted: null value, no title, filter `$exists false` matches it (T1, T3).
-- Sorting on a lookup with nulls: SQLite sorts nulls first ascending. The grid's own sort must not reorder them differently (T3 `sort on a lookup`).
+- A self-relation lookup, where the target has a column named like `via`: it reads the parent's field, not its own (T1 `a self-relation reads the parent`).
 - A write naming both `locatie` and `locatie_id` is 400 and writes nothing (T4).
 - A step-2 database after `--seed-missing`:
   - the Planning system view moves onto activiteit;
@@ -70,38 +71,44 @@ Assets: fields of related records; the write path's checks.
 - Produces, in `lookups.ts`:
   - `lookupOf(source: Source, key: string): LookupDecl | undefined`: undefined for a query or an undeclared key.
   - `targetOf(source: DatasetDecl, lookup: LookupDecl): string`: `source.columns[lookup.via].relation`.
-  - `lookupColumn(domain: Domain, source: DatasetDecl, name: string): ColumnDecl`: the target's `field` declaration with `nullable: true`, plus `readonly: true` unless `own`.
-  - `lookupValue(source: DatasetDecl, name: string, table: SQLiteTable): SQL`: `(SELECT "t"."field" FROM "target" AS "t" WHERE "t"."id" = <table.via> AND "t"."deleted_at" IS NULL)`, wrapped in `COALESCE(<table.own>, …)` when `own`. Alias the inner table so a self-relation is unambiguous; use `sql.identifier` for names.
-  - `lookupInherited(source: DatasetDecl, name: string, table: SQLiteTable): SQL`: `(<own> IS NULL AND <subquery> IS NOT NULL)`.
-  - `lookupSelect(source: Source, table: SQLiteTable): Record<string, SQL>`: `{ [name]: value }`, plus `{ ['inherited:' + name]: inheritedFlag }` per inherited lookup; `{}` for a query.
+  - `lookupColumn(domain: Domain, source: DatasetDecl, name: string): ColumnDecl`: the target's `field` declaration with `nullable: true`, plus `readonly: true` unless `own`. A boolean `field` is refused by validation (the subquery would answer 0/1).
+  - `lookupValue(source: DatasetDecl, name: string): SQL`: `(SELECT "t"."field" FROM "target" AS "t" WHERE "t"."id" = <table.via> AND "t"."deleted_at" IS NULL)`, wrapped in `COALESCE(<table.own>, …)` when `own`. Alias the inner table, and print every outer column as `${sql.identifier(source.name)}.${sql.identifier(column)}`, never `${table[column]}`. In a select field drizzle prints a template column without its table, and SQLite would then bind it to the inner alias (plan review B1, probed).
+  - `lookupInherited(source: DatasetDecl, name: string): SQL`: `(<own> IS NULL AND <subquery> IS NOT NULL)`, with the outer side qualified the same way.
+  - `lookupSelect(source: Source): Record<string, SQL>`: `{ [name]: value }`, plus `{ ['inherited:' + name]: inheritedFlag }` per inherited lookup; `{}` for a query.
   - `EngineRow.inherited?: string[]`: present when the source declares an inherited lookup.
 - Produces, on `/schema`: `sources[name].lookups?: Record<string, ColumnDecl & { inherited?: true; from?: string }>`. Type, options, tones and relation come from `lookupColumn`.
 
-- [ ] **Step 1: The fixture.** `lookup-domain.ts`:
-  - `groep { naam }`, `item { naam, groep_id → groep }`, `regel { naam, item_id → item, groep_id → groep nullable }`;
-  - on `item`: `lookups.groep_naam = { label: 'Groepnaam', via: 'groep_id', field: 'naam' }`;
-  - on `regel`: `lookups.groep = { label: 'Groep', via: 'item_id', field: 'groep_id', own: 'groep_id', from: 'Item' }`;
-  - writers that accept every create and update;
-  - seeds: two groeps; an item in groep 1; two regels, one with its own groep 2, one without.
+- [ ] **Step 1: The fixture.** `lookup-domain.ts`, English generic names (`scripts/check-vocabulary.ts` scans engine tests):
+  - `team { name }`; `item { name, team_id → team, phase (options open/done) }`; `line { name, item_id → item, team_id → team nullable, phase nullable (options open/done; lifecycle on phase: open→done only, editor) }`; `node { name, parent_id → node nullable }`;
+  - on `item`: `lookups.team_name = { label: 'Team name', via: 'team_id', field: 'name' }`;
+  - on `line`: `lookups.team = { label: 'Team', via: 'item_id', field: 'team_id', own: 'team_id', from: 'Item' }` and `lookups.stage = { label: 'Stage', via: 'item_id', field: 'phase', own: 'phase', from: 'Item' }`;
+  - on `node`: `lookups.parent_name = { label: 'Parent', via: 'parent_id', field: 'name' }` (a self-relation: the target has the outer row's columns);
+  - writers that accept every create and update, except `line` refuses `team_id === 99`;
+  - seeds: two teams ('One', 'Two'); an item in team 1; two lines, one with its own team 2, one without; a node 'Root' and a node 'Leaf' under it.
 - [ ] **Step 2: Failing tests** in `lookups.test.ts`, through the app (`createEngine` + an editor session, as `links.test.ts` does):
-  - `a plain lookup reads the related field`: `GET /rows/item` → `rows[0].groep_naam === 'Een'`.
-  - `an inherited lookup reads own, else the relation`: the regel with its own groep → `groep === 2` and `inherited` lacks `'groep'`. The other → `groep === 1`, `inherited` contains `'groep'`, and `lookups.groep.title === 'Een'`.
-  - `a deleted target reads null`: soft-delete the item (direct SQL `UPDATE item SET deleted_at = …`) → the inheriting regel's `groep === null`, `lookups.groep === null`, `inherited` lacks `'groep'`.
-  - `schema serves lookups`: `sources.regel.lookups.groep` has `type: 'integer'`, `relation: 'groep'`, `inherited: true`, `from: 'Item'`, and no `readonly`. `sources.item.lookups.groep_naam` has `readonly: true`. `sources.regel.columns` has no `groep`.
-  - `a write reply carries the lookup`: `PATCH /rows/regel/<own>` with `{ naam: 'x' }` → reply `groep === 2`.
+  - `a plain lookup reads the related field`: `GET /rows/item` → `rows[0].team_name === 'One'`.
+  - `an inherited lookup reads own, else the relation`: the line with its own team → `team === 2` and `inherited` lacks `'team'`. The other → `team === 1`, `inherited` contains `'team'`, and `lookups.team.title === 'One'`.
+  - `a self-relation reads the parent`: `GET /rows/node` → Leaf's `parent_name === 'Root'`, Root's is null.
+  - `a deleted target reads null`: soft-delete the item (direct SQL `UPDATE item SET deleted_at = …`) → the inheriting line's `team === null`, `lookups.team === null`, `inherited` lacks `'team'`.
+  - `schema serves lookups`: `sources.line.lookups.team` has `type: 'integer'`, `relation: 'team'`, `inherited: true`, `from: 'Item'`, and no `readonly`. `sources.item.lookups.team_name` has `readonly: true`. `sources.line.columns` has no `team`.
+  - `a write reply carries the lookup`: `PATCH /rows/line/<own>` with `{ name: 'x' }` → reply `team === 2`.
+  - `link and cell rows carry no lookup keys`: rows read through `pointingAt` (a link on `team` to its `item`s) carry no `team_name` key and no `inherited`.
 - [ ] **Step 3: Failing validation tests** in `lookups.test.ts`. Each mutated copy of the fixture is refused with a `DomainError` naming the bad key:
   - `via` not a relation;
   - `field` not a target column;
   - `field` of type json;
   - `own` of another type or another relation;
   - a lookup named like a column or a link;
+  - reserved names: one case each for `id`, `custom`, `deleted_at`, `lookups`, `inherited`, `cells`, `title`;
+  - a boolean `field`;
+  - a column named `inherited` (added to `OVERWRITTEN`);
   - `refuses lookups on an owned dataset` (`owners: { owner: 'id' }`).
 - [ ] **Step 4: Run** `bun test packages/engine/test/lookups.test.ts`. Expected: FAIL.
 - [ ] **Step 5: Implement.**
   - `lookups.ts` as in Interfaces.
   - `checkLookups(domain, dataset)` in `validate.ts`.
-  - `readRows` and `rowOf` select `{ ...getTableColumns(table), ...lookupSelect(source, table) }`.
-  - `withLookups` copies each lookup value onto the row, adds relation titles for relation-typed lookups through `titlesOf`, and builds `inherited` from the `inherited:` flags. Flags are never copied onto the row.
+  - `readRows` and `rowOf` select `{ ...getTableColumns(table), ...lookupSelect(source) }`.
+  - `withLookups` copies each lookup value present in the raw onto the row (raws from `pointingAt` and history carry none, and get none), adds relation titles for relation-typed lookups through `titlesOf`, and builds `inherited` from the `inherited:` flags. Flags are never copied onto the row.
   - `/schema` adds `lookups` for a dataset that declares any.
 - [ ] **Step 6: Run** `bun test packages/engine` and `bun run check`. Expected: PASS, no existing test changed.
 - [ ] **Step 7: Commit** `feat(engine): lookup columns on datasets — plain and inherited, read on every row and served in /schema`.
@@ -109,7 +116,7 @@ Assets: fields of related records; the write path's checks.
 ### Task 2: Grid and theatre — the lookup shows on every Activiteiten view
 
 **Files:**
-- Modify: `apps/grid/src/engine.ts` (`EngineSource.lookups`, `fieldOf` for lookups, `modelOf` fields, `toRow` takes `inherited` off the fields), `apps/grid/src/types.ts` (`Field.via?: string`, `Row.inherited?: string[]`), `apps/grid/src/grid/columns.ts:208-211` (a column's `via` from `field.via`)
+- Modify: `apps/grid/src/engine.ts` (`EngineSource.lookups`, `fieldOf` for lookups, `modelOf` fields, `toRow` takes `inherited` off the fields; `fieldsOf` at 268-271 and `kindOf` at 250-258 read `source.lookups`, so the saved-view round trip and filter chips know them), `apps/grid/src/types.ts` (`Field.via?: string`, `Row.inherited?: string[]`), `apps/grid/src/grid/columns.ts:208-211` (a column's `via` from `field.via`)
 - Modify: `packages/theatre/src/datasets.ts` (`activiteit`: `links.mensen`, `lookups.locatie`)
 - Test: `apps/grid/src/engine.test.ts`, `apps/grid/src/grid/cells/Inherited.test.tsx`, `packages/theatre/test/lookups.test.ts` (create)
 
@@ -124,6 +131,8 @@ Assets: fields of related records; the write path's checks.
 - [ ] **Step 1: Failing tests.**
   - `engine.test.ts`, `toSchema maps a served lookup to a field`: a source with `lookups.locatie` (`relation: 'organisatie'`, `inherited: true`, `from: 'Tourstop'`) yields `models.x.fields.locatie` with `type: 'relation'`, `via: 'Tourstop'` and no `readonly`. A plain lookup yields `readonly: true`.
   - `toRow keeps inherited off the fields`: `fields.inherited` is undefined and `row.inherited` equals `['locatie']`.
+  - `a stored view keeps a lookup in place`: `fromStoredView` of `visible_fields: ['start_at', 'locatie', 'status']` keeps `locatie` second, and `toStoredView` writes it back there; hiding it drops it from `visible_fields`.
+  - `kindOf types a relation lookup as a choice`: a stored `{ locatie: 7 }` reads back as an `in` chip.
   - `Inherited.test.tsx`, `an inherited lookup reads via its word`: render the cell for a row with `inherited: ['locatie']`. It shows the title greyed with "via Tourstop". A row without the key shows it solid.
   - Theatre `lookups.test.ts`, on the theatre seed through the app:
     - `activiteit reads its venue through the tourstop`: an activity with a speelreeks and no own locatie has `locatie` equal to the speelreeks's `locatie_id`, and `inherited` contains `'locatie'`;
@@ -131,7 +140,7 @@ Assets: fields of related records; the write path's checks.
 - [ ] **Step 2: Run** `bun run --filter @worktable/grid test -- engine Inherited` and `bun test packages/theatre/test/lookups.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement** as in Interfaces. The `links.mensen` declaration is the one in `queries.ts` dagplanning, moved onto `activiteit`; dagplanning keeps its own until Task 5.
 - [ ] **Step 4: Run** the same commands, then `bun run gate`. Expected: PASS.
-- [ ] **Step 5: Look at it.** Start a scratch engine and grid on a fresh database: `bun packages/engine/src/serve.ts --domain @worktable/theatre --db <scratch>/t.db --fresh --port 4351` and vite on 5191 against it. Open Activiteiten, add "Locatie" and "Mensen" from the column picker, and take one screenshot into `specs/virtual-columns/`.
+- [ ] **Step 5: Look at it.** Start a scratch engine and grid on a fresh database: `head -c 48 /dev/urandom > <scratch>/secret && chmod 600 <scratch>/secret`, then `bun packages/engine/src/serve.ts --domain @worktable/theatre --db <scratch>/t.db --fresh --port 4351 --link-secret-file <scratch>/secret` and vite on 5191 against it. Open Activiteiten, add "Locatie" and "Mensen" from the column picker, and take one screenshot into `specs/virtual-columns/`.
 - [ ] **Step 6: Commit** `feat(grid,theatre): Activiteiten carries Mensen and the venue through its tourstop on every view`.
 
 ### Task 3: Filter, sort, group and saved views on a lookup
@@ -143,17 +152,17 @@ Assets: fields of related records; the write path's checks.
 **Interfaces:**
 - Consumes: `lookupOf`, `lookupValue`, `lookupColumn` (Task 1).
 - Produces:
-  - `filterWhere(input, source, table, domain, now?)`, with the domain added before `now`;
+  - `filterWhere(input, source, table, now?, domain?)` and `compileFilter(ast, source, table, now?, domain?)`: the domain last, so `filter.test.ts:17,102` keeps passing `now` fourth; a lookup key without a domain is 400 `bad_filter`;
   - `readIds(db, domain, source, params, scope)`.
 
 - [ ] **Step 1: Failing tests** in `lookups.test.ts`:
-  - `filter on a lookup`: `GET /rows/regel?filter={"groep":1}` returns only the inheriting regel; `{"groep":{"$exists":false}}` after deleting the item returns it.
-  - `filter on a text lookup`: `GET /rows/item?filter={"groep_naam":{"$like":"Ee"}}` returns the item.
-  - `sort on a lookup`: `?sort=-groep` puts the own-groep-2 regel first.
-  - `group on a lookup`: `?group=groep` returns 200, in group order.
-  - `a saved view on a lookup`: `POST /views` with `filters: {groep: 1}`, `sort: ['groep']`, `group_by: 'groep'` and `visible_fields: ['groep']` is accepted, and its rows match.
+  - `filter on a lookup`: `GET /rows/line?filter={"team":1}` returns only the inheriting line; `{"team":{"$exists":false}}` after deleting the item returns it.
+  - `filter on a text lookup`: `GET /rows/item?filter={"team_name":{"$like":"On"}}` returns the item.
+  - `sort on a lookup`: `?sort=-team` puts the own-team-2 line first.
+  - `group on a lookup`: `?group=team` returns 200, in group order.
+  - `a saved view on a lookup`: `POST /views` with `filters: {team: 1}`, `sort: ['team']`, `group_by: 'team'` and `visible_fields: ['team']` is accepted, and its rows match.
   - `unknown key stays 400`: `?filter={"nope":1}` → 400 `bad_filter`; `?sort=nope` → 400 `bad_sort`.
-  - `history filters on a lookup`: `GET /history/regel?filter={"groep":1}` → 200.
+  - `history filters on a lookup`: `GET /history/line?filter={"team":1}` → 200.
 - [ ] **Step 2: Run** `bun test packages/engine/test/lookups.test.ts`. Expected: the new tests FAIL.
 - [ ] **Step 3: Implement.**
   - `resolveKey` returns `{ expr: lookupValue(...), custom: null, numeric, type }`, with the type from `lookupColumn`.
@@ -174,15 +183,17 @@ Assets: fields of related records; the write path's checks.
 - Produces: `ownBody(dataset: DatasetDecl, body: Values): Values`.
   - It renames each inherited lookup key to its `own` key and drops plain lookup keys.
   - A body naming both an inherited lookup and its `own` is 400 `bad_value`, with the message `"<name>" and "<own>" name one value`.
+  - It runs for every write through `valuesOf`: the API, actions, import (`import.ts:163`) and seeds (`seed-missing.ts:56`). An import row naming both is refused.
 
 - [ ] **Step 1: Failing tests.**
   - Engine:
-    - `inherited write lands on own`: `PATCH /rows/regel/<inheriting>` with `{ groep: 2 }` → the reply has `groep === 2` and no `'groep'` in `inherited`, and `GET /revisions/regel/<id>` shows `groep_id`.
-    - `null inherits again`: then `{ groep: null }` → `groep === 1`, and `inherited` contains `'groep'`.
-    - `inherited write goes through the writer`: a fixture writer that refuses `groep_id === 99` gives 422 for `{ groep: 99 }`, and a nonexistent groep gives 400 `bad_relation`.
-    - `the related row is untouched`: after the write, `GET /rows/item` shows the item's `groep_id` unchanged.
-    - `both names are 400`: `{ groep: 2, groep_id: 2 }` → 400, nothing written.
-    - `a plain lookup is dropped`: `PATCH /rows/item/1` with `{ groep_naam: 'x' }` → 200 with `changed: []`.
+    - `inherited write lands on own`: `PATCH /rows/line/<inheriting>` with `{ team: 2 }` → the reply has `team === 2` and no `'team'` in `inherited`, and `GET /revisions/line/<id>` shows `team_id`.
+    - `null inherits again`: then `{ team: null }` → `team === 1`, and `inherited` contains `'team'`.
+    - `inherited write goes through the writer`: `{ team: 99 }` → 422 from the fixture writer; `{ team: 98 }` (no such team, not refused by the writer) → 400 `bad_relation`. The writer runs before `checkRelations` (`writes.ts:474,482`).
+    - `a transition on own is checked`: a line whose own `phase` is `done` written `{ stage: 'open' }` → 422 (the lifecycle allows open→done only).
+    - `the related row is untouched`: after the write, `GET /rows/item` shows the item's `team_id` unchanged.
+    - `both names are 400`: `{ team: 2, team_id: 2 }` → 400, nothing written.
+    - `a plain lookup is dropped`: `PATCH /rows/item/1` with `{ team_name: 'x' }` → 200 with `changed: []`.
   - Grid `api.test.ts`, `an inherited lookup is written on the dataset`: editing `locatie` to `[7]` sends `PATCH /rows/activiteit/<id>` with `{ locatie: 7 }`.
   - Theatre, `overriding the venue leaves the tourstop`: after `PATCH /rows/activiteit/<a>` with `{ locatie: <org> }`, the speelreeks's `locatie_id` and a sibling activity's `locatie` are unchanged.
 - [ ] **Step 2: Run** the three suites. Expected: FAIL.
@@ -197,7 +208,7 @@ Assets: fields of related records; the write path's checks.
 - Modify: `packages/engine/src/validate.ts:337-348` (a section may list a query without `of`), `validate.ts:358-365` and `declare.ts:40-41` (remove `inherited`), `packages/engine/src/seed-missing.ts` (`nameOrphans`)
 - Modify: `apps/grid/src/types.ts:28`, `apps/grid/src/engine.ts:18,150`, `apps/grid/src/grid/columns.ts:167-172,208-211` (remove the query `inherited` path)
 - Create: `specs/virtual-columns/real-data.md` (Stefan's commands for the copy)
-- Test: `packages/theatre/test/seed-missing.test.ts`, `packages/engine/test/seed-missing.test.ts`, `packages/engine/test/validate.test.ts`, theatre and grid tests that named dagplanning or query `inherited`
+- Test: `packages/theatre/test/seed-missing.test.ts`, `packages/engine/test/seed-missing.test.ts`, `packages/engine/test/validate.test.ts`, `packages/engine/test/fixtures/space-domain.ts:3,69` and `packages/engine/test/declarations.test.ts:51,105-113,131-160` (query `inherited`), theatre and grid tests that named dagplanning or query `inherited`
 
 **Interfaces:**
 - Consumes: Tasks 1-4.
@@ -206,10 +217,10 @@ Assets: fields of related records; the write path's checks.
   - `--seed-missing` lines `view "<name>" (<source>) has no source any more, left alone`.
 
 - [ ] **Step 1: Failing tests.**
-  - Theatre `seed-missing.test.ts`, on a database seeded from the one-planning seeds (Planning on dagplanning, plus a user view on dagplanning):
-    - `--seed-missing` moves Planning onto activiteit (updates it, or adds it and removes the old one, whichever `seedViews` does by name and source);
-    - it removes the dagplanning system view;
-    - it names the user view with the orphan line and keeps it live.
+  - Theatre `seed-missing.test.ts`; old views are inserted by direct SQL into `saved_view`, since the dagplanning query no longer exists in code. `seedViews` keys on name plus source (`seed-missing.ts:147-191`).
+    - `a one-planning database`: system Planning on dagplanning plus a user view on dagplanning. After `--seed-missing`, Planning on activiteit is added and the Planning on dagplanning removed (a new id; `real-data.md` says so), and the user view is named with the orphan line and kept live.
+    - `a step-2 database` (main's seeds, the copy's likely shape): system Planning on activiteit (status bevestigd filter), system Dagplanning on dagplanning, a user view on dagplanning. After `--seed-missing`, Planning keeps its id with Dagplanning's filter, sort, group and columns; Dagplanning is removed; the user view is named once and kept.
+    - `nameOrphans` runs after `removeUndeclared`, so a published system view on dagplanning is named once ("left alone"), not twice.
   - Engine `validate.test.ts`: `a section lists a query without of`, and `a section listing a query with of is refused`.
   - Engine `seed-missing.test.ts`: `names a view whose source is undeclared`.
   - Theatre: `no dagplanning source` (`/schema` has no `dagplanning`), and `queries sit under Overzichten`.
@@ -219,10 +230,11 @@ Assets: fields of related records; the write path's checks.
   - `Inherited.test.tsx` and `engine.test.ts` cases for the query shape are deleted, since the lookup cases from Task 2 replace them.
   - Retarget theatre tests that read `dagplanning` (`grid-ux.test.ts`, `writer.test.ts`, `step1.test.ts`, `history.test.ts`, `apply.test.ts`, `fixtures/step-1.sql`) to `activiteit` with `locatie`.
   - Write `real-data.md`:
-    1. back up the copy (mode 0600);
-    2. run `bun packages/engine/src/serve.ts --domain @worktable/theatre --db ~/laika-export/step2-copy.db --seed-missing`;
-    3. read its view lines;
-    4. restart :4341.
+    1. stop the engine on :4341;
+    2. back up the copy (mode 0600);
+    3. run `bun packages/engine/src/serve.ts --domain @worktable/theatre --db ~/laika-export/step2-copy.db --seed-missing`;
+    4. read its view lines;
+    5. start :4341 again on the new code.
 - [ ] **Step 4: Run** `bun test packages scripts`, `bun run --filter @worktable/grid test` and `bun run check`. Expected: PASS. `bun run parity` on the e2e fixture still passes (75b4e36 counts from activiteit).
 - [ ] **Step 5: Commit** `feat(theatre,engine): one Planning on Activiteiten with Mensen and the inherited venue; dagplanning and query inheritance removed; queries under Overzichten`.
 
@@ -235,8 +247,8 @@ Assets: fields of related records; the write path's checks.
 **Interfaces:**
 - Consumes: Task 5's seeded Planning. Flows address the view by its name "Planning" (as 18405aa already does). A URL `#view=dagplanning` becomes the Planning view's key; an API path `/api/rows/dagplanning` becomes `/api/rows/activiteit`; the column "Locatie van" (`locatie_bron`) becomes the inherited cell's "via Tourstop".
 
-- [ ] **Step 1:** Run `bunx playwright test` and list every failure. Each one is a flow that named the removed query.
-- [ ] **Step 2:** Retarget each flow to Planning on activiteit, keeping what it asserts. A flow that asserted only the query itself becomes `dagplanning-is-gone @e2e` (the rail shows no Dagplanning; the queries sit under Overzichten). That covers `query-views-under-model`, `owner-has-no-dagplanning` and `dagplanning asks for a session`.
+- [ ] **Step 1:** Run `bunx playwright test` and list every failure. Most are flows that named the removed query; a failure in a flow that reaches Planning by name only (`toolbar`, `title-line`, `ui-fit`, `step-0b`, `step-0d`) is a regression to fix in the code, never by loosening the assertion.
+- [ ] **Step 2:** Retarget each flow to Planning on activiteit, keeping every assertion at its strength. A flow that asserted only the query itself becomes `dagplanning-is-gone @e2e` (the rail shows no Dagplanning; the queries sit under Overzichten). That covers `query-views-under-model`, `owner-has-no-dagplanning` and `dagplanning asks for a session`.
 - [ ] **Step 3:** Update the matching `specs/CHECKS.md` rows' names, commands and files. Keep the count unless a flow became `dagplanning-is-gone`.
 - [ ] **Step 4: Run** `bun run gate`. Expected: PASS.
 - [ ] **Step 5: Commit** `test(e2e): flows follow Planning on Activiteiten`.
