@@ -113,6 +113,15 @@ describe('what stays in this browser', () => {
     expect(arrangementOf(reread).picked).toEqual([9])
   })
 
+  it('keeps a condition not yet filled in past a Save: the engine never stores it, so the copy is not what was stored', () => {
+    storeLayout(served, { ...layout(), filters: [...layout().filters, { field: 'status', op: 'in', values: [] }] })
+    const sent = localOf(served)!
+
+    clearIfSent(served, sent)
+
+    expect(layoutOf(served).filters).toEqual([...stored.filters, { field: 'status', op: 'in', values: [] }])
+  })
+
   it('is copied to a view saved as new, and gone with a view deleted for good', () => {
     const created: SavedView = { ...served, key: '50', id: 50 }
     storeLayout(served, { ...layout(), widths: { place: 90 } })

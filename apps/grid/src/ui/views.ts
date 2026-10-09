@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { joinOf } from '../grid/conditions'
+import { complete, joinOf } from '../grid/conditions'
 import { clearKept, clearLayout, defaults, type Layout, save, saveKept, storedKept, storedLayout, storedRevision, subscribeStored } from '../grid/layout'
 import { savePicked } from '../matrix/columns'
 import type { Arrangement, SavedView, StoredArrangement, View } from '../types'
@@ -105,10 +105,10 @@ export function copyKept(from: View, to: View): void {
   if (kept) saveKept(to, kept)
 }
 
-/** Clears the local copy only while it is what was sent: a change made since stays. */
+/** Clears the local copy only while it is what was sent: a change made since stays, and so does a condition not yet filled in, which is never sent. */
 export function clearIfSent(view: View, sent: Arrangement): void {
   const now = localOf(view)
-  if (now && comparable(now) === comparable(sent)) clearLocal(view)
+  if (now && comparable(now) === comparable(sent) && now.filters.every(complete)) clearLocal(view)
 }
 
 /** Keeps an arrangement as this browser's unsaved copy of another view. */

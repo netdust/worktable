@@ -937,7 +937,6 @@ test('open-related-record-by-keyboard @e2e', async ({ page }) => {
 })
 
 test('own-view-keeps-a-new-condition @e2e', async ({ page }) => {
-  test.fail(true, 'shakeout row: on an own view the new condition row is gone once the view saves itself')
   const made = await page.request.post('/api/views', {
     data: { name: 'ra eigen voorwaarde', source: 'activiteit', shared: false },
   })
