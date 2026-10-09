@@ -2,7 +2,7 @@
 
 Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 grid, 151 e2e). The design is `specs/step-2/findings.md` (40d91ed). Stefan's brief of 2026-10-09 is the source quoted below as "brief".
 
-**Working assumptions.** Stefan has not yet answered the findings' questions; the plan lists the load-bearing ones (Q1, Q4, Q5, Q11, Q12) and two new ones (Q13, Q14) to answer before Task 0. This spec takes each recommended answer, marked `assumed (Qn)`. An answer that differs changes the requirement first, then the plan. Question 1 follows the brief: Beschikbaarheid.soort and Persoon_rol move to step 3 with kandidaten.
+**Working assumptions.** Stefan has not yet answered the findings' questions; the plan lists the load-bearing ones (Q1, Q4, Q5, Q11, Q12) and two new ones (Q13, Q14) to answer before Task 0. This spec takes each recommended answer, marked `assumed (Qn)`. An answer that differs changes the requirement first, then the plan. Question 1 is confirmed by Stefan (2026-10-09): Beschikbaarheid.soort, Persoon_rol and plan-side cost move to step 3 with kandidaten.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 
   - the new section "The engine's surface after step 2" (R12).
 - Kandidaten and Beschikbaarheid.soort, Persoon_rol and plan-side cost move to step 3.
 - It is written before any code, and only those lines are committed; Stefan's own uncommitted edits stay out.
-- Source: AGENTS.md "Changing scope means editing it first"; brief "F5 … Add a section to the spec"; assumed (Q1).
+- Source: AGENTS.md "Changing scope means editing it first"; brief "F5 … Add a section to the spec"; confirmed (Q1).
 
 **R2. Lifecycle, an engine shape, opt-in.**
 - A dataset declares `lifecycle: { column, transitions: [{ from, to, roles }], hooks?, token_projection? }`.
@@ -109,7 +109,7 @@ Branch `feature/step-2`, cut from main at e080e02 (gate green: 1144 engine, 944 
 - Source: brief "F5, the engine's surface."
 
 ## Out
-- Candidates and conflicts, Beschikbaarheid.soort, Persoon_rol and plan-side cost (step 3; assumed Q1).
+- Candidates and conflicts, Beschikbaarheid.soort, Persoon_rol and plan-side cost (step 3; confirmed Q1).
 - Uploads and documents.
 - The board skin, public create, mail delivery.
 - Notes written through the link.

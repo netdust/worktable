@@ -17,7 +17,7 @@ Theatre declares the names: the Toewijzing lifecycle and invite hook, `vul_slot`
 
 **Spec:** `specs/step-2/spec.md`. Design: `specs/step-2/findings.md` (with `findings-review.md` and the advisor's full F1/F2 draft `f1-f2-advisor-draft.md`). Code facts: `specs/step-2/plan-facts.md` (its `serve.ts` line numbers are stale; re-read that file). Reviews of this plan: `plan-review.md` (formal), `plan-review-advisor.md` (fidelity).
 
-**Before Task 0 commits the spec, Stefan answers the load-bearing questions** (the formal review's list, plus two the reviews raised): Q1, Q4, Q5, Q11, Q12, Q13 and Q14 (end of this file). The rest are cheap to change later and stay working assumptions.
+**Questions before Task 0:** Q1 and Q14 are answered (end of this file). Q4, Q5, Q11, Q12 and Q13 are defaults the advisor's independent view confirms; the rest stay working assumptions.
 
 **First working version:** Task 4. Toewijzing slot-first with its lifecycle in the running grid: open rows with a role, the new states, and a refused transition shown in Dutch. Tasks 1-3 are the engine it stands on and have nothing to see.
 
@@ -140,7 +140,7 @@ Inside the engine each shape stays minimal:
 
 **Files:** Modify `docs/SPEC.md` (only the lines below), `scripts/vocabulary-allow.txt`.
 
-- [ ] **Step 1:** Precondition (Q14): Stefan has committed or set aside his staged `docs/SPEC.md` edits. They touch the rows this task edits (HEAD:43, 44, 46). If they are still staged, stop and ask.
+- [ ] **Step 1:** Precondition (Q14): Stefan has committed his staged `docs/SPEC.md` edits himself. `git status --short docs/SPEC.md` is empty. If it is not, stop and ask; never commit, stash or fold his edits.
 - [ ] **Step 2:** Write the changes R1 lists. Line numbers are `git show HEAD:docs/SPEC.md`'s:
   - the step 2 row and gate (HEAD:258, 288);
   - the Toewijzing row (HEAD:166): states with `voorlopig`, the transitions, `rol_id`, `aantal`;
@@ -546,8 +546,8 @@ Per `netdust-gates:policy`. This repo has no Makefile, so the review is `/featur
 
 Narrowed after the advisor's independent view (`specs/step-2/questions-advisor.md`), which agrees with every recommendation:
 
-- **Q14 (his action):** commit his staged `docs/SPEC.md` edits on `feature/step-2` first, or say "fold them in". If he is away, Task 0 builds the blob from `HEAD:docs/SPEC.md` and keeps his edits in the working file.
-- **Q1 (his nod):** Beschikbaarheid.soort, Persoon_rol and plan-side cost move to step 3 with kandidaten.
+- **Q14, answered 2026-10-09:** Stefan commits his staged `docs/SPEC.md` edits himself before Task 0. Task 0 builds on them and commits its own lines only, by path.
+- **Q1, confirmed 2026-10-09:** Beschikbaarheid.soort, Persoon_rol and plan-side cost move to step 3 with kandidaten.
 
 **Taken as defaults, reported to Stefan:**
 - **Q4:** `for_owners` / `owner_visible`.
