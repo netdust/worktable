@@ -353,6 +353,8 @@ export interface ActView {
   projection: Record<string, unknown>
   labels: Record<string, string>
   to: { value: string; label: string }[]
+  /** False once the record left the state the token was minted for: `to` is then empty. */
+  answerable: boolean
 }
 
 /** The signed-in account, as `/auth/me` serves it. */

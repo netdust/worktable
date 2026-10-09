@@ -115,7 +115,7 @@ function lifecycleDataset(
 const subjectOf = (row: TokenRow): Subject => ({ dataset: row.subject_dataset, id: row.subject_id })
 
 type Answer = { value: string; label: string }
-type Shown = { dataset: string; projection: Raw; labels: Record<string, string>; to: Answer[] }
+type Shown = { dataset: string; projection: Raw; labels: Record<string, string>; to: Answer[]; answerable: boolean }
 
 // Read as the stored subject's link account reads: a record whose owner moved is no longer this token's.
 function projectionOf(store: Store, token: unknown): Shown {
@@ -142,11 +142,11 @@ function projectionOf(store: Store, token: unknown): Shown {
     dataset.lifecycle.transitions.find(
       (t) => t.to === value && (t.from === '*' || t.from.includes(row.from_state)) && t.label !== undefined,
     )?.label
-  const to = (JSON.parse(row.to_states) as string[]).map((value) => ({
-    value,
-    label: verb(value) ?? options[value] ?? value,
-  }))
-  return { dataset: dataset.name, projection, labels, to }
+  // A record that left the token's from-state can only refuse an answer: offer none.
+  const answerable = record[dataset.lifecycle.column] === row.from_state
+  const allowed = answerable ? (JSON.parse(row.to_states) as string[]) : []
+  const to = allowed.map((value) => ({ value, label: verb(value) ?? options[value] ?? value }))
+  return { dataset: dataset.name, projection, labels, to, answerable }
 }
 
 function consume(sqlite: Database, row: TokenRow, now: number): void {

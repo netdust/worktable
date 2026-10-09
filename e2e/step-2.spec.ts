@@ -562,8 +562,7 @@ test.describe('step 2', () => {
   })
 
   test('cancelled-invite-offers-no-answer @e2e', async ({ page, browser }) => {
-    // Found in the shake-out (review Minor 2, still open): the page offers answers that can only be refused.
-    test.fail()
+    // Found in the shake-out (row 19): a slot that left uitgenodigd offers no answer that could only be refused.
     const api = page.request
     const email = 'kato.annuleer@e2e-invite.test'
     const id = await activity(api, 'e2e geannuleerde uitnodiging', WEEK.decline, '10:00')
@@ -579,6 +578,7 @@ test.describe('step 2', () => {
       await tab.goto(link)
       const card = tab.getByRole('region', { name: 'Je antwoord' })
       await expect(card).toContainText('Geannuleerd')
+      await expect(card.getByRole('status')).toHaveText('Deze uitnodiging is niet meer open.')
       await shot(tab, 'cancelled-invite-offers-answers')
       await expect(card.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0, { timeout: 2000 })
       await expect(card.getByRole('button', { name: 'Weigeren' })).toHaveCount(0, { timeout: 2000 })

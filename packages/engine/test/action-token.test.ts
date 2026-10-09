@@ -204,8 +204,25 @@ describe('the action token', () => {
           { value: 'c', label: 'Close' },
           { value: 'd', label: 'D' },
         ],
+        answerable: true,
       },
     })
+  })
+
+  test("a record that left the token's from-state is not answerable: no answers, its current state shown", async () => {
+    const { token } = await invite()
+    expect((await patch(1, { state: 'a', expect: { state: 'b' } })).status).toBe(200)
+    expect(await view(token)).toEqual({
+      status: 200,
+      body: {
+        dataset: 'ticket',
+        projection: { host_id: 'Bob', state: 'A' },
+        labels: { host_id: 'Host', state: 'State' },
+        to: [],
+        answerable: false,
+      },
+    })
+    expect(tokens()[0]?.used_at).toBeNull()
   })
 
   test('mint, view, act: the row moves and the batch actor is the link account', async () => {

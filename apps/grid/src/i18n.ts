@@ -157,6 +157,7 @@ const strings = {
   actHint: 'Kies je antwoord.',
   actDead: 'Deze link werkt niet meer',
   actAnswered: 'Al beantwoord',
+  actClosed: 'Deze uitnodiging is niet meer open.',
   actDone: 'Bedankt. Je antwoord is doorgegeven: {answer}.',
   actRetryLater: 'Te veel pogingen. Probeer het zo meteen opnieuw.',
   actFailed: 'Dat lukte niet. Probeer het opnieuw.',

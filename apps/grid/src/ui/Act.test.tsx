@@ -12,6 +12,7 @@ const shown = {
   projection: { task_id: 'Opbouw zaal', kind_id: 'Techniek', state: 'asked' },
   labels: { task_id: 'Taak', kind_id: 'Soort', state: 'Status' },
   to: [{ value: 'yes', label: 'Ja' }, { value: 'no', label: 'Nee' }],
+  answerable: true,
 }
 
 function answer(byPath: Record<string, Response | (() => Response)>) {
@@ -94,5 +95,17 @@ describe('the confirm page', () => {
     fireEvent.click(retry)
     expect(await screen.findByText(/Je antwoord is doorgegeven: Ja/)).toBeTruthy()
     expect(seen.filter((call) => call.url === '/api/act')).toHaveLength(2)
+  })
+
+  it('a record no longer open shows its status and a sentence, and offers no answer', async () => {
+    const closed = { ...shown, projection: { ...shown.projection, state: 'Geannuleerd' }, to: [], answerable: false }
+    answer({ '/api/act/view': () => json(closed) })
+    render(<App />)
+
+    expect(await screen.findByText('Geannuleerd')).toBeTruthy()
+    expect(screen.getByText('Deze uitnodiging is niet meer open.')).toBeTruthy()
+    expect(screen.queryByText('Kies je antwoord.')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(seen.filter((call) => call.url === '/api/act')).toHaveLength(0)
   })
 })

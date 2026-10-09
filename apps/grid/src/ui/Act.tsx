@@ -56,7 +56,7 @@ export function Act({ token }: { token: string }) {
   const note =
     phase.kind === 'done' ? t('actDone', { answer: phase.answer })
     : phase.kind === 'refused' ? phase.text
-    : phase.kind === 'shown' ? (phase.failed ?? t('actHint'))
+    : phase.kind === 'shown' ? (phase.failed ?? (phase.view.answerable ? t('actHint') : t('actClosed')))
     : ''
   return (
     <section className="nv-auth" aria-label={t('actTitle')} aria-busy={phase.kind === 'loading'}>
@@ -71,7 +71,7 @@ export function Act({ token }: { token: string }) {
           ))}
         </dl>
       )}
-      {phase.kind !== 'loading' && <p className="nv-auth__note" role={phase.kind === 'shown' && !phase.failed ? undefined : 'status'}>{note}</p>}
+      {phase.kind !== 'loading' && <p className="nv-auth__note" role={phase.kind === 'shown' && !phase.failed && phase.view.answerable ? undefined : 'status'}>{note}</p>}
       {phase.kind === 'shown' && (
         <div className="nv-act__answers">
           {phase.view.to.map((to, i) => (
