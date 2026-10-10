@@ -177,7 +177,7 @@ export const views: SavedViewSeed[] = [
     filters: { plandag: { $period: 'week' } },
     sort: ['start_at'],
     group_by: 'plandag',
-    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie', 'mensen', 'status'],
+    visible_fields: ['start_at', 'omschrijving', 'soort', 'speelreeks_id', 'locatie', 'mensen', 'status'],
   },
   {
     name: 'Toewijzingen per activiteit',

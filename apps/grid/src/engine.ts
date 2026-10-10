@@ -16,6 +16,8 @@ export interface EngineColumn {
   /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
   writes?: { dataset: string; field: string; key: string }
   owner_visible?: boolean
+  /** Stored and written through the API, never shown in the grid. */
+  hidden?: true
 }
 
 /** A dataset's lookup: the related row's field, typed as that field; an inherited one is the row's own when set. */
@@ -164,9 +166,13 @@ function titleLabel(source: EngineSource): string {
   return source.title_via ? `${label(source.title_via)} / ${label(source.title)}` : label(source.title)
 }
 
+/** The columns the grid offers: never the title column, `id`, nor a hidden column. */
+const shownColumns = (source: EngineSource): [string, EngineColumn][] =>
+  Object.entries(source.columns).filter(([key, column]) => key !== titleColumn(source) && key !== 'id' && !column.hidden)
+
 /** The row's own id is the grid's `id`, never a field. */
 function modelOf(name: string, source: EngineSource, sources: Sources): Model {
-  const fields = Object.entries(source.columns).filter(([key]) => key !== titleColumn(source) && key !== 'id')
+  const fields = shownColumns(source)
   // The matrix's open column runs its fill; offered on any row it would only be refused.
   const actions = source.actions?.filter((action) => action.name !== source.matrix?.open?.fill)
   return {
@@ -272,9 +278,9 @@ function splitFilters(filters: Record<string, unknown>, source: EngineSource): {
   return { chips: conditions, fixed, join }
 }
 
-/** The grid's field ids, in declared order: never the title column nor `id`. */
+/** The grid's field ids, in declared order. */
 const fieldsOf = (source: EngineSource): string[] => [
-  ...Object.keys(source.columns).filter((key) => key !== titleColumn(source) && key !== 'id'),
+  ...shownColumns(source).map(([key]) => key),
   ...Object.keys(source.lookups ?? {}),
   ...Object.keys(source.links ?? {}),
 ]

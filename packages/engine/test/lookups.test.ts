@@ -93,6 +93,18 @@ describe('reading lookups', () => {
     expect(body.sources.team).not.toHaveProperty('lookups')
   })
 
+  test('schema serves a hidden column as declared', async () => {
+    const { body } = await editor('GET', '/api/schema')
+    expect(body.sources.line.columns.team_id.hidden).toBe(true)
+    expect(body.sources.line.columns.name).not.toHaveProperty('hidden')
+  })
+
+  test('a hidden column is still written through the API', async () => {
+    const { status, body } = await editor('PATCH', '/api/rows/line/2', { body: JSON.stringify({ team_id: 2 }) })
+    expect(status).toBe(200)
+    expect(body.team_id).toBe(2)
+  })
+
   test('a write reply carries the lookup', async () => {
     const { status, body } = await editor('PATCH', '/api/rows/line/1', { body: JSON.stringify({ name: 'x' }) })
     expect(status).toBe(200)

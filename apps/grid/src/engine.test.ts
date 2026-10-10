@@ -309,6 +309,25 @@ describe('toSavedViews', () => {
   })
 })
 
+describe('a hidden column', () => {
+  const hidden = { ...engine.sources.activiteit, columns: { ...engine.sources.activiteit.columns, plaats: { type: 'text' as const, label: 'Plaats', nullable: true, hidden: true as const } } }
+  const planning = { ...views[0], visible_fields: ['start_at', 'plaats', 'omschrijving', 'soort', 'status'] }
+
+  it('is left out of the model\'s fields, so no picker, default, filter, sort or group offers it', () => {
+    const model = toSchema({ sources: { ...engine.sources, activiteit: hidden } }).models.activiteit
+    expect(Object.keys(model.fields)).not.toContain('plaats')
+    expect(Object.keys(model.fields)).toContain('soort')
+    expect(columnsFor(model, { key: 'a', label: 'a', table: 'activiteit', model: 'activiteit' }, true).map((c) => c.id)).not.toContain('plaats')
+  })
+
+  it('round-trips a view that names it: the other fields keep their place and it is not written back', () => {
+    const { arrangement, fixed } = fromStoredView(planning, hidden)
+    expect(arrangement.order).toEqual(['start_at', 'title', 'soort', 'status'])
+    expect(arrangement.hidden).not.toContain('plaats')
+    expect(toStoredView(arrangement, fixed, hidden).visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'status'])
+  })
+})
+
 describe('an arrangement on the wire', () => {
   const activiteit = engine.sources.activiteit
   const planning = views[0]

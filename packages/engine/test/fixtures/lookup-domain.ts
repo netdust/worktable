@@ -32,7 +32,7 @@ const line = defineDataset({
   columns: {
     name: { type: 'text', label: 'Name' },
     item_id: { type: 'integer', label: 'Item', relation: 'item' },
-    team_id: { type: 'integer', label: 'Own team', relation: 'team', nullable: true },
+    team_id: { type: 'integer', label: 'Own team', relation: 'team', nullable: true, hidden: true },
     phase: { type: 'text', label: 'Own phase', nullable: true, options: phase },
   },
   lifecycle: { column: 'phase', transitions: [{ from: ['open'], to: 'done', roles: ['editor'] }] },

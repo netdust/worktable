@@ -480,13 +480,14 @@ test('planning-details @e2e', async ({ page }) => {
   await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag tussen 2027-03-22 en 2027-03-28'])
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
-  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Mensen, Status; a time range with its end muted.
+  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Tourstop, Locatie, Mensen, Status; a time range with its end muted.
   const heads = await page.locator('thead th').allTextContents()
   expect(heads.map((h) => h.replace(/\s*[↑↓]$/, '').trim())).toEqual([
     '#',
     'Tijd',
     'Omschrijving',
     'Soort',
+    'Tourstop',
     'Locatie',
     'Mensen',
     'Status',

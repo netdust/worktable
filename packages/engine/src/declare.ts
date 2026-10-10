@@ -39,6 +39,8 @@ export interface ColumnDecl {
   writes?: { dataset: string; field: string; key: string }
   /** Served to the row's owner in a view for owners; never on json or on the owner column. */
   owner_visible?: boolean
+  /** The grid never offers or shows it; still stored, imported and written through the API. */
+  hidden?: boolean
 }
 
 /** A fact the grid computes from a group's rows. */

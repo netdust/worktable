@@ -123,15 +123,29 @@ describe('theatre declares the details: icons, colours, an end time and create-f
     expect(sources.activiteit.columns.status.tones).toEqual(STATUS_TONES)
   })
 
+  test('Eigen locatie and Plaats stay stored but are served hidden', async () => {
+    const { sources } = await schemaAs('editor')
+    expect(sources.activiteit.columns.locatie_id).toMatchObject({ label: 'Eigen locatie', hidden: true })
+    expect(sources.activiteit.columns.plaats).toMatchObject({ hidden: true })
+  })
+
   test('activiteit serves its end time', async () => {
     const { sources } = await schemaAs('editor')
     expect(sources.activiteit.columns.eind_at).toMatchObject({ type: 'datetime', nullable: true })
   })
 
-  test('the Planning view, on activiteit, shows time, omschrijving, soort, locatie, mensen and status', () => {
+  test('the Planning view, on activiteit, shows time, omschrijving, soort, tourstop, locatie, mensen and status', () => {
     const view = theatre.views.find((v) => v.name === 'Planning')
     expect(view?.source).toBe('activiteit')
-    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie', 'mensen', 'status'])
+    expect(view?.visible_fields).toEqual([
+      'start_at',
+      'omschrijving',
+      'soort',
+      'speelreeks_id',
+      'locatie',
+      'mensen',
+      'status',
+    ])
   })
 
   test('the Planning view starts on this week: its period is a condition on plandag', () => {

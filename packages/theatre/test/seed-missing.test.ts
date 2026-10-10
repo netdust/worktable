@@ -13,7 +13,7 @@ const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
 const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties']
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
-const PLANNING = ['start_at', 'omschrijving', 'soort', 'locatie', 'mensen', 'status']
+const PLANNING = ['start_at', 'omschrijving', 'soort', 'speelreeks_id', 'locatie', 'mensen', 'status']
 const WEEK = { plandag: { $period: 'week' } }
 const KEPT = ['organisatie', 'productie', 'activiteit', 'persoon', 'toewijzing', 'beschikbaarheid', 'speelreeks']
 

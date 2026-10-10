@@ -103,6 +103,16 @@ function checkOwnerVisible(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+// The grid needs the title and the date column to show a row.
+function checkHidden(source: DatasetDecl | QueryDecl): void {
+  const title = typeof source.title === 'string' ? [source.title] : [source.title.else, source.title.via]
+  for (const column of [...title, source.date]) {
+    if (column !== undefined && source.columns[column]?.hidden) {
+      throw new DomainError(source.name, column, `${column} is the title or date column, so it is not hidden`)
+    }
+  }
+}
+
 // Keys the engine adds to every row it answers.
 const OVERWRITTEN = [
   ['title', 'the computed row title'],
@@ -418,6 +428,7 @@ export function validateDomain(domain: Domain): void {
     checkRelations(domain, source)
     checkOwners(source)
     checkOwnerVisible(source)
+    checkHidden(source)
     checkTones(source)
     checkIcon(source)
     checkFacts(source)

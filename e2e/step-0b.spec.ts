@@ -289,9 +289,9 @@ test.describe('cross-site-refused', () => {
     const before = await activiteit(page, name)
     const response = await page.request.patch(`/api/rows/activiteit/${before.id}`, {
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      data: JSON.stringify({ plaats: 'Tongeren' }),
+      data: JSON.stringify({ notities: 'Tongeren' }),
     })
     expect(response.status()).toBe(200)
-    expect((await revisions(page, before.id)).map((revision) => revision.field)).toEqual(['plaats'])
+    expect((await revisions(page, before.id)).map((revision) => revision.field)).toEqual(['notities'])
   })
 })
