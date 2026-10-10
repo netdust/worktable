@@ -154,6 +154,8 @@ const stempel = defineDataset({
     project_id: { type: 'integer', label: 'Project', relation: 'project' },
     tekst: { type: 'text', label: 'Tekst' },
   },
+  // Not owned, so it may carry a lookup: the owner-view leak test runs over a domain that has one.
+  lookups: { project_name: { label: 'Project name', via: 'project_id', field: 'name' } },
 })
 
 const stempelLijst = defineQuery({
