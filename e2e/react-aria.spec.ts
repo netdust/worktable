@@ -409,7 +409,7 @@ test('edit-relation-cell @e2e', async ({ page }) => {
   const api = page.request
   const title = 'ra relatie'
   const id = await activity(api, title, { datum: day(3), start_at: `${day(3)}T10:00` })
-  const patches = writes(page, 'PATCH', /^\/api\/rows\/(activiteit|dagplanning)\/\d+$/)
+  const patches = writes(page, 'PATCH', /^\/api\/rows\/activiteit\/\d+$/)
   try {
     await openDagplanning(page)
     const locatie = () => cellOf(page, title, 'Locatie')

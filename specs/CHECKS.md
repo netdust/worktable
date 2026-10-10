@@ -47,7 +47,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
 | Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut-bar-and-foot @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
 | Dagplanning · inherited venue | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "inherited-venue @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
-| Dagplanning · details | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "dagplanning-details @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
+| Planning · details | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "planning-details @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
 | Grid shell (lang nl, Plex) | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "the grid shell speaks Dutch in Plex @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
 | GET /api/schema | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/schema asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |
 | GET /api/views | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/views asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 45f8d18 2026-10-09 |

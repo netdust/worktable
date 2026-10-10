@@ -427,7 +427,7 @@ test('inherited-venue @e2e', async ({ page }) => {
   await bands(page).nth(2).click()
   await expect(bands(page).nth(2)).toHaveAttribute('aria-expanded', 'false')
   await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
-  await shot(page, 'dagplanning')
+  await shot(page, 'planning')
 })
 
 const rowHeight = async (page: Page) => (await gridRows(page).first().boundingBox())?.height ?? 0
@@ -468,7 +468,7 @@ test('dark-and-density @e2e', async ({ page }) => {
   await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(light)
 })
 
-test('dagplanning-details @e2e', async ({ page }) => {
+test('planning-details @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await speeldagen(page.request, 'Speelreeks e2e details', DETAILS_WEEK)
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', DETAILS_WEEK)

@@ -499,8 +499,8 @@ test('apply-double-submit @e2e', async ({ page }) => {
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(14)
 })
 
-/** Applies the Sjabloon from the drawer and opens Dagplanning on the week, a cell focused for the keyboard. */
-async function appliedInDagplanning(page: Page, naam: string, week: string, days: number): Promise<number> {
+/** Applies the Sjabloon from the drawer and opens Planning on the week, a cell focused for the keyboard. */
+async function appliedInPlanning(page: Page, naam: string, week: string, days: number): Promise<number> {
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
   const id = await speelreeks(page.request, naam, week, plusDays(week, days - 1))
   await pick(page, 'Tourstops')
@@ -512,7 +512,7 @@ async function appliedInDagplanning(page: Page, naam: string, week: string, days
 }
 
 test('apply-undo-changed-since @e2e', async ({ page, browser }) => {
-  const id = await appliedInDagplanning(page, 'Speelreeks e2e na wijziging', '2026-12-21', 1)
+  const id = await appliedInPlanning(page, 'Speelreeks e2e na wijziging', '2026-12-21', 1)
   const made = await rowsOf<{ id: number; omschrijving: string }>(page.request, 'activiteit', { speelreeks_id: id })
   const lunch = made.find((a) => a.omschrijving === 'Lunch')
 
@@ -533,7 +533,7 @@ test('apply-undo-changed-since @e2e', async ({ page, browser }) => {
 
 test('apply-redo-refused @e2e', async ({ page }) => {
   const naam = 'Speelreeks e2e opnieuw'
-  const id = await appliedInDagplanning(page, naam, '2026-12-28', 2)
+  const id = await appliedInPlanning(page, naam, '2026-12-28', 2)
   const undone = undoOf(page)
   await page.keyboard.press('ControlOrMeta+z')
   expect((await undone).status()).toBe(200)

@@ -420,7 +420,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
   })
 })
 
-test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
+test('undo-time-on-untimed-in-planning', async ({ page }) => {
   await page.goto('/')
   const productie = (
     (await (await page.request.get('/api/rows/productie?limit=50')).json()) as { rows: { id: number }[] }
