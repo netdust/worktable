@@ -130,6 +130,8 @@ async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
 
 /** Opens a surface in light and in dark, checks that its own background follows the theme, and shoots it in each. */
 async function inBothThemes(page: Page, name: string, open: () => Promise<Locator>, close: () => Promise<void>) {
+  // The theme crossfades over 220ms; measured mid-fade under load, a dark surface still reads light.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const theme of ['Licht', 'Donker'] as const) {
     await setTheme(page, theme)
     const surface = await open()
