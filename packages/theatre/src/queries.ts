@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { defineQuery } from '@worktable/engine'
-import { dagFacts, soorten } from './datasets'
 
 const count = (label: string) => ({ type: 'integer' as const, label })
 
 export const productieDag = defineQuery({
   name: 'productie_dag',
-  of: 'activiteit',
   label: 'Per productie per dag',
   icon: 'table',
   title: 'productie',
@@ -28,59 +26,6 @@ export const productieDag = defineQuery({
     maaltijd: count('Maaltijd'),
     vergadering: count('Vergadering'),
     andere: count('Andere'),
-  },
-})
-
-const writesActiviteit = (field: string) => ({ dataset: 'activiteit', field, key: 'activiteit_id' })
-
-export const dagplanning = defineQuery({
-  name: 'dagplanning',
-  of: 'activiteit',
-  label: 'Planning',
-  icon: 'query',
-  title: 'omschrijving',
-  date: 'plandag',
-  scoped: 'productie_id',
-  group_facts: dagFacts,
-  creates: 'activiteit',
-  links: {
-    mensen: {
-      label: 'Mensen',
-      item: 'Toewijzing',
-      dataset: 'toewijzing',
-      key: 'activiteit_id',
-      target: 'persoon_id',
-      state: 'state',
-    },
-  },
-  sql: readFileSync(new URL('./queries/dagplanning.sql', import.meta.url), 'utf8'),
-  columns: {
-    id: { type: 'integer', label: 'Id' },
-    activiteit_id: { type: 'integer', label: 'Activiteit' },
-    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
-    productie: { type: 'text', label: 'Productie' },
-    omschrijving: { type: 'text', label: 'Omschrijving', nullable: true, writes: writesActiviteit('omschrijving') },
-    soort: { type: 'text', label: 'Soort', ...soorten, writes: writesActiviteit('soort') },
-    datum: { type: 'date', label: 'Datum', writes: writesActiviteit('datum') },
-    start_at: { type: 'datetime', label: 'Start', nullable: true, writes: writesActiviteit('start_at') },
-    eind_at: { type: 'datetime', label: 'Einde', nullable: true, writes: writesActiviteit('eind_at') },
-    plandag: { type: 'date', label: 'Plandag' },
-    status: { type: 'text', label: 'Status', writes: writesActiviteit('status') },
-    locatie_id: {
-      type: 'integer',
-      label: 'Locatie',
-      nullable: true,
-      relation: 'organisatie',
-      writes: writesActiviteit('locatie_id'),
-      inherited: { flag: 'locatie_bron', own: 'eigen' },
-    },
-    locatie_bron: {
-      type: 'text',
-      label: 'Locatie van',
-      nullable: true,
-      readonly: true,
-      options: { eigen: 'Eigen', speelreeks: 'Tourstop' },
-    },
   },
 })
 
@@ -106,7 +51,6 @@ const shown = (type: 'text' | 'date', label: string) => ({ type, label, nullable
 // A person's productions: names as text, since a link actor reads no lookups.
 export const mijnProducties = defineQuery({
   name: 'mijn_producties',
-  of: 'toewijzing',
   label: 'Mijn producties',
   icon: 'star',
   title: 'productie',

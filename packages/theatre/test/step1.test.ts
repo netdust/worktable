@@ -352,8 +352,11 @@ test('/api/schema marks sjabloon not writable', async () => {
 })
 
 describe('the inherited locatie', () => {
-  const dag = (id: number) =>
-    sqlite.query('SELECT locatie_id, locatie_bron FROM dagplanning WHERE id = ?').get(id) as Body
+  async function dag(id: number): Promise<Body> {
+    const filter = encodeURIComponent(JSON.stringify({ id }))
+    const [row] = (await editor('GET', `/api/rows/activiteit?filter=${filter}`)).body.rows as Body[]
+    return { locatie: row?.locatie, inherited: Boolean(row?.inherited?.includes('locatie')) }
+  }
 
   async function inReeks(body: Body = {}): Promise<number> {
     const id = await reeks()
@@ -369,18 +372,18 @@ describe('the inherited locatie', () => {
     return res.body.id as number
   }
 
-  test('dagplanning: from the speelreeks without its own', async () => {
-    expect(dag(await inReeks())).toEqual({ locatie_id: 3, locatie_bron: 'speelreeks' })
+  test('activiteit: from the speelreeks without its own', async () => {
+    expect(await dag(await inReeks())).toEqual({ locatie: 3, inherited: true })
   })
 
-  test('dagplanning: its own wins', async () => {
-    expect(dag(await inReeks({ locatie_id: 2 }))).toEqual({ locatie_id: 2, locatie_bron: 'eigen' })
-    expect(dag(1)).toEqual({ locatie_id: 2, locatie_bron: 'eigen' })
+  test('activiteit: its own wins', async () => {
+    expect(await dag(await inReeks({ locatie_id: 2 }))).toEqual({ locatie: 2, inherited: false })
+    expect(await dag(1)).toEqual({ locatie: 2, inherited: false })
   })
 
-  test('dagplanning: neither leaves both empty', async () => {
+  test('activiteit: neither leaves it empty', async () => {
     const res = await editor('POST', '/api/rows/activiteit', { productie_id: 1, soort: 'andere', datum: '2026-11-02' })
-    expect(dag(res.body.id as number)).toEqual({ locatie_id: null, locatie_bron: null })
+    expect(await dag(res.body.id as number)).toEqual({ locatie: null, inherited: false })
   })
 
   test('voorstellingen shows the inherited venue', async () => {
@@ -391,8 +394,8 @@ describe('the inherited locatie', () => {
   })
 })
 
-test('the seeded Planning view shows the resolved locatie; where it comes from is left out (R10)', () => {
+test('the seeded Planning view shows the resolved locatie, not the own column (R10)', () => {
   const view = theatre.views.find((v) => v.name === 'Planning')
-  expect(view?.visible_fields).toContain('locatie_id')
-  expect(view?.visible_fields).not.toContain('locatie_bron')
+  expect(view?.visible_fields).toContain('locatie')
+  expect(view?.visible_fields).not.toContain('locatie_id')
 })

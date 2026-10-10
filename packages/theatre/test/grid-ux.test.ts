@@ -35,36 +35,35 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
       .filter(([, s]) => (s as Schema).space === 'scoped')
       .map(([name]) => name)
       .sort()
-    expect(scoped).toEqual(['activiteit', 'dagplanning', 'productie_dag', 'speelreeks'])
+    expect(scoped).toEqual(['activiteit', 'productie_dag', 'speelreeks'])
     for (const s of Object.values(body.sources) as Schema[]) expect(['scoped', 'global']).toContain(s.space)
   })
 
-  test('an editor gets the sections in their draft order, with no query in them', async () => {
+  test('an editor gets the sections in their draft order, the queries last under Overzichten', async () => {
     const body = await schemaAs('editor')
     expect(body.sections).toEqual([
       { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
       { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
       { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
+      { label: 'Overzichten', sources: ['productie_dag', 'voorstellingen', 'mijn_producties'] },
     ])
     expect(body.sources.beschikbaarheid.label).toBe('Beschikbaarheden')
   })
 
-  test('the planning queries read activiteit, Voorstellingen is its own node, and the person page reads toewijzing', async () => {
+  test('every query is its own node, under no dataset', async () => {
     const body = await schemaAs('editor')
     const queries = Object.entries(body.sources).filter(([, s]) => (s as Schema).kind === 'query')
     expect(queries.map(([name, s]) => [name, (s as Schema).of])).toEqual([
-      ['dagplanning', 'activiteit'],
-      ['productie_dag', 'activiteit'],
+      ['productie_dag', undefined],
       ['voorstellingen', undefined],
-      ['mijn_producties', 'toewijzing'],
+      ['mijn_producties', undefined],
     ])
   })
 
-  test('dagplanning and activiteit carry the two facts; the venue is inherited from locatie_bron', async () => {
+  test('activiteit carries the two facts, and the venue inherited through its tourstop', async () => {
     const body = await schemaAs('editor')
-    expect(body.sources.dagplanning.group_facts).toEqual(FACTS)
     expect(body.sources.activiteit.group_facts).toEqual(FACTS)
-    expect(body.sources.dagplanning.columns.locatie_id.inherited).toEqual({ flag: 'locatie_bron', own: 'eigen' })
+    expect(body.sources.activiteit.lookups.locatie).toMatchObject({ inherited: true, from: 'Tourstop' })
   })
 
   test('an owner gets no space and only the sections it can read', async () => {
@@ -73,6 +72,7 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     expect(body.sections).toEqual([
       { label: 'Planning', sources: ['toewijzing', 'beschikbaarheid'] },
       { label: 'Gegevens', sources: ['persoon'] },
+      { label: 'Overzichten', sources: ['mijn_producties'] },
     ])
     for (const s of Object.values(body.sources) as Schema[]) expect(s.space).toBeUndefined()
   })
@@ -107,57 +107,39 @@ describe('theatre declares the details: icons, colours, an end time and create-f
       rol: 'check',
       sjabloon: 'list',
       productie_dag: 'table',
-      dagplanning: 'query',
       voorstellingen: 'table',
       mijn_producties: 'star',
     })
   })
 
-  test('soort carries a colour per option on activiteit and dagplanning, with the same labels', async () => {
+  test('soort carries a colour per option on activiteit', async () => {
     const { sources } = await schemaAs('editor')
     expect(sources.activiteit.columns.soort.tones).toEqual(SOORT_TONES)
-    expect(sources.dagplanning.columns.soort.tones).toEqual(SOORT_TONES)
-    expect(sources.dagplanning.columns.soort.options).toEqual(sources.activiteit.columns.soort.options)
   })
 
-  test('speelreeks status is coloured like activiteit status, and dagplanning status carries them through writes', async () => {
+  test('speelreeks status is coloured like activiteit status', async () => {
     const { sources } = await schemaAs('editor')
     expect(sources.speelreeks.columns.status.tones).toEqual(STATUS_TONES)
     expect(sources.activiteit.columns.status.tones).toEqual(STATUS_TONES)
-    expect(sources.dagplanning.columns.status.tones).toEqual(STATUS_TONES)
-    expect(sources.dagplanning.columns.status.options).toEqual(sources.activiteit.columns.status.options)
   })
 
-  test('dagplanning serves its end time and creates an activiteit', async () => {
+  test('activiteit serves its end time', async () => {
     const { sources } = await schemaAs('editor')
-    expect(sources.dagplanning.columns.eind_at).toMatchObject({ type: 'datetime', nullable: true })
-    expect(sources.dagplanning.creates).toBe('activiteit')
-    const sqlite = new Database(':memory:')
-    migrate(sqlite, theatre)
-    seedDomain(sqlite, theatre)
-    const rows = sqlite
-      .query(
-        'SELECT d.eind_at AS got, a.eind_at AS want FROM dagplanning d JOIN activiteit a ON a.id = d.activiteit_id',
-      )
-      .all() as { got: unknown; want: unknown }[]
-    expect(rows.length).toBeGreaterThan(0)
-    for (const { got, want } of rows) expect(got).toBe(want)
-    expect(rows.some((r) => r.got !== null)).toBe(true)
+    expect(sources.activiteit.columns.eind_at).toMatchObject({ type: 'datetime', nullable: true })
   })
 
-  test('the Planning view, on dagplanning, shows time, omschrijving, soort, locatie and status', () => {
+  test('the Planning view, on activiteit, shows time, omschrijving, soort, locatie, mensen and status', () => {
     const view = theatre.views.find((v) => v.name === 'Planning')
-    expect(view?.source).toBe('dagplanning')
-    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'])
+    expect(view?.source).toBe('activiteit')
+    expect(view?.visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'locatie', 'mensen', 'status'])
   })
 
   test('the Planning view starts on this week: its period is a condition on plandag', () => {
     expect(theatre.views.find((v) => v.name === 'Planning')?.filters).toEqual({ plandag: { $period: 'week' } })
   })
 
-  test('an owner sees no dagplanning, so none of its colours or its create', async () => {
+  test('an owner sees no activiteit, so none of its colours', async () => {
     const { sources } = await schemaAs('owner')
-    expect(sources.dagplanning).toBeUndefined()
     expect(sources.activiteit).toBeUndefined()
     expect(sources.persoon.icon).toBe('user')
   })

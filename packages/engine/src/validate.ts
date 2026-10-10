@@ -382,7 +382,9 @@ function checkSections(domain: Domain): void {
     for (const name of sources) {
       const source = sourceOf(domain, name)
       if (!source) throw new DomainError(label, name, `section lists unknown source "${name}"`)
-      if (source.kind === 'query') throw new DomainError(label, name, `section lists query "${name}"; only datasets`)
+      if (source.kind === 'query' && source.of !== undefined) {
+        throw new DomainError(label, name, `section lists query "${name}", which sits under "${source.of}"`)
+      }
       if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
       seen.add(name)
     }
@@ -394,15 +396,6 @@ function checkFacts(source: DatasetDecl | QueryDecl): void {
     if (fact.kind !== 'count') checkColumn(source, 'fact column', fact.column)
     const where = fact.kind === 'empty' ? undefined : fact.where
     for (const column of Object.keys(where ?? {})) checkColumn(source, 'fact where', column)
-  }
-}
-
-function checkInherited(source: DatasetDecl | QueryDecl): void {
-  for (const [column, decl] of Object.entries(source.columns)) {
-    if (!decl.inherited) continue
-    if (source.kind === 'dataset') throw new DomainError(source.name, column, `${column} is inherited on a dataset`)
-    const { flag } = decl.inherited
-    if (!declared(source, flag)) throw new DomainError(source.name, flag, `${column} has flag "${flag}", not a column`)
   }
 }
 
@@ -419,7 +412,6 @@ export function validateDomain(domain: Domain): void {
     checkTones(source)
     checkIcon(source)
     checkFacts(source)
-    checkInherited(source)
     checkLinks(domain, source)
   }
   checkSpace(domain)

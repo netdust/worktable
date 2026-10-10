@@ -171,13 +171,13 @@ export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) 
 export const views: SavedViewSeed[] = [
   {
     name: 'Planning',
-    source_type: 'query',
-    source: 'dagplanning',
+    source_type: 'dataset',
+    source: 'activiteit',
     skin: 'table',
     filters: { plandag: { $period: 'week' } },
     sort: ['start_at'],
     group_by: 'plandag',
-    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'],
+    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie', 'mensen', 'status'],
   },
   {
     name: 'Toewijzingen per activiteit',

@@ -217,18 +217,10 @@ describe('an activity without a time', () => {
   })
 })
 
-describe('dagplanning', () => {
-  test('serves writes on status and start_at in /schema', async () => {
-    const { body } = await request('GET', '/api/schema')
-    const query = body.sources.dagplanning
-    expect(query.writable).toBe(true)
-    expect(query.columns.status.writes).toEqual({ dataset: 'activiteit', field: 'status', key: 'activiteit_id' })
-    expect(query.columns.start_at.writes).toEqual({ dataset: 'activiteit', field: 'start_at', key: 'activiteit_id' })
-  })
-
+describe('the Planning on activiteit', () => {
   test('serves the people on an activity as links.mensen', async () => {
     const { body } = await request('GET', '/api/schema')
-    expect(body.sources.dagplanning.links.mensen).toEqual({
+    expect(body.sources.activiteit.links.mensen).toEqual({
       label: 'Mensen',
       item: 'Toewijzing',
       dataset: 'toewijzing',
@@ -243,78 +235,59 @@ describe('dagplanning', () => {
     })
   })
 
-  test("a dagplanning row lists its activity's toewijzingen as mensen", async () => {
+  test('an activiteit row lists its toewijzingen as mensen', async () => {
     const assigned = (await request('GET', '/api/rows/toewijzing?limit=500')).body.rows as {
       id: number
       activiteit_id: number
     }[]
     const activity = assigned[0]?.activiteit_id as number
     const ids = assigned.filter((t) => t.activiteit_id === activity).map((t) => t.id)
-    const { body } = await request('GET', '/api/rows/dagplanning?limit=500')
-    const row = (body.rows as { id: number; links: { mensen: { id: number }[] } }[]).find((r) => r.id === activity)
+    const row = (await activiteitRows()).find((r) => r.id === activity)
     expect(row?.links.mensen.map((m) => m.id).sort()).toEqual(ids.sort())
   })
 
-  test('the theatre domain passes validateDomain with dagplanning writes', () => {
+  test('the theatre domain passes validateDomain', () => {
     expect(() => validateDomain(theatre)).not.toThrow()
   })
 
-  const dagRows = async () => {
-    const res = await request('GET', '/api/rows/dagplanning?limit=500')
+  const activiteitRows = async () => {
+    const res = await request('GET', '/api/rows/activiteit?limit=500')
     return res.body.rows as {
       id: number
-      activiteit_id: number
       start_at: string
       plandag: string
-      locatie_id: number | null
-      locatie_bron: string | null
+      locatie: number | null
+      inherited?: string[]
+      links: { mensen: { id: number }[] }
     }[]
   }
 
-  test('a soft-deleted activiteit leaves dagplanning, and every row has id equal to activiteit_id', async () => {
-    const before = await dagRows()
-    expect(before.some((r) => r.id === 1)).toBe(true)
-    await request('DELETE', '/api/rows/activiteit/1')
-    const after = await dagRows()
-    expect(after.length).toBe(before.length - 1)
-    expect(after.some((r) => r.id === 1)).toBe(false)
-    expect(after.every((r) => r.id === r.activiteit_id)).toBe(true)
-  })
-
-  test('a changed start_at shows in dagplanning with the same id and the recomputed plandag', async () => {
+  test('a changed start_at shows with the recomputed plandag', async () => {
     await patch(1, { eind_at: null, start_at: '2026-10-15T03:30' })
-    const row = (await dagRows()).find((r) => r.id === 1)
+    const row = (await activiteitRows()).find((r) => r.id === 1)
     expect(row).toMatchObject({ start_at: '2026-10-15T03:30', plandag: '2026-10-14' })
   })
 
-  // The engine has no PATCH on a query: the grid sends a mapped column to the dataset in its `writes`.
-  const dagPatch = (id: number, body: unknown) => patch(id, body)
-
-  test('omschrijving, soort and locatie in dagplanning write the activity', async () => {
-    const { body } = await request('GET', '/api/schema')
-    const columns = body.sources.dagplanning.columns
-    for (const field of ['omschrijving', 'soort', 'locatie_id']) {
-      expect(columns[field].writes).toEqual({ dataset: 'activiteit', field, key: 'activiteit_id' })
-      expect(columns[field].readonly).toBeFalsy()
-    }
-    const res = await dagPatch(1, { omschrijving: 'Nieuwe titel', soort: 'opbouw', locatie_id: 2 })
+  test('omschrijving, soort and locatie write the activity', async () => {
+    const res = await patch(1, { omschrijving: 'Nieuwe titel', soort: 'opbouw', locatie: 2 })
     expect(res.status).toBe(200)
     expect(stored(1)).toMatchObject({ omschrijving: 'Nieuwe titel', soort: 'opbouw', locatie_id: 2 })
   })
 
-  test('clearing dagplanning locatie falls back to the speelreeks', async () => {
+  test('clearing locatie falls back to the speelreeks', async () => {
     sqlite.run(
       "INSERT INTO speelreeks (productie_id, naam, locatie_id, start_datum, eind_datum) VALUES (1, 'Tour', 3, '2026-10-12', '2026-10-12')",
     )
     const reeks = (sqlite.query('SELECT last_insert_rowid() AS id').get() as { id: number }).id
     sqlite.run('UPDATE activiteit SET speelreeks_id = ?, locatie_id = NULL WHERE id = 1', [reeks])
     const reeksBefore = sqlite.query('SELECT * FROM speelreeks WHERE id = ?').get(reeks)
-    const row = async () => (await dagRows()).find((r) => r.id === 1)
+    const row = async () => (await activiteitRows()).find((r) => r.id === 1)
 
-    expect((await dagPatch(1, { locatie_id: 2 })).status).toBe(200)
-    expect(await row()).toMatchObject({ locatie_id: 2, locatie_bron: 'eigen' })
-    expect((await dagPatch(1, { locatie_id: null })).status).toBe(200)
-    expect(await row()).toMatchObject({ locatie_id: 3, locatie_bron: 'speelreeks' })
+    expect((await patch(1, { locatie: 2 })).status).toBe(200)
+    expect(await row()).toMatchObject({ locatie: 2 })
+    expect((await row())?.inherited ?? []).not.toContain('locatie')
+    expect((await patch(1, { locatie: null })).status).toBe(200)
+    expect(await row()).toMatchObject({ locatie: 3, inherited: ['locatie'] })
     expect(sqlite.query('SELECT * FROM speelreeks WHERE id = ?').get(reeks)).toEqual(reeksBefore)
   })
 })

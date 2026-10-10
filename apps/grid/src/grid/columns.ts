@@ -28,7 +28,7 @@ export interface Column {
   value: (row: Row) => unknown
   /** What the cell shows, copy takes and search reads. */
   text: (row: Row) => string
-  /** For an inherited value, the flag column's option label saying where it comes from; empty when the row's own. */
+  /** For an inherited lookup, the word for where its value comes from; empty when the row's own. */
   via?: (row: Row) => string
   /** In a day group, a moment's time and the muted end of its range; null when it holds none. */
   range?: (row: Row) => { start: string; end: string } | null
@@ -164,14 +164,7 @@ export function firstId(value: unknown): string {
   return scalar(Array.isArray(value) ? value[0] : value)
 }
 
-function viaOf({ flag, own }: { flag: string; own: string }, source?: Field): (row: Row) => string {
-  return (row) => {
-    const value = scalar(row.fields[flag])
-    return value === '' || value === own ? '' : source?.options?.[value] ?? value
-  }
-}
-
-function fieldColumn(key: string, field: Field, writable: boolean, model: Model): Column {
+function fieldColumn(key: string, field: Field, writable: boolean): Column {
   const kind = kindOf(field)
   const column = base(key, kind, field.label, (row) => row.fields[key])
   column.field = key
@@ -204,10 +197,6 @@ function fieldColumn(key: string, field: Field, writable: boolean, model: Model)
     column.text = (row) => row.lookups?.[key]?.title ?? ''
     column.edit = (row) => firstId(row.fields[key])
     column.parse = (draft) => (draft === '' ? [] : [Number(draft)])
-  }
-  if (field.inherited) {
-    column.via = viaOf(field.inherited, model.fields[field.inherited.flag])
-    column.width = INHERITED_WIDTH
   }
   const { via } = field
   if (via) {
@@ -266,7 +255,7 @@ export function columnsFor(model: Model, view: View, writable = true, models: Re
   const shown = (view.columns ?? Object.keys(model.fields)).filter((key) => key !== 'title' && key in model.fields)
   return [
     titleColumn(model, writable),
-    ...shown.map((key) => fieldColumn(key, model.fields[key], writable, model)),
+    ...shown.map((key) => fieldColumn(key, model.fields[key], writable)),
     ...lookupColumns(model, view, shown, models),
     ...rollupColumns(view),
   ]

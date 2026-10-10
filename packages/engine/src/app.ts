@@ -140,12 +140,12 @@ function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Re
   return served.length ? { links: Object.fromEntries(served) } : {}
 }
 
-type ServedLookup = Omit<ColumnDecl, 'inherited'> & { inherited?: true; from?: string }
+type ServedLookup = ColumnDecl & { inherited?: true; from?: string }
 
 function servedLookups(domain: Domain, source: Source): { lookups?: Record<string, ServedLookup> } {
   if (source.kind !== 'dataset' || !source.lookups) return {}
   const served = Object.entries(source.lookups).map(([name, { own, from }]): [string, ServedLookup] => {
-    const column: Omit<ColumnDecl, 'inherited'> = lookupColumn(domain, source, name)
+    const column: ColumnDecl = lookupColumn(domain, source, name)
     return [name, { ...column, ...(own ? { inherited: true } : {}), ...(from ? { from } : {}) }]
   })
   return served.length ? { lookups: Object.fromEntries(served) } : {}

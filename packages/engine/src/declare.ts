@@ -37,8 +37,6 @@ export interface ColumnDecl {
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }
-  /** Query columns only: the value is taken over from elsewhere when the row's `flag` column is neither `own` nor empty. */
-  inherited?: { flag: string; own: string }
   /** Served to the row's owner in a view for owners; never on json or on the owner column. */
   owner_visible?: boolean
 }

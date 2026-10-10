@@ -13,7 +13,8 @@ const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
 const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties']
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
-const DAGPLANNING = ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status']
+const PLANNING = ['start_at', 'omschrijving', 'soort', 'locatie', 'mensen', 'status']
+const WEEK = { plandag: { $period: 'week' } }
 const KEPT = ['organisatie', 'productie', 'activiteit', 'persoon', 'toewijzing', 'beschikbaarheid', 'speelreeks']
 
 type OldView = Omit<SavedViewSeed, 'skin' | 'group_by'> & { skin?: string; group_by?: string | null }
@@ -57,6 +58,30 @@ const OLD_ACTIVITEIT: OldView[] = [
 ]
 const RENAMED = ['Planning']
 
+const json = JSON.stringify
+const insertSql = `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+function insertViews(sqlite: Database, views: OldView[], owner = -1): number[] {
+  const insert = sqlite.query(insertSql)
+  return views.map((v) =>
+    Number(
+      insert.run(
+        v.name,
+        v.source_type,
+        v.source,
+        v.skin ?? 'table',
+        json(v.filters),
+        json(v.sort),
+        v.group_by ?? null,
+        json(v.visible_fields),
+        owner,
+        owner === -1 ? 1 : 0,
+      ).lastInsertRowid,
+    ),
+  )
+}
+
 async function seedMissing(db: string) {
   const args = ['bun', serve, '--domain', '@worktable/theatre', '--db', db, '--seed-missing']
   const proc = Bun.spawn(args, { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' })
@@ -70,25 +95,8 @@ function existingDb(): string {
   const sqlite = new Database(db, { create: true })
   migrate(sqlite, theatre)
   sqlite.run("INSERT INTO organisatie (naam, soort) VALUES ('Verzonnen Gezelschap', 'eigen')")
-  const insert = sqlite.query(
-    `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, -1, 1)`,
-  )
   const later = [...ADDED, ...RENAMED]
-  const old: OldView[] = [...OLD_ACTIVITEIT, ...theatre.views.filter((view) => !later.includes(view.name))]
-  for (const v of old) {
-    const json = JSON.stringify
-    insert.run(
-      v.name,
-      v.source_type,
-      v.source,
-      v.skin ?? 'table',
-      json(v.filters),
-      json(v.sort),
-      v.group_by ?? null,
-      json(v.visible_fields),
-    )
-  }
+  insertViews(sqlite, [...OLD_ACTIVITEIT, ...theatre.views.filter((view) => !later.includes(view.name))])
   sqlite.close()
   return db
 }
@@ -107,7 +115,7 @@ test('rol and sjabloon are config datasets, and no demo dataset is', () => {
   expect(config.sort()).toEqual(['rol', 'sjabloon'])
 })
 
-test('an existing database gets the Rol rows, the Sjabloon and the later views, and Planning on dagplanning', async () => {
+test('an existing database gets the Rol rows, the Sjabloon and the later views, and Planning on activiteit', async () => {
   const db = existingDb()
   const before = kept(db)
   const result = await seedMissing(db)
@@ -116,7 +124,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   expect(result.out).toContain('seed-missing: rol 4 inserted, 0 present')
   expect(result.out).toContain('seed-missing: sjabloon 1 inserted, 0 present\n')
   expect(result.out).toContain('seed-missing: persoon skipped (not config)')
-  expect(result.out).toContain('seed-missing: views 5 added, 0 updated, 7 present')
+  expect(result.out).toContain('seed-missing: views 4 added, 1 updated, 7 present')
 
   expect(read(db, 'SELECT naam FROM rol ORDER BY id').map((r) => r.naam)).toEqual([
     'Speler',
@@ -130,7 +138,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   const views = read(db, 'SELECT name, owner_id, visible_fields FROM saved_view WHERE deleted_at IS NULL')
   for (const name of ADDED) expect(views.filter((v) => v.name === name)).toHaveLength(1)
   const planning = views.find((v) => v.name === 'Planning')
-  expect(JSON.parse(planning?.visible_fields as string)).toEqual(DAGPLANNING)
+  expect(JSON.parse(planning?.visible_fields as string)).toEqual(PLANNING)
 
   expect(read(db, 'SELECT kind, actor_id FROM batch')).toEqual([{ kind: 'seed', actor_id: -1 }])
 
@@ -141,50 +149,67 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   expect(read(db, 'SELECT COUNT(*) AS n FROM batch')).toEqual([{ n: 1 }])
 }, 30_000)
 
-const activiteitViews = (db: string) =>
+// A database holding today's seeds except Planning, plus the given system views.
+function planningDb(system: OldView[]): { db: string; ids: number[]; user: number } {
+  const db = join(mkdtempSync(join(tmpdir(), 'wt-theatre-seed-')), 'engine.db')
+  const sqlite = new Database(db, { create: true })
+  migrate(sqlite, theatre)
+  insertViews(
+    sqlite,
+    theatre.views.filter((view) => view.name !== 'Planning'),
+  )
+  const ids = insertViews(sqlite, system)
+  const user = createAccount(sqlite, theatre, 'planner@example.test', 'editor')
+  insertViews(sqlite, [{ ...DAGPLANNING_VIEW, name: 'Mijn dagplanning' }], user)
+  sqlite.close()
+  return { db, ids, user }
+}
+
+const DAGPLANNING_VIEW: OldView = {
+  name: 'Dagplanning',
+  source_type: 'query',
+  source: 'dagplanning',
+  filters: WEEK,
+  sort: ['start_at'],
+  group_by: 'plandag',
+  visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie_id', 'mensen', 'status'],
+}
+const ORPHAN = 'seed-missing: view "Mijn dagplanning" (dagplanning) has no source any more, left alone'
+
+const planningViews = (db: string) =>
   read(
     db,
-    `SELECT name, source, owner_id, filters, visible_fields, share_token FROM saved_view
-     WHERE deleted_at IS NULL AND source IN ('activiteit', 'dagplanning', 'productie_dag', 'voorstellingen') ORDER BY id`,
+    `SELECT id, name, source, owner_id, filters, sort, group_by, visible_fields FROM saved_view
+     WHERE deleted_at IS NULL AND (name LIKE '%lanning%') ORDER BY id`,
   )
 
-test('one planning: the old activity views go, Planning on dagplanning comes, and a published or private view stays', async () => {
-  const db = existingDb()
+const count = (out: string, line: string) => out.split('\n').filter((l) => l === line).length
+
+test('a one-planning database', async () => {
+  const published: OldView = { ...DAGPLANNING_VIEW, name: 'Gedeelde planning' }
+  const { db, ids, user } = planningDb([{ ...DAGPLANNING_VIEW, name: 'Planning' }, published])
   const sqlite = new Database(db)
-  sqlite.run("UPDATE saved_view SET public = 1, share_token = 'verzonnen-hash' WHERE name = 'Voorstellingen'")
-  const user = createAccount(sqlite, theatre, 'planner@example.test', 'editor')
-  const own = sqlite.query(
-    `INSERT INTO saved_view (name, source_type, source, skin, filters, sort, group_by, visible_fields, owner_id, shared)
-     VALUES (?, ?, ?, 'table', '{}', '[]', NULL, '["status"]', ?, 0)`,
-  )
-  own.run('Planning', 'dataset', 'activiteit', user)
-  own.run('Dagplanning', 'query', 'dagplanning', user)
+  sqlite.query("UPDATE saved_view SET public = 1, share_token = 'verzonnen-hash' WHERE id = ?").run(ids[1] as number)
   sqlite.close()
-  const mine = activiteitViews(db).filter((v) => v.owner_id === user)
 
   const result = await seedMissing(db)
   expect(result.err).toBe('')
   expect(result.code).toBe(0)
-  for (const [name, source] of [
-    ['Planning', 'activiteit'],
-    ['Per productie per dag', 'productie_dag'],
-    ['Dagplanning', 'dagplanning'],
-    ['Optie of bevestigd', 'activiteit'],
+  expect(result.out).toContain('seed-missing: view "Planning" (dagplanning) removed, no longer declared')
+  expect(count(result.out, ORPHAN)).toBe(1)
+  expect(result.out.split('\n').filter((l) => l.includes('"Gedeelde planning"'))).toEqual([
+    'seed-missing: view "Gedeelde planning" (dagplanning) is public, left alone',
   ])
-    expect(result.out).toContain(`seed-missing: view "${name}" (${source}) removed, no longer declared`)
-  expect(result.out).toContain('seed-missing: view "Voorstellingen" (voorstellingen) is public, left alone')
 
-  const system = activiteitViews(db).filter((v) => v.owner_id === -1)
-  expect(system.map((v) => [v.name, v.source])).toEqual([
-    ['Toewijzingen per activiteit', 'activiteit'],
-    ['Voorstellingen', 'voorstellingen'],
-    ['Planning', 'dagplanning'],
+  const views = planningViews(db)
+  const planning = views.find((v) => v.name === 'Planning')
+  expect(planning).toMatchObject({ source: 'activiteit', owner_id: -1, group_by: 'plandag' })
+  expect(planning?.id).not.toBe(ids[0])
+  expect(JSON.parse(planning?.filters as string)).toEqual(WEEK)
+  expect(JSON.parse(planning?.visible_fields as string)).toEqual(PLANNING)
+  expect(views.filter((v) => v.owner_id === user).map((v) => [v.name, v.source])).toEqual([
+    ['Mijn dagplanning', 'dagplanning'],
   ])
-  expect(system.find((v) => v.name === 'Voorstellingen')?.share_token).toBe('verzonnen-hash')
-  const planning = system.find((v) => v.name === 'Planning')
-  expect(JSON.parse(planning?.visible_fields as string)).toEqual(DAGPLANNING)
-  expect(JSON.parse(planning?.filters as string)).toEqual({ plandag: { $period: 'week' } })
-  expect(activiteitViews(db).filter((v) => v.owner_id === user)).toEqual(mine)
 
   // Served in the declared seed order although Planning was added last: it leads Activiteiten on this database too.
   const served = new Database(db)
@@ -192,11 +217,71 @@ test('one planning: the old activity views go, Planning on dagplanning comes, an
   const cookie = await signIn(app)
   const res = await app.request('/api/views', { headers: { host: '127.0.0.1:4310', cookie } })
   const names = ((await res.json()) as { views: { name: string; source: string }[] }).views
-    .filter((v) => v.source === 'activiteit' || v.source === 'dagplanning')
+    .filter((v) => v.source === 'activiteit')
     .map((v) => v.name)
   served.close()
   expect(names.slice(0, 2)).toEqual(['Planning', 'Toewijzingen per activiteit'])
 }, 30_000)
+
+test('a step-2 database', async () => {
+  const planning: OldView = {
+    name: 'Planning',
+    source_type: 'dataset',
+    source: 'activiteit',
+    filters: { status: 'bevestigd' },
+    sort: ['start_at'],
+    group_by: 'plandag',
+    visible_fields: ['productie_id', 'soort', 'datum', 'start_at', 'status'],
+  }
+  const { db, ids, user } = planningDb([planning, DAGPLANNING_VIEW])
+
+  const result = await seedMissing(db)
+  expect(result.err).toBe('')
+  expect(result.code).toBe(0)
+  expect(result.out).toContain('seed-missing: view "Planning" (activiteit) updated')
+  expect(result.out).toContain('seed-missing: view "Dagplanning" (dagplanning) removed, no longer declared')
+  expect(count(result.out, ORPHAN)).toBe(1)
+
+  const views = planningViews(db)
+  expect(views.filter((v) => v.owner_id === -1).map((v) => [v.id, v.name, v.source])).toEqual([
+    [ids[0], 'Planning', 'activiteit'],
+  ])
+  const kept = views[0]
+  expect(JSON.parse(kept?.filters as string)).toEqual(DAGPLANNING_VIEW.filters)
+  expect(JSON.parse(kept?.sort as string)).toEqual(DAGPLANNING_VIEW.sort)
+  expect(kept?.group_by).toBe(DAGPLANNING_VIEW.group_by)
+  expect(JSON.parse(kept?.visible_fields as string)).toEqual(PLANNING)
+  expect(views.filter((v) => v.owner_id === user).map((v) => [v.name, v.source])).toEqual([
+    ['Mijn dagplanning', 'dagplanning'],
+  ])
+}, 30_000)
+
+test('no dagplanning source', async () => {
+  const sqlite = new Database(':memory:')
+  migrate(sqlite, theatre)
+  const app = testEngine(sqlite, theatre)
+  const cookie = await signIn(app)
+  const res = await app.request('/api/schema', { headers: { host: '127.0.0.1:4310', cookie } })
+  const body = (await res.json()) as { sources: Record<string, unknown> }
+  expect(Object.keys(body.sources)).not.toContain('dagplanning')
+  expect(theatre.views.map((view) => view.source)).not.toContain('dagplanning')
+})
+
+test('queries sit under Overzichten', () => {
+  const queries = theatre.queries.map((query) => query.name)
+  expect(theatre.sections?.find((section) => section.label === 'Overzichten')?.sources).toEqual(queries)
+  expect(theatre.queries.filter((query) => query.of !== undefined)).toEqual([])
+  expect(theatre.views[0]).toEqual({
+    name: 'Planning',
+    source_type: 'dataset',
+    source: 'activiteit',
+    skin: 'table',
+    filters: WEEK,
+    sort: ['start_at'],
+    group_by: 'plandag',
+    visible_fields: PLANNING,
+  })
+})
 
 const slotsOf = (db: string) =>
   (read(db, `SELECT items FROM sjabloon WHERE naam = '${SPEELDAG}'`).map((r) => JSON.parse(r.items as string))[0] ?? [])

@@ -15,12 +15,11 @@ export interface EngineColumn {
   readonly?: true
   /** A query column's edit goes to this dataset's field, on the record `row[key]` names. */
   writes?: { dataset: string; field: string; key: string }
-  inherited?: { flag: string; own: string }
   owner_visible?: boolean
 }
 
 /** A dataset's lookup: the related row's field, typed as that field; an inherited one is the row's own when set. */
-export type EngineLookup = Omit<EngineColumn, 'inherited'> & { inherited?: true; from?: string }
+export type EngineLookup = EngineColumn & { inherited?: true; from?: string }
 
 /** A join dataset's matrix: down and across are its relation columns, cell an options column. */
 export interface EngineMatrix {
@@ -152,7 +151,6 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
-    ...(declared.inherited ? { inherited: declared.inherited } : {}),
     ...(declared.owner_visible ? { owner_visible: true as const } : {}),
   }
 }

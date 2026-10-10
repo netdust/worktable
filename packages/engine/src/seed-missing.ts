@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import type { Actor, DatasetDecl, Domain, SavedViewSeed } from './declare'
 import { silentMailer } from './mailer'
 import { ApiError } from './params'
+import { sourceOf } from './registry'
 import { savedView } from './saved-view'
 import { SYSTEM_OWNER } from './views'
 import { contextOf, create, encodeAll, recordBatch, revise, type Store, valuesOf, writableOf } from './writes'
@@ -16,7 +17,7 @@ export type DatasetOutcome = { inserted: number; present: number } | 'not config
 export interface SeedReport {
   datasets: Record<string, DatasetOutcome>
   views: { added: number; updated: number; present: number }
-  // One line per system view it updated, or left alone for being public or for owners.
+  // One line per system view it updated or left alone, and per view whose source is gone.
   named: string[]
   batch: string | null
 }
@@ -159,6 +160,7 @@ function seedViews(run: Run): SeedReport['views'] {
     else counts.present++
   }
   removeUndeclared(run)
+  nameOrphans(run)
   return counts
 }
 
@@ -188,6 +190,15 @@ function removeUndeclared(run: Run): void {
     )
     run.written++
     run.named.push(`${label} removed, no longer declared`)
+  }
+}
+
+// A person's view on a source the domain no longer declares is theirs to keep; system views were handled above.
+function nameOrphans(run: Run): void {
+  const sql = 'SELECT name, source FROM saved_view WHERE owner_id != ? AND deleted_at IS NULL ORDER BY id'
+  for (const view of run.store.sqlite.query(sql).all(SYSTEM_OWNER) as Stored[]) {
+    if (sourceOf(run.store.domain, String(view.source))) continue
+    run.named.push(`view "${view.name}" (${view.source}) has no source any more, left alone`)
   }
 }
 

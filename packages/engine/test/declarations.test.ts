@@ -48,7 +48,7 @@ const refused = (d: Domain) => {
   return [e.declaration, e.bad]
 }
 
-describe('validateDomain refuses a bad space, section, fact or inherited column', () => {
+describe('validateDomain refuses a bad space, section or fact', () => {
   test('the fixture passes', () => expect(() => validateDomain(spaced)).not.toThrow())
 
   test('a space naming an unknown dataset', () => {
@@ -84,6 +84,18 @@ describe('validateDomain refuses a bad space, section, fact or inherited column'
     expect(refused({ ...spaced, sections: [{ label: 'X', sources: ['job', 'ghost'] }] })).toEqual(['X', 'ghost'])
   })
 
+  test('a section lists a query without of', () => {
+    const sections = [{ label: 'Overviews', sources: ['job_room'] }]
+    expect(() => validateDomain({ ...withQuery('job_room', { of: undefined }), sections })).not.toThrow()
+  })
+
+  test('a section listing a query with of is refused', () => {
+    expect(refused({ ...spaced, sections: [{ label: 'Overviews', sources: ['job_room'] }] })).toEqual([
+      'Overviews',
+      'job_room',
+    ])
+  })
+
   test('a source listed twice, in one section or across two', () => {
     expect(refused({ ...spaced, sections: [{ label: 'X', sources: ['job', 'job'] }] })).toEqual(['X', 'job'])
     const across = [
@@ -101,18 +113,6 @@ describe('validateDomain refuses a bad space, section, fact or inherited column'
     const empty = { kind: 'empty', column: 'ghost', label: 'g' } as const
     expect(refused(withQuery('job_room', { group_facts: [empty] }))).toEqual(['job_room', 'ghost'])
   })
-
-  test('inherited on a dataset column', () => {
-    const columns = { ...dataset('job').columns }
-    columns.room_id = { ...columns.room_id, inherited: { flag: 'kind', own: 'main' } } as ColumnDecl
-    expect(refused(withDataset('job', { columns }))).toEqual(['job', 'room_id'])
-  })
-
-  test('inherited with a flag that is not a column of the query', () => {
-    const columns = { ...query('job_room').columns }
-    columns.room_id = { ...columns.room_id, inherited: { flag: 'ghost', own: 'own' } } as ColumnDecl
-    expect(refused(withQuery('job_room', { columns }))).toEqual(['job_room', 'ghost'])
-  })
 })
 
 async function schemaOf(domain: Domain, role: 'owner' | 'editor', owner = 'member'): Promise<Schema> {
@@ -128,7 +128,7 @@ async function schemaOf(domain: Domain, role: 'owner' | 'editor', owner = 'membe
 }
 
 describe('/schema serves the declarations', () => {
-  test('an editor gets the space, the sections, each source in or out of the space, facts and inherited', async () => {
+  test('an editor gets the space, the sections, each source in or out of the space, and facts', async () => {
     const body = await schemaOf(spaced, 'editor')
     expect(body.space).toEqual({ model: 'team', field: 'team_id' })
     expect(body.sections).toEqual([
@@ -139,7 +139,6 @@ describe('/schema serves the declarations', () => {
     expect(space).toEqual({ team: 'global', member: 'global', room: 'global', job: 'scoped', job_room: 'scoped' })
     expect(body.sources.job.group_facts).toEqual(dataset('job').group_facts)
     expect(body.sources.job_room.group_facts).toBeUndefined()
-    expect(body.sources.job_room.columns.room_id.inherited).toEqual({ flag: 'room_from', own: 'own' })
   })
 
   test('an owner who cannot read the space dataset gets no space, and only readable, non-empty sections', async () => {
@@ -157,7 +156,6 @@ describe('/schema serves the declarations', () => {
     for (const source of Object.values(body.sources) as Schema[]) {
       expect(source.space).toBeUndefined()
       expect(source.group_facts).toBeUndefined()
-      for (const column of Object.values(source.columns) as Schema[]) expect(column.inherited).toBeUndefined()
     }
   })
 })

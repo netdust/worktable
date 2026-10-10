@@ -51,7 +51,7 @@ const views: EngineView[] = [
   },
 ]
 
-describe('toSchema: space, sections, facts and inherited', () => {
+describe('toSchema: space, sections and facts', () => {
   const declared: EngineSchema = {
     sources: {
       season: { kind: 'dataset', label: 'Seizoenen', title: 'name', date: null, space: 'global', columns: { name: { type: 'text', label: 'Naam' } } },
@@ -62,8 +62,7 @@ describe('toSchema: space, sections, facts and inherited', () => {
           name: { type: 'text', label: 'Naam' },
           day: { type: 'date', label: 'Dag' },
           season_id: { type: 'integer', label: 'Seizoen', relation: 'season' },
-          room: { type: 'text', label: 'Zaal', inherited: { flag: 'room_from', own: 'self' } },
-          room_from: { type: 'text', label: 'Zaal van', options: { self: 'Eigen', block: 'Blok' } },
+          room: { type: 'text', label: 'Zaal' },
         },
       },
     },
@@ -71,7 +70,7 @@ describe('toSchema: space, sections, facts and inherited', () => {
     sections: [{ label: 'Werk', sources: ['session'] }],
   }
 
-  it('maps the space, the sections, each table\'s space and facts, and a column\'s inherited', () => {
+  it('maps the space, the sections, each table\'s space and facts', () => {
     const schema = toSchema(declared)
 
     expect(schema.space).toEqual({ model: 'season', field: 'season_id' })
@@ -80,8 +79,6 @@ describe('toSchema: space, sections, facts and inherited', () => {
       ['season', 'global', undefined],
       ['session', 'scoped', declared.sources.session.group_facts],
     ])
-    expect(schema.models.session.fields.room.inherited).toEqual({ flag: 'room_from', own: 'self' })
-    expect(schema.models.session.fields.room_from.inherited).toBeUndefined()
   })
 
   it('carries the table\'s space and facts onto its saved views', () => {
@@ -104,7 +101,6 @@ describe('toSchema: space, sections, facts and inherited', () => {
     expect('space' in schema).toBe(false)
     expect('sections' in schema).toBe(false)
     expect(schema.tables.some((t) => 'space' in t || 'facts' in t)).toBe(false)
-    expect(Object.values(schema.models).flatMap((m) => Object.values(m.fields)).some((f) => 'inherited' in f)).toBe(false)
   })
 })
 
