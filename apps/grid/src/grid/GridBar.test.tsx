@@ -138,7 +138,7 @@ describe('the group panel', () => {
     click(screen.getByRole('button', { name: 'Groeperen' }))
     const dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Soort' }))
+    click(within(dialog).getByRole('button', { name: 'Soort' }))
     expect(last.group).toBe('kind')
 
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
