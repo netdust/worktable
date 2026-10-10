@@ -48,5 +48,6 @@ test('dagplanning-is-gone @e2e', async ({ page }) => {
 
   expect((await rows).status()).toBe(200)
   await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag deze week'])
+  await overzichten.scrollIntoViewIfNeeded()
   await shot(page, 'dagplanning-is-gone')
 })
