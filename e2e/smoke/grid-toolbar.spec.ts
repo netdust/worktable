@@ -10,13 +10,13 @@ const or = encodeURIComponent(
   ]),
 )
 test('a link joined by Of lands on the sign-in page @smoke', async ({ page }) => {
-  const response = await page.goto(`/#view=dagplanning&f=${or}&j=or`)
+  const response = await page.goto(`/#view=activiteit&f=${or}&j=or`)
   expect(response?.status()).toBe(200)
   await expect(page.getByRole('textbox', { name: 'E-mailadres' })).toBeVisible()
   await expect(page.locator('body')).not.toContainText(/error|exception|stack/i)
 })
 
-for (const path of ['/api/history/activiteit', '/api/history/dagplanning']) {
+for (const path of ['/api/history/activiteit', '/api/history/toewijzing']) {
   test(`${path} asks for a session @smoke`, async ({ request }) => {
     const response = await request.get(path)
     expect(response.status()).toBe(401)

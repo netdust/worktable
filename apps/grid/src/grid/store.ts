@@ -11,6 +11,8 @@ export interface Change {
   value: unknown
   /** A picked relation's record, painted with the id until the server answers. */
   lookup?: Lookup | null
+  /** An inherited lookup: a value paints as the row's own, an empty one as inherited again. */
+  inherits?: boolean
 }
 
 export interface CellError {
@@ -91,6 +93,13 @@ function write(row: Row, field: string, value: unknown, lookup?: Lookup | null):
   if (field === 'title') return { ...row, title: String(value ?? '') }
   const written = { ...row, fields: { ...row.fields, [field]: value } }
   return lookup === undefined ? written : { ...written, lookups: { ...row.lookups, [field]: lookup } }
+}
+
+function painted(row: Row, change: Change): Row {
+  const written = write(row, change.field, change.value, change.lookup)
+  if (!change.inherits) return written
+  const others = (row.inherited ?? []).filter((key) => key !== change.field)
+  return { ...written, inherited: empty(change.value) ? [...others, change.field] : others }
 }
 
 function empty(value: unknown): boolean {
@@ -180,7 +189,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     const mine = ++ticket
     latest.set(change.id, mine)
     track(change.id, 1)
-    set({ rows: patch(change.id, (r) => write(r, change.field, change.value, change.lookup)), errors, error: null, save: 'saving' })
+    set({ rows: patch(change.id, (r) => painted(r, change)), errors, error: null, save: 'saving' })
 
     try {
       const { row: saved, batch } = await queued(change, row)
@@ -209,7 +218,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       const server = confirmed.get(change.id)
       const revert = (r: Row) => {
         if (!same(read(r, change.field), change.value)) return r
-        return write(r, change.field, server ? read(server, change.field) : read(row, change.field), server?.lookups?.[change.field])
+        const reverted = write(r, change.field, server ? read(server, change.field) : read(row, change.field), server?.lookups?.[change.field])
+        return change.inherits ? { ...reverted, inherited: (server ?? row).inherited } : reverted
       }
       set({ rows: patch(change.id, revert), errors: { ...state.errors, [key]: raised }, error: raised })
       // The state moved on meanwhile: show what it holds now, never the value this tab still had.

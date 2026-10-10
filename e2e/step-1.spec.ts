@@ -206,7 +206,7 @@ test('apply-template @e2e', async ({ page }) => {
   const naam = 'Speelreeks e2e Spiegel'
   const days = [0, 1, 2, 3].map((n) => plusDays(APPLY_WEEK, n))
   // Landed first: the week's condition stays with Dagplanning, and the tab's undo lives as long as this page.
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', APPLY_WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', APPLY_WEEK)
   await createInGrid(page, naam, days[0], days[3])
   const reeks = (await rowsOf<{ id: number; naam: string }>(page.request, 'speelreeks')).find((r) => r.naam === naam)
   expect(reeks).toBeDefined()
@@ -257,7 +257,7 @@ test('apply-template @e2e', async ({ page }) => {
   }
 
   await page.keyboard.press('Escape')
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await pick(page, 'Planning', 'Activiteiten')
   await expect(gridRows(page)).toHaveCount(28)
   // Grouped by plandag: one group a day, each the whole pattern at its times, the venue the Speelreeks's.
   const groups = await dayGroups(page)
@@ -281,7 +281,7 @@ test('apply-template @e2e', async ({ page }) => {
   ).toHaveLength(0)
 
   await page.reload()
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await pick(page, 'Planning', 'Activiteiten')
   await expect(page.getByText('Geen rijen in deze periode')).toBeVisible()
   await expect(gridRows(page)).toHaveCount(0)
 })
@@ -360,14 +360,14 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   })
   const startOf = async () => (await rowsOf<Values>(page.request, 'activiteit', { id }))[0].start_at
 
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', UNDO_WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', UNDO_WEEK)
   const savedA = patchOf(page, 'activiteit')
   await typeInto(await cellOf(page, named(page, omschrijving), 'Tijd'), `${datum}T10:00`)
   expect((await savedA).status()).toBe(200)
 
   const other = await browser.newContext({ baseURL: THEATRE.app, storageState: state('admin') })
   const b = await other.newPage()
-  await openWeek(b, 'Dagplanning', 'Activiteiten', 'plandag', UNDO_WEEK)
+  await openWeek(b, 'Planning', 'Activiteiten', 'plandag', UNDO_WEEK)
   const savedB = patchOf(b, 'activiteit')
   await typeInto(await cellOf(b, named(b, omschrijving), 'Tijd'), `${datum}T11:00`)
   expect((await savedB).status()).toBe(200)
@@ -383,7 +383,7 @@ test('undo-changed-since @e2e', async ({ page, browser }) => {
   await expect(page.getByText('Start is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
 
   await page.reload()
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await pick(page, 'Planning', 'Activiteiten')
   await expect(await cellOf(page, named(page, omschrijving), 'Tijd')).toHaveText('11:00')
   expect(await startOf()).toBe(`${datum}T11:00`)
 })
@@ -452,7 +452,7 @@ test('sjablonen-read-only @e2e', async ({ page }) => {
   expect((await page.request.delete(`/api/rows/sjabloon/${id}`)).status()).toBe(405)
 })
 
-test('dagplanning-locatie-van @e2e', async ({ page }) => {
+test('planning-locatie-via-tourstop @e2e', async ({ page }) => {
   const week = '2026-12-07'
   const api = page.request
   const reeks = await speelreeks(api, 'Speelreeks e2e bron', week, week)
@@ -463,13 +463,14 @@ test('dagplanning-locatie-van @e2e', async ({ page }) => {
   await idOf(api, 'activiteit', { ...base, omschrijving: 'bron eigen', speelreeks_id: reeks, locatie_id: eigen })
   await idOf(api, 'activiteit', { ...base, omschrijving: 'bron geen' })
 
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', week)
-  // "Locatie van" left the default view (R10); the grid shows the venue, the query still serves where it comes from.
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
+  // The grid shows the venue, greyed "via tourstop" when inherited; the engine's row says where it comes from.
   const seen = async (title: string) => {
-    const [row] = await rowsOf<Values>(api, 'dagplanning', { omschrijving: title })
-    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), row.locatie_bron ?? null]
+    const [row] = await rowsOf<Values & { inherited?: string[] }>(api, 'activiteit', { omschrijving: title })
+    const bron = row.inherited?.includes('locatie') ? 'tourstop' : row.locatie_id != null ? 'eigen' : null
+    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), bron]
   }
-  expect(await seen('bron geerfd')).toEqual([`${VENUE}via tourstop`, 'speelreeks'])
+  expect(await seen('bron geerfd')).toEqual([`${VENUE}via tourstop`, 'tourstop'])
   expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'eigen'])
   expect(await seen('bron geen')).toEqual(['', null])
 
@@ -498,20 +499,20 @@ test('apply-double-submit @e2e', async ({ page }) => {
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(14)
 })
 
-/** Applies the Sjabloon from the drawer and opens Dagplanning on the week, a cell focused for the keyboard. */
-async function appliedInDagplanning(page: Page, naam: string, week: string, days: number): Promise<number> {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', week)
+/** Applies the Sjabloon from the drawer and opens Planning on the week, a cell focused for the keyboard. */
+async function appliedInPlanning(page: Page, naam: string, week: string, days: number): Promise<number> {
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
   const id = await speelreeks(page.request, naam, week, plusDays(week, days - 1))
   await pick(page, 'Tourstops')
   expect((await applyInDrawer(page, naam)).status()).toBe(201)
   await page.keyboard.press('Escape')
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await pick(page, 'Planning', 'Activiteiten')
   await (await cellOf(page, gridRows(page).first(), 'Soort')).click()
   return id
 }
 
 test('apply-undo-changed-since @e2e', async ({ page, browser }) => {
-  const id = await appliedInDagplanning(page, 'Speelreeks e2e na wijziging', '2026-12-21', 1)
+  const id = await appliedInPlanning(page, 'Speelreeks e2e na wijziging', '2026-12-21', 1)
   const made = await rowsOf<{ id: number; omschrijving: string }>(page.request, 'activiteit', { speelreeks_id: id })
   const lunch = made.find((a) => a.omschrijving === 'Lunch')
 
@@ -525,14 +526,14 @@ test('apply-undo-changed-since @e2e', async ({ page, browser }) => {
   await page.keyboard.press('ControlOrMeta+z')
   const response = await undone
   expect(response.status()).toBe(409)
-  expect(await response.json()).toMatchObject({ code: 'changed_since', column: 'locatie_id', label: 'Locatie' })
-  await expect(page.getByText('Locatie is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
+  expect(await response.json()).toMatchObject({ code: 'changed_since', column: 'locatie_id', label: 'Eigen locatie' })
+  await expect(page.getByText('Eigen locatie is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(7)
 })
 
 test('apply-redo-refused @e2e', async ({ page }) => {
   const naam = 'Speelreeks e2e opnieuw'
-  const id = await appliedInDagplanning(page, naam, '2026-12-28', 2)
+  const id = await appliedInPlanning(page, naam, '2026-12-28', 2)
   const undone = undoOf(page)
   await page.keyboard.press('ControlOrMeta+z')
   expect((await undone).status()).toBe(200)

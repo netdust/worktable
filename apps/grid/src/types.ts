@@ -24,8 +24,8 @@ export interface Field {
   readonly?: boolean
   /** A query column's write: to `dataset`'s `field`, on the record the row's `key` names. */
   writes?: { dataset: string; field: string; key: string }
-  /** A value its row may take from elsewhere: `flag` names the column that says where from, `own` the flag's value for the row's own. */
-  inherited?: { flag: string; own: string }
+  /** The word for where an inherited lookup's value comes from, on a row whose `inherited` names it. */
+  via?: string
   /** A `links` field: the rows of `dataset` whose `key` is this row's id, each pointing at a `target_dataset` record. */
   link?: Link
   /** Served to the row's owner in a view for owners. */
@@ -268,6 +268,8 @@ export interface Row {
   fields: Record<string, unknown>
   lookups?: Record<string, Lookup | null>
   rollups?: Record<string, number | unknown[]>
+  /** The inherited lookups whose value came through the relation, not the row's own. */
+  inherited?: string[]
 }
 
 export interface Lookup {

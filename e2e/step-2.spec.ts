@@ -917,7 +917,7 @@ test.describe('step 2', () => {
       try {
         // The administrator shows "Mijn producties" to owners from Exporteren / delen.
         await page.goto('/')
-        await openView(page, 'Mijn producties', 'Toewijzingen')
+        await openView(page, 'Mijn producties')
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mijn producties')
         await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
         const menu = page.getByRole('menu', { name: 'Exporteren / delen' })

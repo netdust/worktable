@@ -87,7 +87,7 @@ async function sectionOf(page: Page, omschrijving: string): Promise<string> {
 test('status-persists', async ({ page }) => {
   const name = 'maaltijd Gent'
   expect((await activiteit(page, name)).status).toBe('optie')
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
   await dropStatusFilter(page)
 
   const status = await cell(page, name, 'Status')
@@ -105,7 +105,7 @@ test('refused-edit', async ({ page }) => {
   const name = 'vergadering Gent'
   const before = await activiteit(page, name)
   expect(before.status).toBe('bevestigd')
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
 
   await typeInto(await cell(page, name, 'Einde'), '2026-10-16T09:00')
   await expect(row(page, name).getByRole('alert')).toContainText('Einde ligt voor de start.')
@@ -120,7 +120,7 @@ test('query-edit-lands', async ({ page }) => {
   const name = 'opbouw Brugge'
   const before = await activiteit(page, name)
   expect(before.status).toBe('bevestigd')
-  await open(page, 'Dagplanning', 'Activiteiten')
+  await open(page, 'Planning', 'Activiteiten')
 
   const status = await cell(page, name, 'Status')
   await expect(status).toHaveText('Bevestigd')
@@ -139,7 +139,7 @@ test('revisions-recorded', async ({ page }) => {
   const before = await activiteit(page, name)
   expect(before.status).toBe('geannuleerd')
   expect(await revisions(page, before.id)).toEqual([])
-  await open(page, 'Dagplanning', 'Activiteiten')
+  await open(page, 'Planning', 'Activiteiten')
 
   const status = await cell(page, name, 'Status')
   await expect(status).toHaveText('Geannuleerd')
@@ -159,7 +159,7 @@ test('day-line-move', async ({ page }) => {
   const before = await activiteit(page, name)
   expect(before.start_at).toBe('2026-10-12T14:00')
   expect(before.plandag).toBe('2026-10-12')
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
   expect(await sectionOf(page, name)).toContain('12 oktober')
 
   await typeInto(await cell(page, name, 'Einde'), '2026-10-13T08:00')
@@ -186,7 +186,7 @@ test('relation-pick', async ({ page }) => {
   const name = 'reis Gent'
   const before = await activiteit(page, name)
   expect([before.status, before.productie_id]).toEqual(['bevestigd', 1])
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
 
   const productie = await cell(page, name, 'Productie')
   await expect(productie).toHaveText('De Kersentuin')
@@ -202,7 +202,7 @@ test('relation-pick', async ({ page }) => {
 test('clear-end', async ({ page }) => {
   const name = 'afbouw Gent'
   expect((await activiteit(page, name)).eind_at).toBe('2026-10-13T01:00')
-  await open(page, 'Planning', 'Activiteiten')
+  await open(page, 'Bevestigd', 'Activiteiten')
 
   const einde = await cell(page, name, 'Einde')
   await typeInto(einde, '')
@@ -289,9 +289,9 @@ test.describe('cross-site-refused', () => {
     const before = await activiteit(page, name)
     const response = await page.request.patch(`/api/rows/activiteit/${before.id}`, {
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      data: JSON.stringify({ plaats: 'Tongeren' }),
+      data: JSON.stringify({ notities: 'Tongeren' }),
     })
     expect(response.status()).toBe(200)
-    expect((await revisions(page, before.id)).map((revision) => revision.field)).toEqual(['plaats'])
+    expect((await revisions(page, before.id)).map((revision) => revision.field)).toEqual(['notities'])
   })
 })

@@ -130,6 +130,8 @@ async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
 
 /** Opens a surface in light and in dark, checks that its own background follows the theme, and shoots it in each. */
 async function inBothThemes(page: Page, name: string, open: () => Promise<Locator>, close: () => Promise<void>) {
+  // The theme crossfades over 220ms; measured mid-fade under load, a dark surface still reads light.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const theme of ['Licht', 'Donker'] as const) {
     await setTheme(page, theme)
     const surface = await open()
@@ -401,15 +403,15 @@ test('edit-select-cell @e2e', async ({ page }) => {
 })
 
 async function openDagplanning(page: Page) {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
 }
 
 test('edit-relation-cell @e2e', async ({ page }) => {
   const api = page.request
   const title = 'ra relatie'
   const id = await activity(api, title, { datum: day(3), start_at: `${day(3)}T10:00` })
-  const patches = writes(page, 'PATCH', /^\/api\/rows\/(activiteit|dagplanning)\/\d+$/)
+  const patches = writes(page, 'PATCH', /^\/api\/rows\/activiteit\/\d+$/)
   try {
     await openDagplanning(page)
     const locatie = () => cellOf(page, title, 'Locatie')
@@ -758,7 +760,7 @@ test.describe('the chrome as an administrator', () => {
   test.use({ storageState: state('admin') })
 
   test('chrome-light-and-dark @e2e', async ({ page }) => {
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2026-10-12')
     await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
 
     await inBothThemes(
@@ -851,16 +853,16 @@ test.describe('the chrome as an administrator', () => {
   })
 
   test('share-dialog-light-and-dark @e2e', async ({ page }) => {
-    const copy = 'Dagplanning (kopie)'
+    const copy = 'Voorstellingen (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
     try {
       await page.goto('/')
-      await openView(page, 'Dagplanning', 'Activiteiten')
-      await page.getByRole('button', { name: 'More actions: Dagplanning', exact: true }).click()
+      await openView(page, 'Voorstellingen')
+      await page.getByRole('button', { name: 'More actions: Voorstellingen', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
       await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
-      await openView(page, copy, 'Activiteiten')
+      await openView(page, copy, 'Voorstellingen')
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(copy)
       const share = page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' })
       await inBothThemes(
@@ -996,16 +998,16 @@ test.describe('the Publiceren dialog as an administrator', () => {
   test.use({ storageState: state('admin') })
 
   test('publish-address-reads-in-full @e2e', async ({ page }) => {
-    const copy = 'Dagplanning (kopie)'
+    const copy = 'Voorstellingen (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
     try {
       await page.goto('/')
-      await openView(page, 'Dagplanning', 'Activiteiten')
-      await page.getByRole('button', { name: 'More actions: Dagplanning', exact: true }).click()
+      await openView(page, 'Voorstellingen')
+      await page.getByRole('button', { name: 'More actions: Voorstellingen', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
       await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
-      await openView(page, copy, 'Activiteiten')
+      await openView(page, copy, 'Voorstellingen')
       await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
       await page.getByRole('menuitem', { name: 'Publiceren' }).click()
       const address = page.getByRole('dialog', { name: 'Publiceren' }).getByRole('textbox', { name: 'Publiek adres' })

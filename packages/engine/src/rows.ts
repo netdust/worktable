@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
 import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
 import { filterWhere } from './filter'
+import { INHERITED, lookupColumn, lookupOf, lookupSelect, lookupValue } from './lookups'
 import type { RowsParams } from './params'
 import { type Source, sourceOf } from './registry'
 import { tableOf } from './tables'
@@ -13,6 +14,8 @@ export interface EngineRow {
   title: string
   custom: Record<string, unknown>
   lookups: Record<string, { id: number; title: string } | null>
+  /** The inherited lookups whose value came through the relation; on a source that declares any. */
+  inherited?: string[]
   [column: string]: unknown
 }
 
@@ -26,24 +29,32 @@ function scopeWhere(table: SQLiteTable, scope: Scope): SQL | undefined {
   return scope === 'none' ? sql`0` : eq(columnOf(table, scope.column), scope.id)
 }
 
-function whereOf(source: Source, table: SQLiteTable, params: RowsParams, scope: Scope): SQL | undefined {
+function whereOf(
+  domain: Domain,
+  source: Source,
+  table: SQLiteTable,
+  params: RowsParams,
+  scope: Scope,
+): SQL | undefined {
   const dateColumn = source.date ? columnOf(table, source.date) : null
   const window = (op: '>=' | '<=', day: string | null): SQL | undefined =>
     day && dateColumn ? sql`substr(${dateColumn}, 1, 10) ${sql.raw(op)} ${day}` : undefined
   const parts = [
     source.kind === 'dataset' ? isNull(columnOf(table, 'deleted_at')) : undefined,
     scopeWhere(table, scope),
-    params.stored ? filterWhere(params.stored, source, table) : undefined,
-    params.filter ? filterWhere(params.filter, source, table) : undefined,
+    params.stored ? filterWhere(params.stored, source, table, undefined, domain) : undefined,
+    params.filter ? filterWhere(params.filter, source, table, undefined, domain) : undefined,
     window('>=', params.from),
     window('<=', params.to),
   ].filter((p): p is SQL => p !== undefined)
   return parts.length ? and(...parts) : undefined
 }
 
-function orderOf(table: SQLiteTable, params: RowsParams): SQL[] {
+function orderOf(source: Source, table: SQLiteTable, params: RowsParams): SQL[] {
   const keys = [...(params.group ? [{ column: params.group, desc: false }] : []), ...params.sort]
-  return [...keys.map((k) => (k.desc ? desc : asc)(columnOf(table, k.column))), asc(columnOf(table, 'id'))]
+  const sortValue = (key: string) =>
+    source.kind === 'dataset' && lookupOf(source, key) ? lookupValue(source, key) : columnOf(table, key)
+  return [...keys.map((k) => (k.desc ? desc : asc)(sortValue(k.column))), asc(columnOf(table, 'id'))]
 }
 
 function parseCustom(value: unknown): Record<string, unknown> {
@@ -69,24 +80,47 @@ function titleOf(source: Source, raw: Raw, titles: Map<string, Map<number, strin
   return (typeof id === 'number' ? titles.get(source.title.via)?.get(id) : undefined) || text(source.title.else)
 }
 
+// The lookups a raw carries: a raw read with SELECT * (link rows, history) carries none.
+function lookupsIn(source: Source, raws: Raw[]): string[] {
+  if (source.kind !== 'dataset') return []
+  return Object.keys(source.lookups ?? {}).filter((name) => raws.some((r) => Object.hasOwn(r, name)))
+}
+
+function relationsOf(domain: Domain, source: Source, looked: string[]): [string, string][] {
+  const columns = Object.entries(source.columns).flatMap(([name, c]) => (c.relation ? [[name, c.relation]] : []))
+  const lookups = looked.flatMap((name) => {
+    const relation = lookupColumn(domain, source as DatasetDecl, name).relation
+    return relation ? [[name, relation]] : []
+  })
+  return [...columns, ...lookups] as [string, string][]
+}
+
+function inheritedOf(source: Source, raw: Raw): { inherited?: string[] } {
+  if (source.kind !== 'dataset') return {}
+  const flagged = Object.keys(source.lookups ?? {}).filter((name) => Object.hasOwn(raw, INHERITED + name))
+  return flagged.length ? { inherited: flagged.filter((name) => Boolean(raw[INHERITED + name])) } : {}
+}
+
 export function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Source, raws: Raw[]): EngineRow[] {
-  const relations = Object.entries(source.columns).filter(([, c]) => c.relation)
+  const looked = lookupsIn(source, raws)
+  const relations = relationsOf(domain, source, looked)
   const titles = new Map(
-    relations.map(([name, c]) => {
+    relations.map(([name, relation]) => {
       const ids = [...new Set(raws.map((r) => r[name]).filter((v): v is number => typeof v === 'number'))]
-      return [name, titlesOf(db, domain, c.relation as string, ids)]
+      return [name, titlesOf(db, domain, relation, ids)]
     }),
   )
   return raws.map((raw) => {
     const row: Raw = { id: raw.id }
-    for (const name of Object.keys(source.columns)) row[name] = raw[name]
+    for (const name of [...Object.keys(source.columns), ...looked]) row[name] = raw[name]
     const lookups: EngineRow['lookups'] = {}
     for (const [name] of relations) {
       const id = raw[name]
       const title = typeof id === 'number' ? titles.get(name)?.get(id) : undefined
       lookups[name] = title === undefined ? null : { id: id as number, title }
     }
-    return { ...row, title: titleOf(source, raw, titles), custom: parseCustom(raw.custom), lookups } as EngineRow
+    const title = titleOf(source, raw, titles)
+    return { ...row, title, custom: parseCustom(raw.custom), lookups, ...inheritedOf(source, raw) } as EngineRow
   })
 }
 
@@ -98,12 +132,12 @@ export function readRows(
   scope: Scope,
 ): { rows: EngineRow[]; total: number } {
   const table = tableOf(source)
-  const where = whereOf(source, table, params, scope)
+  const where = whereOf(domain, source, table, params, scope)
   const raws = db
-    .select()
+    .select({ ...getTableColumns(table), ...(scope === 'all' ? lookupSelect(source) : {}) })
     .from(table)
     .where(where)
-    .orderBy(...orderOf(table, params))
+    .orderBy(...orderOf(source, table, params))
     .limit(params.limit)
     .offset(params.offset)
     .all() as Raw[]
@@ -114,13 +148,19 @@ export function readRows(
 export const CHUNK = 500
 
 // The ids `readRows` would answer for the same params and scope, in its order.
-export function readIds(db: BunSQLiteDatabase, source: Source, params: RowsParams, scope: Scope): number[] {
+export function readIds(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  source: Source,
+  params: RowsParams,
+  scope: Scope,
+): number[] {
   const table = tableOf(source)
   const found = db
     .select({ id: columnOf(table, 'id') })
     .from(table)
-    .where(whereOf(source, table, params, scope))
-    .orderBy(...orderOf(table, params))
+    .where(whereOf(domain, source, table, params, scope))
+    .orderBy(...orderOf(source, table, params))
     .limit(params.limit)
     .offset(params.offset)
     .all() as { id: number }[]

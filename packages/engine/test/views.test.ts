@@ -302,6 +302,39 @@ describe('views', () => {
     expect(body.views[1]).toMatchObject({ name: 'Van Zeven gedeeld', owner_id: 7, mine: false, editable: false })
   })
 
+  test('GET lists the system views a seed declares in its declared order, then every other view by id', async () => {
+    const eerst = { ...domain.views[0], name: 'Eerst' }
+    const declared: Domain = { ...domain, views: [eerst, ...domain.views] }
+    const fresh = seeded()
+    const system = (name: string) =>
+      Number(
+        fresh
+          .query(
+            "INSERT INTO saved_view (name, source_type, source, owner_id, shared) VALUES (?, 'dataset', 'taak', -1, 1)",
+          )
+          .run(name).lastInsertRowid,
+      )
+    const gedeeld = Number(
+      fresh
+        .query(
+          "INSERT INTO saved_view (name, source_type, source, owner_id, shared) VALUES ('Gedeeld', 'dataset', 'taak', 7, 1)",
+        )
+        .run().lastInsertRowid,
+    )
+    const undeclared = system('Niet gezaaid')
+    const later = system('Eerst')
+    const onPerStatus = Number(
+      fresh
+        .query(
+          "INSERT INTO saved_view (name, source_type, source, owner_id, shared) VALUES ('Eerst', 'query', 'per_status', -1, 1)",
+        )
+        .run().lastInsertRowid,
+    )
+    const app = testEngine(fresh, declared)
+    const { body } = await send(app, await signIn(app))('GET', '/api/views')
+    expect(body.views.map((v: { id: number }) => v.id)).toEqual([later, SEEDED, gedeeld, undeclared, onPerStatus])
+  })
+
   test('a seeded view is owned by the system owner, shared, and neither mine nor editable', async () => {
     const fresh = seeded()
     const app = testEngine(fresh, domain)

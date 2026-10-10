@@ -127,8 +127,8 @@ async function offeredFields(page: Page): Promise<string[]> {
 }
 
 test('switch-production @e2e', async ({ page }) => {
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
+  await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', SEED_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bevestigd')
   await expect(gridRows(page).first()).toBeVisible()
   expect((await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
   expect(await offeredFields(page)).toContain('Productie')
@@ -154,19 +154,19 @@ test('switch-production @e2e', async ({ page }) => {
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toHaveCount(0)
   expect(await offeredFields(page)).not.toContain('Productie')
 
-  // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
+  // Planning no longer shows Productie (R10), so the scope is read off the rows request.
   const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
-  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Dagplanning', 'Activiteiten'))).toEqual(nachtwacht)
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', SEED_WEEK)
+  expect(await scopeAsked(page, 'activiteit', () => pick(page, 'Planning', 'Activiteiten'))).toEqual(nachtwacht)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
   await expect(gridRows(page).first()).toBeVisible()
 
   // Kept in this browser: a reload still works in Nachtwacht.
   const reload = async () => {
     await page.reload()
     await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
-    await pick(page, 'Dagplanning', 'Activiteiten')
+    await pick(page, 'Planning', 'Activiteiten')
   }
-  expect(await scopeAsked(page, 'dagplanning', reload)).toEqual(nachtwacht)
+  expect(await scopeAsked(page, 'activiteit', reload)).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
 
   const scoped = await gridRows(page).count()
@@ -174,15 +174,15 @@ test('switch-production @e2e', async ({ page }) => {
   await switchTo(page, 'Nachtwacht', 'Alle producties')
   await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveCount(0)
   await expect.poll(() => gridRows(page).count()).toBeGreaterThan(scoped)
-  await pick(page, 'Planning', 'Activiteiten')
+  await pick(page, 'Bevestigd', 'Activiteiten')
   await expect.poll(async () => (await shownIn(page, 'Productie')).length).toBeGreaterThan(1)
   await page.reload()
   await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
 })
 
 test('tree-fold-and-hover @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', SEED_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   const node = modelNode(page, 'Tourstops')
   const row = node.locator('.nv-model')
   const tools = row.locator('.nv-model__tools')
@@ -197,7 +197,7 @@ test('tree-fold-and-hover @e2e', async ({ page }) => {
   await expect(row.getByRole('button', { name: 'Meer voor Tourstops' })).toBeVisible()
   await shot(page, 'tree-hover')
 
-  // The chevron folds and unfolds; the view stays Dagplanning.
+  // The chevron folds and unfolds; the view stays Planning.
   const views = node.getByRole('group', { name: 'View type' })
   if ((await node.getAttribute('aria-expanded')) !== 'true') {
     await row.getByRole('button', { name: 'Uitklappen' }).click()
@@ -207,11 +207,11 @@ test('tree-fold-and-hover @e2e', async ({ page }) => {
   await row.getByRole('button', { name: 'Inklappen' }).click()
   await expect(node).toHaveAttribute('aria-expanded', 'false')
   await expect(views).toHaveCount(0)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await row.getByRole('button', { name: 'Uitklappen' }).click()
   await expect(node).toHaveAttribute('aria-expanded', 'true')
   await expect(views.getByRole('button', { name: 'Tourstops', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
 
   // The name opens the model's view.
   await openModel(page, 'Tourstops')
@@ -249,7 +249,7 @@ test('create-team-and-personal-view @e2e', async ({ page }) => {
   const team = 'Team e2e weergave'
   const own = 'Eigen e2e weergave'
   await page.goto('/')
-  await pick(page, 'Planning', 'Activiteiten')
+  await pick(page, 'Bevestigd', 'Activiteiten')
 
   await newView(page, 'Activiteiten', team, 'Het team', 'dialog')
   await expect(viewRow(page, 'Activiteiten', team)).toHaveCount(1)
@@ -323,8 +323,8 @@ const facts = (band: Locator) => band.locator('.nv-group__fact')
 
 test('fold-day-band @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e vouwen', FOLD_WEEK)
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', FOLD_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', FOLD_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   // Row numbers lead every row, and subtle dividers stand between the cells (Stefan, 2026-10-07).
@@ -345,7 +345,7 @@ test('fold-day-band @e2e', async ({ page }) => {
 
   // Kept per view in this browser.
   await page.reload()
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await pick(page, 'Planning', 'Activiteiten')
   await expect(bands(page)).toHaveCount(4)
   await expect(bands(page).first()).toHaveAttribute('aria-expanded', 'false')
   await expect(gridRows(page)).toHaveCount(21)
@@ -360,8 +360,8 @@ test('fold-day-band @e2e', async ({ page }) => {
 
 test('band-facts @e2e', async ({ page }) => {
   await speeldagen(page.request, 'Speelreeks e2e feiten', FACTS_WEEK)
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', FACTS_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', FACTS_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
   for (const band of await bands(page).all()) {
@@ -389,8 +389,8 @@ test('inherited-venue @e2e', async ({ page }) => {
     expect(a.locatie_id ?? null).toBeNull()
   }
 
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', INHERIT_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', INHERIT_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page)).toHaveCount(29)
   const locatie = await columnIndex(page, 'Locatie')
 
@@ -427,14 +427,14 @@ test('inherited-venue @e2e', async ({ page }) => {
   await bands(page).nth(2).click()
   await expect(bands(page).nth(2)).toHaveAttribute('aria-expanded', 'false')
   await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
-  await shot(page, 'dagplanning')
+  await shot(page, 'planning')
 })
 
 const rowHeight = async (page: Page) => (await gridRows(page).first().boundingBox())?.height ?? 0
 
 test('dark-and-density @e2e', async ({ page }) => {
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
+  await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', SEED_WEEK)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bevestigd')
   await expect(gridRows(page).first()).toBeVisible()
   const root = page.locator('#root')
   const theme = page.getByRole('radiogroup', { name: 'Thema' })
@@ -456,7 +456,7 @@ test('dark-and-density @e2e', async ({ page }) => {
   await expect.poll(async () => Math.round(await rowHeight(page))).toBe(46)
 
   await page.reload()
-  await pick(page, 'Planning', 'Activiteiten')
+  await pick(page, 'Bevestigd', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
   await expect(root).toHaveAttribute('data-theme', 'dark')
   expect(await root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(dark)
@@ -468,10 +468,10 @@ test('dark-and-density @e2e', async ({ page }) => {
   await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(light)
 })
 
-test('dagplanning-details @e2e', async ({ page }) => {
+test('planning-details @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await speeldagen(page.request, 'Speelreeks e2e details', DETAILS_WEEK)
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', DETAILS_WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', DETAILS_WEEK)
   await expect(page.locator('html')).toHaveAttribute('lang', 'nl')
   await switchTo(page, 'Alle producties', 'Nachtwacht')
   await expect(gridRows(page)).toHaveCount(28)
@@ -480,13 +480,14 @@ test('dagplanning-details @e2e', async ({ page }) => {
   await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag tussen 2027-03-22 en 2027-03-28'])
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
-  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Locatie, Mensen, Status; a time range with its end muted.
+  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Tourstop, Locatie, Mensen, Status; a time range with its end muted.
   const heads = await page.locator('thead th').allTextContents()
   expect(heads.map((h) => h.replace(/\s*[↑↓]$/, '').trim())).toEqual([
     '#',
     'Tijd',
     'Omschrijving',
     'Soort',
+    'Tourstop',
     'Locatie',
     'Mensen',
     'Status',
@@ -508,7 +509,7 @@ test('dagplanning-details @e2e', async ({ page }) => {
   // R10.5: a model reads stronger than its views.
   const node = modelNode(page, 'Activiteiten')
   await expect(node.locator('.nv-model__name')).toHaveCSS('font-weight', '500')
-  const view = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: 'Dagplanning', exact: true })
+  const view = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: 'Planning', exact: true })
   await expect(view).toHaveCSS('font-size', '13.5px')
   expect(Math.round((await view.boundingBox())?.height ?? 0)).toBe(28)
   await shot(page, 'details')
@@ -699,8 +700,8 @@ test.describe
 
     test('read-limit-cut @e2e', async ({ page }) => {
       expect(ids).toHaveLength(MAX_READ + 1)
-      await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', CUT_WEEK)
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', CUT_WEEK)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
@@ -712,8 +713,8 @@ test.describe
 
     // Shake-out row 19: the bar's count and the grid's foot say 5000+ like the title line.
     test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
-      await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', CUT_WEEK)
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dagplanning')
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', CUT_WEEK)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen`)

@@ -51,6 +51,19 @@ describe('validateDomain', () => {
     expect([e.declaration, e.bad]).toEqual(['a', 'name'])
   })
 
+  test('a hidden title or date column is refused: the grid needs both', () => {
+    const hidden: ColumnDecl = { ...text, hidden: true }
+    const when: ColumnDecl = { type: 'date', label: 'D', hidden: true }
+    const title = failure(withDomain({ datasets: [dataset({ columns: { name: hidden } })], queries: [] }))
+    expect([title.declaration, title.bad]).toEqual(['a', 'name'])
+    const date = failure(
+      withDomain({ datasets: [dataset({ date: 'on', columns: { name: text, on: when } })], queries: [] }),
+    )
+    expect([date.declaration, date.bad]).toEqual(['a', 'on'])
+    const other = dataset({ columns: { name: text, note: hidden } })
+    expect(() => validateDomain(withDomain({ datasets: [other], queries: [] }))).not.toThrow()
+  })
+
   test('a domain dataset declaring checks is refused: they are for engine tables', () => {
     const e = failure(withDomain({ datasets: [dataset({ checks: ['CHECK (id > 0)'] })], queries: [] }))
     expect([e.declaration, e.bad]).toEqual(['a', 'checks'])

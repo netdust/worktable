@@ -103,11 +103,22 @@ function checkOwnerVisible(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+// The grid needs the title and the date column to show a row.
+function checkHidden(source: DatasetDecl | QueryDecl): void {
+  const title = typeof source.title === 'string' ? [source.title] : [source.title.else, source.title.via]
+  for (const column of [...title, source.date]) {
+    if (column !== undefined && source.columns[column]?.hidden) {
+      throw new DomainError(source.name, column, `${column} is the title or date column, so it is not hidden`)
+    }
+  }
+}
+
 // Keys the engine adds to every row it answers.
 const OVERWRITTEN = [
   ['title', 'the computed row title'],
   ['revision', 'the write reply'],
   ['links', "the row's link rows"],
+  ['inherited', "the row's inherited lookups"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -148,6 +159,56 @@ function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
       throw at(link.target, `target "${link.target}" is not a relation column`)
     if (link.state !== undefined && !linked.columns[link.state]?.options) {
       throw at(link.state, `state "${link.state}" is not an options column`)
+    }
+  }
+}
+
+// Keys every row or write body already carries.
+const LOOKUP_RESERVED = new Set([
+  'id',
+  'custom',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'lookups',
+  'inherited',
+  'cells',
+  'title',
+  'links',
+  'revision',
+  'notices',
+  'expect',
+])
+
+// One hop through a live relation; a boolean field is refused because the subquery answers 0 or 1.
+function checkLookups(domain: Domain, dataset: DatasetDecl): void {
+  const owns = new Set<string>()
+  for (const [name, lookup] of Object.entries(dataset.lookups ?? {})) {
+    const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lookup ${name} ${message}`)
+    if (dataset.owners) throw at(name, 'is on a dataset with owners, which reads only titles through a relation')
+    if (LOOKUP_RESERVED.has(name)) throw at(name, 'has a name the engine uses on every row')
+    if (declared(dataset, name) || Object.hasOwn(dataset.links ?? {}, name)) {
+      throw at(name, 'has the name of a column or a link')
+    }
+    const target = domain.datasets.find((d) => d.name === dataset.columns[lookup.via]?.relation)
+    if (!target) throw at(lookup.via, `via "${lookup.via}" is not a relation column`)
+    const field = Object.hasOwn(target.columns, lookup.field) ? target.columns[lookup.field] : undefined
+    if (!field) throw at(lookup.field, `field "${lookup.field}" is not a column of "${target.name}"`)
+    if (field.type === 'json' || field.type === 'boolean') {
+      throw at(lookup.field, `field "${lookup.field}" is ${field.type}`)
+    }
+    if (lookup.own === undefined) continue
+    if (lookup.from === undefined) throw at(name, 'has an own column but no from')
+    if (owns.has(lookup.own)) throw at(name, `shares own "${lookup.own}" with another lookup`)
+    owns.add(lookup.own)
+    const own = Object.hasOwn(dataset.columns, lookup.own) ? dataset.columns[lookup.own] : undefined
+    if (own?.type !== field.type || own.relation !== field.relation) {
+      throw at(lookup.own, `own "${lookup.own}" is not a column of the field's type and relation`)
+    }
+    // A write through the lookup is renamed to own, so own must be a column any editor may clear.
+    if (own.readonly || !own.nullable) throw at(lookup.own, `own "${lookup.own}" is readonly or not nullable`)
+    if (lookup.own === dataset.lifecycle?.column || lookup.own === dataset.record_link?.email) {
+      throw at(lookup.own, `own "${lookup.own}" is guarded by the engine`)
     }
   }
 }
@@ -340,7 +401,9 @@ function checkSections(domain: Domain): void {
     for (const name of sources) {
       const source = sourceOf(domain, name)
       if (!source) throw new DomainError(label, name, `section lists unknown source "${name}"`)
-      if (source.kind === 'query') throw new DomainError(label, name, `section lists query "${name}"; only datasets`)
+      if (source.kind === 'query' && source.of !== undefined) {
+        throw new DomainError(label, name, `section lists query "${name}", which sits under "${source.of}"`)
+      }
       if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
       seen.add(name)
     }
@@ -355,15 +418,6 @@ function checkFacts(source: DatasetDecl | QueryDecl): void {
   }
 }
 
-function checkInherited(source: DatasetDecl | QueryDecl): void {
-  for (const [column, decl] of Object.entries(source.columns)) {
-    if (!decl.inherited) continue
-    if (source.kind === 'dataset') throw new DomainError(source.name, column, `${column} is inherited on a dataset`)
-    const { flag } = decl.inherited
-    if (!declared(source, flag)) throw new DomainError(source.name, flag, `${column} has flag "${flag}", not a column`)
-  }
-}
-
 export function validateDomain(domain: Domain): void {
   for (const source of sourcesOf(domain)) {
     if (reservedNames.has(source.name)) {
@@ -374,10 +428,10 @@ export function validateDomain(domain: Domain): void {
     checkRelations(domain, source)
     checkOwners(source)
     checkOwnerVisible(source)
+    checkHidden(source)
     checkTones(source)
     checkIcon(source)
     checkFacts(source)
-    checkInherited(source)
     checkLinks(domain, source)
   }
   checkSpace(domain)
@@ -393,6 +447,7 @@ export function validateDomain(domain: Domain): void {
     checkLifecycle(dataset)
     checkRecordLink(dataset)
     checkConfig(domain, dataset)
+    checkLookups(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)
   }
   for (const query of domain.queries) {

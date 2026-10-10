@@ -242,6 +242,20 @@ describe('seedMissing: system views no longer declared', () => {
     expect(seedLines(report)).toContain('seed-missing: view "Oud" (taak) is public, left alone')
   })
 
+  test('names a view whose source is undeclared', () => {
+    const sqlite = existingDb()
+    insertView(sqlite, 7, 'Weg', 'gone', ['day'], 0)
+    const system = insertView(sqlite, SYSTEM_OWNER, 'Oud', 'gone', ['day'])
+    sqlite.query('UPDATE saved_view SET public = 1 WHERE id = ?').run(system)
+    const before = viewsNamed(sqlite, 'Weg')
+    const lines = seedLines(seedMissing(sqlite, seedDomain))
+    expect(viewsNamed(sqlite, 'Weg')).toEqual(before)
+    expect(lines).toContain('seed-missing: view "Weg" (gone) has no source any more, left alone')
+    expect(lines.filter((line) => line.includes('"Oud"'))).toEqual([
+      'seed-missing: view "Oud" (gone) is public, left alone',
+    ])
+  })
+
   test("a person's own or shared view that matches no seed is never removed", () => {
     const sqlite = existingDb()
     insertView(sqlite, 7, 'Mijn', 'taak', ['day'], 0)

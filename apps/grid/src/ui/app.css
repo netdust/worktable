@@ -1877,6 +1877,11 @@
   z-index: 50;
 }
 
+/* Placed above its trigger, React Aria sets only `bottom`; the anchored `top` would stretch the box up to it. */
+.nv-pop[data-placement] {
+  top: auto;
+}
+
 /* A date and time can be wider than its column: the editor grows past the cell by what its segments need, as the editing cell lets it. */
 .nv-datefield {
   position: absolute;
@@ -2055,9 +2060,9 @@
   cursor: pointer;
 }
 
-.nv-tr:hover .nv-open,
-.nv-td--active .nv-open,
-.nv-open:focus-visible {
+#root .nv-tr:hover .nv-open,
+#root .nv-td--active .nv-open,
+#root .nv-open:focus-visible {
   opacity: 1;
 }
 
@@ -2186,7 +2191,7 @@
 }
 
 .nv-grid .nv-group__count {
-  padding: 0 6px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: var(--color-bg-muted);
   color: var(--color-fg-muted);
@@ -2197,6 +2202,10 @@
 .nv-grid .nv-group__totals {
   color: var(--color-fg-muted);
   font-size: 12px;
+}
+
+.nv-grid .nv-group__count + .nv-group__fact {
+  margin-left: 6px;
 }
 
 .nv-grid .nv-group__fact i {

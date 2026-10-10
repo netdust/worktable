@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite'
-import { eq } from 'drizzle-orm'
+import { eq, getTableColumns } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
@@ -16,6 +16,7 @@ import type {
   Writer,
 } from './declare'
 import type { BatchKind } from './engine-tables'
+import { lookupSelect, ownBody } from './lookups'
 import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
 import { retireDelivered } from './record-link'
@@ -465,7 +466,7 @@ export function valuesOf(
   scope: Scope,
 ): Values {
   const { dataset, writer } = target
-  const given = cutBody(dataset, body)
+  const given = cutBody(dataset, ownBody(dataset, body))
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
   checkValues(dataset, cut, false)
@@ -552,20 +553,25 @@ export function runWrite(
   actor: Actor,
   opts: { expect?: Record<string, unknown> } = {},
 ): Written {
-  if (op === 'update') expectFromService(target.dataset, body, actor, opts.expect)
+  const renamed = ownBody(target.dataset, body)
+  if (op === 'update') expectFromService(target.dataset, renamed, actor, opts.expect)
   const mode: TransitionMode = { kind: 'write', expect: expectedOf(target.dataset, opts.expect) }
   const hooked = noneHooked()
   const written = store.sqlite
-    .transaction(() => applyWrite(store, target, op, id, body, actor, mode, hooked))
+    .transaction(() => applyWrite(store, target, op, id, renamed, actor, mode, hooked))
     .immediate()
   sendAfterCommit(store, hooked)
   return { ...written, notices: hooked.notices }
 }
 
-export function rowOf(store: Store, dataset: DatasetDecl, id: number): EngineRow {
+export function rowOf(store: Store, dataset: DatasetDecl, id: number, scope: Scope): EngineRow {
   const table = tableOf(dataset)
   const idColumn = (table as unknown as Record<string, SQLiteColumn>).id as SQLiteColumn
-  const raw = store.db.select().from(table).where(eq(idColumn, id)).get() as Values
+  const raw = store.db
+    .select({ ...getTableColumns(table), ...(scope === 'all' ? lookupSelect(dataset) : {}) })
+    .from(table)
+    .where(eq(idColumn, id))
+    .get() as Values
   return withLookups(store.db, store.domain, dataset, [raw])[0] as EngineRow
 }
 

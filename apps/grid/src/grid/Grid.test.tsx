@@ -496,6 +496,25 @@ describe('editing', () => {
     expect(api.update).toHaveBeenCalledWith('activity', 102, { place: '' }, expect.objectContaining({ id: 102 }))
   })
 
+  it('an own inherited lookup emptied on Delete reads via its word before the server answers', async () => {
+    const model: Model = { ...activity, fields: { ...activity.fields, location: { ...activity.fields.location!, via: 'Tourstop' } } }
+    const rows = calais.map((r) => ({ ...r, inherited: [] }))
+    renderGrid(rows, { model })
+    let answer: (saved: Saved) => void = () => undefined
+    api.update.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    const at = () => cell('Montage', 'location')
+    expect(at().querySelector('.nv-inherited')).toBeNull()
+
+    fireEvent.click(at())
+    await act(async () => {
+      type(at(), 'Delete')
+    })
+    expect(api.update).toHaveBeenCalledWith('activity', 102, { location: [] }, expect.objectContaining({ id: 102 }))
+    expect(at().querySelector('.nv-via')?.textContent).toBe('via tourstop')
+    await act(async () => answer({ row: { ...rows[1]!, inherited: ['location'] }, batch: 'b1' }))
+    expect(at().querySelector('.nv-inherited')).not.toBeNull()
+  })
+
   it('undoes the last write on Ctrl+Z by its batch on the server, and repaints the row it reads back', async () => {
     renderGrid()
     api.update.mockImplementation(async (_m, id, data) => ({ row: { ...calais.find((r) => r.id === id)!, fields: { ...calais.find((r) => r.id === id)!.fields, ...data } }, batch: `b${id}` }))

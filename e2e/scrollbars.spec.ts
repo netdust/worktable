@@ -7,7 +7,7 @@ test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
 test('minimal-scrollbars @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 520 })
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
+  await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2026-10-12')
   await page.locator('.nv-bar').getByRole('button', { name: 'Filter Plandag wissen' }).click()
   await page.locator('.nv-bar').getByRole('button', { name: 'Filter Status wissen' }).click()
   const scroller = page.locator('.nv-scroll').first()

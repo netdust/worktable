@@ -6,7 +6,7 @@ test.use({ storageState: { cookies: [], origins: [] } })
 const week = encodeURIComponent(
   JSON.stringify([{ field: 'plandag', op: 'between', values: ['2026-12-21', '2027-02-20'] }]),
 )
-for (const hash of [`#view=dagplanning&f=${week}`, '#view=dagplanning&f=%7Bnot']) {
+for (const hash of [`#view=activiteit&f=${week}`, '#view=activiteit&f=%7Bnot']) {
   test(`a link with conditions lands on the sign-in page (${hash.slice(0, 24)}) @smoke`, async ({ page }) => {
     const response = await page.goto(`/${hash}`)
     expect(response?.status()).toBe(200)
@@ -15,7 +15,7 @@ for (const hash of [`#view=dagplanning&f=${week}`, '#view=dagplanning&f=%7Bnot']
   })
 }
 
-for (const path of ['/api/rows/toewijzing', '/api/rows/dagplanning?from=2026-12-21&to=2026-12-27']) {
+for (const path of ['/api/rows/toewijzing', '/api/rows/activiteit?from=2026-12-21&to=2026-12-27']) {
   test(`${path} asks for a session @smoke`, async ({ request }) => {
     const response = await request.get(path)
     expect(response.status()).toBe(401)

@@ -107,8 +107,8 @@ export const activiteit = defineDataset({
     start_at: { type: 'datetime', label: 'Start', nullable: true },
     eind_at: { type: 'datetime', label: 'Einde', nullable: true },
     plandag: { type: 'date', label: 'Plandag', readonly: true },
-    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
-    plaats: { type: 'text', label: 'Plaats', nullable: true },
+    locatie_id: { type: 'integer', label: 'Eigen locatie', nullable: true, relation: 'organisatie', hidden: true },
+    plaats: { type: 'text', label: 'Plaats', nullable: true, hidden: true },
     status: {
       type: 'text',
       label: 'Status',
@@ -119,6 +119,19 @@ export const activiteit = defineDataset({
     bron: { type: 'text', label: 'Bron', default: 'plan', options: { plan: 'Plan', registratie: 'Registratie' } },
     notities: { type: 'text', label: 'Notities', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
+  },
+  lookups: {
+    locatie: { label: 'Locatie', via: 'speelreeks_id', field: 'locatie_id', own: 'locatie_id', from: 'Tourstop' },
+  },
+  links: {
+    mensen: {
+      label: 'Mensen',
+      item: 'Toewijzing',
+      dataset: 'toewijzing',
+      key: 'activiteit_id',
+      target: 'persoon_id',
+      state: 'state',
+    },
   },
   indexes: [['plandag']],
 })

@@ -160,6 +160,23 @@ describe('a table\'s list', () => {
     expect(listFor(withQuery, [calais, copy], order).map((v) => v.key)).toEqual(['bezetting', 'planning', '42', '45', 'dag'])
     expect(listFor(withQuery, [calais, copy], { planning: ['45', '42'] }).map((v) => v.key)).toEqual(['42', 'planning', 'bezetting', 'dag', '45'])
   })
+
+  it('puts a query block first when its first view was served first, and an order still sorts within each block', () => {
+    const served = (id: number, label: string, source: string, extra: Partial<SavedView> = {}): SavedView =>
+      ({ ...calais, key: String(id), id, label, model: source, table: source, ...extra })
+    const planning = served(1, 'Planning', 'dagplanning', { of: 'activiteit', query: true })
+    const matrix = served(2, 'Toewijzingen per activiteit', 'activiteit', { type: 'matrix' })
+    const toewijzingen = served(5, 'Toewijzingen', 'toewijzing')
+    const mijn = served(8, 'Mijn producties', 'mijn_producties', { of: 'toewijzing', query: true })
+    const mine = served(9, 'Mijn week', 'activiteit')
+    const activiteit: Table = { key: 'activiteit', label: 'Activiteiten', space: 'scoped', types: ['grid'], views: [planning, matrix, mine] }
+    const toewijzing: Table = { key: 'toewijzing', label: 'Toewijzingen', space: 'scoped', types: ['grid'], views: [toewijzingen, mijn] }
+    const all = [planning, matrix, toewijzingen, mijn, mine]
+
+    expect(listFor(activiteit, all, {}).map((v) => v.label)).toEqual(['Planning', 'Toewijzingen per activiteit', 'Mijn week'])
+    expect(listFor(toewijzing, all, {}).map((v) => v.label)).toEqual(['Toewijzingen', 'Mijn producties'])
+    expect(listFor(activiteit, all, { activiteit: ['9'] }).map((v) => v.label)).toEqual(['Planning', 'Mijn week', 'Toewijzingen per activiteit'])
+  })
 })
 
 describe('an order', () => {

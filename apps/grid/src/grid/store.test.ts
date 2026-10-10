@@ -93,6 +93,36 @@ describe('apply', () => {
 
     expect(api.update).not.toHaveBeenCalled()
   })
+
+  it('an inherited lookup paints as the row\'s own on override and as inherited on clear, until the reply lands', async () => {
+    const inheriting: Row = { ...calais[0], fields: { ...calais[0].fields, venue: [3] }, lookups: {}, inherited: ['venue'] }
+    const { api, store, row } = setup([inheriting])
+    const own = deferred<Saved>()
+    const cleared = deferred<Saved>()
+    api.update.mockReturnValueOnce(own.promise).mockReturnValueOnce(cleared.promise)
+
+    const overriding = store.apply({ id: 101, field: 'venue', value: [7], inherits: true })
+    expect(row(101).inherited).toEqual([])
+    own.resolve(ok({ ...inheriting, fields: { ...inheriting.fields, venue: [7] }, inherited: [] }))
+    await overriding
+
+    const clearing = store.apply({ id: 101, field: 'venue', value: [], inherits: true })
+    expect(row(101).inherited).toEqual(['venue'])
+    cleared.resolve(ok(inheriting))
+    await clearing
+    expect(row(101).inherited).toEqual(['venue'])
+  })
+
+  it('a refused override of an inherited lookup reads as inherited again', async () => {
+    const inheriting: Row = { ...calais[0], fields: { ...calais[0].fields, venue: [3] }, lookups: {}, inherited: ['venue'] }
+    const { api, store, row } = setup([inheriting])
+    api.update.mockRejectedValueOnce({ code: 'refused', message: 'no' })
+
+    await store.apply({ id: 101, field: 'venue', value: [7], inherits: true })
+
+    expect(row(101).fields.venue).toEqual([3])
+    expect(row(101).inherited).toEqual(['venue'])
+  })
 })
 
 describe('undo and redo, by batch on the server', () => {

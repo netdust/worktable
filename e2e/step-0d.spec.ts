@@ -182,7 +182,7 @@ test('matrix-two-activities-undo', async ({ page }) => {
 test('view-saved-after-reload', async ({ page }) => {
   const name = 'Mijn planning'
   expect((await views(page)).map((v) => v.name)).not.toContain(name)
-  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
+  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
 
   const head = page.locator('thead th', { hasText: 'Soort' })
   const before = (await head.boundingBox())?.width as number
@@ -196,9 +196,9 @@ test('view-saved-after-reload', async ({ page }) => {
   const widened = await head.evaluate((th) => (th as HTMLElement).style.width)
 
   await addCondition(page, 'Productie', 'Nachtwacht')
-  await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+  await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await page.getByRole('button', { name: 'More actions: Planning (kopie)', exact: true }).click()
+  await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
@@ -211,10 +211,10 @@ test('view-saved-after-reload', async ({ page }) => {
 })
 
 test('view-delete-undo', async ({ page }) => {
-  const copy = 'Dagplanning (kopie)'
+  const copy = 'Planning (kopie)'
   expect((await views(page)).map((v) => v.name)).not.toContain(copy)
-  await open(page, 'Dagplanning', page.getByRole('grid', { name: 'Dagplanning' }), 'Activiteiten')
-  await page.getByRole('button', { name: 'More actions: Dagplanning' }).click()
+  await open(page, 'Planning', header(page, 'Omschrijving'), 'Activiteiten')
+  await page.getByRole('button', { name: 'More actions: Planning' }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
   const made = (await views(page)).find((v) => v.name === copy)
@@ -260,7 +260,7 @@ test('person-to-name', async ({ page }) => {
 })
 
 test('datetime-shown', async ({ page }) => {
-  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
+  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
   const start = page.locator('tbody td [data-value="2026-10-14T00:30"]').first()
   await expect(start).toHaveText(/^wo 14\/10 00:30$/)
   await expect(start).not.toContainText('T')
@@ -295,7 +295,7 @@ test('in-filter-applies', async ({ page }) => {
 test('new-without-title', async ({ page }) => {
   const created: string[] = []
   page.on('request', (req) => req.method() === 'POST' && created.push(req.url()))
-  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
+  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
   await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
   await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
   expect(created).toEqual([])
@@ -310,7 +310,7 @@ test('relation-beyond-page', async ({ page }) => {
     if (url.pathname === '/api/rows/productie')
       asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
-  await open(page, 'Planning', header(page, 'Einde'), 'Activiteiten')
+  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
   await page
     .locator('.nv-bar')
     .getByRole('button', { name: /^Filter\s*\d*$/ })

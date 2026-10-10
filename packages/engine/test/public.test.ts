@@ -85,6 +85,13 @@ describe('public route denials (attack 10)', () => {
     expect((await read(fresh)).status).toBe(200)
   })
 
+  test('a public view whose source is not a query is 404', async () => {
+    const id = insertView('per_project', ['name'])
+    const { token } = (await share(id)).body
+    sqlite.run("UPDATE saved_view SET source = 'taak' WHERE id = ?", [id])
+    await denied(read(token), 404, 'unknown_view')
+  })
+
   test('a token cleared by DELETE is 404', async () => {
     const id = insertView('per_project', ['name'])
     const { token } = (await share(id)).body

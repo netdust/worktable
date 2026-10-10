@@ -345,11 +345,11 @@ describe("a query's views under its model", () => {
     v('los', 'Losse query', 'losse', { query: true }),
   ])
 
-  it('lists no query with `of` as a node; its views end the model\'s list in the declared order, each with the query icon', () => {
+  it('lists no query with `of` as a node; its views sit in the model\'s list in the order they were served, each with the query icon', () => {
     render(<Rail tables={tables} active="activiteiten" onSelect={() => undefined} />)
 
     expect(models(tree())).toEqual(['Activiteiten', 'Losse query'])
-    expect(within(views('Activiteiten')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Activiteiten', 'Dagplanning', 'Per productie per dag', 'Voorstellingen'])
+    expect(within(views('Activiteiten')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Voorstellingen', 'Activiteiten', 'Dagplanning', 'Per productie per dag'])
     for (const name of ['Dagplanning', 'Per productie per dag', 'Voorstellingen']) {
       expect(view('Activiteiten', name).querySelector('.lucide-combine')).toBeTruthy()
     }

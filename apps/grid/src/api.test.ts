@@ -364,6 +364,26 @@ describe('writes', () => {
     ])
   })
 
+  it('an inherited lookup is written on the dataset, and the row keeps `inherited` in step with the reply', async () => {
+    const lookup = { type: 'integer' as const, label: 'Locatie', nullable: true, relation: 'productie', via: 'productie_id', field: 'id', own: 'locatie_id', inherited: true as const, from: 'Productie' }
+    const withLookup: EngineSchema = { sources: { ...engine.sources, activiteit: { ...engine.sources.activiteit, lookups: { locatie: lookup } } } as EngineSchema['sources'] }
+    const reply = (locatie: number, inherited: string[]): EngineRow => ({ ...stored, locatie, lookups: {}, ...(inherited.length ? { inherited } : {}), revision: { batch_id: 'b-9', changed: ['locatie_id'] } })
+    const answers = [reply(7, []), reply(3, ['locatie'])]
+    fetcher.mockImplementation(async (input) => (String(input) === '/api/schema' ? json(withLookup) : json(answers.shift())))
+    const row: Row = { id: 7, title: 'opbouw Gent', status: '', fields: { locatie: 3 }, lookups: {}, inherited: ['locatie'] }
+    const store = createStore({ model: 'activiteit', rows: [row], api: { update, create: vi.fn() } })
+
+    await store.apply({ id: 7, field: 'locatie', value: [7] })
+    expect(store.getState().rows[0]?.inherited).toBeUndefined()
+    await store.apply({ id: 7, field: 'locatie', value: [] })
+    expect(store.getState().rows[0]?.inherited).toEqual(['locatie'])
+
+    expect(sent().map(([url, method, body]) => [url, method, body])).toEqual([
+      ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ locatie: 7 })],
+      ['/api/rows/activiteit/7', 'PATCH', JSON.stringify({ locatie: null })],
+    ])
+  })
+
   it('update on dagplanning status sends PATCH /rows/activiteit/<row.activiteit_id> and re-reads the query row', async () => {
     const reread = { id: 40, activiteit_id: 7, omschrijving: 'opbouw Gent', title: 'opbouw Gent', status: 'bevestigd', custom: {}, lookups: {} }
     fetcher.mockImplementation(async (input, init) => {

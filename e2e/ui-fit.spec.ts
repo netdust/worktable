@@ -171,7 +171,7 @@ test('space-switcher-fits @e2e', async ({ page }) => {
 })
 
 test('chips-fit @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   const row = page.locator('tbody tr.nv-tr[data-title="voorstelling Gent"]').first()
   await expect(row).toBeVisible()
 
@@ -219,7 +219,7 @@ const widthsOf = (cell: Locator) =>
 
 test('date-editors-fit @e2e', async ({ page }) => {
   // Bug 6: a date editor is its cell's width while its content fits, and grows by no more than its content needs.
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   const row = page.locator('tbody tr.nv-tr[data-title="voorstelling Gent"]').first()
   await expect(row).toBeVisible()
   const start = await cellOf(page, row, 'Tijd')
@@ -271,7 +271,7 @@ const centres = (row: Locator, parts: string) =>
   }, parts)
 
 test('filter-row-fits @e2e', async ({ page }) => {
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', WEEK)
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   await page
     .locator('.nv-bar')
     .getByRole('button', { name: /^Filter\s*\d*$/ })
@@ -375,4 +375,17 @@ test('drawer-picker-keeps-its-frame @e2e', async ({ page }) => {
   } finally {
     expect((await page.request.delete(`/api/rows/speelreeks/${id}`)).status()).toBe(200)
   }
+})
+
+// The row's open button shows on hover; a rule with #root once kept it at opacity 0 for good.
+test('open-button-shows-on-hover @e2e', async ({ page }) => {
+  await page.goto('/')
+  await openView(page, 'Personen')
+  const row = page.locator('tbody tr.nv-tr').first()
+  const open = row.getByRole('button', { name: 'Openen' })
+  const opacity = () => open.evaluate((el) => Number(getComputedStyle(el).opacity))
+  await page.mouse.move(0, 0)
+  await expect.poll(opacity).toBe(0)
+  await row.hover()
+  await expect.poll(opacity).toBe(1)
 })

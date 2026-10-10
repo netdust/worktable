@@ -159,7 +159,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     const lookup: Lookup | null | undefined = column.kind !== 'relation' ? undefined
       : chosen && Array.isArray(value) && value[0] === chosen.id ? { id: chosen.id, title: chosen.title, status: chosen.status, fields: chosen.fields }
       : Array.isArray(value) && value.length === 0 ? null : undefined
-    void store.apply({ id: row.id, field: column.field, value, lookup })
+    void store.apply({ id: row.id, field: column.field, value, lookup, ...(column.via ? { inherits: true } : {}) })
   }
 
   function run(effect: Effect): void {

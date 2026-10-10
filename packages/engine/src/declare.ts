@@ -37,10 +37,10 @@ export interface ColumnDecl {
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }
-  /** Query columns only: the value is taken over from elsewhere when the row's `flag` column is neither `own` nor empty. */
-  inherited?: { flag: string; own: string }
   /** Served to the row's owner in a view for owners; never on json or on the owner column. */
   owner_visible?: boolean
+  /** The grid never offers or shows it; still stored, imported and written through the API. */
+  hidden?: boolean
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -75,6 +75,15 @@ export interface LinkDecl {
   state?: string
 }
 
+/** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. */
+export interface LookupDecl {
+  label: string
+  via: string
+  field: string
+  own?: string
+  from?: string
+}
+
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
@@ -101,6 +110,7 @@ export interface DatasetDecl {
   /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
   new_label?: string
   links?: Record<string, LinkDecl>
+  lookups?: Record<string, LookupDecl>
   lifecycle?: LifecycleDecl
   /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
   record_link?: { email?: string }
@@ -237,6 +247,7 @@ export function defineDataset(d: Omit<DatasetDecl, 'kind'>): DatasetDecl {
   for (const [name, column] of Object.entries(d.columns)) {
     if (column.relation) assertIdentifier(`relation of ${name}`, column.relation)
   }
+  for (const lookup of Object.keys(d.lookups ?? {})) assertIdentifier('lookup', lookup)
   return { kind: 'dataset', ...d }
 }
 

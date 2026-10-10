@@ -1,5 +1,6 @@
 import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, type SQL, sql } from 'drizzle-orm'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { DatasetDecl, Domain } from './declare'
 import {
   type FilterAST,
   FilterCompileError,
@@ -8,6 +9,7 @@ import {
   type JsonValue,
   type Period,
 } from './filter-compile'
+import { lookupColumn, lookupOf, lookupValue } from './lookups'
 import { ApiError } from './params'
 import type { Source } from './registry'
 
@@ -16,7 +18,13 @@ export const CUSTOM_KEY = /^[A-Za-z0-9_]+$/
 // type is null on a custom key: its type is not declared.
 type Lhs = { expr: SQL | SQLiteColumn; custom: string | null; numeric: boolean; type: string | null }
 
-function resolveKey(key: string, source: Source, table: SQLiteTable): Lhs {
+function resolveLookup(key: string, source: DatasetDecl, domain: Domain | undefined): Lhs {
+  if (!domain) throw new ApiError(400, 'bad_filter', `unknown filter key "${key}"`)
+  const { type } = lookupColumn(domain, source, key)
+  return { expr: lookupValue(source, key), custom: null, numeric: type === 'integer' || type === 'real', type }
+}
+
+function resolveKey(key: string, source: Source, table: SQLiteTable, domain?: Domain): Lhs {
   if (key.startsWith('custom.')) {
     const name = key.slice('custom.'.length)
     if (source.kind !== 'dataset' || !source.custom)
@@ -25,6 +33,7 @@ function resolveKey(key: string, source: Source, table: SQLiteTable): Lhs {
     const column = (table as unknown as Record<string, SQLiteColumn>).custom as SQLiteColumn
     return { expr: sql`json_extract(${column}, ${`$.${name}`})`, custom: `$.${name}`, numeric: false, type: null }
   }
+  if (source.kind === 'dataset' && lookupOf(source, key)) return resolveLookup(key, source, domain)
   const declared = Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
   if (!declared) throw new ApiError(400, 'bad_filter', `unknown filter key "${key}"`)
   const type = key === 'id' ? 'integer' : source.columns[key]?.type
@@ -134,17 +143,23 @@ function comparison(lhs: Lhs, key: string, op: string, value: JsonValue, table: 
   }
 }
 
-function clauseOf(ast: FilterAST, source: Source, table: SQLiteTable, now: Date): SQL | undefined {
+function clauseOf(ast: FilterAST, source: Source, table: SQLiteTable, now: Date, domain?: Domain): SQL | undefined {
   if (ast.kind === 'cmp') {
-    return comparison(resolveKey(ast.key, source, table), ast.key, ast.op, ast.value, table, now)
+    return comparison(resolveKey(ast.key, source, table, domain), ast.key, ast.op, ast.value, table, now)
   }
-  const parts = ast.clauses.map((c) => clauseOf(c, source, table, now)).filter((p): p is SQL => p !== undefined)
+  const parts = ast.clauses.map((c) => clauseOf(c, source, table, now, domain)).filter((p): p is SQL => p !== undefined)
   if (!parts.length) return undefined
   return ast.kind === 'or' ? or(...parts) : and(...parts)
 }
 
-export function compileFilter(ast: FilterAST, source: Source, table: SQLiteTable, now = new Date()): SQL | undefined {
-  return clauseOf(ast, source, table, now)
+export function compileFilter(
+  ast: FilterAST,
+  source: Source,
+  table: SQLiteTable,
+  now = new Date(),
+  domain?: Domain,
+): SQL | undefined {
+  return clauseOf(ast, source, table, now, domain)
 }
 
 /** Every key a filter names, those inside $or included. */
@@ -158,9 +173,15 @@ export function filterKeys(input: FilterInput): string[] {
   }
 }
 
-export function filterWhere(input: FilterInput, source: Source, table: SQLiteTable, now = new Date()): SQL | undefined {
+export function filterWhere(
+  input: FilterInput,
+  source: Source,
+  table: SQLiteTable,
+  now = new Date(),
+  domain?: Domain,
+): SQL | undefined {
   try {
-    return compileFilter(filterCompile(input), source, table, now)
+    return compileFilter(filterCompile(input), source, table, now, domain)
   } catch (e) {
     if (e instanceof FilterCompileError) throw new ApiError(400, 'bad_filter', e.message)
     throw e

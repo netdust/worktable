@@ -170,15 +170,13 @@ describe('sjabloon_toepassen', () => {
     })
   })
 
-  test('every one inherits the venue in Dagplanning', async () => {
+  test('every one inherits the venue through its tourstop', async () => {
     const id = await reeks()
     await apply(id)
-    const bron = sqlite
-      .query(
-        'SELECT d.locatie_id, d.locatie_bron FROM dagplanning d JOIN activiteit a ON a.id = d.id WHERE a.speelreeks_id = ?',
-      )
-      .all(id)
-    expect(bron).toEqual(Array(28).fill({ locatie_id: 3, locatie_bron: 'speelreeks' }))
+    const filter = encodeURIComponent(JSON.stringify({ speelreeks_id: id }))
+    const res = await editor('GET', `/api/rows/activiteit?filter=${filter}&limit=500`)
+    const venues = (res.body.rows as { locatie: number; inherited?: string[] }[]).map((r) => [r.locatie, r.inherited])
+    expect(venues).toEqual(Array(28).fill([3, ['locatie']]))
   })
 
   test('one batch for all 28 and the 8 open slots, and the reply names them', async () => {

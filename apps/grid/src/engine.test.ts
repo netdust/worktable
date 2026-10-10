@@ -51,7 +51,7 @@ const views: EngineView[] = [
   },
 ]
 
-describe('toSchema: space, sections, facts and inherited', () => {
+describe('toSchema: space, sections and facts', () => {
   const declared: EngineSchema = {
     sources: {
       season: { kind: 'dataset', label: 'Seizoenen', title: 'name', date: null, space: 'global', columns: { name: { type: 'text', label: 'Naam' } } },
@@ -62,8 +62,7 @@ describe('toSchema: space, sections, facts and inherited', () => {
           name: { type: 'text', label: 'Naam' },
           day: { type: 'date', label: 'Dag' },
           season_id: { type: 'integer', label: 'Seizoen', relation: 'season' },
-          room: { type: 'text', label: 'Zaal', inherited: { flag: 'room_from', own: 'self' } },
-          room_from: { type: 'text', label: 'Zaal van', options: { self: 'Eigen', block: 'Blok' } },
+          room: { type: 'text', label: 'Zaal' },
         },
       },
     },
@@ -71,7 +70,7 @@ describe('toSchema: space, sections, facts and inherited', () => {
     sections: [{ label: 'Werk', sources: ['session'] }],
   }
 
-  it('maps the space, the sections, each table\'s space and facts, and a column\'s inherited', () => {
+  it('maps the space, the sections, each table\'s space and facts', () => {
     const schema = toSchema(declared)
 
     expect(schema.space).toEqual({ model: 'season', field: 'season_id' })
@@ -80,8 +79,6 @@ describe('toSchema: space, sections, facts and inherited', () => {
       ['season', 'global', undefined],
       ['session', 'scoped', declared.sources.session.group_facts],
     ])
-    expect(schema.models.session.fields.room.inherited).toEqual({ flag: 'room_from', own: 'self' })
-    expect(schema.models.session.fields.room_from.inherited).toBeUndefined()
   })
 
   it('carries the table\'s space and facts onto its saved views', () => {
@@ -104,7 +101,6 @@ describe('toSchema: space, sections, facts and inherited', () => {
     expect('space' in schema).toBe(false)
     expect('sections' in schema).toBe(false)
     expect(schema.tables.some((t) => 'space' in t || 'facts' in t)).toBe(false)
-    expect(Object.values(schema.models).flatMap((m) => Object.values(m.fields)).some((f) => 'inherited' in f)).toBe(false)
   })
 })
 
@@ -177,7 +173,7 @@ describe('toSchema', () => {
 })
 
 describe('writes', () => {
-  /** The theatre's writable shapes: activiteit has a writer, dagplanning maps status to it, productie has none. */
+  /** The writable shapes: activiteit has a writer, a query maps status to it, productie has none. */
   const writes: EngineSchema = {
     sources: {
       productie: { ...engine.sources.productie, writable: false },
@@ -310,6 +306,25 @@ describe('toSavedViews', () => {
 
   it('leaves out a view whose source is not served', () => {
     expect(toSavedViews([{ ...views[0], source: 'gone' }], engine.sources)).toEqual([])
+  })
+})
+
+describe('a hidden column', () => {
+  const hidden = { ...engine.sources.activiteit, columns: { ...engine.sources.activiteit.columns, plaats: { type: 'text' as const, label: 'Plaats', nullable: true, hidden: true as const } } }
+  const planning = { ...views[0], visible_fields: ['start_at', 'plaats', 'omschrijving', 'soort', 'status'] }
+
+  it('is left out of the model\'s fields, so no picker, default, filter, sort or group offers it', () => {
+    const model = toSchema({ sources: { ...engine.sources, activiteit: hidden } }).models.activiteit
+    expect(Object.keys(model.fields)).not.toContain('plaats')
+    expect(Object.keys(model.fields)).toContain('soort')
+    expect(columnsFor(model, { key: 'a', label: 'a', table: 'activiteit', model: 'activiteit' }, true).map((c) => c.id)).not.toContain('plaats')
+  })
+
+  it('round-trips a view that names it: the other fields keep their place and it is not written back', () => {
+    const { arrangement, fixed } = fromStoredView(planning, hidden)
+    expect(arrangement.order).toEqual(['start_at', 'title', 'soort', 'status'])
+    expect(arrangement.hidden).not.toContain('plaats')
+    expect(toStoredView(arrangement, fixed, hidden).visible_fields).toEqual(['start_at', 'omschrijving', 'soort', 'status'])
   })
 })
 
@@ -615,5 +630,54 @@ describe('links', () => {
     expect(toStoredView(arrangement, fixed, dag).visible_fields).toEqual(['omschrijving', 'locatie_id', 'mensen', 'status'])
     const hidden = { ...arrangement, hidden: [...arrangement.hidden, 'mensen'] }
     expect(toStoredView(hidden, fixed, dag).visible_fields).toEqual(['omschrijving', 'locatie_id', 'status'])
+  })
+})
+
+describe('lookups', () => {
+  const LOCATIE = { type: 'integer' as const, label: 'Locatie', nullable: true, relation: 'organisatie', inherited: true as const, from: 'Tourstop' }
+  const act = {
+    kind: 'dataset' as const, label: 'Activiteiten', title: 'omschrijving', date: 'plandag',
+    columns: {
+      omschrijving: { type: 'text' as const, label: 'Omschrijving' },
+      start_at: { type: 'datetime' as const, label: 'Start' },
+      status: { type: 'text' as const, label: 'Status' },
+    },
+    lookups: {
+      locatie: LOCATIE,
+      plaats: { type: 'text' as const, label: 'Plaats', nullable: true, readonly: true as const },
+    },
+  }
+  const stored = {
+    id: 9, name: 'Activiteiten', source_type: 'dataset' as const, source: 'activiteit', skin: 'table' as const,
+    filters: {}, sort: [], group_by: null, visible_fields: ['omschrijving', 'start_at', 'locatie', 'status'],
+    shared: true, owner_id: -1, mine: false, editable: false,
+  }
+
+  it('toSchema maps a served lookup to a field', () => {
+    const { models } = toSchema({ sources: { x: act } } as unknown as EngineSchema)
+    const locatie = models.x?.fields.locatie
+    expect(locatie).toMatchObject({ type: 'relation', label: 'Locatie', via: 'Tourstop', relation: { model: 'organisatie', multiple: false } })
+    expect(locatie?.readonly).toBeUndefined()
+    expect(models.x?.fields.plaats).toMatchObject({ type: 'text', readonly: true })
+  })
+
+  it('toRow keeps inherited off the fields', () => {
+    const row = toRow({ id: 1, omschrijving: 'x', title: 'x', custom: {}, lookups: {}, locatie: 4, inherited: ['locatie'] })
+    expect(row.fields.inherited).toBeUndefined()
+    expect(row.fields.locatie).toBe(4)
+    expect(row.inherited).toEqual(['locatie'])
+  })
+
+  it('a stored view keeps a lookup in place', () => {
+    const { arrangement, fixed } = fromStoredView(stored, act)
+    expect(arrangement.order).toEqual(['title', 'start_at', 'locatie', 'status'])
+    expect(toStoredView(arrangement, fixed, act).visible_fields).toEqual(['omschrijving', 'start_at', 'locatie', 'status'])
+    const hidden = { ...arrangement, hidden: [...arrangement.hidden, 'locatie'] }
+    expect(toStoredView(hidden, fixed, act).visible_fields).toEqual(['omschrijving', 'start_at', 'status'])
+  })
+
+  it('kindOf types a relation lookup as a choice', () => {
+    const { arrangement } = fromStoredView({ ...stored, filters: { locatie: 7 } }, act)
+    expect(arrangement.filters).toEqual([{ field: 'locatie', op: 'in', values: ['7'] }])
   })
 })

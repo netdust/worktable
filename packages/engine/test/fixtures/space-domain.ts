@@ -1,6 +1,6 @@
 import { type Domain, defineDataset, defineQuery } from '../../src'
 
-// A domain declaring a space, sections, group facts and an inherited column, in generic words.
+// A domain declaring a space, sections and group facts, in generic words.
 const team = defineDataset({
   name: 'team',
   label: 'Teams',
@@ -66,7 +66,6 @@ const jobRoom = defineQuery({
       label: 'Room',
       relation: 'room',
       readonly: true,
-      inherited: { flag: 'room_from', own: 'own' },
     },
     room_from: { type: 'text', label: 'Room from', options: { own: 'Own', team: 'Team' } },
   },

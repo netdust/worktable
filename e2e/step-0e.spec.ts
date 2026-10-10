@@ -94,26 +94,26 @@ test.describe('as the owner', () => {
 
     // Another person's row by id, and a view on a dataset the owner cannot read, show nothing.
     expect((await page.request.get(`/api/revisions/toewijzing/${other?.id}`)).status()).toBe(404)
-    const planning = (await views(editor)).find((v) => v.name === 'Planning')
+    const planning = (await views(editor)).find((v) => v.name === 'Bevestigd')
     await land(page, `/#view=${planning?.id}`)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Planning')
+    await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Bevestigd')
     const nav = page.getByRole('navigation', { name: 'Views' })
     await expect(nav.getByRole('treeitem', { name: 'Activiteiten', exact: true })).toHaveCount(0)
-    await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toHaveCount(0)
+    await expect(nav.getByRole('button', { name: 'Bevestigd', exact: true })).toHaveCount(0)
     await editor.dispose()
   })
 })
 
 test('seeded-view-read-only', async ({ page }) => {
   const name = 'Planning Nachtwacht'
-  const seeded = (await views(page.request)).find((v) => v.name === 'Planning')
+  const seeded = (await views(page.request)).find((v) => v.name === 'Bevestigd')
   expect(seeded?.editable).toBe(false)
   const patched = await page.request.patch(`/api/views/${seeded?.id}`, { data: { name: 'Mijn planning' } })
   expect(patched.status()).toBe(403)
 
   await page.goto('/')
-  await pick(page, 'Planning', 'Activiteiten')
+  await pick(page, 'Bevestigd', 'Activiteiten')
   await addCondition(page, 'Productie', 'Nachtwacht')
   const toolbar = page.locator('.nv-toolbar')
   // The seeded view keeps the change in this browser: no save word, nothing sent.
@@ -121,9 +121,9 @@ test('seeded-view-read-only', async ({ page }) => {
   expect((await views(page.request)).find((v) => v.id === seeded?.id)?.filters).toEqual(seeded?.filters)
 
   // Kopie maken in the rail takes the change along; the copy is one's own.
-  await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+  await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await page.getByRole('button', { name: 'More actions: Planning (kopie)', exact: true }).click()
+  await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
@@ -167,7 +167,7 @@ test('public-view-by-token', async () => {
 
 test('session-less-401', async ({ page, context }) => {
   await page.goto('/')
-  await pick(page, 'Planning', 'Activiteiten')
+  await pick(page, 'Bevestigd', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
 
   await context.clearCookies()
@@ -420,7 +420,7 @@ test.describe('undo restores what the writer changed with the edit', () => {
   })
 })
 
-test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
+test('undo-time-on-untimed-in-planning', async ({ page }) => {
   await page.goto('/')
   const productie = (
     (await (await page.request.get('/api/rows/productie?limit=50')).json()) as { rows: { id: number }[] }
@@ -435,7 +435,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
     return ((await found.json()) as { rows: { datum: string }[] }).rows[0].datum
   }
 
-  await openWeek(page, 'Dagplanning', 'Activiteiten', 'plandag', '2026-10-12')
+  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
   const row = () => named(page, 'dagplanning undo e2e')
   await expect(row()).toBeVisible()
   const moved = patchOf(page, 'activiteit')
@@ -450,7 +450,7 @@ test('undo-time-on-untimed-in-dagplanning', async ({ page }) => {
   await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
 
   await page.reload()
-  await pick(page, 'Dagplanning', 'Activiteiten')
+  await pick(page, 'Planning', 'Activiteiten')
   await expect(await cellOf(page, row(), 'Tijd')).toHaveText('zonder tijd')
   expect(await datumOf()).toBe('2026-10-13')
 })

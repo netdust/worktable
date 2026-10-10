@@ -1,0 +1,52 @@
+# Shake-out: virtual-columns (step 2b, lookup columns on datasets)
+
+Driven 2026-10-10 on `feature/virtual-columns` at 681e19f (the reviewed and fixed code, with Task 7's hidden
+columns), in the worktree `worktable-vc`, through the repo's own Playwright harness (`playwright.config.ts`).
+The harness starts a fresh invented theatre engine at 127.0.0.1:4311 with its grid at 127.0.0.1:5174, and the
+fiche pair at 4312/5175. It signs in its invented accounts through the magic-link form: editor
+`planner@e2e.test` for every flow, owner `lotte@e2e.test` for the denied-actor edge. Every flow ran in a real
+Chromium. The theatre seed has no tourstop with activities, so each flow makes its own on the API, as the
+planner would from a Tourstop's drawer: a tourstop of Nachtwacht at Theater Het Anker, in an empty week of
+2028 (one week per flow), with invented activities and Toewijzingen. Each flow deletes what it made again,
+whatever happens. Each screenshot is the viewport, written by `e2e/shots.ts`. The width is 1920 or 2560 so the
+Tourstop, Locatie and Mensen columns sit in one frame.
+
+Sweep, at 681e19f with the new specs:
+- First full `bun run gate`: check green, `bun test packages scripts` 1581 pass, grid vitest 1007 pass, Playwright 181/182. The one failure was row 3's flow, which hung on a seeded organisation that `step-0c` deletes earlier in the suite (fixed in the test, see row 3).
+- Second full Playwright run: 181/182, with all three step-2b flows green. The one failure was `step-1.spec.ts` › `undo-changed-since`, which hit the 30 s timeout waiting for the Tijd column under load. Re-run alone it passed (14.7 s; the file 14/14). It does not touch this feature's files and passed in the first run.
+- Every registered test passed in at least one of the two runs, so every CHECKS row's `verified` is bumped to 681e19f.
+
+Flows: the plan's Test map, E2E flows column, in its order, plus Task 7's picker flow (Stefan, after review).
+1. "new view offers Locatie and Mensen", with Task 7: Tourstop offered, no "Eigen locatie", no "Plaats"
+2. "override and clear the venue"
+3. "filter, sort, group on Locatie"
+4. "no Dagplanning; Overzichten"
+
+The new flows are in `e2e/step-2b.spec.ts` (`@e2e`). The read-only checks are in
+`e2e/smoke/virtual-columns.spec.ts` (`@smoke`). Flow 4 is the registered row "Rail tree · no Dagplanning,
+Overzichten" (`e2e/rail-tree.spec.ts`). It was re-driven, not duplicated. Its only change is that it scrolls the
+Overzichten group into view before its screenshot.
+
+| # | Flow | Layer | Verdict | Evidence |
+|---|---|---|---|---|
+| 1 | new-view-offers-locatie-and-mensen (Done when 1; Task 7): the test makes a tourstop "Tourstop e2e kolomkiezer" at Theater Het Anker (2028-05-01) and two activities. "kolomkiezer via tourstop" sits under the tourstop with Noor Claes on it; "kolomkiezer zonder tourstop" has no tourstop. Rail › Activiteiten › Weergave toevoegen › Grid, name "Nieuw e2e Locatie en Mensen", Alleen ik → POST /api/views 201. The view lands on that week. Kolommen opens the picker, which offers Omschrijving … Tourstop … Legacy post, Locatie, Mensen. All three are ticked. Neither "Eigen locatie" nor "Plaats" is offered. The header shows Tourstop, Locatie and Mensen and neither hidden column. The row under the tourstop reads Tourstop "Tourstop e2e kolomkiezer", Locatie greyed "Theater Het Anker" + "via tourstop", Mensen "Noor Claes". Empty edge: the row with no tourstop has an empty Locatie (no "via" tag) and an empty Mensen. Denied actor: the owner session's GET /api/rows/activiteit → 404 `unknown_source`, and its /api/schema lists no activiteit, so no lookup value reaches an owner (threat 1). | browser | pass | Browser: http://127.0.0.1:5174/#view=15 · shakeout/picker.png (the Kolommen picker); the sheet with Tourstop, Locatie and Mensen: shakeout/new-view-columns.png. Test: `e2e/step-2b.spec.ts` › `new-view-offers-locatie-and-mensen @e2e` |
+| 2 | override-and-clear-venue (Done when 2): the test makes a tourstop "Tourstop e2e overschrijven" at Theater Het Anker (2028-05-08), then "Repetitie e2e eigen zaal" (Mon, Noor Claes) and its sibling "Repetitie e2e zuster" (Tue, Sam Peeters) under it. Planning on that week: the header has Tourstop before Locatie, then Mensen, and no Eigen locatie or Plaats. Both rows show greyed italic "Theater Het Anker" + "via tourstop". Mid-flow failure edge: the PATCH is aborted (connection reset) while picking Repetitiekot De Loods. The cell goes back to the inherited venue, the title line says "Niet opgeslagen", and the server holds `locatie_id` null. Override: Locatie cell → Enter → "Loods" → Repetitiekot De Loods → PATCH 200. The cell shows "Repetitiekot De Loods" solid (font-style normal, no tag). The sibling row still shows Anker "via tourstop". On the API: the activity's `locatie_id` = De Loods, the sibling's is null, and the speelreeks's `locatie_id` is still Theater Het Anker. Re-entry: after a reload the cell stays solid and the sibling stays inherited. Clear: Delete → PATCH 200. The cell shows "via tourstop" again and the server holds null; the tourstop is unchanged. One Ctrl+Z → POST /api/batches/…/undo 200, and the override is back (solid De Loods on screen and on the server), with the sibling and tourstop untouched. Boundary (wire): a PATCH naming both `locatie` and `locatie_id` → 400 `bad_value`, and nothing is written. | browser | pass | Browser: http://127.0.0.1:5174/#view=1 · shakeout/venue-overridden.png (overridden solid beside the sibling's "via tourstop"); before the override: shakeout/planning-inherited.png. Test: `e2e/step-2b.spec.ts` › `override-and-clear-venue @e2e` |
+| 3 | filter-sort-group-on-locatie (Done when 3): the test makes a tourstop "Tourstop e2e zoeken" at Theater Het Anker (2028-05-15) and four activities. "zoek anker via tourstop" inherits from the tourstop. "zoek loods eigen" sits under the tourstop with its own venue, De Loods. "zoek spiegel zonder tourstop" has its own Zaal De Spiegel. "zoek zonder locatie" has no venue. The flow runs on its own view "Eigen e2e Locatie zoeken" on that week (4 rows). Filter: the builder's Veld list offers Locatie, so the flow adds Locatie is Theater Het Anker. The chip reads "Locatie is Theater Het Anker", and only the inherited row is left; the own De Loods in the same tourstop is excluded. Wiping the chip brings back 4 rows. Sort: clicking the Locatie header once orders the rows zonder locatie, loods, anker, spiegel (empty first). A second click orders them spiegel, anker, loods, zonder locatie. Group: Groep → Locatie gives 4 bands: Repetitiekot De Loods, Theater Het Anker, Zaal De Spiegel, Geen waarde. Re-entry: the own view saved `group_by: locatie`, `sort: ["-locatie"]` on the server, and after a reload "Groep: locatie" is still on. Empty edge: the flow makes its own organisation "Zaal e2e zonder activiteit", and Locatie is that venue → 0 rows. The first full run used the seeded Lichtwerk Verhuur, which `step-0c` deletes earlier in the suite, so the option was missing and the flow hung; the flow no longer depends on suite order. | browser | pass | Browser: http://127.0.0.1:5174/#view=16 · shakeout/locatie-grouped.png (grouped by Locatie, sorted descending); the filter: shakeout/locatie-filtered.png. Test: `e2e/step-2b.spec.ts` › `filter-sort-group-on-locatie @e2e` |
+| 4 | dagplanning-is-gone (Done when 4; registered row, re-driven): the landing view is Planning, first under Activiteiten. The Activiteiten node holds no Voorstellingen and no "Per productie per dag". The rail has no "Dagplanning" anywhere, no Planning model, and GET /api/rows/dagplanning → 404. The group "Overzichten" holds Per productie per dag (productie_dag), Voorstellingen (voorstellingen) and Mijn producties (mijn_producties). Denied actor: `owner-has-no-dagplanning` (`e2e/dagplanning.spec.ts`) ran green in the same sweep. | browser | pass | Browser: http://127.0.0.1:5174/ · shakeout/dagplanning-is-gone.png (Planning under Activiteiten, the Overzichten group with its three queries). Test: `e2e/rail-tree.spec.ts` › `dagplanning-is-gone @e2e` |
+
+Edges not driven, with the reason:
+- Concurrent edge on flow 2: an override carries no `expect`, as any plain column, so two tabs writing it is last-write-wins by design (spec: no write-through, no transition on `locatie_id`). There is no guard to race.
+- A deleted tourstop reading null, and `--seed-missing` moving Planning onto activiteit: these are covered by engine and theatre integration (`lookups.test.ts`, `seed-missing.test.ts`). The browser cannot reach them without deleting seed data the other specs share.
+
+Bite check: which test goes red when a dangerous path breaks.
+- The inherited read (own value, else the tourstop's): rows 1–3 (the greyed cell; the filter that matches the inherited row and not the own one in the same tourstop).
+- The rename of an inherited write onto `own` (threat 3): row 2. The server's `locatie_id` is asserted after override, clear and undo, and the tourstop's venue is asserted unchanged each time.
+- The optimistic paint and its rollback (dd02c50): row 2's aborted PATCH.
+- Both keys in one write → 400: row 2 (wire).
+- Hidden columns (cf5b4a5): rows 1 and 2 (picker and header).
+- Owner reads no lookup (threat 1): row 1's owner edge.
+- The lookup in a saved view (sort, group_by by name): row 3's server poll after the reload.
+
+Observations found while driving, outside the four flows (pre-existing, not in this diff):
+- Band labels scroll away horizontally. A grouped grid scrolled sideways loses every band's label, though `.nv-group__in` is `position: sticky; left: 0` (`apps/grid/src/ui/app.css:2155`, from de4c193). Flow 3 meets it at 1280 px: clicking the Locatie header (far right on a new view) scrolls the grid, and the four bands show only "Legacy post 0" on the right. Reproduced cold on the seeded view: sign in as the editor, open Activiteiten › Bevestigd (Groep: plandag), set the viewport to 700×700, and scroll `.nv-scroll` fully right. Live DOM: the label "Maandag 12 oktober" moves from left 301 (scrollLeft 0) to left −262 while `.nv-scroll` starts at 1 (scrollLeft 295). Evidence: shakeout/band-label-scrolled-away.png. It needs a defect row and a fix pass if Stefan wants it fixed.
+- Legacy post is summed. On a new Activiteiten view, grouped, each band and the foot sum the integer column Legacy post ("Legacy post 0"), which is an id, not a quantity. Cosmetic.
