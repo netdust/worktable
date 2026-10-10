@@ -134,7 +134,7 @@ export function readRows(
   const table = tableOf(source)
   const where = whereOf(domain, source, table, params, scope)
   const raws = db
-    .select({ ...getTableColumns(table), ...lookupSelect(source) })
+    .select({ ...getTableColumns(table), ...(scope === 'all' ? lookupSelect(source) : {}) })
     .from(table)
     .where(where)
     .orderBy(...orderOf(source, table, params))

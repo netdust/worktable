@@ -11,6 +11,7 @@ import {
   seedDomain,
   validateDomain,
 } from '../src'
+import { createService } from '../src/auth'
 import type { LookupDecl } from '../src/declare'
 import { parseRowsParams } from '../src/params'
 import { readRows, withLookups } from '../src/rows'
@@ -18,6 +19,8 @@ import { viewOf } from '../src/views'
 import { send } from './fixture'
 import domain from './fixtures/lookup-domain'
 import { signIn, testEngine } from './sign-in'
+
+const JSON_WRITE = { host: '127.0.0.1:4310', 'content-type': 'application/json' }
 
 type Row = Record<string, unknown> & { id: number; inherited?: string[]; lookups: Record<string, unknown> }
 
@@ -59,12 +62,7 @@ describe('reading lookups', () => {
     expect(inheriting.team).toBe(1)
     expect(inheriting.inherited).toContain('team')
     expect((inheriting.lookups.team as { title: string }).title).toBe('One')
-    expect(inheriting.stage).toBe('open')
-    expect(inheriting.inherited).toContain('stage')
-    const ownPhase = byId(rows, 3)
-    expect(ownPhase.stage).toBe('done')
-    expect(ownPhase.inherited).toEqual(['team'])
-    expect(Object.keys(ownPhase).some((key) => key.startsWith('inherited:'))).toBe(false)
+    expect(Object.keys(inheriting).some((key) => key.startsWith('inherited:'))).toBe(false)
   })
 
   test('a self-relation reads the parent', async () => {
@@ -88,8 +86,6 @@ describe('reading lookups', () => {
     const team = body.sources.line.lookups.team
     expect(team).toMatchObject({ type: 'integer', relation: 'team', inherited: true, from: 'Item', label: 'Team' })
     expect(team).not.toHaveProperty('readonly')
-    expect(body.sources.line.lookups.stage).toMatchObject({ options: { open: 'Open', done: 'Done' } })
-    expect(body.sources.line.lookups.stage).not.toHaveProperty('default')
     const teamName = body.sources.item.lookups.team_name
     expect(teamName).toMatchObject({ type: 'text', readonly: true, label: 'Team name', nullable: true })
     expect(teamName).not.toHaveProperty('default')
@@ -101,7 +97,7 @@ describe('reading lookups', () => {
     const { status, body } = await editor('PATCH', '/api/rows/line/1', { body: JSON.stringify({ name: 'x' }) })
     expect(status).toBe(200)
     expect(body.team).toBe(2)
-    expect(body.inherited).toEqual(['stage'])
+    expect(body.inherited).toEqual([])
   })
 
   test('a raw without lookup keys gets none', () => {
@@ -167,10 +163,40 @@ describe('validateDomain refuses a lookups declaration', () => {
   })
 
   test('an own of another type or another relation', () => {
-    const team = { label: 'Team', via: 'item_id', field: 'team_id' }
+    const team = { label: 'Team', via: 'item_id', field: 'team_id', from: 'Item' }
     expect(bad(changed('line', { lookups: { team: { ...team, own: 'name' } } }))).toBe('name')
     expect(bad(changed('line', { lookups: { team: { ...team, own: 'item_id' } } }))).toBe('item_id')
     expect(bad(changed('line', { lookups: { team: { ...team, own: 'nope' } } }))).toBe('nope')
+  })
+
+  const teamOwn = { label: 'Team', via: 'item_id', field: 'team_id', own: 'team_id', from: 'Item' }
+  const lineColumns = (over: Record<string, ColumnDecl>) => ({ ...datasetOf('line').columns, ...over })
+
+  test('an own that is the lifecycle column', () => {
+    const stage = { label: 'Stage', via: 'item_id', field: 'phase', own: 'phase', from: 'Item' }
+    expect(bad(changed('line', { lookups: { team: teamOwn, stage } }))).toBe('phase')
+  })
+
+  test('an own that is readonly or not nullable', () => {
+    const own = datasetOf('line').columns.team_id as ColumnDecl
+    expect(bad(changed('line', { columns: lineColumns({ team_id: { ...own, readonly: true } }) }))).toBe('team_id')
+    expect(bad(changed('line', { columns: lineColumns({ team_id: { ...own, nullable: false } }) }))).toBe('team_id')
+  })
+
+  test('an own that is the record link address', () => {
+    const contact: ColumnDecl = { type: 'text', label: 'Contact', nullable: true }
+    const lookups = { contact_name: { label: 'Contact', via: 'item_id', field: 'name', own: 'contact', from: 'Item' } }
+    const d = changed('line', { columns: lineColumns({ contact }), lookups, record_link: { email: 'contact' } })
+    expect(() => validateDomain(d)).toThrow(DomainError)
+  })
+
+  test('two lookups sharing one own', () => {
+    expect(bad(changed('line', { lookups: { team: teamOwn, team2: { ...teamOwn, label: 'Team 2' } } }))).toBe('team2')
+  })
+
+  test('an own without from', () => {
+    const { from: _, ...noFrom } = teamOwn
+    expect(bad(changed('line', { lookups: { team: noFrom } }))).toBe('team')
   })
 
   test('a lookup named like a column or a link', () => {
@@ -257,19 +283,19 @@ describe('a lookup behaves like a column in a view', () => {
   })
 
   test('visible_fields longer than the source has fields is refused', async () => {
-    const fields = ['name', 'item_id', 'team_id', 'phase', 'team', 'stage', 'id', 'name2', 'x']
+    const fields = ['name', 'item_id', 'team_id', 'phase', 'team', 'id', 'name2', 'x']
     const res = await editor('POST', '/api/views', {
       body: JSON.stringify({ name: 'Long', source: 'line', visible_fields: fields }),
     })
-    expect([res.status, res.body.message]).toEqual([400, 'visible_fields takes at most 7 keys'])
-    const six = await editor('POST', '/api/views', {
+    expect([res.status, res.body.message]).toEqual([400, 'visible_fields takes at most 6 keys'])
+    const five = await editor('POST', '/api/views', {
       body: JSON.stringify({
-        name: 'Six',
+        name: 'Five',
         source: 'line',
-        visible_fields: ['name', 'item_id', 'team_id', 'phase', 'team', 'stage'],
+        visible_fields: ['name', 'item_id', 'team_id', 'phase', 'team'],
       }),
     })
-    expect(six.status).toBe(201)
+    expect(five.status).toBe(201)
   })
 
   test('an unknown key stays 400', async () => {
@@ -311,8 +337,10 @@ describe('writing through a lookup', () => {
     expect([missing.status, missing.body.code]).toEqual([400, 'bad_relation'])
   })
 
-  test('a transition on own is checked', async () => {
-    expect((await patch(3, { stage: 'open' })).status).toBe(422)
+  test('a renamed write still meets the transition check on its other columns', async () => {
+    const res = await patch(3, { team: 2, phase: 'open' })
+    expect(res.status).toBe(422)
+    expect(byId(await rowsOf('line'), 3).team).toBe(1)
   })
 
   test('the related row is untouched', async () => {
@@ -325,6 +353,27 @@ describe('writing through a lookup', () => {
     const res = await patch(2, { team: 2, team_id: 2 })
     expect([res.status, res.body.code]).toEqual([400, 'bad_value'])
     expect(res.body.message).toBe('"team" and "team_id" name one value')
+    expect(byId(await rowsOf('line'), 2).team).toBe(1)
+  })
+
+  test('a service write through a lookup is judged by the expect rule on the columns it lands on', async () => {
+    const token = createService(sqlite, 'bot', 'editor')
+    const service = (body: unknown) =>
+      testEngine(sqlite, domain).request('/api/rows/line/2', {
+        method: 'PATCH',
+        headers: { ...JSON_WRITE, authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      })
+    const refused = await service({ team: 2, phase: 'done' })
+    expect([refused.status, ((await refused.json()) as { code: string }).code]).toEqual([400, 'bad_body'])
+    expect(byId(await rowsOf('line'), 2).team).toBe(1)
+    expect((await service({ team: 2 })).status).toBe(200)
+  })
+
+  test('a __proto__ key in a write body changes nothing', async () => {
+    const res = await editor('PATCH', '/api/rows/line/2', { body: '{"__proto__":{"team_id":2,"phase":"done"}}' })
+    expect(res.status).toBe(200)
+    expect(res.body.revision.changed).toEqual([])
     expect(byId(await rowsOf('line'), 2).team).toBe(1)
   })
 

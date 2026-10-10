@@ -9,7 +9,7 @@ import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
-import { lookupColumn } from './lookups'
+import { lookupColumn, targetOf } from './lookups'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
 import { openApiOf } from './openapi'
 import { ownerViewGuard, ownerViewRoutes } from './owner-views'
@@ -40,8 +40,8 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
-  const reply = (dataset: DatasetDecl, { id, batch_id, changed, notices }: Written) => ({
-    ...rowOf(store, dataset, id),
+  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, notices }: Written) => ({
+    ...rowOf(store, dataset, id, scopeOf(actor, dataset)),
     revision: { batch_id, changed },
     notices,
   })
@@ -49,7 +49,7 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   app.post('/rows/:dataset', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'create', c.get('actor'))
     const written = runWrite(store, target, 'create', null, await bodyOf(c), c.get('actor'))
-    return c.json(reply(target.dataset, written), 201)
+    return c.json(reply(target.dataset, c.get('actor'), written), 201)
   })
 
   app.patch('/rows/:dataset/:id', async (c) => {
@@ -58,7 +58,7 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     const { expect, ...body } = await bodyOf(c)
     const opts = { expect: expect as Record<string, unknown> | undefined }
     const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, c.get('actor'), opts)
-    return c.json(reply(target.dataset, written))
+    return c.json(reply(target.dataset, c.get('actor'), written))
   })
 
   app.delete('/rows/:dataset/:id', (c) => {
@@ -142,11 +142,16 @@ function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Re
 
 type ServedLookup = ColumnDecl & { inherited?: true; from?: string }
 
-function servedLookups(domain: Domain, source: Source): { lookups?: Record<string, ServedLookup> } {
+// A lookup is served only to a reader of the dataset it reads through, as a link is.
+function servedLookups(domain: Domain, source: Source, actor: Actor): { lookups?: Record<string, ServedLookup> } {
   if (source.kind !== 'dataset' || !source.lookups) return {}
-  const served = Object.entries(source.lookups).map(([name, { own, from }]): [string, ServedLookup] => {
+  const served = Object.entries(source.lookups).flatMap(([name, lookup]): [string, ServedLookup][] => {
+    const target = sourceOf(domain, targetOf(source, lookup))
+    if (!target || !readable(actor, target)) return []
     const column: ColumnDecl = lookupColumn(domain, source, name)
-    return [name, { ...column, ...(own ? { inherited: true } : {}), ...(from ? { from } : {}) }]
+    return [
+      [name, { ...column, ...(lookup.own ? { inherited: true } : {}), ...(lookup.from ? { from: lookup.from } : {}) }],
+    ]
   })
   return served.length ? { lookups: Object.fromEntries(served) } : {}
 }
@@ -234,7 +239,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...createsOf(domain, s, actor),
             ...ofOf(domain, s, actor),
             ...servedLinks(domain, s, actor),
-            ...servedLookups(domain, s),
+            ...servedLookups(domain, s, actor),
             ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
               ? { new_label: s.new_label }
               : {}),

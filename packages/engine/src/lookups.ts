@@ -70,15 +70,14 @@ type Values = Record<string, unknown>
 
 /** A write names an inherited lookup by its own column; a plain lookup has nothing to write. */
 export function ownBody(dataset: DatasetDecl, body: Values): Values {
-  const out: Values = {}
-  for (const [key, value] of Object.entries(body)) {
-    const lookup = lookupOf(dataset, key)
-    if (!lookup) out[key] = value
-    else if (lookup.own) {
+  return Object.fromEntries(
+    Object.entries(body).flatMap(([key, value]) => {
+      const lookup = lookupOf(dataset, key)
+      if (!lookup) return [[key, value]]
+      if (!lookup.own) return []
       if (Object.hasOwn(body, lookup.own))
         throw new ApiError(400, 'bad_value', `"${key}" and "${lookup.own}" name one value`)
-      out[lookup.own] = value
-    }
-  }
-  return out
+      return [[lookup.own, value]]
+    }),
+  )
 }

@@ -172,6 +172,7 @@ const LOOKUP_RESERVED = new Set([
 
 // One hop through a live relation; a boolean field is refused because the subquery answers 0 or 1.
 function checkLookups(domain: Domain, dataset: DatasetDecl): void {
+  const owns = new Set<string>()
   for (const [name, lookup] of Object.entries(dataset.lookups ?? {})) {
     const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lookup ${name} ${message}`)
     if (dataset.owners) throw at(name, 'is on a dataset with owners, which reads only titles through a relation')
@@ -187,9 +188,17 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
       throw at(lookup.field, `field "${lookup.field}" is ${field.type}`)
     }
     if (lookup.own === undefined) continue
+    if (lookup.from === undefined) throw at(name, 'has an own column but no from')
+    if (owns.has(lookup.own)) throw at(name, `shares own "${lookup.own}" with another lookup`)
+    owns.add(lookup.own)
     const own = Object.hasOwn(dataset.columns, lookup.own) ? dataset.columns[lookup.own] : undefined
     if (own?.type !== field.type || own.relation !== field.relation) {
       throw at(lookup.own, `own "${lookup.own}" is not a column of the field's type and relation`)
+    }
+    // A write through the lookup is renamed to own, so own must be a column any editor may clear.
+    if (own.readonly || !own.nullable) throw at(lookup.own, `own "${lookup.own}" is readonly or not nullable`)
+    if (lookup.own === dataset.lifecycle?.column || lookup.own === dataset.record_link?.email) {
+      throw at(lookup.own, `own "${lookup.own}" is guarded by the engine`)
     }
   }
 }

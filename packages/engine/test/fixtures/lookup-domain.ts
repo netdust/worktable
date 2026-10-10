@@ -38,7 +38,6 @@ const line = defineDataset({
   lifecycle: { column: 'phase', transitions: [{ from: ['open'], to: 'done', roles: ['editor'] }] },
   lookups: {
     team: { label: 'Team', via: 'item_id', field: 'team_id', own: 'team_id', from: 'Item' },
-    stage: { label: 'Stage', via: 'item_id', field: 'phase', own: 'phase', from: 'Item' },
   },
 })
 

@@ -439,7 +439,7 @@ function publicView(sqlite: Database, token: string): Raw {
 export function publicRows({ db, domain }: Store, raw: Raw, window: { from?: string; to?: string }) {
   const view = viewOf(raw)
   const source = sourceOf(domain, view.source)
-  if (!source) throw noPublicView()
+  if (source?.kind !== 'query') throw noPublicView()
   const sort = view.sort.join(',')
   const params = {
     ...parseRowsParams(source, { ...window, sort, group: view.group_by ?? undefined }),
