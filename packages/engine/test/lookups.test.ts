@@ -284,3 +284,53 @@ describe('a lookup behaves like a column in a view', () => {
     expect(status).toBe(200)
   })
 })
+
+describe('writing through a lookup', () => {
+  const patch = (id: number, body: unknown, source = 'line') =>
+    editor('PATCH', `/api/rows/${source}/${id}`, { body: JSON.stringify(body) })
+
+  test('inherited write lands on own', async () => {
+    const { status, body } = await patch(2, { team: 2 })
+    expect(status).toBe(200)
+    expect(body.team).toBe(2)
+    expect(body.inherited).not.toContain('team')
+    const { body: history } = await editor('GET', '/api/revisions/line/2')
+    expect(JSON.stringify(history.revisions)).toContain('team_id')
+  })
+
+  test('null inherits again', async () => {
+    await patch(2, { team: 2 })
+    const { body } = await patch(2, { team: null })
+    expect(body.team).toBe(1)
+    expect(body.inherited).toContain('team')
+  })
+
+  test('inherited write goes through the writer', async () => {
+    expect((await patch(2, { team: 99 })).status).toBe(422)
+    const missing = await patch(2, { team: 98 })
+    expect([missing.status, missing.body.code]).toEqual([400, 'bad_relation'])
+  })
+
+  test('a transition on own is checked', async () => {
+    expect((await patch(3, { stage: 'open' })).status).toBe(422)
+  })
+
+  test('the related row is untouched', async () => {
+    await patch(2, { team: 2 })
+    const item = (await rowsOf('item'))[0]
+    expect(item?.team_id).toBe(1)
+  })
+
+  test('both names are 400', async () => {
+    const res = await patch(2, { team: 2, team_id: 2 })
+    expect([res.status, res.body.code]).toEqual([400, 'bad_value'])
+    expect(res.body.message).toBe('"team" and "team_id" name one value')
+    expect(byId(await rowsOf('line'), 2).team).toBe(1)
+  })
+
+  test('a plain lookup is dropped', async () => {
+    const res = await patch(1, { team_name: 'x' }, 'item')
+    expect(res.status).toBe(200)
+    expect(res.body.revision.changed).toEqual([])
+  })
+})

@@ -52,6 +52,35 @@ describe('activiteit carries the venue and the people', () => {
     expect(body.rows[0].inherited).toContain('locatie')
   })
 
+  test('overriding the venue leaves the tourstop', async () => {
+    const as = await editor()
+    const reeks = await as('POST', '/api/rows/speelreeks', {
+      productie_id: 1,
+      naam: 'Tournee West',
+      locatie_id: 3,
+      start_datum: '2026-11-01',
+      eind_datum: '2026-11-04',
+    })
+    const day = (datum: string) =>
+      as('POST', '/api/rows/activiteit', {
+        productie_id: 1,
+        speelreeks_id: reeks.body.id,
+        soort: 'opbouw',
+        datum,
+        status: 'optie',
+      })
+    const first = await day('2026-11-01')
+    const sibling = await day('2026-11-02')
+    const patched = await as('PATCH', `/api/rows/activiteit/${first.body.id}`, { locatie: 2 })
+    expect(patched.status).toBe(200)
+    expect(patched.body.locatie).toBe(2)
+    expect(patched.body.inherited ?? []).not.toContain('locatie')
+    const one = async (source: string, id: number) =>
+      (await as('GET', `/api/rows/${source}?filter=${encodeURIComponent(JSON.stringify({ id }))}`)).body.rows[0]
+    expect((await one('speelreeks', reeks.body.id)).locatie_id).toBe(3)
+    expect((await one('activiteit', sibling.body.id)).locatie).toBe(3)
+  })
+
   test('mensen is a link on activiteit', async () => {
     const as = await editor()
     const { body } = await as('GET', '/api/schema')

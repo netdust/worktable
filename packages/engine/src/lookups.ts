@@ -1,5 +1,6 @@
 import { type SQL, sql } from 'drizzle-orm'
 import type { ColumnDecl, DatasetDecl, Domain, LookupDecl } from './declare'
+import { ApiError } from './params'
 import { type Source, sourceOf } from './registry'
 
 export function lookupOf(source: Source, key: string): LookupDecl | undefined {
@@ -63,4 +64,21 @@ export function lookupSelect(source: Source): Record<string, SQL> {
     if (lookup.own) select[INHERITED + name] = lookupInherited(source, name)
   }
   return select
+}
+
+type Values = Record<string, unknown>
+
+/** A write names an inherited lookup by its own column; a plain lookup has nothing to write. */
+export function ownBody(dataset: DatasetDecl, body: Values): Values {
+  const out: Values = {}
+  for (const [key, value] of Object.entries(body)) {
+    const lookup = lookupOf(dataset, key)
+    if (!lookup) out[key] = value
+    else if (lookup.own) {
+      if (Object.hasOwn(body, lookup.own))
+        throw new ApiError(400, 'bad_value', `"${key}" and "${lookup.own}" name one value`)
+      out[lookup.own] = value
+    }
+  }
+  return out
 }

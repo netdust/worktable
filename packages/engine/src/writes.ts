@@ -16,7 +16,7 @@ import type {
   Writer,
 } from './declare'
 import type { BatchKind } from './engine-tables'
-import { lookupSelect } from './lookups'
+import { lookupSelect, ownBody } from './lookups'
 import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
 import { retireDelivered } from './record-link'
@@ -466,7 +466,7 @@ export function valuesOf(
   scope: Scope,
 ): Values {
   const { dataset, writer } = target
-  const given = cutBody(dataset, body)
+  const given = cutBody(dataset, ownBody(dataset, body))
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
   checkValues(dataset, cut, false)
