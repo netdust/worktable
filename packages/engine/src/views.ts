@@ -142,14 +142,13 @@ function checkSize(fields: ViewFields): ViewFields {
   return fields
 }
 
-// On create the input is the body; on update it is the stored view with the patch laid over it.
 // A view may show every field its source has, however many.
 const fieldCount = (source: Source): number =>
   Object.keys(source.columns).length +
-  1 +
-  Object.keys(source.links ?? {}).length +
-  Object.keys(source.kind === 'dataset' ? (source.lookups ?? {}) : {}).length
+  (source.kind === 'dataset' ? 1 + Object.keys(source.lookups ?? {}).length : 0) +
+  Object.keys(source.links ?? {}).length
 
+// On create the input is the body; on update it is the stored view with the patch laid over it.
 export function viewBody(input: unknown, domain: Domain, creating: boolean): ViewFields {
   if (!isObject(input)) throw bad('body must be a JSON object')
   const v = creating ? { ...DEFAULTS, ...input } : input

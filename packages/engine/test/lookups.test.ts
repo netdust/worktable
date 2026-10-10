@@ -12,12 +12,16 @@ import {
   validateDomain,
 } from '../src'
 import type { LookupDecl } from '../src/declare'
-import { withLookups } from '../src/rows'
+import { parseRowsParams } from '../src/params'
+import { readRows, withLookups } from '../src/rows'
+import { viewOf } from '../src/views'
 import { send } from './fixture'
 import domain from './fixtures/lookup-domain'
 import { signIn, testEngine } from './sign-in'
 
 type Row = Record<string, unknown> & { id: number; inherited?: string[]; lookups: Record<string, unknown> }
+
+const lineSource = domain.datasets.find((d) => d.name === 'line') as DatasetDecl
 
 let sqlite: Database
 let editor: ReturnType<typeof send>
@@ -211,6 +215,7 @@ describe('a lookup behaves like a column in a view', () => {
     sqlite.run("UPDATE item SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = 1")
     const gone = await q('line', { filter: '{"team":{"$exists":false}}' })
     expect(names(gone.body)).toEqual(['Inherits', 'Own phase'])
+    expect(names((await q('line', { filter: '{"team":{"$exists":true}}' })).body)).toEqual(['Own team'])
   })
 
   test('filter on a text lookup', async () => {
@@ -221,7 +226,7 @@ describe('a lookup behaves like a column in a view', () => {
 
   test('sort on a lookup', async () => {
     const { body } = await q('line', { sort: '-team' })
-    expect(names(body)[0]).toBe('Own team')
+    expect(names(body)).toEqual(['Own team', 'Inherits', 'Own phase'])
   })
 
   test('group on a lookup', async () => {
@@ -243,6 +248,28 @@ describe('a lookup behaves like a column in a view', () => {
     expect(made.status).toBe(201)
     const { body } = await q('line', { filter: JSON.stringify(view.filters), sort: 'team', group: 'team' })
     expect(names(body)).toEqual(['Inherits', 'Own phase'])
+    const stored = viewOf(
+      sqlite.query('SELECT * FROM saved_view WHERE id = ?').get(made.body.id) as Record<string, unknown>,
+    )
+    const params = { ...parseRowsParams(lineSource, { sort: stored.sort.join(',') }), stored: stored.filters }
+    const read = readRows(drizzle(sqlite), domain, lineSource, params, 'all')
+    expect(read.rows.map((r) => r.name)).toEqual(['Inherits', 'Own phase'])
+  })
+
+  test('visible_fields longer than the source has fields is refused', async () => {
+    const fields = ['name', 'item_id', 'team_id', 'phase', 'team', 'stage', 'id', 'name2', 'x']
+    const res = await editor('POST', '/api/views', {
+      body: JSON.stringify({ name: 'Long', source: 'line', visible_fields: fields }),
+    })
+    expect([res.status, res.body.message]).toEqual([400, 'visible_fields takes at most 7 keys'])
+    const six = await editor('POST', '/api/views', {
+      body: JSON.stringify({
+        name: 'Six',
+        source: 'line',
+        visible_fields: ['name', 'item_id', 'team_id', 'phase', 'team', 'stage'],
+      }),
+    })
+    expect(six.status).toBe(201)
   })
 
   test('an unknown key stays 400', async () => {
