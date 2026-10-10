@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { type Actor, createAccount, importExport, migrate } from '../src'
 import { contents, freshDb } from './fixture'
 import domain from './fixtures/import-domain'
+import lookupDomain from './fixtures/lookup-domain'
 
 const TABLES = ['project', 'taak', 'plat', 'note', 'revision']
 
@@ -102,6 +103,32 @@ describe('import denials', () => {
     ['no datasets', { worktable_export: 1 }],
     ['an array', []],
   ])('%s is 400 bad_import', (_, data) => refusedWith(data, 400, 'bad_import'))
+
+  test('a row naming a lookup key is refused before any write', () => {
+    const db = new Database(':memory:')
+    migrate(db, lookupDomain)
+    const actor = accountIn(db, 'administrator')
+    const valid = {
+      team: [{ legacy_id: 1, name: 'One' }],
+      item: [{ legacy_id: 1, name: 'First', team_id: 1 }],
+      line: [{ legacy_id: 1, name: 'L', item_id: 1 }],
+    }
+    const inherited = { ...valid, line: [{ ...valid.line[0], team: 1 }] }
+    const plain = { ...valid, item: [{ ...valid.item[0], team_name: 'x' }] }
+    for (const [datasets, key] of [
+      [inherited, 'line[0].team'],
+      [plain, 'item[0].team_name'],
+    ] as const) {
+      expect(() => importExport(db, lookupDomain, exportOf(datasets), actor, { acceptReport: true })).toThrow(
+        expect.objectContaining({
+          status: 400,
+          code: 'bad_import',
+          message: `datasets.${key}: is not a declared column`,
+        }),
+      )
+      expect(['team', 'item', 'line', 'revision'].map((t) => contents(db, t))).toEqual([[], [], [], []])
+    }
+  })
 
   test('the checks block is ignored', () => {
     const result = run(exportOf(VALID, { checks: { counts: { project: 99 } } }))
