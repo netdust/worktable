@@ -184,9 +184,9 @@ describe('validateDomain refuses a lookups declaration', () => {
   })
 
   test('an own that is the record link address', () => {
-    const contact: ColumnDecl = { type: 'text', label: 'Contact', nullable: true }
-    const lookups = { contact_name: { label: 'Contact', via: 'item_id', field: 'name', own: 'contact', from: 'Item' } }
-    const d = changed('line', { columns: lineColumns({ contact }), lookups, record_link: { email: 'contact' } })
+    const address: ColumnDecl = { type: 'text', label: 'Address', nullable: true }
+    const lookups = { address_name: { label: 'Address', via: 'item_id', field: 'name', own: 'address', from: 'Item' } }
+    const d = changed('line', { columns: lineColumns({ address }), lookups, record_link: { email: 'address' } })
     expect(() => validateDomain(d)).toThrow(DomainError)
   })
 
