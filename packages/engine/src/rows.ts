@@ -4,7 +4,7 @@ import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
 import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
 import { filterWhere } from './filter'
-import { INHERITED, lookupColumn, lookupSelect } from './lookups'
+import { INHERITED, lookupColumn, lookupOf, lookupSelect, lookupValue } from './lookups'
 import type { RowsParams } from './params'
 import { type Source, sourceOf } from './registry'
 import { tableOf } from './tables'
@@ -29,24 +29,32 @@ function scopeWhere(table: SQLiteTable, scope: Scope): SQL | undefined {
   return scope === 'none' ? sql`0` : eq(columnOf(table, scope.column), scope.id)
 }
 
-function whereOf(source: Source, table: SQLiteTable, params: RowsParams, scope: Scope): SQL | undefined {
+function whereOf(
+  domain: Domain,
+  source: Source,
+  table: SQLiteTable,
+  params: RowsParams,
+  scope: Scope,
+): SQL | undefined {
   const dateColumn = source.date ? columnOf(table, source.date) : null
   const window = (op: '>=' | '<=', day: string | null): SQL | undefined =>
     day && dateColumn ? sql`substr(${dateColumn}, 1, 10) ${sql.raw(op)} ${day}` : undefined
   const parts = [
     source.kind === 'dataset' ? isNull(columnOf(table, 'deleted_at')) : undefined,
     scopeWhere(table, scope),
-    params.stored ? filterWhere(params.stored, source, table) : undefined,
-    params.filter ? filterWhere(params.filter, source, table) : undefined,
+    params.stored ? filterWhere(params.stored, source, table, undefined, domain) : undefined,
+    params.filter ? filterWhere(params.filter, source, table, undefined, domain) : undefined,
     window('>=', params.from),
     window('<=', params.to),
   ].filter((p): p is SQL => p !== undefined)
   return parts.length ? and(...parts) : undefined
 }
 
-function orderOf(table: SQLiteTable, params: RowsParams): SQL[] {
+function orderOf(source: Source, table: SQLiteTable, params: RowsParams): SQL[] {
   const keys = [...(params.group ? [{ column: params.group, desc: false }] : []), ...params.sort]
-  return [...keys.map((k) => (k.desc ? desc : asc)(columnOf(table, k.column))), asc(columnOf(table, 'id'))]
+  const sortValue = (key: string) =>
+    source.kind === 'dataset' && lookupOf(source, key) ? lookupValue(source, key) : columnOf(table, key)
+  return [...keys.map((k) => (k.desc ? desc : asc)(sortValue(k.column))), asc(columnOf(table, 'id'))]
 }
 
 function parseCustom(value: unknown): Record<string, unknown> {
@@ -124,12 +132,12 @@ export function readRows(
   scope: Scope,
 ): { rows: EngineRow[]; total: number } {
   const table = tableOf(source)
-  const where = whereOf(source, table, params, scope)
+  const where = whereOf(domain, source, table, params, scope)
   const raws = db
     .select({ ...getTableColumns(table), ...lookupSelect(source) })
     .from(table)
     .where(where)
-    .orderBy(...orderOf(table, params))
+    .orderBy(...orderOf(source, table, params))
     .limit(params.limit)
     .offset(params.offset)
     .all() as Raw[]
@@ -140,13 +148,19 @@ export function readRows(
 export const CHUNK = 500
 
 // The ids `readRows` would answer for the same params and scope, in its order.
-export function readIds(db: BunSQLiteDatabase, source: Source, params: RowsParams, scope: Scope): number[] {
+export function readIds(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  source: Source,
+  params: RowsParams,
+  scope: Scope,
+): number[] {
   const table = tableOf(source)
   const found = db
     .select({ id: columnOf(table, 'id') })
     .from(table)
-    .where(whereOf(source, table, params, scope))
-    .orderBy(...orderOf(table, params))
+    .where(whereOf(domain, source, table, params, scope))
+    .orderBy(...orderOf(source, table, params))
     .limit(params.limit)
     .offset(params.offset)
     .all() as { id: number }[]

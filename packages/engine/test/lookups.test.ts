@@ -198,3 +198,62 @@ describe('validateDomain refuses a lookups declaration', () => {
     expect(() => defineDataset({ ...item, lookups: { 'Team-name': lookup() } })).toThrow()
   })
 })
+
+describe('a lookup behaves like a column in a view', () => {
+  const q = (path: string, params: Record<string, string>) =>
+    editor('GET', `/api/rows/${path}?${new URLSearchParams(params)}`)
+  const names = (body: unknown) => (body as { rows: Row[] }).rows.map((r) => r.name)
+
+  test('filter on a lookup', async () => {
+    const { status, body } = await q('line', { filter: '{"team":1}' })
+    expect(status).toBe(200)
+    expect(names(body)).toEqual(['Inherits', 'Own phase'])
+    sqlite.run("UPDATE item SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = 1")
+    const gone = await q('line', { filter: '{"team":{"$exists":false}}' })
+    expect(names(gone.body)).toEqual(['Inherits', 'Own phase'])
+  })
+
+  test('filter on a text lookup', async () => {
+    const { status, body } = await q('item', { filter: '{"team_name":{"$like":"On"}}' })
+    expect(status).toBe(200)
+    expect(names(body)).toEqual(['First'])
+  })
+
+  test('sort on a lookup', async () => {
+    const { body } = await q('line', { sort: '-team' })
+    expect(names(body)[0]).toBe('Own team')
+  })
+
+  test('group on a lookup', async () => {
+    const { status, body } = await q('line', { group: 'team' })
+    expect(status).toBe(200)
+    expect(names(body)).toEqual(['Inherits', 'Own phase', 'Own team'])
+  })
+
+  test('a saved view on a lookup', async () => {
+    const view = {
+      name: 'By team',
+      source: 'line',
+      filters: { team: 1 },
+      sort: ['team'],
+      group_by: 'team',
+      visible_fields: ['team'],
+    }
+    const made = await editor('POST', '/api/views', { body: JSON.stringify(view) })
+    expect(made.status).toBe(201)
+    const { body } = await q('line', { filter: JSON.stringify(view.filters), sort: 'team', group: 'team' })
+    expect(names(body)).toEqual(['Inherits', 'Own phase'])
+  })
+
+  test('an unknown key stays 400', async () => {
+    const filter = await q('line', { filter: '{"nope":1}' })
+    expect([filter.status, (filter.body as { code: string }).code]).toEqual([400, 'bad_filter'])
+    const sort = await q('line', { sort: 'nope' })
+    expect([sort.status, (sort.body as { code: string }).code]).toEqual([400, 'bad_sort'])
+  })
+
+  test('history filters on a lookup', async () => {
+    const { status } = await editor('GET', `/api/history/line?${new URLSearchParams({ filter: '{"team":1}' })}`)
+    expect(status).toBe(200)
+  })
+})

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { FilterInput } from './filter-compile'
+import { lookupOf } from './lookups'
 import type { Source } from './registry'
 
 export class ApiError extends Error {
@@ -77,7 +78,7 @@ function parseOffset(raw: string | undefined): number {
 }
 
 const hasColumn = (source: Source, key: string): boolean =>
-  Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
+  Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id') || !!lookupOf(source, key)
 
 export function parseFilter(raw: string | undefined): FilterInput | null {
   if (raw === undefined || raw === '') return null
@@ -94,8 +95,8 @@ export function parseFilter(raw: string | undefined): FilterInput | null {
 }
 
 /** M1: a key list is short and names each column once. */
-export function keysProblem(what: string, columns: string[]): string | null {
-  if (columns.length > MAX_KEYS) return `${what} takes at most ${MAX_KEYS} keys`
+export function keysProblem(what: string, columns: string[], max = MAX_KEYS): string | null {
+  if (columns.length > max) return `${what} takes at most ${max} keys`
   const twice = columns.find((column, i) => columns.indexOf(column) !== i)
   return twice === undefined ? null : `${what} names "${twice}" twice`
 }

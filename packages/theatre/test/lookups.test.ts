@@ -58,3 +58,19 @@ describe('activiteit carries the venue and the people', () => {
     expect(body.sources.activiteit.links.mensen.dataset).toBe('toewijzing')
   })
 })
+
+describe('a view may show every field of its source', () => {
+  test('activiteit with all its columns, the lookup and the link is accepted', async () => {
+    const as = await editor()
+    const { body: schema } = await as('GET', '/api/schema')
+    const source = schema.sources.activiteit
+    const visible_fields = [
+      ...Object.keys(source.columns),
+      ...Object.keys(source.lookups),
+      ...Object.keys(source.links),
+    ]
+    expect(visible_fields.length).toBeGreaterThan(16)
+    const made = await as('POST', '/api/views', { name: 'Alles', source: 'activiteit', visible_fields })
+    expect(made.status).toBe(201)
+  })
+})

@@ -6,6 +6,7 @@ import { type AuthEnv, secret, sha256 } from './auth'
 import type { Actor, Domain, SavedViewSeed } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
+import { lookupOf } from './lookups'
 import { ApiError, keysProblem, parseRowsParams } from './params'
 import { checkLimits } from './rate-limit'
 import { type Source, sourceOf } from './registry'
@@ -38,7 +39,7 @@ const DEFAULTS = { skin: 'table', filters: {}, sort: [], group_by: null, visible
 const bad = (message: string) => new ApiError(400, 'bad_view', message)
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const hasColumn = (source: Source, key: string): boolean =>
-  Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id')
+  Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id') || !!lookupOf(source, key)
 // A link is shown like a column, never sorted or grouped on.
 const hasField = (source: Source, key: string): boolean =>
   hasColumn(source, key) || Object.hasOwn(source.links ?? {}, key)
@@ -96,11 +97,11 @@ function skinOf(domain: Domain, source: Source, value: unknown): 'table' | 'matr
   throw bad(`skin "${String(value)}" is not available on "${source.name}"`)
 }
 
-function filtersOf(source: Source, value: unknown): FilterInput {
+function filtersOf(domain: Domain, source: Source, value: unknown): FilterInput {
   if (!isObject(value)) throw bad('filters must be an object')
   if (!Bun.deepEquals(JSON.parse(JSON.stringify(value)), value)) throw bad('filters must hold only finite numbers')
   try {
-    filterWhere(value as FilterInput, source, tableOf(source))
+    filterWhere(value as FilterInput, source, tableOf(source), undefined, domain)
   } catch (err) {
     if (err instanceof ApiError) throw bad(err.message)
     throw err
@@ -114,9 +115,10 @@ function columnsOf(
   value: unknown,
   strip = (key: string) => key,
   known = hasColumn,
+  max?: number,
 ): string[] {
   if (!Array.isArray(value) || !value.every((key) => typeof key === 'string')) throw bad(`${what} must be a list`)
-  const problem = keysProblem(what, value.map(strip))
+  const problem = keysProblem(what, value.map(strip), max)
   if (problem) throw bad(problem)
   for (const key of value) if (!known(source, strip(key))) throw bad(`${what}: "${key}" is not a column`)
   return value
@@ -141,6 +143,13 @@ function checkSize(fields: ViewFields): ViewFields {
 }
 
 // On create the input is the body; on update it is the stored view with the patch laid over it.
+// A view may show every field its source has, however many.
+const fieldCount = (source: Source): number =>
+  Object.keys(source.columns).length +
+  1 +
+  Object.keys(source.links ?? {}).length +
+  Object.keys(source.kind === 'dataset' ? (source.lookups ?? {}) : {}).length
+
 export function viewBody(input: unknown, domain: Domain, creating: boolean): ViewFields {
   if (!isObject(input)) throw bad('body must be a JSON object')
   const v = creating ? { ...DEFAULTS, ...input } : input
@@ -150,10 +159,10 @@ export function viewBody(input: unknown, domain: Domain, creating: boolean): Vie
     source_type: source.kind,
     source: source.name,
     skin: skinOf(domain, source, v.skin),
-    filters: filtersOf(source, v.filters),
+    filters: filtersOf(domain, source, v.filters),
     sort: columnsOf(source, 'sort', v.sort, (key) => key.replace(/^-/, '')),
     group_by: groupOf(source, v.group_by),
-    visible_fields: columnsOf(source, 'visible_fields', v.visible_fields, undefined, hasField),
+    visible_fields: columnsOf(source, 'visible_fields', v.visible_fields, undefined, hasField, fieldCount(source)),
     shared: sharedOf(v.shared),
   })
 }

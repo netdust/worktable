@@ -82,7 +82,7 @@ function recordsOf(store: Store, source: Source, actor: Actor): Records | null {
 function idsOf(store: Store, source: Source, dataset: DatasetDecl, query: Record<string, string>, actor: Actor) {
   const { filter, from, to } = query
   const params = { ...parseRowsParams(source, { filter, from, to }), limit: MAX_LIMIT }
-  const ids = [...new Set(readIds(store.db, source, params, scopeOf(actor, source)))]
+  const ids = [...new Set(readIds(store.db, store.domain, source, params, scopeOf(actor, source)))]
   const scope = scopeOf(actor, dataset)
   if (source.kind === 'dataset' || scope === 'all') return ids
   return chunks(ids).flatMap((chunk) => {
