@@ -154,9 +154,9 @@ test('switch-production @e2e', async ({ page }) => {
   await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toHaveCount(0)
   expect(await offeredFields(page)).not.toContain('Productie')
 
-  // Dagplanning no longer shows Productie (R10), so the scope is read off the rows request.
+  // Planning no longer shows Productie (R10), so the scope is read off the rows request.
   const nachtwacht = { $eq: await idByName(page.request, 'productie', 'titel', 'Nachtwacht') }
-  expect(await scopeAsked(page, 'dagplanning', () => pick(page, 'Planning', 'Activiteiten'))).toEqual(nachtwacht)
+  expect(await scopeAsked(page, 'activiteit', () => pick(page, 'Planning', 'Activiteiten'))).toEqual(nachtwacht)
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
   await expect(gridRows(page).first()).toBeVisible()
 
@@ -166,7 +166,7 @@ test('switch-production @e2e', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Nachtwacht', exact: true })).toBeVisible()
     await pick(page, 'Planning', 'Activiteiten')
   }
-  expect(await scopeAsked(page, 'dagplanning', reload)).toEqual(nachtwacht)
+  expect(await scopeAsked(page, 'activiteit', reload)).toEqual(nachtwacht)
   await expect(gridRows(page).first()).toBeVisible()
 
   const scoped = await gridRows(page).count()
@@ -197,7 +197,7 @@ test('tree-fold-and-hover @e2e', async ({ page }) => {
   await expect(row.getByRole('button', { name: 'Meer voor Tourstops' })).toBeVisible()
   await shot(page, 'tree-hover')
 
-  // The chevron folds and unfolds; the view stays Dagplanning.
+  // The chevron folds and unfolds; the view stays Planning.
   const views = node.getByRole('group', { name: 'View type' })
   if ((await node.getAttribute('aria-expanded')) !== 'true') {
     await row.getByRole('button', { name: 'Uitklappen' }).click()

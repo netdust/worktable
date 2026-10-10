@@ -10,7 +10,7 @@ test('sign-in page renders @smoke', async ({ page }) => {
   await expect(page.locator('body')).not.toContainText(/error|exception|stack/i)
 })
 
-for (const source of ['speelreeks', 'rol', 'sjabloon', 'dagplanning']) {
+for (const source of ['speelreeks', 'rol', 'sjabloon', 'activiteit']) {
   test(`${source} asks for a session @smoke`, async ({ request }) => {
     const response = await request.get(`/api/rows/${source}`)
     expect(response.status()).toBe(401)

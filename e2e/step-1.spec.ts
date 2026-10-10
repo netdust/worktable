@@ -452,7 +452,7 @@ test('sjablonen-read-only @e2e', async ({ page }) => {
   expect((await page.request.delete(`/api/rows/sjabloon/${id}`)).status()).toBe(405)
 })
 
-test('dagplanning-locatie-van @e2e', async ({ page }) => {
+test('planning-locatie-via-tourstop @e2e', async ({ page }) => {
   const week = '2026-12-07'
   const api = page.request
   const reeks = await speelreeks(api, 'Speelreeks e2e bron', week, week)
@@ -464,12 +464,13 @@ test('dagplanning-locatie-van @e2e', async ({ page }) => {
   await idOf(api, 'activiteit', { ...base, omschrijving: 'bron geen' })
 
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
-  // "Locatie van" left the default view (R10); the grid shows the venue, the query still serves where it comes from.
+  // The grid shows the venue, greyed "via tourstop" when inherited; the engine's row says where it comes from.
   const seen = async (title: string) => {
-    const [row] = await rowsOf<Values>(api, 'dagplanning', { omschrijving: title })
-    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), row.locatie_bron ?? null]
+    const [row] = await rowsOf<Values & { inherited?: string[] }>(api, 'activiteit', { omschrijving: title })
+    const bron = row.inherited?.includes('locatie') ? 'tourstop' : row.locatie_id != null ? 'eigen' : null
+    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), bron]
   }
-  expect(await seen('bron geerfd')).toEqual([`${VENUE}via tourstop`, 'speelreeks'])
+  expect(await seen('bron geerfd')).toEqual([`${VENUE}via tourstop`, 'tourstop'])
   expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'eigen'])
   expect(await seen('bron geen')).toEqual(['', null])
 

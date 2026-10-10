@@ -517,7 +517,7 @@ test('people-box-fits-at-1280 @e2e', async ({ page }) => {
   })
 })
 
-// A draft row never reaches Dagplanning: + Nieuw there creates the activity at once, so its Mensen links to a real record.
+// + Nieuw in Planning creates the activity at once once a production is chosen, so its Mensen links to a real record.
 test('new-row-people @e2e', async ({ page }) => {
   const api = page.request
   const posts: string[] = []
@@ -527,8 +527,12 @@ test('new-row-people @e2e', async ({ page }) => {
   })
   await openDagplanning(page)
   const add = page.getByRole('button', { name: 'Nieuwe activiteit' })
-  await expect(add).toBeDisabled()
-  await expect(add).toHaveAttribute('title', 'Kies eerst Productie')
+  // Without a production the row cannot be made: the draft asks Productie and nothing is written.
+  await add.click()
+  await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
+  expect(posts).toEqual([])
+  await page.keyboard.press('Escape')
+  await expect(page.locator('tbody tr.nv-tr--draft')).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
   await page.getByRole('option', { name: 'Nachtwacht', exact: true }).click()

@@ -173,7 +173,7 @@ describe('toSchema', () => {
 })
 
 describe('writes', () => {
-  /** The theatre's writable shapes: activiteit has a writer, dagplanning maps status to it, productie has none. */
+  /** The writable shapes: activiteit has a writer, a query maps status to it, productie has none. */
   const writes: EngineSchema = {
     sources: {
       productie: { ...engine.sources.productie, writable: false },

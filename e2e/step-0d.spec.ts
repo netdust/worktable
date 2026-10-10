@@ -213,7 +213,7 @@ test('view-saved-after-reload', async ({ page }) => {
 test('view-delete-undo', async ({ page }) => {
   const copy = 'Planning (kopie)'
   expect((await views(page)).map((v) => v.name)).not.toContain(copy)
-  await open(page, 'Planning', page.getByRole('grid', { name: 'Planning' }), 'Activiteiten')
+  await open(page, 'Planning', header(page, 'Omschrijving'), 'Activiteiten')
   await page.getByRole('button', { name: 'More actions: Planning' }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()

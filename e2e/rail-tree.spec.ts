@@ -23,12 +23,12 @@ test('tree-scrolls-in-rail @e2e', async ({ page }) => {
   await shot(page, 'tree-scrolled-menu')
 })
 
-test('query-views-under-model @e2e', async ({ page }) => {
-  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/dagplanning')
+test('dagplanning-is-gone @e2e', async ({ page }) => {
+  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/activiteit')
   await page.goto('/')
   const node = modelNode(page, 'Activiteiten')
   await expect(node).toHaveAttribute('aria-expanded', 'true')
-  // The landing view is Planning, the dagplanning query's view, first under Activiteiten.
+  // The landing view is Planning on Activiteiten, first under it.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   // The views' own buttons: each row also holds its drag button, "Verplaats <view>".
   const names = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: /^(?!Verplaats )/ })
@@ -37,12 +37,16 @@ test('query-views-under-model @e2e', async ({ page }) => {
   expect(await names.allTextContents()).not.toContain('Voorstellingen')
   expect(await names.allTextContents()).not.toContain('Per productie per dag')
 
-  for (const query of ['Planning', 'Per productie per dag']) await expect(modelNode(page, query)).toHaveCount(0)
-  // Voorstellingen reads no dataset: its own node, after the sections' sources.
-  const nodes = page.getByRole('tree', { name: 'Views' }).getByRole('treeitem')
-  await expect(nodes.last()).toHaveAccessibleName('Voorstellingen')
+  // No Dagplanning anywhere in the rail; the queries sit under Overzichten.
+  const rail = page.getByRole('navigation', { name: 'Views' })
+  await expect(rail.getByText('Dagplanning')).toHaveCount(0)
+  expect((await page.request.get('/api/rows/dagplanning')).status()).toBe(404)
+  await expect(modelNode(page, 'Planning')).toHaveCount(0)
+  const overzichten = rail.getByRole('group', { name: 'Overzichten', exact: true })
+  for (const query of ['Per productie per dag', 'Voorstellingen', 'Mijn producties'])
+    await expect(overzichten.getByRole('treeitem', { name: query, exact: true })).toHaveCount(1)
 
   expect((await rows).status()).toBe(200)
   await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag deze week'])
-  await shot(page, 'query-views-under-model')
+  await shot(page, 'dagplanning-is-gone')
 })

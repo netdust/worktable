@@ -246,7 +246,7 @@ test('a step-2 database', async () => {
   expect(views.filter((v) => v.owner_id === -1).map((v) => [v.id, v.name, v.source])).toEqual([
     [ids[0], 'Planning', 'activiteit'],
   ])
-  const kept = views[0]
+  const kept = views.find((v) => v.id === ids[0])
   expect(JSON.parse(kept?.filters as string)).toEqual(DAGPLANNING_VIEW.filters)
   expect(JSON.parse(kept?.sort as string)).toEqual(DAGPLANNING_VIEW.sort)
   expect(kept?.group_by).toBe(DAGPLANNING_VIEW.group_by)

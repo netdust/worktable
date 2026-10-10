@@ -25,6 +25,7 @@ Stefan's commands for `~/laika-export/step2-copy.db`, after `feature/virtual-col
    - `view "Planning" (activiteit) updated`: the system Planning keeps its id and takes Dagplanning's week filter, sort, day groups and columns (Locatie through the tourstop, Mensen).
    - `view "Dagplanning" (dagplanning) removed, no longer declared`.
    - `view "<name>" (dagplanning) has no source any more, left alone`: one line per person's own view on the old Dagplanning. It is kept in the database, untouched, but no list shows it while its source is gone; they remake it on Activiteiten.
+   - A published system view on dagplanning answers 404 after the run: its source is gone.
    - `view "<name>" (...) is public, left alone`: a published system view; it is never changed.
 
    On a database whose system Planning was on dagplanning instead, the line is `view "Planning" (dagplanning) removed, no longer declared` plus `views 1 added`: Planning on activiteit is a new view with a new id, so a bookmark to the old Planning's id no longer opens it.

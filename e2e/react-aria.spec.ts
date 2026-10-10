@@ -851,16 +851,16 @@ test.describe('the chrome as an administrator', () => {
   })
 
   test('share-dialog-light-and-dark @e2e', async ({ page }) => {
-    const copy = 'Planning (kopie)'
+    const copy = 'Voorstellingen (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
     try {
       await page.goto('/')
-      await openView(page, 'Planning', 'Activiteiten')
-      await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+      await openView(page, 'Voorstellingen')
+      await page.getByRole('button', { name: 'More actions: Voorstellingen', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
       await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
-      await openView(page, copy, 'Activiteiten')
+      await openView(page, copy, 'Voorstellingen')
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(copy)
       const share = page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' })
       await inBothThemes(
@@ -996,16 +996,16 @@ test.describe('the Publiceren dialog as an administrator', () => {
   test.use({ storageState: state('admin') })
 
   test('publish-address-reads-in-full @e2e', async ({ page }) => {
-    const copy = 'Planning (kopie)'
+    const copy = 'Voorstellingen (kopie)'
     const views = async () =>
       ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
     try {
       await page.goto('/')
-      await openView(page, 'Planning', 'Activiteiten')
-      await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+      await openView(page, 'Voorstellingen')
+      await page.getByRole('button', { name: 'More actions: Voorstellingen', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
       await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
-      await openView(page, copy, 'Activiteiten')
+      await openView(page, copy, 'Voorstellingen')
       await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
       await page.getByRole('menuitem', { name: 'Publiceren' }).click()
       const address = page.getByRole('dialog', { name: 'Publiceren' }).getByRole('textbox', { name: 'Publiek adres' })

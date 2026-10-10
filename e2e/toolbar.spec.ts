@@ -459,24 +459,25 @@ test('history-other-has-no-undo @e2e', async ({ page, browser }) => {
   }
 })
 
-async function copyOfDagplanning(page: Page, copy: string): Promise<number> {
+// Only a view on a query can be published, so these flows copy Voorstellingen, the website's overview.
+async function copyOfVoorstellingen(page: Page, copy: string): Promise<number> {
   await page.goto('/')
-  await openView(page, 'Planning', 'Activiteiten')
-  await page.getByRole('button', { name: 'More actions: Planning', exact: true }).click()
+  await openView(page, 'Voorstellingen')
+  await page.getByRole('button', { name: 'More actions: Voorstellingen', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await expect.poll(async () => (await views(page)).find((v) => v.name === copy)?.mine).toBe(true)
-  await openView(page, copy, 'Activiteiten')
+  await openView(page, copy, 'Voorstellingen')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(copy)
   return ((await views(page)).find((v) => v.name === copy) as Stored).id
 }
 
 // Publiceren from the menu: the write guard takes a PUT only with a JSON body, an empty one too.
 test('publish-from-share-menu @e2e', async ({ browser }) => {
-  const copy = 'Planning (kopie)'
+  const copy = 'Voorstellingen (kopie)'
   const admin = await browser.newContext({ storageState: state('admin') })
   const page = await admin.newPage()
   try {
-    await copyOfDagplanning(page, copy)
+    await copyOfVoorstellingen(page, copy)
     await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
     await page.getByRole('menuitem', { name: 'Publiceren' }).click()
     const dialog = page.getByRole('dialog', { name: 'Publiceren' })
@@ -498,20 +499,27 @@ test('publish-from-share-menu @e2e', async ({ browser }) => {
 
 // A published view never saves itself: a removed condition stays in this browser until "Publieke weergave bijwerken".
 test('published-view-stays-put @e2e', async ({ browser }) => {
-  const copy = 'Planning (kopie)'
+  const copy = 'Voorstellingen (kopie)'
   const admin = await browser.newContext({ storageState: state('admin') })
   const page = await admin.newPage()
   try {
-    const id = await copyOfDagplanning(page, copy)
+    const id = await copyOfVoorstellingen(page, copy)
+    const filtered = await admin.request.patch(`/api/views/${id}`, {
+      data: { filters: { datum: { $period: 'week' } } },
+    })
+    expect(filtered.status(), await filtered.text()).toBe(200)
     const published = await admin.request.put(`/api/views/${id}/share-token`, { data: {} })
     expect(published.status(), await published.text()).toBe(200)
     await page.reload()
-    await openView(page, copy, 'Activiteiten')
-    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag deze week'])
+    await openView(page, copy, 'Voorstellingen')
+    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Datum deze week'])
 
     const stored = () => views(page).then((all) => all.find((v) => v.id === id) as Stored & { filters: unknown })
     const before = (await stored()).filters
-    await page.locator('.nv-bar').getByRole('button', { name: 'Filter Plandag wissen' }).click()
+    await page
+      .locator('.nv-bar')
+      .getByRole('button', { name: /^Filter Datum .*wissen$/ })
+      .click()
     await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
     await page.waitForTimeout(800)
     expect((await stored()).filters).toEqual(before)
