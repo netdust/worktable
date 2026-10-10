@@ -517,6 +517,48 @@ test('people-box-fits-at-1280 @e2e', async ({ page }) => {
   })
 })
 
+test('people-list-opens-up-to-its-size @e2e', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 })
+  const api = page.request
+  const production = await idByName(api, 'productie', 'titel', 'Nachtwacht')
+  const earlier: number[] = []
+  for (let hour = 8; hour < 20; hour++)
+    earlier.push(
+      await idOf(api, 'activiteit', {
+        productie_id: production,
+        soort: 'repetitie',
+        datum: WEEK,
+        start_at: `${WEEK}T${String(hour).padStart(2, '0')}:00`,
+        omschrijving: `vooraf ${hour} e2e`,
+      }),
+    )
+  try {
+    await withActivity(page, 'mensen omhoog e2e', '23:00', async () => {
+      await openDagplanning(page)
+      // Room below the row for less than the list, and far more above it: the list must open upwards at its own height.
+      const row = (await named(page, 'mensen omhoog e2e').boundingBox()) ?? { y: 0, height: 0 }
+      expect(row.y).toBeGreaterThan(400)
+      await page.setViewportSize({ width: 1280, height: Math.round(row.y + row.height + 120) })
+      const search = await openPeopleOf(page, 'mensen omhoog e2e')
+      await search.press('ArrowDown')
+      const list = page.locator('.nv-picker__pop')
+      await expect(list.getByRole('option').first()).toBeVisible()
+      const at = await list.evaluate((el) => ({
+        placement: el.getAttribute('data-placement'),
+        ...el.getBoundingClientRect().toJSON(),
+      }))
+      const input = (await search.boundingBox()) ?? { y: 0 }
+      await shot(page, 'people-list-up')
+      expect(at.placement).toBe('top')
+      expect(at.bottom).toBeLessThanOrEqual(input.y)
+      expect(input.y - at.bottom).toBeLessThanOrEqual(12)
+      expect(at.height).toBeLessThanOrEqual(300)
+    })
+  } finally {
+    for (const id of earlier) await api.delete(`/api/rows/activiteit/${id}`)
+  }
+})
+
 // + Nieuw in Planning creates the activity at once once a production is chosen, so its Mensen links to a real record.
 test('new-row-people @e2e', async ({ page }) => {
   const api = page.request

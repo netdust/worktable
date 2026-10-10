@@ -1877,6 +1877,11 @@
   z-index: 50;
 }
 
+/* Placed above its trigger, React Aria sets only `bottom`; the anchored `top` would stretch the box up to it. */
+.nv-pop[data-placement] {
+  top: auto;
+}
+
 /* A date and time can be wider than its column: the editor grows past the cell by what its segments need, as the editing cell lets it. */
 .nv-datefield {
   position: absolute;
