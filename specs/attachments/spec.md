@@ -23,7 +23,7 @@ Branch `feature/attachments`, cut from main `67f9962`. Design: `specs/engine-add
 - Source: Stefan, "Files in a directory next to each client's database: yes" (findings answer 3).
 
 **R4. Owners and link accounts write declared columns and attach files.**
-- A column may declare `owner_writable: true` (only with `owner_visible`; never on the owner column, the lifecycle column, a `record_link.email` column, json or readonly).
+- A column may declare `owner_writable: true` (only with `owner_visible`; never on the owner column, the lifecycle column, a `record_link.email` column, a relation column, json or readonly).
 - A **link account** writes only `owner_writable` columns: on `PATCH /rows/:dataset/:id` (rows in its scope; no create, no delete) and in `values` beside its choice on `POST /act`, written in the transition's batch. Any other key is 403 `column_not_owner_writable`, naming it. A signed-in owner (an account of kind `user`) keeps today's rule: it writes rows in its scope and its writer decides which columns (`docs/SPEC.md:45`). Ruling (plan review B3): the declared limit binds the link only, because applying it to every owner would refuse owner transitions, the token's own transition and theatre's owner writes.
 - With `attachments.owner_visible` an owner or link reads a record's files; with `owner_writable` it uploads, and deletes only its own uploads.
 - Source: Stefan, "C6 + C8: a link account writes a declared column, and Attachment reads and writes for owners and link accounts (technicians adding notes, documents and photos)"; findings F1.
