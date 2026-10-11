@@ -67,7 +67,7 @@ Everything else stays minimal: one guard extended rather than a second one, raw-
    - A `Content-Length` is required and `Transfer-Encoding` refused (411); a declared length over `max_mb` is 413. Bun's server holds the body to that length.
    - The record, content type, kind, name, writer and rate-limit checks all run before a byte is read (`checkUpload`).
    - A per-actor upload limit of 30 a minute (`checkLimits`, 429).
-   - A total cap on the files on disk (`--files-max-gb`, default 5 GB, soft-deleted files counted): a declared length that would pass it is 507 `storage_full` before a byte is read, and new bytes that would pass it after stripping are refused with nothing stored.
+   - A total cap on the files on disk (`--files-max-gb`, default 5 GiB, the same bytes counted once, soft-deleted files counted): a declared length that would pass it is 507 `storage_full` before a byte is read, and new bytes that would pass it after stripping are refused with nothing stored.
 6. **A cross-site page posts a file with the user's cookie.**
    - `writeGuard`'s site check stays on the upload path.
    - `application/octet-stream` is required, which is not CORS-simple, so a form cannot send it (415 otherwise).
@@ -94,7 +94,8 @@ Everything else stays minimal: one guard extended rather than a second one, raw-
 **Deferrals:**
 - **Malware in a pdf:** not scanned. Files are served as downloads with `nosniff` and never rendered by the grid.
 - **PDF metadata** (author, software): kept. Stripping needs a pdf parser, and the location risk is in photos.
-- **Files on disk after a soft delete:** kept, because undo needs them. No garbage collection in this step.
+- **Files on disk after a soft delete:** kept, because undo needs them. No garbage collection in this step: no purge of deleted files yet, so they keep counting toward the total cap and only raising `--files-max-gb` frees room.
+- **Usage side channel:** accepted. A writer can probe how much room is left (cap − total) by choosing a `Content-Length` near the cap and watching for 507; it needs write access, is rate-limited (30 a minute) and learns only a total size.
 - **Image re-encoding:** out.
 - **A link account opening a file:** a plain `<a href>` cannot send the link's header. Step 6 owns that screen (fetch to blob).
 - **Total disk use:** the total cap (`--files-max-gb`) is the backstop. A per-account byte quota is still not built: the rate limit bounds how fast one account writes (30 × `max_mb` a minute), and the cap bounds how much all accounts write together. Deferred until owners or links upload (step 6); in theatre only editors upload today. A failed insert removes the file it wrote, and a failed rename its `.tmp`.

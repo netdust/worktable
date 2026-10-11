@@ -10,7 +10,7 @@ Branch `feature/attachments`, cut from main `67f9962`. Design: `specs/engine-add
 - Routes: list a record's files; upload one file (raw bytes, kind and name as parameters); read its bytes; soft-delete it. Reading needs reading the record; writing needs the record writable.
 - Allowed types by magic bytes: pdf, jpeg, png, webp. Default limit 10 MB per file, `max_mb` per dataset.
 - Served as attachment (inline only for the image types), `nosniff`, a sandbox CSP.
-- An upload and a delete are revised under one batch; undo removes an upload and restores a deleted file, redo repeats it. `docs/SPEC.md:56` ("a batch holding a delete … is never undone") gains this one exception, for files only: undoing a file delete restores the file.
+- An upload and a delete are revised under one batch; undo removes an upload and restores a deleted file, redo repeats it. `docs/SPEC.md:56` ("a batch holding a delete … is never undone") gains this one exception, and the exception is for files only: a batch whose every row is an attachment row is undone (undoing a file delete restores the file); an import or seed batch, a batch recorded before the table, and an already undone batch are never undone, files included.
 - Out: `show_on_publication` and inheritance down a parent relation (step 4).
 - Source: Stefan, "Attachment now: yes" (findings answer 1); findings F1; `docs/SPEC.md:58` (Attachment row).
 
@@ -20,7 +20,7 @@ Branch `feature/attachments`, cut from main `67f9962`. Design: `specs/engine-add
 
 **R3. Files beside the database.**
 - `--files-dir` names the directory; it is backed up with the database. The engine creates it with mode 0700.
-- `--files-max-gb` (default 5) caps the files' total size: each stored file counted once, soft-deleted files too (undo needs them). An upload whose `Content-Length` would pass the cap is 507 `storage_full` before the body is read; bytes already stored and an undone delete add nothing. This is the backstop for attack 5; a per-account quota is still not built.
+- `--files-max-gb` (default 5 GiB) caps the files' total size: the same bytes counted once, soft-deleted files too (undo needs them; they keep counting until a purge exists, so only raising the limit frees room). An upload whose `Content-Length` would pass the cap is 507 `storage_full` before the body is read; bytes already stored and an undone delete add nothing. This is the backstop for attack 5; a per-account quota is still not built.
 - Source: Stefan, before merge: "a total storage cap for attachment files" (review S2).
 - Source: Stefan, "Files in a directory next to each client's database: yes" (findings answer 3).
 
