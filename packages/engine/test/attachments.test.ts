@@ -366,6 +366,28 @@ describe('storage', () => {
     expect(await listedIds()).toHaveLength(2)
   })
 
+  test('a jpeg is stored stripped, hashed and sized as stored', async () => {
+    const comment = [0xff, 0xfe, 0, 6, ...ascii('home')]
+    const { status, body } = await upload(new Uint8Array([0xff, 0xd8, ...comment, 0xff, 0xd9, 0x01]), {
+      kind: 'photo',
+      name: 'a.jpg',
+    })
+    const stored = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+    expect({ status, size: body.size }).toEqual({ status: 201, size: stored.length })
+    expect(readdirSync(filesDir)).toEqual([sha256(stored)])
+    expect(new Uint8Array(await (await download(body.id)).arrayBuffer())).toEqual(stored)
+  })
+
+  test('a truncated jpeg is 415 bad_file_type, with nothing stored', async () => {
+    const res = await upload(new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x40, ...ascii('Exif')]), {
+      kind: 'photo',
+      name: 'a.jpg',
+    })
+    expect({ status: res.status, code: res.body.code }).toEqual({ status: 415, code: 'bad_file_type' })
+    expect(readdirSync(filesDir)).toEqual([])
+    expect(await listedIds()).toEqual([])
+  })
+
   // Serves on a free port until it listens, then stops it, so no server outlives the test.
   async function serveWith(files: string): Promise<void> {
     const dir = mkdtempSync(join(tmpdir(), 'wt-serve-files-'))

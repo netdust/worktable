@@ -9,6 +9,7 @@ import { attachment } from './engine-tables'
 import { ApiError } from './params'
 import { checkLimits, type Limit } from './rate-limit'
 import { sourceOf, writerOf } from './registry'
+import { StripError, type StrippedMime, strip } from './strip'
 import { CREATED, create, parseId, recordBatch, revise, type Store } from './writes'
 
 type Declared = DatasetDecl & { attachments: AttachmentsDecl }
@@ -177,6 +178,19 @@ function uploadGate(store: Store): MiddlewareHandler<AuthEnv> {
   }
 }
 
+const badFileType = () => new ApiError(415, 'bad_file_type', 'Only pdf, jpeg, png and webp files are taken')
+
+// A photo loses its location and camera data before it is hashed (attack 7); a pdf is kept byte for byte.
+function withoutMetadata(bytes: Uint8Array, mime: string): Uint8Array {
+  if (mime === 'application/pdf') return bytes
+  try {
+    return strip(bytes, mime as StrippedMime)
+  } catch (error) {
+    if (error instanceof StripError) throw badFileType()
+    throw error
+  }
+}
+
 function upload(
   store: Store,
   target: { dataset: Declared; id: number },
@@ -185,29 +199,30 @@ function upload(
   actor: Actor,
 ) {
   const mime = sniff(bytes)
-  if (!mime) throw new ApiError(415, 'bad_file_type', 'Only pdf, jpeg, png and webp files are taken')
-  const sha256 = storeBytes(store, bytes)
+  if (!mime) throw badFileType()
+  const stored = withoutMetadata(bytes, mime)
+  const sha256 = storeBytes(store, stored)
   const now = new Date().toISOString()
   const batch = crypto.randomUUID()
   const { kind, name } = file
-  const stored = {
+  const row = {
     entity: target.dataset.name,
     record_id: target.id,
     kind,
     name,
     mime,
-    size: bytes.length,
+    size: stored.length,
     sha256,
     uploaded_by: actor.id,
   }
   const made = store.sqlite
     .transaction(() => {
-      const { id: fileId } = create(store.sqlite, attachment, stored, now, actor.id, batch)
+      const { id: fileId } = create(store.sqlite, attachment, row, now, actor.id, batch)
       recordBatch(store.sqlite, batch, actor.id, 'write', now)
       return fileId
     })
     .immediate()
-  return { id: made, kind, name, mime, size: bytes.length, revision: { batch_id: batch } }
+  return { id: made, kind, name, mime, size: stored.length, revision: { batch_id: batch } }
 }
 
 function setDeleted(store: Store, file: AttachmentRow, value: string | null, now: string, actor: Actor, batch: string) {
