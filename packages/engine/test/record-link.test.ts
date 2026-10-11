@@ -308,7 +308,7 @@ describe('the link secret', () => {
     expect(() => createEngine(fresh(domain), domain, { port: 4310 })).toThrow(/link secret/)
     const short = new Uint8Array(31)
     expect(() => createEngine(fresh(domain), domain, { port: 4310, linkSecret: short })).toThrow(/link secret/)
-    expect(() => createEngine(fresh(bare), bare, { port: 4310 })).not.toThrow()
+    expect(() => createEngine(fresh(bare), bare, { port: 4310, filesDir: tmpdir() })).not.toThrow()
   })
   test('/schema says which datasets carry a record link, so the grid offers its controls there only', async () => {
     const sources = (await send(app, await signIn(app, 'administrator'))('GET', '/api/schema')).body.sources

@@ -5,6 +5,7 @@ import { getConnInfo } from 'hono/bun'
 import { readable, scopeOf, visibleSource } from './access'
 import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
+import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
@@ -165,6 +166,8 @@ export interface EngineOptions {
   clientIp?: (req: Request) => string
   /** Signs record links; required, at least 32 bytes, when a dataset declares record_link. */
   linkSecret?: Uint8Array
+  /** Holds attachment files; required when a dataset declares attachments. */
+  filesDir?: string
 }
 
 const MIN_LINK_SECRET = 32
@@ -181,6 +184,10 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   if (domain.datasets.some((d) => d.record_link) && (linkSecret?.length ?? 0) < MIN_LINK_SECRET) {
     throw new Error(`a dataset declares record_link, so the engine needs a link secret of ${MIN_LINK_SECRET} bytes`)
   }
+  const { filesDir } = options
+  if (domain.datasets.some((d) => d.attachments) && !filesDir) {
+    throw new Error('a dataset declares attachments, so the engine needs a files directory')
+  }
   sqlite.run('PRAGMA foreign_keys = ON')
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
@@ -196,7 +203,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
 
   const app = root.basePath('/api')
   const mailer = options.mailer ?? (outbox ? outboxMailer(outbox) : undefined)
-  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl }
+  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl, filesDir }
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)
@@ -205,6 +212,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   ownerViewGuard(app, store, ipOf)
   authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
   if (linkSecret) recordLinkRoutes(app, store, linkSecret)
+  attachmentRoutes(app, store)
 
   app.get('/schema', (c) => {
     const format = c.req.query('format')
@@ -240,6 +248,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...ofOf(domain, s, actor),
             ...servedLinks(domain, s, actor),
             ...servedLookups(domain, s, actor),
+            ...(s.kind === 'dataset' ? servedAttachments(s, actor) : {}),
             ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
               ? { new_label: s.new_label }
               : {}),

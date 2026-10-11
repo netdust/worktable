@@ -5,6 +5,7 @@ import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
 import { mintActionToken, ownerSubject, revokeMintedBy } from './action-token'
+import { undoAttachments } from './attachments'
 import type {
   Actor,
   ColumnDecl,
@@ -46,6 +47,8 @@ export interface Store {
   domain: Domain
   mailer: Mailer
   appUrl: string
+  /** Where attachment files sit; set whenever a dataset declares attachments. */
+  filesDir?: string
 }
 
 export interface Writable {
@@ -724,6 +727,8 @@ export function undoBatch(
   return sqlite
     .transaction(() => {
       undoableBatch(sqlite, key, actor)
+      const files = undoAttachments(store, key, actor)
+      if (files) return files
       const planned = touchedBy(store, key)
         .reverse()
         .map((record) => planUndo(store, record, actor))

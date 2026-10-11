@@ -336,6 +336,27 @@ function checkLifecycle(dataset: DatasetDecl): void {
   }
 }
 
+const KIND = /^[a-z][a-z0-9_]*$/
+
+function checkAttachments(dataset: DatasetDecl): void {
+  const declared = dataset.attachments
+  if (!declared) return
+  const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `attachments ${message}`)
+  const kinds = Object.entries(declared.kinds ?? {})
+  if (kinds.length === 0) throw at('kinds', 'declare at least one kind')
+  for (const [kind, label] of kinds) {
+    if (!KIND.test(kind)) throw at(kind, `kind "${kind}" must match ${KIND}`)
+    if (typeof label !== 'string' || label.trim() === '') throw at(kind, `kind "${kind}" needs a label`)
+  }
+  const mb = declared.max_mb
+  if (mb !== undefined && !(Number.isInteger(mb) && mb >= 1 && mb <= 50)) {
+    throw at('max_mb', 'max_mb must be an integer from 1 to 50')
+  }
+  if (declared.owner_writable && !declared.owner_visible) {
+    throw at('owner_writable', 'owner_writable needs owner_visible')
+  }
+}
+
 function checkRecordLink(dataset: DatasetDecl): void {
   const link = dataset.record_link
   if (!link) return
@@ -433,12 +454,18 @@ export function validateDomain(domain: Domain): void {
     checkIcon(source)
     checkFacts(source)
     checkLinks(domain, source)
+    if (source.kind === 'query' && Object.hasOwn(source, 'attachments')) {
+      throw new DomainError(source.name, 'attachments', 'attachments are declared on a dataset, never a query')
+    }
   }
   checkSpace(domain)
   checkSections(domain)
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
+    if (dataset.name === 'file') {
+      throw new DomainError(dataset.name, dataset.name, '"file" is taken: the attachment routes read it as a file id')
+    }
     if (Object.hasOwn(dataset.columns, 'expect')) {
       throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
     }
@@ -446,6 +473,7 @@ export function validateDomain(domain: Domain): void {
     checkNewLabel(dataset)
     checkLifecycle(dataset)
     checkRecordLink(dataset)
+    checkAttachments(dataset)
     checkConfig(domain, dataset)
     checkLookups(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)

@@ -140,6 +140,8 @@ test('refuses to write its detail inside the repository', async () => {
       join(tmpdir(), 'copy.db'),
       '--outbox',
       join(tmpdir(), 'outbox'),
+      '--files-dir',
+      join(tmpdir(), 'files'),
       '--out',
       join(repo, 'scratch'),
     ],

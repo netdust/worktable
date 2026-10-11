@@ -20,6 +20,7 @@ const { values } = parseArgs({
     fresh: { type: 'boolean', default: false },
     'app-url': { type: 'string' },
     outbox: { type: 'string' },
+    'files-dir': { type: 'string' },
     'cookie-name': { type: 'string' },
     'create-admin': { type: 'string' },
     'create-account': { type: 'string' },
@@ -46,7 +47,7 @@ function fail(message: string): never {
 if (!values.domain || !values.db) {
   fail(
     'usage: serve.ts --domain <module> --db <file> [--port 4310] [--hostname 127.0.0.1] [--fresh]\n' +
-      '  [--app-url <url>] [--outbox <dir>] [--cookie-name <name>] [--link-secret-file <file>]\n' +
+      '  [--app-url <url>] [--outbox <dir>] [--files-dir <dir>] [--cookie-name <name>] [--link-secret-file <file>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
       '   | --disable-account <email> | --create-service <name> [--role editor|administrator]\n' +
       '   | --disable-service <name> | --rotate-service <name>]\n' +
@@ -227,6 +228,18 @@ function readLinkSecret(file: string | undefined): Uint8Array | undefined {
 }
 const linkSecret = readLinkSecret(values['link-secret-file'])
 
+// The files are personal documents, so the directory is owner-only even when it already existed.
+function filesDirOf(dir: string | undefined): string | undefined {
+  if (dir === undefined) {
+    if (domain.datasets.some((d) => d.attachments)) fail('this domain declares attachments: pass --files-dir')
+    return undefined
+  }
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  chmodSync(dir, 0o700)
+  return dir
+}
+const filesDir = filesDirOf(values['files-dir'])
+
 const port = Number(values.port)
 const server = Bun.serve({
   hostname: values.hostname,
@@ -237,6 +250,7 @@ const server = Bun.serve({
     outbox: values.outbox,
     cookieName: values['cookie-name'],
     linkSecret,
+    filesDir,
   }).fetch,
 })
 console.log(`engine listening on http://${server.hostname}:${server.port}`)

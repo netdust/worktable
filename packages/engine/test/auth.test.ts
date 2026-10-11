@@ -373,6 +373,7 @@ describe('the cookie name and the outbox', () => {
       port: 4310,
       clientIp: () => '127.0.0.1',
       linkSecret: TEST_LINK_SECRET,
+      filesDir: mkdtempSync(join(tmpdir(), 'wt-files-')),
     })
     const spies = (['log', 'info', 'warn', 'error'] as const).map((m) => spyOn(console, m))
     try {
@@ -535,6 +536,8 @@ describe('serve.ts', () => {
         box,
         '--link-secret-file',
         secret,
+        '--files-dir',
+        join(outbox, 'files'),
       ],
       { stdout: 'pipe', stderr: 'pipe' },
     )

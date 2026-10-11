@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { tmpdir } from 'node:os'
 import { createEngine, defineQuery, migrate, seedDomain } from '../src'
 import { contents, domain, freshDb, probes, projectDeleteHook, projectDeletes, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
@@ -154,7 +155,7 @@ describe('write denials', () => {
     const own = new Database(':memory:')
     migrate(own, domain)
     own.run('PRAGMA foreign_keys = OFF')
-    createEngine(own, domain, { port: 4310, linkSecret: TEST_LINK_SECRET })
+    createEngine(own, domain, { port: 4310, linkSecret: TEST_LINK_SECRET, filesDir: tmpdir() })
     expect(own.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
   })
 })

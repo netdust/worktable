@@ -18,7 +18,8 @@ export default defineConfig({
       command:
         'mkdir -p e2e/.tmp && (umask 077 && head -c 32 /dev/urandom > e2e/.tmp/link-secret && chmod 600 e2e/.tmp/link-secret) &&' +
         ' bun packages/engine/src/serve.ts --domain @worktable/theatre --db e2e/.tmp/e2e.db --port 4311 --fresh' +
-        ' --outbox e2e/.tmp/outbox --app-url http://127.0.0.1:5174 --link-secret-file e2e/.tmp/link-secret',
+        ' --outbox e2e/.tmp/outbox --files-dir e2e/.tmp/files --app-url http://127.0.0.1:5174' +
+        ' --link-secret-file e2e/.tmp/link-secret',
       wait: { stdout: /engine listening/ },
       reuseExistingServer: false,
       timeout: 120_000,

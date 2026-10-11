@@ -84,6 +84,14 @@ export interface LookupDecl {
   from?: string
 }
 
+/** Files on a dataset's records: `kinds` keyed by identifier, at most `max_mb` each (default 10). */
+export interface AttachmentsDecl {
+  kinds: Record<string, string>
+  max_mb?: number
+  owner_visible?: true
+  owner_writable?: true
+}
+
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
@@ -114,6 +122,7 @@ export interface DatasetDecl {
   lifecycle?: LifecycleDecl
   /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
   record_link?: { email?: string }
+  attachments?: AttachmentsDecl
 }
 
 export interface QueryDecl {

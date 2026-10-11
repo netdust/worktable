@@ -18,6 +18,7 @@ export function testEngine(sqlite: Database, domain: Domain, options: Partial<En
   const app = createEngine(sqlite, domain, {
     port: 4310,
     outbox,
+    filesDir: mkdtempSync(join(tmpdir(), 'wt-files-')),
     clientIp: () => '127.0.0.1',
     linkSecret: TEST_LINK_SECRET,
     ...options,
