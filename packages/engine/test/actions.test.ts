@@ -119,6 +119,17 @@ const actions: Record<string, ActionDecl> = {
       creates: [parentOf(record.id, 'ouder')],
     }),
   },
+  // Renames every note of the project, read with ctx.findAll.
+  rename_all: {
+    label: 'Rename all',
+    on: 'project',
+    input: {},
+    run: (record, _, ctx) => ({
+      updates: ctx
+        .findAll('note', { project_id: record.id })
+        .map((note) => ({ dataset: 'note', id: Number(note.id), values: { tekst: `${note.tekst}!` } })),
+    }),
+  },
   // A note an owner may create, then an entry its writer refuses to an owner.
   make_entry: {
     label: 'Make entry',
@@ -325,6 +336,30 @@ describe('actions', () => {
       actions: { bad: { label: 'Bad', on: 'project', input: { x: { relation: 'nope', label: 'X' } }, run: () => [] } },
     }
     expect(() => validateDomain(bad)).toThrow(DomainError)
+  })
+})
+
+describe('ctx.findAll in an action', () => {
+  const notes = (count: number) => {
+    const insert = sqlite.prepare('INSERT INTO note (project_id, tekst, lengte) VALUES (3, ?, 1)')
+    sqlite.transaction(() => {
+      for (let n = 0; n < count; n++) insert.run(`n${n}`)
+    })()
+  }
+
+  test('reads every matching row, up to 5000', async () => {
+    notes(5000)
+    const res = await act(editor, 'rename_all', { id: 3 })
+    expect(res.status).toBe(201)
+    expect(sqlite.query("SELECT count(*) AS n FROM note WHERE tekst LIKE '%!'").get()).toEqual({ n: 5000 })
+  }, 30_000)
+
+  test('5001 matching rows refuse the action with 422, and nothing is written', async () => {
+    notes(5001)
+    const res = await act(editor, 'rename_all', { id: 3 })
+    expect(res.status).toBe(422)
+    expect(res.body.message).toContain('5000')
+    expect(sqlite.query("SELECT count(*) AS n FROM note WHERE tekst LIKE '%!'").get()).toEqual({ n: 0 })
   })
 })
 
