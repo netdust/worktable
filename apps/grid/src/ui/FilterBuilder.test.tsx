@@ -71,7 +71,7 @@ describe('the filter builder', () => {
     bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }, { field: 'plandag', op: 'week', values: [] }])
     open()
     const operators = (n: number) => within(listOf(row(n), 'Vergelijking')).getAllByRole('option').map((o) => o.textContent)
-    expect(operators(0)).toEqual(['is deze week', 'is volgende week', 'is deze maand', 'ligt tussen'])
+    expect(operators(0)).toEqual(['is vandaag', 'is deze week', 'is volgende week', 'is deze maand', 'ligt tussen'])
     expect(operators(1)).toEqual(['bevat', 'bevat niet', 'is', 'is leeg'])
   })
 

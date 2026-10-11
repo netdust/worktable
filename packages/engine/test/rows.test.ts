@@ -76,7 +76,7 @@ describe('$like, $nlike and $period', () => {
 
   const onText = 'only supported on text columns'
   const onDate = 'only supported on date or datetime columns'
-  const tokens = '$period takes week, next_week, month'
+  const tokens = '$period takes today, week, next_week, month'
   test.each([
     ['$like on an integer column', { prio: { $like: '1' } }, onText],
     ['$like on a date column', { day: { $like: '2026' } }, onText],

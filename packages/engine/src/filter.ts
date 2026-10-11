@@ -93,6 +93,7 @@ const ymd = (d: Date): string =>
 
 // In the server's local date: weeks run Monday to Sunday, a month is the calendar month.
 function periodDays(period: Period, now: Date): [string, string] {
+  if (period === 'today') return [ymd(now), ymd(now)]
   const y = now.getFullYear()
   const m = now.getMonth()
   if (period === 'month') return [ymd(new Date(y, m, 1)), ymd(new Date(y, m + 1, 0))]

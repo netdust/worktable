@@ -14,10 +14,14 @@ import { Pick } from './Pick'
 export const OPERATORS: Record<Kind, Op[]> = {
   choice: ['in', 'nin', 'empty', 'filled'],
   text: ['like', 'nlike', 'eq', 'empty'],
-  date: ['week', 'next_week', 'month', 'between'],
-  datetime: ['week', 'next_week', 'month', 'between'],
+  date: ['today', 'week', 'next_week', 'month', 'between'],
+  datetime: ['today', 'week', 'next_week', 'month', 'between'],
   bool: ['in'],
 }
+
+// A new date condition starts at this week, as a planner reads a sheet; today is one choice further.
+const START: Partial<Record<Kind, Op>> = { date: 'week', datetime: 'week' }
+const startOp = (kind: Kind): Op => START[kind] ?? (OPERATORS[kind][0] as Op)
 
 const OPTIONS_SHOWN = 6
 
@@ -55,7 +59,7 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
   }
   const add = () => {
     const field = fields.find((f) => !filters.some((c) => c.field === f.field)) ?? fields[0]
-    if (field) onChange([...filters, { field: field.field, op: OPERATORS[field.kind][0] as Op, values: startOf(field) }])
+    if (field) onChange([...filters, { field: field.field, op: startOp(field.kind), values: startOf(field) }])
   }
 
   return (
@@ -74,7 +78,7 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
               options={fields.map((f) => ({ value: f.field, label: f.label, icon: iconOf(f) }))}
               onChange={(name) => {
                 const next = fieldOf(name)
-                if (next) setAt(at, { field: next.field, op: OPERATORS[next.kind][0] as Op, values: startOf(next) })
+                if (next) setAt(at, { field: next.field, op: startOp(next.kind), values: startOf(next) })
               }} />
             <Pick label={t('filterOperator')} value={condition.op} className="nv-fb__op"
               options={OPERATORS[kind].map((op) => ({ value: op, label: t(opWord(kind, op)) }))}

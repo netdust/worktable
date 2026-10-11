@@ -109,6 +109,10 @@ describe('$period resolves against the injected now', () => {
   test('week is Monday to Sunday around now', () => {
     expect(within('day', 'week', newYearsEve)).toEqual(['2026-12-28', '2026-12-31', '2027-01-03'])
   })
+  test('today is the one day around now', () => {
+    expect(within('day', 'today', newYearsEve)).toEqual(['2026-12-31'])
+    expect(within('start_at', 'today', newYearsEve)).toEqual(['2026-12-31'])
+  })
   test('next_week is the following Monday to Sunday', () => {
     expect(within('day', 'next_week', newYearsEve)).toEqual(['2027-01-04', '2027-01-10'])
   })
