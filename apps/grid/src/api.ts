@@ -23,7 +23,8 @@ function toApiError(error: unknown): ApiError {
     const named = 'label' in error && typeof error.label === 'string' ? { label: error.label } : {}
     const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
     const key = 'key' in error && typeof error.key === 'string' ? { key: error.key } : {}
-    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key }
+    const dataset = 'dataset' in error && typeof error.dataset === 'string' ? { dataset: error.dataset } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }

@@ -177,7 +177,7 @@ describe("a person's link in the drawer", () => {
 })
 
 describe("a record's files in the drawer", () => {
-  const files = { dataset: 'activity', kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20 }
+  const files = { dataset: 'activity', kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20, writable: true as const, version: '0' }
   const rider = { id: 7, kind: 'rider', name: 'rider.pdf', mime: 'application/pdf', size: 48_000, own: true, created_at: '2026-10-01 09:00:00' }
   const photo = { id: 8, kind: 'foto', name: 'zaal.jpg', mime: 'image/jpeg', size: 3_000, own: true, created_at: '2026-10-01 09:01:00' }
   const pdf = () => new File(['%PDF-1.4'], 'zaalblad.pdf', { type: 'application/pdf' })
@@ -218,10 +218,10 @@ describe("a record's files in the drawer", () => {
 
     expect(remote.uploadAttachment).toHaveBeenCalledExactlyOnceWith('activity', 1, 'foto', file)
     expect(section.getByRole('link', { name: 'zaalblad.pdf' })).toBeTruthy()
-    expect(onBatch).toHaveBeenCalledExactlyOnceWith('b-up', expect.any(Function))
+    expect(onBatch).toHaveBeenCalledExactlyOnceWith('b-up')
   })
 
-  it('deletes a file and hands its batch to the history; the refresh reads the list again', async () => {
+  it('deletes a file and hands its batch to the history', async () => {
     remote.attachmentsOf.mockResolvedValue([rider, photo])
     remote.removeAttachment.mockResolvedValue('b-del')
     const onBatch = vi.fn()
@@ -230,11 +230,60 @@ describe("a record's files in the drawer", () => {
     await act(async () => fireEvent.click(await section.findByRole('button', { name: 'rider.pdf verwijderen' })))
     expect(remote.removeAttachment).toHaveBeenCalledExactlyOnceWith(7)
     expect(section.queryByRole('link', { name: 'rider.pdf' })).toBeNull()
-    expect(onBatch).toHaveBeenCalledExactlyOnceWith('b-del', expect.any(Function))
+    expect(onBatch).toHaveBeenCalledExactlyOnceWith('b-del')
+  })
 
-    await act(async () => onBatch.mock.calls[0][1]())
+  it('reads the list again when its version moves', async () => {
+    remote.attachmentsOf.mockResolvedValueOnce([photo]).mockResolvedValueOnce([rider, photo])
+    const { rerender } = render(<Drawer row={row(1, 'Montage')} columns={[]} attachments={files} onClose={() => undefined} />)
+    const section = within(await screen.findByRole('region', { name: 'Bijlagen' }))
+    await section.findByRole('link', { name: 'zaal.jpg' })
+
+    await act(async () => rerender(<Drawer row={row(1, 'Montage')} columns={[]} attachments={{ ...files, version: '1' }} onClose={() => undefined} />))
+
     expect(remote.attachmentsOf).toHaveBeenCalledTimes(2)
     expect(section.getByRole('link', { name: 'rider.pdf' })).toBeTruthy()
+  })
+
+  it('lists the files of a dataset it may not write, offering no upload or delete', async () => {
+    remote.attachmentsOf.mockResolvedValue([rider])
+    const { writable: _, ...readOnly } = files
+    const section = await shown({ attachments: readOnly })
+
+    await section.findByRole('link', { name: 'rider.pdf' })
+    expect(section.queryByRole('button', { name: 'rider.pdf verwijderen' })).toBeNull()
+    expect(section.queryByLabelText('Bestand toevoegen')).toBeNull()
+    expect(section.queryByRole('button', { name: /^Soort/ })).toBeNull()
+  })
+
+  it.each([
+    ['bad_name', 'name must be 1 to 200 characters', 'Deze bestandsnaam kan niet: hoogstens 200 tekens, zonder stuurtekens.'],
+    ['rate_limited', 'Too many requests', 'Te veel bestanden in korte tijd. Probeer het zo meteen opnieuw.'],
+    ['read_only', '"activity" does not accept attachments', 'Hier kunnen geen bestanden toegevoegd of verwijderd worden.'],
+    ['forbidden', 'An owner may not add files here', 'Je mag hier geen bestanden toevoegen of verwijderen.'],
+    ['length_required', 'An upload needs a Content-Length', 'Het bestand kwam niet volledig aan. Probeer het opnieuw.'],
+  ])('says a refused upload with %s in Dutch', async (code, message, said) => {
+    remote.attachmentsOf.mockResolvedValue([])
+    remote.uploadAttachment.mockRejectedValue({ code, message })
+    const section = await shown()
+
+    await choose(pdf())
+
+    expect(section.getByRole('alert').textContent).toBe(said)
+  })
+
+  it.each([
+    ['unknown_attachment', 'unknown attachment', 'Dit bestand bestaat niet meer of je mag het niet zien.'],
+    ['forbidden', 'An owner deletes only its own files', 'Je mag hier geen bestanden toevoegen of verwijderen.'],
+  ])('says a refused delete with %s in Dutch', async (code, message, said) => {
+    remote.attachmentsOf.mockResolvedValue([rider])
+    remote.removeAttachment.mockRejectedValue({ code, message })
+    const section = await shown()
+
+    const remove = await section.findByRole('button', { name: 'rider.pdf verwijderen' })
+    await act(async () => fireEvent.click(remove))
+
+    expect(section.getByRole('alert').textContent).toBe(said)
   })
 
   it.each([

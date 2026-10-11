@@ -173,10 +173,17 @@ describe('toSchema', () => {
 
   it("carries a dataset's attachment kinds and limit to its model, and none where it declares none", () => {
     const attachments = { kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20, owner_visible: true as const }
-    const schema = toSchema({ sources: { ...engine.sources, activiteit: { ...engine.sources.activiteit, attachments } } })
+    const schema = toSchema({ sources: { ...engine.sources, activiteit: { ...engine.sources.activiteit, attachments, writable: false } } })
 
     expect(schema.models.activiteit.attachments).toEqual({ kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20 })
     expect(schema.models.productie).not.toHaveProperty('attachments')
+  })
+
+  it('marks the attachments of a writable dataset writable', () => {
+    const attachments = { kinds: { rider: 'Rider' }, max_mb: 20 }
+    const schema = toSchema({ sources: { ...engine.sources, activiteit: { ...engine.sources.activiteit, attachments, writable: true } } })
+
+    expect(schema.models.activiteit.attachments).toEqual({ kinds: { rider: 'Rider' }, max_mb: 20, writable: true })
   })
 })
 

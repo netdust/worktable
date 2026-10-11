@@ -267,6 +267,13 @@ const strings = {
   attachmentAdd: 'Bestand toevoegen',
   attachmentType: 'Dit bestandstype kan niet. Gebruik pdf, jpg, png of webp.',
   attachmentTooLarge: 'Dit bestand is te groot (max. {n} MB).',
+  attachmentName: 'Deze bestandsnaam kan niet: hoogstens 200 tekens, zonder stuurtekens.',
+  attachmentRateLimited: 'Te veel bestanden in korte tijd. Probeer het zo meteen opnieuw.',
+  attachmentReadOnly: 'Hier kunnen geen bestanden toegevoegd of verwijderd worden.',
+  attachmentForbidden: 'Je mag hier geen bestanden toevoegen of verwijderen.',
+  attachmentLength: 'Het bestand kwam niet volledig aan. Probeer het opnieuw.',
+  attachmentGone: 'Dit bestand bestaat niet meer of je mag het niet zien.',
+  attachmentChangedSince: 'Dit bestand is intussen gewijzigd.',
 }
 
 export type StringKey = keyof typeof strings
@@ -319,6 +326,7 @@ export function undoText(error: Partial<ApiError>): string {
   const code = error.code ?? 'unknown'
   const label = error.label ?? ''
   const said = code === 'in_use' && error.by?.length ? inUse(error.by)
+    : code === 'changed_since' && error.dataset === 'attachment' ? t('attachmentChangedSince')
     : code === 'changed_since' ? t(error.column === 'deleted_at' ? 'deletedSince' : 'changedSince', { label })
     : code === 'already_undone' ? t('alreadyUndone')
     : code === 'not_undoable' ? t('notUndoable')

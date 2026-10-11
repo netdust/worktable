@@ -74,7 +74,7 @@ export interface Model {
   /** Each record has a link its person reads their views through. */
   record_link?: true
   /** Files its records carry, by kind; the drawer lists and takes them. */
-  attachments?: { kinds: Record<string, string>; max_mb: number }
+  attachments?: { kinds: Record<string, string>; max_mb: number; writable?: true }
   fields: Record<string, Field>
 }
 
@@ -299,6 +299,8 @@ export interface ApiError {
   /** On a 409 `changed_since`: the column that changed, and its label. */
   column?: string
   label?: string
+  /** On a 409 `changed_since`: the dataset of the record that changed. */
+  dataset?: string
   /** On a refusal about one column, such as one not shown to owners. */
   key?: string
 }

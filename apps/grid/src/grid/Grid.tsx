@@ -63,6 +63,8 @@ export interface GridProps {
   onNotice?: (message: string) => void
   /** The model's dataset when the drawer copies and renews its records' links; an administrator's. */
   recordLink?: string
+  /** Counts the view's reads; the drawer's files read again with each. */
+  reloads?: number
 }
 
 const NO_MODELS: Record<string, Model> = {}
@@ -77,7 +79,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links, onNotice, recordLink }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -135,6 +137,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Focus moves to a cell only after the grid itself moved it; a search filtering rows must keep its focus.
   const moved = useRef(false)
   const [drawer, setDrawer] = useState<number | null>(null)
+  const [filesVersions, setFilesVersions] = useState<Record<string, number>>({})
   const [related, setRelated] = useState<{ row: Row; columns: Column[]; model: Model } | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
 
@@ -314,8 +317,14 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
 
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
 
-  const filesOf = (of: Model, id: number) => (of.attachments && id !== DRAFT ? { ...of.attachments, dataset: of.key } : undefined)
-  const batchOn = (of: Model, id: number) => (batch: string, refresh: () => void) => store.push({ batch: Promise.resolve(batch), model: of.key, id, refresh })
+  // Kept here, not in the drawer: an undo after the drawer closed and opened again must reach the open one.
+  const filesOf = (of: Model, id: number) =>
+    of.attachments && id !== DRAFT ? { ...of.attachments, dataset: of.key, version: `${filesVersions[`${of.key}:${id}`] ?? 0}:${reloads}` } : undefined
+  const batchOn = (of: Model, id: number) => (batch: string) => {
+    const key = `${of.key}:${id}`
+    const refresh = () => setFilesVersions((was) => ({ ...was, [key]: (was[key] ?? 0) + 1 }))
+    store.push({ batch: Promise.resolve(batch), model: of.key, id, refresh })
+  }
 
   return (
     <LinksContext.Provider value={links ?? null}>

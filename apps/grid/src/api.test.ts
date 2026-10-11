@@ -578,7 +578,7 @@ describe('writes', () => {
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } })
 
     fetcher.mockImplementationOnce(async () => json({ code: 'changed_since', message: '"status" changed since', dataset: 'activiteit', id: 7, column: 'status', label: 'Status' }, 409))
-    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status' })
+    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status', dataset: 'activiteit' })
   })
 
   it('runs an action on a record with its input, and answers its batch', async () => {
