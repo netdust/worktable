@@ -298,15 +298,18 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
   ]
 
   // The leak script as a test.
-  test('for every view for owners, every key of every row is owner-visible and listed, and only the subject`s rows', async () => {
+  test('for every view for owners, every key of every row is owner-visible and listed, never a lookup, and only the subject`s rows', async () => {
     for (const [n, body] of VIEWS.entries()) await forOwners(await viewAs(admin, { name: `View ${n}`, ...body }))
     const source = domain.queries.find((q) => q.name === 'per_project')
     const ownerVisible = (key: string) => (source?.columns[key] as ColumnDecl | undefined)?.owner_visible === true
+    const lookupNames = domain.datasets.flatMap((d) => Object.keys(d.lookups ?? {}))
+    expect(lookupNames.length).toBeGreaterThan(0)
     const listed = await asLink('/api/owner/views')
     expect(listed.body.views).toHaveLength(VIEWS.length)
     for (const view of listed.body.views as { id: number; columns: { key: string }[] }[]) {
       const keys = view.columns.map((c) => c.key)
       expect(keys.every(ownerVisible)).toBe(true)
+      for (const name of lookupNames) expect(keys).not.toContain(name)
       const res = await asLink(`/api/owner/views/${view.id}/rows`)
       expect(res.status).toBe(200)
       expect(res.body.rows.length).toBeGreaterThan(0)
@@ -316,7 +319,7 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
           expect(keys).toContain(key)
           expect(ownerVisible(key)).toBe(true)
         }
-        for (const key of NEVER) expect(Object.hasOwn(row, key)).toBe(false)
+        for (const key of [...NEVER, ...lookupNames]) expect(Object.hasOwn(row, key)).toBe(false)
       }
       expect(Object.keys(res.body).sort()).toEqual(['columns', 'rows', 'total'])
     }
