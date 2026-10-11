@@ -2,7 +2,10 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, ModelAction, Row } from '../types'
 
-const remote = vi.hoisted(() => ({ records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn() }))
+const remote = vi.hoisted(() => ({
+  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(),
+  attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`,
+}))
 vi.mock('../api', () => remote)
 const { Drawer, linkedDataset } = await import('./Drawer')
 import { columnsFor } from './columns'
@@ -170,5 +173,88 @@ describe("a person's link in the drawer", () => {
     expect(remote.rotateRecordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(`${LINK}-new`)
     expect(screen.getByRole('status').textContent).toBe('Nieuwe link gekopieerd; de vorige werkt niet meer')
+  })
+})
+
+describe("a record's files in the drawer", () => {
+  const files = { dataset: 'activity', kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20 }
+  const rider = { id: 7, kind: 'rider', name: 'rider.pdf', mime: 'application/pdf', size: 48_000, own: true, created_at: '2026-10-01 09:00:00' }
+  const photo = { id: 8, kind: 'foto', name: 'zaal.jpg', mime: 'image/jpeg', size: 3_000, own: true, created_at: '2026-10-01 09:01:00' }
+  const pdf = () => new File(['%PDF-1.4'], 'zaalblad.pdf', { type: 'application/pdf' })
+
+  async function shown(props: Partial<Parameters<typeof Drawer>[0]> = {}) {
+    render(<Drawer row={row(1, 'Montage')} columns={[]} attachments={files} onBatch={vi.fn()} onClose={() => undefined} {...props} />)
+    return within(await screen.findByRole('region', { name: 'Bijlagen' }))
+  }
+  const choose = async (file: File) => {
+    await act(async () => fireEvent.change(screen.getByLabelText('Bestand toevoegen'), { target: { files: [file] } }))
+  }
+
+  afterEach(() => vi.clearAllMocks())
+
+  it("lists each file with its kind, name and size, and opens it at its address in a new tab", async () => {
+    remote.attachmentsOf.mockResolvedValue([rider])
+    const section = await shown()
+
+    expect(remote.attachmentsOf).toHaveBeenCalledWith('activity', 1)
+    const item = await section.findByRole('listitem')
+    expect(item.textContent).toContain('Rider')
+    expect(item.textContent).toContain('47 kB')
+    const open = within(item).getByRole('link', { name: 'rider.pdf' })
+    expect(open.getAttribute('href')).toBe('/api/attachments/file/7')
+    expect(open.getAttribute('target')).toBe('_blank')
+  })
+
+  it('uploads a chosen file with the picked kind, lists it and hands its batch to the history', async () => {
+    remote.attachmentsOf.mockResolvedValue([])
+    remote.uploadAttachment.mockResolvedValue({ attachment: { ...photo, name: 'zaalblad.pdf', mime: 'application/pdf' }, batch: 'b-up' })
+    const onBatch = vi.fn()
+    const section = await shown({ onBatch })
+
+    fireEvent.click(section.getByRole('button', { name: 'Soort: Rider' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Foto' }))
+    const file = pdf()
+    await choose(file)
+
+    expect(remote.uploadAttachment).toHaveBeenCalledExactlyOnceWith('activity', 1, 'foto', file)
+    expect(section.getByRole('link', { name: 'zaalblad.pdf' })).toBeTruthy()
+    expect(onBatch).toHaveBeenCalledExactlyOnceWith('b-up', expect.any(Function))
+  })
+
+  it('deletes a file and hands its batch to the history; the refresh reads the list again', async () => {
+    remote.attachmentsOf.mockResolvedValue([rider, photo])
+    remote.removeAttachment.mockResolvedValue('b-del')
+    const onBatch = vi.fn()
+    const section = await shown({ onBatch })
+
+    await act(async () => fireEvent.click(await section.findByRole('button', { name: 'rider.pdf verwijderen' })))
+    expect(remote.removeAttachment).toHaveBeenCalledExactlyOnceWith(7)
+    expect(section.queryByRole('link', { name: 'rider.pdf' })).toBeNull()
+    expect(onBatch).toHaveBeenCalledExactlyOnceWith('b-del', expect.any(Function))
+
+    await act(async () => onBatch.mock.calls[0][1]())
+    expect(remote.attachmentsOf).toHaveBeenCalledTimes(2)
+    expect(section.getByRole('link', { name: 'rider.pdf' })).toBeTruthy()
+  })
+
+  it.each([
+    [{ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' }, 'Dit bestandstype kan niet. Gebruik pdf, jpg, png of webp.'],
+    [{ code: 'body_too_large', message: 'too large' }, 'Dit bestand is te groot (max. 20 MB).'],
+  ])('says a refused upload in Dutch: %o', async (refusal, said) => {
+    remote.attachmentsOf.mockResolvedValue([])
+    remote.uploadAttachment.mockRejectedValue(refusal)
+    const onBatch = vi.fn()
+    const section = await shown({ onBatch })
+
+    await choose(pdf())
+
+    expect(section.getByRole('alert').textContent).toBe(said)
+    expect(onBatch).not.toHaveBeenCalled()
+  })
+
+  it('shows no files section on a model without attachments', () => {
+    render(<Drawer row={row(1, 'Montage')} columns={[]} onClose={() => undefined} />)
+    expect(screen.queryByRole('region', { name: 'Bijlagen' })).toBeNull()
+    expect(remote.attachmentsOf).not.toHaveBeenCalled()
   })
 })

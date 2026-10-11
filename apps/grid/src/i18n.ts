@@ -261,6 +261,12 @@ const strings = {
   transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
   undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
   redoSkipped: 'Opnieuw doen kan hier niet',
+  attachments: 'Bijlagen',
+  attachmentsNone: 'Nog geen bijlagen',
+  attachmentKind: 'Soort',
+  attachmentAdd: 'Bestand toevoegen',
+  attachmentType: 'Dit bestandstype kan niet. Gebruik pdf, jpg, png of webp.',
+  attachmentTooLarge: 'Dit bestand is te groot (max. {n} MB).',
 }
 
 export type StringKey = keyof typeof strings
@@ -330,6 +336,14 @@ export function inUse(by: { label: string; count: number }[]): string {
 /** "21 rijen"; "5000+ rijen" where the read limit cut the rows. */
 export function rowCount(n: number, cut = false): string {
   return cut ? t('rows', { n: `${n}+` }) : n === 1 ? t('row') : t('rows', { n })
+}
+
+const KB = 1024
+
+/** "47 kB", "2,3 MB": a file's size as the page's language writes numbers. */
+export function fileSize(bytes: number): string {
+  const number = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 })
+  return bytes < KB * KB ? `${number.format(Math.max(1, Math.round(bytes / KB)))} kB` : `${number.format(bytes / KB / KB)} MB`
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */

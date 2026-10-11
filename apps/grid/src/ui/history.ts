@@ -6,6 +6,8 @@ export interface Entry {
   batch: Promise<string | null>
   model: string
   id: number | null
+  /** Repaints what the step changed beside the rows, such as a record's files. */
+  refresh?: () => void
 }
 
 export interface History {

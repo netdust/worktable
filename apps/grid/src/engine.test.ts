@@ -170,6 +170,14 @@ describe('toSchema', () => {
     expect(schema.models.productie.actions).toEqual([apply])
     expect(schema.models.activiteit).not.toHaveProperty('actions')
   })
+
+  it("carries a dataset's attachment kinds and limit to its model, and none where it declares none", () => {
+    const attachments = { kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20, owner_visible: true as const }
+    const schema = toSchema({ sources: { ...engine.sources, activiteit: { ...engine.sources.activiteit, attachments } } })
+
+    expect(schema.models.activiteit.attachments).toEqual({ kinds: { rider: 'Rider', foto: 'Foto' }, max_mb: 20 })
+    expect(schema.models.productie).not.toHaveProperty('attachments')
+  })
 })
 
 describe('writes', () => {

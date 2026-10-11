@@ -13,7 +13,8 @@ import { createStore, type StoreApi } from './store'
 const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(),
+  attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}` }))
 vi.mock('../api', () => remote)
 const { App } = await import('../ui/App')
 
@@ -992,6 +993,29 @@ describe('the drawer', () => {
     return screen.getByRole('complementary', { name: title })
   }
   const deletable: Model = { ...activity, deletable: true }
+
+  const attaching: Model = { ...activity, attachments: { kinds: { rider: 'Rider' }, max_mb: 20 } }
+  const rider = { id: 7, kind: 'rider', name: 'rider.pdf', mime: 'application/pdf', size: 48_000, own: true, created_at: '2026-10-01 09:00:00' }
+
+  it("deletes a record's file, and Ctrl+Z undoes its batch and reads the files again", async () => {
+    renderGrid(calais, { model: attaching })
+    remote.attachmentsOf.mockResolvedValueOnce([rider]).mockResolvedValueOnce([rider])
+    remote.removeAttachment.mockResolvedValueOnce('b-del')
+    api.undo.mockResolvedValueOnce('u-del')
+    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+
+    const remove = await files.findByRole('button', { name: 'rider.pdf verwijderen' })
+    await act(async () => fireEvent.click(remove))
+    expect(files.queryByRole('link', { name: 'rider.pdf' })).toBeNull()
+
+    fireEvent.click(cell('Montage', 'place'))
+    await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
+
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-del')
+    expect(remote.attachmentsOf).toHaveBeenCalledTimes(2)
+    expect(files.getByRole('link', { name: 'rider.pdf' })).toBeTruthy()
+    remote.attachmentsOf.mockReset()
+  })
 
   it('offers Verwijderen only for a deletable model', () => {
     renderGrid()

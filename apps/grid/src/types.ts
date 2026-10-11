@@ -73,6 +73,8 @@ export interface Model {
   actions?: ModelAction[]
   /** Each record has a link its person reads their views through. */
   record_link?: true
+  /** Files its records carry, by kind; the drawer lists and takes them. */
+  attachments?: { kinds: Record<string, string>; max_mb: number }
   fields: Record<string, Field>
 }
 

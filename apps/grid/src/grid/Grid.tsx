@@ -135,7 +135,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Focus moves to a cell only after the grid itself moved it; a search filtering rows must keep its focus.
   const moved = useRef(false)
   const [drawer, setDrawer] = useState<number | null>(null)
-  const [related, setRelated] = useState<{ row: Row; columns: Column[] } | null>(null)
+  const [related, setRelated] = useState<{ row: Row; columns: Column[]; model: Model } | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
 
   const sheet: Sheet = {
@@ -308,11 +308,14 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       const targetModel = models[target]
       if (!found || !targetModel) return gone()
       setDrawer(null)
-      setRelated({ row: found, columns: columnsFor(targetModel, { ...view, columns: undefined, lookups: {}, rollups: {} }, false, models) })
+      setRelated({ row: found, model: targetModel, columns: columnsFor(targetModel, { ...view, columns: undefined, lookups: {}, rollups: {} }, false, models) })
     }, gone)
   }
 
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
+
+  const filesOf = (of: Model, id: number) => (of.attachments && id !== DRAFT ? { ...of.attachments, dataset: of.key } : undefined)
+  const batchOn = (of: Model, id: number) => (batch: string, refresh: () => void) => store.push({ batch: Promise.resolve(batch), model: of.key, id, refresh })
 
   return (
     <LinksContext.Provider value={links ?? null}>
@@ -333,8 +336,10 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
-        {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} />}
+        {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)}
+          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} recordLink={open.id === DRAFT ? undefined : recordLink}
+          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
           onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>

@@ -36,6 +36,10 @@ const statussen = {
   tones: { optie: 'warn', bevestigd: 'ok', geannuleerd: 'bad' },
 } as const
 
+const bijlagen = {
+  kinds: { rider: 'Rider', zaalblad: 'Zaalblad', bonnetje: 'Bonnetje', foto: 'Foto', document: 'Document' },
+}
+
 export const organisatie = defineDataset({
   name: 'organisatie',
   label: 'Organisaties',
@@ -134,6 +138,7 @@ export const activiteit = defineDataset({
     },
   },
   indexes: [['plandag']],
+  attachments: bijlagen,
 })
 
 export const persoon = defineDataset({
@@ -245,6 +250,7 @@ export const toewijzing = defineDataset({
     token_projection: ['activiteit_id', 'rol_id', 'state'],
   },
   indexes: [['persoon_id'], ['activiteit_id']],
+  attachments: bijlagen,
 })
 
 export const beschikbaarheid = defineDataset({
@@ -308,6 +314,7 @@ export const speelreeks = defineDataset({
       ...statussen,
     },
   },
+  attachments: bijlagen,
 })
 
 export const sjabloon = defineDataset({

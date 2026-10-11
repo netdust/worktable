@@ -72,6 +72,7 @@ export interface EngineSource {
   lifecycle?: { column: string }
   /** Each record has a link its person reads their views through. */
   record_link?: true
+  attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
 }
 
 /** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
@@ -189,6 +190,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
+    ...(source.attachments ? { attachments: { kinds: source.attachments.kinds, max_mb: source.attachments.max_mb } } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
       ...Object.fromEntries(Object.entries(source.lookups ?? {}).map(([key, lookup]) => [key, lookupField(lookup, source, sources)])),
