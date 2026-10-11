@@ -283,7 +283,6 @@ describe('a link actor is confined (attack 11)', () => {
       ['GET', '/api/history/taak'],
       ['GET', '/api/revisions/note/1'],
       ['POST', '/api/rows/note', { project_id: 1, tekst: 'x' }],
-      ['PATCH', '/api/rows/note/1', { tekst: 'x' }],
       ['DELETE', '/api/rows/note/1'],
       ['POST', '/api/actions/copy_notes', { id: 1, input: { source: 1 } }],
       ['POST', '/api/batches/own/undo', {}],
@@ -293,6 +292,8 @@ describe('a link actor is confined (attack 11)', () => {
       ['PUT', '/api/sources/taak/display', { label: 'x' }],
     ]
     for (const [method, path, body] of calls) await denied(() => asLink(token, method, path, body), 403, 'forbidden')
+    // PATCH passes the fence; a column the dataset does not declare owner_writable is refused by name.
+    await denied(() => asLink(token, 'PATCH', '/api/rows/note/1', { tekst: 'x' }), 403, 'column_not_owner_writable')
   })
 })
 
@@ -308,7 +309,7 @@ describe('the link secret', () => {
     expect(() => createEngine(fresh(domain), domain, { port: 4310 })).toThrow(/link secret/)
     const short = new Uint8Array(31)
     expect(() => createEngine(fresh(domain), domain, { port: 4310, linkSecret: short })).toThrow(/link secret/)
-    expect(() => createEngine(fresh(bare), bare, { port: 4310 })).not.toThrow()
+    expect(() => createEngine(fresh(bare), bare, { port: 4310, filesDir: tmpdir() })).not.toThrow()
   })
   test('/schema says which datasets carry a record link, so the grid offers its controls there only', async () => {
     const sources = (await send(app, await signIn(app, 'administrator'))('GET', '/api/schema')).body.sources

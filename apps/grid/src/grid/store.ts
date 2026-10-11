@@ -62,6 +62,8 @@ export interface Store {
   create: (fields: Record<string, unknown>) => Promise<void>
   /** Soft-deletes the record; a refusal keeps the row and raises the notice. No undo. */
   remove: (id: number) => Promise<void>
+  /** A step made outside the rows, such as a file added in the drawer, into the undo history. */
+  push: (entry: Entry) => void
   dismiss: (id: number, field: string) => void
 }
 
@@ -239,8 +241,9 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     if (found) replace(found)
   }
 
-  /** Repaints the undone step's row as the server now has it; a step on another view's rows, or an action, reloads. */
+  /** Repaints the undone step's row as the server now has it; a step on another view's rows, or an action, reloads; a step with its own refresh runs it. */
   async function repaint(entry: Entry): Promise<void> {
+    if (entry.refresh) return entry.refresh()
     const found = entry.model === model && entry.id !== null && api.read ? await api.read(model, entry.id).catch(() => null) : null
     if (found) replace(found)
     else reload()
@@ -305,6 +308,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     },
     undo: () => travel(history.undo, false),
     redo: () => travel(history.redo, true),
+    push: history.push,
     replace,
     draft(fields, needs = ['title'], offered = []) {
       const open = state.rows.some((r) => r.id === DRAFT)

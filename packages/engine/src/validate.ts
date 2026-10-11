@@ -112,6 +112,23 @@ function checkOwnerVisible(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+// What a person link may write: a plain value of its own, never its scope, its state or where its link goes.
+function checkOwnerWritable(dataset: DatasetDecl): void {
+  for (const [column, decl] of Object.entries(dataset.columns)) {
+    if (!decl.owner_writable) continue
+    const refuse = (why: string) =>
+      new DomainError(dataset.name, column, `${column} ${why}, so it is not owner_writable`)
+    if (decl.type === 'json') throw refuse('is json')
+    if (decl.readonly) throw refuse('is readonly')
+    // checkRelations only proves the target exists, so a link could point its row at a record it cannot read.
+    if (decl.relation) throw refuse('is a relation')
+    if (column === dataset.owners?.owner) throw refuse('is the owner column')
+    if (column === dataset.lifecycle?.column) throw refuse('is the lifecycle column')
+    if (column === dataset.record_link?.email) throw refuse('is the record link address')
+    if (!decl.owner_visible) throw refuse('is not owner_visible')
+  }
+}
+
 // The grid needs the title and the date column to show a row.
 function checkHidden(source: DatasetDecl | QueryDecl): void {
   const title = typeof source.title === 'string' ? [source.title] : [source.title.else, source.title.via]
@@ -346,6 +363,27 @@ function checkLifecycle(dataset: DatasetDecl): void {
   }
 }
 
+const KIND = /^[a-z][a-z0-9_]*$/
+
+function checkAttachments(dataset: DatasetDecl): void {
+  const declared = dataset.attachments
+  if (!declared) return
+  const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `attachments ${message}`)
+  const kinds = Object.entries(declared.kinds ?? {})
+  if (kinds.length === 0) throw at('kinds', 'declare at least one kind')
+  for (const [kind, label] of kinds) {
+    if (!KIND.test(kind)) throw at(kind, `kind "${kind}" must match ${KIND}`)
+    if (typeof label !== 'string' || label.trim() === '') throw at(kind, `kind "${kind}" needs a label`)
+  }
+  const mb = declared.max_mb
+  if (mb !== undefined && !(Number.isInteger(mb) && mb >= 1 && mb <= 50)) {
+    throw at('max_mb', 'max_mb must be an integer from 1 to 50')
+  }
+  if (declared.owner_writable && !declared.owner_visible) {
+    throw at('owner_writable', 'owner_writable needs owner_visible')
+  }
+}
+
 function checkRecordLink(dataset: DatasetDecl): void {
   const link = dataset.record_link
   if (!link) return
@@ -458,12 +496,18 @@ export function validateDomain(domain: Domain): void {
     checkIcon(source)
     checkFacts(source)
     checkLinks(domain, source)
+    if (source.kind === 'query' && Object.hasOwn(source, 'attachments')) {
+      throw new DomainError(source.name, 'attachments', 'attachments are declared on a dataset, never a query')
+    }
   }
   checkSpace(domain)
   checkSections(domain)
   const downs = new Set<string>()
   for (const dataset of domain.datasets) {
     if (dataset.checks) throw new DomainError(dataset.name, 'checks', 'checks are for engine tables only')
+    if (dataset.name === 'file') {
+      throw new DomainError(dataset.name, dataset.name, '"file" is taken: the attachment routes read it as a file id')
+    }
     if (Object.hasOwn(dataset.columns, 'expect')) {
       throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
     }
@@ -471,6 +515,8 @@ export function validateDomain(domain: Domain): void {
     checkNewLabel(dataset)
     checkLifecycle(dataset)
     checkRecordLink(dataset)
+    checkOwnerWritable(dataset)
+    checkAttachments(dataset)
     checkConfig(domain, dataset)
     checkLookups(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)

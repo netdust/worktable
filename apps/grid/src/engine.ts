@@ -72,6 +72,7 @@ export interface EngineSource {
   lifecycle?: { column: string }
   /** Each record has a link its person reads their views through. */
   record_link?: true
+  attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
 }
 
 /** What the engine stores of a view's arrangement; a bare scalar in `filters` means `$eq`, a leading `-` in `sort` descending. */
@@ -170,6 +171,11 @@ function titleLabel(source: EngineSource): string {
 const shownColumns = (source: EngineSource): [string, EngineColumn][] =>
   Object.entries(source.columns).filter(([key, column]) => key !== titleColumn(source) && key !== 'id' && !column.hidden)
 
+/** A dataset without a writer still lists its files; only a writable one takes and removes them. */
+function attachable({ kinds, max_mb }: NonNullable<EngineSource['attachments']>, writable: boolean): NonNullable<Model['attachments']> {
+  return { kinds, max_mb, ...(writable ? { writable: true as const } : {}) }
+}
+
 /** The row's own id is the grid's `id`, never a field. */
 function modelOf(name: string, source: EngineSource, sources: Sources): Model {
   const fields = shownColumns(source)
@@ -189,6 +195,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
+    ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
       ...Object.fromEntries(Object.entries(source.lookups ?? {}).map(([key, lookup]) => [key, lookupField(lookup, source, sources)])),

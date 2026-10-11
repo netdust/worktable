@@ -2,9 +2,10 @@ import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
-import { readable, scopeOf, visibleSource } from './access'
+import { linkWritable, readable, scopeOf, visibleSource } from './access'
 import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
+import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
@@ -56,9 +57,15 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     const target = writableOf(domain, c.req.param('dataset'), 'update', c.get('actor'))
     // cutBody would drop it silently, so the expected value is taken out here; runWrite checks its shape.
     const { expect, ...body } = await bodyOf(c)
-    const opts = { expect: expect as Record<string, unknown> | undefined }
-    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, c.get('actor'), opts)
-    return c.json(reply(target.dataset, c.get('actor'), written))
+    const actor = c.get('actor')
+    if (actor.kind === 'link') linkWritable(target.dataset, body)
+    // A link never writes the lifecycle column, so its expect would only tell it the state it may not read.
+    const opts = { expect: actor.kind === 'link' ? undefined : (expect as Record<string, unknown> | undefined) }
+    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, actor, opts)
+    // A forwarded link must not read the whole row back through its write (attack 9).
+    if (actor.kind === 'link')
+      return c.json({ id: written.id, revision: { batch_id: written.batch_id, changed: written.changed } })
+    return c.json(reply(target.dataset, actor, written))
   })
 
   app.delete('/rows/:dataset/:id', (c) => {
@@ -165,6 +172,10 @@ export interface EngineOptions {
   clientIp?: (req: Request) => string
   /** Signs record links; required, at least 32 bytes, when a dataset declares record_link. */
   linkSecret?: Uint8Array
+  /** Holds attachment files; required when a dataset declares attachments. */
+  filesDir?: string
+  /** The cap on the attachment files' total size, soft-deleted files counted; 5 GiB by default. */
+  filesMaxBytes?: number
 }
 
 const MIN_LINK_SECRET = 32
@@ -181,6 +192,13 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   if (domain.datasets.some((d) => d.record_link) && (linkSecret?.length ?? 0) < MIN_LINK_SECRET) {
     throw new Error(`a dataset declares record_link, so the engine needs a link secret of ${MIN_LINK_SECRET} bytes`)
   }
+  const { filesDir, filesMaxBytes } = options
+  if (domain.datasets.some((d) => d.attachments) && !filesDir) {
+    throw new Error('a dataset declares attachments, so the engine needs a files directory')
+  }
+  if (filesMaxBytes !== undefined && !(Number.isSafeInteger(filesMaxBytes) && filesMaxBytes > 0)) {
+    throw new Error(`filesMaxBytes must be a positive safe integer, not ${filesMaxBytes}`)
+  }
   sqlite.run('PRAGMA foreign_keys = ON')
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
@@ -196,7 +214,16 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
 
   const app = root.basePath('/api')
   const mailer = options.mailer ?? (outbox ? outboxMailer(outbox) : undefined)
-  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl, linkSecret }
+  const store: Store = {
+    sqlite,
+    db,
+    domain,
+    mailer: mailer ?? silentMailer,
+    appUrl,
+    linkSecret,
+    filesDir,
+    filesMaxBytes,
+  }
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)
@@ -205,6 +232,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   ownerViewGuard(app, store, ipOf)
   authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
   if (linkSecret) recordLinkRoutes(app, store, linkSecret)
+  attachmentRoutes(app, store)
 
   app.get('/schema', (c) => {
     const format = c.req.query('format')
@@ -240,6 +268,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...ofOf(domain, s, actor),
             ...servedLinks(domain, s, actor),
             ...servedLookups(domain, s, actor),
+            ...(s.kind === 'dataset' ? servedAttachments(s, actor) : {}),
             ...(s.kind === 'dataset' && s.new_label && (displays.get(s.name)?.label ?? s.label) === s.label
               ? { new_label: s.new_label }
               : {}),

@@ -13,7 +13,8 @@ import { createStore, type StoreApi } from './store'
 const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), history: vi.fn(),
+  attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}` }))
 vi.mock('../api', () => remote)
 const { App } = await import('../ui/App')
 
@@ -993,6 +994,56 @@ describe('the drawer', () => {
   }
   const deletable: Model = { ...activity, deletable: true }
 
+  const attaching: Model = { ...activity, attachments: { kinds: { rider: 'Rider' }, max_mb: 20, writable: true } }
+  const rider = { id: 7, kind: 'rider', name: 'rider.pdf', mime: 'application/pdf', size: 48_000, own: true, created_at: '2026-10-01 09:00:00' }
+
+  it("deletes a record's file, and Ctrl+Z undoes its batch and reads the files again", async () => {
+    renderGrid(calais, { model: attaching })
+    remote.attachmentsOf.mockResolvedValueOnce([rider]).mockResolvedValueOnce([rider])
+    remote.removeAttachment.mockResolvedValueOnce('b-del')
+    api.undo.mockResolvedValueOnce('u-del')
+    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+
+    const remove = await files.findByRole('button', { name: 'rider.pdf verwijderen' })
+    await act(async () => fireEvent.click(remove))
+    expect(files.queryByRole('link', { name: 'rider.pdf' })).toBeNull()
+
+    fireEvent.click(cell('Montage', 'place'))
+    await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
+
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-del')
+    expect(remote.attachmentsOf).toHaveBeenCalledTimes(2)
+    expect(files.getByRole('link', { name: 'rider.pdf' })).toBeTruthy()
+    remote.attachmentsOf.mockReset()
+  })
+
+  it("undoes a file deleted before the drawer closed: reopened, Ctrl+Z reads its files again", async () => {
+    renderGrid(calais, { model: attaching })
+    let stored = [rider]
+    remote.attachmentsOf.mockImplementation(() => Promise.resolve(stored))
+    remote.removeAttachment.mockImplementationOnce(() => {
+      stored = []
+      return Promise.resolve('b-del')
+    })
+    api.undo.mockImplementationOnce(() => {
+      stored = [rider]
+      return Promise.resolve('u-del')
+    })
+    const first = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const remove = await first.findByRole('button', { name: 'rider.pdf verwijderen' })
+    await act(async () => fireEvent.click(remove))
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Montage' })).getByRole('button', { name: 'Sluiten' }))
+
+    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    await files.findByText('Nog geen bijlagen')
+    fireEvent.click(cell('Montage', 'place'))
+    await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
+
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-del')
+    expect(await files.findByRole('link', { name: 'rider.pdf' })).toBeTruthy()
+    remote.attachmentsOf.mockReset()
+  })
+
   it('offers Verwijderen only for a deletable model', () => {
     renderGrid()
     expect(within(openDrawer('Lunch bistrot')).queryByRole('button', { name: 'Verwijderen' })).toBeNull()
@@ -1149,6 +1200,33 @@ async function addCondition(field: string, value: string) {
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' }).getAttribute('placeholder')).toBe('Zoeken')
     expect(within(toolbar()).queryByRole('button', { name: 'Volgende periode' })).toBeNull()
     expect(within(toolbar()).queryByRole('status')).toBeNull()
+  })
+
+  it("an undo from the history panel reads the open drawer's files again", async () => {
+    const attaching = { ...schema.models.activity, attachments: { kinds: { rider: 'Rider' }, max_mb: 20, writable: true as const } }
+    remote.schema.mockResolvedValue({ ...schema, models: { activity: attaching } })
+    const rider = { id: 7, kind: 'rider', name: 'rider.pdf', mime: 'application/pdf', size: 48_000, own: true, created_at: '2026-10-01 09:00:00' }
+    let stored: (typeof rider)[] = []
+    remote.attachmentsOf.mockImplementation(() => Promise.resolve(stored))
+    remote.history.mockResolvedValue([{ batch: 'b1', at: '2026-05-19T09:00:00.000Z', by: 'self', actor: 'an@example.test', undoable: true, others: 0, batch_kind: 'write', created: false,
+      record: { id: 102, title: 'Montage' }, changes: [{ field: 'place', label: 'Plaats', old: 'a', new: 'b' }] }])
+    remote.undoBatch.mockImplementation(() => {
+      stored = [rider]
+      return Promise.resolve('u1')
+    })
+    render(<App />)
+    await screen.findByText('18 mei')
+    fireEvent.click(within(cell('Montage', 'title')).getByRole('button', { name: 'Openen' }))
+    const files = within(screen.getByRole('region', { name: 'Bijlagen' }))
+    await files.findByText('Nog geen bijlagen')
+
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'Geschiedenis' }))
+    const panel = await screen.findByRole('complementary', { name: 'Geschiedenis' })
+    const undo = await within(panel).findByRole('button', { name: 'Ongedaan maken' })
+    await act(async () => fireEvent.click(undo))
+
+    expect(remote.undoBatch).toHaveBeenCalledExactlyOnceWith('b1')
+    expect(await files.findByRole('link', { name: 'rider.pdf' })).toBeTruthy()
   })
 
   it('shows a refused delete in the toolbar as the Dutch in-use sentence', async () => {

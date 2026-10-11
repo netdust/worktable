@@ -39,6 +39,8 @@ export interface ColumnDecl {
   writes?: { dataset: string; field: string; key: string }
   /** Served to the row's owner in a view for owners; never on json or on the owner column. */
   owner_visible?: boolean
+  /** A person link may write it; only with owner_visible, never on the owner, lifecycle or link address column. */
+  owner_writable?: true
   /** The grid never offers or shows it; still stored, imported and written through the API. */
   hidden?: boolean
 }
@@ -84,6 +86,14 @@ export interface LookupDecl {
   from?: string
 }
 
+/** Files on a dataset's records: `kinds` keyed by identifier, at most `max_mb` each (default 10). */
+export interface AttachmentsDecl {
+  kinds: Record<string, string>
+  max_mb?: number
+  owner_visible?: true
+  owner_writable?: true
+}
+
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
@@ -114,6 +124,7 @@ export interface DatasetDecl {
   lifecycle?: LifecycleDecl
   /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
   record_link?: { email?: string }
+  attachments?: AttachmentsDecl
 }
 
 export interface QueryDecl {

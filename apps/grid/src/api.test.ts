@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { actOn, actView, ownerRows, ownerViews, recordLink, rotateRecordLink, setForOwners, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
+import { attachmentsOf, fileUrl, removeAttachment, uploadAttachment, actOn, actView, ownerRows, ownerViews, recordLink, rotateRecordLink, setForOwners, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -534,6 +534,32 @@ describe('writes', () => {
     expect(fetcher.mock.calls[1][1]).toMatchObject({ body: '{}' })
   })
 
+  it("lists a record's files, uploads the bytes as octet-stream with the kind and name, deletes one, and answers each batch", async () => {
+    const rider = { id: 7, kind: 'rider', name: 'rider plan.pdf', mime: 'application/pdf', size: 8 }
+    fetcher.mockImplementation(async (_url, init) =>
+      init?.method === 'POST' ? json({ ...rider, revision: { batch_id: 'b-up' } }, 201)
+        : init?.method === 'DELETE' ? json({ id: 7, revision: { batch_id: 'b-del' } })
+        : json({ attachments: [{ ...rider, own: true, created_at: '2026-10-01 09:00:00' }] }))
+    const file = new File(['%PDF-1.4'], 'rider plan.pdf', { type: 'application/pdf' })
+
+    expect(await attachmentsOf('activiteit', 3)).toEqual([{ ...rider, own: true, created_at: '2026-10-01 09:00:00' }])
+    const { attachment, batch } = await uploadAttachment('activiteit', 3, 'rider', file)
+    expect([attachment.id, attachment.name, batch]).toEqual([7, 'rider plan.pdf', 'b-up'])
+    expect(await removeAttachment(7)).toBe('b-del')
+    expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method ?? 'GET'])).toEqual([
+      ['/api/attachments/activiteit/3', 'GET'],
+      ['/api/attachments/activiteit/3?kind=rider&name=rider+plan.pdf', 'POST'],
+      ['/api/attachments/file/7', 'DELETE'],
+    ])
+    expect(fetcher.mock.calls[1][1]).toMatchObject({ body: file, headers: { 'Content-Type': 'application/octet-stream' } })
+    expect(fileUrl(7)).toBe('/api/attachments/file/7')
+  })
+
+  it('answers a refused upload as the engine said it', async () => {
+    fetcher.mockImplementation(async () => json({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' }, 415))
+    await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' })
+  })
+
   it('reads the views for owners with the link as a RecordLink header, never in the address', async () => {
     fetcher.mockImplementation(async (url) => json(String(url).endsWith('/rows') ? { columns: [], rows: [], total: 0 } : { views: [] }))
     expect(await ownerViews('persoon.3.abc')).toEqual([])
@@ -552,7 +578,7 @@ describe('writes', () => {
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } })
 
     fetcher.mockImplementationOnce(async () => json({ code: 'changed_since', message: '"status" changed since', dataset: 'activiteit', id: 7, column: 'status', label: 'Status' }, 409))
-    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status' })
+    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status', dataset: 'activiteit' })
   })
 
   it('runs an action on a record with its input, and answers its batch', async () => {

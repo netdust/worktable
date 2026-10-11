@@ -1,8 +1,10 @@
+import { X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { type ReactNode, useState } from 'react'
-import { recordLink as readLink, rotateRecordLink } from '../api'
-import { errorText, t } from '../i18n'
+import { type ChangeEvent, type ReactNode, useEffect, useId, useState } from 'react'
+import { type Attachment, attachmentsOf, fileUrl, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
+import { errorText, fileSize, type StringKey, t } from '../i18n'
 import type { Account, ActionInput, ApiError, Model, ModelAction, Row } from '../types'
+import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
 import { RelationPicker } from './cells/RelationPicker'
@@ -24,7 +26,14 @@ interface Props {
   focusOnOpen?: boolean
   /** The dataset whose record link the drawer copies and renews; an administrator's. */
   recordLink?: string
+  /** The record's dataset and the files it takes; none on a model without attachments, or a draft. */
+  attachments?: Attachable
+  /** An upload or delete into the undo history. */
+  onBatch?: (batch: string) => void
 }
+
+/** `version` moves when the files changed elsewhere, such as by an undo: the list reads again. */
+export type Attachable = NonNullable<Model['attachments']> & { dataset: string; version?: string }
 
 /** The dataset an administrator copies a record's link of, on one that declares record_link. */
 export function linkedDataset(role: Account['role'], model: Model): string | undefined {
@@ -32,7 +41,7 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. */
-export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink }: Props) {
+export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined }: Props) {
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen}>
       {columns.length > 0 && <dl className="nv-drawer__fields">
@@ -44,6 +53,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
         ))}
       </dl>}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
+      {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
       {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
     </SidePanel>
@@ -65,6 +75,90 @@ function RecordLink({ dataset, id }: { dataset: string; id: number }) {
       <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(rotateRecordLink(dataset, id), t('recordLinkRotated'))}>{t('recordLinkNew')}</Button>
       <p className="nv-action__said" role="status">{said}</p>
     </div>
+  )
+}
+
+const ACCEPTED = 'application/pdf,image/jpeg,image/png,image/webp'
+
+const FILE_REFUSALS: Record<string, StringKey> = {
+  bad_file_type: 'attachmentType',
+  bad_name: 'attachmentName',
+  rate_limited: 'attachmentRateLimited',
+  read_only: 'attachmentReadOnly',
+  forbidden: 'attachmentForbidden',
+  length_required: 'attachmentLength',
+  unknown_attachment: 'attachmentGone',
+  storage_full: 'attachmentStorageFull',
+}
+
+function fileRefusal(error: ApiError, maxMb: number): string {
+  if (error.code === 'body_too_large') return errorText(error.code, t('attachmentTooLarge', { n: maxMb }))
+  const own = FILE_REFUSALS[error.code]
+  return errorText(error.code, own ? t(own) : error.message)
+}
+
+/** Keyed by its record: another row starts from its own list. */
+function Attachments({ files: { dataset, kinds, max_mb, writable, version }, id, onBatch }: { files: Attachable; id: number; onBatch: NonNullable<Props['onBatch']> }) {
+  const heading = useId()
+  const [files, setFiles] = useState<Attachment[] | null>(null)
+  const [kind, setKind] = useState(Object.keys(kinds)[0] ?? '')
+  const [sending, setSending] = useState(false)
+  const [refused, setRefused] = useState('')
+  const said = (error: ApiError) => setRefused(fileRefusal(error, max_mb))
+  // version is never read: its change is the signal to read again.
+  useEffect(() => {
+    attachmentsOf(dataset, id).then(setFiles, said)
+  }, [dataset, id, version])
+
+  const upload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setRefused('')
+    setSending(true)
+    uploadAttachment(dataset, id, kind, file).then(
+      ({ attachment, batch }) => {
+        setFiles((was) => [...(was ?? []), attachment])
+        onBatch(batch)
+      },
+      said,
+    ).finally(() => setSending(false))
+  }
+  const remove = (file: Attachment) => {
+    setRefused('')
+    removeAttachment(file.id).then((batch) => {
+      setFiles((was) => was?.filter((f) => f.id !== file.id) ?? null)
+      onBatch(batch)
+    }, said)
+  }
+
+  return (
+    <section className="nv-files" aria-labelledby={heading}>
+      <h3 id={heading} className="nv-files__title">{t('attachments')}</h3>
+      {files?.length === 0 && <p className="nv-files__none">{t('attachmentsNone')}</p>}
+      {files && files.length > 0 && (
+        <ul className="nv-files__list">
+          {files.map((file) => (
+            <li key={file.id} className="nv-files__item">
+              <span className="nv-files__kind">{kinds[file.kind] ?? file.kind}</span>
+              <a className="nv-files__name" href={fileUrl(file.id)} target="_blank" rel="noreferrer">{file.name}</a>
+              <span className="nv-files__size">{fileSize(file.size)}</span>
+              {writable && <Button className="nv-files__remove" aria-label={t('removeItem', { name: file.name })} onPress={() => remove(file)}>
+                <X size={14} aria-hidden="true" />
+              </Button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {writable && <div className="nv-files__add">
+        <Pick label={t('attachmentKind')} value={kind} options={Object.entries(kinds).map(([value, label]) => ({ value, label }))} onChange={setKind} />
+        <label className="nv-button nv-button--secondary nv-button--sm nv-files__choose" aria-disabled={sending || undefined}>
+          <input type="file" className="nv-sr-only" accept={ACCEPTED} disabled={sending} onChange={upload} />
+          {t('attachmentAdd')}
+        </label>
+      </div>}
+      {refused && <p className="nv-action__refused" role="alert">{refused}</p>}
+    </section>
   )
 }
 

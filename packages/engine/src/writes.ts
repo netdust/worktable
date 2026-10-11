@@ -5,6 +5,7 @@ import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
 import { mintActionToken, ownerSubject, revokeMintedBy } from './action-token'
+import { undoAttachments } from './attachments'
 import type {
   Actor,
   ColumnDecl,
@@ -48,6 +49,10 @@ export interface Store {
   appUrl: string
   /** Signs record links; a hook asking for its record's link gets null without it. */
   linkSecret?: Uint8Array
+  /** Where attachment files sit; set whenever a dataset declares attachments. */
+  filesDir?: string
+  /** The cap on the attachment files' total size; DEFAULT_FILES_MAX_BYTES when unset. */
+  filesMaxBytes?: number
 }
 
 export interface Writable {
@@ -805,6 +810,8 @@ export function undoBatch(
   return sqlite
     .transaction(() => {
       undoableBatch(sqlite, key, actor)
+      const files = undoAttachments(store, key, actor)
+      if (files) return files
       const planned = touchedBy(store, key)
         .reverse()
         .map((record) => planUndo(store, record, actor))

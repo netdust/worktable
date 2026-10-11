@@ -163,6 +163,22 @@ describe('undo and redo, by batch on the server', () => {
     expect(api.undo).toHaveBeenLastCalledWith('b-redo')
   })
 
+  it('a step pushed with its own refresh runs it on undo and on redo, and neither reads a row nor reloads', async () => {
+    const { api, store, reload } = setup()
+    const refresh = vi.fn()
+    api.undo.mockResolvedValueOnce('b-undo').mockResolvedValueOnce('b-redo')
+
+    store.push({ batch: Promise.resolve('b-file'), model: 'activity', id: 103, refresh })
+    expect(store.getState().canUndo).toBe(true)
+    await store.undo()
+    await store.redo()
+
+    expect(api.undo.mock.calls).toEqual([['b-file'], ['b-undo']])
+    expect(refresh).toHaveBeenCalledTimes(2)
+    expect(api.read).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
   it('a redo answered not_undoable (an undone invite) drops the redo entry and says redo cannot be done here', async () => {
     const { api, store } = setup()
     api.update.mockResolvedValueOnce(ok(show, 'b-edit'))

@@ -263,6 +263,20 @@ const strings = {
   transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
   undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
   redoSkipped: 'Opnieuw doen kan hier niet',
+  attachments: 'Bijlagen',
+  attachmentsNone: 'Nog geen bijlagen',
+  attachmentKind: 'Soort',
+  attachmentAdd: 'Bestand toevoegen',
+  attachmentType: 'Dit bestandstype kan niet. Gebruik pdf, jpg, png of webp.',
+  attachmentTooLarge: 'Dit bestand is te groot (max. {n} MB).',
+  attachmentName: 'Deze bestandsnaam kan niet: hoogstens 200 tekens, zonder stuurtekens.',
+  attachmentRateLimited: 'Te veel bestanden in korte tijd. Probeer het zo meteen opnieuw.',
+  attachmentReadOnly: 'Hier kunnen geen bestanden toegevoegd of verwijderd worden.',
+  attachmentForbidden: 'Je mag hier geen bestanden toevoegen of verwijderen.',
+  attachmentLength: 'Het bestand kwam niet volledig aan. Probeer het opnieuw.',
+  attachmentGone: 'Dit bestand bestaat niet meer of je mag het niet zien.',
+  attachmentStorageFull: 'De opslag voor bijlagen is vol. Een beheerder moet de limiet verhogen.',
+  attachmentChangedSince: 'Dit bestand is intussen gewijzigd.',
 }
 
 export type StringKey = keyof typeof strings
@@ -315,6 +329,7 @@ export function undoText(error: Partial<ApiError>): string {
   const code = error.code ?? 'unknown'
   const label = error.label ?? ''
   const said = code === 'in_use' && error.by?.length ? inUse(error.by)
+    : code === 'changed_since' && error.dataset === 'attachment' ? t('attachmentChangedSince')
     : code === 'changed_since' ? t(error.column === 'deleted_at' ? 'deletedSince' : 'changedSince', { label })
     : code === 'already_undone' ? t('alreadyUndone')
     : code === 'not_undoable' ? t('notUndoable')
@@ -332,6 +347,14 @@ export function inUse(by: { label: string; count: number }[]): string {
 /** "21 rijen"; "5000+ rijen" where the read limit cut the rows. */
 export function rowCount(n: number, cut = false): string {
   return cut ? t('rows', { n: `${n}+` }) : n === 1 ? t('row') : t('rows', { n })
+}
+
+const KB = 1024
+
+/** "47 kB", "2,3 MB": a file's size as the page's language writes numbers. */
+export function fileSize(bytes: number): string {
+  const number = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 })
+  return bytes < KB * KB ? `${number.format(Math.max(1, Math.round(bytes / KB)))} kB` : `${number.format(bytes / KB / KB)} MB`
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */

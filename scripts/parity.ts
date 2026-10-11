@@ -257,9 +257,12 @@ async function run(file: string): Promise<number> {
     }
     const outbox = join(dir, 'outbox')
     mkdirSync(outbox, { recursive: true })
+    const filesDir = join(dir, 'files')
+    mkdirSync(filesDir, { recursive: true, mode: 0o700 })
     const engine = createEngine(sqlite, domain, {
       port: PORT,
       outbox,
+      filesDir,
       clientIp: () => '127.0.0.1',
       linkSecret: LINK_SECRET,
     })

@@ -76,6 +76,34 @@ export const recordLink = defineDataset({
   checks: ['UNIQUE (dataset, record_id)'],
 })
 
-export const engineTables = [savedView, revision, batch, sourceDisplay, ...authTables, actionToken, recordLink]
+// A file on a record; the bytes sit in the files directory under their sha256.
+export const attachment = defineDataset({
+  name: 'attachment',
+  label: 'Attachment',
+  title: 'name',
+  custom: false,
+  columns: {
+    entity: { type: 'text', label: 'Entity' },
+    record_id: { type: 'integer', label: 'Record' },
+    kind: { type: 'text', label: 'Kind' },
+    name: { type: 'text', label: 'Name' },
+    mime: { type: 'text', label: 'Type' },
+    size: { type: 'integer', label: 'Size' },
+    sha256: { type: 'text', label: 'Hash' },
+    uploaded_by: { type: 'integer', label: 'Uploaded by' },
+  },
+  indexes: [['entity', 'record_id'], ['sha256']],
+})
+
+export const engineTables = [
+  savedView,
+  revision,
+  batch,
+  sourceDisplay,
+  ...authTables,
+  actionToken,
+  recordLink,
+  attachment,
+]
 
 export const reservedNames = new Set([MIGRATIONS, ...engineTables.map((t) => t.name)])

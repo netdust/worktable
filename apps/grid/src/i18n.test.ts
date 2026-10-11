@@ -37,6 +37,11 @@ describe('undoText()', () => {
     const refused = { code: 'in_use', message: 'Still referenced by Toewijzingen (1)', by: [{ label: 'Toewijzingen', count: 1 }] }
     expect(undoText(refused)).toBe('Nog in gebruik door Toewijzingen (1).')
   })
+
+  it('says a file changed since, not a removed record, on an attachment', () => {
+    const refused = { code: 'changed_since', message: '"deleted_at" changed since', dataset: 'attachment', column: 'deleted_at', label: 'rider.pdf' }
+    expect(undoText(refused)).toBe('Dit bestand is intussen gewijzigd.')
+  })
 })
 
 describe('errorText()', () => {

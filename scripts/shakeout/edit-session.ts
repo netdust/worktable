@@ -23,7 +23,7 @@ import {
   undoOrder,
 } from './edit-session.lib'
 
-// Run on a copy only: bun scripts/shakeout/edit-session.ts --db <copy> --outbox <dir> [--port 4320]
+// Run on a copy only: bun scripts/shakeout/edit-session.ts --db <copy> --outbox <dir> --files-dir <dir> [--port 4320]
 // stdout carries step names, verdicts and counts; every value goes to the detail file.
 
 const REPO = resolve(import.meta.dir, '../..')
@@ -39,6 +39,7 @@ const { values: args } = parseArgs({
     db: { type: 'string' },
     port: { type: 'string', default: '4320' },
     outbox: { type: 'string' },
+    'files-dir': { type: 'string' },
     out: { type: 'string' },
   },
 })
@@ -48,15 +49,16 @@ function refuseToRun(message: string): never {
   process.exit(2)
 }
 
-if (!args.db || !args.outbox)
-  refuseToRun('usage: edit-session.ts --db <copy.db> --outbox <dir> [--port 4320] [--out <dir>]')
+if (!args.db || !args.outbox || !args['files-dir'])
+  refuseToRun('usage: edit-session.ts --db <copy.db> --outbox <dir> --files-dir <dir> [--port 4320] [--out <dir>]')
 const DB = resolve(args.db)
 const OUTBOX = resolve(args.outbox)
+const FILES = resolve(args['files-dir'])
 const OUT = resolve(args.out ?? join(homedir(), 'laika-export', 'shakeout'))
 const PORT = Number(args.port)
 if (DB === LIVE_DB) refuseToRun('refusing to write to the live engine.db: pass a copy')
 // The detail file holds row values: it never lands in the checkout.
-for (const path of [OUT, OUTBOX])
+for (const path of [OUT, OUTBOX, FILES])
   if (`${path}/`.startsWith(`${REPO}/`)) refuseToRun(`refusing to write inside the repository: ${path}`)
 if (TAKEN_PORTS.has(PORT)) refuseToRun(`port ${PORT} belongs to the running engine or grid`)
 const BASE = `http://127.0.0.1:${PORT}`
@@ -120,6 +122,8 @@ const serveArgs = (extra: string[]): string[] => [
   String(PORT),
   '--outbox',
   OUTBOX,
+  '--files-dir',
+  FILES,
   '--app-url',
   BASE,
   ...extra,

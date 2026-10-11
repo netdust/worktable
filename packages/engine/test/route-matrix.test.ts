@@ -1,9 +1,13 @@
 import type { Database } from 'bun:sqlite'
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Actor } from '../src'
 import { createService } from '../src/auth'
 import { recordLinkFor } from '../src/record-link'
-import { domain, freshDb, send } from './fixture'
+import { UPLOAD } from '../src/write-guard'
+import { domain, freshDb } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
 const OWN = { dataset: 'project', id: 1 }
@@ -15,9 +19,12 @@ type Role = 'none' | Actor['role'] | 'link' | 'service'
 
 const PUBLIC_TOKEN = 'matrix-token'
 const PUBLIC_HASH = new Bun.CryptoHasher('sha256').update(PUBLIC_TOKEN).digest('hex')
+const FILE = '%PDF-1.4 matrix'
+const FILE_HASH = new Bun.CryptoHasher('sha256').update(FILE).digest('hex')
 
 // Written by hand from the Decisions table, never derived from may(), so a wrong cell cannot pass both sides.
-const EXPECTED: { method: string; path: string; body?: unknown; status: Record<Role, number> }[] = [
+// With `type`, the body is sent as it is, under that content type.
+const EXPECTED: { method: string; path: string; body?: unknown; type?: string; status: Record<Role, number> }[] = [
   {
     method: 'POST',
     path: '/api/auth/request',
@@ -220,6 +227,29 @@ const EXPECTED: { method: string; path: string; body?: unknown; status: Record<R
   },
   {
     method: 'GET',
+    path: '/api/attachments/project/1',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
+  },
+  {
+    method: 'POST',
+    path: '/api/attachments/project/1?kind=doc&name=a.pdf',
+    body: FILE,
+    type: 'application/octet-stream',
+    status: { none: 401, owner: 201, editor: 201, administrator: 201, link: 201, service: 201 },
+  },
+  {
+    method: 'GET',
+    path: '/api/attachments/file/1',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
+  },
+  {
+    // The file is the signed-in account's; the link account deletes only its own uploads.
+    method: 'DELETE',
+    path: '/api/attachments/file/1',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },
+  },
+  {
+    method: 'GET',
     path: `/api/public/views/${PUBLIC_TOKEN}`,
     status: { none: 200, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
   },
@@ -236,14 +266,16 @@ describe('the permissions matrix', () => {
   // One engine and one sign-in per role; each cell runs in a savepoint that is rolled back.
   beforeAll(async () => {
     sqlite = freshDb()
-    app = testEngine(sqlite, domain)
+    const filesDir = mkdtempSync(join(tmpdir(), 'wt-matrix-files-'))
+    writeFileSync(join(filesDir, FILE_HASH), FILE)
+    app = testEngine(sqlite, domain, { filesDir })
     for (const role of ['owner', 'editor', 'administrator'] as const) {
       cookies[role] = await signIn(app, role, role === 'owner' ? OWN : null)
     }
     serviceToken = createService(sqlite, 'matrix', 'administrator')
   })
 
-  for (const { method, path, body, status } of EXPECTED) {
+  for (const { method, path, body, type, status } of EXPECTED) {
     for (const role of roles) {
       test(`${method} ${path} as ${role} is ${status[role]}`, async () => {
         sqlite.run('SAVEPOINT cell')
@@ -271,24 +303,29 @@ describe('the permissions matrix', () => {
              VALUES ('note', 1, 'tekst', '"oud"', '"eerste"', ${account}, 'x', 'matrix-own'),
                     ('note', 1, 'tekst', '"oud"', '"eerste"', 999, 'x', 'matrix-other')`,
           )
-          const sent = body === undefined ? { type: null } : { body: json(body) }
+          // One file on project 1, uploaded by the signed-in account.
+          sqlite.run(
+            `INSERT INTO attachment (entity, record_id, kind, name, mime, size, sha256, uploaded_by)
+             VALUES ('project', 1, 'doc', 'a.pdf', 'application/pdf', ${FILE.length}, '${FILE_HASH}', ${account})`,
+          )
+          const raw = body === undefined ? undefined : type ? String(body) : json(body)
           const authorization =
             role === 'link'
               ? `RecordLink ${recordLinkFor(sqlite, TEST_LINK_SECRET, 'project', 1)}`
               : role === 'service'
                 ? `Bearer ${serviceToken}`
                 : null
-          const res = authorization
-            ? await app.request(path, {
-                method,
-                headers: {
-                  host: '127.0.0.1:4310',
-                  authorization,
-                  ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-                },
-                body: body === undefined ? undefined : json(body),
-              })
-            : await send(app, cookies[role])(method, path, sent)
+          const credential = authorization ? { authorization } : cookies[role] ? { cookie: cookies[role] } : {}
+          const res = await app.request(path, {
+            method,
+            headers: {
+              host: '127.0.0.1:4310',
+              ...credential,
+              ...(raw === undefined ? {} : { 'content-type': type ?? 'application/json' }),
+              ...(type ? { 'content-length': String(raw?.length) } : {}),
+            },
+            body: raw,
+          })
           expect(res.status).toBe(status[role])
         } finally {
           sqlite.run('ROLLBACK TO cell')
@@ -315,6 +352,22 @@ describe('every route has a row in the matrix', () => {
 
   test('a registered /api route with no EXPECTED row fails, naming it', () => {
     expect(registered.filter((r) => !listed(r)).map((r) => `${r.method} ${r.path}`)).toEqual([])
+  })
+
+  // Each ':param' or '*' segment filled with a word and with digits, every combination.
+  const concrete = (pattern: string): string[] =>
+    pattern
+      .split('/')
+      .reduce<string[]>(
+        (paths, seg) =>
+          (seg.startsWith(':') || seg === '*' ? ['a', '1'] : [seg]).flatMap((s) => paths.map((p) => `${p}/${s}`)),
+        [''],
+      )
+      .map((p) => p.slice(1))
+
+  test('the write guard skips its JSON checks for the upload route only', () => {
+    const exempt = registered.filter((r) => r.method === 'POST' && concrete(r.path).some((p) => UPLOAD.test(p)))
+    expect(exempt.map((r) => `${r.method} ${r.path}`)).toEqual(['POST /api/attachments/:dataset/:id'])
   })
 
   test('every EXPECTED row names a registered route and gives every role', () => {

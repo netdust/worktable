@@ -9,6 +9,9 @@ const deny = (c: Context, status: 403 | 413 | 415, code: string, message: string
 
 const isJson = (type: string | undefined): boolean => type?.split(';')[0]?.trim().toLowerCase() === 'application/json'
 
+// An upload is raw bytes; its route checks the type and its own size limit.
+export const UPLOAD = /^\/api\/attachments\/[a-z][a-z0-9_]*\/\d+$/
+
 const sizeCap = bodyLimit({
   maxSize: MAX_BODY,
   onError: (c) => deny(c, 413, 'body_too_large', `Body is larger than ${MAX_BODY} bytes`),
@@ -22,6 +25,7 @@ export function writeGuard(): MiddlewareHandler {
     if (FOREIGN_SITES.has(site ?? '') || (site === undefined && c.req.header('origin') !== undefined)) {
       return deny(c, 403, 'forbidden_site', 'Writes from another site are not allowed')
     }
+    if (c.req.method === 'POST' && UPLOAD.test(c.req.path)) return next()
     if (c.req.method !== 'DELETE' && !isJson(c.req.header('content-type'))) {
       return deny(c, 415, 'bad_content_type', 'Content-Type must be application/json')
     }

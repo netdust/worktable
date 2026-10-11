@@ -23,7 +23,8 @@ function toApiError(error: unknown): ApiError {
     const named = 'label' in error && typeof error.label === 'string' ? { label: error.label } : {}
     const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
     const key = 'key' in error && typeof error.key === 'string' ? { key: error.key } : {}
-    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key }
+    const dataset = 'dataset' in error && typeof error.dataset === 'string' ? { dataset: error.dataset } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
@@ -136,6 +137,38 @@ export async function recordLink(dataset: string, id: number): Promise<string> {
 /** A new link for a record; the old one stops at once. */
 export async function rotateRecordLink(dataset: string, id: number): Promise<string> {
   return (await request<{ link: string }>('POST', `/record-links/${encodeURIComponent(dataset)}/${id}/rotate`, {}, {})).link
+}
+
+/** A file on a record; `size` is as stored, after a photo lost its metadata. */
+export type Attachment = { id: number; kind: string; name: string; mime: string; size: number; own: boolean; created_at: string }
+
+const attachmentsPath = (model: string, id: number) => `/attachments/${encodeURIComponent(model)}/${id}`
+
+export async function attachmentsOf(model: string, id: number): Promise<Attachment[]> {
+  return (await request<{ attachments: Attachment[] }>('GET', attachmentsPath(model, id))).attachments
+}
+
+/** The bytes go as they are: `request` would encode them as JSON. */
+export async function uploadAttachment(model: string, id: number, kind: string, file: File): Promise<{ attachment: Attachment; batch: string }> {
+  try {
+    const url = endpoint(attachmentsPath(model, id), { kind, name: file.name })
+    const response = await fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' } })
+    if (response.status === 401) unauthenticated()
+    if (!response.ok) throw await refusal(response)
+    const { revision, ...made } = (await response.json()) as Omit<Attachment, 'own' | 'created_at'> & { revision: { batch_id: string } }
+    return { attachment: { ...made, own: true, created_at: new Date().toISOString() }, batch: revision.batch_id }
+  } catch (error) {
+    throw toApiError(error)
+  }
+}
+
+/** Answers the batch an undo takes the file back with. */
+export async function removeAttachment(id: number): Promise<string> {
+  return (await request<{ revision: { batch_id: string } }>('DELETE', `/attachments/file/${id}`)).revision.batch_id
+}
+
+export function fileUrl(id: number): string {
+  return endpoint(`/attachments/file/${id}`)
 }
 
 const asLink = (token: string) => `RecordLink ${token}`

@@ -60,11 +60,24 @@ export function verifyRecordLink(sqlite: Database, domain: Domain, secret: Uint8
   return actor
 }
 
-const OPEN_TO_LINKS = /^\/api\/(?:auth\/me|owner\/views(?:\/.*)?)$/
+// Method and path both: a link never creates or deletes a row, runs an action or undoes (attachments attack 10).
+const OPEN_TO_LINKS: [string, RegExp][] = [
+  ['GET', /^\/api\/auth\/me$/],
+  ['GET', /^\/api\/owner\/views(?:\/.*)?$/],
+  ['PATCH', /^\/api\/rows\/[^/]+\/[^/]+$/],
+  ['GET', /^\/api\/attachments\/[^/]+\/[^/]+$/],
+  ['POST', /^\/api\/attachments\/(?!file\/)[^/]+\/[^/]+$/],
+  ['DELETE', /^\/api\/attachments\/file\/[^/]+$/],
+]
 
-/** Installed right after authentication: a link actor reaches its own pages only (attack 11). */
+const openToLinks = (method: string, path: string): boolean =>
+  OPEN_TO_LINKS.some(([m, pattern]) => m === method && pattern.test(path))
+
+/** Installed right after authentication: a link actor reaches only the routes it may use. */
 export const confineLinkActor = createMiddleware<AuthEnv>(async (c, next) => {
-  if (c.get('actor').kind === 'link' && !OPEN_TO_LINKS.test(c.req.path)) forbid('A link opens only its own pages')
+  if (c.get('actor').kind === 'link' && !openToLinks(c.req.method, c.req.path)) {
+    forbid('A link opens only its own pages')
+  }
   await next()
 })
 
