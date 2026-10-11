@@ -97,9 +97,9 @@ describe('tourstop_verschuiven', () => {
 
   test('moves back with a negative number', async () => {
     const { reeks, untimed } = await tour()
-    expect((await editor('POST', '/api/actions/tourstop_verschuiven', { id: reeks, input: { dagen: -2 } })).status).toBe(
-      201,
-    )
+    expect(
+      (await editor('POST', '/api/actions/tourstop_verschuiven', { id: reeks, input: { dagen: -2 } })).status,
+    ).toBe(201)
     expect(await row('activiteit', untimed)).toMatchObject({ datum: '2026-11-08' })
   })
 
