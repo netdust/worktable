@@ -156,6 +156,20 @@ describe("the drawer's actions", () => {
     expect(onAction).toHaveBeenLastCalledWith(shift, { dagen: -3, stil: true })
   })
 
+  it('starts a required yes/no unticked as false, so it runs without a tick', async () => {
+    const confirm: ModelAction = { name: 'bevestigen', label: 'Bevestigen', input: { mail: { type: 'boolean', label: 'Mail sturen' } } }
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[confirm]} onAction={onAction} onClose={() => undefined} />)
+    const group = screen.getByRole('group', { name: 'Bevestigen' })
+    expect((within(group).getByLabelText('Mail sturen') as HTMLInputElement).checked).toBe(false)
+    const run = within(group).getByRole('button', { name: 'Bevestigen' })
+    expect(run.hasAttribute('disabled')).toBe(false)
+    await act(async () => {
+      fireEvent.click(run)
+    })
+    expect(onAction).toHaveBeenCalledExactlyOnceWith(confirm, { mail: false })
+  })
+
   it('offers no action without a way to run it, nor on a model that declares none', () => {
     const { rerender } = render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onClose={() => undefined} />)
     expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()

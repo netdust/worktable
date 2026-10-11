@@ -100,11 +100,15 @@ function TypedInput({ input, value, onChange }: { input: Typed; value: unknown; 
   )
 }
 
+/** A required yes/no starts as no, as its box shows; an optional one stays out until ticked. */
+const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
+  Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
+
 /** Keyed by its record, so another row starts with nothing picked. */
 function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<string, unknown>) => Promise<void> }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
-  const [typed, setTyped] = useState<Record<string, unknown>>({})
+  const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
   const [open, setOpen] = useState<string | null>(null)
   const [sending, setSending] = useState<Sending>({ status: 'idle' })
   const valueOf = ([key, input]: [string, ActionInput]) => ('relation' in input ? picked[key]?.id : typed[key])
