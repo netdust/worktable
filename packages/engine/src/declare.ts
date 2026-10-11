@@ -198,6 +198,11 @@ export interface WriteContext {
   find(dataset: string, id: number): Record<string, unknown> | null
   /** The first live row whose columns equal `match`. */
   findBy(dataset: string, match: Record<string, unknown>): Record<string, unknown> | null
+  /**
+   * Every live row whose columns equal `match`, by id; at most 5000, refused past that.
+   * No scope is applied: never copy its rows into what an owner-reachable action returns or refuses.
+   */
+  findAll(dataset: string, match: Record<string, unknown>): Record<string, unknown>[]
   exists(dataset: string, match: Record<string, unknown>, exceptId?: number): boolean
 }
 
@@ -219,12 +224,25 @@ export interface ActionUpdate {
 
 export type ActionResult = ActionCreate[] | { creates?: ActionCreate[]; updates?: ActionUpdate[] }
 
+export type InputType = 'integer' | 'date' | 'text' | 'boolean'
+
+/** The longest text a typed action input takes. */
+export const MAX_INPUT_TEXT = 500
+
+/** A record picked by id, which `run` receives as the record; or a typed value, checked before `run`. */
+export type ActionInput =
+  | { relation: string; label: string }
+  | { type: InputType; label: string; min?: number; max?: number; required?: boolean }
+
+/** What `run` receives per input: the picked record, or the typed value (absent when not required and left out). */
+export type InputValue = Values | string | number | boolean | undefined
+
 /** Runs as the caller: `run` answers the creates and updates, and each goes through its dataset's writer. */
 export interface ActionDecl {
   label: string
   on: string
-  input: Record<string, { relation: string; label: string }>
-  run(record: Values, input: Record<string, Values>, ctx: WriteContext): ActionResult
+  input: Record<string, ActionInput>
+  run(record: Values, input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 
 export interface Writer {

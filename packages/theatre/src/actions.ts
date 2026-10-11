@@ -53,20 +53,56 @@ export const sjabloonToepassen: ActionDecl = {
   label: 'Sjabloon toepassen',
   on: 'speelreeks',
   input: { sjabloon_id: { relation: 'sjabloon', label: 'Sjabloon' } },
-  run(reeks, { sjabloon_id }, ctx) {
+  run(reeks, input, ctx) {
+    const sjabloon = input.sjabloon_id as Values
     if (ctx.exists('activiteit', { speelreeks_id: reeks.id })) {
       refuse(
         'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.',
       )
     }
-    validateItems(sjabloon_id?.items, ctx)
-    const items = sjabloon_id?.items as Item[]
+    validateItems(sjabloon.items, ctx)
+    const items = sjabloon.items as Item[]
     return days(String(reeks.start_datum), String(reeks.eind_datum)).flatMap((day) =>
       items.map((item) => {
         const children = slotsOf(item, ctx)
         return { dataset: 'activiteit', values: activiteitOf(reeks, day, item), ...(children && { children }) }
       }),
     )
+  },
+}
+
+// A date or a local date-time N days later, the time of day kept.
+function shifted(value: unknown, days: number): unknown {
+  if (typeof value !== 'string') return value
+  const [day = '', time] = value.split('T')
+  const [y, m, d] = day.split('-').map(Number)
+  const moved = new Date(Date.UTC(y as number, (m as number) - 1, (d as number) + days)).toISOString().slice(0, 10)
+  return time === undefined ? moved : `${moved}T${time}`
+}
+
+const moved = (row: Values, columns: string[], days: number): Values =>
+  Object.fromEntries(
+    columns.filter((column) => row[column] != null).map((column) => [column, shifted(row[column], days)]),
+  )
+
+// The tourstop and every activity in it, N days later or earlier; the writers recompute plandag.
+export const tourstopVerschuiven: ActionDecl = {
+  label: 'Tourstop verschuiven',
+  on: 'speelreeks',
+  input: { dagen: { type: 'integer', label: 'Dagen', min: -365, max: 365 } },
+  run(reeks, input, ctx) {
+    const days = input.dagen as number
+    const activities = ctx.findAll('activiteit', { speelreeks_id: reeks.id })
+    return {
+      updates: [
+        { dataset: 'speelreeks', id: Number(reeks.id), values: moved(reeks, ['start_datum', 'eind_datum'], days) },
+        ...activities.map((activity) => ({
+          dataset: 'activiteit',
+          id: Number(activity.id),
+          values: moved(activity, ['datum', 'start_at', 'eind_at'], days),
+        })),
+      ],
+    }
   },
 }
 
@@ -77,8 +113,8 @@ export const vulSlot: ActionDecl = {
   label: 'Open plek invullen',
   on: 'toewijzing',
   input: { persoon_id: { relation: 'persoon', label: 'Persoon' } },
-  run(slot, { persoon_id }) {
-    const filled = { persoon_id: persoon_id?.id, state: 'voorlopig' }
+  run(slot, input) {
+    const filled = { persoon_id: (input.persoon_id as Values).id, state: 'voorlopig' }
     const aantal = Number(slot.aantal)
     if (aantal <= 1)
       return { updates: [{ dataset: 'toewijzing', id: Number(slot.id), values: filled, expect: STILL_OPEN }] }

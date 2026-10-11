@@ -1,5 +1,14 @@
 import { ROLES } from './auth-tables'
-import { type ColumnDecl, type DatasetDecl, type Domain, ICONS, type QueryDecl, TONES } from './declare'
+import {
+  type ActionInput,
+  type ColumnDecl,
+  type DatasetDecl,
+  type Domain,
+  ICONS,
+  type InputType,
+  type QueryDecl,
+  TONES,
+} from './declare'
 import { reservedNames } from './engine-tables'
 import { sourceOf, sourcesOf, writerOf } from './registry'
 
@@ -284,7 +293,8 @@ function checkOpen(
     throw at(open.fill, `open fill "${open.fill}" acts on "${action.on}", not "${join.name}"`)
   const across = join.columns[m.across]?.relation
   const inputs = Object.values(action.input)
-  if (inputs.length !== 1 || inputs[0]?.relation !== across) {
+  const only = inputs[0]
+  if (inputs.length !== 1 || !only || !('relation' in only) || only.relation !== across) {
     throw at(open.fill, `open fill "${open.fill}" must take one input, a "${across}"`)
   }
 }
@@ -348,6 +358,23 @@ function checkRecordLink(dataset: DatasetDecl): void {
 
 const ACTION_NAME = /^[a-z][a-z0-9_]*$/
 
+const INPUT_TYPES: InputType[] = ['integer', 'date', 'text', 'boolean']
+
+function checkInput(action: string, key: string, input: ActionInput, datasets: Set<string>): void {
+  const at = (message: string) => new DomainError(action, key, `input ${key} ${message}`)
+  if ('relation' in input) {
+    if (!datasets.has(input.relation)) throw at(`relates to undeclared "${input.relation}"`)
+    return
+  }
+  if (!INPUT_TYPES.includes(input.type)) throw at(`has unknown type "${String(input.type)}"`)
+  if (input.type !== 'integer') {
+    if (input.min !== undefined || input.max !== undefined) throw at('takes min and max only as an integer')
+    return
+  }
+  if (!Number.isFinite(input.min) || !Number.isFinite(input.max)) throw at('must declare min and max as finite numbers')
+  if ((input.min as number) > (input.max as number)) throw at('has min above max')
+}
+
 function checkActions(domain: Domain): void {
   const datasets = new Set(domain.datasets.map((d) => d.name))
   for (const [name, action] of Object.entries(domain.actions ?? {})) {
@@ -355,9 +382,7 @@ function checkActions(domain: Domain): void {
     if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
       throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
     }
-    for (const [key, { relation }] of Object.entries(action.input)) {
-      if (!datasets.has(relation)) throw new DomainError(name, key, `input ${key} relates to undeclared "${relation}"`)
-    }
+    for (const [key, input] of Object.entries(action.input)) checkInput(name, key, input, datasets)
   }
 }
 

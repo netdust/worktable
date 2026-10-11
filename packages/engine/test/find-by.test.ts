@@ -37,3 +37,30 @@ describe('ctx.findBy', () => {
     expect(() => findBy()('project', match)).toThrow(message)
   })
 })
+
+function findAll() {
+  const sqlite = new Database(':memory:')
+  migrate(sqlite, domain)
+  sqlite.run("INSERT INTO project (name, deleted_at) VALUES ('twin', '2026-01-01T00:00:00Z')")
+  sqlite.run("INSERT INTO project (name) VALUES ('twin'), ('solo'), ('twin')")
+  const store = { sqlite, domain, mailer: silentMailer, appUrl: '' } as unknown as Store
+  return contextOf(store, SYSTEM, null).findAll
+}
+
+describe('ctx.findAll', () => {
+  test('returns every live row that matches, by id', () => {
+    expect(findAll()('project', { name: 'twin' }).map((row) => row.id)).toEqual([2, 4])
+  })
+
+  test('answers an empty list when nothing matches', () => {
+    expect(findAll()('project', { name: 'nobody' })).toEqual([])
+  })
+
+  test.each([
+    [{ onbekend: 'x' }, 'findAll: "onbekend" is not a declared column of project'],
+    [{ name: null }, 'findAll: "name" may not be matched against null'],
+    [{}, 'findAll: a match names no column'],
+  ])('refuses %o', (match, message) => {
+    expect(() => findAll()('project', match)).toThrow(message)
+  })
+})

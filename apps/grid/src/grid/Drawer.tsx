@@ -2,13 +2,13 @@ import { Button } from 'react-aria-components'
 import { type ReactNode, useState } from 'react'
 import { recordLink as readLink, rotateRecordLink } from '../api'
 import { errorText, t } from '../i18n'
-import type { Account, ApiError, Model, ModelAction, Row } from '../types'
+import type { Account, ActionInput, ApiError, Model, ModelAction, Row } from '../types'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
 import { RelationPicker } from './cells/RelationPicker'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
-export type RunAction = (action: ModelAction, input: Record<string, number>) => Promise<void>
+export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<void>
 
 interface Props {
   row: Row
@@ -70,17 +70,57 @@ function RecordLink({ dataset, id }: { dataset: string; id: number }) {
 
 type Sending = { status: 'idle' } | { status: 'sent' } | { status: 'refused'; message: string }
 
+type Typed = Exclude<ActionInput, { relation: string }>
+
+/** As the engine checks it, so the run button waits for a value it would take. */
+function typedValid(input: Typed, value: unknown): boolean {
+  if (value === undefined || value === '') return input.required === false
+  if (input.type !== 'integer') return true
+  const n = value as number
+  return Number.isSafeInteger(n) && (input.min === undefined || n >= input.min) && (input.max === undefined || n <= input.max)
+}
+
+function TypedInput({ input, value, onChange }: { input: Typed; value: unknown; onChange: (value: unknown) => void }) {
+  if (input.type === 'boolean') {
+    return (
+      <label className="nv-action__input nv-action__check">
+        <input type="checkbox" checked={value === true} onChange={(event) => onChange(event.target.checked)} />
+        {input.label}
+      </label>
+    )
+  }
+  const kind = input.type === 'integer' ? 'number' : input.type
+  const read = (raw: string): unknown => (raw === '' ? undefined : input.type === 'integer' ? Number(raw) : raw)
+  return (
+    <label className="nv-action__input">
+      <span>{input.label}</span>
+      <input className="nv-fb__text" type={kind} aria-label={input.label} min={input.min} max={input.max} maxLength={input.type === 'text' ? 500 : undefined}
+        value={value === undefined ? '' : String(value)} onChange={(event) => onChange(read(event.target.value))} />
+    </label>
+  )
+}
+
+/** A required yes/no starts as no, as its box shows; an optional one stays out until ticked. */
+const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
+  Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
+
 /** Keyed by its record, so another row starts with nothing picked. */
-function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<string, number>) => Promise<void> }) {
+function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<string, unknown>) => Promise<void> }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
+  const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
   const [open, setOpen] = useState<string | null>(null)
   const [sending, setSending] = useState<Sending>({ status: 'idle' })
-  const ready = inputs.every(([key]) => picked[key])
+  const valueOf = ([key, input]: [string, ActionInput]) => ('relation' in input ? picked[key]?.id : typed[key])
+  const ready = inputs.every((entry) => {
+    const [, input] = entry
+    return 'relation' in input ? picked[entry[0]] !== undefined : typedValid(input, typed[entry[0]])
+  })
 
   const run = () => {
     setSending({ status: 'sent' })
-    onRun(Object.fromEntries(inputs.map(([key]) => [key, picked[key].id]))).then(
+    const given = inputs.filter((entry) => valueOf(entry) !== undefined).map((entry) => [entry[0], valueOf(entry)])
+    onRun(Object.fromEntries(given)).then(
       () => setSending({ status: 'idle' }),
       (error: ApiError) => setSending({ status: 'refused', message: errorText(error.code, error.message) }),
     )
@@ -88,7 +128,7 @@ function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<
 
   return (
     <div className="nv-action" role="group" aria-label={action.label}>
-      {inputs.map(([key, input]) => (
+      {inputs.map(([key, input]) => 'relation' in input ? (
         <div key={key} className="nv-action__input">
           <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
           {open === key && (
@@ -99,6 +139,8 @@ function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<
               }} />
           )}
         </div>
+      ) : (
+        <TypedInput key={key} input={input} value={typed[key]} onChange={(value) => setTyped((was) => ({ ...was, [key]: value }))} />
       ))}
       <Button className="nv-button nv-button--primary nv-button--sm" isDisabled={!ready || sending.status === 'sent'} onPress={run}>{action.label}</Button>
       {sending.status === 'refused' && <p className="nv-action__refused" role="alert">{sending.message}</p>}

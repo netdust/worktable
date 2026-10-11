@@ -1,5 +1,5 @@
 import type { Domain } from '@worktable/engine'
-import { sjabloonToepassen, vulSlot } from './actions'
+import { sjabloonToepassen, tourstopVerschuiven, vulSlot } from './actions'
 import {
   activiteit,
   beschikbaarheid,
@@ -41,7 +41,7 @@ const theatre: Domain = {
     speelreeks: speelreeksWriter,
     sjabloon: sjabloonWriter,
   },
-  actions: { sjabloon_toepassen: sjabloonToepassen, vul_slot: vulSlot },
+  actions: { sjabloon_toepassen: sjabloonToepassen, vul_slot: vulSlot, tourstop_verschuiven: tourstopVerschuiven },
   space: { dataset: 'productie' },
   // Section names and order are a draft, pending Stefan's approval.
   sections: [
