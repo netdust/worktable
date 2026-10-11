@@ -367,9 +367,12 @@ function checkInput(action: string, key: string, input: ActionInput, datasets: S
     return
   }
   if (!INPUT_TYPES.includes(input.type)) throw at(`has unknown type "${String(input.type)}"`)
-  const bounded = input.min !== undefined || input.max !== undefined
-  if (bounded && input.type !== 'integer') throw at('takes min and max only as an integer')
-  if (input.min !== undefined && input.max !== undefined && input.min > input.max) throw at('has min above max')
+  if (input.type !== 'integer') {
+    if (input.min !== undefined || input.max !== undefined) throw at('takes min and max only as an integer')
+    return
+  }
+  if (!Number.isFinite(input.min) || !Number.isFinite(input.max)) throw at('must declare min and max as finite numbers')
+  if ((input.min as number) > (input.max as number)) throw at('has min above max')
 }
 
 function checkActions(domain: Domain): void {

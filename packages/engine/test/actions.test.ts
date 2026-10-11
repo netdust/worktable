@@ -382,4 +382,21 @@ describe('typed action inputs', () => {
     expect(() => validateDomain(withInput({ x: { type: 'text', label: 'X', min: 1 } }))).toThrow(DomainError)
     expect(() => validateDomain(withInput({ x: { type: 'integer', label: 'X', min: 1, max: 5 } }))).not.toThrow()
   })
+
+  test.each([
+    ['no bounds', {}],
+    ['no max', { min: 1 }],
+    ['no min', { max: 5 }],
+    ['an infinite max', { min: 1, max: Number.POSITIVE_INFINITY }],
+    ['a NaN min', { min: Number.NaN, max: 5 }],
+    ['a bound given as text', { min: '1', max: 5 }],
+  ])('validation refuses an integer input with %s, naming the input', (_, bounds) => {
+    const bad = {
+      ...domain,
+      actions: {
+        bad: { label: 'Bad', on: 'project', input: { x: { type: 'integer', label: 'X', ...bounds } }, run: () => [] },
+      },
+    } as unknown as Domain
+    expect(() => validateDomain(bad)).toThrow(/input x .*min and max/)
+  })
 })
