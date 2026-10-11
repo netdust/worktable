@@ -120,7 +120,12 @@ function actionPath({ name, label, input }: ServedSource['actions'][number], on:
     required: ['id', 'input'],
     properties: {
       id: { type: 'integer', description: `The id of the ${on} record` },
-      input: { type: 'object', required, properties: Object.fromEntries(inputs) },
+      input: {
+        type: 'object',
+        additionalProperties: false,
+        ...(required.length > 0 ? { required } : {}),
+        properties: Object.fromEntries(inputs),
+      },
     },
   }
   return {

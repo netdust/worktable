@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import type { ActionDecl, Domain } from '../src'
 import { recordLinkFor } from '../src/record-link'
 import { domain, freshDb, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
@@ -57,6 +58,49 @@ describe('GET /schema?format=openapi', () => {
     expect(components.securitySchemes).toEqual({
       bearer: { type: 'http', scheme: 'bearer' },
       cookie: { type: 'apiKey', in: 'cookie', name: 'wt_session' },
+    })
+  })
+
+  test('typed action inputs: their schemas, no other keys, and required only when something is', async () => {
+    const actions: Record<string, ActionDecl> = {
+      typed: {
+        label: 'Typed',
+        on: 'project',
+        input: {
+          count: { type: 'integer', label: 'Count', min: 1, max: 3 },
+          day: { type: 'date', label: 'Day' },
+          word: { type: 'text', label: 'Word' },
+          loud: { type: 'boolean', label: 'Loud', required: false },
+        },
+        run: () => [],
+      },
+      optional: {
+        label: 'Optional',
+        on: 'project',
+        input: { loud: { type: 'boolean', label: 'Loud', required: false } },
+        run: () => [],
+      },
+    }
+    const typed: Domain = { ...domain, actions: { ...domain.actions, ...actions } }
+    app = testEngine(sqlite, typed)
+    const doc = await openapi(await signIn(app, 'editor'))
+    const inputOf = (name: string) =>
+      doc.paths[`/actions/${name}`].post.requestBody.content['application/json'].schema.properties.input
+    expect(inputOf('typed')).toEqual({
+      type: 'object',
+      additionalProperties: false,
+      required: ['count', 'day', 'word'],
+      properties: {
+        count: { type: 'integer', title: 'Count', minimum: 1, maximum: 3 },
+        day: { type: 'string', format: 'date', title: 'Day' },
+        word: { type: 'string', maxLength: 500, title: 'Word' },
+        loud: { type: 'boolean', title: 'Loud' },
+      },
+    })
+    expect(inputOf('optional')).toEqual({
+      type: 'object',
+      additionalProperties: false,
+      properties: { loud: { type: 'boolean', title: 'Loud' } },
     })
   })
 
