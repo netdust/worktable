@@ -28,3 +28,13 @@ Exif Orientation lost with APP1; a link cannot open a file by `<a href>` (step 6
 - **B3:** the declared limit binds **person links only** (PATCH and `/act` values, checked before `ownBody`/`cutBody`); signed-in owners keep SPEC:45 — matches what Stefan approved ("a link account writes a declared column") and breaks no existing owner write. Regression tests listed. Cost if wrong: extend the check to owner sessions later.
 - **SF1:** drop bytes after the first EOI. **Note on Orientation:** keep it in a minimal Exif APP1.
 - **SF2–SF9:** folded into the plan; `no-store` restored for owner and link downloads.
+
+---
+
+# Re-review
+
+Reviewed-plan: 4995c0f5b617d3db7687de7501d727eb088e4261
+Verdict: ready with fixes; B1, B2, B3 resolved, nothing Blocking.
+
+Should fix, all folded in: (1) the matrix drawer keeps its own undo stack (`App.tsx:306`, `matrix/store.ts:108`) → the files section is on the row drawer only; (2) `history.ts` `Entry.refresh` and `store.ts` `repaint` named; (3) the upload's revision rows and the per-record undo rule spelled out (marker → set `deleted_at`; `deleted_at` row → restore `old`; redo through the undo batch, which is undoable); (4) a link's PATCH reply would carry every column (`app.ts:43-47`, `rowOf`) → links get `{ id, revision }` only, with a test; (5) `record-link.test.ts:286` listed; (6) the route matrix runs on `test/fixture.ts` → `project` declares attachments, `EXPECTED` gets a body type, the SAVEPOINT seeds an attachment.
+Minor, folded in: `file/:id` registered first and a dataset named `file` refused; `linkWritable` sees the body after `expect`; `/act` `values` not an object → 400 `bad_body`; an upload to an unknown dataset 404s before reading; `--files-dir` on the serve path only; strip also drops png bytes after `IEND` and jpeg `COM`.
