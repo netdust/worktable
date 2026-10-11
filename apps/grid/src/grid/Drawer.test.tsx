@@ -129,16 +129,16 @@ describe("the drawer's actions", () => {
   })
 
   const shift: ModelAction = {
-    name: 'tour_verschuiven',
-    label: 'Tour verschuiven',
+    name: 'tourstop_verschuiven',
+    label: 'Tourstop verschuiven',
     input: { dagen: { type: 'integer', label: 'Dagen', min: -365, max: 365 }, stil: { type: 'boolean', label: 'Stil', required: false } },
   }
 
   it('takes a typed input as a field, sends it as its value, and leaves an optional one out', async () => {
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[shift]} onAction={onAction} onClose={() => undefined} />)
-    const group = screen.getByRole('group', { name: 'Tour verschuiven' })
-    const run = within(group).getByRole('button', { name: 'Tour verschuiven' })
+    const group = screen.getByRole('group', { name: 'Tourstop verschuiven' })
+    const run = within(group).getByRole('button', { name: 'Tourstop verschuiven' })
     expect(run.hasAttribute('disabled')).toBe(true)
 
     fireEvent.change(within(group).getByLabelText('Dagen'), { target: { value: '400' } })

@@ -85,9 +85,9 @@ const moved = (row: Values, columns: string[], days: number): Values =>
     columns.filter((column) => row[column] != null).map((column) => [column, shifted(row[column], days)]),
   )
 
-// The tour and every activity in it, N days later or earlier; the writers recompute plandag.
-export const tourVerschuiven: ActionDecl = {
-  label: 'Tour verschuiven',
+// The tourstop and every activity in it, N days later or earlier; the writers recompute plandag.
+export const tourstopVerschuiven: ActionDecl = {
+  label: 'Tourstop verschuiven',
   on: 'speelreeks',
   input: { dagen: { type: 'integer', label: 'Dagen', min: -365, max: 365 } },
   run(reeks, input, ctx) {

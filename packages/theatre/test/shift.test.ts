@@ -66,10 +66,17 @@ const row = async (dataset: string, id: number) =>
       .rows as Body[]
   )[0] as Body
 
-describe('tour_verschuiven', () => {
-  test('moves the tour and every activity in it by N days, in one batch that one undo reverses', async () => {
+describe('tourstop_verschuiven', () => {
+  test('is served on the tourstop as "Tourstop verschuiven"', async () => {
+    const schema = (await editor('GET', '/api/schema')).body as { sources: Record<string, { actions: Body[] }> }
+    const names = (schema.sources.speelreeks?.actions ?? []).map((a) => [a.name, a.label])
+    expect(names).toContainEqual(['tourstop_verschuiven', 'Tourstop verschuiven'])
+    expect(names.map(([name]) => name)).not.toContain('tour_verschuiven')
+  })
+
+  test('moves the tourstop and every activity in it by N days, in one batch that one undo reverses', async () => {
     const { reeks, timed, untimed, other } = await tour()
-    const res = await editor('POST', '/api/actions/tour_verschuiven', { id: reeks, input: { dagen: 3 } })
+    const res = await editor('POST', '/api/actions/tourstop_verschuiven', { id: reeks, input: { dagen: 3 } })
     expect(res.status).toBe(201)
 
     expect(await row('speelreeks', reeks)).toMatchObject({ start_datum: '2026-11-12', eind_datum: '2026-11-13' })
@@ -90,7 +97,7 @@ describe('tour_verschuiven', () => {
 
   test('moves back with a negative number', async () => {
     const { reeks, untimed } = await tour()
-    expect((await editor('POST', '/api/actions/tour_verschuiven', { id: reeks, input: { dagen: -2 } })).status).toBe(
+    expect((await editor('POST', '/api/actions/tourstop_verschuiven', { id: reeks, input: { dagen: -2 } })).status).toBe(
       201,
     )
     expect(await row('activiteit', untimed)).toMatchObject({ datum: '2026-11-08' })
@@ -101,7 +108,7 @@ describe('tour_verschuiven', () => {
     ['a fraction', 1.5],
   ])('refuses %s', async (_, dagen) => {
     const { reeks } = await tour()
-    const res = await editor('POST', '/api/actions/tour_verschuiven', { id: reeks, input: { dagen } })
+    const res = await editor('POST', '/api/actions/tourstop_verschuiven', { id: reeks, input: { dagen } })
     expect(res.status).toBe(400)
     expect(res.body.message).toContain('input.dagen')
   })
