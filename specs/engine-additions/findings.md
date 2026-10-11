@@ -188,3 +188,5 @@ Read against `docs/SPEC.md` and `packages/engine/src` at main `67f9962`. Nothing
 3. Files in a directory next to each client's database (`--files-dir`): **yes**.
 4. A1: "you choose". Ruling: not now — no domain in this repo matches a null today; AGENTS.md builds nothing before a domain needs it — cost if wrong: one small engine change when the agency lands.
 5. Order: **F4, F2, F3, F1**, each its own branch and gate.
+6. `ctx.findAll` (added by ruling in F2, outside this finding): **kept** — Stefan, 2026-10-11 ("go ahead", on the question).
+7. F1 plan (`specs/attachments/plan.md` on `feature/attachments`): **approved**, subagent-driven — Stefan, 2026-10-11.
