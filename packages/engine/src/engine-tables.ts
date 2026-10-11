@@ -92,7 +92,7 @@ export const attachment = defineDataset({
     sha256: { type: 'text', label: 'Hash' },
     uploaded_by: { type: 'integer', label: 'Uploaded by' },
   },
-  indexes: [['entity', 'record_id']],
+  indexes: [['entity', 'record_id'], ['sha256']],
 })
 
 export const engineTables = [

@@ -512,7 +512,7 @@ describe('storage', () => {
     await serveWith(mkdtempSync(join(tmpdir(), 'wt-files-')), ['--files-max-gb', '0.5'])
   }, 20_000)
 
-  test.each(['0', '-1', 'abc', ''])(
+  test.each(['0', '-1', 'abc', '', '0.0000000001'])(
     'serve.ts --files-max-gb refuses %p',
     async (value) => {
       const run = spawnServe(mkdtempSync(join(tmpdir(), 'wt-files-')), [`--files-max-gb=${value}`])
@@ -564,6 +564,40 @@ describe('storage cap', () => {
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 507, code: 'storage_full' })
   })
 
+  test('two overlapping uploads that each fit alone but not together: one 201, one 507, one file on disk', async () => {
+    await capped(PDF.length + 5)
+    const gates: (() => void)[] = []
+    const send = (bytes: Uint8Array, name: string) => {
+      const ready = new Promise<void>((resolve) => gates.push(resolve))
+      const body = new ReadableStream(
+        {
+          async pull(controller) {
+            await ready
+            controller.enqueue(bytes)
+            controller.close()
+          },
+        },
+        { highWaterMark: 0 },
+      )
+      return app.request(`/api/attachments/box/1?kind=doc&name=${name}`, {
+        method: 'POST',
+        headers: {
+          host: HOST,
+          cookie: editor,
+          'content-type': 'application/octet-stream',
+          'content-length': String(bytes.length),
+        },
+        body,
+      })
+    }
+    const pending = [send(PDF, 'a.pdf'), send(OTHER, 'b.pdf')]
+    await Bun.sleep(50)
+    for (const release of gates) release()
+    const statuses = (await Promise.all(pending)).map((res) => res.status).sort()
+    expect(statuses).toEqual([201, 507])
+    expect(readdirSync(filesDir)).toHaveLength(1)
+  })
+
   test('undoing a file delete at the cap restores the file', async () => {
     await capped(PDF.length)
     const { body } = await upload(PDF)
@@ -583,6 +617,10 @@ describe('start and validation', () => {
     expect(() =>
       createEngine(freshDb(), domain, { port: 4310, linkSecret: TEST_LINK_SECRET, clientIp: () => '127.0.0.1' }),
     ).toThrow(/files/)
+  })
+
+  test.each([0, -1, 1.5, Number.NaN, 2 ** 53])('createEngine refuses filesMaxBytes %p', (filesMaxBytes) => {
+    expect(() => testEngine(freshDb(), domain, { filesMaxBytes })).toThrow(/filesMaxBytes/)
   })
 
   test.each([

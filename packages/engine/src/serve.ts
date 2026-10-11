@@ -243,9 +243,10 @@ function filesDirOf(dir: string | undefined): string | undefined {
 const filesDir = filesDirOf(values['files-dir'])
 
 function filesMaxBytesOf(raw: string): number {
-  const gb = /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : 0
-  if (!(gb > 0)) fail(`--files-max-gb ${raw} is not a positive number`)
-  return Math.floor(gb * 1024 ** 3)
+  const bytes = /^\d+(\.\d+)?$/.test(raw) ? Math.floor(Number(raw) * 1024 ** 3) : 0
+  if (!(bytes >= 1 && Number.isSafeInteger(bytes)))
+    fail(`--files-max-gb ${raw} is not a positive number of at least one byte`)
+  return bytes
 }
 const filesMaxBytes = filesMaxBytesOf(values['files-max-gb'])
 

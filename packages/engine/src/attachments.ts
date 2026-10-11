@@ -149,6 +149,7 @@ function filesDirOf(store: Store): string {
 function storeBytes(store: Store, bytes: Uint8Array): { sha256: string; written?: string } {
   const sha256 = new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
   const known = store.sqlite.query('SELECT 1 FROM attachment WHERE sha256 = ? LIMIT 1').get(sha256)
+  // The race backstop: overlapping uploads all pass checkUpload before either body is read.
   if (!known && !fits(store, bytes.length)) throw storageFull()
   const path = join(filesDirOf(store), sha256)
   if (existsSync(path)) return { sha256 }
@@ -164,7 +165,7 @@ function storeBytes(store: Store, bytes: Uint8Array): { sha256: string; written?
 }
 
 const storageFull = () =>
-  new ApiError(507, 'storage_full', 'The storage for attachments is full: ask an administrator to free space')
+  new ApiError(507, 'storage_full', 'The storage for attachments is full: an administrator must raise the limit')
 
 // Soft-deleted files stay on disk for undo, so they count; the same bytes sit on disk once.
 function storedTotal(store: Store): number {

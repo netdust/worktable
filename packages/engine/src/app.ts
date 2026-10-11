@@ -196,6 +196,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   if (domain.datasets.some((d) => d.attachments) && !filesDir) {
     throw new Error('a dataset declares attachments, so the engine needs a files directory')
   }
+  if (filesMaxBytes !== undefined && !(Number.isSafeInteger(filesMaxBytes) && filesMaxBytes > 0)) {
+    throw new Error(`filesMaxBytes must be a positive safe integer, not ${filesMaxBytes}`)
+  }
   sqlite.run('PRAGMA foreign_keys = ON')
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])

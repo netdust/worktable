@@ -289,7 +289,7 @@ describe("a record's files in the drawer", () => {
   it.each([
     [{ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' }, 'Dit bestandstype kan niet. Gebruik pdf, jpg, png of webp.'],
     [{ code: 'body_too_large', message: 'too large' }, 'Dit bestand is te groot (max. 20 MB).'],
-    [{ code: 'storage_full', message: 'The storage for attachments is full' }, 'De opslag voor bijlagen is vol. Vraag een beheerder om ruimte vrij te maken.'],
+    [{ code: 'storage_full', message: 'The storage for attachments is full' }, 'De opslag voor bijlagen is vol. Een beheerder moet de limiet verhogen.'],
   ])('says a refused upload in Dutch: %o', async (refusal, said) => {
     remote.attachmentsOf.mockResolvedValue([])
     remote.uploadAttachment.mockRejectedValue(refusal)
