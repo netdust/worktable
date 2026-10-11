@@ -70,17 +70,18 @@ Everything else stays minimal: one guard extended rather than a second one, raw-
    - `writeGuard`'s site check stays on the upload path.
    - `application/octet-stream` is required, which is not CORS-simple, so a form cannot send it (415 otherwise).
 7. **A photo carries where it was taken.** `strip.ts` runs before hashing and storing:
-   - It removes jpeg APP1 (Exif, XMP) and APP13, and drops everything after the first EOI.
+   - It removes jpeg APP1 (Exif, XMP), APP13 and COM, and drops everything after the first EOI and after a png's IEND.
    - It writes back a minimal Exif APP1 with only Orientation when the original had one.
    - It removes png `eXIf`/`tEXt`/`iTXt`/`zTXt`, and webp `EXIF`/`XMP ` chunks (VP8X flags cleared, RIFF size fixed).
    - A file it cannot walk is refused (415), never stored unstripped.
 8. **A person link writes a column it may not (mass assignment).**
    - The link checks on `PATCH /rows` (in the route, before `runWrite`) and on `/act` `values` refuse any key not `owner_writable`: 403 `column_not_owner_writable`, naming it.
    - The check runs on the raw body, before `ownBody`/`cutBody`, which would silently drop a key and hide the refusal.
-9. **A forwarded person link writes in the subject's name.**
+9. **A forwarded person link writes in the subject's name, or reads the whole row back through the write's reply.**
    - Limited to `owner_writable` columns and its own uploads.
    - Logged as the link account in Revision.
    - Rotating the link stops it (existing).
+   - A link's `PATCH` replies `{ id, revision }` only, never the row (`app.ts`, the reply for `actor.kind === 'link'`).
 10. **A link reaches DELETE on rows through the widened path fence.** `confineLinkActor` matches method and path:
     - `GET /api/auth/me`, `GET /api/owner/views…`;
     - `PATCH /api/rows/:dataset/:id`;
@@ -124,14 +125,15 @@ The `@e2e` flows of Done-when 1 and 2 are written by `/shakeout` after the revie
   - `engine-tables.ts`: the `attachment` table; its name joins the reserved names.
   - `validate.ts` `checkAttachments`: kinds non-empty with identifier keys; `max_mb` an integer from 1 to 50; `owner_writable` needs `owner_visible`; attachments only on a dataset.
   - `write-guard.ts`: the exemption below.
-  - `app.ts`: `EngineOptions.filesDir`; `createEngine` throws when any dataset declares attachments and none is given; the routes are registered after `authRoutes`; the Store carries `filesDir`.
+  - `app.ts`: `EngineOptions.filesDir`; `createEngine` throws when any dataset declares attachments and none is given; the routes are registered after `authRoutes`, `file/:id` before `:dataset/:id`; an upload to an unknown or undeclared dataset answers 404 before the body is read; the Store carries `filesDir`. `validate.ts` also refuses a dataset named `file`.
   - `writes.ts` `undoBatch`: the attachment branch below.
-  - `serve.ts`: `--files-dir`, created with mode 0700, in the usage line.
+  - `serve.ts`: `--files-dir`, read on the serve path only, beside `--outbox`, after the one-shot commands exit; created with mode 0700; in the usage line.
   - `test/sign-in.ts` `testEngine`: a temporary `filesDir` by default.
   - `scripts/parity.ts`: a temporary `filesDir`.
   - `playwright.config.ts`: the theatre engine gets `--files-dir e2e/.tmp/files`.
   - `scripts/shakeout/edit-session.ts`: `--files-dir` beside `--outbox`.
-  - `route-matrix.test.ts`: the four routes, with the expected status per role written by hand.
+  - `test/fixture.ts`: the `project` dataset declares `attachments: { kinds: { doc: 'Doc' }, owner_visible: true, owner_writable: true }`, for the route matrix.
+  - `route-matrix.test.ts`: the four routes, with the expected status per role written by hand; `EXPECTED` gains a body-type field for the octet-stream upload; the per-cell SAVEPOINT seeds one attachment.
   - `docs/SPEC.md`: the Task 1 lines.
 
 **The guard exemption** (`write-guard.ts`; the one non-obvious piece):
@@ -143,11 +145,13 @@ const UPLOAD = /^\/api\/attachments\/[a-z][a-z0-9_]*\/\d+$/
 if (c.req.method === 'POST' && UPLOAD.test(c.req.path)) return next()
 ```
 
-**The undo branch** (`writes.ts` `undoBatch`, before the domain path): a batch whose revision rows all have entity `attachment`:
-- checks the actor may write the attachment's record (the same check as an upload or a delete);
-- flips `deleted_at` for each row (set on an undone upload, cleared on an undone delete);
-- revises each flip under a new `undo` batch, and records it so redo works the same way;
-- refuses with `changed_since` if `deleted_at` changed after the batch.
+**The undo branch** (`writes.ts` `undoBatch`, after `undoableBatch`, before `touchedBy`):
+- An upload is a `write` batch holding the attachment's `id` marker row (as `create()` revises it); a delete is a `write` batch holding one `deleted_at` row.
+- It applies when the batch has at least one revision row and every row has entity `attachment`, and works per attachment record: a marker means set `deleted_at = now`; a `deleted_at` row means restore its first `old`.
+- It checks the actor may write the attachment's record (the same check as an upload or a delete).
+- It refuses with `changed_since` when the current `deleted_at` differs from that batch's last `new` (null for an upload).
+- It revises each change under a new `undo` batch and records that batch.
+- Redo needs nothing more: the engine redoes a batch by undoing its undo batch (kind `undo` is undoable), whose `deleted_at` rows the same branch handles.
 
 A batch mixing attachment and dataset rows does not occur: uploads and deletes are their own batches.
 
@@ -185,7 +189,7 @@ A batch mixing attachment and dataset rows does not occur: uploads and deletes a
   - **Route matrix:** the four routes, with their status per role.
 - [ ] **Step 2: Run** `bun test packages/engine/test/attachments.test.ts packages/engine/test/route-matrix.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement.** The SPEC lines first.
-- [ ] **Step 4: Run** `bun test packages scripts` and `bun run check`. Expected: PASS, with no other test changed except `route-matrix.test.ts`.
+- [ ] **Step 4: Run** `bun test packages scripts` and `bun run check`. Expected: PASS; tests that read the fixture's `/schema` change only where the new `attachments` key legitimately appears.
 - [ ] **Step 5: Commit** `feat(engine): attachments — files on disk by sha256, routes behind the write guard, magic-byte allowlist, undo and redo`.
 
 ### Task 2: Engine — strip location and camera data
@@ -197,12 +201,12 @@ A batch mixing attachment and dataset rows does not occur: uploads and deletes a
 **Interfaces it produces:** `strip(bytes: Uint8Array, mime: 'image/jpeg' | 'image/png' | 'image/webp'): Uint8Array`. It throws `StripError` on a file it cannot walk.
 
 - [ ] **Step 1: Failing tests.**
-  - **jpeg:** a jpeg with an Exif APP1 holding GPS and Orientation 6, an XMP APP1, an APP13, and an appended MP4 after its EOI:
-    - The GPS, XMP, APP13 and trailing bytes are gone.
+  - **jpeg:** a jpeg with an Exif APP1 holding GPS and Orientation 6, an XMP APP1, an APP13, a COM segment, and an appended MP4 after its EOI:
+    - The GPS, XMP, APP13, COM and trailing bytes are gone.
     - A minimal Exif APP1 holds Orientation 6.
     - Every other segment and the scan data are byte-identical.
   - **jpeg without Orientation:** no APP1 is written back.
-  - **png:** `eXIf` and `tEXt` are gone; IHDR, IDAT and IEND are identical and their CRCs still valid.
+  - **png:** `eXIf`, `tEXt` and bytes after `IEND` are gone; IHDR, IDAT and IEND are identical and their CRCs still valid.
   - **webp:** `EXIF` and `XMP ` chunks with a VP8X header are gone; the VP8X EXIF and XMP flags are cleared, and the RIFF size is correct.
   - **Through the upload route:**
     - A truncated jpeg → `StripError`, then 415, with nothing on disk.
@@ -220,8 +224,8 @@ A batch mixing attachment and dataset rows does not occur: uploads and deletes a
   - `apps/grid/src/api.ts`: the interfaces below. The upload uses its own `fetch`, because `request()` always JSON-encodes.
   - `apps/grid/src/grid/Drawer.tsx`: an `Attachments` section.
   - `apps/grid/src/grid/Grid.tsx`: passes the model's attachments and an `onBatch` to the drawer at both drawer render sites. The draft row shows no files section.
-  - `apps/grid/src/matrix/Matrix.tsx:558`: the matrix drawer shows the section too.
-  - The grid's undo history: a history entry for an attachment batch carries a `refresh` the drawer section registers.
+  - The matrix drawer (`Matrix.tsx:558`) does **not** show the section: the matrix keeps its own undo stack (`matrix/store.ts:108`), and R5 asks only for the row drawer.
+  - `apps/grid/src/ui/history.ts`: `Entry.refresh?: () => void`; `apps/grid/src/grid/store.ts` `repaint` calls it on undo and on redo.
   - `apps/grid/src/i18n.ts`.
 - Create: `packages/theatre/test/attachments.test.ts`.
 
@@ -258,11 +262,12 @@ Each upload or delete pushes `{ batch, refresh }` onto the shared undo history. 
 - Modify:
   - `declare.ts`: `ColumnDecl.owner_writable?: true`.
   - `validate.ts`: the refusals of R4.
-  - `app.ts`: in the `PATCH /rows/:dataset/:id` handler, for `actor.kind === 'link'`, call `linkWritable(dataset, body)` before `runWrite`.
-  - `action-token.ts`: the `/act` body takes `values?: Record<string, unknown>`. They are checked with `linkWritable`, then written in the same `applyWrite` call as the transition, `{ ...values, [column]: to }`.
+  - `app.ts`: in the `PATCH /rows/:dataset/:id` handler, for `actor.kind === 'link'`, call `linkWritable(dataset, body)` on the body after `expect` is taken out, before `runWrite`; the reply to a link is `{ id, revision }` only.
+  - `action-token.ts`: the `/act` body takes `values?: Record<string, unknown>` (not a plain object → 400 `bad_body`). They are checked with `linkWritable`, then written in the same `applyWrite` call as the transition, `{ ...values, [column]: to }`.
   - `record-link.ts`: `confineLinkActor` matches method and path, per attack 10.
   - `attachments.ts`: the owner and link rules of attack 4, and `no-store` for owners and links.
   - `route-matrix.test.ts`: the link cells.
+  - `record-link.test.ts:286`: a link `PATCH /api/rows/note/1 {tekst}` now passes the fence and answers 403 `column_not_owner_writable`; update its expectation.
   - `docs/SPEC.md`: the Task 4 lines.
 - Create: `packages/engine/test/owner-writes.test.ts`. Its fixture has an owned dataset with one `owner_writable` text column, a lifecycle and its token, and `attachments.owner_visible`/`owner_writable`.
 
@@ -273,7 +278,7 @@ Each upload or delete pushes `{ batch, refresh }` onto the shared undo history. 
 - [ ] **Step 1: Failing tests.**
   - **Validation** refuses `owner_writable` without `owner_visible`, on the owner column, the lifecycle column, a `record_link.email` column, json and readonly.
   - **Link PATCH:**
-    - A link PATCH of the `owner_writable` column → 200, revised as the link account.
+    - A link PATCH of the `owner_writable` column → 200 with only `{ id, revision }` (no other column in the reply), revised as the link account; a link sending `expect` is not refused for it.
     - Another column, including the lifecycle column → 403, naming it.
     - Another subject's row → 404.
   - **Link fence:** a link POST and DELETE on `/rows`, and a link POST on `/actions` and `/batches/:id/undo` → 403.
