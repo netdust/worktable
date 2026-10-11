@@ -195,7 +195,10 @@ export interface WriteContext {
   find(dataset: string, id: number): Record<string, unknown> | null
   /** The first live row whose columns equal `match`. */
   findBy(dataset: string, match: Record<string, unknown>): Record<string, unknown> | null
-  /** Every live row whose columns equal `match`, by id; at most 5000, refused past that. */
+  /**
+   * Every live row whose columns equal `match`, by id; at most 5000, refused past that.
+   * No scope is applied: never copy its rows into what an owner-reachable action returns or refuses.
+   */
   findAll(dataset: string, match: Record<string, unknown>): Record<string, unknown>[]
   exists(dataset: string, match: Record<string, unknown>, exceptId?: number): boolean
 }
