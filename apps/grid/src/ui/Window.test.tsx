@@ -50,6 +50,10 @@ describe('the week window', () => {
     expect(formatWindow({ from: '2026-12-28', to: '2027-01-03' })).toBe('Week 53 · 28 dec–3 jan')
   })
 
+  it('prints a one-day window as that day once', () => {
+    expect(formatWindow({ from: '2026-12-31', to: '2026-12-31' })).toBe('31 dec')
+  })
+
   it('follows an English admin locale', () => {
     document.documentElement.lang = 'en-GB'
     expect(formatWindow({ from: '2026-05-18', to: '2026-05-24' })).toBe('Week 21 · 18–24 May')

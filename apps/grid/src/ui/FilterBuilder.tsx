@@ -4,7 +4,7 @@ import { UNSAFE_PortalProvider, useInteractOutside } from 'react-aria'
 import { Button, DatePicker, Dialog, Group, OverlayTriggerStateContext, Popover } from 'react-aria-components'
 import { Month, Segments } from '../grid/cells/Date'
 import { fromDate, toDate } from '../grid/cells/dates'
-import { type Filter, isDate, type Join, type Kind, type Op, put } from '../grid/conditions'
+import { type Filter, isDate, type Join, type Kind, type Op, put, valued } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { records } from '../api'
 import { t } from '../i18n'
@@ -14,10 +14,14 @@ import { Pick } from './Pick'
 export const OPERATORS: Record<Kind, Op[]> = {
   choice: ['in', 'nin', 'empty', 'filled'],
   text: ['like', 'nlike', 'eq', 'empty'],
-  date: ['week', 'next_week', 'month', 'between'],
-  datetime: ['week', 'next_week', 'month', 'between'],
+  date: ['today', 'week', 'next_week', 'month', 'between'],
+  datetime: ['today', 'week', 'next_week', 'month', 'between'],
   bool: ['in'],
 }
+
+// A new date condition starts at this week, as a planner reads a sheet; today is one choice further.
+const START: Partial<Record<Kind, Op>> = { date: 'week', datetime: 'week' }
+const startOp = (kind: Kind): Op => START[kind] ?? (OPERATORS[kind][0] as Op)
 
 const OPTIONS_SHOWN = 6
 
@@ -55,7 +59,7 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
   }
   const add = () => {
     const field = fields.find((f) => !filters.some((c) => c.field === f.field)) ?? fields[0]
-    if (field) onChange([...filters, { field: field.field, op: OPERATORS[field.kind][0] as Op, values: startOf(field) }])
+    if (field) onChange([...filters, { field: field.field, op: startOp(field.kind), values: startOf(field) }])
   }
 
   return (
@@ -74,7 +78,7 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
               options={fields.map((f) => ({ value: f.field, label: f.label, icon: iconOf(f) }))}
               onChange={(name) => {
                 const next = fieldOf(name)
-                if (next) setAt(at, { field: next.field, op: OPERATORS[next.kind][0] as Op, values: startOf(next) })
+                if (next) setAt(at, { field: next.field, op: startOp(next.kind), values: startOf(next) })
               }} />
             <Pick label={t('filterOperator')} value={condition.op} className="nv-fb__op"
               options={OPERATORS[kind].map((op) => ({ value: op, label: t(opWord(kind, op)) }))}
@@ -98,8 +102,6 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
 
 /** The word of an operator: a datetime speaks as a date. */
 export const opWord = (kind: Kind, op: Op) => `op.${kind === 'datetime' ? 'date' : kind}.${op}` as Parameters<typeof t>[0]
-
-const valued = (op: Op): boolean => !['empty', 'filled', 'week', 'next_week', 'month'].includes(op)
 
 function Value({ field, condition, onChange }: { field: FilterField; condition: Filter; onChange: (values: string[]) => void }) {
   if (!valued(condition.op)) return <span className="nv-fb__value" />

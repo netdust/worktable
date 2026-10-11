@@ -16,6 +16,7 @@ describe('a condition on the wire', () => {
     [{ field: 'omschrijving', op: 'like', values: ['zaal'] }, { omschrijving: { $like: 'zaal' } }],
     [{ field: 'omschrijving', op: 'nlike', values: ['zaal'] }, { omschrijving: { $nlike: 'zaal' } }],
     [{ field: 'omschrijving', op: 'eq', values: ['Lunch'] }, { omschrijving: { $eq: 'Lunch' } }],
+    [{ field: 'plandag', op: 'today', values: [] }, { plandag: { $period: 'today' } }],
     [{ field: 'plandag', op: 'week', values: [] }, { plandag: { $period: 'week' } }],
     [{ field: 'plandag', op: 'next_week', values: [] }, { plandag: { $period: 'next_week' } }],
     [{ field: 'plandag', op: 'month', values: [] }, { plandag: { $period: 'month' } }],
@@ -113,6 +114,7 @@ describe('putting a condition', () => {
 describe('the days a date condition spans', () => {
   const today = new Date(2026, 11, 31)
   it('reads week, next week and month from today, Monday to Sunday', () => {
+    expect(windowOf({ field: 'plandag', op: 'today', values: [] }, today)).toEqual({ from: '2026-12-31', to: '2026-12-31' })
     expect(windowOf({ field: 'plandag', op: 'week', values: [] }, today)).toEqual({ from: '2026-12-28', to: '2027-01-03' })
     expect(windowOf({ field: 'plandag', op: 'next_week', values: [] }, today)).toEqual({ from: '2027-01-04', to: '2027-01-10' })
     expect(windowOf({ field: 'plandag', op: 'month', values: [] }, today)).toEqual({ from: '2026-12-01', to: '2026-12-31' })

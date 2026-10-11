@@ -13,7 +13,7 @@ export type Operator =
   | '$nlike'
   | '$period'
 
-export const PERIODS = ['week', 'next_week', 'month'] as const
+export const PERIODS = ['today', 'week', 'next_week', 'month'] as const
 export type Period = (typeof PERIODS)[number]
 
 /** Max number of values in a `$contains` array — bounds the EXISTS subquery fan-out (DoS guard). */

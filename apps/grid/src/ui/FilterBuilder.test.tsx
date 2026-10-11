@@ -71,8 +71,18 @@ describe('the filter builder', () => {
     bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }, { field: 'plandag', op: 'week', values: [] }])
     open()
     const operators = (n: number) => within(listOf(row(n), 'Vergelijking')).getAllByRole('option').map((o) => o.textContent)
-    expect(operators(0)).toEqual(['is deze week', 'is volgende week', 'is deze maand', 'ligt tussen'])
+    expect(operators(0)).toEqual(['is vandaag', 'is deze week', 'is volgende week', 'is deze maand', 'ligt tussen'])
     expect(operators(1)).toEqual(['bevat', 'bevat niet', 'is', 'is leeg'])
+  })
+
+  it('asks no value of a period, today included', () => {
+    for (const op of ['today', 'week', 'next_week', 'month'] as const) {
+      bar([{ field: 'plandag', op, values: [] }])
+      open()
+      expect(row(0).querySelector('.nv-fb__value')?.childElementCount).toBe(0)
+      expect(within(row(0)).queryByRole('searchbox')).toBeNull()
+      cleanup()
+    }
   })
 
   it('adds a condition, its field the first not yet filtered on', () => {

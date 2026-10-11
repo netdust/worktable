@@ -73,12 +73,13 @@ export function isoWeek(date: Date): number {
   return 1 + Math.floor(Math.round((thursday.getTime() - first.getTime()) / 86_400_000) / 7)
 }
 
-/** "Alles", "Week 45 · 2–8 nov", "oktober 2026" or "12 okt – 3 nov". */
+/** "Alles", "31 dec", "Week 45 · 2–8 nov", "oktober 2026" or "12 okt – 3 nov". */
 export function formatWindow(window: Partial<DateWindow>): string {
   if (!window.from || !window.to) return t('all')
   const full = { from: window.from, to: window.to }
   const from = parse(full.from) ?? new Date()
   const to = parse(full.to) ?? from
+  if (full.from === full.to) return `${from.getDate()} ${monthName(from)}`
   if (isMonth(full)) return named(from, { month: 'long', year: 'numeric' })
   if (!isWeek(full)) return `${from.getDate()} ${monthName(from)} – ${to.getDate()} ${monthName(to)}`
   const start = from.getMonth() === to.getMonth() ? `${from.getDate()}` : `${from.getDate()} ${monthName(from)}`

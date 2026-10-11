@@ -3,7 +3,7 @@
  * The engine's filter language is the stored form: a condition maps to one of its keys and back.
  */
 
-export type Op = 'in' | 'nin' | 'empty' | 'filled' | 'like' | 'nlike' | 'eq' | 'week' | 'next_week' | 'month' | 'between'
+export type Op = 'in' | 'nin' | 'empty' | 'filled' | 'like' | 'nlike' | 'eq' | 'today' | 'week' | 'next_week' | 'month' | 'between'
 
 export interface Filter {
   field: string
@@ -23,12 +23,15 @@ export interface Window {
   to: string
 }
 
-const OPS: Op[] = ['in', 'nin', 'empty', 'filled', 'like', 'nlike', 'eq', 'week', 'next_week', 'month', 'between']
-const PERIODS: Op[] = ['week', 'next_week', 'month']
+const OPS: Op[] = ['in', 'nin', 'empty', 'filled', 'like', 'nlike', 'eq', 'today', 'week', 'next_week', 'month', 'between']
+const PERIODS: Op[] = ['today', 'week', 'next_week', 'month']
 const DATED: Op[] = [...PERIODS, 'between']
 const NO_VALUE: Op[] = ['empty', 'filled', ...PERIODS]
 
 export const isDate = (op: Op): boolean => DATED.includes(op)
+
+/** An operator that takes a value: not a period, not empty or filled. */
+export const valued = (op: Op): boolean => !NO_VALUE.includes(op)
 
 /** The conditions a link carries, parsed, not cast: null when the text is not a list of conditions. */
 export function readConditions(text: string): Filter[] | null {
@@ -44,7 +47,7 @@ export function readConditions(text: string): Filter[] | null {
 
 /** A condition the engine can apply: one without its value is still being written. */
 export function complete(f: Filter): boolean {
-  if (NO_VALUE.includes(f.op)) return true
+  if (!valued(f.op)) return true
   if (f.op === 'between') return f.values.length === 2 && f.values.every((v) => v !== '')
   return f.values.some((v) => v !== '')
 }
@@ -170,11 +173,13 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const iso = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 const plus = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
 
-/** The days a date condition spans, as the engine resolves it: Monday to Sunday, or the calendar month. */
+/** The days a date condition spans, as the engine resolves it: today, Monday to Sunday, or the calendar month. */
 export function windowOf(f: Filter | undefined, today: Date): Window | null {
   if (!f || !complete(f)) return null
   const monday = plus(today, -((today.getDay() + 6) % 7))
   switch (f.op) {
+    case 'today':
+      return { from: iso(today), to: iso(today) }
     case 'week':
       return { from: iso(monday), to: iso(plus(monday, 6)) }
     case 'next_week':
