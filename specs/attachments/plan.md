@@ -2,122 +2,295 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Files attached to any record, read and written by planners from the drawer and, where a dataset allows, by owners and link accounts; owners and links write only columns a dataset declares `owner_writable`.
+**Goal:** Files attached to any record, read and written by planners from the drawer and, where a dataset allows, by owners and person links; a person link writes only columns a dataset declares `owner_writable`.
 
-**Architecture:** An engine table `attachment` and a dataset key `attachments`; files on disk under `--files-dir`, named by sha256; four routes with their own guard (the JSON write guard does not fit raw bytes); a byte-level metadata stripper for jpeg, png and webp; `owner_writable` checked in `valuesOf` before the writer; `confineLinkActor` opens `PATCH /rows` and the attachment routes to link accounts. Theatre declares attachments on three datasets; the grid's drawer lists and uploads them.
+**Architecture:**
+- An engine table `attachment` and a dataset key `attachments`. Files sit on disk under `--files-dir`, named by sha256.
+- Four routes, mounted after sign-in like every other route. `writeGuard` keeps its site check for all of them and skips only its JSON and 64 KB checks for the upload path, which then requires `application/octet-stream` and the dataset's `max_mb`.
+- A dedicated undo branch for attachment batches.
+- A byte-level metadata stripper for jpeg, png and webp.
+- `owner_writable` checked for link accounts at the link's PATCH and at `/act` `values`, before `ownBody`/`cutBody`.
+- `confineLinkActor` made method-aware.
+- Theatre declares attachments on three datasets; the grid's row drawer lists and uploads them.
 
-**Tech Stack:** Bun, Hono, SQLite, TypeScript; Bun tests (engine, theatre), Vitest (grid), Playwright (e2e).
+**Tech Stack:** Bun, Hono, SQLite, TypeScript; Bun tests (engine, theatre), Vitest (grid), Playwright (e2e via `/shakeout`).
 
-**Spec:** `specs/attachments/spec.md`. Design: `specs/engine-additions/findings.md` F1.
+**Spec:** `specs/attachments/spec.md`. Design: `specs/engine-additions/findings.md` F1. Review: `specs/attachments/plan-review.md`.
 
-**First working version:** Task 3 — a planner attaches a file to an activity in the running grid. Tasks 1–2 are the engine it stands on.
+**First working version:** Task 3, where a planner attaches a file to an activity in the running grid. Tasks 1 and 2 are the engine it stands on.
 
-**Simplest design:** Store files as BLOBs in SQLite and serve them from a single route, editors only. Not used: Stefan chose files beside the database (answer 3), a BLOB column makes every backup and migration copy carry the files, and owners and links are in scope (R4). The plan keeps every other part minimal: raw-bytes upload (no multipart parser), content-addressed files (no names on disk), byte-level stripping (no image library), soft delete through the existing revision and undo.
+**Simplest design.** Store files as BLOBs in SQLite and serve them from a single route, editors only. The plan does not use it:
+- Stefan chose files beside the database (answer 3);
+- a BLOB makes every backup and migration copy carry the files;
+- owners and links are in scope (R4).
+
+Everything else stays minimal: one guard extended rather than a second one, raw-bytes upload (no multipart parser), content-addressed files, byte-level stripping (no image library), and a named undo branch rather than a general engine-table undo.
 
 ## Global Constraints
-- `packages/engine` knows no domain word; engine names English and generic; Dutch user strings (`apps/grid/src/i18n.ts`).
-- `docs/SPEC.md` gets its lines first (Task 1): the Attachment row as built (without publication and inheritance), `attachments` on Dataset, `owner_writable` on columns, the four routes on the freeze list, `--files-dir` in the CLI row, the Access table's link writes.
-- No client data; invented fixtures; `bun scripts/check-export-terms.ts` before every commit; commit by path.
-- The gate is `bun run gate`; never touch ports 4330/5180/4341/5181 or `~/laika-export`.
+- `packages/engine` knows no domain word. Engine names are English and generic; user strings are Dutch (`apps/grid/src/i18n.ts`).
+- `docs/SPEC.md` lines come first in the task that needs them:
+  - Task 1: the Attachment row as built (without publication and inheritance); `attachments` on Dataset; the four routes on the freeze list; `--files-dir` in the CLI row; `SPEC.md:56`, where an attachment delete is undoable.
+  - Task 4: `owner_writable` on columns; the Access table, where a link account writes `owner_writable` columns and its own attachments.
+- No client data; fixtures are invented. Run `bun scripts/check-export-terms.ts` before every commit and commit by path.
+- The gate is `bun run gate`. Never touch ports 4330/5180/4341/5181 or `~/laika-export`.
 - Every refusal of an actor is asserted, not only the allowed path.
+- One code per refusal:
+  - 403 `forbidden_site`;
+  - 415 `bad_content_type`, 415 `bad_file_type`;
+  - 413 `body_too_large`;
+  - 404 `unknown_attachment`;
+  - 403 `column_not_owner_writable`;
+  - 400 `bad_kind`, 400 `bad_name`;
+  - 429 `rate_limited`.
 
 ## Threat model
 
 **Assets:** the files (contracts, receipts, photos of people and places); write access to records; the long-lived person link; the server's disk.
 
-**Attacks → mitigations (where):**
-1. **An editor-, owner- or link-uploaded HTML, SVG or polyglot file runs script in the grid's origin when opened** → magic-byte allowlist (pdf `%PDF-`, jpeg `FF D8 FF`, png `89 50 4E 47 0D 0A 1A 0A`, webp `RIFF....WEBP`) in `attachments.ts` `sniff`; the declared mime is the sniffed one, never the client's; served with `Content-Disposition: attachment` (inline only for jpeg/png/webp), `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox` in the download route.
-2. **Path traversal or overwrite through the uploaded name** → files stored as `<files-dir>/<sha256>`; the name is metadata only, at most 200 characters, control characters refused; the download sets `filename*` with RFC 5987 encoding (`attachments.ts` `dispositionOf`).
-3. **Reading another record's file by guessing ids** (any actor) → the download reads the attachment row, then its record through `visibleSource` + `scopeOf` + `inScope`, then `owner_visible` for an owner or link; every failure answers the same 404 `unknown_attachment` (`attachments.ts` `readable`).
-4. **An owner or link uploads to, lists or deletes on a record it cannot write or read** → the same scope read; upload needs `attachments.owner_writable` for owner/link; delete by owner/link only of its own upload (`uploaded_by`), editors any.
-5. **Disk fill or memory exhaustion by a huge upload** → `bodyLimit` at `max_mb` (default 10) on the upload route before reading (413 `body_too_large`); a per-actor upload rate limit (30 a minute, `checkLimits`); the body read once into memory only after the limit.
-6. **A cross-site page posts a file with the user's cookie** → the upload route runs its own guard: the same `sec-fetch-site`/`Origin` refusal as `writeGuard`, and `Content-Type: application/octet-stream` required (not CORS-simple, so a cross-site form cannot send it without preflight).
-7. **A photo carries where it was taken** → `strip.ts` removes jpeg APP1 (Exif, XMP) and APP13, png `eXIf`/`tEXt`/`iTXt`/`zTXt`, webp `EXIF`/`XMP ` chunks (clearing the VP8X flags), before hashing and storing; a file the stripper cannot parse is refused (415), never stored unstripped.
-8. **An owner or link writes a column it may not (mass assignment)** → `valuesOf` refuses any key not `owner_writable` for role owner, 403 `column_not_owner_writable` naming it, before the writer.
-9. **A forwarded person link writes in the subject's name** → limited to `owner_writable` columns and own uploads; logged as the link account in Revision; rotating the link stops it (existing).
-10. **A link uses `PATCH` to reach a column through a lookup rename (`ownBody`)** → owners never have lookups (validation refuses lookups on owned datasets), and the `owner_writable` check runs on the renamed body.
+**Attacks and their mitigations (where each lives):**
+1. **Script in a file opened from the grid's origin.** An editor-, owner- or link-uploaded HTML, SVG or polyglot file runs script when opened.
+   - A magic-byte allowlist in `attachments.ts` `sniff`: pdf `%PDF-`, jpeg `FF D8 FF`, png `89 50 4E 47 0D 0A 1A 0A`, webp `RIFF....WEBP`.
+   - The stored mime is the sniffed one, never the client's.
+   - Downloads are served with `Content-Disposition: attachment` (inline only for jpeg/png/webp), `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, plus `Cache-Control: no-store` for owners and links.
+2. **Path traversal or overwrite through the uploaded name.**
+   - Files are stored as `<files-dir>/<sha256>`.
+   - The name is metadata only: at most 200 characters, control characters refused.
+   - `filename*` is RFC 5987-encoded (`attachments.ts` `dispositionOf`).
+3. **Reading another record's file by guessing ids (any actor).**
+   - `attachments.ts` `readable` loads the attachment, then its record through `visibleSource`, `scopeOf` and `inScope`, then checks `owner_visible` for an owner or link.
+   - Every failure answers the same 404 `unknown_attachment`.
+4. **An owner or link lists, uploads or deletes on a record it may not read or write.**
+   - The same scope read as attack 3.
+   - Upload needs `attachments.owner_writable` for an owner or link.
+   - An owner or link deletes only its own uploads (`uploaded_by`); editors may delete any.
+5. **Filling the disk or exhausting memory with a huge upload.**
+   - Hono `bodyLimit` at `max_mb` on the upload route, one limiter per declared dataset built at start, before the body is read (413).
+   - A per-actor upload limit of 30 a minute (`checkLimits`, 429).
+6. **A cross-site page posts a file with the user's cookie.**
+   - `writeGuard`'s site check stays on the upload path.
+   - `application/octet-stream` is required, which is not CORS-simple, so a form cannot send it (415 otherwise).
+7. **A photo carries where it was taken.** `strip.ts` runs before hashing and storing:
+   - It removes jpeg APP1 (Exif, XMP) and APP13, and drops everything after the first EOI.
+   - It writes back a minimal Exif APP1 with only Orientation when the original had one.
+   - It removes png `eXIf`/`tEXt`/`iTXt`/`zTXt`, and webp `EXIF`/`XMP ` chunks (VP8X flags cleared, RIFF size fixed).
+   - A file it cannot walk is refused (415), never stored unstripped.
+8. **A person link writes a column it may not (mass assignment).**
+   - The link checks on `PATCH /rows` (in the route, before `runWrite`) and on `/act` `values` refuse any key not `owner_writable`: 403 `column_not_owner_writable`, naming it.
+   - The check runs on the raw body, before `ownBody`/`cutBody`, which would silently drop a key and hide the refusal.
+9. **A forwarded person link writes in the subject's name.**
+   - Limited to `owner_writable` columns and its own uploads.
+   - Logged as the link account in Revision.
+   - Rotating the link stops it (existing).
+10. **A link reaches DELETE on rows through the widened path fence.** `confineLinkActor` matches method and path:
+    - `GET /api/auth/me`, `GET /api/owner/views…`;
+    - `PATCH /api/rows/:dataset/:id`;
+    - `GET`/`POST /api/attachments/:dataset/:id`, `GET`/`DELETE /api/attachments/file/:id`.
+
+    Nothing else: no `POST` or `DELETE` on rows, no `/actions`, no `/batches`.
 
 **Deferrals:**
-- Malware in a pdf: not scanned; files are served as downloads with `nosniff`, never rendered by the grid.
-- PDF metadata (author, software) is kept: stripping a pdf needs a parser; the location risk is in photos.
-- Orphaned files on disk after a soft delete are kept (undo needs them); no garbage collection in this step.
-- Image re-encoding (which would also kill steganographic payloads) is out.
+- **Malware in a pdf:** not scanned. Files are served as downloads with `nosniff` and never rendered by the grid.
+- **PDF metadata** (author, software): kept. Stripping needs a pdf parser, and the location risk is in photos.
+- **Files on disk after a soft delete:** kept, because undo needs them. No garbage collection in this step.
+- **Image re-encoding:** out.
+- **A link account opening a file:** a plain `<a href>` cannot send the link's header. Step 6 owns that screen (fetch to blob).
 
 ## Test map
 
-| Unit | Seam | Tier | File | Command | e2e flows (shake-out) |
+| Unit | Seam | Tier | File | Command | e2e flows (`/shakeout`) |
 |---|---|---|---|---|---|
-| T1 engine table, routes, guard, headers | `/api/attachments/*` | engine integration | `packages/engine/test/attachments.test.ts` | `bun test packages/engine/test/attachments.test.ts` | — |
+| T1 table, routes, guard, headers, undo | `/api/attachments/*`, `writeGuard`, `undoBatch` | engine integration | `packages/engine/test/attachments.test.ts`, `packages/engine/test/route-matrix.test.ts` | `bun test packages/engine/test/attachments.test.ts packages/engine/test/route-matrix.test.ts` | — |
 | T2 stripper | `strip(bytes, mime)` and the upload route | engine unit + integration | `packages/engine/test/strip.test.ts` | `bun test packages/engine/test/strip.test.ts` | photo location gone |
-| T3 theatre + drawer | `/schema` attachments; Drawer render, upload, open, delete, undo | theatre integration, vitest | `packages/theatre/test/attachments.test.ts`, `apps/grid/src/grid/Drawer.test.tsx` | `bun test packages/theatre`, grid vitest | upload pdf and photo, open, delete, undo |
-| T4 owner_writable + link writes | `PATCH /rows`, `POST /act`, attachment routes as owner/link | engine integration | `packages/engine/test/owner-writes.test.ts` | `bun test packages/engine/test/owner-writes.test.ts` | — |
+| T3 theatre + drawer | `/schema` attachments; Drawer render, upload, open, delete, undo | theatre integration, vitest | `packages/theatre/test/attachments.test.ts`, `apps/grid/src/grid/Drawer.test.tsx` | `bun test packages/theatre/test/attachments.test.ts`; `bun run --filter @worktable/grid test` | upload a pdf and a photo, open, delete, undo |
+| T4 link writes | link `PATCH /rows`, `POST /act` values, attachment routes as owner/link, `confineLinkActor` | engine integration | `packages/engine/test/owner-writes.test.ts`, `route-matrix.test.ts` | `bun test packages/engine/test/owner-writes.test.ts packages/engine/test/route-matrix.test.ts` | — |
+
+The `@e2e` flows of Done-when 1 and 2 are written by `/shakeout` after the review, per the house process.
 
 ## Review Focus
-- Attack 1 (script in an upload) → T1 `an svg, an html file and an exe renamed .pdf are 415` and the header assertions.
-- Attack 3 (guessing ids) → T1 `another record's file and an unknown id answer the same 404` (and T4 for owner/link).
-- Attack 7 (location) → T2 `a jpeg's GPS is gone; an unparseable image is refused, not stored`.
-- Attack 8 (mass assignment) → T4 `an owner PATCH naming another column is 403 naming it`.
-- Attack 6 (cross-site) → T1 `a cross-site upload and a form-encoded upload are refused`.
+- Attack 1 (script in an upload): T1 `an svg, an html file and an exe renamed .pdf are 415`, and the header assertions.
+- Attack 3 (guessing ids): T1 `another record's file and an unknown id answer the same 404`, and T4 for owners and links.
+- Attack 7 (location): T2 `a jpeg's GPS and its trailing motion video are gone, Orientation kept; an unparseable image is refused, not stored`.
+- Attack 8 (mass assignment): T4 `a link PATCH naming another column is 403 naming it`.
+- Attack 10 (the fence): T4 `a link DELETE on rows and a link POST on /actions are 403`.
 
 ---
 
-### Task 1: Engine — the attachment table, routes and guard
+### Task 1: Engine — the attachment table, routes, guard and undo
 
-**Files:** Create `packages/engine/src/attachments.ts`, `packages/engine/test/attachments.test.ts`, `packages/engine/test/fixtures/attachment-domain.ts`. Modify `packages/engine/src/declare.ts` (`AttachmentsDecl`, `DatasetDecl.attachments`), `engine-tables.ts` (the `attachment` table; `attachment` joins the reserved names), `validate.ts` (`checkAttachments`: kinds non-empty, `max_mb` 1–50, `owner_writable` needs `owner_visible`), `app.ts` (`EngineOptions.filesDir`; refuse to start without it when any dataset declares attachments; mount the routes before `writeGuard` with their own guard), `serve.ts` (`--files-dir`, created 0700), `history`/undo (an attachment revision: `deleted_at` on delete, a create undone by setting `deleted_at`), `docs/SPEC.md`.
+**Files:**
+- Create: `packages/engine/src/attachments.ts`, `packages/engine/test/attachments.test.ts`, `packages/engine/test/fixtures/attachment-domain.ts`.
+- Modify:
+  - `declare.ts`: `AttachmentsDecl { kinds: Record<string, string>; max_mb?: number; owner_visible?: true; owner_writable?: true }`; `DatasetDecl.attachments`.
+  - `engine-tables.ts`: the `attachment` table; its name joins the reserved names.
+  - `validate.ts` `checkAttachments`: kinds non-empty with identifier keys; `max_mb` an integer from 1 to 50; `owner_writable` needs `owner_visible`; attachments only on a dataset.
+  - `write-guard.ts`: the exemption below.
+  - `app.ts`: `EngineOptions.filesDir`; `createEngine` throws when any dataset declares attachments and none is given; the routes are registered after `authRoutes`; the Store carries `filesDir`.
+  - `writes.ts` `undoBatch`: the attachment branch below.
+  - `serve.ts`: `--files-dir`, created with mode 0700, in the usage line.
+  - `test/sign-in.ts` `testEngine`: a temporary `filesDir` by default.
+  - `scripts/parity.ts`: a temporary `filesDir`.
+  - `playwright.config.ts`: the theatre engine gets `--files-dir e2e/.tmp/files`.
+  - `scripts/shakeout/edit-session.ts`: `--files-dir` beside `--outbox`.
+  - `route-matrix.test.ts`: the four routes, with the expected status per role written by hand.
+  - `docs/SPEC.md`: the Task 1 lines.
 
-**Interfaces — produces:**
-- `GET /api/attachments/:dataset/:id` → `{ attachments: [{ id, kind, name, mime, size, uploaded_by_self: boolean, created_at }] }`
-- `POST /api/attachments/:dataset/:id?kind=<kind>&name=<name>` with `Content-Type: application/octet-stream`, body the bytes → 201 `{ id, kind, name, mime, size, revision: { batch_id } }`
-- `GET /api/attachments/file/:id` → the bytes with the headers of attacks 1 and 2
-- `DELETE /api/attachments/file/:id` → `{ id, revision: { batch_id } }`
-- `/schema` serves `attachments: { kinds, max_mb, owner_visible?, owner_writable? }` per dataset.
-- Errors: 404 `unknown_attachment`, 413 `body_too_large`, 415 `bad_file_type`, 400 `bad_kind` / `bad_name`, 403 `forbidden_site` / `bad_content_type`.
+**The guard exemption** (`write-guard.ts`; the one non-obvious piece):
 
-- [ ] **Step 1: Failing tests** (fixture: `box { name }` with `attachments: { kinds: { doc: 'Doc', photo: 'Photo' }, max_mb: 1 }`):
-  - upload a pdf as an editor → 201; list shows it; download returns the same bytes, `Content-Disposition: attachment; filename*=UTF-8''…`, `nosniff`, `Content-Security-Policy: sandbox`;
-  - a png downloads inline;
-  - an svg, an html file, and an exe (`MZ…`) named `x.pdf` → 415; the client's `Content-Type` is ignored for the stored mime;
-  - 1 MB + 1 byte → 413; an unknown kind → 400 `bad_kind`; a name with a newline or over 200 characters → 400 `bad_name`;
-  - a cross-site upload (`sec-fetch-site: cross-site`) and a `multipart/form-data` upload → 403;
-  - another record's attachment id on the download and an unknown id → the same 404 body;
-  - delete → gone from the list, the download 404s; undo of the delete's batch → back; undo of the upload's batch → gone;
-  - the file on disk is `<filesDir>/<sha256>` and two uploads of the same bytes store one file;
-  - `createEngine` without `filesDir` on a domain with attachments throws; validation refuses empty kinds, `max_mb` 0 or 51, `owner_writable` without `owner_visible`.
-- [ ] **Step 2: Run** `bun test packages/engine/test/attachments.test.ts` — FAIL.
-- [ ] **Step 3: Implement** as in Interfaces; the spec lines in `docs/SPEC.md` first.
-- [ ] **Step 4: Run** `bun test packages/engine` and `bun run check` — PASS.
-- [ ] **Step 5: Commit** `feat(engine): attachments — files on disk by sha256, four routes with their own guard, magic-byte allowlist, revised and undoable`.
+```ts
+// An upload is raw bytes; its route checks the type and its own size limit.
+const UPLOAD = /^\/api\/attachments\/[a-z][a-z0-9_]*\/\d+$/
+// inside writeGuard, after the site check:
+if (c.req.method === 'POST' && UPLOAD.test(c.req.path)) return next()
+```
+
+**The undo branch** (`writes.ts` `undoBatch`, before the domain path): a batch whose revision rows all have entity `attachment`:
+- checks the actor may write the attachment's record (the same check as an upload or a delete);
+- flips `deleted_at` for each row (set on an undone upload, cleared on an undone delete);
+- revises each flip under a new `undo` batch, and records it so redo works the same way;
+- refuses with `changed_since` if `deleted_at` changed after the batch.
+
+A batch mixing attachment and dataset rows does not occur: uploads and deletes are their own batches.
+
+**Interfaces it produces:**
+- `GET /api/attachments/:dataset/:id` → `{ attachments: [{ id, kind, name, mime, size, own: boolean, created_at }] }` (`own`: uploaded by the caller).
+- `POST /api/attachments/:dataset/:id?kind=<kind>&name=<name>`, with `Content-Type: application/octet-stream` and the bytes as body → 201 `{ id, kind, name, mime, size, revision: { batch_id } }`.
+- `GET /api/attachments/file/:id` → the bytes, with the headers of attacks 1 and 2.
+- `DELETE /api/attachments/file/:id` → `{ id, revision: { batch_id } }`.
+- `/schema` serves `attachments: { kinds, max_mb, owner_visible?, owner_writable? }` per dataset that declares them.
+
+- [ ] **Step 1: Failing tests.** The fixture is `box { name }` with `attachments: { kinds: { doc: 'Doc', photo: 'Photo' }, max_mb: 1 }`.
+  - **Upload and download:**
+    - An editor uploads a pdf → 201, and the list shows it.
+    - The download returns the same bytes, with `Content-Disposition: attachment; filename*=UTF-8''…`, `nosniff` and `Content-Security-Policy: sandbox`.
+    - A png downloads inline.
+  - **Refusals:**
+    - An svg, an html file, and an exe (`MZ…`) named `x.pdf` → 415 `bad_file_type`; the client's `Content-Type` is never the stored mime.
+    - 1 MB + 1 byte → 413.
+    - An unknown kind → 400 `bad_kind`.
+    - A name with a newline, or over 200 characters → 400 `bad_name`.
+    - `multipart/form-data` → 415 `bad_content_type`; a cross-site upload → 403 `forbidden_site`.
+    - The 31st upload in a minute by one account → 429.
+    - Another record's attachment id and an unknown id on the download → the same 404 body.
+  - **Delete and undo:**
+    - Delete → gone from the list, and the download answers 404.
+    - Undo the delete's batch → back. Redo → gone again.
+    - Undo the upload's batch → gone.
+    - Undo after the file's `deleted_at` changed since → 409 `changed_since`.
+  - **Storage:**
+    - The file sits at `<filesDir>/<sha256>`, and two uploads of the same bytes store one file.
+    - `serve.ts --files-dir` creates the directory with mode 0700.
+  - **Start and validation:**
+    - `createEngine` on a domain with attachments and no `filesDir` throws.
+    - Validation refuses empty kinds, `max_mb` 0 or 51, and `owner_writable` without `owner_visible`.
+  - **Route matrix:** the four routes, with their status per role.
+- [ ] **Step 2: Run** `bun test packages/engine/test/attachments.test.ts packages/engine/test/route-matrix.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Implement.** The SPEC lines first.
+- [ ] **Step 4: Run** `bun test packages scripts` and `bun run check`. Expected: PASS, with no other test changed except `route-matrix.test.ts`.
+- [ ] **Step 5: Commit** `feat(engine): attachments — files on disk by sha256, routes behind the write guard, magic-byte allowlist, undo and redo`.
 
 ### Task 2: Engine — strip location and camera data
 
-**Files:** Create `packages/engine/src/strip.ts`, `packages/engine/test/strip.test.ts`, `packages/engine/test/fixtures/images/` (tiny invented images with GPS tags, built in the test from bytes). Modify `attachments.ts` (strip before hashing).
+**Files:**
+- Create: `packages/engine/src/strip.ts`, `packages/engine/test/strip.test.ts`. Tiny invented images are built in the test from bytes.
+- Modify: `attachments.ts`, which strips before hashing.
 
-**Interfaces — produces:** `strip(bytes: Uint8Array, mime: 'image/jpeg' | 'image/png' | 'image/webp'): Uint8Array`, throwing `StripError` on a file it cannot walk.
+**Interfaces it produces:** `strip(bytes: Uint8Array, mime: 'image/jpeg' | 'image/png' | 'image/webp'): Uint8Array`. It throws `StripError` on a file it cannot walk.
 
-- [ ] **Step 1: Failing tests:** a jpeg with an Exif APP1 holding GPS and an XMP APP1 → both gone, every other segment and the scan data byte-identical; a png with `eXIf` and `tEXt` → both chunks gone, IHDR/IDAT/IEND identical, CRCs valid; a webp with `EXIF` and `XMP ` chunks and a VP8X header → chunks gone, VP8X flags cleared, RIFF size correct; a truncated jpeg → `StripError`, and through the upload route 415 with nothing on disk; a pdf through the route → stored byte for byte.
-- [ ] **Step 2–4:** red, implement (walk segments/chunks; no image library), green; `bun test packages/engine`.
-- [ ] **Step 5: Commit** `feat(engine): uploaded photos are stored without location and camera data`.
+- [ ] **Step 1: Failing tests.**
+  - **jpeg:** a jpeg with an Exif APP1 holding GPS and Orientation 6, an XMP APP1, an APP13, and an appended MP4 after its EOI:
+    - The GPS, XMP, APP13 and trailing bytes are gone.
+    - A minimal Exif APP1 holds Orientation 6.
+    - Every other segment and the scan data are byte-identical.
+  - **jpeg without Orientation:** no APP1 is written back.
+  - **png:** `eXIf` and `tEXt` are gone; IHDR, IDAT and IEND are identical and their CRCs still valid.
+  - **webp:** `EXIF` and `XMP ` chunks with a VP8X header are gone; the VP8X EXIF and XMP flags are cleared, and the RIFF size is correct.
+  - **Through the upload route:**
+    - A truncated jpeg → `StripError`, then 415, with nothing on disk.
+    - A pdf → stored byte for byte.
+- [ ] **Steps 2–4:** red, implement (walk segments and chunks; no image library), green with `bun test packages/engine`.
+- [ ] **Step 5: Commit** `feat(engine): uploaded photos are stored without location and camera data, Orientation kept`.
 
 ### Task 3: Theatre and the drawer — planners attach files
 
-**Files:** Modify `packages/theatre/src/datasets.ts` (`attachments` on `activiteit`, `toewijzing`, `speelreeks`: kinds `rider: 'Rider'`, `zaalblad: 'Zaalblad'`, `bonnetje: 'Bonnetje'`, `foto: 'Foto'`, `document: 'Document'`), `apps/grid/src/engine.ts` (serve `attachments` on the model), `apps/grid/src/api.ts` (`attachmentsOf`, `upload`, `removeAttachment`; upload sends `application/octet-stream`), `apps/grid/src/grid/Drawer.tsx` (an "Bijlagen" section: the list with kind, name and size, a link to open each, a kind select and a file input to upload, a delete button; a delete or upload is undoable through the grid's undo history), `apps/grid/src/i18n.ts`, `playwright.config.ts` and `e2e/global-setup.ts` (the e2e engine gets `--files-dir e2e/.tmp/files`), `scripts/shakeout/edit-session.ts` if it starts an engine.
-Create `packages/theatre/test/attachments.test.ts`.
+**Files:**
+- Modify:
+  - `packages/theatre/src/datasets.ts`: `attachments` on `activiteit`, `toewijzing` and `speelreeks`, with kinds `rider: 'Rider'`, `zaalblad: 'Zaalblad'`, `bonnetje: 'Bonnetje'`, `foto: 'Foto'`, `document: 'Document'`.
+  - `apps/grid/src/engine.ts`: serve `attachments` on the model.
+  - `apps/grid/src/types.ts`: `Model.attachments?: { kinds: Record<string, string>; max_mb: number }`.
+  - `apps/grid/src/api.ts`: the interfaces below. The upload uses its own `fetch`, because `request()` always JSON-encodes.
+  - `apps/grid/src/grid/Drawer.tsx`: an `Attachments` section.
+  - `apps/grid/src/grid/Grid.tsx`: passes the model's attachments and an `onBatch` to the drawer at both drawer render sites. The draft row shows no files section.
+  - `apps/grid/src/matrix/Matrix.tsx:558`: the matrix drawer shows the section too.
+  - The grid's undo history: a history entry for an attachment batch carries a `refresh` the drawer section registers.
+  - `apps/grid/src/i18n.ts`.
+- Create: `packages/theatre/test/attachments.test.ts`.
 
-- [ ] **Step 1: Failing tests:** theatre `/schema` serves the attachments of the three datasets; an upload to an activity is listed. Vitest: the drawer of a model with attachments lists them, uploads a chosen file as octet-stream with the kind, opens a file at `/api/attachments/file/:id`, deletes one and offers undo; a model without attachments shows no section; a refused upload says why in Dutch ("Dit bestandstype kan niet", "Dit bestand is te groot").
-- [ ] **Step 2–4:** red, implement, green; `bun run gate`.
-- [ ] **Step 5: Look at it:** a scratch engine with `--files-dir`, upload a pdf and a photo to an activity, one screenshot into `specs/attachments/`.
+**Interfaces** (`apps/grid/src/api.ts`):
+- `attachmentsOf(model: string, id: number): Promise<Attachment[]>`
+- `uploadAttachment(model: string, id: number, kind: string, file: File): Promise<{ attachment: Attachment; batch: string }>`
+- `removeAttachment(id: number): Promise<string>`, which returns the batch id.
+- `fileUrl(id: number): string`, which returns `/api/attachments/file/${id}`.
+- `type Attachment = { id; kind; name; mime; size; own; created_at }`
+
+**Drawer section `Attachments`:** "Bijlagen" lists each file with its kind label, name and size. It has:
+- an open link (`fileUrl`, new tab);
+- a delete button;
+- a kind select and a file input, which upload on choose.
+
+Each upload or delete pushes `{ batch, refresh }` onto the shared undo history. Ctrl+Z and the undo button undo it and call `refresh`, which re-reads `attachmentsOf`. A refusal shows in Dutch:
+- 415: "Dit bestandstype kan niet. Gebruik pdf, jpg, png of webp."
+- 413: "Dit bestand is te groot (max. {n} MB)."
+
+- [ ] **Step 1: Failing tests.**
+  - **Theatre:** `/schema` serves the attachments of the three datasets, and an upload to an activity is listed.
+  - **Vitest:**
+    - The drawer of a model with attachments lists them, uploads a chosen file as octet-stream with the kind, and opens a file at `fileUrl`.
+    - It deletes one, and Ctrl+Z restores it and re-reads the list.
+    - A model without attachments, and the draft row, show no section.
+    - A refused upload shows the Dutch message.
+- [ ] **Steps 2–4:** red, implement, green with `bun test packages/theatre/test/attachments.test.ts`, `bun run --filter @worktable/grid test`, then `bun run gate`.
+- [ ] **Step 5: Look at it.** Start a scratch engine with `--files-dir` and `--link-secret-file` on ports 4351/5191, upload a pdf and a photo to an activity, and save one screenshot into `specs/attachments/`.
 - [ ] **Step 6: Commit** `feat(theatre,grid): planners attach riders, zaalbladen, receipts and photos to activities, assignments and tourstops from the drawer`.
 
-### Task 4: Engine — owners and link accounts write declared columns and attach files
+### Task 4: Engine — person links write declared columns and attach files
 
-**Files:** Modify `declare.ts` (`ColumnDecl.owner_writable`), `validate.ts` (the refusals of R4), `writes.ts` (`valuesOf`: role owner writes only `owner_writable`, 403 `column_not_owner_writable`), `record-link.ts` (`OPEN_TO_LINKS` adds `PATCH /api/rows/:dataset/:id` and the attachment routes; link POST/DELETE on `/rows` stay 403), `action-token.ts` (`POST /act` takes `values` of `owner_writable` columns, written in the transition's `applyWrite` call), `attachments.ts` (owner/link rules of attack 4), `docs/SPEC.md` (Access table). Create `packages/engine/test/owner-writes.test.ts` with a fixture whose owned dataset has one `owner_writable` text column and `attachments.owner_visible`/`owner_writable`.
+**Files:**
+- Modify:
+  - `declare.ts`: `ColumnDecl.owner_writable?: true`.
+  - `validate.ts`: the refusals of R4.
+  - `app.ts`: in the `PATCH /rows/:dataset/:id` handler, for `actor.kind === 'link'`, call `linkWritable(dataset, body)` before `runWrite`.
+  - `action-token.ts`: the `/act` body takes `values?: Record<string, unknown>`. They are checked with `linkWritable`, then written in the same `applyWrite` call as the transition, `{ ...values, [column]: to }`.
+  - `record-link.ts`: `confineLinkActor` matches method and path, per attack 10.
+  - `attachments.ts`: the owner and link rules of attack 4, and `no-store` for owners and links.
+  - `route-matrix.test.ts`: the link cells.
+  - `docs/SPEC.md`: the Task 4 lines.
+- Create: `packages/engine/test/owner-writes.test.ts`. Its fixture has an owned dataset with one `owner_writable` text column, a lifecycle and its token, and `attachments.owner_visible`/`owner_writable`.
 
-- [ ] **Step 1: Failing tests:**
-  - validation refuses `owner_writable` without `owner_visible`, on the owner column, the lifecycle column, a `record_link.email` column, json, readonly;
-  - an owner session and a link PATCH of the `owner_writable` column → 200, revised as that account; another column → 403 naming it; another subject's row → 404;
-  - a link POST and DELETE on `/rows` → 403;
-  - `/act` with `values: { note: 'x' }` writes the transition and the note in one batch; a refused transition writes neither; `values` naming another column → 400 naming it;
-  - an owner and a link list and download files of their own record with `owner_visible`; without it → 404; upload with `owner_writable` → 201; delete of an editor's upload → 403; of its own → 200; another record's file → the same 404 as an unknown id;
-  - an editor's writes are unchanged (no `owner_writable` limit).
-- [ ] **Step 2–4:** red, implement, green; `bun test packages/engine`, `bun run check`.
-- [ ] **Step 5: Commit** `feat(engine): owners and person links write only owner-writable columns, and attach files where a dataset allows it`.
+**Interfaces it produces:**
+- `linkWritable(dataset: DatasetDecl, body: Record<string, unknown>): void` throws 403 `column_not_owner_writable`, naming the first key whose column is not `owner_writable`.
+- `POST /act` body: `{ token, to, values? }`.
+
+- [ ] **Step 1: Failing tests.**
+  - **Validation** refuses `owner_writable` without `owner_visible`, on the owner column, the lifecycle column, a `record_link.email` column, json and readonly.
+  - **Link PATCH:**
+    - A link PATCH of the `owner_writable` column → 200, revised as the link account.
+    - Another column, including the lifecycle column → 403, naming it.
+    - Another subject's row → 404.
+  - **Link fence:** a link POST and DELETE on `/rows`, and a link POST on `/actions` and `/batches/:id/undo` → 403.
+  - **`/act`:**
+    - `values: { note: 'x' }` writes the transition and the note in one batch.
+    - A refused transition writes neither.
+    - `values` naming another column → 403 `column_not_owner_writable`, naming it.
+  - **Owner and link files:**
+    - An owner session and a link list and download the files of their own record when `owner_visible` is set; without it → 404.
+    - Upload with `owner_writable` → 201.
+    - Deleting an editor's upload → 403; deleting their own → 200.
+    - Another record's file → the same 404 as an unknown id.
+    - Downloads carry `Cache-Control: no-store`.
+  - **Regressions:**
+    - A signed-in owner's PATCH of the lifecycle column (`lifecycle.test.ts`) still works.
+    - Theatre's owner Beschikbaarheid and Toewijzing writes still work (`theatre/test/access.test.ts`, `toewijzing.test.ts`).
+    - An owner's undo of its own transition still works.
+    - An editor's writes are unchanged.
+- [ ] **Steps 2–4:** red, implement, green with `bun test packages scripts` and `bun run check`.
+- [ ] **Step 5: Commit** `feat(engine): person links write only owner-writable columns, and attach files where a dataset allows it`.

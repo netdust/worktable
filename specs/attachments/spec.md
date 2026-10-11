@@ -10,12 +10,12 @@ Branch `feature/attachments`, cut from main `67f9962`. Design: `specs/engine-add
 - Routes: list a record's files; upload one file (raw bytes, kind and name as parameters); read its bytes; soft-delete it. Reading needs reading the record; writing needs the record writable.
 - Allowed types by magic bytes: pdf, jpeg, png, webp. Default limit 10 MB per file, `max_mb` per dataset.
 - Served as attachment (inline only for the image types), `nosniff`, a sandbox CSP.
-- An upload and a delete are revised under one batch; undo removes an upload.
+- An upload and a delete are revised under one batch; undo removes an upload and restores a deleted file, redo repeats it. `docs/SPEC.md:56` ("a batch holding a delete … is never undone") gains this one exception.
 - Out: `show_on_publication` and inheritance down a parent relation (step 4).
 - Source: Stefan, "Attachment now: yes" (findings answer 1); findings F1; `docs/SPEC.md:58` (Attachment row).
 
 **R2. Photo location and camera data stripped.**
-- A jpeg, png or webp upload is stored without its location and camera metadata (EXIF, XMP and text chunks), the image bytes otherwise unchanged; a pdf is stored byte for byte.
+- A jpeg, png or webp upload is stored without its location and camera metadata (EXIF, XMP and text chunks) and without anything after a jpeg's end-of-image marker (motion photos and secondary images carry their own GPS), the image bytes otherwise unchanged; a jpeg keeps only its Orientation tag, in a minimal Exif block, so a portrait photo is not shown sideways; a pdf is stored byte for byte.
 - Source: Stefan, "Strip a photo's location … yes" (findings answer 2).
 
 **R3. Files beside the database.**
@@ -24,8 +24,7 @@ Branch `feature/attachments`, cut from main `67f9962`. Design: `specs/engine-add
 
 **R4. Owners and link accounts write declared columns and attach files.**
 - A column may declare `owner_writable: true` (only with `owner_visible`; never on the owner column, the lifecycle column, a `record_link.email` column, json or readonly).
-- An actor with role `owner` writes only `owner_writable` columns, on rows in its scope; any other key is 403 `column_not_owner_writable`, naming it.
-- A link account may `PATCH /rows/:dataset/:id` (no create, no delete) and send `values` of `owner_writable` columns with `POST /act`, written in the transition's batch.
+- A **link account** writes only `owner_writable` columns: on `PATCH /rows/:dataset/:id` (rows in its scope; no create, no delete) and in `values` beside its choice on `POST /act`, written in the transition's batch. Any other key is 403 `column_not_owner_writable`, naming it. A signed-in owner (an account of kind `user`) keeps today's rule: it writes rows in its scope and its writer decides which columns (`docs/SPEC.md:45`). Ruling (plan review B3): the declared limit binds the link only, because applying it to every owner would refuse owner transitions, the token's own transition and theatre's owner writes.
 - With `attachments.owner_visible` an owner or link reads a record's files; with `owner_writable` it uploads, and deletes only its own uploads.
 - Source: Stefan, "C6 + C8: a link account writes a declared column, and Attachment reads and writes for owners and link accounts (technicians adding notes, documents and photos)"; findings F1.
 
