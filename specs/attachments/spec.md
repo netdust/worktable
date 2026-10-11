@@ -15,7 +15,7 @@ Branch `feature/attachments`, cut from main `67f9962`. Design: `specs/engine-add
 - Source: Stefan, "Attachment now: yes" (findings answer 1); findings F1; `docs/SPEC.md:58` (Attachment row).
 
 **R2. Photo location and camera data stripped.**
-- A jpeg, png or webp upload is stored without its location and camera metadata (EXIF, XMP and text chunks) and without anything after a jpeg's end-of-image marker (motion photos and secondary images carry their own GPS), the image bytes otherwise unchanged; a jpeg keeps only its Orientation tag, in a minimal Exif block, so a portrait photo is not shown sideways; a pdf is stored byte for byte.
+- A jpeg, png or webp upload is stored through a keep-list, so its location and camera metadata never reach the disk: a jpeg keeps only its decode segments (SOFn, DHT, DAC, DQT, DRI) and its JFIF, ICC and Adobe colour segments; a png only its image, colour (`gAMA`, `cHRM`, `sRGB`, `iCCP`, `cICP`, `mDCv`, `cLLi`, `sBIT`, `bKGD`, `pHYs`, `tRNS`, `PLTE`) and animation chunks; a webp only its image, alpha, animation and ICC chunks. Every other segment or chunk is dropped, and nothing after a jpeg's end-of-image marker, a png's IEND or the RIFF end is kept (motion photos and secondary images carry their own GPS). A jpeg keeps its Orientation tag, in a minimal Exif block, so a portrait photo is not shown sideways. An image the stripper cannot walk is refused (415), never stored unstripped. A pdf is stored byte for byte.
 - Source: Stefan, "Strip a photo's location … yes" (findings answer 2).
 
 **R3. Files beside the database.**

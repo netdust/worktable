@@ -63,16 +63,18 @@ Everything else stays minimal: one guard extended rather than a second one, raw-
    - The same scope read as attack 3.
    - Upload needs `attachments.owner_writable` for an owner or link.
    - An owner or link deletes only its own uploads (`uploaded_by`); editors may delete any.
-5. **Filling the disk or exhausting memory with a huge upload.**
-   - Hono `bodyLimit` at `max_mb` on the upload route, one limiter per declared dataset built at start, before the body is read (413).
+5. **Exhausting memory with a huge upload, or making the engine read bodies it will refuse.**
+   - A `Content-Length` is required and `Transfer-Encoding` refused (411); a declared length over `max_mb` is 413. Bun's server holds the body to that length.
+   - The record, content type, kind, name, writer and rate-limit checks all run before a byte is read (`checkUpload`).
    - A per-actor upload limit of 30 a minute (`checkLimits`, 429).
+   - Filling the disk is not mitigated in this step: see Deferrals.
 6. **A cross-site page posts a file with the user's cookie.**
    - `writeGuard`'s site check stays on the upload path.
    - `application/octet-stream` is required, which is not CORS-simple, so a form cannot send it (415 otherwise).
 7. **A photo carries where it was taken.** `strip.ts` runs before hashing and storing:
-   - It removes jpeg APP1 (Exif, XMP), APP13 and COM, and drops everything after the first EOI and after a png's IEND.
+   - A keep-list: a jpeg keeps its decode segments and its JFIF, ICC and Adobe APPn; a png its image, colour and animation chunks; a webp its image, alpha, animation and ICC chunks (VP8X flags cleared, RIFF size fixed). Everything else goes.
+   - Nothing after a jpeg's first EOI, a png's IEND or the RIFF end is kept.
    - It writes back a minimal Exif APP1 with only Orientation when the original had one.
-   - It removes png `eXIf`/`tEXt`/`iTXt`/`zTXt`, and webp `EXIF`/`XMP ` chunks (VP8X flags cleared, RIFF size fixed).
    - A file it cannot walk is refused (415), never stored unstripped.
 8. **A person link writes a column it may not (mass assignment).**
    - The link checks on `PATCH /rows` (in the route, before `runWrite`) and on `/act` `values` refuse any key not `owner_writable`: 403 `column_not_owner_writable`, naming it.
@@ -95,6 +97,8 @@ Everything else stays minimal: one guard extended rather than a second one, raw-
 - **Files on disk after a soft delete:** kept, because undo needs them. No garbage collection in this step.
 - **Image re-encoding:** out.
 - **A link account opening a file:** a plain `<a href>` cannot send the link's header. Step 6 owns that screen (fetch to blob).
+- **Total disk use:** no per-account byte quota. The rate limit bounds how fast one account writes (30 × `max_mb` a minute), not how much. Deferred until owners or links upload (step 6); in theatre only editors upload today. A failed insert removes the file it wrote, and a failed rename its `.tmp`.
+- **What the kept colour segments still say:** an ICC profile is kept whole, and its header can name the device's make and model; a jpeg's JFXX APP0 can hold a thumbnail of the photo (its pixels only, no location); Adobe's APP14 is kept for its colour transform; a webp `ANMF` frame is copied whole, its sub-chunks not walked.
 
 ## Test map
 
