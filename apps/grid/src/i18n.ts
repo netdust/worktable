@@ -273,6 +273,7 @@ const strings = {
   attachmentForbidden: 'Je mag hier geen bestanden toevoegen of verwijderen.',
   attachmentLength: 'Het bestand kwam niet volledig aan. Probeer het opnieuw.',
   attachmentGone: 'Dit bestand bestaat niet meer of je mag het niet zien.',
+  attachmentStorageFull: 'De opslag voor bijlagen is vol. Vraag een beheerder om ruimte vrij te maken.',
   attachmentChangedSince: 'Dit bestand is intussen gewijzigd.',
 }
 

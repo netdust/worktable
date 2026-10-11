@@ -49,6 +49,8 @@ export interface Store {
   appUrl: string
   /** Where attachment files sit; set whenever a dataset declares attachments. */
   filesDir?: string
+  /** The cap on the attachment files' total size; DEFAULT_FILES_MAX_BYTES when unset. */
+  filesMaxBytes?: number
 }
 
 export interface Writable {

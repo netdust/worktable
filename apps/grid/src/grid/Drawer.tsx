@@ -88,6 +88,7 @@ const FILE_REFUSALS: Record<string, StringKey> = {
   forbidden: 'attachmentForbidden',
   length_required: 'attachmentLength',
   unknown_attachment: 'attachmentGone',
+  storage_full: 'attachmentStorageFull',
 }
 
 function fileRefusal(error: ApiError, maxMb: number): string {

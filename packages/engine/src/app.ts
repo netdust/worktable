@@ -174,6 +174,8 @@ export interface EngineOptions {
   linkSecret?: Uint8Array
   /** Holds attachment files; required when a dataset declares attachments. */
   filesDir?: string
+  /** The cap on the attachment files' total size, soft-deleted files counted; 5 GiB by default. */
+  filesMaxBytes?: number
 }
 
 const MIN_LINK_SECRET = 32
@@ -190,7 +192,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   if (domain.datasets.some((d) => d.record_link) && (linkSecret?.length ?? 0) < MIN_LINK_SECRET) {
     throw new Error(`a dataset declares record_link, so the engine needs a link secret of ${MIN_LINK_SECRET} bytes`)
   }
-  const { filesDir } = options
+  const { filesDir, filesMaxBytes } = options
   if (domain.datasets.some((d) => d.attachments) && !filesDir) {
     throw new Error('a dataset declares attachments, so the engine needs a files directory')
   }
@@ -209,7 +211,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
 
   const app = root.basePath('/api')
   const mailer = options.mailer ?? (outbox ? outboxMailer(outbox) : undefined)
-  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl, filesDir }
+  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl, filesDir, filesMaxBytes }
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)

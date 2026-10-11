@@ -21,6 +21,7 @@ const { values } = parseArgs({
     'app-url': { type: 'string' },
     outbox: { type: 'string' },
     'files-dir': { type: 'string' },
+    'files-max-gb': { type: 'string', default: '5' },
     'cookie-name': { type: 'string' },
     'create-admin': { type: 'string' },
     'create-account': { type: 'string' },
@@ -47,7 +48,8 @@ function fail(message: string): never {
 if (!values.domain || !values.db) {
   fail(
     'usage: serve.ts --domain <module> --db <file> [--port 4310] [--hostname 127.0.0.1] [--fresh]\n' +
-      '  [--app-url <url>] [--outbox <dir>] [--files-dir <dir>] [--cookie-name <name>] [--link-secret-file <file>]\n' +
+      '  [--app-url <url>] [--outbox <dir>] [--files-dir <dir>] [--files-max-gb 5] [--cookie-name <name>]\n' +
+      '  [--link-secret-file <file>]\n' +
       '  [--create-admin <email> | --create-account <email> --role <role> [--subject <dataset>:<id>]\n' +
       '   | --disable-account <email> | --create-service <name> [--role editor|administrator]\n' +
       '   | --disable-service <name> | --rotate-service <name>]\n' +
@@ -240,6 +242,13 @@ function filesDirOf(dir: string | undefined): string | undefined {
 }
 const filesDir = filesDirOf(values['files-dir'])
 
+function filesMaxBytesOf(raw: string): number {
+  const gb = /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : 0
+  if (!(gb > 0)) fail(`--files-max-gb ${raw} is not a positive number`)
+  return Math.floor(gb * 1024 ** 3)
+}
+const filesMaxBytes = filesMaxBytesOf(values['files-max-gb'])
+
 const port = Number(values.port)
 const server = Bun.serve({
   hostname: values.hostname,
@@ -251,6 +260,7 @@ const server = Bun.serve({
     cookieName: values['cookie-name'],
     linkSecret,
     filesDir,
+    filesMaxBytes,
   }).fetch,
 })
 console.log(`engine listening on http://${server.hostname}:${server.port}`)

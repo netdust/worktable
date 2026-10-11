@@ -95,6 +95,27 @@ async function undo(batch: string) {
 
 const listedIds = async () => (await list()).body.attachments.map((a: { id: number }) => a.id)
 
+// Counts what the engine pulls from the body; nothing is pulled until something reads it.
+function streamed(path: string, headers: Record<string, string> = {}) {
+  const read = { bytes: 0 }
+  const body = new ReadableStream(
+    {
+      pull(controller) {
+        read.bytes += PDF.length
+        controller.enqueue(PDF)
+        controller.close()
+      },
+    },
+    { highWaterMark: 0 },
+  )
+  const sent = app.request(path, {
+    method: 'POST',
+    headers: { host: HOST, cookie: editor, 'content-type': 'application/octet-stream', ...headers },
+    body,
+  })
+  return { read, sent }
+}
+
 describe('upload and download', () => {
   test('an editor uploads a pdf: 201, and the list shows it', async () => {
     const res = await upload(PDF)
@@ -187,27 +208,6 @@ describe('refusals', () => {
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 413, code: 'body_too_large' })
     expect(stored().n).toBe(0)
   })
-
-  // Counts what the engine pulls from the body; nothing is pulled until something reads it.
-  function streamed(path: string, headers: Record<string, string> = {}) {
-    const read = { bytes: 0 }
-    const body = new ReadableStream(
-      {
-        pull(controller) {
-          read.bytes += PDF.length
-          controller.enqueue(PDF)
-          controller.close()
-        },
-      },
-      { highWaterMark: 0 },
-    )
-    const sent = app.request(path, {
-      method: 'POST',
-      headers: { host: HOST, cookie: editor, 'content-type': 'application/octet-stream', ...headers },
-      body,
-    })
-    return { read, sent }
-  }
 
   test.each([
     ['an unknown record', '/api/attachments/box/99?kind=doc&name=a.pdf', 404, 'unknown_record'],
@@ -457,7 +457,7 @@ describe('storage', () => {
   })
 
   // Serves on a free port until it listens, then stops it, so no server outlives the test.
-  async function serveWith(files: string): Promise<void> {
+  function spawnServe(files: string, extra: string[] = []) {
     const dir = mkdtempSync(join(tmpdir(), 'wt-serve-files-'))
     const secret = join(dir, 'secret')
     writeFileSync(secret, 'x'.repeat(32), { mode: 0o600 })
@@ -466,15 +466,20 @@ describe('storage', () => {
     probe.stop(true)
     const serve = join(import.meta.dir, '..', 'src', 'serve.ts')
     const domainFile = join(import.meta.dir, 'fixtures', 'serve-domain.ts')
-    const run = Bun.spawn(
+    return Bun.spawn(
       ['bun', serve, '--domain', domainFile, '--db', join(dir, 'db'), '--fresh', '--port', port].concat([
         '--link-secret-file',
         secret,
         '--files-dir',
         files,
+        ...extra,
       ]),
       { stdout: 'pipe', stderr: 'pipe' },
     )
+  }
+
+  async function serveWith(files: string, extra: string[] = []): Promise<void> {
+    const run = spawnServe(files, extra)
     try {
       const reader = run.stdout.getReader()
       let out = ''
@@ -502,6 +507,70 @@ describe('storage', () => {
     await serveWith(files)
     expect(statSync(files).mode & 0o777).toBe(0o700)
   }, 20_000)
+
+  test('serve.ts --files-max-gb takes a positive number', async () => {
+    await serveWith(mkdtempSync(join(tmpdir(), 'wt-files-')), ['--files-max-gb', '0.5'])
+  }, 20_000)
+
+  test.each(['0', '-1', 'abc', ''])(
+    'serve.ts --files-max-gb refuses %p',
+    async (value) => {
+      const run = spawnServe(mkdtempSync(join(tmpdir(), 'wt-files-')), [`--files-max-gb=${value}`])
+      expect(await run.exited).toBe(1)
+      expect(await new Response(run.stderr).text()).toContain('is not a positive number')
+    },
+    20_000,
+  )
+})
+
+describe('storage cap', () => {
+  const OTHER = ascii('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF ')
+  const THIRD = ascii('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\t')
+
+  async function capped(bytes: number) {
+    app = testEngine(sqlite, domain, { filesDir, filesMaxBytes: bytes })
+    editor = await signIn(app)
+  }
+
+  test('an upload whose Content-Length would pass the cap is 507 storage_full, with nothing read or stored', async () => {
+    await capped(PDF.length)
+    expect((await upload(PDF)).status).toBe(201)
+    const { read, sent } = streamed('/api/attachments/box/1?kind=doc&name=a.pdf', {
+      'content-length': String(PDF.length),
+    })
+    const res = await sent
+    expect({ status: res.status, code: ((await res.json()) as { code: string }).code }).toEqual({
+      status: 507,
+      code: 'storage_full',
+    })
+    expect(read.bytes).toBe(0)
+    expect(readdirSync(filesDir)).toEqual([sha256(PDF)])
+    expect(await listedIds()).toHaveLength(1)
+  })
+
+  test('bytes already stored add nothing: after a duplicate, another file of that size still fits', async () => {
+    await capped(2 * PDF.length)
+    expect((await upload(PDF)).status).toBe(201)
+    expect((await upload(PDF, { name: 'again.pdf' })).status).toBe(201)
+    expect((await upload(OTHER, { name: 'other.pdf' })).status).toBe(201)
+    expect((await upload(THIRD, { name: 'third.pdf' })).status).toBe(507)
+  })
+
+  test('a soft-deleted file still counts toward the total', async () => {
+    await capped(PDF.length)
+    const { body } = await upload(PDF)
+    await remove(body.id)
+    const res = await upload(OTHER, { name: 'other.pdf' })
+    expect({ status: res.status, code: res.body.code }).toEqual({ status: 507, code: 'storage_full' })
+  })
+
+  test('undoing a file delete at the cap restores the file', async () => {
+    await capped(PDF.length)
+    const { body } = await upload(PDF)
+    const deleted = await remove(body.id)
+    expect((await undo(deleted.body.revision.batch_id)).status).toBe(200)
+    expect(await listedIds()).toEqual([body.id])
+  })
 })
 
 const withBox = (attachments: unknown): Domain => ({

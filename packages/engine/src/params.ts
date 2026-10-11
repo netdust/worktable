@@ -5,7 +5,7 @@ import type { Source } from './registry'
 
 export class ApiError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 405 | 409 | 411 | 413 | 415 | 422 | 429,
+    readonly status: 400 | 401 | 403 | 404 | 405 | 409 | 411 | 413 | 415 | 422 | 429 | 507,
     readonly code: string,
     message: string,
     readonly details: Record<string, unknown> = {},

@@ -29,6 +29,7 @@ interface AttachmentRow {
 
 const MB = 1024 * 1024
 export const DEFAULT_MAX_MB = 10
+export const DEFAULT_FILES_MAX_BYTES = 5 * 1024 ** 3
 const MAX_NAME = 200
 // Control characters and direction controls; a bidi override would let x.pdf read as another name.
 const UNSAFE = /[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069]/u
@@ -144,8 +145,11 @@ function filesDirOf(store: Store): string {
 
 // Written under a temporary name and renamed, so a file at its hash is always whole.
 // `written` is the path when this call made the file, so a failed insert can take it back.
+// Bytes already stored add nothing, so a duplicate is never refused here.
 function storeBytes(store: Store, bytes: Uint8Array): { sha256: string; written?: string } {
   const sha256 = new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
+  const known = store.sqlite.query('SELECT 1 FROM attachment WHERE sha256 = ? LIMIT 1').get(sha256)
+  if (!known && !fits(store, bytes.length)) throw storageFull()
   const path = join(filesDirOf(store), sha256)
   if (existsSync(path)) return { sha256 }
   const temporary = `${path}.${crypto.randomUUID()}.tmp`
@@ -159,16 +163,29 @@ function storeBytes(store: Store, bytes: Uint8Array): { sha256: string; written?
   return { sha256, written: path }
 }
 
+const storageFull = () =>
+  new ApiError(507, 'storage_full', 'The storage for attachments is full: ask an administrator to free space')
+
+// Soft-deleted files stay on disk for undo, so they count; the same bytes sit on disk once.
+function storedTotal(store: Store): number {
+  const sql = 'SELECT COALESCE(SUM(size), 0) AS total FROM (SELECT MAX(size) AS size FROM attachment GROUP BY sha256)'
+  return (store.sqlite.query(sql).get() as { total: number }).total
+}
+
+const fits = (store: Store, bytes: number): boolean =>
+  storedTotal(store) + bytes <= (store.filesMaxBytes ?? DEFAULT_FILES_MAX_BYTES)
+
 const isOctetStream = (type: string | undefined): boolean =>
   type?.split(';')[0]?.trim().toLowerCase() === 'application/octet-stream'
 
 // Bun's server holds a request to its Content-Length, so a declared length bounds what is read.
-function declaredLength(c: Context<AuthEnv>, max: number): void {
+function declaredLength(c: Context<AuthEnv>, max: number): number {
   const length = c.req.header('content-length') ?? ''
   if (c.req.header('transfer-encoding') !== undefined || !/^\d{1,15}$/.test(length)) {
     throw new ApiError(411, 'length_required', 'An upload needs a Content-Length')
   }
   if (Number(length) > max) throw new ApiError(413, 'body_too_large', `A file is at most ${max / MB} MB`)
+  return Number(length)
 }
 
 // Every refusal is decided before the body is read, so a refused upload costs no bytes.
@@ -181,7 +198,7 @@ function checkUpload(store: Store, c: Context<AuthEnv>) {
   const file = { kind: checkKind(target.dataset, c.req.query('kind')), name: checkName(c.req.query('name')) }
   checkWrite(store, target.dataset, actor)
   checkLimits(store.sqlite, () => [uploadLimit(actor)], false)
-  declaredLength(c, maxBytes(target.dataset))
+  if (!fits(store, declaredLength(c, maxBytes(target.dataset)))) throw storageFull()
   return { target, file }
 }
 
