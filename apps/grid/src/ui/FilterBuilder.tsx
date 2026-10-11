@@ -4,7 +4,7 @@ import { UNSAFE_PortalProvider, useInteractOutside } from 'react-aria'
 import { Button, DatePicker, Dialog, Group, OverlayTriggerStateContext, Popover } from 'react-aria-components'
 import { Month, Segments } from '../grid/cells/Date'
 import { fromDate, toDate } from '../grid/cells/dates'
-import { type Filter, isDate, type Join, type Kind, type Op, put } from '../grid/conditions'
+import { type Filter, isDate, type Join, type Kind, type Op, put, valued } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { records } from '../api'
 import { t } from '../i18n'
@@ -102,8 +102,6 @@ export function FilterBuilder({ fields, filters, join = 'and', onChange, onJoin 
 
 /** The word of an operator: a datetime speaks as a date. */
 export const opWord = (kind: Kind, op: Op) => `op.${kind === 'datetime' ? 'date' : kind}.${op}` as Parameters<typeof t>[0]
-
-const valued = (op: Op): boolean => !['empty', 'filled', 'week', 'next_week', 'month'].includes(op)
 
 function Value({ field, condition, onChange }: { field: FilterField; condition: Filter; onChange: (values: string[]) => void }) {
   if (!valued(condition.op)) return <span className="nv-fb__value" />

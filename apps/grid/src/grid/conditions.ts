@@ -30,6 +30,9 @@ const NO_VALUE: Op[] = ['empty', 'filled', ...PERIODS]
 
 export const isDate = (op: Op): boolean => DATED.includes(op)
 
+/** An operator that takes a value: not a period, not empty or filled. */
+export const valued = (op: Op): boolean => !NO_VALUE.includes(op)
+
 /** The conditions a link carries, parsed, not cast: null when the text is not a list of conditions. */
 export function readConditions(text: string): Filter[] | null {
   try {
@@ -44,7 +47,7 @@ export function readConditions(text: string): Filter[] | null {
 
 /** A condition the engine can apply: one without its value is still being written. */
 export function complete(f: Filter): boolean {
-  if (NO_VALUE.includes(f.op)) return true
+  if (!valued(f.op)) return true
   if (f.op === 'between') return f.values.length === 2 && f.values.every((v) => v !== '')
   return f.values.some((v) => v !== '')
 }
