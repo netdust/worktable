@@ -53,7 +53,12 @@ interface Upload {
 
 async function upload(body: Uint8Array, opts: Upload = {}) {
   const { dataset = 'box', id = 1, kind = 'doc', name = 'plan.pdf', type = 'application/octet-stream' } = opts
-  const headers: Record<string, string> = { host: HOST, cookie: opts.cookie ?? editor, 'content-type': type }
+  const headers: Record<string, string> = {
+    host: HOST,
+    cookie: opts.cookie ?? editor,
+    'content-type': type,
+    'content-length': String(body.length),
+  }
   if (opts.site) headers['sec-fetch-site'] = opts.site
   const query = new URLSearchParams({ kind, name })
   const res = await app.request(`/api/attachments/${dataset}/${id}?${query}`, { method: 'POST', headers, body })
@@ -182,20 +187,57 @@ describe('refusals', () => {
     expect(stored().n).toBe(0)
   })
 
-  test('a body streamed without a Content-Length is cut off at 1 MB with 413', async () => {
-    const big = new Uint8Array([...PDF, ...new Uint8Array(1024 * 1024 + 1 - PDF.length)])
-    const body = new ReadableStream({
-      start(controller) {
-        controller.enqueue(big)
-        controller.close()
+  // Counts what the engine pulls from the body; nothing is pulled until something reads it.
+  function streamed(path: string, headers: Record<string, string> = {}) {
+    const read = { bytes: 0 }
+    const body = new ReadableStream(
+      {
+        pull(controller) {
+          read.bytes += PDF.length
+          controller.enqueue(PDF)
+          controller.close()
+        },
       },
-    })
-    const res = await app.request('/api/attachments/box/1?kind=doc&name=a.pdf', {
+      { highWaterMark: 0 },
+    )
+    const sent = app.request(path, {
       method: 'POST',
-      headers: { host: HOST, cookie: editor, 'content-type': 'application/octet-stream' },
+      headers: { host: HOST, cookie: editor, 'content-type': 'application/octet-stream', ...headers },
       body,
     })
-    expect(res.status).toBe(413)
+    return { read, sent }
+  }
+
+  test.each([
+    ['an unknown record', '/api/attachments/box/99?kind=doc&name=a.pdf', 404, 'unknown_record'],
+    ['a bad kind', '/api/attachments/box/1?kind=nope&name=a.pdf', 400, 'bad_kind'],
+    ['a bad name', '/api/attachments/box/1?kind=doc&name=a%0Ab.pdf', 400, 'bad_name'],
+    ['a dataset without a writer', '/api/attachments/crate/1?kind=doc&name=a.pdf', 405, 'read_only'],
+  ])('a streamed body to %s is refused before a byte is read', async (_, path, status, code) => {
+    const { read, sent } = streamed(path)
+    const res = await sent
+    expect({ status: res.status, code: ((await res.json()) as { code: string }).code }).toEqual({ status, code })
+    expect(read.bytes).toBe(0)
+  })
+
+  test('a streamed body over the rate limit is refused before a byte is read', async () => {
+    for (let n = 0; n < 30; n++) expect((await upload(PDF)).status).toBe(201)
+    const { read, sent } = streamed('/api/attachments/box/1?kind=doc&name=a.pdf')
+    expect((await sent).status).toBe(429)
+    expect(read.bytes).toBe(0)
+  })
+
+  test.each([
+    ['without a Content-Length', {}],
+    ['with Transfer-Encoding', { 'content-length': String(PDF.length), 'transfer-encoding': 'chunked' }],
+  ])('an upload %s is 411 length_required, with nothing read', async (_, headers) => {
+    const { read, sent } = streamed('/api/attachments/box/1?kind=doc&name=a.pdf', headers)
+    const res = await sent
+    expect({ status: res.status, code: ((await res.json()) as { code: string }).code }).toEqual({
+      status: 411,
+      code: 'length_required',
+    })
+    expect(read.bytes).toBe(0)
     expect(stored().n).toBe(0)
   })
 

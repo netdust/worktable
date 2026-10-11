@@ -1,7 +1,6 @@
 import { existsSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Hono, MiddlewareHandler } from 'hono'
-import { bodyLimit } from 'hono/body-limit'
+import type { Context, Hono } from 'hono'
 import { forbid, inScope, readable as readableSource, scopeOf } from './access'
 import type { AuthEnv } from './auth'
 import type { Actor, AttachmentsDecl, DatasetDecl } from './declare'
@@ -158,26 +157,27 @@ function storeBytes(store: Store, bytes: Uint8Array): string {
 const isOctetStream = (type: string | undefined): boolean =>
   type?.split(';')[0]?.trim().toLowerCase() === 'application/octet-stream'
 
-// Runs before the body is read: an unknown dataset is 404 and an oversized body 413 with nothing read.
-function uploadGate(store: Store): MiddlewareHandler<AuthEnv> {
-  const limits = new Map(
-    store.domain.datasets
-      .filter((d): d is Declared => d.attachments !== undefined)
-      .map((d) => {
-        const max = maxBytes(d)
-        const message = `A file is at most ${max / MB} MB`
-        return [d.name, bodyLimit({ maxSize: max, onError: (c) => c.json({ code: 'body_too_large', message }, 413) })]
-      }),
-  )
-  return async (c, next) => {
-    const name = c.req.param('dataset') ?? ''
-    const limit = declaredOf(store, name, c.get('actor')) ? limits.get(name) : undefined
-    if (!limit) throw unknownSource(name)
-    if (!isOctetStream(c.req.header('content-type'))) {
-      throw new ApiError(415, 'bad_content_type', 'Content-Type must be application/octet-stream')
-    }
-    return limit(c, next)
+// Bun's server holds a request to its Content-Length, so a declared length bounds what is read.
+function declaredLength(c: Context<AuthEnv>, max: number): void {
+  const length = c.req.header('content-length') ?? ''
+  if (c.req.header('transfer-encoding') !== undefined || !/^\d{1,15}$/.test(length)) {
+    throw new ApiError(411, 'length_required', 'An upload needs a Content-Length')
   }
+  if (Number(length) > max) throw new ApiError(413, 'body_too_large', `A file is at most ${max / MB} MB`)
+}
+
+// Every refusal is decided before the body is read, so a refused upload costs no bytes.
+function checkUpload(store: Store, c: Context<AuthEnv>) {
+  const actor = c.get('actor')
+  const target = recordOf(store, c.req.param('dataset') ?? '', c.req.param('id') ?? '', actor)
+  if (!isOctetStream(c.req.header('content-type'))) {
+    throw new ApiError(415, 'bad_content_type', 'Content-Type must be application/octet-stream')
+  }
+  const file = { kind: checkKind(target.dataset, c.req.query('kind')), name: checkName(c.req.query('name')) }
+  checkWrite(store, target.dataset, actor)
+  checkLimits(store.sqlite, () => [uploadLimit(actor)], false)
+  declaredLength(c, maxBytes(target.dataset))
+  return { target, file }
 }
 
 const badFileType = () => new ApiError(415, 'bad_file_type', 'Only pdf, jpeg, png and webp files are taken')
@@ -285,15 +285,10 @@ export function attachmentRoutes(app: Hono<AuthEnv>, store: Store): void {
     return c.json({ attachments })
   })
 
-  app.post('/attachments/:dataset/:id', uploadGate(store), async (c) => {
-    const actor = c.get('actor')
-    const { dataset, id } = recordOf(store, c.req.param('dataset'), c.req.param('id'), actor)
-    const kind = checkKind(dataset, c.req.query('kind'))
-    const name = checkName(c.req.query('name'))
-    checkWrite(store, dataset, actor)
-    checkLimits(store.sqlite, () => [uploadLimit(actor)], false)
+  app.post('/attachments/:dataset/:id', async (c) => {
+    const { target, file } = checkUpload(store, c)
     const bytes = new Uint8Array(await c.req.arrayBuffer())
-    return c.json(upload(store, { dataset, id }, { kind, name }, bytes, actor), 201)
+    return c.json(upload(store, target, file, bytes, c.get('actor')), 201)
   })
 }
 

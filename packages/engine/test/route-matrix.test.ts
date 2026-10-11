@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import type { Actor } from '../src'
 import { createService } from '../src/auth'
 import { recordLinkFor } from '../src/record-link'
+import { UPLOAD } from '../src/write-guard'
 import { domain, freshDb } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
@@ -321,6 +322,7 @@ describe('the permissions matrix', () => {
               host: '127.0.0.1:4310',
               ...credential,
               ...(raw === undefined ? {} : { 'content-type': type ?? 'application/json' }),
+              ...(type ? { 'content-length': String(raw?.length) } : {}),
             },
             body: raw,
           })
@@ -350,6 +352,22 @@ describe('every route has a row in the matrix', () => {
 
   test('a registered /api route with no EXPECTED row fails, naming it', () => {
     expect(registered.filter((r) => !listed(r)).map((r) => `${r.method} ${r.path}`)).toEqual([])
+  })
+
+  // Each ':param' or '*' segment filled with a word and with digits, every combination.
+  const concrete = (pattern: string): string[] =>
+    pattern
+      .split('/')
+      .reduce<string[]>(
+        (paths, seg) =>
+          (seg.startsWith(':') || seg === '*' ? ['a', '1'] : [seg]).flatMap((s) => paths.map((p) => `${p}/${s}`)),
+        [''],
+      )
+      .map((p) => p.slice(1))
+
+  test('the write guard skips its JSON checks for the upload route only', () => {
+    const exempt = registered.filter((r) => r.method === 'POST' && concrete(r.path).some((p) => UPLOAD.test(p)))
+    expect(exempt.map((r) => `${r.method} ${r.path}`)).toEqual(['POST /api/attachments/:dataset/:id'])
   })
 
   test('every EXPECTED row names a registered route and gives every role', () => {

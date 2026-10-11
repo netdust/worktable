@@ -125,6 +125,7 @@ async function call(as: As, method: string, path: string, body?: unknown): Promi
   const bytes = body instanceof Uint8Array
   const headers: Record<string, string> = { host: HOST, ...credential }
   if (body !== undefined) headers['content-type'] = bytes ? 'application/octet-stream' : 'application/json'
+  if (bytes) headers['content-length'] = String(body.length)
   const res = await app.request(path, {
     method,
     headers,

@@ -10,7 +10,7 @@ const deny = (c: Context, status: 403 | 413 | 415, code: string, message: string
 const isJson = (type: string | undefined): boolean => type?.split(';')[0]?.trim().toLowerCase() === 'application/json'
 
 // An upload is raw bytes; its route checks the type and its own size limit.
-const UPLOAD = /^\/api\/attachments\/[a-z][a-z0-9_]*\/\d+$/
+export const UPLOAD = /^\/api\/attachments\/[a-z][a-z0-9_]*\/\d+$/
 
 const sizeCap = bodyLimit({
   maxSize: MAX_BODY,
