@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Hono, MiddlewareHandler } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
@@ -30,8 +30,15 @@ interface AttachmentRow {
 const MB = 1024 * 1024
 export const DEFAULT_MAX_MB = 10
 const MAX_NAME = 200
-const CONTROL = /\p{Cc}/u
+// Control and format characters; a bidi override would let x.pdf read as another name.
+const UNSAFE = /[\p{Cc}\p{Cf}]/u
 const INLINE = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const EXTENSIONS: Record<string, string[]> = {
+  'application/pdf': ['.pdf'],
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/webp': ['.webp'],
+}
 
 const uploadLimit = (actor: Actor): Limit => ({ key: `upload:${actor.id}`, max: 30, windowMs: 60_000 })
 
@@ -52,9 +59,19 @@ export function sniff(bytes: Uint8Array): string | null {
   return null
 }
 
+// The saved file opens as what it is: a pdf named x.html saves as x.html.pdf.
+function savedName(mime: string, name: string): string {
+  const extensions = EXTENSIONS[mime] ?? []
+  const fits = extensions.some((extension) => name.toLowerCase().endsWith(extension))
+  return fits || !extensions[0] ? name : `${name}${extensions[0]}`
+}
+
 // RFC 5987: encodeURIComponent leaves ' ( ) * unescaped, which the header grammar does not allow.
 export function dispositionOf(mime: string, name: string): string {
-  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+  const encoded = encodeURIComponent(savedName(mime, name)).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  )
   return `${INLINE.has(mime) ? 'inline' : 'attachment'}; filename*=UTF-8''${encoded}`
 }
 
@@ -105,8 +122,8 @@ function checkWrite(store: Store, dataset: Declared, actor: Actor, uploadedBy?: 
 }
 
 function checkName(name: string | undefined): string {
-  if (name === undefined || name.length < 1 || name.length > MAX_NAME || CONTROL.test(name)) {
-    throw new ApiError(400, 'bad_name', `name must be 1 to ${MAX_NAME} characters without control characters`)
+  if (name === undefined || name.length < 1 || name.length > MAX_NAME || UNSAFE.test(name)) {
+    throw new ApiError(400, 'bad_name', `name must be 1 to ${MAX_NAME} characters without control or format characters`)
   }
   return name
 }
@@ -217,9 +234,11 @@ export function attachmentRoutes(app: Hono<AuthEnv>, store: Store): void {
   app.get('/attachments/file/:id', async (c) => {
     const actor = c.get('actor')
     const { file } = readable(store, c.req.param('id'), actor)
-    const bytes = new Uint8Array(readFileSync(join(filesDirOf(store), file.sha256)))
-    return c.body(bytes, 200, {
+    const bytes = Bun.file(join(filesDirOf(store), file.sha256))
+    if (!(await bytes.exists())) throw new Error(`attachment ${file.id}: its file ${file.sha256} is missing`)
+    return c.body(bytes.stream(), 200, {
       'Content-Type': file.mime,
+      'Content-Length': String(bytes.size),
       'Content-Disposition': dispositionOf(file.mime, file.name),
       'Content-Security-Policy': 'sandbox',
       'X-Content-Type-Options': 'nosniff',

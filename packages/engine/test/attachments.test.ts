@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createEngine, type DatasetDecl, type Domain, validateDomain } from '../src'
@@ -132,6 +132,22 @@ describe('upload and download', () => {
     expect(res.headers.get('content-security-policy')).toBe('sandbox')
   })
 
+  test.each([
+    ['x.html', 'x.html.pdf'],
+    ['x', 'x.pdf'],
+    ['X.PDF', 'X.PDF'],
+  ])('a pdf named %s is served as %s', async (name, served) => {
+    const { body } = await upload(PDF, { name })
+    expect((await download(body.id)).headers.get('content-disposition')).toBe(`attachment; filename*=UTF-8''${served}`)
+  })
+
+  test('a jpeg keeps .jpeg and a png named .jpg gains .png', async () => {
+    const jpeg = await upload(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { kind: 'photo', name: 'a.jpeg' })
+    expect((await download(jpeg.body.id)).headers.get('content-disposition')).toBe("inline; filename*=UTF-8''a.jpeg")
+    const png = await upload(PNG, { kind: 'photo', name: 'b.jpg' })
+    expect((await download(png.body.id)).headers.get('content-disposition')).toBe("inline; filename*=UTF-8''b.jpg.png")
+  })
+
   test('a png downloads inline', async () => {
     const { body } = await upload(PNG, { kind: 'photo', name: 'p.png' })
     const res = await download(body.id)
@@ -196,6 +212,8 @@ describe('refusals', () => {
   test.each([
     ['a newline', 'a\nb.pdf'],
     ['a NUL', 'a\u0000.pdf'],
+    ['a right-to-left override', 'cod\u202egnp.pdf'],
+    ['a zero-width space', 'a\u200bb.pdf'],
     ['over 200 characters', `${'a'.repeat(197)}.pdf`],
     ['nothing', ''],
   ])('a name with %s is 400 bad_name', async (_, name) => {
@@ -219,7 +237,7 @@ describe('refusals', () => {
   })
 
   test('an upload to an unknown dataset or record is 404', async () => {
-    expect((await upload(PDF, { dataset: 'crate' })).status).toBe(404)
+    expect((await upload(PDF, { dataset: 'nope' })).status).toBe(404)
     expect((await upload(PDF, { id: 99 })).body.code).toBe('unknown_record')
   })
 
@@ -247,6 +265,54 @@ describe('refusals', () => {
     expect((await download(body.id, owner)).headers.get('cache-control')).toBe('no-store')
     expect((await upload(PDF, { id: 2, cookie: owner })).status).toBe(403)
     expect((await remove(body.id, owner)).status).toBe(403)
+  })
+})
+
+describe('owner and read-only refusals', () => {
+  test("an owner deletes its own upload but not another account's, nor undoes that account's batch", async () => {
+    const owner = await signIn(app, 'owner', { dataset: 'bin', id: 1 })
+    const editors = await upload(PDF, { dataset: 'bin' })
+    const own = await upload(PDF, { dataset: 'bin', cookie: owner })
+    expect(own.status).toBe(201)
+    const refused = await remove(editors.body.id, owner)
+    expect({ status: refused.status, code: refused.body.code }).toEqual({ status: 403, code: 'forbidden' })
+    expect((await request('POST', `/api/batches/${editors.body.revision.batch_id}/undo`, owner)).status).toBe(403)
+    expect((await remove(own.body.id, owner)).status).toBe(200)
+    const files = await request('GET', '/api/attachments/bin/1')
+    expect(((await files.json()) as { attachments: { id: number }[] }).attachments.map((a) => a.id)).toEqual([
+      editors.body.id,
+    ])
+  })
+
+  test('an owner on a dataset without owner_visible gets 404 on list, upload and download, and no attachments in /schema', async () => {
+    const { body } = await upload(PDF, { dataset: 'shelf' })
+    const owner = await signIn(app, 'owner', { dataset: 'shelf', id: 1 })
+    expect((await request('GET', '/api/rows/shelf', owner)).status).toBe(200)
+    expect((await request('GET', '/api/attachments/shelf/1', owner)).status).toBe(404)
+    expect((await upload(PDF, { dataset: 'shelf', cookie: owner })).status).toBe(404)
+    const download = await request('GET', `/api/attachments/file/${body.id}`, owner)
+    expect({ status: download.status, code: ((await download.json()) as { code: string }).code }).toEqual({
+      status: 404,
+      code: 'unknown_attachment',
+    })
+    const schema = (await (await request('GET', '/api/schema', owner)).json()) as {
+      sources: Record<string, { attachments?: unknown }>
+    }
+    expect(schema.sources.shelf).toBeDefined()
+    expect(schema.sources.shelf?.attachments).toBeUndefined()
+  })
+
+  test('a dataset without a writer lists its files, and refuses upload and delete with 405 read_only', async () => {
+    sqlite.run(
+      `INSERT INTO attachment (entity, record_id, kind, name, mime, size, sha256, uploaded_by)
+       VALUES ('crate', 1, 'doc', 'a.pdf', 'application/pdf', 1, 'x', 1)`,
+    )
+    const listed = await request('GET', '/api/attachments/crate/1')
+    expect(((await listed.json()) as { attachments: unknown[] }).attachments).toHaveLength(1)
+    const uploaded = await upload(PDF, { dataset: 'crate' })
+    expect({ status: uploaded.status, code: uploaded.body.code }).toEqual({ status: 405, code: 'read_only' })
+    const removed = await remove(1)
+    expect({ status: removed.status, code: removed.body.code }).toEqual({ status: 405, code: 'read_only' })
   })
 })
 
@@ -300,17 +366,18 @@ describe('storage', () => {
     expect(await listedIds()).toHaveLength(2)
   })
 
-  test('serve.ts --files-dir creates the directory with mode 0700', async () => {
+  // Serves on a free port until it listens, then stops it, so no server outlives the test.
+  async function serveWith(files: string): Promise<void> {
     const dir = mkdtempSync(join(tmpdir(), 'wt-serve-files-'))
     const secret = join(dir, 'secret')
     writeFileSync(secret, 'x'.repeat(32), { mode: 0o600 })
-    const files = join(dir, 'files')
+    const probe = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response() })
+    const port = String(probe.port)
+    probe.stop(true)
     const serve = join(import.meta.dir, '..', 'src', 'serve.ts')
+    const domainFile = join(import.meta.dir, 'fixtures', 'serve-domain.ts')
     const run = Bun.spawn(
-      ['bun', serve, '--domain', join(import.meta.dir, 'fixtures', 'serve-domain.ts'), '--db', join(dir, 'db')].concat([
-        '--fresh',
-        '--port',
-        '1',
+      ['bun', serve, '--domain', domainFile, '--db', join(dir, 'db'), '--fresh', '--port', port].concat([
         '--link-secret-file',
         secret,
         '--files-dir',
@@ -318,7 +385,31 @@ describe('storage', () => {
       ]),
       { stdout: 'pipe', stderr: 'pipe' },
     )
-    await run.exited
+    try {
+      const reader = run.stdout.getReader()
+      let out = ''
+      while (!out.includes('engine listening')) {
+        const { done, value } = await reader.read()
+        if (done) throw new Error(`the engine did not start: ${out}`)
+        out += new TextDecoder().decode(value)
+      }
+    } finally {
+      run.kill()
+      await run.exited
+    }
+  }
+
+  test('serve.ts --files-dir creates the directory with mode 0700', async () => {
+    const files = join(mkdtempSync(join(tmpdir(), 'wt-files-parent-')), 'files')
+    await serveWith(files)
+    expect(statSync(files).mode & 0o777).toBe(0o700)
+  }, 20_000)
+
+  test('serve.ts --files-dir narrows an existing 0755 directory to 0700', async () => {
+    const files = join(mkdtempSync(join(tmpdir(), 'wt-files-parent-')), 'files')
+    mkdirSync(files, { mode: 0o755 })
+    chmodSync(files, 0o755)
+    await serveWith(files)
     expect(statSync(files).mode & 0o777).toBe(0o700)
   }, 20_000)
 })
