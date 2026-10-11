@@ -15,7 +15,7 @@ Read against `docs/SPEC.md` and `packages/engine/src` at main `67f9962`. Nothing
 | C1, C3, C10 | Several owner columns; dry-run quote; administrator account routes | deferred until cargo is real |
 | S3, S5, S6, S7 | Record-link counter; `ctx.count`; per-record renderers; visitor filters on public views | dropped |
 | C2, C7 | Public create; board skin | not in this finding: already specified, built when a domain needs them |
-| A1 | `exists`/`findBy` matching null | new, raised for Stefan's decision (question 4) |
+| A1 | `exists`/`findBy` matching null | not now (Stefan left it to me, 2026-10-11): no domain in the repo needs it; built with the agency |
 
 ## F1. Owners and link accounts write declared columns, and attach files (C6 + C8)
 
@@ -181,3 +181,10 @@ Read against `docs/SPEC.md` and `packages/engine/src` at main `67f9962`. Nothing
 3. **Where files live.** A directory next to each client's database file (`--files-dir`, backed up with it). Agree?
 4. **A1.** The agency's "one row per person, task and day" cannot be checked for a row without a task, because `exists`/`findBy` refuse a null in the match. Add "null means IS NULL" (small) with these changes, or leave it?
 5. **Order.** Recommended: F4 (an hour), then F2, then F3, then F1 (the largest, with a threat model on the diff). Each its own branch and gate. Or F1 first, because step 6 (registration) and the agency both need it?
+
+## Answers (Stefan, 2026-10-11)
+1. Attachment now: **yes**, without publication and inheritance (step 4).
+2. Strip a photo's location and camera data on owner and link uploads: **yes**.
+3. Files in a directory next to each client's database (`--files-dir`): **yes**.
+4. A1: "you choose". Ruling: not now — no domain in this repo matches a null today; AGENTS.md builds nothing before a domain needs it — cost if wrong: one small engine change when the agency lands.
+5. Order: **F4, F2, F3, F1**, each its own branch and gate.
