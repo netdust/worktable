@@ -59,7 +59,8 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     const { expect, ...body } = await bodyOf(c)
     const actor = c.get('actor')
     if (actor.kind === 'link') linkWritable(target.dataset, body)
-    const opts = { expect: expect as Record<string, unknown> | undefined }
+    // A link never writes the lifecycle column, so its expect would only tell it the state it may not read.
+    const opts = { expect: actor.kind === 'link' ? undefined : (expect as Record<string, unknown> | undefined) }
     const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, actor, opts)
     // A forwarded link must not read the whole row back through its write (attack 9).
     if (actor.kind === 'link')

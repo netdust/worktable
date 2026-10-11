@@ -131,7 +131,7 @@ async function call(as: As, method: string, path: string, body?: unknown): Promi
     body: body === undefined ? undefined : bytes ? body : JSON.stringify(body),
   })
   const text = await res.text()
-  const parsed = res.headers.get('content-type')?.includes('json') ? JSON.parse(text) : { text }
+  const parsed = text && res.headers.get('content-type')?.includes('json') ? JSON.parse(text) : { text }
   return { status: res.status, headers: res.headers, body: parsed }
 }
 
@@ -199,10 +199,23 @@ describe('a person link patching a row', () => {
     expect(revision.actor_id).toBe(linkAccountId())
   })
 
-  test('may send expect', async () => {
-    const res = await call(link(), 'PATCH', '/api/rows/ticket/1', { note: 'x', expect: { state: 'a' } })
-    expect(res.status).toBe(200)
-    expect(ticketOf(1).note).toBe('x')
+  // The state is not owner_visible: a wrong expect must not answer differently from the right one.
+  test.each([[{}], [{ note: 'x' }]])('expect tells a link nothing about the state (%p)', async (body) => {
+    const right = await call(link(), 'PATCH', '/api/rows/ticket/1', { ...body, expect: { state: 'a' } })
+    const wrong = await call(link(), 'PATCH', '/api/rows/ticket/1', { ...body, expect: { state: 'b' } })
+    const bad = await call(link(), 'PATCH', '/api/rows/ticket/1', { ...body, expect: 'b' })
+    for (const res of [right, wrong, bad]) expect(res.status).toBe(200)
+    expect(Object.keys(wrong.body).sort()).toEqual(['id', 'revision'])
+    expect(ticketOf(1).state).toBe('a')
+  })
+
+  test('a soft-deleted row of its own is 404', async () => {
+    sqlite.run("INSERT INTO ticket (member_id, name, state, deleted_at) VALUES (1, 'Weg', 'a', '2026-01-01')")
+    await denied(() => call(link(), 'PATCH', '/api/rows/ticket/3', { note: 'x' }), 404, 'unknown_record')
+  })
+
+  test('a dataset without an owner column is 404', async () => {
+    await denied(() => call(link(), 'PATCH', '/api/rows/member/1', { name: 'x' }), 404, 'unknown_source')
   })
 
   test.each(['name', 'state', 'member_id', 'inbox', 'custom', 'unknown'])(
@@ -229,8 +242,18 @@ describe('a person link patching a row', () => {
     ['PATCH', '/api/attachments/ticket/1', {}],
     ['DELETE', '/api/attachments/ticket/1', undefined],
     ['GET', '/api/rows/ticket', undefined],
+    ['PATCH', '/api/rows/ticket/1/extra', { note: 'x' }],
+    ['PATCH', '/api/rows/ticket/1/', { note: 'x' }],
+    ['GET', '/api/attachments/ticket/1/x', undefined],
+    ['POST', '/api/attachments/file/1', {}],
   ])('the fence refuses %s %s', async (method, path, body) => {
     await denied(() => call(link(), method, path, body), 403, 'forbidden')
+  })
+
+  test.each(['/api/attachments/ticket/1', '/api/owner/views'])('the fence refuses HEAD %s', async (path) => {
+    const before = tables()
+    expect((await call(link(), 'HEAD', path)).status).toBe(403)
+    expect(tables()).toEqual(before)
   })
 })
 
