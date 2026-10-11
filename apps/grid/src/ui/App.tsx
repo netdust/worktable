@@ -434,7 +434,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     } } })
   }
   // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
-  const act = async (row: Row, action: ModelAction, input: Record<string, number>) => {
+  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
     if (!view) return
     const { batch } = await runAction(action.name, row.id, input)
     const entry = { batch: Promise.resolve(batch), model: view.model, id: null }

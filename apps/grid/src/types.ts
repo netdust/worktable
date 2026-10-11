@@ -76,11 +76,16 @@ export interface Model {
   fields: Record<string, Field>
 }
 
-/** A declared action: each input is a record of `relation`, picked before it runs. */
+/** One input of an action: a record of `relation`, picked; or a typed value, filled in. */
+export type ActionInput =
+  | { relation: string; label: string }
+  | { type: 'integer' | 'date' | 'text' | 'boolean'; label: string; min?: number; max?: number; required?: boolean }
+
+/** A declared action: every input is given before it runs, but one declared `required: false`. */
 export interface ModelAction {
   name: string
   label: string
-  input: Record<string, { relation: string; label: string }>
+  input: Record<string, ActionInput>
 }
 
 export type ViewType = 'grid' | 'matrix'

@@ -4,6 +4,7 @@ export { createAccount } from './auth'
 export type {
   ActionCreate,
   ActionDecl,
+  ActionInput,
   ActionResult,
   ActionUpdate,
   Actor,
@@ -14,6 +15,8 @@ export type {
   GroupFact,
   HookResult,
   Icon,
+  InputType,
+  InputValue,
   LifecycleDecl,
   LinkDecl,
   LookupDecl,

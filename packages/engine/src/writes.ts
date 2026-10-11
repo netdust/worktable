@@ -201,15 +201,28 @@ function matchOf(dataset: DatasetDecl, match: Values, caller: string): [sql: str
   })
 }
 
+// The live rows matching `match`, by id, at most `limit` of them.
+function matching(store: Store, name: string, match: Values, caller: string, limit: number): Values[] {
+  const dataset = domainDataset(store, name, caller)
+  const pairs = matchOf(dataset, match, caller)
+  const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
+  const raws = store.sqlite
+    .query(`SELECT * FROM "${name}" WHERE ${where} ORDER BY id LIMIT ${limit}`)
+    .all(...pairs.map(([, value]) => value)) as Stored[]
+  return raws.map((raw) => decodeAll(dataset, raw))
+}
+
 function matcher(store: Store): WriteContext['findBy'] {
+  return (name, match) => matching(store, name, match, 'findBy', 1)[0] ?? null
+}
+
+export const MAX_FIND_ALL = 5000
+
+function allMatcher(store: Store): WriteContext['findAll'] {
   return (name, match) => {
-    const dataset = domainDataset(store, name, 'findBy')
-    const pairs = matchOf(dataset, match, 'findBy')
-    const where = ['deleted_at IS NULL', ...pairs.map(([sql]) => sql)].join(' AND ')
-    const raw = store.sqlite
-      .query(`SELECT * FROM "${name}" WHERE ${where} ORDER BY id LIMIT 1`)
-      .get(...pairs.map(([, value]) => value)) as Stored | null
-    return raw && decodeAll(dataset, raw)
+    const rows = matching(store, name, match, 'findAll', MAX_FIND_ALL + 1)
+    if (rows.length > MAX_FIND_ALL) refuse(`More than ${MAX_FIND_ALL} rows match; narrow the match.`)
+    return rows
   }
 }
 
@@ -234,6 +247,7 @@ export const contextOf = (
   current,
   find: finder(store),
   findBy: matcher(store),
+  findAll: allMatcher(store),
   exists: existence(store),
 })
 

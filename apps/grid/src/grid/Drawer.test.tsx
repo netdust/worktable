@@ -128,6 +128,34 @@ describe("the drawer's actions", () => {
     expect(screen.getByRole('alert').textContent).toBe('Dit sjabloon is al toegepast.')
   })
 
+  const shift: ModelAction = {
+    name: 'tour_verschuiven',
+    label: 'Tour verschuiven',
+    input: { dagen: { type: 'integer', label: 'Dagen', min: -365, max: 365 }, stil: { type: 'boolean', label: 'Stil', required: false } },
+  }
+
+  it('takes a typed input as a field, sends it as its value, and leaves an optional one out', async () => {
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[shift]} onAction={onAction} onClose={() => undefined} />)
+    const group = screen.getByRole('group', { name: 'Tour verschuiven' })
+    const run = within(group).getByRole('button', { name: 'Tour verschuiven' })
+    expect(run.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.change(within(group).getByLabelText('Dagen'), { target: { value: '400' } })
+    expect(run.hasAttribute('disabled')).toBe(true)
+    fireEvent.change(within(group).getByLabelText('Dagen'), { target: { value: '-3' } })
+    await act(async () => {
+      fireEvent.click(run)
+    })
+    expect(onAction).toHaveBeenCalledExactlyOnceWith(shift, { dagen: -3 })
+
+    fireEvent.click(within(group).getByLabelText('Stil'))
+    await act(async () => {
+      fireEvent.click(run)
+    })
+    expect(onAction).toHaveBeenLastCalledWith(shift, { dagen: -3, stil: true })
+  })
+
   it('offers no action without a way to run it, nor on a model that declares none', () => {
     const { rerender } = render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onClose={() => undefined} />)
     expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()

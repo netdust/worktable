@@ -50,6 +50,21 @@ const parentOf = (project: unknown, tekst: string) => ({
 
 const actions: Record<string, ActionDecl> = {
   ...domain.actions,
+  // Typed inputs: `count` notes, each named after the word, the day and whether it was loud.
+  typed: {
+    label: 'Typed',
+    on: 'project',
+    input: {
+      count: { type: 'integer', label: 'Count', min: 1, max: 3 },
+      day: { type: 'date', label: 'Day' },
+      word: { type: 'text', label: 'Word' },
+      loud: { type: 'boolean', label: 'Loud', required: false },
+    },
+    run: (record, input) =>
+      Array.from({ length: input.count as number }, (_, n) =>
+        noteOf(record.id, `${input.word} ${input.day} ${n + 1}${input.loud ? '!' : ''}`),
+      ),
+  },
   // The third create repeats the first, which the note writer refuses.
   repeat: {
     label: 'Repeat',
@@ -310,5 +325,61 @@ describe('actions', () => {
       actions: { bad: { label: 'Bad', on: 'project', input: { x: { relation: 'nope', label: 'X' } }, run: () => [] } },
     }
     expect(() => validateDomain(bad)).toThrow(DomainError)
+  })
+})
+
+describe('typed action inputs', () => {
+  const TYPED = { id: 1, input: { count: 2, day: '2026-10-12', word: 'repetitie' } }
+
+  test('a typed input reaches run as its value, in one batch', async () => {
+    const res = await act(editor, 'typed', { ...TYPED, input: { ...TYPED.input, loud: true } })
+    expect(res.status).toBe(201)
+    expect(res.body.created).toHaveLength(2)
+    const notes = (contents(sqlite, 'note') as { tekst: string }[]).map((note) => note.tekst)
+    expect(notes.filter((tekst) => tekst.startsWith('repetitie'))).toEqual([
+      'repetitie 2026-10-12 1!',
+      'repetitie 2026-10-12 2!',
+    ])
+  })
+
+  test('an input that is not required may be left out', async () => {
+    expect((await act(editor, 'typed', TYPED)).status).toBe(201)
+  })
+
+  test.each([
+    ['an integer below min', { count: 0 }, 'count'],
+    ['an integer above max', { count: 4 }, 'count'],
+    ['a number that is not an integer', { count: 1.5 }, 'count'],
+    ['a malformed date', { day: '12-10-2026' }, 'day'],
+    ['a date that does not exist', { day: '2026-02-30' }, 'day'],
+    ['a text over 500 characters', { word: 'x'.repeat(501) }, 'word'],
+    ['a boolean given as text', { loud: 'yes' }, 'loud'],
+    ['a missing required input', { word: undefined }, 'word'],
+    ['an input the action does not declare', { extra: 1 }, 'extra'],
+  ])('%s is 400 bad_body naming the input', async (_, change, named) => {
+    const input: Record<string, unknown> = { ...TYPED.input, ...change }
+    for (const key of Object.keys(input)) if (input[key] === undefined) delete input[key]
+    const res = await act(editor, 'typed', { id: 1, input })
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('bad_body')
+    expect(res.body.message).toContain(`input.${named}`)
+  })
+
+  test('/schema lists the typed inputs', async () => {
+    const { body } = await editor('GET', '/api/schema')
+    const typed = body.sources.project.actions.find((a: { name: string }) => a.name === 'typed')
+    expect(typed.input.count).toEqual({ type: 'integer', label: 'Count', min: 1, max: 3 })
+    expect(typed.input.loud).toEqual({ type: 'boolean', label: 'Loud', required: false })
+  })
+
+  test('validation refuses an unknown type, min above max, and min on a non-integer', () => {
+    const withInput = (input: Record<string, unknown>): Domain => ({
+      ...domain,
+      actions: { bad: { label: 'Bad', on: 'project', input, run: () => [] } as unknown as ActionDecl },
+    })
+    expect(() => validateDomain(withInput({ x: { type: 'blob', label: 'X' } }))).toThrow(DomainError)
+    expect(() => validateDomain(withInput({ x: { type: 'integer', label: 'X', min: 5, max: 1 } }))).toThrow(DomainError)
+    expect(() => validateDomain(withInput({ x: { type: 'text', label: 'X', min: 1 } }))).toThrow(DomainError)
+    expect(() => validateDomain(withInput({ x: { type: 'integer', label: 'X', min: 1, max: 5 } }))).not.toThrow()
   })
 })

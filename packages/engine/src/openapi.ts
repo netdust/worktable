@@ -1,4 +1,4 @@
-import type { ActionDecl, ColumnDecl, Domain } from './declare'
+import { type ActionDecl, type ActionInput, type ColumnDecl, type Domain, MAX_INPUT_TEXT } from './declare'
 import { writerOf } from './registry'
 
 type Schema = Record<string, unknown>
@@ -96,17 +96,31 @@ function rowPaths(domain: Domain, name: string): Record<string, Schema> {
   }
 }
 
+function inputSchema(decl: ActionInput): Schema {
+  if ('relation' in decl)
+    return { type: 'integer', title: decl.label, description: `The id of a ${decl.relation} record` }
+  if (decl.type === 'date') return { type: 'string', format: 'date', title: decl.label }
+  if (decl.type === 'text') return { type: 'string', maxLength: MAX_INPUT_TEXT, title: decl.label }
+  if (decl.type === 'boolean') return { type: 'boolean', title: decl.label }
+  return {
+    type: 'integer',
+    title: decl.label,
+    ...(decl.min !== undefined ? { minimum: decl.min } : {}),
+    ...(decl.max !== undefined ? { maximum: decl.max } : {}),
+  }
+}
+
 function actionPath({ name, label, input }: ServedSource['actions'][number], on: string): Schema {
-  const inputs = Object.entries(input).map(([key, { relation, label: inputLabel }]) => [
-    key,
-    { type: 'integer', title: inputLabel, description: `The id of a ${relation} record` },
-  ])
+  const inputs = Object.entries(input).map(([key, decl]) => [key, inputSchema(decl)])
+  const required = Object.entries(input)
+    .filter(([, decl]) => 'relation' in decl || decl.required !== false)
+    .map(([key]) => key)
   const body = {
     type: 'object',
     required: ['id', 'input'],
     properties: {
       id: { type: 'integer', description: `The id of the ${on} record` },
-      input: { type: 'object', required: Object.keys(input), properties: Object.fromEntries(inputs) },
+      input: { type: 'object', required, properties: Object.fromEntries(inputs) },
     },
   }
   return {
