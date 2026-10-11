@@ -297,47 +297,73 @@ export interface Hooked {
 
 export const noneHooked = (): Hooked => ({ notices: [], mails: [] })
 
-function recordLinkOf(store: Store, dataset: DatasetDecl, row: Values): string | null {
-  if (!dataset.record_link || !store.linkSecret) return null
-  return linkUrl(store.appUrl, recordLinkFor(store.sqlite, store.linkSecret, dataset.name, row.id as number))
+// A link a hook may mail, and the part of it that opens something: a record link's MAC, an action token whole.
+interface HookLink {
+  url: string
+  secret: string
+}
+
+// A record without an owner has no one for its link to open as, so it gets none.
+function recordLinkOf(store: Store, dataset: DatasetDecl, row: Values): HookLink | null {
+  if (!dataset.record_link || !store.linkSecret || !ownerSubject(dataset, row)) return null
+  const token = recordLinkFor(store.sqlite, store.linkSecret, dataset.name, row.id as number)
+  return { url: linkUrl(store.appUrl, token), secret: token.slice(token.lastIndexOf('.') + 1) }
 }
 
 const MAX_HOOK_MAILS = 10
+const LINE_BREAK = /[\r\n]/
+const ONE_ADDRESS = /^[^\s@,;<>"():]+@[^\s@,;<>"():]+$/
+
+const sameAddress = (a: string, b: unknown): boolean =>
+  typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase()
 
 // A domain bug must not spray a link: each link goes in one mail to one address, the record link to the record's own.
+// A link is found by its secret, so an encoded or bare one counts too.
 function checkHookMails(
   dataset: DatasetDecl,
   row: Values,
   state: string,
   mails: Mail[],
-  token: string | null,
-  record: string | null,
+  token: HookLink | null,
+  record: HookLink | null,
 ) {
   const fail = (why: string): never => {
-    throw new Error(`${dataset.name} hook on "${state}": ${why}`)
+    throw new ApiError(500, 'hook_mail_refused', `${dataset.name} hook on "${state}": ${why}`)
   }
   if (mails.length > MAX_HOOK_MAILS) fail(`${mails.length} mails, at most ${MAX_HOOK_MAILS}`)
-  for (const link of [token, record]) {
-    if (link === null) continue
-    const carrying = mails.filter((mail) => mail.text.includes(link) || mail.subject.includes(link))
-    if (carrying.length > 1) fail('a link in more than one mail')
-    if (carrying.some((mail) => /[,;]/.test(mail.to))) fail('a link mailed to more than one address')
+  for (const mail of mails) {
+    if (typeof mail?.to !== 'string' || mail.to.trim() === '') fail('a mail without an address')
+    if (typeof mail.subject !== 'string' || typeof mail.text !== 'string')
+      fail('a mail whose subject or text is not text')
+    if (LINE_BREAK.test(mail.to) || LINE_BREAK.test(mail.subject)) fail('a line break in an address or subject')
   }
   const own = dataset.record_link?.email
-  const address = own === undefined ? null : row[own]
-  if (record !== null && own !== undefined) {
-    const carrying = mails.filter((mail) => mail.text.includes(record) || mail.subject.includes(record))
-    if (carrying.some((mail) => mail.to !== address))
+  for (const link of [token, record]) {
+    if (link === null) continue
+    const carrying = mails.filter((mail) =>
+      [mail.to, mail.subject, mail.text].some((part) => part.includes(link.secret)),
+    )
+    if (carrying.length > 1) fail('a link in more than one mail')
+    if (carrying.some((mail) => !ONE_ADDRESS.test(mail.to.trim()))) fail('a link mailed to other than one address')
+    if (link === record && own !== undefined && carrying.some((mail) => !sameAddress(mail.to, row[own])))
       fail('the record link mailed to another address than the record’s own')
   }
 }
 
 // A record whose owner column is empty has no one to act on the token, so none is minted and the link is null.
-function linkOf(store: Store, dataset: DatasetDecl, row: Values, from: string, token: HookToken, batch: string) {
+function linkOf(
+  store: Store,
+  dataset: DatasetDecl,
+  row: Values,
+  from: string,
+  token: HookToken,
+  batch: string,
+): HookLink | null {
   const subject = ownerSubject(dataset, row)
   if (!subject) return null
   const minted = { dataset: dataset.name, record_id: row.id as number, subject, from, ...token, batch }
-  return `${store.appUrl.replace(/\/+$/, '')}/#/act/${mintActionToken(store.sqlite, minted)}`
+  const secret = mintActionToken(store.sqlite, minted)
+  return { url: `${store.appUrl.replace(/\/+$/, '')}/#/act/${secret}`, secret }
 }
 
 // Only runWrite and runAction call this: import, seed-missing and undo never fire a hook.
@@ -358,11 +384,12 @@ export function enterState(
   const result = hook?.(row, ctx)
   if (!result) return
   if (result.notice) hooked.notices.push(result.notice)
-  const link = result.token ? linkOf(store, dataset, row, String(state), result.token, batch) : null
+  const token = result.token ? linkOf(store, dataset, row, String(state), result.token, batch) : null
   const record = result.record_link ? recordLinkOf(store, dataset, row) : null
-  const answered = result.mail?.(link, { token: link, record }) ?? []
+  const link = token?.url ?? null
+  const answered = result.mail?.(link, { token: link, record: record?.url ?? null }) ?? []
   const mails = Array.isArray(answered) ? answered : [answered]
-  checkHookMails(dataset, row, String(state), mails, link, record)
+  checkHookMails(dataset, row, String(state), mails, token, record)
   hooked.mails.push(...mails)
 }
 
