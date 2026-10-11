@@ -24,9 +24,18 @@ function concat(parts: Uint8Array[]): Uint8Array {
 
 /** The bytes without location and camera data; throws StripError on a file it cannot walk. */
 export function strip(bytes: Uint8Array, mime: StrippedMime): Uint8Array {
-  if (mime === 'image/jpeg') return stripJpeg(bytes)
-  if (mime === 'image/png') return stripPng(bytes)
-  return stripWebp(bytes)
+  switch (mime) {
+    case 'image/jpeg':
+      return stripJpeg(bytes)
+    case 'image/png':
+      return stripPng(bytes)
+    case 'image/webp':
+      return stripWebp(bytes)
+    default: {
+      const unknown: never = mime
+      throw new Error(`strip does not know ${unknown}`)
+    }
+  }
 }
 
 const EXIF_ID = ascii('Exif\0\0')
@@ -72,12 +81,26 @@ function minimalExif(orientation: number): Uint8Array {
   return out
 }
 
+const SOI = 0xd8
 const APP1 = 0xe1
-const APP13 = 0xed
-const COM = 0xfe
 const SOS = 0xda
 const EOI = 0xd9
+const TEM = 0x01
 const isRestart = (marker: number) => marker >= 0xd0 && marker <= 0xd7
+
+// SOFn, DHT, DAC, DQT, DRI: what a decoder needs. Every other segment is dropped.
+const JPEG_KEPT = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xdb, 0xdd,
+])
+// APPn kept only by their identifier: JFIF, an ICC profile, Adobe's colour transform.
+const JPEG_KEPT_APPS = new Map([
+  [0xe0, [ascii('JFIF\0'), ascii('JFXX\0')]],
+  [0xe2, [ascii('ICC_PROFILE\0')]],
+  [0xee, [ascii('Adobe')]],
+])
+
+const keptSegment = (marker: number, payload: Uint8Array): boolean =>
+  JPEG_KEPT.has(marker) || (JPEG_KEPT_APPS.get(marker)?.some((id) => startsWith(payload, id)) ?? false)
 
 // The end of entropy-coded data: the next 0xFF that is neither stuffing (FF00) nor a restart marker.
 function scanEnd(bytes: Uint8Array, from: number): number {
@@ -91,11 +114,12 @@ function scanEnd(bytes: Uint8Array, from: number): number {
 
 // Up to and including the first EOI: whatever follows it (a motion photo, a second image) is dropped.
 function stripJpeg(bytes: Uint8Array): Uint8Array {
-  if (!startsWith(bytes, [0xff, 0xd8])) refuse('jpeg has no SOI')
+  if (!startsWith(bytes, [0xff, SOI])) refuse('jpeg has no SOI')
   const view = viewOf(bytes)
   const kept: Uint8Array[] = [bytes.subarray(0, 2)]
   let at = 2
-  let oriented = false
+  // Orientation comes from the first Exif block before the first scan only.
+  let exifRead = false
   for (;;) {
     if (bytes[at] !== 0xff) refuse('jpeg marker expected')
     while (bytes[at + 1] === 0xff) at++
@@ -105,25 +129,29 @@ function stripJpeg(bytes: Uint8Array): Uint8Array {
       kept.push(bytes.subarray(at, at + 2))
       return concat(kept)
     }
-    if (isRestart(marker) || marker === 0x01) {
+    if (isRestart(marker) || marker === TEM) {
       kept.push(bytes.subarray(at, at + 2))
       at += 2
       continue
     }
+    if (marker === SOI || marker === 0x00) refuse('jpeg marker cannot be walked')
     if (at + 4 > bytes.length) refuse('jpeg segment header cut off')
     const length = view.getUint16(at + 2)
     const end = at + 2 + length
     if (length < 2 || end > bytes.length) refuse('jpeg segment runs past the end')
-    if (marker === APP1) {
-      const orientation: number | null = oriented ? null : orientationOf(bytes.subarray(at + 4, end))
-      if (orientation !== null) kept.push(minimalExif(orientation))
-      oriented ||= orientation !== null
-    } else if (marker === SOS) {
+    const payload = bytes.subarray(at + 4, end)
+    if (marker === SOS) {
+      exifRead = true
       const scanned = scanEnd(bytes, end)
       kept.push(bytes.subarray(at, scanned))
       at = scanned
       continue
-    } else if (marker !== APP13 && marker !== COM) {
+    }
+    if (marker === APP1 && !exifRead && startsWith(payload, EXIF_ID)) {
+      exifRead = true
+      const orientation = orientationOf(payload)
+      if (orientation !== null) kept.push(minimalExif(orientation))
+    } else if (keptSegment(marker, payload)) {
       kept.push(bytes.subarray(at, end))
     }
     at = end
@@ -131,11 +159,12 @@ function stripJpeg(bytes: Uint8Array): Uint8Array {
 }
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-const PNG_DROPPED = new Set(['eXIf', 'tEXt', 'iTXt', 'zTXt'])
+// Image, colour and animation chunks; every other chunk is dropped.
+const PNG_KEPT = new Set('IHDR PLTE IDAT IEND tRNS gAMA cHRM sRGB iCCP sBIT bKGD pHYs acTL fcTL fdAT'.split(' '))
 
 const typeAt = (bytes: Uint8Array, at: number) => String.fromCharCode(...bytes.subarray(at, at + 4))
 
-// Chunks are copied whole, CRC included; bytes after IEND are dropped.
+// Kept chunks are copied whole, CRC included; bytes after IEND are dropped.
 function stripPng(bytes: Uint8Array): Uint8Array {
   if (!startsWith(bytes, PNG_SIGNATURE)) refuse('png has no signature')
   const view = viewOf(bytes)
@@ -145,13 +174,14 @@ function stripPng(bytes: Uint8Array): Uint8Array {
     const end = at + 12 + view.getUint32(at)
     if (end > bytes.length) refuse('png chunk runs past the end')
     const type = typeAt(bytes, at + 4)
-    if (!PNG_DROPPED.has(type)) kept.push(bytes.subarray(at, end))
+    if (PNG_KEPT.has(type)) kept.push(bytes.subarray(at, end))
     if (type === 'IEND') return concat(kept)
     at = end
   }
 }
 
-const WEBP_DROPPED = new Set(['EXIF', 'XMP '])
+// Image, colour and animation chunks; every other chunk is dropped.
+const WEBP_KEPT = new Set(['VP8 ', 'VP8L', 'VP8X', 'ALPH', 'ANIM', 'ANMF', 'ICCP'])
 const VP8X_EXIF = 0x08
 const VP8X_XMP = 0x04
 
@@ -172,7 +202,7 @@ function stripWebp(bytes: Uint8Array): Uint8Array {
       const chunk = bytes.slice(at, end)
       chunk[8] = (chunk[8] as number) & ~(VP8X_EXIF | VP8X_XMP)
       kept.push(chunk)
-    } else if (!WEBP_DROPPED.has(type)) {
+    } else if (WEBP_KEPT.has(type)) {
       kept.push(bytes.subarray(at, end))
     }
     at = end

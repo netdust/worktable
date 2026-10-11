@@ -378,11 +378,16 @@ describe('storage', () => {
     expect(new Uint8Array(await (await download(body.id)).arrayBuffer())).toEqual(stored)
   })
 
-  test('a truncated jpeg is 415 bad_file_type, with nothing stored', async () => {
-    const res = await upload(new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x40, ...ascii('Exif')]), {
-      kind: 'photo',
-      name: 'a.jpg',
-    })
+  // The doubled SOI read as a segment would take FF E1 as its length and span the GPS APP1 whole.
+  const gpsApp1 = [...ascii('Exif\0\0GPS'), ...new Uint8Array(0xffdf - 2 - 9)]
+  test.each([
+    ['a truncated jpeg', new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x40, ...ascii('Exif')])],
+    [
+      'a doubled SOI before a GPS APP1',
+      new Uint8Array([0xff, 0xd8, 0xff, 0xd8, 0xff, 0xe1, 0xff, 0xdf, ...gpsApp1, 0xff, 0xd9]),
+    ],
+  ])('%s is 415 bad_file_type, with nothing stored', async (_, jpeg) => {
+    const res = await upload(jpeg, { kind: 'photo', name: 'a.jpg' })
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 415, code: 'bad_file_type' })
     expect(readdirSync(filesDir)).toEqual([])
     expect(await listedIds()).toEqual([])

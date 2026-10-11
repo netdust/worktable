@@ -51,8 +51,10 @@ const ascii = (text: string): number[] => [...text].map((c) => c.charCodeAt(0))
 const startsWith = (bytes: Uint8Array, signature: number[], at = 0): boolean =>
   bytes.length >= at + signature.length && signature.every((b, i) => bytes[at + i] === b)
 
+type SniffedMime = 'application/pdf' | StrippedMime
+
 /** The type the first bytes prove, from the allowlist; null for anything else. */
-export function sniff(bytes: Uint8Array): string | null {
+export function sniff(bytes: Uint8Array): SniffedMime | null {
   if (startsWith(bytes, ascii('%PDF-'))) return 'application/pdf'
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) return 'image/jpeg'
   if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png'
@@ -181,10 +183,20 @@ function uploadGate(store: Store): MiddlewareHandler<AuthEnv> {
 const badFileType = () => new ApiError(415, 'bad_file_type', 'Only pdf, jpeg, png and webp files are taken')
 
 // A photo loses its location and camera data before it is hashed (attack 7); a pdf is kept byte for byte.
-function withoutMetadata(bytes: Uint8Array, mime: string): Uint8Array {
-  if (mime === 'application/pdf') return bytes
+function withoutMetadata(bytes: Uint8Array, mime: SniffedMime): Uint8Array {
   try {
-    return strip(bytes, mime as StrippedMime)
+    switch (mime) {
+      case 'application/pdf':
+        return bytes
+      case 'image/jpeg':
+      case 'image/png':
+      case 'image/webp':
+        return strip(bytes, mime)
+      default: {
+        const unknown: never = mime
+        throw new Error(`no metadata rule for ${unknown}`)
+      }
+    }
   } catch (error) {
     if (error instanceof StripError) throw badFileType()
     throw error

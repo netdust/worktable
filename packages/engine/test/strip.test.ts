@@ -52,17 +52,19 @@ describe('jpeg', () => {
   const photo = (orientation: number | null) =>
     bytes(SOI, APP0, exif(orientation), XMP, APP13, COM, DQT, SOF0, DHT, SOS, SCAN, EOI, MP4)
 
-  test('Exif, XMP, APP13, COM and the motion-photo trailer go; Orientation 6 stays in a minimal Exif block', () => {
-    const minimalExif = segment(0xe1, [
+  const minimalExif = (orientation: number) =>
+    segment(0xe1, [
       ...ascii('Exif\0\0'),
       ...ascii('II*\0'),
       ...u32le(8),
       ...u16le(1),
-      ...[...u16le(0x0112), ...u16le(3), ...u32le(1), ...u16le(6), 0, 0],
+      ...[...u16le(0x0112), ...u16le(3), ...u32le(1), ...u16le(orientation), 0, 0],
       ...u32le(0),
     ])
+
+  test('Exif, XMP, APP13, COM and the motion-photo trailer go; Orientation 6 stays in a minimal Exif block', () => {
     const out = strip(photo(6), 'image/jpeg')
-    expect(out).toEqual(bytes(SOI, APP0, minimalExif, DQT, SOF0, DHT, SOS, SCAN, EOI))
+    expect(out).toEqual(bytes(SOI, APP0, minimalExif(6), DQT, SOF0, DHT, SOS, SCAN, EOI))
     for (const leak of ['Phone', 'GPSLatitude', 'IPTC', 'taken at home', 'ftyp']) {
       expect(contains(out, ascii(leak))).toBe(false)
     }
@@ -76,8 +78,56 @@ describe('jpeg', () => {
     expect(strip(bytes(SOI, EOI), 'image/jpeg')).toEqual(bytes(SOI, EOI))
   })
 
+  test('a little-endian Exif Orientation is kept', () => {
+    const tiff = [
+      ...ascii('II*\0'),
+      ...u32le(8),
+      ...u16le(1),
+      ...[...u16le(0x0112), ...u16le(3), ...u32le(1), ...u16le(3), 0, 0],
+      ...u32le(0),
+    ]
+    const input = bytes(SOI, segment(0xe1, [...ascii('Exif\0\0'), ...tiff]), DQT, SOS, SCAN, EOI)
+    expect(strip(input, 'image/jpeg')).toEqual(bytes(SOI, minimalExif(3), DQT, SOS, SCAN, EOI))
+  })
+
+  test("a second Exif APP1 is dropped; only the first one's Orientation is kept", () => {
+    const input = bytes(SOI, exif(6), exif(8), DQT, SOS, SCAN, EOI)
+    expect(strip(input, 'image/jpeg')).toEqual(bytes(SOI, minimalExif(6), DQT, SOS, SCAN, EOI))
+  })
+
+  test('0xFF fill bytes before a marker are skipped', () => {
+    expect(strip(bytes(SOI, [0xff, 0xff], DQT, SOS, SCAN, EOI), 'image/jpeg')).toEqual(bytes(SOI, DQT, SOS, SCAN, EOI))
+  })
+
+  test('a progressive jpeg keeps every scan and drops an APP1 between them', () => {
+    const SOF2 = segment(0xc2, [8, 0, 1, 0, 1, 1, 1, 0x11, 0])
+    const SCAN2 = [0x78, 0xff, 0x00, 0x9a]
+    const input = bytes(SOI, DQT, SOF2, DHT, SOS, SCAN, exif(6), DHT, SOS, SCAN2, EOI)
+    expect(strip(input, 'image/jpeg')).toEqual(bytes(SOI, DQT, SOF2, DHT, SOS, SCAN, DHT, SOS, SCAN2, EOI))
+  })
+
+  test('only known segments are kept: C2PA in APP11, APP3, a non-ICC APP2 and a non-JFIF APP0 go; ICC, Adobe and DRI stay', () => {
+    const ICC = segment(0xe2, [...ascii('ICC_PROFILE\0'), 1, 1, ...ascii('icc bytes')])
+    const ADOBE = segment(0xee, [...ascii('Adobe'), 0, 100, 0, 0, 0, 0, 1])
+    const DRI = segment(0xdd, [0, 4])
+    const C2PA = segment(0xeb, [...ascii('JP'), 0, 1, ...ascii('jumbc2pa GPS')])
+    const APP3 = segment(0xe3, ascii('META camera serial'))
+    const FPXR = segment(0xe2, ascii('FPXR\0camera'))
+    const APP0_OTHER = segment(0xe0, ascii('AVI1\0camera'))
+    const input = bytes(SOI, APP0, APP0_OTHER, ICC, FPXR, C2PA, APP3, ADOBE, DQT, DRI, SOF0, DHT, SOS, SCAN, EOI)
+    expect(strip(input, 'image/jpeg')).toEqual(bytes(SOI, APP0, ICC, ADOBE, DQT, DRI, SOF0, DHT, SOS, SCAN, EOI))
+  })
+
+  // FF D8 read as a segment would take the next marker, FF E1, as its length and copy the Exif APP1 whole.
+  test('a second SOI is refused, never walked as a segment', () => {
+    const tiff = exifTiff(6)
+    const padded = [...ascii('Exif\0\0'), ...tiff, ...Array(0xffe1 - 4 - 6 - tiff.length).fill(0)]
+    expect(() => strip(bytes(SOI, SOI, segment(0xe1, padded), EOI), 'image/jpeg')).toThrow(StripError)
+  })
+
   test.each([
     ['cut inside a segment', bytes(SOI, APP0.slice(0, 8))],
+    ['with a 0x00 marker', bytes(SOI, [0xff, 0x00, 0, 4, 0, 0], EOI)],
     ['cut inside the scan', bytes(SOI, DQT, SOS, SCAN)],
     ['with no EOI', bytes(SOI, APP0)],
     ['a segment length under 2', bytes(SOI, [0xff, 0xe0, 0, 1], EOI)],
@@ -94,7 +144,7 @@ describe('png', () => {
     return [...u32be(data.length), ...body, ...u32be(Bun.hash.crc32(body))]
   }
   const IHDR = chunk('IHDR', [0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0])
-  const PLTE_LIKE = chunk('sRGB', [0])
+  const SRGB = chunk('sRGB', [0])
   const IDAT = chunk('IDAT', [0x78, 0x9c, 0x63, 0xf8, 0x0f, 0x00, 0x01, 0x01, 0x01, 0x00])
   const IEND = chunk('IEND', [])
 
@@ -104,7 +154,7 @@ describe('png', () => {
       IHDR,
       chunk('eXIf', ascii('MM\0*GPS')),
       chunk('tEXt', ascii('Location\0home')),
-      PLTE_LIKE,
+      SRGB,
       chunk('iTXt', ascii('XML:com.adobe.xmp\0\0\0\0\0<x:xmpmeta/>')),
       chunk('zTXt', ascii('Comment\0\0x')),
       IDAT,
@@ -112,13 +162,29 @@ describe('png', () => {
       ascii('trailing GPS'),
     )
     const out = strip(input, 'image/png')
-    expect(out).toEqual(bytes(SIGNATURE, IHDR, PLTE_LIKE, IDAT, IEND))
+    expect(out).toEqual(bytes(SIGNATURE, IHDR, SRGB, IDAT, IEND))
     const view = new DataView(out.buffer, out.byteOffset)
     for (let at = 8; at < out.length; ) {
       const length = view.getUint32(at)
       expect(view.getUint32(at + 8 + length)).toBe(Bun.hash.crc32(out.subarray(at + 4, at + 8 + length)))
       at += 12 + length
     }
+  })
+
+  test('only known chunks are kept: caBX, tIME and zTXt go, iCCP stays', () => {
+    const ICCP = chunk('iCCP', [...ascii('icc\0'), 0, 0x78, 0x9c])
+    const input = bytes(
+      SIGNATURE,
+      IHDR,
+      ICCP,
+      chunk('zTXt', ascii('Comment\0\0x')),
+      SRGB,
+      chunk('tIME', [0x07, 0xea, 1, 1, 0, 0, 0]),
+      chunk('caBX', ascii('jumbc2pa GPS')),
+      IDAT,
+      IEND,
+    )
+    expect(strip(input, 'image/png')).toEqual(bytes(SIGNATURE, IHDR, ICCP, SRGB, IDAT, IEND))
   })
 
   test.each([
@@ -159,6 +225,16 @@ describe('webp', () => {
     expect(new DataView(out.buffer, out.byteOffset).getUint32(4, true)).toBe(out.length - 8)
   })
 
+  test('only known chunks are kept: C2PA goes, ICCP stays', () => {
+    const ICCP = chunk('ICCP', ascii('icc bytes'))
+    const input = riff(vp8x(0x20), ICCP, VP8L, chunk('C2PA', ascii('jumbc2pa GPS')))
+    expect(strip(input, 'image/webp')).toEqual(riff(vp8x(0x20), ICCP, VP8L))
+  })
+
+  test('bytes after the RIFF end are dropped', () => {
+    expect(strip(bytes([...riff(VP8L)], ascii('trailing GPS')), 'image/webp')).toEqual(riff(VP8L))
+  })
+
   test.each([
     ['whose RIFF size runs past the end', bytes(ascii('RIFF'), u32le(100), ascii('WEBP'), VP8L)],
     ['with a chunk running past the RIFF', riff(VP8L.slice(0, 9))],
@@ -166,4 +242,16 @@ describe('webp', () => {
   ])('a webp %s is refused', (_, input) => {
     expect(() => strip(input, 'image/webp')).toThrow(StripError)
   })
+})
+
+test('a type strip does not know fails loudly, not as a file it cannot walk', () => {
+  const unknown = 'image/gif' as Parameters<typeof strip>[1]
+  let thrown: unknown
+  try {
+    strip(new Uint8Array(ascii('GIF89a')), unknown)
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeInstanceOf(Error)
+  expect(thrown).not.toBeInstanceOf(StripError)
 })
