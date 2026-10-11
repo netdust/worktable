@@ -19,7 +19,7 @@ import type { BatchKind } from './engine-tables'
 import { lookupSelect, ownBody } from './lookups'
 import type { Mail, Mailer } from './mailer'
 import { ApiError, isRealDate } from './params'
-import { retireDelivered } from './record-link'
+import { linkUrl, recordLinkFor, retireDelivered } from './record-link'
 import { writerOf } from './registry'
 import { type EngineRow, withLookups } from './rows'
 import { tableOf } from './tables'
@@ -46,6 +46,8 @@ export interface Store {
   domain: Domain
   mailer: Mailer
   appUrl: string
+  /** Signs record links; a hook asking for its record's link gets null without it. */
+  linkSecret?: Uint8Array
 }
 
 export interface Writable {
@@ -295,6 +297,41 @@ export interface Hooked {
 
 export const noneHooked = (): Hooked => ({ notices: [], mails: [] })
 
+function recordLinkOf(store: Store, dataset: DatasetDecl, row: Values): string | null {
+  if (!dataset.record_link || !store.linkSecret) return null
+  return linkUrl(store.appUrl, recordLinkFor(store.sqlite, store.linkSecret, dataset.name, row.id as number))
+}
+
+const MAX_HOOK_MAILS = 10
+
+// A domain bug must not spray a link: each link goes in one mail to one address, the record link to the record's own.
+function checkHookMails(
+  dataset: DatasetDecl,
+  row: Values,
+  state: string,
+  mails: Mail[],
+  token: string | null,
+  record: string | null,
+) {
+  const fail = (why: string): never => {
+    throw new Error(`${dataset.name} hook on "${state}": ${why}`)
+  }
+  if (mails.length > MAX_HOOK_MAILS) fail(`${mails.length} mails, at most ${MAX_HOOK_MAILS}`)
+  for (const link of [token, record]) {
+    if (link === null) continue
+    const carrying = mails.filter((mail) => mail.text.includes(link) || mail.subject.includes(link))
+    if (carrying.length > 1) fail('a link in more than one mail')
+    if (carrying.some((mail) => /[,;]/.test(mail.to))) fail('a link mailed to more than one address')
+  }
+  const own = dataset.record_link?.email
+  const address = own === undefined ? null : row[own]
+  if (record !== null && own !== undefined) {
+    const carrying = mails.filter((mail) => mail.text.includes(record) || mail.subject.includes(record))
+    if (carrying.some((mail) => mail.to !== address))
+      fail('the record link mailed to another address than the record’s own')
+  }
+}
+
 // A record whose owner column is empty has no one to act on the token, so none is minted and the link is null.
 function linkOf(store: Store, dataset: DatasetDecl, row: Values, from: string, token: HookToken, batch: string) {
   const subject = ownerSubject(dataset, row)
@@ -322,8 +359,11 @@ export function enterState(
   if (!result) return
   if (result.notice) hooked.notices.push(result.notice)
   const link = result.token ? linkOf(store, dataset, row, String(state), result.token, batch) : null
-  const mail = result.mail?.(link)
-  if (mail) hooked.mails.push(mail)
+  const record = result.record_link ? recordLinkOf(store, dataset, row) : null
+  const answered = result.mail?.(link, { token: link, record }) ?? []
+  const mails = Array.isArray(answered) ? answered : [answered]
+  checkHookMails(dataset, row, String(state), mails, link, record)
+  hooked.mails.push(...mails)
 }
 
 export function sendAfterCommit(store: Store, hooked: Hooked): void {

@@ -68,7 +68,7 @@ export const confineLinkActor = createMiddleware<AuthEnv>(async (c, next) => {
   await next()
 })
 
-const linkUrl = (appUrl: string, token: string): string => `${appUrl.replace(/\/+$/, '')}/#/link/${token}`
+export const linkUrl = (appUrl: string, token: string): string => `${appUrl.replace(/\/+$/, '')}/#/link/${token}`
 
 function rotate(sqlite: Database, dataset: string, id: number, actor: Actor): void {
   sqlite

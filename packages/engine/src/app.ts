@@ -196,7 +196,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
 
   const app = root.basePath('/api')
   const mailer = options.mailer ?? (outbox ? outboxMailer(outbox) : undefined)
-  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl }
+  const store: Store = { sqlite, db, domain, mailer: mailer ?? silentMailer, appUrl, linkSecret }
   const ipOf = clientIp ? (c: Context) => clientIp(c.req.raw) : peerAddress
   app.on(['POST', 'PUT', 'PATCH', 'DELETE'], '/*', writeGuard())
   publicRoutes(app, store, ipOf)

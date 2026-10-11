@@ -172,7 +172,10 @@ export interface Actor {
 /** What a hook asks the engine to do; `link` is null while no token was minted. */
 export interface HookResult {
   token?: { to: string[]; days: number }
-  mail?: (link: string | null) => Mail | null
+  /** Passes the record's current record link to `mail`; only on a dataset that declares record_link. */
+  record_link?: true
+  /** `link` is the minted token's link; `links` carries it again beside the record link. At most 10 mails. */
+  mail?: (link: string | null, links: { token: string | null; record: string | null }) => Mail | Mail[] | null
   notice?: string
 }
 
