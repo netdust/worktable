@@ -1,0 +1,19 @@
+# Review: hook-mails (F3)
+
+Reviews of 2026-10-11: superpowers whole-branch review (opus) and security-sentinel. Fix pass on feature/hook-mails.
+
+## F3 — feature/hook-mails (verdict: ready per the code review; BLOCKING per security)
+1. (Blocking, sentinel B1, proven) The link check matches the whole URL, so an encoded link or the bare token slips past every rule. Fix in `checkHookMails` (`writes.ts`): match the secret part — the record-link token from `recordLinkFor` (dataset.id.mac) and the raw action token from `mintActionToken` — in `to`, `subject` and `text`. Tests: the record link URL-encoded inside another URL, and the bare token, each to another address, both fail the write and send nothing; the action-token link in two mails, and to two recipients, fail too.
+2. (Should fix, sentinel S1, proven) Refuse `\r` or `\n` in `to` and `subject` of every hook mail; refuse an empty or non-string `to`. A mail carrying a link must have a strict single address: `^[^\s@,;<>"():]+@[^\s@,;<>"():]+$`. The record's-own-address comparison trims and ignores case. Tests: CRLF in `to` and in `subject`, a null `to`, "a@x b@y" with a link, a case difference on the own address passes.
+3. (Minor, sentinel M1 / review M1) The refusal becomes an `ApiError` 500 with code `hook_mail_refused` and a message naming the dataset and state, never the link. Assert the code and the hook name in the tests.
+4. (Minor, M5) `recordLinkOf` returns null when the row has no owner subject (a link `verifyRecordLink` would reject). Test it.
+5. (Minor) Tests: `record` is null on a dataset without `record_link`, and when the engine has no link secret.
+Left as is (noted): one-mail-per-link is per hook, not per write (two hooks in one action may mail the same link to the same address); `record_link: {}` without `email` lets the record link go to any single address (as the finding says).
+
+## Fixed
+All five land in one commit, since they rewrite the same function (`checkHookMails`, `recordLinkOf`, `linkOf` in `writes.ts`); tests in `packages/engine/test/hook-mails.test.ts`.
+1. f819fda — a link is found by its secret (the record link's MAC, the action token whole) in `to`, `subject` and `text`. Tests: 'a hook mail cannot slip a link past the rules' — the record link URL-encoded inside another URL, the bare record token, the MAC alone in a subject, each to another address; the action-token link in two mails (one bare), to two recipients, to two addresses split by a space, and encoded to a display-name address. The reviewer's PoC (`poc/bypass.test.ts`) now answers 500 and sends nothing.
+2. f819fda — every hook mail: no `\r`/`\n` in `to` or `subject`, `to` a non-empty string (and subject and text strings); a link-carrying mail's `to` matches `^[^\s@,;<>"():]+@[^\s@,;<>"():]+$`; the own-address comparison trims and ignores case. Tests: CRLF in `to`, LF in `subject`, a null `to`, an empty `to`, "a@x b@y" with a link; 'the record’s own address matches trimmed and in any case' passes.
+3. f819fda — the refusal is `ApiError(500, 'hook_mail_refused', '<dataset> hook on "<state>": <why>')` (`ApiError` takes 500); the tests assert the code, the hook name, and that the body holds no link secret.
+4. f819fda — `recordLinkOf` returns null for a row without an owner subject. Test: 'null on a record with no owner, whose link would never open'.
+5. f819fda — `record` is null on a dataset without `record_link` (test: 'null on a dataset that declares no record_link'). Ruled differently for the missing secret: `createEngine` refuses to start when a dataset declares `record_link` and no link secret is given, so a hook never meets a missing secret; the test asserts that refusal ('an engine without a link secret refuses to start on a dataset declaring record_link') and the null branch stays as a type guard.
