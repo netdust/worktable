@@ -135,6 +135,7 @@ describe('upload and download', () => {
     expect(res.headers.get('content-disposition')).toBe("attachment; filename*=UTF-8''plan%20%C3%A9t%C3%A9.pdf")
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('content-security-policy')).toBe('sandbox')
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
   })
 
   test.each([
@@ -255,12 +256,21 @@ describe('refusals', () => {
     ['a newline', 'a\nb.pdf'],
     ['a NUL', 'a\u0000.pdf'],
     ['a right-to-left override', 'cod\u202egnp.pdf'],
-    ['a zero-width space', 'a\u200bb.pdf'],
+    ['a left-to-right mark', 'a\u200eb.pdf'],
+    ['a first-strong isolate', 'a\u2068b.pdf'],
     ['over 200 characters', `${'a'.repeat(197)}.pdf`],
     ['nothing', ''],
   ])('a name with %s is 400 bad_name', async (_, name) => {
     const res = await upload(PDF, { name })
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 400, code: 'bad_name' })
+  })
+
+  test.each([
+    ['an emoji with a zero-width joiner', '\u{1f469}\u200d\u{1f4bb} plan.pdf'],
+    ['a soft hyphen', 'zaal\u00adblad.pdf'],
+  ])('a name with %s is taken', async (_, name) => {
+    const res = await upload(PDF, { name })
+    expect({ status: res.status, name: res.body.name }).toEqual({ status: 201, name })
   })
 
   test('a name of 200 characters is taken', async () => {
@@ -304,7 +314,7 @@ describe('refusals', () => {
   test('an owner reads its own record’s files but uploads only with owner_writable', async () => {
     const { body } = await upload(PDF, { id: 2 })
     const owner = await signIn(app, 'owner', { dataset: 'box', id: 2 })
-    expect((await download(body.id, owner)).headers.get('cache-control')).toBe('no-store')
+    expect((await download(body.id, owner)).headers.get('cache-control')).toBe('private, no-store')
     expect((await upload(PDF, { id: 2, cookie: owner })).status).toBe(403)
     expect((await remove(body.id, owner)).status).toBe(403)
   })
@@ -418,6 +428,17 @@ describe('storage', () => {
     expect({ status, size: body.size }).toEqual({ status: 201, size: stored.length })
     expect(readdirSync(filesDir)).toEqual([sha256(stored)])
     expect(new Uint8Array(await (await download(body.id)).arrayBuffer())).toEqual(stored)
+  })
+
+  test('a failed insert removes the file it wrote, and leaves one that was there before', async () => {
+    sqlite.run(
+      "CREATE TRIGGER refuse BEFORE INSERT ON attachment WHEN NEW.name = 'refused.pdf' BEGIN SELECT RAISE(ABORT, 'refused'); END",
+    )
+    expect((await upload(PDF, { name: 'refused.pdf' })).status).toBe(500)
+    expect(readdirSync(filesDir)).toEqual([])
+    await upload(PDF)
+    expect((await upload(PDF, { name: 'refused.pdf' })).status).toBe(500)
+    expect(readdirSync(filesDir)).toEqual([sha256(PDF)])
   })
 
   // The doubled SOI read as a segment would take FF E1 as its length and span the GPS APP1 whole.

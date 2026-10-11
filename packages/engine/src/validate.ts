@@ -111,6 +111,8 @@ function checkOwnerWritable(dataset: DatasetDecl): void {
       new DomainError(dataset.name, column, `${column} ${why}, so it is not owner_writable`)
     if (decl.type === 'json') throw refuse('is json')
     if (decl.readonly) throw refuse('is readonly')
+    // checkRelations only proves the target exists, so a link could point its row at a record it cannot read.
+    if (decl.relation) throw refuse('is a relation')
     if (column === dataset.owners?.owner) throw refuse('is the owner column')
     if (column === dataset.lifecycle?.column) throw refuse('is the lifecycle column')
     if (column === dataset.record_link?.email) throw refuse('is the record link address')

@@ -1,4 +1,4 @@
-import { existsSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context, Hono } from 'hono'
 import { forbid, inScope, readable as readableSource, scopeOf } from './access'
@@ -30,8 +30,8 @@ interface AttachmentRow {
 const MB = 1024 * 1024
 export const DEFAULT_MAX_MB = 10
 const MAX_NAME = 200
-// Control and format characters; a bidi override would let x.pdf read as another name.
-const UNSAFE = /[\p{Cc}\p{Cf}]/u
+// Control characters and direction controls; a bidi override would let x.pdf read as another name.
+const UNSAFE = /[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069]/u
 const INLINE = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const EXTENSIONS: Record<string, string[]> = {
   'application/pdf': ['.pdf'],
@@ -143,15 +143,20 @@ function filesDirOf(store: Store): string {
 }
 
 // Written under a temporary name and renamed, so a file at its hash is always whole.
-function storeBytes(store: Store, bytes: Uint8Array): string {
+// `written` is the path when this call made the file, so a failed insert can take it back.
+function storeBytes(store: Store, bytes: Uint8Array): { sha256: string; written?: string } {
   const sha256 = new Bun.CryptoHasher('sha256').update(bytes).digest('hex')
   const path = join(filesDirOf(store), sha256)
-  if (!existsSync(path)) {
-    const temporary = `${path}.${crypto.randomUUID()}.tmp`
+  if (existsSync(path)) return { sha256 }
+  const temporary = `${path}.${crypto.randomUUID()}.tmp`
+  try {
     writeFileSync(temporary, bytes, { mode: 0o600 })
     renameSync(temporary, path)
+  } catch (error) {
+    rmSync(temporary, { force: true })
+    throw error
   }
-  return sha256
+  return { sha256, written: path }
 }
 
 const isOctetStream = (type: string | undefined): boolean =>
@@ -213,7 +218,7 @@ function upload(
   const mime = sniff(bytes)
   if (!mime) throw badFileType()
   const stored = withoutMetadata(bytes, mime)
-  const sha256 = storeBytes(store, stored)
+  const { sha256, written } = storeBytes(store, stored)
   const now = new Date().toISOString()
   const batch = crypto.randomUUID()
   const { kind, name } = file
@@ -227,13 +232,20 @@ function upload(
     sha256,
     uploaded_by: actor.id,
   }
-  const made = store.sqlite
-    .transaction(() => {
-      const { id: fileId } = create(store.sqlite, attachment, row, now, actor.id, batch)
-      recordBatch(store.sqlite, batch, actor.id, 'write', now)
-      return fileId
-    })
-    .immediate()
+  // Nothing awaits between the write and the insert, so no other upload can have claimed the new file.
+  let made: number
+  try {
+    made = store.sqlite
+      .transaction(() => {
+        const { id: fileId } = create(store.sqlite, attachment, row, now, actor.id, batch)
+        recordBatch(store.sqlite, batch, actor.id, 'write', now)
+        return fileId
+      })
+      .immediate()
+  } catch (error) {
+    if (written) rmSync(written, { force: true })
+    throw error
+  }
   return { id: made, kind, name, mime, size: stored.length, revision: { batch_id: batch } }
 }
 
@@ -259,8 +271,7 @@ function remove(store: Store, raw: string, actor: Actor) {
 export function attachmentRoutes(app: Hono<AuthEnv>, store: Store): void {
   // Before the :dataset routes, which would otherwise read "file" as a dataset.
   app.get('/attachments/file/:id', async (c) => {
-    const actor = c.get('actor')
-    const { file } = readable(store, c.req.param('id'), actor)
+    const { file } = readable(store, c.req.param('id'), c.get('actor'))
     const bytes = Bun.file(join(filesDirOf(store), file.sha256))
     if (!(await bytes.exists())) throw new Error(`attachment ${file.id}: its file ${file.sha256} is missing`)
     return c.body(bytes.stream(), 200, {
@@ -269,7 +280,7 @@ export function attachmentRoutes(app: Hono<AuthEnv>, store: Store): void {
       'Content-Disposition': dispositionOf(file.mime, file.name),
       'Content-Security-Policy': 'sandbox',
       'X-Content-Type-Options': 'nosniff',
-      ...(actor.role === 'owner' ? { 'Cache-Control': 'no-store' } : {}),
+      'Cache-Control': 'private, no-store',
     })
   })
 

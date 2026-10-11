@@ -184,6 +184,18 @@ describe('declaring owner_writable', () => {
     ['on the record link address', 'inbox', { owner_visible: true, owner_writable: true }],
     ['on a json column', 'extra', { type: 'json', label: 'Extra', owner_visible: true, owner_writable: true }],
     ['on a readonly column', 'name', { readonly: true, owner_writable: true }],
+    [
+      'on a relation column',
+      'helper_id',
+      {
+        type: 'integer',
+        label: 'Helper',
+        relation: 'member',
+        nullable: true,
+        owner_visible: true,
+        owner_writable: true,
+      },
+    ],
   ])('is refused %s', (_, column, decl) => {
     expect(() => validateDomain(withColumn(column, decl))).toThrow(DomainError)
   })
@@ -330,7 +342,7 @@ describe('owner and link files', () => {
       expect(listed.body.attachments).toMatchObject([{ id: made.body.id, own: true }])
       const file = await call(as(), 'GET', `/api/attachments/file/${made.body.id}`)
       expect(file.status).toBe(200)
-      expect(file.headers.get('cache-control')).toBe('no-store')
+      expect(file.headers.get('cache-control')).toBe('private, no-store')
     })
 
     test(`${who} deletes its own upload, not an editor's`, async () => {
