@@ -187,6 +187,16 @@ describe('png', () => {
     expect(strip(input, 'image/png')).toEqual(bytes(SIGNATURE, IHDR, ICCP, SRGB, IDAT, IEND))
   })
 
+  test('the HDR colour chunks cICP, mDCv and cLLi stay', () => {
+    const hdr = [
+      chunk('cICP', [9, 16, 0, 1]),
+      chunk('mDCv', new Array(24).fill(1)),
+      chunk('cLLi', [0, 0, 0x27, 0x10, 0, 0, 0x01, 0xf4]),
+    ]
+    const input = bytes(SIGNATURE, IHDR, ...hdr, IDAT, IEND)
+    expect(strip(input, 'image/png')).toEqual(input)
+  })
+
   test.each([
     ['with no IEND', bytes(SIGNATURE, IHDR, IDAT)],
     ['with a chunk running past the end', bytes(SIGNATURE, IHDR, IDAT.slice(0, 12), IEND.slice(0, 4))],

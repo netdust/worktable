@@ -160,7 +160,9 @@ function stripJpeg(bytes: Uint8Array): Uint8Array {
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 // Image, colour and animation chunks; every other chunk is dropped.
-const PNG_KEPT = new Set('IHDR PLTE IDAT IEND tRNS gAMA cHRM sRGB iCCP sBIT bKGD pHYs acTL fcTL fdAT'.split(' '))
+const PNG_KEPT = new Set(
+  'IHDR PLTE IDAT IEND tRNS gAMA cHRM sRGB iCCP cICP mDCv cLLi sBIT bKGD pHYs acTL fcTL fdAT'.split(' '),
+)
 
 const typeAt = (bytes: Uint8Array, at: number) => String.fromCharCode(...bytes.subarray(at, at + 4))
 
