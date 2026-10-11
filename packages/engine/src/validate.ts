@@ -103,6 +103,21 @@ function checkOwnerVisible(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+// What a person link may write: a plain value of its own, never its scope, its state or where its link goes.
+function checkOwnerWritable(dataset: DatasetDecl): void {
+  for (const [column, decl] of Object.entries(dataset.columns)) {
+    if (!decl.owner_writable) continue
+    const refuse = (why: string) =>
+      new DomainError(dataset.name, column, `${column} ${why}, so it is not owner_writable`)
+    if (decl.type === 'json') throw refuse('is json')
+    if (decl.readonly) throw refuse('is readonly')
+    if (column === dataset.owners?.owner) throw refuse('is the owner column')
+    if (column === dataset.lifecycle?.column) throw refuse('is the lifecycle column')
+    if (column === dataset.record_link?.email) throw refuse('is the record link address')
+    if (!decl.owner_visible) throw refuse('is not owner_visible')
+  }
+}
+
 // The grid needs the title and the date column to show a row.
 function checkHidden(source: DatasetDecl | QueryDecl): void {
   const title = typeof source.title === 'string' ? [source.title] : [source.title.else, source.title.via]
@@ -473,6 +488,7 @@ export function validateDomain(domain: Domain): void {
     checkNewLabel(dataset)
     checkLifecycle(dataset)
     checkRecordLink(dataset)
+    checkOwnerWritable(dataset)
     checkAttachments(dataset)
     checkConfig(domain, dataset)
     checkLookups(domain, dataset)

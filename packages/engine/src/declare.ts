@@ -39,6 +39,8 @@ export interface ColumnDecl {
   writes?: { dataset: string; field: string; key: string }
   /** Served to the row's owner in a view for owners; never on json or on the owner column. */
   owner_visible?: boolean
+  /** A person link may write it; only with owner_visible, never on the owner, lifecycle or link address column. */
+  owner_writable?: true
   /** The grid never offers or shows it; still stored, imported and written through the API. */
   hidden?: boolean
 }

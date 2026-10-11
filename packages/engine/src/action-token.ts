@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { timingSafeEqual } from 'node:crypto'
 import type { Context, Hono } from 'hono'
 import { createMiddleware } from 'hono/factory'
-import { inScope, scopeOf } from './access'
+import { inScope, linkWritable, scopeOf } from './access'
 import { type AuthEnv, secret, sha256 } from './auth'
 import type { Actor, DatasetDecl } from './declare'
 import { ApiError } from './params'
@@ -153,8 +153,15 @@ function consume(sqlite: Database, row: TokenRow, now: number): void {
   sqlite.query('UPDATE action_token SET used_at = ? WHERE hash = ? AND used_at IS NULL').run(iso(now), row.hash)
 }
 
+function valuesOf(given: unknown): Raw {
+  if (given === undefined) return {}
+  if (typeof given === 'object' && given !== null && !Array.isArray(given)) return given as Raw
+  throw new ApiError(400, 'bad_body', '"values" must be an object')
+}
+
 // Consume and transition in one transaction: a refused transition leaves the token unused (threat 2).
-function actOn(store: Store, token: unknown, to: unknown): { ok: true } {
+function actOn(store: Store, token: unknown, to: unknown, given: unknown): { ok: true } {
+  const values = valuesOf(given)
   const hooked = noneHooked()
   store.sqlite
     .transaction(() => {
@@ -166,12 +173,13 @@ function actOn(store: Store, token: unknown, to: unknown): { ok: true } {
       if (typeof to !== 'string' || !(JSON.parse(row.to_states) as string[]).includes(to)) {
         throw new ApiError(422, 'transition_not_allowed', `"${column}" may not go to ${String(to)}`)
       }
+      linkWritable(dataset, values)
       const actor = linkAccount(store.sqlite, subjectOf(row))
       if (!actor) throw badToken()
       try {
         const target = writableOf(store.domain, dataset.name, 'update', actor)
         const mode = { kind: 'write', expect: row.from_state } as const
-        applyWrite(store, target, 'update', row.record_id, { [column]: to }, actor, mode, hooked)
+        applyWrite(store, target, 'update', row.record_id, { ...values, [column]: to }, actor, mode, hooked)
       } catch (err) {
         // The scope read refuses a record whose owner moved since the mint: the same answer as any bad token.
         if (err instanceof ApiError && err.status === 404) throw badToken()
@@ -197,7 +205,7 @@ export function actionTokenRoutes(app: Hono<AuthEnv>, store: Store, clientIp: (c
     return c.json(await limited(c)(store.sqlite, () => projectionOf(store, token)))
   })
   app.post('/act', async (c) => {
-    const { token, to } = await bodyOf(c)
-    return c.json(await limited(c)(store.sqlite, () => actOn(store, token, to)))
+    const { token, to, values } = await bodyOf(c)
+    return c.json(await limited(c)(store.sqlite, () => actOn(store, token, to, values)))
   })
 }

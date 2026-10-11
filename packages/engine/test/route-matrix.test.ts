@@ -227,21 +227,22 @@ const EXPECTED: { method: string; path: string; body?: unknown; type?: string; s
   {
     method: 'GET',
     path: '/api/attachments/project/1',
-    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
   },
   {
     method: 'POST',
     path: '/api/attachments/project/1?kind=doc&name=a.pdf',
     body: FILE,
     type: 'application/octet-stream',
-    status: { none: 401, owner: 201, editor: 201, administrator: 201, link: 403, service: 201 },
+    status: { none: 401, owner: 201, editor: 201, administrator: 201, link: 201, service: 201 },
   },
   {
     method: 'GET',
     path: '/api/attachments/file/1',
-    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
   },
   {
+    // The file is the signed-in account's; the link account deletes only its own uploads.
     method: 'DELETE',
     path: '/api/attachments/file/1',
     status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },

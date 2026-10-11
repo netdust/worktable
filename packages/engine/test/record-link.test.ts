@@ -283,7 +283,6 @@ describe('a link actor is confined (attack 11)', () => {
       ['GET', '/api/history/taak'],
       ['GET', '/api/revisions/note/1'],
       ['POST', '/api/rows/note', { project_id: 1, tekst: 'x' }],
-      ['PATCH', '/api/rows/note/1', { tekst: 'x' }],
       ['DELETE', '/api/rows/note/1'],
       ['POST', '/api/actions/copy_notes', { id: 1, input: { source: 1 } }],
       ['POST', '/api/batches/own/undo', {}],
@@ -293,6 +292,8 @@ describe('a link actor is confined (attack 11)', () => {
       ['PUT', '/api/sources/taak/display', { label: 'x' }],
     ]
     for (const [method, path, body] of calls) await denied(() => asLink(token, method, path, body), 403, 'forbidden')
+    // PATCH passes the fence; a column the dataset does not declare owner_writable is refused by name.
+    await denied(() => asLink(token, 'PATCH', '/api/rows/note/1', { tekst: 'x' }), 403, 'column_not_owner_writable')
   })
 })
 

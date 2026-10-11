@@ -1,4 +1,4 @@
-import type { Actor, Domain } from './declare'
+import type { Actor, DatasetDecl, Domain } from './declare'
 import { ApiError } from './params'
 import { type Source, sourceOf } from './registry'
 
@@ -40,6 +40,15 @@ export function may(actor: Actor | null, surface: Surface): boolean {
 
 export function forbid(message: string): never {
   throw new ApiError(403, 'forbidden', message)
+}
+
+/** A person link writes only declared columns; checked on the raw body, before anything drops a key (attack 8). */
+export function linkWritable(dataset: DatasetDecl, body: Record<string, unknown>): void {
+  const refused = Object.keys(body).find(
+    (key) => !Object.hasOwn(dataset.columns, key) || !dataset.columns[key]?.owner_writable,
+  )
+  if (refused === undefined) return
+  throw new ApiError(403, 'column_not_owner_writable', `A link may not write "${refused}"`, { column: refused })
 }
 
 export type Scope = { column: string; id: number } | 'all' | 'none'

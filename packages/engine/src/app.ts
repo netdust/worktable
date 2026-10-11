@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
-import { readable, scopeOf, visibleSource } from './access'
+import { linkWritable, readable, scopeOf, visibleSource } from './access'
 import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
@@ -57,9 +57,14 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     const target = writableOf(domain, c.req.param('dataset'), 'update', c.get('actor'))
     // cutBody would drop it silently, so the expected value is taken out here; runWrite checks its shape.
     const { expect, ...body } = await bodyOf(c)
+    const actor = c.get('actor')
+    if (actor.kind === 'link') linkWritable(target.dataset, body)
     const opts = { expect: expect as Record<string, unknown> | undefined }
-    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, c.get('actor'), opts)
-    return c.json(reply(target.dataset, c.get('actor'), written))
+    const written = runWrite(store, target, 'update', parseId(c.req.param('id')), body, actor, opts)
+    // A forwarded link must not read the whole row back through its write (attack 9).
+    if (actor.kind === 'link')
+      return c.json({ id: written.id, revision: { batch_id: written.batch_id, changed: written.changed } })
+    return c.json(reply(target.dataset, actor, written))
   })
 
   app.delete('/rows/:dataset/:id', (c) => {
