@@ -374,8 +374,14 @@ test('owners read none of them', async () => {
 
 // Seeding inserts views without the views route's checks; each one must also save through it.
 test('every seeded view saves through the views route', async () => {
+  const listed = (await admin('GET', '/api/views')).body.views as { id: number; name: string; owner_id: number }[]
+  // A seed's tiles name views; a stored layout names them by id.
+  const idOf = (name: unknown) => listed.find((v) => v.name === name)?.id ?? name
+  const byId = (layout: Body) =>
+    JSON.parse(JSON.stringify(layout), (key, value) => (['view', 'done', 'total'].includes(key) ? idOf(value) : value))
   for (const { name, ...fields } of theatre.views) {
-    const res = await admin('POST', '/api/views', { name: `${name} (copy)`, ...fields, shared: false })
+    const body = fields.layout ? { ...fields, layout: byId(fields.layout as unknown as Body) } : fields
+    const res = await admin('POST', '/api/views', { name: `${name} (copy)`, ...body, shared: false })
     expect({ name, status: res.status, body: res.status === 201 ? null : res.body }).toEqual({
       name,
       status: 201,

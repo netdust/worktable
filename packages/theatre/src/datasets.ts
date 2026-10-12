@@ -107,6 +107,9 @@ export const activiteit = defineDataset({
   icon: 'calendar',
   title: 'omschrijving',
   date: 'plandag',
+  calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['productie_id', 'speelreeks_id'] },
+  board: { column: 'status' },
+  gallery: { kind: 'foto' },
   custom: true,
   scoped: 'productie_id',
   group_facts: dagFacts,
@@ -203,6 +206,7 @@ export const toewijzing = defineDataset({
   new_label: 'Nieuwe toewijzing',
   icon: 'users',
   title: { via: 'persoon_id', else: 'naam' },
+  board: { column: 'state' },
   custom: true,
   owners: { owner: 'persoon_id' },
   matrix: {
@@ -280,6 +284,8 @@ export const beschikbaarheid = defineDataset({
   icon: 'clock',
   title: { via: 'persoon_id', else: 'reden' },
   date: 'start_at',
+  // An absence covers every day from its start to its end.
+  calendar: { day: 'start_at', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'], spans: true },
   custom: true,
   owners: { owner: 'persoon_id' },
   columns: {
@@ -328,6 +334,8 @@ export const speelreeks = defineDataset({
   new_label: 'Nieuwe tourstop',
   icon: 'film',
   title: 'naam',
+  date: 'start_datum',
+  calendar: { day: 'start_datum', end: 'eind_datum', lanes: ['productie_id'], spans: true },
   custom: true,
   scoped: 'productie_id',
   columns: {
