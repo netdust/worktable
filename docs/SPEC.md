@@ -1,5 +1,7 @@
 # Planning Engine — Architecture
 
+The tool is for admins and their work. Everyone else uses webpages built on the engine's data: they read through queries and published views, and the only writes from outside are the few a page makes for one person through that person's own link or token.
+
 One standalone engine, many domains. The theatre planning model as the first domain. Websites, including WordPress, are REST clients and nothing more.
 
 Oct 4, 2026 · @Stefan
@@ -7,6 +9,8 @@ Oct 4, 2026 · @Stefan
 Revised Oct 5, 2026 after the Claude Code review: English engine names, lifecycle moved to step 2, queries may join queries and the generic tables, matrix declarations made generic. This file is the spec of record.
 
 Revised Oct 9, 2026 for step 2, before any of its code: the lifecycle with `expect`, the record token split into record links and action tokens, views for owners, account kinds, actions that update, the matrix's `open`, Sjabloon slots, and the engine's surface; kandidaten, Persoon_rol, plan-side cost and soort on Beschikbaarheid move to step 3.
+
+Revised Oct 12, 2026 before step 3: the rule above as the first paragraph, and websites as consumers.
 
 ## What this is
 
@@ -117,6 +121,21 @@ The freeze list. Anything not on it needs a finding before it is built. It names
 | Interfaces | `LifecycleDecl` (transitions with an optional `label`), `HookResult { token?, record_link?, mail?, notice? }` (`mail(link, { token, record })` answers one mail or up to 10; a link, found by its secret so an encoded or bare one counts, goes in one mail to one plain address, the record link only to the record's own `record_link.email` (trimmed, any case) and never for a record without an owner; no mail's `to` or `subject` holds a line break and every `to` is a non-empty address; otherwise the write fails with 500 `hook_mail_refused` naming the dataset and state, never the link), `ActionResult`, `MatrixDecl.open { match, count, fill }`, the Mailer (`send({ to, subject, text })`; the development mailer writes the outbox and is the only code that logs a link); public routes count failures with `failureLimiter` and send `noStoreHeaders()` |
 | Routes | `GET /schema` (and `?format=openapi`); `GET /rows/:source`; `POST /rows/:dataset`, `PATCH` and `DELETE /rows/:dataset/:id`; `POST /actions/:name`; `POST /batches/:id/undo`; `GET /revisions/:dataset/:id`; `GET /history/:source`; `/views` (`GET`, `POST`, `PATCH`, `DELETE`, `/restore`, `PUT` and `DELETE /views/:id/share-token`, `PUT` and `DELETE /views/:id/for-owners`); `PUT /sources/:name/display`; `/auth/request`, `/auth/consume`, `/auth/me`, `/auth/signout`; `GET /public/views/:token`; `GET /owner/views`, `GET /owner/views/:id/rows`; `GET /record-links/:dataset/:id`, `POST /record-links/:dataset/:id/rotate`, `POST /record-links/request`; `POST /act`, `POST /act/view`; `GET` and `POST /attachments/:dataset/:id`, `GET` and `DELETE /attachments/file/:id` |
 | CLI | `--fresh`, `--import` (with `--as`, `--report`, `--accept-report`), `--seed-missing`, `--create-admin`, `--create-account`, `--disable-account`, `--create-service`, `--rotate-service`, `--disable-service`, `--link-secret-file`, `--outbox`, `--files-dir`, `--files-max-gb`, `--app-url`, `--hostname`; `bun run parity` |
+
+## Websites as consumers
+
+A website is a page built on the engine's data, never a second tool. It reads through queries and published views, and writes only what one person may write about themselves. It holds exactly one of three credentials, chosen by the page:
+
+| Credential | Fits | Reads | Writes |
+| --- | --- | --- | --- |
+| Share token | A public page: a performance calendar, a published schedule | The one view the token publishes | Nothing |
+| Record link (or an action token) | A page for one person: their productions, their answer to an invite | That person's rows, through views for owners and owner-visible columns | That person's owner-writable columns and their own lifecycle answers |
+| Service account | A trusted server-side consumer only, whose token never reaches a browser | Everything its role reads | What its role writes, logged as the account |
+
+- A query a website reads is a published contract: its columns may only grow. A column is never renamed or removed while a consumer reads it; a change of meaning is a new column.
+- The grid's `#/link` (the person page) and `#/act` (the invite answer) are the reference consumers: a website builds its own versions of those pages on the same routes and credentials.
+- Closed as website work, not engine work (Stefan, 2026-10-12): the Doorverwijsgids detail template (a fiche's detail page is a website page reading the fiche through a public view), and cargo C1 (several owner columns), C3 (a dry-run quote) and C10 (administrator account routes).
+- Cutover precondition: Laika's website needs an invite-answer page and a person page before real invites go out.
 
 ## Storage
 

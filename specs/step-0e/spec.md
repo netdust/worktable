@@ -151,7 +151,7 @@ Source: "removing the views module from baseline" · form: Stefan's decision abo
 Then stop and report.
 
 ## Out
-- **The cutover,** a separate slice: HTTPS, the Host allowlist for a real domain, Secure session flags, real mail delivery, a trusted-proxy setting, backups and a restore drill, the independent review, and Laika's composer constraint (mail and proxy added by Stefan, 2026-10-06).
+- **The cutover,** a separate slice: HTTPS, the Host allowlist for a real domain, Secure session flags, real mail delivery, a trusted-proxy setting, backups and a restore drill, the independent review, and Laika's composer constraint (mail and proxy added by Stefan, 2026-10-06), and Laika's website gains an invite-answer page and a person page before real invites (Stefan, 2026-10-12).
 - **Signed person links and record tokens** (step 2).
 - **Publication (step 4),** apart from the single public read route above.
 - **Mail delivery,** beyond the console in development.
