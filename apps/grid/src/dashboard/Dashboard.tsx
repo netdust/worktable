@@ -82,7 +82,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
       </div>
       <div className="nv-body">
         {editing ? (
-          <div className="nv-dash"><Composer dashboard={dashboard} views={views} role={role} onDone={() => setEditing(false)} onSaved={onSaved} /></div>
+          <div className="nv-dash"><Composer dashboard={dashboard} views={views} models={models} role={role} onDone={() => setEditing(false)} onSaved={onSaved} /></div>
         ) : (
         <div className="nv-dash">
           {sections.length === 0 && <p className="nv-tile__note">{t('dashboardEmpty')}</p>}

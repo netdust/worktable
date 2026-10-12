@@ -98,7 +98,8 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   /** When the open view goes: the next under its rail node, else the first of any. */
   const leave = (gone: View, to?: View) => {
     if (active.current !== gone.key) return
-    const next = to ?? tableOf(tables, gone.key)?.views.find((v) => v.key !== gone.key) ?? tables[0]?.views[0]
+    const siblings = gone.type === 'dashboard' ? dashboards : tableOf(tables, gone.key)?.views
+    const next = to ?? siblings?.find((v) => v.key !== gone.key) ?? tables[0]?.views[0]
     if (next) open(next.key)
   }
   const refresh = () => savedViews().then(setSaved, () => undefined)

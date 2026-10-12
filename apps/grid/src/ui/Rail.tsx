@@ -1,7 +1,7 @@
-import { ChevronRight, Combine, LayoutDashboard, Plus, Rows3 } from 'lucide-react'
+import { ChevronRight, Combine, LayoutDashboard, Plus, Rows3, X } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { t } from '../i18n'
-import type { Schema, View, ViewType } from '../types'
+import type { SavedView, Schema, View, ViewType } from '../types'
 import { ICONS, iconNamed } from './icons'
 import { type Action, MoreMenu } from './MoreMenu'
 import { RailFoot, type Signed } from './RailFoot'
@@ -41,9 +41,11 @@ interface Props {
   signed?: Signed
   /** The dashboards the reader can open, in landing order; the tree's first group. */
   dashboards?: View[]
+  /** An administrator's delete of a dashboard it may edit; absent for anyone else. */
+  onRemoveDashboard?: (view: SavedView) => void
 }
 
-export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed, dashboards = [] }: Props) {
+export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed, dashboards = [], onRemoveDashboard }: Props) {
   const current = tableOf(tables, active)
   const [open, setOpen] = useOpenModels(current?.key)
   const fold = (table: Table) => setOpen(table.key, !open.has(table.key))
@@ -63,6 +65,11 @@ export function Rail({ tables, sections, active, onSelect, onTable = (table) => 
                   <LayoutDashboard size={14} aria-hidden="true" />
                   <span>{view.label}</span>
                 </button>
+                {onRemoveDashboard && (view as SavedView).editable && (
+                  <button type="button" className="nv-view__remove" aria-label={t('removeDashboard')} onClick={() => onRemoveDashboard(view as SavedView)}>
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

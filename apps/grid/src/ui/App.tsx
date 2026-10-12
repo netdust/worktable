@@ -482,7 +482,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   return (
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
-        onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions} space={space.status === 'ready' && served?.space && (
+        onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
+        onRemoveDashboard={role === 'administrator' ? actions.remove : undefined} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">

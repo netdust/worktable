@@ -362,3 +362,25 @@ describe("a query's views under its model", () => {
     expect(within(views('Losse query')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Losse query'])
   })
 })
+
+describe('the dashboard group', () => {
+  const board = (id: number, label: string, editable: boolean) =>
+    ({ key: String(id), id, label, model: '', table: 'Dashboard', type: 'dashboard', editable }) as unknown as View
+  const system = board(1, 'Overzicht', false)
+  const team = board(2, 'Team', true)
+
+  it('lets an administrator delete a dashboard it may edit, never the system one', () => {
+    const onRemove = vi.fn()
+    render(<Rail tables={plain.map((v) => ({ ...v, views: [v] })) as never} dashboards={[team, system]} active={undefined} onSelect={() => undefined} onRemoveDashboard={onRemove} />)
+    const group = within(rail()).getByRole('group', { name: 'Dashboard' })
+    const removes = within(group).getAllByRole('button', { name: 'Dashboard verwijderen' })
+    expect(removes).toHaveLength(1)
+    fireEvent.click(removes[0])
+    expect(onRemove).toHaveBeenCalledWith(team)
+  })
+
+  it('offers no delete without the administrator handler', () => {
+    render(<Rail tables={plain.map((v) => ({ ...v, views: [v] })) as never} dashboards={[team, system]} active={undefined} onSelect={() => undefined} />)
+    expect(within(rail()).queryByRole('button', { name: 'Dashboard verwijderen' })).toBeNull()
+  })
+})

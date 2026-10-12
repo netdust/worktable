@@ -4678,3 +4678,32 @@
   width: auto;
   margin: 0;
 }
+
+.nv-tree__dashboards .nv-view {
+  display: flex;
+  align-items: center;
+}
+.nv-tree__dashboards .nv-view__button {
+  flex: 1;
+  min-width: 0;
+}
+.nv-tree__dashboards .nv-view__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+.nv-tree__dashboards .nv-view:hover .nv-view__remove,
+.nv-tree__dashboards .nv-view__remove:focus-visible {
+  opacity: 1;
+}
+.nv-tree__dashboards .nv-view__remove:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
