@@ -67,7 +67,7 @@ The brief asks for "the Conflicten view with its badge on rows". Nothing in the 
 
 ## Domain work (theatre only, no engine change)
 
-- **Persoon_rol:** `persoon_id`, `rol_id`, `dagtarief`, `uurtarief`, `voorkeur`. The writer refuses the rate columns for anyone but an administrator, and so does Rol's writer for its rates. Plan-side cost (`bedrag_gepland`) moves to step 6, beside the actual side; this is pending Stefan's confirmation, because the Oct 9 revision had put it in step 3.
+- **Persoon_rol:** `persoon_id`, `rol_id`, `dagtarief`, `uurtarief`, `voorkeur`. The writer refuses the rate columns for anyone but an administrator, and so does Rol's writer for its rates. Plan-side cost (`bedrag_gepland`) moves to step 6, beside the actual side; confirmed by Stefan on 2026-10-12, though the Oct 9 revision had put it in step 3.
 - **Beschikbaarheid.soort:** `afwezig · onzeker · beschikbaar · voorkeur`. The existing rows need a value; see question 5. `organisatie_id` (an organisation row covering its people) is in the SPEC row but not in the brief; see question 6.
 - **Taak:** `titel`, `deadline`, `toegewezen_aan` (→ Persoon), `gekoppeld_aan` (an option: productie · speelreeks · activiteit · organisatie), `record_id` (an integer, not a relation, because the engine has no polymorphic relation), `status` (open · gedaan), `notitie`.
 - **Parameters:** the own organisation's `waarschuwingshorizon_dagen` and `bevestigingstermijn_dagen`, seeded, read by conflicten and werklijst.

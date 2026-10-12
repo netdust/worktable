@@ -75,7 +75,7 @@
 | T6 | Grid calendar view | `<Calendar>` render; `calendar/layout.ts` `placeEvents` | unit · `apps/grid/src/calendar/layout.test.ts`, `apps/grid/src/calendar/Calendar.test.tsx` · `bun run --filter @worktable/grid test` | person-calendar, company-week |
 | T7 | Grid candidates source | `optionsFrom` in `api.ts`; `FillPicker`, Drawer input, Relation cell | unit · `apps/grid/src/api.test.ts`, `apps/grid/src/matrix/Matrix.test.tsx` · same | candidates-picker |
 | T8 | Grid badge cell | `<BadgeCell>` render | unit · `apps/grid/src/grid/cells/Badge.test.tsx` · same | badge-clears |
-| T9 | Seeded views and the gate | the running grid | e2e · `e2e/step-3.spec.ts`, `e2e/smoke/step-3.spec.ts` · `bunx playwright test e2e/step-3.spec.ts` | all five above |
+| T9 | Seeded views and the gate | the running grid | e2e · `e2e/step-3.spec.ts`, `e2e/smoke/step-3.spec.ts` · `bunx playwright test e2e/step-3.spec.ts` | all five above, away-only-afwezig |
 | T10 | Untimed-rule counts on the real copy | `bun scripts/conflict-counts.ts <db>` | none — a report, never asserted (G) | — |
 
 ## Review Focus
@@ -348,7 +348,8 @@
   - `ViewFields.skin` adds `'calendar'`;
   - `skinOf` accepts `calendar` when `source.calendar`;
   - with skin calendar, `groupOf` accepts null or one of `calendar.lanes`, else `bad_view` "cannot group a calendar on …".
-- Modify: `packages/engine/src/app.ts` (`/schema` serves `calendar` per source; `badge` rides on the column as declared)
+- Modify: `packages/engine/src/app.ts` (`/schema` serves `calendar` per source; `badge` rides on the column as declared; `matrix.away.where` rides on the served matrix)
+- R13: `MatrixDecl.away` gains `where?: Record<string, string | number | boolean>` (`declare.ts`); `checkAway` (`validate.ts:319`) refuses a `where` key that is not a column of the away dataset, and a value outside an options column's options. Theatre's toewijzing matrix declares `away: { …, where: { soort: 'afwezig' } }` (`datasets.ts:209`).
 - Modify: `packages/theatre/src/queries.ts`: productie_dag `calendar: { day: 'plandag', lanes: ['productie_id'] }`; persoon_dag `calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id', 'productie_id'] }`; locatie_dag `calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['locatie_id', 'productie_id'] }`; `badge: 'bad'` on both `conflicten` columns (moved from Task 2; plan review S4)
 - Test: `packages/engine/test/calendar.test.ts` (fixture domain with an invented `event` dataset: `day` date, `begins` and `ends` datetime, `room_id` → `room`)
 
@@ -364,7 +365,8 @@
   - `a view on the calendar skin saves with group_by a lane`;
   - `refuses a calendar view grouped on a non-lane`;
   - `refuses skin calendar on a source without calendar`;
-  - `/schema serves calendar and badge`.
+  - `/schema serves calendar and badge`;
+  - in `packages/engine/test/matrix.test.ts`: `refuses an away where on an undeclared column` and `refuses an away where value outside the column's options`; `/schema serves away.where`.
 - [ ] **Step 2: Run** `bun test packages/engine/test/calendar.test.ts` → FAIL.
 - [ ] **Step 3: Implement** as listed in Files.
 - [ ] **Step 4: Run** the file and `bun test packages` → PASS.
@@ -436,6 +438,8 @@
 - Modify: `apps/grid/src/matrix/store.ts` / `engine.ts:223-228` `openOf` (carry the fill input's `options_from` onto `open`)
 - Modify: `i18n.ts` (`candidatesNone: 'Geen kandidaten'`, `candidatesAll: 'Iedereen tonen'`)
 - The search box stays and searches the candidates while candidates are shown, and everyone after Iedereen tonen.
+- R13 in the grid: `engine.ts` `awayOf` carries `where`; `api.ts:192-196` `awayRows` adds each `where` pair to its filter.
+- Test (R13): `api.test.ts` `awayRows adds the away where to its filter`; and in `e2e/step-3.spec.ts` (Task 9) the flow **away-only-afwezig**: in "Toewijzingen per activiteit", week of 2026-10-12, Bram is not marked away on voorstelling Gent (his row there is onzeker), while Noor is marked away on 2026-10-14 (afwezig); after badge-clears sets Familiefeest to beschikbaar, Noor is no longer marked away.
 - Modify: `e2e/step-2.spec.ts:176-183` `fillFromMatrix`: press Iedereen tonen before searching, since its people (Ines Brievenbus at `:365`) hold no Persoon_rol (review 2 S10).
 - Test: `apps/grid/src/api.test.ts`, `apps/grid/src/matrix/Matrix.test.tsx`, `apps/grid/src/grid/cells/RelationPicker.test.tsx` (create if missing)
 
@@ -495,10 +499,10 @@
     - Lotte's untimed overnachting on 2026-10-15 (seeded in Task 1) shows under "Hele dag" in her lane; laned by production it sits in Nachtwacht's lane (plan review S3).
   - **company-week**: open Bedrijfsweek and pin the week of 2026-10-12 with `openWeek`; it shows lanes De Kersentuin and Nachtwacht.
 - Create: `e2e/smoke/step-3.spec.ts`: `/api/rows/conflicten asks for a session @smoke` → 401; `a calendar link lands on the sign-in page @smoke`.
-- Modify: `specs/CHECKS.md` (register the five flows `@e2e` and the two `@smoke`; `/shakeout` refines them)
+- Add the flow **away-only-afwezig** described in Task 7 (R13).
+- Modify: `specs/CHECKS.md` (register the six flows `@e2e` and the two `@smoke`; `/shakeout` refines them)
 
 - Test: in `packages/theatre/test/step3-queries.test.ts`, `every seeded view saves through the views route`: POST each seeded view's fields to `/views` as an administrator → 201, since seeding inserts views without `skinOf`/`groupOf` (review 2 N7).
-- Not in this plan (review 2 N1, sent to the orchestrator): the matrix's `away` marks every Beschikbaarheid row whatever its soort, so an onzeker or beschikbaar row still shows the person away there.
 - [ ] **Step 1: Write the e2e spec** and run it: `bunx playwright test e2e/step-3.spec.ts` → it fails only where Task 9's seed views are missing.
 - [ ] **Step 2: Add the seed views.** Run again → PASS. Then `bun run gate` → PASS.
 - [ ] **Step 3: Commit** `test(e2e): step 3 gate — candidates in the slot picker, six conflict types, the badge clears, the person calendar and the company week; seeded views`

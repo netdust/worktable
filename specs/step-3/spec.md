@@ -35,6 +35,9 @@ The spec of record is `docs/SPEC.md` at `8768723`. The design is in `specs/step-
 - **R12 Seeded views.** A Conflicten view; a person calendar (persoon_dag, laned by person); a venue calendar (locatie_dag, laned by locatie); the company week (productie_dag on the calendar skin, laned by production).
   Source: brief, as R11; SPEC queries row "productie_dag … Company week across productions".
 
+- **R13 Away rows filtered.** `MatrixDecl.away` takes an optional `where: { <column>: <value> }`, checked against the away dataset's columns and options; theatre declares `where: { soort: 'afwezig' }`, so an onzeker or beschikbaar row does not mark a person away in the matrix.
+  Source: Stefan via the orchestrator, 2026-10-12: "N1 goes IN step 3: MatrixDecl.away gets an optional where: { <column>: <value> } checked against the source's columns and options, theatre declares soort afwezig, with a validation test and the matrix e2e asserting a beschikbaar row does not mark the person away."
+
 ## Gate
 
 - **G** An open slot's picker lists candidates and excludes anyone afwezig or already assigned. The Conflicten view lists all six types from seeded data. A person calendar and the company week open on the calendar skin. A badge appears on a conflicting row and disappears when fixed. The untimed rule's counts on the real copy are reported, not asserted.
@@ -42,4 +45,4 @@ The spec of record is `docs/SPEC.md` at `8768723`. The design is in `specs/step-
 
 ## Out
 
-werktijd, Publication, Field, the board skin, any website page (brief). Plan-side cost (`bedrag_gepland`) is pending Stefan's confirmation; this plan leaves it out (orchestrator, 2026-10-12, question 1).
+werktijd, Publication, Field, the board skin, any website page (brief). Plan-side cost (`bedrag_gepland`) moves to step 6 (Stefan, 2026-10-12).
