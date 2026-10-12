@@ -70,7 +70,7 @@
 
 ## Review Focus
 
-- **Denied actor** (T1): an owner session and a person link both list no dashboard. An editor cannot share-token a dashboard.
+- **Denied actor** (T1): an owner session and a person link both list no dashboard. An administrator cannot share-token or show a dashboard to owners.
 - **Empty** (T4, T5):
   - a dashboard with no sections shows an empty state with "Bewerken" for an administrator;
   - a stat over an empty view reads 0, neutral;
@@ -109,7 +109,7 @@
     A seed names views by name (string). A stored layout names them by id (number).
 - Create: `packages/engine/src/dashboard.ts`:
   - `layoutOf(domain, sqlite, raw: unknown, actor): DashboardLayout` validates and throws `bad_view`. It checks:
-    - the caps;
+    - the caps, a list tile's `rows` between 1 and 50 included (review 2 N5);
     - each tile's view is a live view the actor can list;
     - a `sum` column is a numeric column of that view's source;
     - a `set` column is an options column that writes (a dataset column, or a query column with `writes`) and `value` is one of its options;
@@ -117,10 +117,10 @@
     - a `create` names a dataset with a create writer.
   - `resolveSeedLayout(sqlite, layout, seededIds: Map<string, number>)` maps names to ids and throws naming an unknown view.
 - Modify: `packages/engine/src/views.ts`:
-  - `viewBody`: skin `dashboard` takes no source, takes a layout, and keeps filters, sort, group and visible fields empty. Every other skin needs a source and takes no layout.
+  - `viewBody`: skin `dashboard` takes no source, takes a layout, and keeps filters, sort, group and visible fields empty. Every other skin needs a source and takes no layout; a `layout: null` counts as none, since a PATCH rebuilds from `outOf` (review 2 N9).
+  - `groupOf` restricts a timeline's `group_by` to `calendar.lanes`, as it does a calendar's (review 2 N3); T1 test `a timeline grouped on a non-lane is 400`.
   - `skinOf` accepts `timeline` where `source.calendar`, `board` where `source.board`, `gallery` where `source.gallery`, and `dashboard` with no source.
   - `listViews` keeps a dashboard for a non-owner actor and drops it for an owner.
-  - The share-token and for-owners routes refuse a dashboard with 400 `bad_view`.
 - Modify: `packages/engine/src/migrate.ts:150` (fresh seed) and `seed-missing.ts` `seedViews`. Insert views first, then each dashboard seed with its layout resolved against the seeded views' ids.
 - A null source touches every `name\0source` key. One helper, `viewKey(name, source: string | null | undefined): string` in `views.ts`, maps a missing source to `''`, and SQL matches with `source IS ?`. The places (review S3):
   - `seed-missing.ts:148` (`source = ?` becomes `source IS ?`);
@@ -138,7 +138,7 @@
 
 - [ ] **Step 1: Write the denial tests first (RED):**
   - `an owner lists no dashboard; an editor and an administrator list the shared one`;
-  - `an administrator's share-token and for-owners on a dashboard are 400`;
+  - `an administrator's share-token and for-owners on a dashboard are 400 not_query` (the existing guards; review 2 S5);
   - `a link account lists no dashboard`.
 - [ ] **Step 2: Write the rest:**
   - `a dashboard takes no source, every other skin needs one`;
@@ -212,7 +212,7 @@
   - If a filter above cannot be expressed (for example `$exists` on a relation), the seed falls back to the nearest expressible one and the task report says which.
 - Test: `packages/theatre/test/step3c.test.ts`:
   - the schema serves every need;
-  - every seeded view saves through `/views` (the existing test from step 3 already covers this; extend it to the dashboard);
+  - every seeded view saves through `/views`: the existing test (`step3-queries.test.ts:376-385`) resolves the dashboard seed's view names to the ids `GET /views` lists before posting it (review 2 S6);
   - the dashboard reads back with ids for every tile;
   - an owner lists none of the new views it cannot read, and no dashboard;
   - `seed-missing.test.ts` counts updated.
@@ -239,11 +239,11 @@
 - Create `dashboard/Dashboard.tsx`: sections and tiles, refresh on `window` focus, after its own actions and when the space changes. It takes `views: SavedView[]` (the listed ones), `space` (the `useSpace` state, not App's `scope`, which is null for a source-less view; review S2), `onOpenView(key)` and `onOpenRow(model, id)`.
 - Each tile applies `space.scope` only where its own view has `space === 'scoped'`. A quick create applies it where its dataset is scoped.
 - Create `dashboard/tiles.ts`:
-  - `statOf(view, layout, scope, measure, previous: boolean): Promise<number>`. It uses `rows()` with `limit=1` for a count (it reads `total`), or every row for a sum. For `previous`, it uses the view's date condition shifted back by its own length (`windowOf` + `shift`).
+  - `statOf(view, layout, scope, measure, previous: boolean): Promise<number>`. `rows()` gains an optional `limit` (passed to `rowsQuery`), and a count reads `total` with `limit: 1`; a sum reads every row. For `previous`, the view's date condition moves back one period: a month by `shiftMonth(window, -1)`, anything else by `shift(window, -days(window))` (review 2 N1, N2).
   - `toneOf(value, tile, column): Tone | null`.
 - Create `dashboard/StatTile.tsx` and `dashboard/ListTile.tsx`:
-  - The list shows the first N rows in the view's sort, the title plus the given columns, "Alles tonen", and the `set` button.
-  - `set` calls `update(model, id, { [column]: value })` for a dataset view. A query view goes through `updateThrough` (`api.ts:276`). Then the dashboard refreshes.
+  - The list's title carries its view's `total` ("Werklijst · 12"), so a drop shows on screen (review 2 S1). It shows the first N rows in the view's sort, the title plus the given columns, "Alles tonen", and the `set` button.
+  - The `set` button shows only on a row whose write key is set (`row.fields[writes.key]` for a query column; always for a dataset). It calls `update(model, id, { [column]: value }, row)`; with `row`, `update` routes a query column through `updateThrough` (`api.ts:264-288`). Then the dashboard refreshes.
 - Tests:
   - `dashboard/tiles.test.ts`: count from `total`, sum over rows, the previous period shift for a week and a month, tone above a threshold and from a badge.
   - `dashboard/Dashboard.test.tsx`:
@@ -257,8 +257,12 @@
     - a list over an empty view says "Geen rijen";
     - a `set` the writer refuses shows the refusal and leaves the stat as it was;
     - the change against the previous period renders ("+2 t.o.v. vorige week");
-    - a scoped tile sends the space filter, and an unscoped one does not (review S5, S2, N8).
-- [ ] Steps: RED, implement, grid tests, `bun run check`, then a screenshot of the landing page (Playwright script or the e2e `shot`). Commit `feat(grid): the dashboard page — the grid opens on it; stat and list tiles with an inline set; refresh on focus`.
+    - a scoped tile sends the space filter, and an unscoped one does not (review S5, S2, N8);
+    - a list row whose write key is null shows no set button (review 2 S3);
+    - a list title shows its view's total.
+- Existing landing assertions move with the landing (review 2 S2): `e2e/rail-tree.spec.ts:9` (Activiteiten expanded on landing) and `:25-35` (`goto('/')` lands on Planning) open their view explicitly; `App.test.tsx`'s landing cases expect the dashboard.
+- The rail's Dashboard group is rendered before `sectionsOf`'s sections (not as an unlisted table, which `sectionsOf` puts last); it has no rename and no `+` (review 2 N6).
+- [ ] Steps: RED, implement, grid tests, `bun run check`, `bunx playwright test e2e/rail-tree.spec.ts`, then a screenshot of the landing page (the e2e `shot`). Commit `feat(grid): the dashboard page — the grid opens on it; stat and list tiles with an inline set; refresh on focus`.
 
 ### Task 5: Grid — week strip, progress, quick create, composer
 
@@ -277,7 +281,7 @@
   - the quick-create dialog is keyboard reachable: Tab reaches each header button, and Enter opens the dialog with focus in its first field (review N8).
 - Quick-create inputs (review N2):
   - `grid/FieldInput.tsx` maps a `Field` to an input: text, longtext, int, float or real, date, datetime, select (its options), boolean, and a single relation through `RelationPicker`.
-  - The dialog builds a `View` for `newRow` from the dataset's `TableDef` (`{ ...tableDef, key: tableDef.key, type: 'grid' }`), as `madeFrom` does (`App.tsx:540`).
+  - The dialog takes its fields from `madeFrom` (`App.tsx:540-544`, exported to `grid/newRow.ts`), which already builds the `View`, applies the scope where the dataset is scoped and calls `newRow` (review 2 N7).
 - [ ] Commit `feat(grid): week strip, progress and quick creates on the dashboard`.
 
 ### Task 5b: Grid — the in-place composer
@@ -291,12 +295,12 @@
   - remove one, and move it up or down.
   - "Opslaan" depends on the view:
     - an editable view (`view.editable`) saves through `updateView(view, { layout })`;
-    - otherwise it saves a copy through `createView` with the layout and `shared` (the copy pattern at `useSavedViews.ts:177-182`) and opens it.
+    - otherwise it saves a copy through `createView` with the layout and opens it. **Ruling R-3c-1** (review 2 S4): an administrator's copy is `shared: true`, so it lands for everyone as "shared by someone else"; anyone else's copy is `shared: false`, so it lands only for them.
   - The engine's refusal shows inline.
 - `useSavedViews` / `App.tsx:218` landing: the caller's own first dashboard, else the first dashboard shared by someone else, else the system one. The rail's Dashboard group lists the same order.
 - Tests:
   - the composer adds, moves and removes a tile and sends the layout;
-  - on the system dashboard "Opslaan" creates a copy, and the copy then lands;
+  - on the system dashboard an administrator's "Opslaan" creates a shared copy that then lands for an editor too; an editor's creates a private copy that lands only for that editor;
   - a refusal shows inline;
   - an empty dashboard shows the empty state with "Bewerken".
 - [ ] Commit `feat(grid): compose a dashboard in place; a seeded one saves as a copy that then lands`.
@@ -310,7 +314,7 @@
   - a non-spanning row is a bar on its day;
   - a click opens the drawer.
 - `gallery/Gallery.tsx`: cards with the image from the batched read (`api.ts` `filesOf(dataset, ids, kind)`) as `<img src={fileUrl(id)} loading="lazy">`; a plain card without one; a click opens the drawer.
-- Engine note (review N4): Task 1's `groupOf` restricts a timeline's `group_by` to `calendar.lanes`, as it does for a calendar.
+- With spans, `App.tsx` drops the view's own date condition on `day` when it sends the overlap filter, as `rowsQuery` does for from/to (`engine.ts:444-445`; review 2 N8).
 - `calendar/layout.ts` `placeEvents`: with `cal.spans`, a row covers every day from its day to its end, in the all-day band. Spanning rows are fetched by overlap: `App.tsx` sends `{ [day]: { $lte: to }, [end]: { $gte: from } }` in place of from/to, as `awayRows` does.
 - `Rail.tsx` `kinds()` enables Bord, Tijdlijn and Galerij where `table.types` includes them; `NewViewDialog` and `ViewList` get icons and words; i18n.
 - Tests:
@@ -327,13 +331,13 @@
   - **dashboard-landing:** `/` opens on Overzicht; every stat shows a number equal to its view's row count, read through the API in the test.
   - **stat-red-then-neutral:**
     - create a production of its own with one overlap conflict, and select it in the space switcher;
-    - the Conflicten stat reads 1 and is red (class `nv-stat--bad`);
+    - the Conflicten stat reads at least 1 and is red (class `nv-stat--bad`; one overlap may give one row per side, review 2 N10);
     - fix the conflict through the grid by cancelling one assignment;
     - back on the dashboard after focus, the stat reads 0 and is neutral (review S7).
   - **stat-opens-view:** clicking the Conflicten stat opens the Conflicten view.
   - **week-opens-activity:** create an activity dated today (the one exception to the 2028 weeks; the strip shows this week). Clicking it in the week strip opens its drawer.
-  - **werklijst-set:** make an open taak; "Gedaan" in the Te doen list removes it, and the Werklijst count drops.
-  - **quick-create:** "Nieuwe taak" with a title creates a Taak that the Werklijst list then shows.
+  - **werklijst-set:** make an open taak with no deadline (it sorts first: SQLite puts NULL first ascending; the second exception to the 2028 weeks). "Gedaan" on its row in the Te doen list removes it, and the list title's count drops by one (review 2 S1).
+  - **quick-create:** "Nieuwe taak" with a title creates a Taak; the Te doen list title's count rises by one.
   - **space-narrows:** selecting one production lowers or keeps every stat, and a stat equals the view's count under that scope.
   - **owner-no-dashboard:** an owner session lists no dashboard (API) and the person link page shows none.
   - **skins-open:** build rows in a 2028 week, open each seeded skin (Bord, Tijdlijn, Galerij with an uploaded image, both calendars) on that week with `openWeek`, and see the rows (review S7).

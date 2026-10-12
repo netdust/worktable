@@ -1,147 +1,130 @@
-# Plan review: step 3c, skins and the dashboard
+# Plan review: step 3c, skins and the dashboard (second pass)
 
-Reviewed-plan: a818f348aa95d83bea2da7d1f91019d6981ae0fe specs/step-3c/plan.md
-Verdict: not ready
+Reviewed-plan: f384ed6eda647bb80eee41b0aa1f099fe2bd2a66 specs/step-3c/plan.md
+Verdict: ready with fixes
 
-Two premises are false in the source. Both are small to fix in the plan. Everything else is Should fix or Note.
+The first pass (blob a818f34, not ready) is this file at commit 4943cf1.
+
+Both Blocking findings from the first review are resolved, and every premise I checked holds in the source. R1–R9 and G each have a task, and every threat-model mitigation has a row. Six Should-fix findings remain. Each needs a plan change of a line or two.
+
+## Earlier findings
+
+- **B1:** resolved. Task 3 adds `date: 'start_datum'` to speelreeks.
+  - Only these paths read `date_field` for a grid view: `newRow` (`App.tsx:329`; `start_datum` is required and was filled already), the ICS export (`App.tsx:388`) and the export sheet (`App.tsx:359`).
+  - The grid view's `window` stays `{}` (`App.tsx:279`), so the Tourstops grid does not narrow. The tourstop flows that create through the grid (`step-1.spec.ts:157-187`, `ui-fit.spec.ts:343`) should be unaffected.
+- **B2:** resolved by Stefan's ruling and Task 5b. One gap remains: S4 below.
+- **S1–S4, S6, S8:** resolved.
+- **S5:** resolved, except the R5 rule in S3 below.
+- **S7:** stat-red and week-opens are resolved. The werklijst flow has a new problem: S1 below.
+- **N1:** resolved in the threat model, but Task 1 still contradicts it (S5 below).
+- **N2, N3, N5, N7, N8:** resolved.
+- **N4:** only partly resolved (Note below).
+- **N6:** left in Review Focus (Note below).
 
 ## Blocking
 
-**B1. Speelreeks has no `date`, so its calendar need fails validation (Task 2 and Task 3, R8).**
-- Plan, Task 3: "Beschikbaarheid and Speelreeks: `calendar` with `spans` (R8)". Plan, Task 2 `checkCalendar`: "`day` stays the source's date".
-- Source: `packages/engine/src/validate.ts:80` refuses with `if (cal.day !== source.date) throw at(cal.day, …)`. `packages/theatre/src/datasets.ts:325-347` (speelreeks) declares no `date`. Activiteit (`date: 'plandag'`, line 109) and Beschikbaarheid (`date: 'start_at'`, line 282) already match.
-- Effect: `validateDomain` throws at migrate, so Task 3 cannot boot.
-- Smallest change: Task 3 adds `date: 'start_datum'` to speelreeks. The task should also say that this gives Tourstops a dated grid: the window, and `newRow` filling the day. Or the plan makes a ruling that, with `spans`, `checkCalendar` drops the day = date rule. That would contradict Task 2's own line, so adding `date` is the smaller change.
-
-**B2. Administrators cannot "compose in place" the only dashboard there is (Task 5 Composer, R7, G).**
-- Plan, Task 5: the Composer is "shown for an administrator, or the view's owner when it is their own … 'Opslaan' calls `updateView(view, { layout })`".
-- Source: `packages/engine/src/views.ts:183`. `ownedView` throws 403 `read_only_view` for `owner_id === SYSTEM_OWNER`. The seeded Overzicht is inserted with `owner_id: SYSTEM_OWNER` (`migrate.ts:150`, `seed-missing.ts:105`).
-- `views.ts:184-186` also throws 403 `not_owner` when an administrator PATCHes another person's shared view. So "shown for an administrator" does not match the engine. Only `view.editable` (`outOf`, `views.ts:69-70`) can save.
-- `findings.md` (F4, Composition) says: "A system-seeded dashboard is changed by saving a copy, as any system view is." Task 5 has no copy path. Its tests ("the composer … sends the layout") would pass with a mocked `updateView` and fail in the artifact.
-- Linked question: `seedOrdered` (`views.ts:261-267`) lists system seeds first. A copy therefore never becomes "the first dashboard view the caller can read". An administrator's composition never lands, which affects the G landing.
-- Smallest change:
-  - gate "Bewerken" on `view.editable`;
-  - on a non-editable dashboard, "Opslaan" saves a copy through `createView` with `layout` and `shared` (`useSavedViews.ts:177-182` is the existing copy pattern);
-  - get a ruling from Stefan on which dashboard lands when a copy exists (for example: the caller's own first, then shared, then system).
+None.
 
 ## Should fix
 
-**S1. Werklijst `status` declares no options, so the seeded `set` fails `layoutOf` as written (Task 1 and Task 3, R5).**
-- Task 1 checks that "a `set` column is an options column that writes … and `value` is one of its options".
-- `packages/theatre/src/queries.ts:218-223` declares `status` with `writes` and no `options`. The options are inherited only when `/schema` serves the column (`app.ts:105-112`, `servedColumn`).
-- If `layoutOf` reads `source.columns`, it refuses the seed `set: { column: 'status', value: 'gedaan' }`, and seeding fails.
-- Fix: Task 1 says `layoutOf` resolves a `writes` column's options from its target, as `servedColumn` does. Or Task 3 declares the options on werklijst.status.
+**S1. The werklijst-set flow asserts a stat that does not exist, and its taak may never show in the list (Task 7 werklijst-set and quick-create; G "a werklijst row action runs from the list, and the stat updates after").**
+- Plan, Task 7: "make an open taak; 'Gedaan' in the Te doen list removes it, and the Werklijst count drops."
+- The seeded "Nu" stats are Conflicten, Open plaatsen (werklijst `open_slot`) and Onbeantwoord (werklijst `onbeantwoord`), plus progress (Task 3). A `set` writes only taak rows: `taak_id` is NULL on every other werklijst branch (`packages/theatre/src/queries/werklijst.sql:13-48`). So no stat on the page changes, and "the Werklijst count" is not a number the plan puts on screen. Task 4's list tile shows rows, "Alles tonen" and `set`, and no total.
+- The list shows 8 rows sorted by `deadline` ascending (`seed.ts:411-418`). Under the Global Constraint a flow's taak sits in 2028-06 or later, so it sorts behind every nearer row and can fall outside the 8. quick-create has the same problem: `newRow` fills `deadline` with today (`newRow.ts:36`, taak `date: 'deadline'`).
+- Smallest change, in two parts:
+  1. Name the on-screen number that drops. Either Task 4's list tile shows its view's `total` in its title, or Task 3 adds a Werklijst stat to Nu. Task 7 asserts that number before and after.
+  2. Give the flows' taak no deadline, so it sorts first (SQLite puts NULLs first in an ascending sort), and state this as a second exception to the 2028 constraint.
 
-**S2. Dashboard tiles get no space scope (Task 4, R7 "the space switcher narrows every tile", G space-narrows).**
-- Task 4: `<Dashboard>` "takes … `scope`", and `statOf(view, layout, scope, …)`.
-- `App.tsx:229-232` computes `scope` only for `view?.space === 'scoped'`. A dashboard view is built from no source, so `space` is unset and `scope` is null. Every tile would read unscoped, and quick creates (`newRow(…, scope)`) would get no space either.
-- Fix: pass the `useSpace` state to `<Dashboard>`. Apply `space.scope` per tile, only where that tile's view has `space === 'scoped'`. The quick-create dialog does the same for its dataset.
+**S2. Existing landing assertions break once the dashboard lands, and no task updates them (Task 4).**
+- Task 4 changes the landing (`App.tsx:218`, `tables[0]?.views[0]`).
+- `e2e/rail-tree.spec.ts:25-35` (dagplanning-is-gone) waits for `/api/rows/activiteit` on `goto('/')` and asserts that the landing heading is "Planning".
+- `rail-tree.spec.ts:9` (tree-scrolls-in-rail) expects Activiteiten to be expanded on landing.
+- Task 3 runs `rail-tree` only "to fix counts". Task 4's steps run grid unit tests and take a screenshot, but no e2e.
+- Smallest change: Task 4 names these two specs and the `App.test.tsx` landing cases, and runs `bunx playwright test e2e/rail-tree.spec.ts` before committing.
 
-**S3. A null source breaks every `name\0source` key, not only `seedViews` (Task 1).**
-- Task 1 names `migrate.ts:150` and `seedViews`, "keyed by name and the empty source". The source has four more places that break, plus missing fields in the stored shape:
-  1. `seed-missing.ts:148` uses `source = ?`, which never matches NULL. Each `--seed-missing` run would add another dashboard.
-  2. `removeUndeclared` (`seed-missing.ts:169-172`) compares `Overzicht\0undefined` (seed) with `Overzicht\0null` (row). It would soft-delete every system dashboard on each run.
-  3. `seedOrdered` (`views.ts:262-263`) has the same mismatch, so the seeded dashboard does not sort first.
-  4. `adoptUnowned` (`migrate.ts:121`) and `nameOrphans` (`seed-missing.ts:200`) report the view as "has no source any more".
-  5. `DECLARED` (`seed-missing.ts:42`) and `storedView` (`seed-missing.ts:88-101`) do not carry `layout`, so a changed seed layout is never brought up to date.
-  6. `viewOf` (`views.ts:48-60`) and `stored()` (`views.ts:204-208`) do not carry `layout`. `PATCH /views/:id` rebuilds the input from `outOf(current)`, so a rename of a dashboard would reach `viewBody` without its layout.
-- Fix: list these places in Task 1's Files. State the key: `source IS ?` with NULL, and one normalised key helper. Add a T1 test that runs `--seed-missing` twice and asserts exactly one live dashboard.
+**S3. R5's "shows only on rows whose write key is set" has no test (Task 4).**
+- Werklijst's open_slot, onbeantwoord and optie rows have `taak_id` NULL. Clicking `set` on one reaches `updateThrough`'s `read_only` throw (`apps/grid/src/api.ts:281`).
+- Smallest change: add to Task 4's `Dashboard.test.tsx` "a list row whose write key is null shows no set button". Also say that the tile passes `row` to `update(model, id, data, row)`. `update` already sends a query through `updateThrough` (`api.ts:264`), and without `row` it throws (`api.ts:279`).
 
-**S4. `viewBody`'s signature has to change, and the plan does not say so (Task 1 Interfaces).**
-- `layoutOf(domain, sqlite, raw, actor)` needs `sqlite` and `actor`.
-- `viewBody(input, domain, creating)` at `views.ts:155` has neither. Its callers are `views.ts:282` and `views.ts:293`.
-- Fix: state the new signature in Task 1.
+**S4. The copy's `shared` value is unstated, and under the ruling it decides everyone's landing (Task 5b).**
+- Plan, Task 5b: "saves a copy through `createView` with the layout and `shared`".
+- If the copy is `shared: false` (as the cited pattern `useSavedViews.ts:180` does), an administrator's composition lands only for that administrator. "Administrators compose the dashboard" then reaches no one else.
+- If it is `shared: true`, then the first editor who saves a shared copy becomes "the first dashboard shared by someone else" for every other user. "Bewerken toggles edit mode on any dashboard" does not limit who can do this, and `POST /views` accepts any `views.write` actor (`views.ts:269-283`).
+- Smallest change: state the value. For example, the copy keeps `shared: true` when an administrator saves it and `false` for anyone else. Add one test per case.
 
-**S5. Review Focus lines with no test in their task.**
-- T4/T5 "Empty": no sections shows the empty state with "Bewerken"; a stat over an empty view reads 0, neutral; a list over an empty view says so. None is in Task 4's or Task 5's test list.
-- T4 "Re-entry": "an action that fails shows its refusal and leaves the stat as it was" is not in Task 4's tests.
-- T6 "a timeline over 92 days falls back to the first week" is not in Task 6's tests.
-- T2: the positive path is not tested ("answers each readable id's newest live file of that kind", including the kind filter). Step 1 lists only refusals.
-- Fix: add one named test per line to the task that owns the row.
+**S5. Two tasks name the dashboard publish refusal two ways (Task 1 Files vs. threat 2).**
+- Task 1: "The share-token and for-owners routes refuse a dashboard with 400 `bad_view`."
+- Threat 2: "No new guard is needed", because the existing checks answer 400 `not_query` (`views.ts:334`, `views.ts:360`).
+- `findings.md:104` asks for `bad_view`. Task 1 Step 1's test ("… are 400") passes either way.
+- Smallest change: pick one. If it is `bad_view`, keep the Task 1 bullet, correct threat 2, and assert the code in the test. If it is `not_query`, delete the Task 1 bullet.
 
-**S6. The owner denial test for the batched read can pass vacuously (Task 2, threat 4).**
-- The owner rule lives in `declaredOf` (`attachments.ts:84-89`), not in `servedAttachments`. Without `owner_visible` an owner gets nothing whatever the scope, so the test never reaches `liveRecord`.
-- The single read answers 404 `unknown_source` there (`recordOf`, `attachments.ts:98-100`). The plan's `{ files: {} }` contradicts R3's "same scope as the single read".
-- Fix: reuse `declaredOf` and answer as the single read does. The scope test's fixture declares `attachments.owner_visible`, and the owner asks for ids both in and out of its scope.
-
-**S7. The G flows as written cannot prove the gate (Task 7).**
-- *stat-red-then-neutral:* "when it is 0, neutral" is conditional. The seed holds conflicts ("four from seeded data", `docs/SPEC.md:346`), so the stat never reaches 0 unscoped and neutral is never asserted. `conflicten` is scoped (`queries.ts:84`). Fix: build a production of its own, select it in the space switcher, then assert red, fix it, and assert 0 and neutral.
-- *week-opens-activity:* "clicking this week's seeded activity" relies on fixed 2026-10 seed dates (`seed.ts:88`). It breaks after this week. The week strip shows only the current week, which contradicts the Global Constraint "rows in 2028-06 and later". Fix: create the activity relative to today, as step 3's gate did for open_slot (state the exception).
-- *skins-open:* the seeded views carry no date condition, so they open on this week (`calendarWindow(null)`, `calendar/layout.ts:145-149`). Rows built in 2028 will not show. Fix: navigate the window to the rows' week, or seed with a condition.
-
-**S8. Timeline window premise (Task 6).**
-- Task 6: "a range of up to 92 days, else the first week, as `calendarWindow` normalises".
-- `calendarWindow` (`calendar/layout.ts:145-149`) returns a week or a month as it is, and any other range as the week it starts in. It never passes a 92-day range.
-- Fix: Task 6 adds its own `timelineWindow` with that rule and its test.
+**S6. The existing seeded-view test will post the dashboard seed with names, and stored layouts take ids (Task 3).**
+- `packages/theatre/test/step3-queries.test.ts:376-385` posts every `theatre.views` entry as it is.
+- Task 1 says "A seed names views by name (string). A stored layout names them by id (number)." So the Overzicht seed gets 400 and the existing test fails. Task 3's "extend it to the dashboard" does not say how.
+- Smallest change: Task 3 says that the test resolves the dashboard seed's names to the ids from `GET /views` (or through `resolveSeedLayout`) before posting.
 
 ## Note
 
-- **N1. Simpler design for threat 2.** Both share-token and for-owners already refuse a source-less view: `checkPublishable` (`views.ts:334`) and `forOwnersProblem` (`views.ts:360`) answer 400 `not_query`. The only new code is the `bad_view` code that findings asks for. Say so instead of presenting it as a new guard.
-- **N2. Quick-create inputs need more than `TypedInput` (Task 5).**
-  - `TypedInput` (`Drawer.tsx:177`) handles action-input types only: integer, date, text and boolean. A quick create needs select, datetime and real fields, and relations.
-  - `newRow` needs a `View` (`newRow.ts:24`), and the dashboard has none for the dataset.
-  - The step says what without showing how: the `FieldInput` type map, and building a `View` from the dataset's `TableDef`.
-- **N3. Name resolution can be ambiguous.** `resolveSeedLayout` resolves by name alone. Seed names are unique today. Say that it refuses a name two seeds share.
-- **N4. Timeline grouping.** `groupOf` (`views.ts:132`) restricts lanes only for `skin === 'calendar'`. Timeline should take the same rule, because the seeded Tijdlijn groups on `productie_id`.
-- **N5. Layout size against the view cap.** `checkSize` caps a stored view at 16 KB (`views.ts:141-145`). A layout at the caps (6×12 tiles with 80-character labels, plus 8 actions) can exceed that and fail as `view_too_large`. Either accept this as the effective cap or say it.
-- **N6. Review Focus "an editor cannot share-token a dashboard".** An editor can share-token nothing (`access.ts:31`), so that test proves nothing about dashboards. The meaningful one, an administrator's share-token on a dashboard returning 400, is already in Task 1 Step 1.
-- **N7. The cut.** Seven tasks is reasonable.
-  - Task 4 is large (types, engine.ts, api.ts, tables, Rail, App and three components), but it is the first working version and holds together.
-  - Task 6 is one reviewable unit.
-  - Task 5 bundles four things, and the composer is the largest and is held by B2's ruling. Split the composer into its own task so that week, progress and quick create can land without it.
-  - Order holds: Task 3 needs Tasks 1 and 2, and Tasks 4–6 need Task 3's seeds.
-- **N8. Coverage.**
-  - R7's "keyboard reachable" quick create has no test.
-  - The stat's change against the previous period is computed in `tiles.test.ts`, but the rendered value is never asserted.
-  - All of R1–R9 and G have tasks.
-  - Every threat-model mitigation has a row. Threat 4's row needs the S6 fix.
+- **N1. `statOf` "uses `rows()` with `limit=1`".** `rows(view, window, scope, layout)` (`api.ts:108`) and `rowsQuery` (`engine.ts:442`) take no limit. Either `rows()` gains one, or `statOf` calls `rowsOf` directly. The plan should say which, or accept a full read for a count.
+- **N2. Previous period for a month.** "shifted back by its own length (`windowOf` + `shift`)" does not give the previous calendar month. `shiftMonth` exists (`Window.tsx:48`). The test "for a week and a month" will need it.
+- **N3. Timeline grouping (first review N4).**
+  - Task 6 says "Task 1's `groupOf` restricts a timeline's `group_by`", but Task 1's Files never list `groupOf` (`views.ts:132`).
+  - Move the line into Task 1 or Task 2, with one T2 test: "a timeline grouped on a non-lane is 400".
+- **N4. Review Focus is stale (first review N6).** "An editor cannot share-token a dashboard" proves nothing (`access.ts:31`). Threat 2 already points at the administrator test. Delete the line.
+- **N5. A list tile's `rows` has no cap.** Threat 6 caps sections, tiles, actions and labels, but `rows: number` is unbounded. Add a bound to `layoutOf`'s caps, for example 1–50.
+- **N6. Rail placement.** The rail renders through `sectionsOf` (`ui/tables.ts:40-48`), which puts any table no section lists in a trailing unlabelled section. A synthetic Dashboard table therefore lands last unless Task 4 special-cases it. Its node actions (rename display through `setDisplay`, and `+`) also need a ruling for a non-source group.
+- **N7. A simpler route for the quick-create dialog.** `madeFrom` (`App.tsx:540-544`) already builds the `View`, applies the scope where the dataset is scoped, and calls `newRow`. Exporting it is simpler than rebuilding it in `QuickCreate.tsx`.
+- **N8. Spanning reads.** When `App.tsx` sends the overlap filter in place of from/to, it must also drop the view's own date condition on `day`. Otherwise the stored `between` still cuts rows that start before the window. `rowsQuery` drops that condition only when it sends from/to (`engine.ts:444-445`).
+- **N9. PATCH on a non-dashboard.** `outOf` will now carry `layout: null`, and the PATCH path rebuilds from it (`views.ts:293`). `viewBody`'s "takes no layout" must treat null as absent.
+- **N10. "Conflicten reads 1".** One overlap between two activities may give one row per assignment. If the stat reads 2, the flow should assert "at least 1, red" before the fix, and "0, neutral" after it.
 
 ## Premises checked
 
-- `saved_view` `source_type` and `source` NOT NULL; skin options `table…board` → `saved-view.ts:10-17` → holds.
-- Changing nullability rebuilds and keeps the ids → `schema-diff.ts:65,89-90,104-119` → holds.
-- `layout` json nullable is added by ALTER → `schema-diff.ts:78` → holds (the rebuild happens anyway).
-- `SavedViewSeed` skin is `table|matrix|calendar` and its source is required → `declare.ts:178-187` → holds (the plan changes it).
-- `CalendarDecl` has no `spans` → `declare.ts:120-125` → holds.
-- `checkCalendar` requires `start` and `end` to be datetime → `validate.ts:81-85` → holds (Task 2 relaxes it).
-- `checkCalendar` requires `day === source.date` → `validate.ts:80` → holds. It is the source of B1.
-- Speelreeks declares a `date` → `datasets.ts:325-347` → does not hold (B1).
-- `listViews` drops a view whose source is unknown → `views.ts:251-254` → holds (Task 1 must special-case the dashboard).
-- `listViews` is at `views.ts:249` and `changing` at `views.ts:269` → hold.
-- Owners cannot write views → `access.ts:30` → holds.
-- `/public/views/:token` requires `source_type = 'query'` → `views.ts:434` → holds.
-- Share-token and for-owners already refuse a source-less view (`not_query`) → `views.ts:334,360` → holds (N1).
-- Administrators can PATCH the seeded dashboard → `views.ts:183-186` → does not hold (B2).
-- `migrate.ts:150` seed path → `migrate.ts:144-152` → holds.
-- `seedViews` is keyed by name and source → `seed-missing.ts:148` → holds. A NULL source breaks it (S3).
-- `removeUndeclared`, `seedOrdered` and `adoptUnowned` use `name\0source` → `seed-missing.ts:169`, `views.ts:262`, `migrate.ts:121` → hold. None is in the plan (S3).
-- `liveRecord` applies the scope → `attachments.ts:91-96` → holds.
-- The owner attachment rule is in `servedAttachments` → `attachments.ts:84-89` (`declaredOf`) is the route's rule → partly holds (S6).
-- The `/attachments/file/:id` route is registered before `/attachments/:dataset/:id` → `attachments.ts:290-307` → holds.
-- `/schema` serves `calendar` and attachments by spread → `app.ts:285,295` → holds.
-- `$exists` on `rol_id` → `filter.ts:133-134` → holds.
-- `$period` on the `datum` lookup of toewijzing → `filter.ts:36,104-107`, `datasets.ts:248` → holds.
-- Lookups are allowed on toewijzing (a dataset with owners) → `datasets.ts:247-252` → holds.
-- Werklijst `status` is an options column that writes → `queries.ts:218-223` → partly holds: `writes` is declared, options are inherited only in `/schema` at `app.ts:105-112` (S1).
-- Taak, activiteit and speelreeks have create writers → `theatre/index.ts:58-70` → holds.
-- Bedrijfsweek is a calendar view → `seed.ts:400-409` → holds.
-- `toSavedViews` drops a source-less view → `engine.ts:370-374` → holds (Task 4 changes it).
-- `EngineView` skin and source types → `engine.ts:89-96` → holds.
-- `createView` and `updateView` call `sourceOf(view.table)` → `api.ts:319-331` → holds.
-- `updateThrough` at `api.ts:276`, not exported, reached through `update` → `api.ts:264` → holds.
-- `App.tsx:218` landing default → `App.tsx:218` → holds.
-- `createThrough` → `App.tsx:341` → holds.
-- App's `scope` reaches a dashboard → `App.tsx:229-232` → does not hold (S2).
-- `groupTables` lists only declared tables, so a dashboard needs a synthetic group → `tables.ts:25-37` → holds (Task 4 says so).
-- Rail `+` "Bord" is blocked as later → `Rail.tsx:94` → holds.
-- `TypedInput` is unexported and handles action inputs only → `Drawer.tsx:177` → holds as "unexported"; the plan's reuse is underspecified (N2).
-- `newRow` needs/offers and its scope argument → `newRow.ts:24` → holds.
-- `placeEvents`, `calendarWindow`, `windowOf` and `shift` exist → `calendar/layout.ts:65,145`, `conditions.ts:177`, `Window.tsx:28` → hold.
-- `calendarWindow` shows up to 92 days → `calendar/layout.ts:145-149` → does not hold (S8).
-- `awayRows` overlap filter with `T23:59:59` → `api.ts:192-195` → holds.
-- `bun run gate` and `bun run check` → `package.json:13-17` → hold.
-- `ARCHITECTURE-INVARIANTS.md` → absent → no "never/only" checks to name.
+- `viewBody(input, domain, creating)` at `views.ts:155`, callers at :282 and :293 → holds
+- `ownedView` 403 `read_only_view` for `SYSTEM_OWNER`, 403 `not_owner` for another user's shared view → `views.ts:183-186` → holds (the source of Task 5b)
+- `editable` = mine, and not published unless the caller is an administrator → `views.ts:69-70` → holds
+- `listViews` drops a view whose source is unknown → `views.ts:249-258` → holds (Task 1 special-cases it)
+- `seedOrdered` keys on `name\0source` → `views.ts:261-267` → holds
+- `checkSize` 16 KB → `views.ts:141-145` → holds
+- `groupOf` restricts lanes only for calendar → `views.ts:132` → holds (N3)
+- `checkPublishable` and `forOwnersProblem` answer `not_query` for a source-less view → `views.ts:334,360` → holds (S5)
+- `/public/views/:token` requires `source_type = 'query'` → `views.ts:434` → holds
+- `seedDomain` inserts seeds with `owner_id: SYSTEM_OWNER, shared: true` → `migrate.ts:144-152` → holds
+- `adoptUnowned` compares `seed.source === v.source` → `migrate.ts:121` → holds
+- `seedViews` uses `source = ?` → `seed-missing.ts:148` → holds
+- `removeUndeclared` → `seed-missing.ts:169-172` → holds
+- `nameOrphans` → `seed-missing.ts:200` → holds
+- `DECLARED` → `seed-missing.ts:42` and `storedView` → `seed-missing.ts:88-101` → hold
+- `checkCalendar`: day = source date, start and end datetime → `validate.ts:80-85` → holds (Task 2 relaxes end under `spans`)
+- Speelreeks has no `date`; `start_datum` and `eind_datum` are date columns → `datasets.ts:326-347` → holds (Task 3 adds the date)
+- Beschikbaarheid `date: 'start_at'`, start_at and eind_at datetime → `datasets.ts:282-288` → holds
+- Activiteit `date: 'plandag'`, start_at and eind_at datetime, `productie_id` and `speelreeks_id` are relations, attachments with kind `foto` → `datasets.ts:48,109-120,149` → holds
+- Toewijzing `state` has options and is the lifecycle column → `datasets.ts:233-258` → holds
+- `CalendarDecl` has no `spans`; `SavedViewSeed` skin is `table|matrix|calendar` → `declare.ts:120-125,178-187` → holds
+- `declaredOf` holds the owner and `owner_visible` rule; `liveRecord` applies the scope → `attachments.ts:84-96` → holds
+- `/attachments/file/:id` registered before `/attachments/:dataset/:id` → `attachments.ts:291,307` → holds
+- `servedColumn` inherits a `writes` target's options → `app.ts:105-112` → holds
+- Werklijst `status` writes `taak.status` and declares no options; it is unscoped; it sorts by deadline → `queries.ts:218-223`, `seed.ts:411-418` → holds (S1)
+- Conflicten is scoped by `productie_id`; overlap has no horizon → `queries.ts:84`, `conflicten.sql` → holds
+- The existing test posts every seed through `/views` → `step3-queries.test.ts:376-385` → holds (S6)
+- `toSavedViews` drops a source-less view → `engine.ts:370-374` → holds (Task 4 changes it)
+- `tableDefOf` types are only `grid` and `calendar` → `engine.ts:243-255` → holds
+- `createView` and `updateView` call `sourceOf(view.table)` → `api.ts:319-330` → holds
+- `update` sends a query through `updateThrough`, which needs `row` → `api.ts:261-288` → holds (S3)
+- `rows()` takes a limit → `api.ts:108`, `engine.ts:442` → does not hold (N1, minor)
+- `awayRows` overlap with `T23:59:59` → `api.ts:192-195` → holds
+- `App.tsx:218` landing, `:229-232` scope, `:341` `createThrough`, `:540` `madeFrom` → hold
+- Copy pattern → `useSavedViews.ts:177-186` → holds (it saves `shared: false`, see S4)
+- `groupTables` declared only; rail goes through `sectionsOf` → `ui/tables.ts:25-48`, `Rail.tsx:56` → holds (N6)
+- `kinds()` blocks Bord as later → `Rail.tsx:86-95` → holds
+- `TypedInput` is unexported in `grid/Drawer.tsx:177`; `RelationPicker` is in `grid/cells` → holds
+- `newRow` returns needs and offers, the scope, and fills the date → `grid/newRow.ts:24-49` → holds
+- `placeEvents` keeps only an event's own day; `calendarWindow` gives a week or month as it is, else the starting week → `calendar/layout.ts:65-73,145-149` → holds
+- `windowOf` → `conditions.ts:177`, `shift` and `shiftMonth` → `Window.tsx:28,48` → hold
+- Landing assertions in `rail-tree.spec.ts:9,31-35` → hold (S2)
+- `@worktable/grid`, `bun run gate`, `bun run check` → `apps/grid/package.json:2`, `package.json:13-17` → hold
+- `ARCHITECTURE-INVARIANTS.md` → absent → no invariant checks to name
 
 ## The cut
 
-One plan, so there is no cross-plan cut. Inside the plan, split the composer out of Task 5 (N7).
+One plan, so there is no cross-plan cut. Inside the plan, the composer is now its own task (5b), and the order holds: Tasks 1 and 2, then Task 3, then Tasks 4 through 6, then Task 7.
