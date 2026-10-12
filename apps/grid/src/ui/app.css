@@ -4182,3 +4182,63 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* A count on a row, tinted by its declared tone; nothing shows at 0. */
+.nv-badge {
+  display: inline-flex;
+  min-width: 20px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--tone) 18%, transparent);
+  color: var(--tone);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-badge--ok {
+  --tone: var(--color-success-fg);
+}
+
+.nv-badge--warn {
+  --tone: var(--color-warning-fg);
+}
+
+.nv-badge--bad {
+  --tone: var(--color-danger-fg);
+}
+
+.nv-badge--rose {
+  --tone: var(--tone-rose);
+}
+
+.nv-badge--violet {
+  --tone: var(--tone-violet);
+}
+
+.nv-badge--amber {
+  --tone: var(--tone-amber);
+}
+
+.nv-badge--sky {
+  --tone: var(--tone-sky);
+}
+
+.nv-badge--slate {
+  --tone: var(--tone-slate);
+}
+
+.nv-badge--green {
+  --tone: var(--tone-green);
+}
+
+.nv-badge--teal {
+  --tone: var(--tone-teal);
+}
+
+.nv-badge--grey {
+  --tone: var(--tone-grey);
+}

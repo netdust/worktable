@@ -109,6 +109,7 @@ const strings = {
   fillPickPerson: 'Kies een persoon',
   candidatesNone: 'Geen kandidaten',
   candidatesAll: 'Iedereen tonen',
+  badgeCount: '{count} {label}',
   hideColumn: 'Verbergen',
   showColumn: 'Tonen',
   awayReason: 'Afwezig: {reason}',

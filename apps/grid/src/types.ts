@@ -39,6 +39,8 @@ export interface Field {
   /** Served to the row's owner in a view for owners. */
   owner_visible?: true
   options_from?: OptionsFrom
+  /** An integer shown as a tinted count above 0. */
+  badge?: Tone
 }
 
 export interface Link {

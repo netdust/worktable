@@ -159,6 +159,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(column.writes ? { writes: column.writes } : {}),
     ...(declared.owner_visible ? { owner_visible: true as const } : {}),
     ...(declared.options_from ? { options_from: declared.options_from } : {}),
+    ...(declared.badge ? { badge: declared.badge } : {}),
   }
 }
 

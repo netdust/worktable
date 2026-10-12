@@ -25,6 +25,8 @@ export interface Column {
   relation?: { model: string; multiple: boolean }
   /** Where an empty relation's picker finds its candidates. */
   options_from?: OptionsFrom
+  /** A count shown as a tinted badge. */
+  badge?: Tone
   /** A `links` column's link: added and removed by its own editor, never written as a value. */
   link?: Link
   value: (row: Row) => unknown
@@ -176,6 +178,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   column.tones = field.tones
   column.relation = field.relation
   column.options_from = field.options_from
+  column.badge = field.badge
 
   if (kind === 'select') {
     column.text = (row) => field.options?.[scalar(row.fields[key])] ?? scalar(row.fields[key])
