@@ -341,6 +341,8 @@ test.describe('undo restores what the writer changed with the edit', () => {
   })
 
   test('undo-day-line-move', async ({ page }) => {
+    // Four datetime edits typed segment by segment: 20 s alone, past 30 s under a full run's load.
+    test.slow()
     await page.goto('/')
     await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'undo nacht e2e')).datum as string

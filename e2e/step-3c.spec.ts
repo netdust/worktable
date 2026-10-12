@@ -88,8 +88,9 @@ async function landing(page: Page) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overzicht')
 }
 
-async function chooseSpace(page: Page, name: string, from = 'Alle producties') {
-  await page.getByRole('button', { name: from, exact: true }).click()
+// The choice lives in this test's own browser context, so no test has to choose it back.
+async function chooseSpace(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
   await page.getByRole('option', { name, exact: true }).click()
   await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
 }
@@ -130,7 +131,6 @@ test.describe('step 3c', () => {
       await expect(statValue(page, 'Conflicten')).toHaveText('0')
       await expect(stat(page, 'Conflicten')).not.toHaveClass(/nv-stat--/)
     } finally {
-      await chooseSpace(page, 'Alle producties', titel).catch(() => undefined)
       await removeActivity(api, a)
       await removeActivity(api, b)
       await api.delete(`/api/rows/productie/${productie}`)
@@ -200,14 +200,10 @@ test.describe('step 3c', () => {
     await expect(statValue(page, 'Conflicten')).toHaveText(/^\d+$/)
     const all = Number(await statValue(page, 'Conflicten').textContent())
     const kersentuin = await idByName(api, 'productie', 'titel', 'De Kersentuin')
-    try {
-      await chooseSpace(page, 'De Kersentuin')
-      const scoped = (await rowsOf(api, 'conflicten', { productie_id: kersentuin })).total
-      await expect(statValue(page, 'Conflicten')).toHaveText(String(scoped))
-      expect(scoped).toBeLessThanOrEqual(all)
-    } finally {
-      await chooseSpace(page, 'Alle producties', 'De Kersentuin')
-    }
+    await chooseSpace(page, 'De Kersentuin')
+    const scoped = (await rowsOf(api, 'conflicten', { productie_id: kersentuin })).total
+    await expect(statValue(page, 'Conflicten')).toHaveText(String(scoped))
+    expect(scoped).toBeLessThanOrEqual(all)
   })
 
   test('owner-no-dashboard @e2e', async ({ browser }) => {
