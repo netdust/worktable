@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -43,7 +43,11 @@ import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevi
 import { useFillViewport } from './viewport'
 import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
+import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
+import { Gallery } from '../gallery/Gallery'
+import { Timeline } from '../timeline/Timeline'
+import { timelineWindow } from '../timeline/layout'
 import { calendarWindow, monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
@@ -274,9 +278,19 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
   // A calendar shows the condition's days, else this week; a month reads its whole weeks.
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
+  const timeline = view?.type === 'timeline' ? view.calendar : undefined
   const calendarShown = calendarWindow(conditionDays, new Date())
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
-  const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : {}
+  const timelineShown = timelineWindow(conditionDays, new Date())
+  const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
+  // Rows that span days are read by overlap with the window, so one begun before it still shows.
+  const readRows = (calendar ?? timeline)?.spans ? spanRows : rows
+  // A calendar's or timeline's days are set by its date condition.
+  const showDays = (next: DateWindow) =>
+    view?.date_field && layout && setLayout(withFilters(layout, [
+      { field: view.date_field, op: 'between', values: [next.from, next.to] },
+      ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
+    ]))
   const windowKey = JSON.stringify(window)
 
   const shownKey = useRef<string | null>(null)
@@ -287,7 +301,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     if (shownKey.current !== view.key) setResult({ status: 'loading' })
     const asked = window
     const away = view.type === 'matrix' ? view.away : undefined
-    Promise.all([rows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
+    Promise.all([readRows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
       ([r, away, titles]) => {
         if (!live) return
         shownKey.current = view.key
@@ -315,7 +329,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
   const live = useRef(store)
   live.current = store
-  const reload = () => (view ? rows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
+  const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
@@ -481,7 +495,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={addBlocked}
-          onAdd={matrix || calendar || dashboard ? undefined : add}
+          onAdd={matrix || calendar || dashboard || view?.type === 'timeline' || view?.type === 'board' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -501,10 +515,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
               lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
-              onShown={(next) => view.date_field && setLayout(withFilters(layout, [
-                { field: view.date_field, op: 'between', values: [next.from, next.to] },
-                ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
-              ]))} />
+              onShown={showDays} />
+          ) : timeline && model && view && layout && result.status === 'ready' ? (
+            <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
+              lane={layout.group} onShown={showDays} filters={filters} />
+          ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
+            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} />
+          ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}

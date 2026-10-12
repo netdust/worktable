@@ -253,8 +253,8 @@ function typesOf(source: EngineSource): ViewType[] {
   ]
 }
 
-function calendarOf({ day, start, end, lanes }: NonNullable<EngineSource['calendar']>): CalendarDef {
-  return { day, start: start ?? null, end: end ?? null, lanes }
+function calendarOf({ day, start, end, lanes, spans }: NonNullable<EngineSource['calendar']>): CalendarDef {
+  return { day, start: start ?? null, end: end ?? null, lanes, ...(spans ? { spans } : {}) }
 }
 
 function tableDefOf(name: string, source: EngineSource, sources: Sources): TableDef {
@@ -268,6 +268,8 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: typesOf(source),
     ...(source.calendar ? { calendar: calendarOf(source.calendar) } : {}),
+    ...(source.board ? { board: source.board } : {}),
+    ...(source.gallery ? { gallery: source.gallery } : {}),
   }
   const joined = source.matrix_join ? sources[source.matrix_join] : undefined
   const matrix = joined?.matrix

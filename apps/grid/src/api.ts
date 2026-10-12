@@ -1,4 +1,5 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import { isDate } from './grid/conditions'
 import type { Layout } from './grid/layout'
 import type { Account, ActView, ApiError, DashboardLayout, DateWindow, HistoryEntry, MatrixAway, NewView, OptionsFrom, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
@@ -206,6 +207,23 @@ async function everyRow(model: string): Promise<Row[]> {
     all.push(...page.rows)
     if (page.rows.length === 0 || all.length >= page.total) return all
   }
+}
+
+/** A spanning view's rows over a window by overlap: begun before its end and ended after its start; its own date condition steps aside. */
+export async function spanRows(view: View, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
+  const cal = view.calendar
+  if (!cal?.spans || !window.from || !window.to || !layout) return rows(view, window, scope, layout)
+  const filters = layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op)))
+  const query = await viewQuery({ ...view, date_field: undefined }, {}, scope, { ...layout, filters })
+  const own = query.filter ? (JSON.parse(query.filter) as Record<string, unknown>) : {}
+  const overlap = { [cal.day]: { $lte: `${window.to}T23:59:59` }, ...(cal.end ? { [cal.end]: { $gte: window.from } } : {}) }
+  return rowsOf(view.model, { ...query, filter: JSON.stringify({ ...own, ...overlap }) })
+}
+
+/** Each record's newest file of a kind, for a page of records at once; ids the reader may not see come back as none. */
+export async function filesOf(dataset: string, ids: number[], kind: string): Promise<Record<number, { id: number; mime: string; name: string }>> {
+  const found = await request<{ files: Record<string, { id: number; mime: string; name: string }> }>('GET', `/attachments/${dataset}`, { ids: ids.join(','), kind })
+  return Object.fromEntries(Object.entries(found.files).map(([id, file]) => [Number(id), file]))
 }
 
 /** The records a relation's options source offers for one row, in the source's order, each once. */

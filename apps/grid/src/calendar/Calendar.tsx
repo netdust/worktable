@@ -194,7 +194,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onShown,
           {lane && <Legend lanes={lanes} toneOf={toneOf} />}
           {month
             ? <Month month={shown} weeks={weeks} lanes={lanes} events={events} toneOf={toneOf} onOpen={setOpen} />
-            : <Week days={days} lanes={lanes} events={events} timed={cal.start !== null} toneOf={toneOf} onOpen={setOpen} />}
+            : <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} toneOf={toneOf} onOpen={setOpen} />}
         </div>
         {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} />}
       </div>

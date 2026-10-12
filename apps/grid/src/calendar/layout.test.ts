@@ -125,3 +125,12 @@ describe('calendarWindow', () => {
     expect(calendarWindow({ from: '2026-10-14', to: '2026-12-02' }, today)).toEqual({ from: '2026-10-12', to: '2026-10-18' })
   })
 })
+
+describe('spans on the calendar', () => {
+  it('puts a spanning row in the all-day band of every day it covers in the window', () => {
+    const cal: CalendarDef = { day: 'start_at', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'], spans: true }
+    const rows = [{ id: 1, title: 'afwezig', status: '', fields: { start_at: '2026-10-10T00:00', eind_at: '2026-10-13T23:59' } }]
+    const { events } = placeEvents(rows, cal, WEEK, null)
+    expect(events.map((e) => [e.day, e.allDay])).toEqual([['2026-10-12', true], ['2026-10-13', true]])
+  })
+})

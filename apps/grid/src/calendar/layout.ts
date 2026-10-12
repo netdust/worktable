@@ -61,11 +61,25 @@ function lanesOf(events: Placed[], lane: string | null): Lane[] {
   return events.some((event) => event.lane === null) ? [...named, { id: null, title: '' }] : named
 }
 
+/** The days a spanning row covers, from its day to its end's date, each in the all-day band. */
+export function spanDays(row: Row, cal: CalendarDef): string[] {
+  const first = text(row.fields[cal.day])?.slice(0, 10)
+  if (!first) return []
+  const last = (cal.end ? text(row.fields[cal.end])?.slice(0, 10) : null) ?? first
+  return last < first ? [first] : daysOf({ from: first, to: last })
+}
+
+function spanned(row: Row, cal: CalendarDef, lane: string | null): Placed[] {
+  const laneId = lane ? row.fields[lane] : null
+  return spanDays(row, cal).map((day) => ({ row, day, lane: typeof laneId === 'number' ? laneId : null, allDay: true, from: 0, to: 0 }))
+}
+
 /** The window's days, its rows placed on them and the lanes they fall in, by lane title with no lane last. */
 export function placeEvents(rows: Row[], cal: CalendarDef, window: DateWindow, lane: string | null) {
   const days = daysOf(window)
   const inWindow = new Set(days)
   const events = rows.flatMap((row) => {
+    if (cal.spans) return spanned(row, cal, lane).filter((event) => inWindow.has(event.day))
     const event = placed(row, cal, lane)
     return event && inWindow.has(event.day) ? [event] : []
   })

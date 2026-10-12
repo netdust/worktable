@@ -99,13 +99,15 @@ interface NodeProps {
 
 /** The kinds `+` offers: those the model can be, then the ones still to come. */
 function kinds(table: Table, onNew: (type: ViewType) => void): Action[] {
+  const offered = (type: ViewType, label: string): Action =>
+    table.types.includes(type) ? { label, run: () => onNew(type) } : { label, run: () => undefined, blocked: t('later') }
   return [
     { label: t('kindGrid'), run: () => onNew('grid') },
     ...(table.types.includes('matrix') ? [{ label: t('matrix'), run: () => onNew('matrix') }] : []),
-    table.types.includes('calendar')
-      ? { label: t('kindCalendar'), run: () => onNew('calendar') }
-      : { label: t('kindCalendar'), run: () => undefined, blocked: t('later') },
-    { label: t('kindBoard'), run: () => undefined, blocked: t('later') },
+    offered('calendar', t('kindCalendar')),
+    offered('timeline', t('kindTimeline')),
+    offered('board', t('kindBoard')),
+    offered('gallery', t('kindGallery')),
   ]
 }
 

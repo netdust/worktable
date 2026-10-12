@@ -121,6 +121,8 @@ export interface CalendarDef {
   start: string | null
   end: string | null
   lanes: string[]
+  /** A row covers every day from `day` to `end`. */
+  spans?: true
 }
 
 /** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
@@ -154,6 +156,10 @@ export interface TableDef {
   away?: MatrixAway
   /** A calendar table: how its rows sit on days. */
   calendar?: CalendarDef
+  /** A board table: the options column its cards are grouped by. */
+  board?: { column: string }
+  /** A gallery table: the attachment kind its cards show. */
+  gallery?: { kind: string }
   types: ViewType[]
 }
 

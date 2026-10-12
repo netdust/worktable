@@ -182,13 +182,13 @@ describe('the tree', () => {
     expect(lead.querySelector('svg')).toBeTruthy()
   })
 
-  it('lists Grid, Matrix only where the model has one, and Kalender and Bord disabled for later', () => {
+  it('lists Grid, Matrix only where the model has one, and the skins it declares no need for disabled for later', () => {
     render(<Rail tables={spaced} active="planning" onSelect={() => undefined} onNewView={() => undefined} />)
 
     const planning = menu('Weergave toevoegen aan Planning')
-    expect(within(planning).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Grid', 'Matrix', 'Kalenderlater', 'Bordlater'])
+    expect(within(planning).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Grid', 'Matrix', 'Kalenderlater', 'Tijdlijnlater', 'Bordlater', 'Galerijlater'])
     expect(within(planning).getAllByRole('menuitem').filter((item) => item.getAttribute('aria-disabled') === 'true').map((item) => item.textContent))
-      .toEqual(['Kalenderlater', 'Bordlater'])
+      .toEqual(['Kalenderlater', 'Tijdlijnlater', 'Bordlater', 'Galerijlater'])
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
     cleanup()
 

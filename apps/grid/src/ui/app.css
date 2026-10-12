@@ -4558,3 +4558,123 @@
 .nv-dash__edit {
   margin-left: auto;
 }
+
+/* The board: a column per option, cards that open their row. */
+.nv-board {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+  overflow: auto;
+  padding: 12px 16px;
+  align-items: flex-start;
+}
+
+.nv-board__column {
+  display: flex;
+  flex: 0 0 240px;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  background: var(--color-bg-subtle);
+  list-style: none;
+}
+
+.nv-board__head {
+  align-self: flex-start;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.nv-board__card,
+.nv-gallery__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-board__card span {
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+
+.nv-board__card:hover,
+.nv-gallery__card:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* The gallery: a card per row with its image. */
+.nv-gallery {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.nv-gallery__card {
+  padding: 0;
+}
+
+.nv-gallery__card img,
+.nv-gallery__blank {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--color-bg-muted);
+}
+
+.nv-gallery__title {
+  padding: 6px 8px;
+}
+
+/* The timeline: lanes down, days across, a bar per row. */
+.nv-timeline {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 8px 0;
+}
+
+.nv-timeline__lane {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-height: 32px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.nv-timeline__name {
+  overflow: hidden;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-timeline__track {
+  position: relative;
+  min-height: 32px;
+}
+
+.nv-timeline__bar {
+  top: 4px;
+  bottom: 4px;
+  width: auto;
+  margin: 0;
+}
