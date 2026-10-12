@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, OptionsFrom, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ActView, ApiError, DashboardLayout, DateWindow, HistoryEntry, MatrixAway, NewView, OptionsFrom, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -105,8 +105,8 @@ export function schema(): Promise<Schema> {
 }
 
 /** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope is one more filter. */
-export async function rows(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
-  const query = await viewQuery(view, window, scope, layout)
+export async function rows(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null, limit?: number): Promise<RowsResponse> {
+  const query = { ...(await viewQuery(view, window, scope, layout)), ...(limit ? { limit: String(limit) } : {}) }
   return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
 }
 
@@ -317,15 +317,19 @@ export async function savedViews(): Promise<SavedView[]> {
 }
 
 export async function createView(view: NewView): Promise<SavedView> {
+  if (view.type === 'dashboard') {
+    const body = { name: view.name, skin: 'dashboard', shared: view.shared, layout: view.layout ?? { sections: [], actions: [] } }
+    return savedOf(await request<EngineView>('POST', '/views', {}, body))
+  }
   const stored = toStoredView(view.arrangement, view.fixed ?? {}, await sourceOf(view.table))
   const skin = view.type === 'grid' || !view.type ? 'table' : view.type
   return savedOf(await request<EngineView>('POST', '/views', {}, { name: view.name, source: view.table, skin, shared: view.shared, ...stored }))
 }
 
 /** A rename, a share, or a Save of the arrangement, which keeps the view's fixed filters. */
-export async function updateView(view: SavedView, data: { name?: string; arrangement?: StoredArrangement; shared?: boolean }): Promise<SavedView> {
+export async function updateView(view: SavedView, data: { name?: string; arrangement?: StoredArrangement; shared?: boolean; layout?: DashboardLayout }): Promise<SavedView> {
   const { arrangement, ...rest } = data
-  const stored = arrangement ? toStoredView(arrangement, view.fixed ?? {}, await sourceOf(view.table)) : {}
+  const stored = arrangement && view.type !== 'dashboard' ? toStoredView(arrangement, view.fixed ?? {}, await sourceOf(view.table)) : {}
   return savedOf(await request<EngineView>('PATCH', `/views/${view.id}`, {}, { ...rest, ...stored }))
 }
 

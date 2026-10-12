@@ -2,7 +2,7 @@ import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'rea
 import { createView, deleteView, restoreView, savePrefs, savedViews, updateView } from '../api'
 import { errorText, t } from '../i18n'
 import type { ApiError, Prefs, SavedView, TableDef, View, ViewType } from '../types'
-import { byFirstView, type Table, groupTables, tableOf } from './tables'
+import { byFirstView, dashboardsOf, type Table, groupTables, tableOf } from './tables'
 import type { Notice } from './Toast'
 import { arrangementOf, blank, changed, clearIfSent, copyKept, currentOf, forget, isSaved, keepLocal, lastIn, listFor, localOf, toStored } from './views'
 
@@ -57,6 +57,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     return () => clearTimeout(timer)
   }, [prefs])
 
+  const dashboards = useMemo(() => dashboardsOf(saved), [saved])
   const tables: Table[] = useMemo(
     () => byFirstView(groupTables(declared, [...starting, ...saved]), [...starting, ...saved]).map((table) => ({ ...table, views: listFor(table, saved, prefs.order) })),
     [declared, starting, saved, prefs.order],
@@ -214,7 +215,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   }
 
   return {
-    load: setSaved, loadPrefs, tables, busy, create, saveAs, save, changedLayout, remember, openTable,
+    dashboards, load: setSaved, loadPrefs, tables, busy, create, saveAs, save, changedLayout, remember, openTable,
     actions: {
       rename: (view: SavedView, name: string) => void write(view, { name }),
       share: (view: SavedView, shared: boolean) => void write(view, { shared }),

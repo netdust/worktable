@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test'
 import { shot } from './shots'
-import { modelNode } from './tree'
+import { modelNode, openModel } from './tree'
 
 test('tree-scrolls-in-rail @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 })
   await page.goto('/')
   const tree = page.getByRole('tree', { name: 'Views' })
+  // The grid lands on the dashboard; Activiteiten opens on a click.
+  await openModel(page, 'Activiteiten')
   await expect(modelNode(page, 'Activiteiten')).toHaveAttribute('aria-expanded', 'true')
 
   const folded = tree.getByRole('button', { name: 'Uitklappen' })
@@ -24,11 +26,13 @@ test('tree-scrolls-in-rail @e2e', async ({ page }) => {
 })
 
 test('dagplanning-is-gone @e2e', async ({ page }) => {
-  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/activiteit')
   await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overzicht')
+  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/activiteit')
+  await openModel(page, 'Activiteiten')
   const node = modelNode(page, 'Activiteiten')
   await expect(node).toHaveAttribute('aria-expanded', 'true')
-  // The landing view is Planning on Activiteiten, first under it.
+  // Activiteiten opens on Planning, first under it.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   // The views' own buttons: each row also holds its drag button, "Verplaats <view>".
   const names = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: /^(?!Verplaats )/ })

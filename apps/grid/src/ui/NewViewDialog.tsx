@@ -1,5 +1,5 @@
 import { Button, Dialog, Modal, ModalOverlay } from 'react-aria-components'
-import { CalendarDays, Grid3x3, Table as TableIcon, UserRound, Users } from 'lucide-react'
+import { CalendarDays, ChartGantt, Grid3x3, Images, Kanban, LayoutDashboard, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { useId, useState } from 'react'
 import { errorText, t } from '../i18n'
 import type { ApiError, ViewType } from '../types'
@@ -15,8 +15,8 @@ interface Props {
   onClose: () => void
 }
 
-const KINDS = { grid: 'kindGrid', matrix: 'matrix', calendar: 'kindCalendar' } as const
-const ICONS = { grid: TableIcon, matrix: Grid3x3, calendar: CalendarDays }
+const KINDS = { grid: 'kindGrid', matrix: 'matrix', calendar: 'kindCalendar', board: 'kindBoard', timeline: 'kindTimeline', gallery: 'kindGallery', dashboard: 'dashboard' } as const
+export const VIEW_ICONS = { grid: TableIcon, matrix: Grid3x3, calendar: CalendarDays, board: Kanban, timeline: ChartGantt, gallery: Images, dashboard: LayoutDashboard }
 const kindOf = (type: ViewType) => t(KINDS[type])
 
 /** A new view of one kind on one source: its name, and whether the team may change it. */
@@ -28,7 +28,7 @@ export function NewViewDialog({ source, type, scope, onSubmit, onClose }: Props)
   const title = useId()
   const field = useId()
   const ready = name.trim() !== '' && !busy
-  const Icon = ICONS[type]
+  const Icon = VIEW_ICONS[type]
 
   const submit = () => {
     if (!ready) return

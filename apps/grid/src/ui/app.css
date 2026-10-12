@@ -4334,3 +4334,136 @@
 .nv-badge--grey {
   --tone: var(--tone-grey);
 }
+
+/* The dashboard: sections of tiles, each a number, a list or a strip over a saved view. */
+.nv-dash {
+  overflow: auto;
+  padding: 16px 20px 24px;
+  gap: 20px;
+}
+
+.nv-dash__heading {
+  margin: 0 0 8px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nv-dash__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.nv-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+}
+
+.nv-tile--none,
+.nv-tile__note {
+  color: var(--color-fg-subtle);
+  font-size: 13px;
+}
+
+.nv-tile__title {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-tile__title:hover {
+  color: var(--color-fg-default);
+  text-decoration: underline;
+}
+
+.nv-stat {
+  border-left: 3px solid var(--tone, var(--color-border-default));
+}
+
+.nv-stat--bad {
+  --tone: var(--color-danger-fg);
+}
+
+.nv-stat--warn {
+  --tone: var(--color-warning-fg);
+}
+
+.nv-stat--ok {
+  --tone: var(--color-success-fg);
+}
+
+.nv-stat__value {
+  color: var(--tone, var(--color-fg-default));
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-stat__change {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-list {
+  grid-column: span 2;
+}
+
+.nv-list__rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-list__row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+}
+
+.nv-list__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-list__cell {
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+.nv-tile__more {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-default);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.nv-tile__refusal {
+  margin: 0;
+  color: var(--color-danger-fg);
+  font-size: 12px;
+}

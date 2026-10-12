@@ -91,7 +91,7 @@ describe('toSchema: space, sections and facts', () => {
     const calendar = { day: 'day', lanes: ['season_id'] }
     const schema = toSchema({ sources: { ...declared.sources, session: { ...declared.sources.session, calendar } } })
     const session = schema.tables.find((t) => t.key === 'session')
-    expect(session?.types).toEqual(['grid', 'calendar'])
+    expect(session?.types).toEqual(['grid', 'calendar', 'timeline'])
     expect(session?.calendar).toEqual({ day: 'day', start: null, end: null, lanes: ['season_id'] })
     expect(schema.tables.find((t) => t.key === 'season')?.types).toEqual(['grid'])
   })

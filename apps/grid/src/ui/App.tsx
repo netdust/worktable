@@ -18,7 +18,7 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, DateWindow, Model, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
+import type { Account, ApiError, DateWindow, Model, ModelAction, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -43,6 +43,7 @@ import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevi
 import { useFillViewport } from './viewport'
 import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
+import { Dashboard } from '../dashboard/Dashboard'
 import { calendarWindow, monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
@@ -214,8 +215,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const starting = served?.views ?? []
   const declared = useMemo(() => (served?.tables ?? []).map((table) => displayed(table, displays[table.key])), [served, displays])
   const current = useRef<string | undefined>(undefined)
-  const { load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
-  const view = tables.flatMap((table) => table.views).find((v) => v.key === activeKey) ?? tables[0]?.views[0] ?? starting[0]
+  const { dashboards, load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
+  // The grid opens on the first dashboard the reader can open, else on its first view.
+  const view = [...dashboards, ...tables.flatMap((table) => table.views)].find((v) => v.key === activeKey) ?? dashboards[0] ?? tables[0]?.views[0] ?? starting[0]
+  const dashboard = view?.type === 'dashboard' ? view : undefined
   current.current = view?.key
 
   useEffect(() => {
@@ -278,7 +281,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
-    if (!settled || !view || scope === undefined) return
+    if (!settled || !view || scope === undefined || dashboard) return
     let live = true
     // The same view asked again (a condition, a sort) keeps its rows on screen, so an open filter builder stays open.
     if (shownKey.current !== view.key) setResult({ status: 'loading' })
@@ -464,7 +467,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   return (
     <div className="nv-app" ref={frame}>
-      <Rail signed={signed} tables={tables} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
+      <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
@@ -478,8 +481,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={addBlocked}
-          onAdd={matrix || calendar ? undefined : add}
-          share={share}
+          onAdd={matrix || calendar || dashboard ? undefined : add}
+          share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
             onRevert: revert,
@@ -487,11 +490,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           } : null}
           viewNote={viewNote}
           fixed={Object.keys(view?.fixed ?? {}).length}
-          onHistory={view ? () => setHistoryOpen((open) => !open) : undefined}
+          onHistory={view && !dashboard ? () => setHistoryOpen((open) => !open) : undefined}
         />
         <div className="nv-work">
         <section className="nv-sheet">
-          {calendar && model && view && layout && result.status === 'ready' ? (
+          {dashboard ? (
+            <Dashboard key={dashboard.key} dashboard={dashboard as SavedView} models={models} onOpenView={setActiveKey}
+              views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
+          ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
               lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
               onShown={(next) => view.date_field && setLayout(withFilters(layout, [
