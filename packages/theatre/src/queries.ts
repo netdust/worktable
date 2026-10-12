@@ -10,6 +10,7 @@ export const productieDag = defineQuery({
   icon: 'table',
   title: 'productie',
   date: 'plandag',
+  calendar: { day: 'plandag', lanes: ['productie_id'] },
   scoped: 'productie_id',
   sql: readFileSync(new URL('./queries/productie_dag.sql', import.meta.url), 'utf8'),
   columns: {
@@ -120,6 +121,7 @@ export const persoonDag = defineQuery({
   icon: 'user',
   title: 'omschrijving',
   date: 'plandag',
+  calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id', 'productie_id'] },
   scoped: 'productie_id',
   sql: sqlOf('persoon_dag'),
   columns: {
@@ -148,7 +150,7 @@ export const persoonDag = defineQuery({
       options: { afwezig: 'Afwezig', onzeker: 'Onzeker', beschikbaar: 'Beschikbaar', voorkeur: 'Voorkeur' },
       tones: { afwezig: 'bad', onzeker: 'warn', beschikbaar: 'ok', voorkeur: 'sky' },
     },
-    conflicten: count('Conflicten'),
+    conflicten: { ...count('Conflicten'), badge: 'bad' },
   },
 })
 
@@ -158,6 +160,7 @@ export const locatieDag = defineQuery({
   icon: 'pin',
   title: 'omschrijving',
   date: 'plandag',
+  calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['locatie_id', 'productie_id'] },
   scoped: 'productie_id',
   sql: sqlOf('locatie_dag'),
   columns: {
@@ -172,7 +175,7 @@ export const locatieDag = defineQuery({
     start_at: { type: 'datetime', label: 'Start', nullable: true, writes: toActiviteit('start_at') },
     eind_at: { type: 'datetime', label: 'Einde', nullable: true, writes: toActiviteit('eind_at') },
     status: { type: 'text', label: 'Status', writes: toActiviteit('status') },
-    conflicten: count('Conflicten'),
+    conflicten: { ...count('Conflicten'), badge: 'bad' },
   },
 })
 

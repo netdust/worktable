@@ -8,6 +8,7 @@ export type {
   ActionResult,
   ActionUpdate,
   Actor,
+  CalendarDecl,
   ColumnDecl,
   ColumnType,
   DatasetDecl,

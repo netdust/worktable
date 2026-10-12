@@ -120,7 +120,9 @@ test('soort is added to an existing beschikbaarheid table by ALTER', () => {
     datasets: theatre.datasets.map((d) =>
       d.name === 'beschikbaarheid'
         ? defineDataset({ ...d, columns: Object.fromEntries(Object.entries(d.columns).filter(([k]) => k !== 'soort')) })
-        : d,
+        : d.matrix?.away
+          ? { ...d, matrix: { ...d.matrix, away: { ...d.matrix.away, where: undefined } } }
+          : d,
     ),
   }
   migrate(sqlite, withoutSoort)

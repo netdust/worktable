@@ -214,7 +214,13 @@ export const toewijzing = defineDataset({
     keys: { v: 'voorlopig', u: 'uitgenodigd', b: 'bevestigd', g: 'geweigerd', x: 'geannuleerd' },
     marks: { voorlopig: '~', uitgenodigd: '?', bevestigd: '✓', geweigerd: '✗', geannuleerd: '–' },
     count: 'bevestigd',
-    away: { dataset: 'beschikbaarheid', across: 'persoon_id', label: 'reden', end: 'eind_at' },
+    away: {
+      dataset: 'beschikbaarheid',
+      across: 'persoon_id',
+      label: 'reden',
+      end: 'eind_at',
+      where: { soort: 'afwezig' },
+    },
     open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' },
   },
   columns: {

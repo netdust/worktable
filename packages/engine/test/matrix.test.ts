@@ -33,7 +33,13 @@ const verlof = defineDataset({
   title: 'reason',
   date: 'start_at',
   custom: false,
-  columns: { member_id: rel('member'), reason: text, start_at: { type: 'date', label: 'S' }, end_at: text },
+  columns: {
+    member_id: rel('member'),
+    reason: text,
+    start_at: { type: 'date', label: 'S' },
+    end_at: text,
+    kind: { type: 'text', label: 'K', nullable: true, options: { off: 'Off', maybe: 'Maybe' } },
+  },
 })
 const matrix = {
   down: 'taak_id',
@@ -44,7 +50,7 @@ const matrix = {
   keys: { x: 'a', y: 'b' },
   marks: { a: '?', b: '!' },
   count: 'b',
-  away: { dataset: 'verlof', across: 'member_id', label: 'reason', end: 'end_at' },
+  away: { dataset: 'verlof', across: 'member_id', label: 'reason', end: 'end_at', where: { kind: 'off' } },
 }
 const join = (over: Partial<DatasetDecl> = {}): DatasetDecl =>
   defineDataset({
@@ -110,6 +116,8 @@ describe('validateDomain: matrix', () => {
     ['away label undeclared', { away: { ...matrix.away, label: 'nope' } }, 'nope'],
     ['away end undeclared', { away: { ...matrix.away, end: 'nope' } }, 'nope'],
     ['away across targets another dataset', { away: { ...matrix.away, across: 'taak_id' } }, 'taak_id'],
+    ['away where on an undeclared column', { away: { ...matrix.away, where: { nope: 'off' } } }, 'nope'],
+    ["away where value outside the column's options", { away: { ...matrix.away, where: { kind: 'z' } } }, 'z'],
   ]
   for (const [name, over, word] of bad) {
     test(`${name} is refused`, () => {
@@ -269,6 +277,7 @@ describe('GET /rows/<down>?cells=1', () => {
   test('/schema serves the declaration on the join and matrix_join on the down source', async () => {
     const { body } = await get('/api/schema')
     expect(body.sources.koppel.matrix).toEqual(matrix)
+    expect(body.sources.koppel.matrix.away.where).toEqual({ kind: 'off' })
     expect(body.sources.taak.matrix_join).toBe('koppel')
     expect(body.sources.verlof.matrix_join).toBeUndefined()
     expect(body.sources.taak.matrix).toBeUndefined()

@@ -24,7 +24,8 @@ export type ViewOut = SavedViewRow & {
   mine: boolean
   editable: boolean
 }
-export type ViewFields = Omit<SavedViewSeed, 'skin'> & { skin: 'table' | 'matrix'; shared: boolean }
+type Skin = SavedViewSeed['skin']
+export type ViewFields = Omit<SavedViewSeed, 'skin'> & { skin: Skin; shared: boolean }
 
 type Raw = Record<string, string | number | null>
 type Change = [field: string, old: string | number | null, value: string | number | null]
@@ -91,9 +92,10 @@ function sourceNamed(domain: Domain, value: unknown): Source {
   return source
 }
 
-function skinOf(domain: Domain, source: Source, value: unknown): 'table' | 'matrix' {
+function skinOf(domain: Domain, source: Source, value: unknown): Skin {
   if (value === 'table') return value
   if (value === 'matrix' && matrixOf(domain, source)) return value
+  if (value === 'calendar' && source.calendar) return value
   throw bad(`skin "${String(value)}" is not available on "${source.name}"`)
 }
 
@@ -124,9 +126,10 @@ function columnsOf(
   return value
 }
 
-function groupOf(source: Source, value: unknown): string | null {
+function groupOf(source: Source, skin: Skin, value: unknown): string | null {
   if (value === null) return null
   if (typeof value !== 'string' || !hasColumn(source, value)) throw bad(`cannot group on "${String(value)}"`)
+  if (skin === 'calendar' && !source.calendar?.lanes.includes(value)) throw bad(`cannot group a calendar on "${value}"`)
   return value
 }
 
@@ -153,14 +156,15 @@ export function viewBody(input: unknown, domain: Domain, creating: boolean): Vie
   if (!isObject(input)) throw bad('body must be a JSON object')
   const v = creating ? { ...DEFAULTS, ...input } : input
   const source = sourceNamed(domain, v.source)
+  const skin = skinOf(domain, source, v.skin)
   return checkSize({
     name: nameOf(v.name),
     source_type: source.kind,
     source: source.name,
-    skin: skinOf(domain, source, v.skin),
+    skin,
     filters: filtersOf(domain, source, v.filters),
     sort: columnsOf(source, 'sort', v.sort, (key) => key.replace(/^-/, '')),
-    group_by: groupOf(source, v.group_by),
+    group_by: groupOf(source, skin, v.group_by),
     visible_fields: columnsOf(source, 'visible_fields', v.visible_fields, undefined, hasField, fieldCount(source)),
     shared: sharedOf(v.shared),
   })

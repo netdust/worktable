@@ -46,6 +46,17 @@ function checkTitle(source: DatasetDecl | QueryDecl): void {
 
 function checkTones(source: DatasetDecl | QueryDecl): void {
   for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.badge !== undefined) {
+      if (decl.type !== 'integer')
+        throw new DomainError(source.name, column, `${column} has a badge but is not an integer`)
+      if (!(TONES as readonly string[]).includes(decl.badge)) {
+        throw new DomainError(
+          source.name,
+          decl.badge,
+          `${column} has badge "${decl.badge}", not one of ${TONES.join(', ')}`,
+        )
+      }
+    }
     if (!decl.tones) continue
     if (!decl.options) throw new DomainError(source.name, column, `${column} declares tones but has no options`)
     for (const key of Object.keys(decl.tones)) {
@@ -58,6 +69,23 @@ function checkTones(source: DatasetDecl | QueryDecl): void {
         throw new DomainError(source.name, tone, `${column} has tone "${tone}", not one of ${TONES.join(', ')}`)
       }
     }
+  }
+}
+
+// The calendar reads the rows route's date window, so its day is the source's date.
+function checkCalendar(source: DatasetDecl | QueryDecl): void {
+  const cal = source.calendar
+  if (!cal) return
+  const at = (bad: string, message: string) => new DomainError(source.name, bad, `calendar ${message}`)
+  if (cal.day !== source.date) throw at(cal.day, `day "${cal.day}" is not the date "${source.date}"`)
+  for (const column of [cal.start, cal.end]) {
+    if (column !== undefined && source.columns[column]?.type !== 'datetime') {
+      throw at(column, `"${column}" is not a datetime column`)
+    }
+  }
+  if (cal.lanes.length === 0) throw at('lanes', 'lanes must name at least one relation')
+  for (const lane of cal.lanes) {
+    if (!source.columns[lane]?.relation) throw at(lane, `lane "${lane}" is not a relation column`)
   }
 }
 
@@ -346,6 +374,13 @@ function checkAway(
   ] as const) {
     if (!Object.hasOwn(target.columns, column)) throw at(column, `away ${what} "${column}" is not a declared column`)
   }
+  for (const [column, value] of Object.entries(away.where ?? {})) {
+    if (!Object.hasOwn(target.columns, column)) throw at(column, `away where "${column}" is not a declared column`)
+    const options = target.columns[column]?.options
+    if (options && !Object.hasOwn(options, String(value))) {
+      throw at(String(value), `away where ${column} "${value}" is not one of its options`)
+    }
+  }
 }
 
 function checkLifecycle(dataset: DatasetDecl): void {
@@ -543,6 +578,7 @@ export function validateDomain(domain: Domain): void {
     checkOwnerVisible(source)
     checkHidden(source)
     checkTones(source)
+    checkCalendar(source)
     checkIcon(source)
     checkFacts(source)
     checkLinks(domain, source)

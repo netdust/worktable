@@ -52,6 +52,8 @@ export interface ColumnDecl {
   /** The grid never offers or shows it; still stored, imported and written through the API. */
   hidden?: boolean
   options_from?: OptionsFrom
+  /** An integer the grid shows as a tinted count above 0, and not at all at 0. */
+  badge?: Tone
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -71,7 +73,14 @@ export interface MatrixDecl {
   keys: Record<string, string>
   marks: Record<string, string>
   count: string
-  away?: { dataset: string; across: string; label: string; end: string }
+  /** `where` keeps only the away rows whose columns equal its values. */
+  away?: {
+    dataset: string
+    across: string
+    label: string
+    end: string
+    where?: Record<string, string | number | boolean>
+  }
   /** A join row with neither across nor label is open: `match` says what it waits for, `count` how many, `fill` the action that fills it. */
   open?: { match: string; count: string; fill: string }
 }
@@ -107,12 +116,21 @@ export interface AttachmentsDecl {
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
+/** Rows placed on `day`, timed by `start` and `end` (none is all-day), grouped by one of `lanes`. */
+export interface CalendarDecl {
+  day: string
+  start?: string
+  end?: string
+  lanes: string[]
+}
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
   label: string
   title: TitleDecl
   date?: string
+  calendar?: CalendarDecl
   columns: Record<string, ColumnDecl>
   indexes?: string[][]
   custom: boolean
@@ -143,6 +161,7 @@ export interface QueryDecl {
   label: string
   title: string
   date?: string
+  calendar?: CalendarDecl
   sql: string
   columns: Record<string, ColumnDecl>
   owners?: Owners
@@ -160,7 +179,7 @@ export interface SavedViewSeed {
   name: string
   source_type: 'dataset' | 'query'
   source: string
-  skin: 'table' | 'matrix'
+  skin: 'table' | 'matrix' | 'calendar'
   filters: FilterInput
   sort: string[]
   group_by: string | null
