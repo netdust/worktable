@@ -4337,6 +4337,10 @@
 
 /* The dashboard: sections of tiles, each a number, a list or a strip over a saved view. */
 .nv-dash {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
   overflow: auto;
   padding: 16px 20px 24px;
   gap: 20px;
@@ -4466,4 +4470,53 @@
   margin: 0;
   color: var(--color-danger-fg);
   font-size: 12px;
+}
+
+.nv-dash__actions {
+  gap: 8px;
+}
+
+.nv-week-tile {
+  grid-column: 1 / -1;
+}
+
+.nv-week-tile__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.nv-week-tile__day {
+  min-height: 72px;
+  padding: 4px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.nv-week-tile__day--today {
+  border-color: var(--color-accent-default);
+  box-shadow: inset 0 2px 0 var(--color-accent-default);
+}
+
+.nv-week-tile__head {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-progress__value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-progress__bar {
+  height: 6px;
+  background: var(--color-bg-muted);
+}
+
+.nv-progress__bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-success-fg);
 }

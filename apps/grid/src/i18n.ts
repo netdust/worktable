@@ -117,6 +117,8 @@ const strings = {
   previousMonth: 'vorige maand',
   previousSpan: 'vorige periode',
   changeSince: '{change} t.o.v. {period}',
+  doneOf: '{done} van {total}',
+  create: 'Aanmaken',
   badgeCount: '{count} {label}',
   hideColumn: 'Verbergen',
   showColumn: 'Tonen',

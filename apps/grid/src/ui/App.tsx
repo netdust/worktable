@@ -13,7 +13,7 @@ import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
 import { complete, type Filter, isDate, joinOf, readConditions, windowOf } from '../grid/conditions'
 import { type Layout, withFilters } from '../grid/layout'
-import { type NewRow, newRow } from '../grid/newRow'
+import { madeFrom, type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
@@ -495,7 +495,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         <div className="nv-work">
         <section className="nv-sheet">
           {dashboard ? (
-            <Dashboard key={dashboard.key} dashboard={dashboard as SavedView} models={models} onOpenView={setActiveKey}
+            <Dashboard key={dashboard.key} dashboard={dashboard as SavedView} models={models} tables={served.tables} onOpenView={setActiveKey}
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
@@ -542,12 +542,6 @@ function monthSpan(month: DateWindow): DateWindow {
   return weeks[0] && last ? { from: weeks[0][0], to: last[6] } : month
 }
 
-/** What a query's `+ Nieuw` creates in its dataset: that dataset's own new row, on the window's day and in the selected space. */
-function madeFrom(target: Model, tables: TableDef[], window: Partial<DateWindow> | null, scope: Scope | null): NewRow {
-  const table = tables.find((t) => t.model === target.key)
-  const view: View = { key: target.key, label: target.label, table: target.key, model: target.key, ...(table?.date_field ? { date_field: table.date_field } : {}) }
-  return newRow(target, view, window, new Date(), table?.space === 'scoped' ? scope : null)
-}
 
 /** Why a query's `+ Nieuw` is off: its dataset is read-only, or a row there still needs what only a pick gives. */
 function createBlocked(target: Model, made: NewRow | null, writable: boolean): string | null {

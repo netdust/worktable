@@ -32,7 +32,7 @@ const list = { kind: 'list', view: 2, rows: 8, columns: ['soort'], set: { column
 
 function show(tiles: unknown[], scope = null as { field: string; id: number } | null) {
   const onOpenView = vi.fn()
-  render(<Dashboard dashboard={dashboard(tiles)} views={[conflicten, lijst]} models={models} scope={scope} onOpenView={onOpenView} />)
+  render(<Dashboard dashboard={dashboard(tiles)} views={[conflicten, lijst]} models={models} tables={[]} scope={scope} onOpenView={onOpenView} />)
   return onOpenView
 }
 
@@ -66,7 +66,7 @@ describe('a stat tile', () => {
       arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [{ field: 'deadline', op: 'between', values: ['2026-10-12', '2026-10-18'] }], group: null, picked: [] },
     } as Partial<SavedView>)
     api.rows.mockImplementation(async (_v, _w, _s, layout) => ({ rows: [], total: layout.filters[0].values[0] === '2026-10-12' ? 5 : 3 }))
-    render(<Dashboard dashboard={dashboard([stat])} views={[weekly, lijst]} models={models} scope={null} onOpenView={() => undefined} />)
+    render(<Dashboard dashboard={dashboard([stat])} views={[weekly, lijst]} models={models} tables={[]} scope={null} onOpenView={() => undefined} />)
     expect(await screen.findByText('+2 t.o.v. vorige week')).toBeTruthy()
   })
 
