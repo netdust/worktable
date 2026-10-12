@@ -116,12 +116,23 @@ export interface AttachmentsDecl {
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
-/** Rows placed on `day`, timed by `start` and `end` (none is all-day), grouped by one of `lanes`. */
+/** Rows placed on `day`, timed by `start` and `end` (none is all-day), grouped by one of `lanes`. With `spans`, a row runs from `day` to `end`, which may be a date. */
 export interface CalendarDecl {
   day: string
   start?: string
   end?: string
   lanes: string[]
+  spans?: true
+}
+
+/** The options column a board groups its cards on. */
+export interface BoardDecl {
+  column: string
+}
+
+/** The attachment kind a gallery shows of each record. */
+export interface GalleryDecl {
+  kind: string
 }
 
 export interface DatasetDecl {
@@ -131,6 +142,8 @@ export interface DatasetDecl {
   title: TitleDecl
   date?: string
   calendar?: CalendarDecl
+  board?: BoardDecl
+  gallery?: GalleryDecl
   columns: Record<string, ColumnDecl>
   indexes?: string[][]
   custom: boolean
@@ -162,6 +175,7 @@ export interface QueryDecl {
   title: string
   date?: string
   calendar?: CalendarDecl
+  board?: BoardDecl
   sql: string
   columns: Record<string, ColumnDecl>
   owners?: Owners

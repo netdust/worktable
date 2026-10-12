@@ -283,6 +283,10 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(typeof s.title === 'string' ? {} : { title_via: s.title.via }),
             date: s.date ?? null,
             ...(s.calendar ? { calendar: s.calendar } : {}),
+            ...(s.board ? { board: s.board } : {}),
+            ...(s.kind === 'dataset' && s.gallery && servedAttachments(s, actor).attachments
+              ? { gallery: s.gallery }
+              : {}),
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
             ...(s.kind === 'dataset' && s.lifecycle ? { lifecycle: { column: s.lifecycle.column } } : {}),
             ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),

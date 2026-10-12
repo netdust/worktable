@@ -104,6 +104,8 @@ function skinOf(domain: Domain, source: Source, value: unknown): Skin {
   if (value === 'table') return value
   if (value === 'matrix' && matrixOf(domain, source)) return value
   if ((value === 'calendar' || value === 'timeline') && source.calendar) return value
+  if (value === 'board' && source.board) return value
+  if (value === 'gallery' && source.kind === 'dataset' && source.gallery) return value
   throw bad(`skin "${String(value)}" is not available on "${source.name}"`)
 }
 

@@ -114,6 +114,29 @@ export function readable(store: Store, raw: string | number, actor: Actor): { fi
   return { file, dataset }
 }
 
+const MAX_IDS = 200
+
+function idsOf(raw: string | undefined): number[] {
+  const parts = raw?.split(',') ?? []
+  if (parts.length === 0 || parts.length > MAX_IDS || !parts.every((part) => /^[1-9]\d{0,14}$/.test(part))) {
+    throw new ApiError(400, 'bad_ids', `ids must be a comma list of 1 to ${MAX_IDS} positive integers`)
+  }
+  return [...new Set(parts.map(Number))]
+}
+
+// An id the actor cannot read answers as an id with no file (attack 4).
+function newestFiles(store: Store, dataset: Declared, kind: string, ids: number[], actor: Actor) {
+  const readableIds = ids.filter((id) => liveRecord(store, dataset, id, actor))
+  if (readableIds.length === 0) return {}
+  const sql = `SELECT id, record_id, mime, name FROM attachment
+               WHERE entity = ? AND kind = ? AND deleted_at IS NULL AND record_id IN (${readableIds.map(() => '?').join(',')})
+               ORDER BY id`
+  const rows = store.sqlite.query(sql).all(dataset.name, kind, ...readableIds) as AttachmentRow[]
+  const files: Record<number, { id: number; mime: string; name: string }> = {}
+  for (const { id, record_id, mime, name } of rows) files[record_id] = { id, mime, name }
+  return files
+}
+
 // An owner writes only where the dataset allows it, and deletes only its own uploads.
 function checkWrite(store: Store, dataset: Declared, actor: Actor, uploadedBy?: number): void {
   if (!writerOf(store.domain, dataset.name)) {
@@ -303,6 +326,17 @@ export function attachmentRoutes(app: Hono<AuthEnv>, store: Store): void {
   })
 
   app.delete('/attachments/file/:id', (c) => c.json(remove(store, c.req.param('id'), c.get('actor'))))
+
+  // Before /attachments/:dataset/:id, as a batch is one segment shorter.
+  app.get('/attachments/:dataset', (c) => {
+    const actor = c.get('actor')
+    const name = c.req.param('dataset')
+    const dataset = declaredOf(store, name, actor)
+    if (!dataset) throw unknownSource(name)
+    const ids = idsOf(c.req.query('ids'))
+    const kind = checkKind(dataset, c.req.query('kind'))
+    return c.json({ files: newestFiles(store, dataset, kind, ids, actor) })
+  })
 
   app.get('/attachments/:dataset/:id', (c) => {
     const actor = c.get('actor')
