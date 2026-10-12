@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarDef, Row } from '../types'
-import { calendarWindow, monthWeeks, placeEvents, weekGrid } from './layout'
+import { calendarWindow, monthWeeks, placeEvents, spanBars, weekGrid } from './layout'
 
 const CAL: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'] }
 const WEEK = { from: '2026-10-12', to: '2026-10-18' }
@@ -132,5 +132,28 @@ describe('spans on the calendar', () => {
     const rows = [{ id: 1, title: 'afwezig', status: '', fields: { start_at: '2026-10-10T00:00', eind_at: '2026-10-13T23:59' } }]
     const { events } = placeEvents(rows, cal, WEEK, null)
     expect(events.map((e) => [e.day, e.allDay])).toEqual([['2026-10-12', true], ['2026-10-13', true]])
+  })
+})
+
+describe('spanBars', () => {
+  const SPANS: CalendarDef = { day: 'start_datum', start: null, end: 'eind_datum', lanes: ['persoon_id'], spans: true }
+  const stop = (id: number, from: string, to: string) => row(id, { start_datum: from, eind_datum: to })
+  const bars = (rows: Row[]) =>
+    spanBars(placeEvents(rows, SPANS, WEEK, null).events, WEEK_DAYS, SPANS, () => 0).map(({ row: r, ...bar }) => ({ id: r.id, ...bar }))
+
+  it('draws a row over its days as one bar', () => {
+    expect(bars([stop(1, '2026-10-12', '2026-10-15')])).toEqual([{ id: 1, lane: null, start: 0, length: 4, line: 0, before: false, after: false }])
+  })
+
+  it('clips a row that begins before the days or ends after them, and says so', () => {
+    expect(bars([stop(1, '2026-10-09', '2026-10-13'), stop(2, '2026-10-17', '2026-10-21')])).toEqual([
+      { id: 1, lane: null, start: 0, length: 2, line: 0, before: true, after: false },
+      { id: 2, lane: null, start: 5, length: 2, line: 0, before: false, after: true },
+    ])
+  })
+
+  it('stacks overlapping bars and reuses a line once it is free', () => {
+    const lines = bars([stop(1, '2026-10-12', '2026-10-14'), stop(2, '2026-10-13', '2026-10-16'), stop(3, '2026-10-16', '2026-10-18')])
+    expect(lines.map((b) => [b.id, b.line])).toEqual([[1, 0], [2, 1], [3, 0]])
   })
 })

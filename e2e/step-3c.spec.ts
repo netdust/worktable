@@ -255,10 +255,13 @@ test.describe('step 3c', () => {
       await expect(page.getByRole('button', { name: /e2e huid activiteit/ })).toBeVisible()
 
       await openWeek(page, 'Kalender afwezigheden', 'Beschikbaarheden', 'start_at', day)
-      const covered = (offset: number) =>
-        page.getByRole('group', { name: new RegExp(`^Hele dag \\w+ ${Number(plusDays(day, offset).slice(8))}$`) })
-      await expect(covered(2).getByRole('button', { name: /Huid Proef/ })).toBeVisible()
-      await expect(covered(3).getByRole('button', { name: /Huid Proef/ })).toBeVisible()
+      // One bar over the two days it covers, the band's first column being the axis.
+      const away = page
+        .getByRole('group', { name: 'Hele dag', exact: true })
+        .getByRole('button', { name: /Huid Proef/ })
+      await expect(away).toHaveCount(1)
+      await expect(away).toHaveCSS('grid-column-start', '4')
+      await expect(away).toHaveCSS('grid-column-end', 'span 2')
 
       await page.goto('/')
       await openView(page, 'Bord toewijzingen', 'Toewijzingen')

@@ -1,10 +1,12 @@
 import { Button } from 'react-aria-components'
-import { Grid3x3, History, Lock, Plus, Table as TableIcon, Users } from 'lucide-react'
+import { History, Lock, Plus, Users } from 'lucide-react'
 import { hint as titled } from './hint'
 import { type Action, MoreMenu } from './MoreMenu'
-import type { ReactNode } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { fixedCount, summary, t } from '../i18n'
 import type { StoreState } from '../grid/store'
+import type { ViewType } from '../types'
+import { VIEW_ICONS } from './NewViewDialog'
 
 export interface Shown {
   rows: number
@@ -18,7 +20,7 @@ interface Props {
   /** The view's name. */
   title: string
   /** The view's kind, for its icon. */
-  matrix?: boolean
+  kind?: ViewType
   /** A view this user can only copy: a lock says whose it is. */
   locked?: 'standard' | 'colleague' | null
   /** What the grid shows now; absent while there is no grid. */
@@ -63,7 +65,7 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
+export function Toolbar({ title, kind = 'grid', locked, shown, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
   const more: Action[] = [
     ...(local?.onPublish ? [{ label: t('publishChange'), run: local.onPublish }] : []),
     ...(local ? [{ label: t('revert'), run: local.onRevert }] : []),
@@ -71,7 +73,7 @@ export function Toolbar({ title, matrix, locked, shown, search, saving, addLabel
   return (
     <header className="nv-toolbar">
       <div className="nv-toolbar__name">
-        <span className="nv-toolbar__glyph" aria-hidden="true">{matrix ? <Grid3x3 size={16} /> : <TableIcon size={16} />}</span>
+        <span className="nv-toolbar__glyph" aria-hidden="true">{createElement(VIEW_ICONS[kind], { size: 16 })}</span>
         <h1 className="nv-toolbar__title">{title}</h1>
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
         {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups, shown.cut)}</span>}

@@ -155,7 +155,8 @@ function ActionsEditor({ actions, models, onChange }: {
   const [pick, setPick] = useState('')
   const model = creatable.find((m) => m.key === pick) ?? creatable[0]
   return (
-    <fieldset className="nv-compose__section" role="group" aria-label={t('quickActions')}>
+    <fieldset className="nv-compose__section">
+      <legend className="nv-compose__legend">{t('quickActions')}</legend>
       <ol className="nv-compose__tiles">
         {actions.map((action, at) => (
           <li key={at} className="nv-compose__row">

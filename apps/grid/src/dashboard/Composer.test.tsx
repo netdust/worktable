@@ -126,6 +126,7 @@ describe('the composer', () => {
     show(dashboard({ editable: true, mine: true, owner: { id: 4, name: '' }, layout: { sections: [], actions: [{ create: 'conflicten', label: 'Weg' }] } } as Partial<SavedView>))
     fireEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
     const actions = screen.getByRole('group', { name: 'Snelle acties' })
+    expect(within(actions).getByText('Snelle acties').tagName).toBe('LEGEND')
     fireEvent.click(within(actions).getByRole('button', { name: 'Actie verwijderen' }))
     fireEvent.change(within(actions).getByLabelText('Nieuw in'), { target: { value: 'taak' } })
     fireEvent.click(within(actions).getByRole('button', { name: 'Actie toevoegen' }))

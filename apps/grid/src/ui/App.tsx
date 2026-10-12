@@ -489,7 +489,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       <main className="nv-main">
         <Toolbar
           title={view?.label ?? title}
-          matrix={matrix}
+          kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
           shown={matrix ? null : shown}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
