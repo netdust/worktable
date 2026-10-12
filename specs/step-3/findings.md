@@ -100,3 +100,19 @@ Beschikbaarheid: 12 rows over 4 people. 2 assignments overlap one of them (1 bev
 4. **F1 on a slot with no candidate** (the real copy has no Persoon_rol rows yet, so every slot's list starts empty). Recommended: the picker shows candidates only, and below them one line "Iedereen tonen", which switches to the plain picker. Filled rows keep the plain picker.
 5. **soort on existing Beschikbaarheid rows.** Recommended: default `afwezig`, because Laika's rows are absences. `--seed-missing` migrates it by `ALTER` with that default.
 6. **organisatie_id on Beschikbaarheid** (SPEC: "an organisatie row covers all its people"). It is not in the brief. Recommended: leave it out of step 3 and remove it from the SPEC row in the spec commit, unless you want it now.
+
+## Counts after the build (2026-10-12)
+
+`bun scripts/conflict-counts.ts ~/laika-export/step2-copy.db`. The script works on a temporary 0600 copy, migrated with the step-3 declarations and then deleted; the source file's mtime and size were the same before and after. Counts only. They are reported, not asserted (gate G).
+
+| type · ernst | rows | people | days |
+| --- | --- | --- | --- |
+| afwezig · conflict | 2 | 1 | 2 |
+| open_slot · conflict | 6 | 0 | 3 |
+| overlap · waarschuwing | 5 | 5 | 1 |
+
+Same-day pairs left out as logistics: 445. No timed overlap. No onzeker row, because every existing Beschikbaarheid reads `afwezig`. No locatie_dubbel.
+
+These match the counts taken before the build. The 5 overlap warnings are the 5 timed + untimed work pairs; the 2 afwezig rows are the 2 assignments that overlap an absence.
+
+**onbevestigd is 0 only because of the date.** The rule counts an invitation made at least `bevestigingstermijn_dagen` (7) days ago, and the copy's 108 uitgenodigd rows date from the 2026-10-06 import (`created_at`, no revision). From 2026-10-13 all 108 count as onbevestigd. Some of them came from Laika's `maybe` status, which step 0e mapped to uitgenodigd ("a planner skims that list before cutover").
