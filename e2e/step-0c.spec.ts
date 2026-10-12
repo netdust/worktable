@@ -193,7 +193,7 @@ test('select-clear-refused', async ({ page }) => {
   expect(before.find((r) => r.id === 5)?.state).toBe('uitgenodigd')
   await open(page, 'Toewijzingen')
 
-  const target = page.locator('tbody tr.nv-tr', { hasText: 'Sam Peeters' })
+  const target = page.locator('tbody tr.nv-tr', { hasText: 'Sam Peeters' }).filter({ hasText: 'Uitgenodigd' })
   const state = target.locator('td').nth(await columnIndex(page, 'Status'))
   // State may not be empty (not nullable, with a default): the grid offers no clear, so none is sent to be refused.
   const patches: string[] = []
