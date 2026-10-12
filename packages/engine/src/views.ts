@@ -73,9 +73,16 @@ export const SYSTEM: Actor = { id: SYSTEM_OWNER, role: 'administrator', subject:
 const isPublic = (raw: Raw): boolean => raw.public === 1
 const isForOwners = (raw: Raw): boolean => raw.for_owners === 1
 
+const humanAdmin = (actor: Actor): boolean => actor.role === 'administrator' && (actor.kind ?? 'user') === 'user'
+
+// One team dashboard: any administrator edits a shared one in place instead of copying it again.
+const teamDashboard = (raw: Raw, actor: Actor): boolean =>
+  raw.skin === 'dashboard' && raw.shared === 1 && raw.owner_id !== SYSTEM_OWNER && humanAdmin(actor)
+
 function outOf(raw: Raw, actor: Actor): ViewOut {
   const mine = raw.owner_id === actor.id
-  const editable = mine && ((!isPublic(raw) && !isForOwners(raw)) || actor.role === 'administrator')
+  const editable =
+    (mine && ((!isPublic(raw) && !isForOwners(raw)) || actor.role === 'administrator')) || teamDashboard(raw, actor)
   return {
     ...viewOf(raw),
     shared: raw.shared === 1,
@@ -201,7 +208,11 @@ export function viewBody(input: unknown, domain: Domain, creating: boolean, ctx:
   if (!isObject(input)) throw bad('body must be a JSON object')
   const v = creating ? { ...DEFAULTS, ...input } : input
   const fields = v.skin === 'dashboard' ? dashboardFields(domain, v, ctx) : sourcedFields(domain, v)
-  return checkSize({ name: nameOf(v.name), ...fields, shared: sharedOf(v.shared) })
+  const shared = sharedOf(v.shared)
+  // A shared dashboard is every editor's landing page (R-3c-1).
+  if (fields.skin === 'dashboard' && shared && !humanAdmin(ctx.actor))
+    throw new ApiError(403, 'shared_dashboard', 'only an administrator shares a dashboard')
+  return checkSize({ name: nameOf(v.name), ...fields, shared })
 }
 
 const unknownView = (id: number | string) => new ApiError(404, 'unknown_view', `unknown view ${id}`)
@@ -215,13 +226,13 @@ export function ownedView(sqlite: Database, id: number, actor: Actor, includeDel
   const raw = viewRaw(sqlite, id, includeDeleted)
   if (!raw) throw unknownView(id)
   if (raw.owner_id === SYSTEM_OWNER) throw new ApiError(403, 'read_only_view', `view ${id} is read-only; save a copy`)
-  if (raw.owner_id !== actor.id) {
+  if (raw.owner_id !== actor.id && !teamDashboard(raw, actor)) {
     if (raw.shared === 1 && raw.deleted_at === null)
       throw new ApiError(403, 'not_owner', `view ${id} belongs to someone else`)
     throw unknownView(id)
   }
   // An editor or a service must not widen what a published token serves (attack 16).
-  const human = actor.role === 'administrator' && (actor.kind ?? 'user') === 'user'
+  const human = humanAdmin(actor)
   if (isPublic(raw) && !human)
     throw new ApiError(403, 'public_view', `view ${id} is public; only an administrator may change it`)
   if (isForOwners(raw) && !human)

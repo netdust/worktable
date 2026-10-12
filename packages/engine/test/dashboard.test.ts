@@ -177,6 +177,72 @@ describe('who lists a dashboard (attack 1)', () => {
   })
 })
 
+describe('only an administrator shares a dashboard (R-3c-1)', () => {
+  test("an editor's shared dashboard is refused on create and on update; the table is unchanged", async () => {
+    const layout = layoutWith([{ kind: 'stat', view: ALL, measure: 'count' }])
+    const before = stored()
+    const landing = (await dashboards(admin)).map((v) => v.id)
+    const created = await editor('POST', '/api/views', {
+      body: json({ name: 'Overview', skin: 'dashboard', shared: true, layout }),
+    })
+    expect({ status: created.status, code: created.body.code }).toEqual({ status: 403, code: 'shared_dashboard' })
+    expect(stored()).toEqual(before)
+    expect((await dashboards(admin)).map((v) => v.id)).toEqual(landing)
+
+    const own = await editor('POST', '/api/views', { body: json({ name: 'Mine', skin: 'dashboard', layout }) })
+    expect(own.status).toBe(201)
+    const kept = stored()
+    const patched = await editor('PATCH', `/api/views/${own.body.id}`, { body: json({ shared: true }) })
+    expect({ status: patched.status, code: patched.body.code }).toEqual({ status: 403, code: 'shared_dashboard' })
+    expect(stored()).toEqual(kept)
+  })
+
+  test("an administrator's shared dashboard lands for an editor", async () => {
+    const res = await post({ shared: true, layout: layoutWith([{ kind: 'stat', view: ALL, measure: 'count' }]) })
+    expect(res.status).toBe(201)
+    expect((await dashboards(editor)).map((v) => v.id)).toContain(res.body.id)
+  })
+})
+
+describe('one team dashboard (I-4)', () => {
+  test('a second administrator updates and deletes a shared dashboard in place; an editor and a private one stay closed', async () => {
+    const layout = layoutWith([{ kind: 'stat', view: ALL, measure: 'count' }])
+    const team = (await post({ shared: true, layout })).body
+    const other = send(app, await signIn(app, 'administrator'))
+    const seen = (await dashboards(other)).find((v) => v.id === team.id) as unknown as { editable: boolean }
+    expect(seen.editable).toBe(true)
+
+    const renamed = await other('PATCH', `/api/views/${team.id}`, { body: json({ name: 'Team' }) })
+    expect({ status: renamed.status, name: renamed.body.name, owner: renamed.body.owner_id }).toEqual({
+      status: 200,
+      name: 'Team',
+      owner: team.owner_id,
+    })
+
+    const before = stored()
+    const byEditor = await editor('PATCH', `/api/views/${team.id}`, { body: json({ name: 'Mine now' }) })
+    expect({ status: byEditor.status, code: byEditor.body.code }).toEqual({ status: 403, code: 'not_owner' })
+    const mine = (await post({ layout })).body
+    expect((await other('PATCH', `/api/views/${mine.id}`, { body: json({ name: 'X' }) })).status).toBe(404)
+    const system = await other('PATCH', `/api/views/${OVERVIEW}`, { body: json({ name: 'X' }) })
+    expect({ status: system.status, code: system.body.code }).toEqual({ status: 403, code: 'read_only_view' })
+    expect(stored().filter((r) => (r as { id: number }).id !== mine.id)).toEqual(before)
+
+    expect((await other('DELETE', `/api/views/${team.id}`)).status).toBe(200)
+    expect((await dashboards(editor)).map((v) => v.id)).toEqual([OVERVIEW])
+  })
+})
+
+describe('a dashboard label', () => {
+  test('holds no control or format characters', async () => {
+    await refused({ layout: { sections: [{ label: 'Nu\u202E', tiles: [] }], actions: [] } }, 'control or format')
+    await refused(
+      { layout: layoutWith([{ kind: 'stat', view: ALL, measure: 'count', label: 'a\u200Bb' }]) },
+      'control or format',
+    )
+  })
+})
+
 describe('a dashboard is never published (attack 2)', () => {
   test("an administrator's share-token and for-owners on a dashboard are 400 not_query", async () => {
     const before = stored()

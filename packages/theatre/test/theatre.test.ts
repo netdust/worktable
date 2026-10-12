@@ -20,13 +20,17 @@ test('the theatre domain validates', () => {
   expect(() => validateDomain(theatre)).not.toThrow()
 })
 
-// A seeded view belongs to no account; saving each as a new view runs it through the saved-view rules.
+// A seeded view belongs to no account; saving each as a new view runs it through the saved-view rules, as an administrator, who alone shares a dashboard.
 test('the seeded views are shared, owned by no account, and pass the saved-view rules', async () => {
   const sqlite = new Database(':memory:')
   migrate(sqlite, theatre)
   seedDomain(sqlite, theatre)
   const app = testEngine(sqlite, theatre)
-  const headers = { host: '127.0.0.1:4310', 'content-type': 'application/json', cookie: await signIn(app) }
+  const headers = {
+    host: '127.0.0.1:4310',
+    'content-type': 'application/json',
+    cookie: await signIn(app, 'administrator'),
+  }
   const { views } = (await (await app.request('/api/views', { headers })).json()) as {
     views: Record<string, unknown>[]
   }

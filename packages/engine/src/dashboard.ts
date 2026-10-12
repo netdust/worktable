@@ -48,6 +48,7 @@ function listOf(value: unknown, what: string, max: number): unknown[] {
 function labelOf(value: unknown, what: string): string {
   if (typeof value !== 'string' || value.trim().length < 1 || value.length > MAX_LABEL)
     throw bad(`${what} label must be 1 to ${MAX_LABEL} characters`)
+  if (/[\p{Cc}\p{Cf}]/u.test(value)) throw bad(`${what} label must not hold control or format characters`)
   return value
 }
 
