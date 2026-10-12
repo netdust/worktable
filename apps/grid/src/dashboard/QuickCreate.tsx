@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog, Heading, Modal, ModalOverlay } from 'react-aria-components'
 import { create, records } from '../api'
-import { madeFrom } from '../grid/newRow'
+import { madeFrom, type NewRow } from '../grid/newRow'
 import { errorText, t } from '../i18n'
 import type { ApiError, Field, Model, Row, Scope, TableDef } from '../types'
 
@@ -59,21 +59,35 @@ function FieldInput({ name, field, value, onChange, autoFocus }: {
   )
 }
 
+/**
+ * What the dialog asks, each once: the title where it is required, every required column the writer takes,
+ * and the chosen space. A value `+ New` fills in (a day, a first option, the space) shows as the field's start.
+ */
+function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
+  if ('missing' in made) return []
+  const required = Object.entries(model.fields)
+    .filter(([key, field]) => field.required && !field.defaulted && !field.readonly && key !== model.title_field)
+    .map(([key]) => key)
+  const space = scope && scope.field in made.fields ? [scope.field] : []
+  return [...new Set([...made.needs.filter((key) => key === 'title' || required.includes(key)), ...required, ...space])]
+}
+
 /** A create on one dataset from the dashboard's header: the columns it needs, the space filled in, the writer judging it. */
 export function QuickCreate({ label, model, tables, scope, onClose, onCreated }: {
   label: string; model: Model; tables: TableDef[]; scope: Scope | null; onClose: () => void; onCreated: () => void
 }) {
   const made = madeFrom(model, tables, null, scope)
-  const fields = 'missing' in made ? {} : made.fields
   const titleField: Field = { type: 'text', label: model.title_label, required: true, fact: false }
-  const asked = 'missing' in made ? [] : [...made.needs, ...made.offers.filter((key) => model.fields[key]?.required && !(key in fields))]
-  const [values, setValues] = useState<Record<string, unknown>>({})
+  const asked = askedOf(model, made, scope)
+  const [values, setValues] = useState<Record<string, unknown>>(() =>
+    'missing' in made ? {} : Object.fromEntries(asked.filter((key) => key in made.fields).map((key) => [key, made.fields[key]])),
+  )
   const [refusal, setRefusal] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const submit = () => {
     setBusy(true)
     setRefusal(null)
-    create(model.key, { ...fields, ...values }).then(
+    create(model.key, values).then(
       () => {
         onCreated()
         onClose()
