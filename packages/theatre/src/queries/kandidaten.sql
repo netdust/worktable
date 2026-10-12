@@ -24,7 +24,7 @@ LEFT JOIN rol r ON r.id = s.rol_id
 WHERE NOT EXISTS (
     SELECT 1 FROM beschikbaarheid b
     WHERE b.persoon_id = p.id AND b.deleted_at IS NULL AND b.soort = 'afwezig'
-      AND datetime(b.start_at) < s.tot AND s.van < datetime(b.eind_at))
+      AND ((datetime(b.start_at) < s.tot AND s.van < datetime(b.eind_at)) OR datetime(b.start_at) = s.van))
   AND NOT EXISTS (
     SELECT 1 FROM toewijzing o
     WHERE o.activiteit_id = s.activiteit_id AND o.persoon_id = p.id AND o.deleted_at IS NULL AND o.state != 'geannuleerd')
@@ -32,4 +32,4 @@ WHERE NOT EXISTS (
     SELECT 1 FROM toewijzing o
     JOIN act oa ON oa.id = o.activiteit_id
     WHERE o.persoon_id = p.id AND o.deleted_at IS NULL AND o.state IN ('voorlopig', 'uitgenodigd', 'bevestigd')
-      AND oa.getimed AND NOT oa.logistiek AND oa.van < s.tot AND s.van < oa.tot))
+      AND oa.getimed AND NOT oa.logistiek AND ((oa.van < s.tot AND s.van < oa.tot) OR oa.van = s.van)))

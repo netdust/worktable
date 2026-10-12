@@ -159,6 +159,32 @@ describe('conflicten', () => {
       })
     }
 
+    // Two shows at 20:00 with no end are the plainest double booking there is (review CR-S1).
+    test('two timed activities with no end that start together clash, as does one starting with a block', async () => {
+      const points = await overlapOf({ datum: DAY, start_at: at('20:00') }, { datum: DAY, start_at: at('20:00') })
+      const withBlock = await overlapOf(
+        { datum: DAY, start_at: at('20:00') },
+        { datum: DAY, start_at: at('20:00'), eind_at: at('22:00') },
+      )
+      expect([...points, ...withBlock].map((c) => c.ernst)).toEqual(['conflict', 'conflict'])
+    })
+
+    test('an activity with no end that starts as an absence starts is afwezig', async () => {
+      const p = await newPerson()
+      await create('beschikbaarheid', { persoon_id: p, start_at: at('20:00'), eind_at: at('23:00'), reden: 'proef' })
+      await assign(await activity({ datum: DAY, start_at: at('20:00') }), p)
+      expect((await conflictsOf(p)).map((c) => c.type)).toEqual(['afwezig'])
+    })
+
+    test("kandidaten leave out someone booked at the slot's very start", async () => {
+      const slotAt = await activity({ datum: DAY, start_at: at('20:00') })
+      const slot = await create('toewijzing', { activiteit_id: slotAt, rol_id: SPELER })
+      await assign(await activity({ datum: DAY, start_at: at('20:00') }), BRAM)
+      const names = (await rows('kandidaten', { toewijzing_id: slot }, 'rang')).map((r) => r.persoon_id)
+      expect(names).not.toContain(BRAM)
+      expect(names).toContain(LOTTE)
+    })
+
     test('a night past midnight on one plandag clashes', async () => {
       const found = await overlapOf(
         { datum: DAY, start_at: at('22:00'), eind_at: at('01:00', '2026-11-03') },

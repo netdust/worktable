@@ -35,7 +35,7 @@ alle AS (
   FROM tw x
   JOIN tw y ON y.persoon_id = x.persoon_id AND y.plandag = x.plandag AND y.id > x.id
   WHERE NOT x.logistiek AND NOT y.logistiek
-    AND (NOT (x.getimed AND y.getimed) OR (x.van < y.tot AND y.van < x.tot))
+    AND (NOT (x.getimed AND y.getimed) OR (x.van < y.tot AND y.van < x.tot) OR x.van = y.van)
 
   UNION ALL
   SELECT CASE b.soort WHEN 'afwezig' THEN 2 ELSE 3 END, x.id, b.id, b.soort,
@@ -45,7 +45,7 @@ alle AS (
       || x.wat || COALESCE(' (' || b.reden || ')', '') || '.'
   FROM tw x
   JOIN beschikbaarheid b ON b.persoon_id = x.persoon_id AND b.deleted_at IS NULL AND b.soort IN ('afwezig', 'onzeker')
-    AND datetime(b.start_at) < x.tot AND x.van < datetime(b.eind_at)
+    AND ((datetime(b.start_at) < x.tot AND x.van < datetime(b.eind_at)) OR datetime(b.start_at) = x.van)
 
   UNION ALL
   SELECT 4, t.id, 0, 'open_slot', 'conflict', NULL, t.id, NULL, act.id, NULL, act.locatie_id, act.productie_id, act.plandag,
@@ -79,7 +79,7 @@ alle AS (
   WHERE NOT x.logistiek AND NOT y.logistiek
     AND (x.productie_id != y.productie_id
       OR (x.speelreeks_id IS NOT NULL AND y.speelreeks_id IS NOT NULL AND x.speelreeks_id != y.speelreeks_id))
-    AND CASE WHEN x.getimed AND y.getimed THEN x.van < y.tot AND y.van < x.tot ELSE x.plandag = y.plandag END
+    AND CASE WHEN x.getimed AND y.getimed THEN (x.van < y.tot AND y.van < x.tot) OR x.van = y.van ELSE x.plandag = y.plandag END
 )
 SELECT code * 1000000000000 + x * 1000000 + y AS id, type, ernst, persoon_id, toewijzing_id, ander_toewijzing_id,
   activiteit_id, ander_activiteit_id, locatie_id, productie_id, plandag, omschrijving

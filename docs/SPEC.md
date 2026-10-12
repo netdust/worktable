@@ -250,7 +250,7 @@ Thirteen SQL views, no rows of their own. Each joins datasets, other queries and
 
 | Type | Rule |
 | --- | --- |
-| overlap | Same persoon, two Toewijzingen in voorlopig, uitgenodigd or bevestigd on one plandag, on activities whose soort is not logistics (maaltijd, overnachting, reis never conflict). Both timed and overlapping: a conflict. Both untimed, or one timed and one untimed: a warning (`ernst` waarschuwing), since times cannot settle it |
+| overlap | Same persoon, two Toewijzingen in voorlopig, uitgenodigd or bevestigd on one plandag, on activities whose soort is not logistics (maaltijd, overnachting, reis never conflict). Both timed and overlapping: a conflict; a timed activity with no end is a moment, and two that start at the same moment overlap, while two that only touch (one ends as the next starts) do not. Both untimed, or one timed and one untimed: a warning (`ernst` waarschuwing), since times cannot settle it |
 | afwezig | Toewijzing on a day covered by Beschikbaarheid afwezig |
 | onzeker | Same, soort onzeker — a warning, not a conflict |
 | open_slot | persoon_id null and start inside the warning horizon |
