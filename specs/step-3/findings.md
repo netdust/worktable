@@ -2,7 +2,7 @@
 
 Stefan, 2026-10-12 (the step 3 brief): "Findings (stop for approval): F1 Candidates option source … F2 Lookups on owner datasets … F3 Calendar skin." Scope 3a: Persoon_rol, soort on Beschikbaarheid, Taak, conflicten with six types, kandidaten, werklijst, the untimed rule. Scope 3b: persoon_dag, locatie_dag, the company week, the calendar skin on them, the Conflicten view with its badge on rows. Out: werktijd, Publication, Field, the board skin, any website page.
 
-**Decision (Stefan via the orchestrator, 2026-10-12):** approved as filed, F4 included; all six questions on the recommended answers.
+**Decision (Stefan via the orchestrator, 2026-10-12):** approved as filed, F4 included; all six questions on the recommended answers. While planning, F1's key became `options_from`, because `options` already names a column's select options (approved by the orchestrator).
 
 Read against `docs/SPEC.md` and the source at `6c76f6b` (main `3997cb5` plus the spec-additions commit). Nothing here is built.
 
@@ -18,7 +18,7 @@ Read against `docs/SPEC.md` and the source at `6c76f6b` (main `3997cb5` plus the
 **The need.** On an open slot, the person picker lists who can fill it: the kandidaten query's rows for that slot, never the whole Persoon table.
 
 **Smallest design.**
-- A relation column, or a relation action input, may declare `options: { source: <query>, match: { <query column>: <this row's column> }, value: <query column> }`. Validation checks that the source is a declared query, that `value` is a relation column of it to the same target, and that every `match` column exists on both sides.
+- A relation column, or a relation action input, may declare `options_from: { source: <query>, match: { <query column>: <this row's column> }, value: <query column> }`. Validation checks that the source is a declared query, that `value` is a relation column of it to the same target, and that every `match` column exists on both sides.
 - `/schema` serves the declaration. The picker then reads `GET /rows/<source>?filter={<query column>: <row value>}` under the reader's own scope and lists each row's `value` record in the query's order (kandidaten ranks by voorkeur, then tarief). The title comes from the row's relation title, as today.
 - Theatre declares it on `vul_slot`'s `persoon_id` input and on `toewijzing.persoon_id`, with `match: { toewijzing_id: id }`, `value: persoon_id`.
 - The writer still decides. The picker narrows, it never authorises: a PATCH naming a non-candidate goes through `refuse()` as it does today.
