@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
 import { shot } from './shots'
-import { modelNode } from './tree'
+import { modelNode, openModel } from './tree'
 
 const MODEL = 'Organisaties'
 const RENAMED = 'Adresboek'
@@ -27,6 +27,8 @@ test.describe('the model menu as an administrator', () => {
   test('the-open-models-menu-exports @e2e', async ({ page }) => {
     await page.goto('/')
     const open = 'Activiteiten'
+    // The grid lands on the dashboard; the model is opened first.
+    await openModel(page, open)
     const menu = await modelMenu(page, open)
     await expect(menu.getByRole('menuitem')).toHaveText(['Naam wijzigen', 'Icoon wijzigen', 'Exporteren', 'Inklappen'])
     await shot(page, 'model-menu')

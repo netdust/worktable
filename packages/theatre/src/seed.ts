@@ -549,7 +549,7 @@ export const views: SavedViewSeed[] = [
         {
           label: 'Deze week',
           tiles: [
-            { kind: 'week', view: 'Bedrijfsweek' },
+            { kind: 'week', view: 'Kalender activiteiten' },
             { kind: 'list', view: 'Vandaag', rows: 5 },
           ],
         },

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { addCondition, modelNode, openView, openWeek, pickIn } from './tree'
+import { addCondition, modelNode, openModel, openView, openWeek, pickIn } from './tree'
 
 const MONDAY = '2026-10-12'
 const MATRIX = 'Toewijzingen per activiteit'
@@ -344,6 +344,7 @@ test.describe('foreign-view-hidden', () => {
     expect((await views(page)).map((v) => v.name)).not.toContain(name)
     await page.goto('/')
     const nav = page.getByRole('navigation', { name: 'Views' })
+    await openModel(page, 'Activiteiten')
     await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toBeVisible()
     await expect(modelNode(page, 'Activiteiten')).toBeVisible()
     await expect(nav.getByRole('button', { name })).toHaveCount(0)
