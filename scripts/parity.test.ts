@@ -57,7 +57,9 @@ describe('parity', () => {
   test('the invented export passes every check', async () => {
     const { code, md } = await parity()
     expect(code).toBe(0)
-    expect(md).toMatch(/counts: pass, 9 compared, 0 mismatched keys/)
+    // One count per theatre dataset; one the export leaves out counts as 0 on both sides.
+    const { datasets } = (await import(theatre)).default as { datasets: unknown[] }
+    expect(md).toContain(`counts: pass, ${datasets.length} compared, 0 mismatched keys`)
     expect(md).toMatch(/activities_per_week: pass, 4 compared, 0 mismatched keys/)
     expect(md).toMatch(/assignments_per_person: pass, 5 compared, 0 mismatched keys/)
     expect(md).toMatch(/absences_per_person: pass, 2 compared, 0 mismatched keys/)

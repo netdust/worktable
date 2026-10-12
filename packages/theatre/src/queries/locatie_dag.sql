@@ -3,7 +3,7 @@ WITH act AS (
     COALESCE(a.locatie_id, sr.locatie_id) AS locatie_id
   FROM activiteit a
   LEFT JOIN speelreeks sr ON sr.id = a.speelreeks_id AND sr.deleted_at IS NULL
-  WHERE a.deleted_at IS NULL AND a.status != 'geannuleerd'
+  WHERE a.deleted_at IS NULL
 )
 SELECT act.id, act.id AS activiteit_id, act.locatie_id, act.productie_id, act.omschrijving, act.soort, act.plandag,
   act.datum, act.start_at, act.eind_at, act.status,

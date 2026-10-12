@@ -270,6 +270,13 @@ describe('locatie_dag', () => {
       [27, 1],
     ])
   })
+
+  test('a cancelled activity keeps its locatie_dag row, with no clash', async () => {
+    await patch('activiteit', 27, { status: 'geannuleerd' })
+    const all = await rows('locatie_dag')
+    expect(all.find((r) => r.id === 27)).toMatchObject({ status: 'geannuleerd', conflicten: 0 })
+    expect(all.find((r) => r.id === 1)).toMatchObject({ conflicten: 0 })
+  })
 })
 
 describe('werklijst', () => {
