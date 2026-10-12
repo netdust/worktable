@@ -12,6 +12,6 @@ test('every imported theatre dataset declares a nullable readonly legacy_post_id
 
 test('the datasets step 1 adds are not imported and carry none', () => {
   const added = theatre.datasets.filter((d) => !IMPORTED.includes(d.name))
-  expect(added.map((d) => d.name).sort()).toEqual(['rol', 'sjabloon', 'speelreeks'])
+  expect(added.map((d) => d.name).sort()).toEqual(['persoon_rol', 'rol', 'sjabloon', 'speelreeks', 'taak'])
   for (const d of added) expect(d.columns.legacy_post_id).toBeUndefined()
 })

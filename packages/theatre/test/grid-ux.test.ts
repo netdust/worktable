@@ -42,8 +42,8 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
   test('an editor gets the sections in their draft order, the queries last under Overzichten', async () => {
     const body = await schemaAs('editor')
     expect(body.sections).toEqual([
-      { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
-      { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
+      { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid', 'taak'] },
+      { label: 'Gegevens', sources: ['productie', 'persoon', 'persoon_rol', 'organisatie'] },
       { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
       { label: 'Overzichten', sources: ['productie_dag', 'voorstellingen', 'mijn_producties'] },
     ])
@@ -102,10 +102,12 @@ describe('theatre declares the details: icons, colours, an end time and create-f
       speelreeks: 'film',
       activiteit: 'calendar',
       persoon: 'user',
+      persoon_rol: 'users',
       toewijzing: 'users',
       beschikbaarheid: 'clock',
       rol: 'check',
       sjabloon: 'list',
+      taak: 'check',
       productie_dag: 'table',
       voorstellingen: 'table',
       mijn_producties: 'star',

@@ -1,5 +1,15 @@
 import { type DatasetDecl, forbid, refuse, type WriteContext, type Writer } from '@worktable/engine'
-import { activiteit, organisatie, persoon, productie, rol, speelreeks, toewijzing } from './datasets'
+import {
+  activiteit,
+  beschikbaarheid,
+  organisatie,
+  persoon,
+  productie,
+  rol,
+  speelreeks,
+  taak,
+  toewijzing,
+} from './datasets'
 import { plandag } from './plandag'
 
 const DAY_LINE_HOUR = 5
@@ -207,6 +217,7 @@ export const beschikbaarheidWriter = writerOf((values, ctx) => {
   checkRequired(values, ctx, 'start_at', 'Start is verplicht.')
   checkRequired(values, ctx, 'eind_at', 'Einde is verplicht.')
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+  checkOption(beschikbaarheid, 'soort', values, 'Ongeldige soort.')
   checkOrder(values, ctx)
   return values
 })
@@ -325,3 +336,30 @@ export const sjabloonWriter: Writer = {
     return values
   },
 }
+
+export const persoonRolWriter = forPlanners(
+  writerOf((values, ctx) => {
+    checkRates(values, ctx)
+    checkRequired(values, ctx, 'persoon_id', 'Persoon is verplicht.')
+    checkRequired(values, ctx, 'rol_id', 'Rol is verplicht.')
+    checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+    checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
+    const { persoon_id, rol_id } = merged(values, ctx)
+    if (ctx.exists('persoon_rol', { persoon_id, rol_id }, ctx.current?.id as number | undefined)) {
+      refuse('Deze persoon heeft deze rol al.')
+    }
+    return values
+  }),
+  'rollen per persoon',
+)
+
+export const taakWriter = forPlanners(
+  writerOf((values, ctx) => {
+    if (!filled(merged(values, ctx).titel)) refuse('Titel is verplicht.')
+    checkOption(taak, 'status', values, 'Ongeldige status.')
+    checkOption(taak, 'gekoppeld_aan', values, 'Ongeldige koppeling.')
+    checkLive(ctx, 'persoon', values.toegewezen_aan, 'Persoon bestaat niet.')
+    return values
+  }),
+  'taken',
+)

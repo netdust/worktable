@@ -4,7 +4,12 @@ import { plandag } from './plandag'
 const DAY_LINE_HOUR = 5
 
 const organisaties = [
-  { naam: 'Gezelschap Lantaarn', soort: 'eigen', adres: 'Werfkaai 12, 9000 Gent', parameters: { dag_grens_uur: 5 } },
+  {
+    naam: 'Gezelschap Lantaarn',
+    soort: 'eigen',
+    adres: 'Werfkaai 12, 9000 Gent',
+    parameters: { dag_grens_uur: 5, waarschuwingshorizon_dagen: 14, bevestigingstermijn_dagen: 7 },
+  },
   {
     naam: 'Zaal De Spiegel',
     soort: 'venue',
@@ -57,10 +62,13 @@ const slots: Slot[] = [
   [3, 'afbouw', '2026-10-19T09:00', '2026-10-19T12:00', 'bevestigd', 'Mechelen'],
 ]
 
-const timed = slots.map(([productieId, soort, startAt, endAt, status, plaats]) => ({
+const activityOf = (
+  [productieId, soort, startAt, endAt, status, plaats]: Slot,
+  omschrijving = `${soort} ${plaats}`,
+) => ({
   productie_id: productieId,
   soort,
-  omschrijving: `${soort} ${plaats}`,
+  omschrijving,
   datum: startAt.slice(0, 10),
   start_at: startAt,
   eind_at: endAt,
@@ -68,7 +76,9 @@ const timed = slots.map(([productieId, soort, startAt, endAt, status, plaats]) =
   status,
   plaats,
   locatie_id: VENUE_OF[plaats] ?? null,
-}))
+})
+
+const timed = slots.map((slot) => activityOf(slot))
 
 // Last, so the ids the toewijzingen name stay put; an activity without a time is on its own datum.
 const untimed = {
@@ -82,7 +92,13 @@ const untimed = {
   locatie_id: VENUE_OF.Antwerpen,
 }
 
-const activiteiten = [...timed, untimed]
+// Overlaps activity 1 in Gent; its own words, as "vergadering Gent" is activity 12's.
+const dubbel = activityOf(
+  [2, 'vergadering', '2026-10-12T10:00', '2026-10-12T11:00', 'bevestigd', 'Gent'],
+  'perspresentatie Gent',
+)
+
+const activiteiten = [...timed, untimed, dubbel]
 
 const persoon = (voornaam: string, achternaam: string, rest: Record<string, unknown>) => ({
   voornaam,
@@ -90,6 +106,9 @@ const persoon = (voornaam: string, achternaam: string, rest: Record<string, unkn
   weergavenaam: `${voornaam} ${achternaam}`,
   ...rest,
 })
+
+const SPELER = 1
+const LICHTTECHNICUS = 2
 
 const personen = [
   persoon('Lotte', 'Verhaegen', { email: 'lotte@lantaarn.test', organisatie_id: OWN, contract_type: 'vast' }),
@@ -107,12 +126,38 @@ const toewijzingen = [
   { activiteit_id: 2, persoon_id: 1, state: 'bevestigd' },
   { activiteit_id: 13, persoon_id: 4, state: 'uitgenodigd' },
   { activiteit_id: 8, persoon_id: 3, state: 'bevestigd' },
+  { activiteit_id: 13, persoon_id: 1, state: 'voorlopig' },
+  { activiteit_id: 16, persoon_id: 3, state: 'bevestigd' },
+  { activiteit_id: 15, persoon_id: 4, state: 'voorlopig' },
+  { activiteit_id: 15, rol_id: SPELER, aantal: 1, state: 'open' },
+  { activiteit_id: 26, persoon_id: 1, state: 'voorlopig' },
 ]
 
 const beschikbaarheden = [
   { persoon_id: 3, start_at: '2026-10-14T00:00', eind_at: '2026-10-14T23:59', reden: 'Familiefeest' },
   { persoon_id: 2, start_at: '2026-10-19T09:00', eind_at: '2026-10-19T13:00', reden: 'Tandarts' },
   { persoon_id: 1, start_at: '2026-10-09T09:00', eind_at: '2026-10-12T12:00', reden: 'Studiedag' },
+  {
+    persoon_id: 2,
+    start_at: '2026-10-12T20:00',
+    eind_at: '2026-10-12T23:00',
+    soort: 'onzeker',
+    reden: 'Misschien repetitie',
+  },
+]
+
+// Bram prefers Speler, Lotte does not: the rank order and the id order disagree.
+const persoonRollen = [
+  { persoon_id: 2, rol_id: SPELER, voorkeur: true },
+  { persoon_id: 1, rol_id: SPELER },
+  { persoon_id: 3, rol_id: SPELER },
+  { persoon_id: 4, rol_id: SPELER },
+  { persoon_id: 3, rol_id: LICHTTECHNICUS, dagtarief: 300 },
+]
+
+const taken = [
+  { titel: 'Rider versturen', deadline: '2026-10-16', toegewezen_aan: 1, status: 'open' },
+  { titel: 'Zaal bevestigen', deadline: '2026-10-09', status: 'gedaan' },
 ]
 
 const rollen = [
@@ -162,10 +207,12 @@ export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) 
   insert('productie', producties)
   insert('activiteit', activiteiten)
   insert('persoon', personen)
+  insert('rol', rollen)
   insert('toewijzing', toewijzingen)
   insert('beschikbaarheid', beschikbaarheden)
-  insert('rol', rollen)
   insert('sjabloon', sjablonen)
+  insert('persoon_rol', persoonRollen)
+  insert('taak', taken)
 }
 
 export const views: SavedViewSeed[] = [
@@ -227,7 +274,7 @@ export const views: SavedViewSeed[] = [
     filters: {},
     sort: ['start_at'],
     group_by: null,
-    visible_fields: ['persoon_id', 'start_at', 'eind_at', 'reden'],
+    visible_fields: ['persoon_id', 'soort', 'start_at', 'eind_at', 'reden'],
   },
   {
     name: 'Voorstellingen',

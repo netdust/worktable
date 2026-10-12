@@ -74,6 +74,7 @@ test('a step-1 theatre database migrates to step 2 keeping every row, revision a
 
   const added: Record<string, string[]> = {
     toewijzing: ['rol_id', 'aantal'],
+    beschikbaarheid: ['soort'],
     saved_view: ['for_owners'],
     account: ['kind', 'name', 'token_hash'],
   }
@@ -109,4 +110,28 @@ test('the migrated database serves its rows and runs the Task 10 query', async (
   const res = await app.request('/api/rows/toewijzing', { headers: { host: '127.0.0.1:4310', cookie } })
   expect(res.status).toBe(200)
   expect(sqlite.query('SELECT count(*) FROM mijn_producties').get()).toBeDefined()
+})
+
+test('soort is added to an existing beschikbaarheid table by ALTER', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'wt-soort-')), 'db.sqlite')
+  const sqlite = new Database(file, { create: true })
+  const withoutSoort: Domain = {
+    ...theatre,
+    datasets: theatre.datasets.map((d) =>
+      d.name === 'beschikbaarheid'
+        ? defineDataset({ ...d, columns: Object.fromEntries(Object.entries(d.columns).filter(([k]) => k !== 'soort')) })
+        : d,
+    ),
+  }
+  migrate(sqlite, withoutSoort)
+  sqlite.run("INSERT INTO persoon (voornaam, achternaam, weergavenaam) VALUES ('Tine', 'Proef', 'Tine Proef')")
+  sqlite.run(
+    "INSERT INTO beschikbaarheid (persoon_id, start_at, eind_at) VALUES (1, '2026-10-20T09:00', '2026-10-20T17:00')",
+  )
+  expect(columns(sqlite, 'beschikbaarheid')).not.toContain('soort')
+
+  migrate(sqlite, theatre)
+
+  expect(existsSync(`${file}.pre-migrate`)).toBe(false)
+  expect(sqlite.query('SELECT soort FROM beschikbaarheid').all()).toEqual([{ soort: 'afwezig' }])
 })

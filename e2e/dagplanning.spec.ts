@@ -625,7 +625,7 @@ test('tourstop-first-in-planning @e2e', async ({ page }) => {
   const order = await models.evaluateAll((items) =>
     items.map((i) => i.querySelector('.nv-model__name')?.textContent?.trim()),
   )
-  expect(order).toEqual(['Tourstops', 'Activiteiten', 'Toewijzingen', 'Beschikbaarheden'])
+  expect(order).toEqual(['Tourstops', 'Activiteiten', 'Toewijzingen', 'Beschikbaarheden', 'Taken'])
 
   await openView(page, 'Tourstops')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tourstops')
