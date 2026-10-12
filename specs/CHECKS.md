@@ -177,3 +177,23 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Bedrijfsweek · maand die op zondag begint | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "month-starting-sunday @e2e"` | e2e/step-3.spec.ts | step-3 | 9aa2e54 2026-10-12 |
 | GET /api/rows/conflicten | smoke | `bunx playwright test e2e/smoke/step-3.spec.ts --grep "/api/rows/conflicten asks for a session @smoke"` | e2e/smoke/step-3.spec.ts | step-3 | 9aa2e54 2026-10-12 |
 | Grid shell · calendar link | smoke | `bunx playwright test e2e/smoke/step-3.spec.ts --grep "a calendar link lands on the sign-in page @smoke"` | e2e/smoke/step-3.spec.ts | step-3 | 9aa2e54 2026-10-12 |
+| Dashboard · landing, licht en donker | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · weekstrook opent activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "week-opens-activity @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · Nieuwe taak | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · Nieuwe activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create-activiteit @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · productie kiezen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · productie kiezen, elke tegel (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · lege productie | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-empty-space @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · Geen toegang | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "tile-no-access @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Dashboard · samenstellen, teamdashboard, verwijderen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "composer-team-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| POST/PATCH /api/views dashboard shared · editor | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "editor-cannot-share-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| GET /api/views · owner, geen dashboard | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "owner-no-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| GET /api/attachments/activiteit?ids · 200 en 201 | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "gallery-batch-boundary @e2e"` | e2e/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| GET /api/views | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/views asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Grid shell · landing | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "the landing page shows the sign-in @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| GET /api/attachments/activiteit?ids | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/attachments/activiteit batch asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Grid shell · skin link | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "a skin view link lands on the sign-in page @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |

@@ -4,7 +4,7 @@ import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
 // Weeks no other spec uses. The dashboard's week strip shows this week, so its flow is dated today (the one exception).
-const WEEK = { skins: '2028-06-05', conflict: '2028-06-12' }
+const WEEK = { skins: '2028-06-05', conflict: '2028-06-12', quick: '2028-06-19', empty: '2028-06-26' }
 
 type Api = APIRequestContext
 type Values = Record<string, unknown>
@@ -70,6 +70,14 @@ async function activity(
   })
 }
 
+async function viewOf(api: Api, values: Values): Promise<number> {
+  const response = await api.post('/api/views', {
+    data: { filters: {}, sort: [], group_by: null, visible_fields: [], ...values },
+  })
+  expect(response.status(), await response.text()).toBe(201)
+  return ((await response.json()) as { id: number }).id
+}
+
 async function removeActivity(api: Api, id: number) {
   for (const t of (await rowsOf<{ id: number }>(api, 'toewijzing', { activiteit_id: id })).rows)
     await api.delete(`/api/rows/toewijzing/${t.id}`)
@@ -108,6 +116,14 @@ test.describe('step 3c', () => {
       await expect(statValue(page, view.name)).toHaveText(String(expected))
     }
     await shot(page, 'dashboard')
+
+    const root = page.locator('#root')
+    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: 'Donker' }).click()
+    await expect(root).toHaveAttribute('data-theme', 'dark')
+    await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(22, 23, 26)')
+    await expect(page.getByRole('region', { name: 'Nu', exact: true })).toBeVisible()
+    await shot(page, 'dashboard-dark')
+    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: 'Licht' }).click()
   })
 
   test('stat-red-then-neutral @e2e', async ({ page }) => {
@@ -141,6 +157,7 @@ test.describe('step 3c', () => {
     await landing(page)
     await stat(page, 'Conflicten').getByRole('button', { name: 'Conflicten' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conflicten')
+    await shot(page, 'stat-opens-view')
   })
 
   test('week-opens-activity @e2e', async ({ page }) => {
@@ -152,6 +169,7 @@ test.describe('step 3c', () => {
       const strip = page.getByRole('region', { name: 'Kalender activiteiten', exact: true })
       await strip.getByRole('button', { name: /e2e vandaag in de strip/ }).click()
       await expect(page.getByRole('complementary', { name: 'e2e vandaag in de strip' })).toBeVisible()
+      await shot(page, 'week-drawer')
     } finally {
       await removeActivity(api, id)
     }
@@ -167,6 +185,8 @@ test.describe('step 3c', () => {
       const row = list.getByRole('listitem').filter({ hasText: 'e2e afvinken' })
       await expect(row).toBeVisible()
       const before = await countIn(page, 'Werklijst')
+      await list.scrollIntoViewIfNeeded()
+      await shot(page, 'werklijst-set')
       await row.getByRole('button', { name: 'Gedaan' }).click()
       await expect(row).toHaveCount(0)
       await expect.poll(() => countIn(page, 'Werklijst')).toBe(before - 1)
@@ -204,6 +224,27 @@ test.describe('step 3c', () => {
     const scoped = (await rowsOf(api, 'conflicten', { productie_id: kersentuin })).total
     await expect(statValue(page, 'Conflicten')).toHaveText(String(scoped))
     expect(scoped).toBeLessThanOrEqual(all)
+    await shot(page, 'dashboard-space')
+  })
+
+  // Spec R7: "the space switcher narrows every tile". Werklijst and Toewijzing are not scoped, so with a production
+  // chosen that has no rows, Open plaatsen, Onbeantwoord, Plaatsen gevuld and the Werklijst still count every production.
+  test('space-narrows-every-tile @e2e', async ({ page }) => {
+    test.fail()
+    const api = page.request
+    const titel = 'e2e productie zonder plaatsen'
+    const productie = await idOf(api, 'productie', { titel, seizoen: '2028', status: 'actief', organisatie_id: 1 })
+    try {
+      await landing(page)
+      await expect(statValue(page, 'Open plaatsen')).toHaveText(/^[1-9]\d*$/)
+      await chooseSpace(page, titel)
+      await expect(statValue(page, 'Conflicten')).toHaveText('0')
+      await expect(statValue(page, 'Open plaatsen')).toHaveText('0')
+      await expect(statValue(page, 'Onbeantwoord')).toHaveText('0')
+      await expect(listTitle(page, 'Werklijst')).toHaveText('Werklijst · 0')
+    } finally {
+      await api.delete(`/api/rows/productie/${productie}`)
+    }
   })
 
   test('owner-no-dashboard @e2e', async ({ browser }) => {
@@ -217,6 +258,7 @@ test.describe('step 3c', () => {
   })
 
   test('skins-open @e2e', async ({ page }) => {
+    test.setTimeout(90_000)
     const api = page.request
     const day = WEEK.skins
     const nachtwacht = await idByName(api, 'productie', 'titel', 'Nachtwacht')
@@ -240,7 +282,21 @@ test.describe('step 3c', () => {
       data: PNG,
     })
     expect(upload.status(), await upload.text()).toBe(201)
+    // Two views the seed does not have: a board of activities by status, a calendar of tourstops whose rows span days.
+    const made: number[] = []
     try {
+      made.push(
+        await viewOf(api, { name: 'e2e Bord activiteiten', source: 'activiteit', skin: 'board', sort: ['plandag'] }),
+      )
+      made.push(
+        await viewOf(api, {
+          name: 'e2e Kalender tourstops',
+          source: 'speelreeks',
+          skin: 'calendar',
+          sort: ['start_datum'],
+          group_by: 'productie_id',
+        }),
+      )
       await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', day)
       await expect(
         page.getByRole('row', { name: 'Nachtwacht' }).getByRole('button', { name: /e2e huid tourstop/ }),
@@ -269,11 +325,219 @@ test.describe('step 3c', () => {
         page.getByRole('list', { name: 'Voorlopig' }).getByRole('button', { name: /Huid Proef/ }),
       ).toBeVisible()
       await shot(page, 'board')
+
+      await openWeek(page, 'e2e Bord activiteiten', 'Activiteiten', 'plandag', day)
+      await expect(
+        page.getByRole('list', { name: 'Bevestigd' }).getByRole('button', { name: /e2e huid activiteit/ }),
+      ).toBeVisible()
+      await shot(page, 'board-activiteiten')
+
+      await openWeek(page, 'e2e Kalender tourstops', 'Tourstops', 'start_datum', day)
+      // The tourstop runs Monday to Thursday: one bar from the first day's column over four.
+      const tour = page
+        .getByRole('group', { name: 'Hele dag', exact: true })
+        .getByRole('button', { name: /e2e huid tourstop/ })
+      await expect(tour).toHaveCount(1)
+      await expect(tour).toHaveCSS('grid-column-start', '2')
+      await expect(tour).toHaveCSS('grid-column-end', 'span 4')
+      await shot(page, 'calendar-span')
     } finally {
+      for (const view of made) await api.delete(`/api/views/${view}`)
       await api.delete(`/api/rows/toewijzing/${slot}`)
       await api.delete(`/api/rows/beschikbaarheid/${away}`)
       await removeActivity(api, id)
       await api.delete(`/api/rows/speelreeks/${reeks}`)
+    }
+  })
+  test('composer-team-dashboard @e2e', async ({ browser, page }) => {
+    const admin = await browser.newContext({ storageState: state('admin') })
+    const a = await admin.newPage()
+    const dashboards = async () => (await viewsOf(admin.request)).filter((v) => v.skin === 'dashboard').map((v) => v.id)
+    const before = await dashboards()
+    try {
+      await landing(a)
+      const rail = a.getByRole('navigation', { name: 'Views' }).getByRole('group', { name: 'Dashboard', exact: true })
+      // The system dashboard is never deleted from the rail.
+      await expect(rail.getByRole('treeitem')).toHaveCount(1)
+      await expect(rail.getByRole('button', { name: 'Dashboard verwijderen' })).toHaveCount(0)
+
+      await a.getByRole('button', { name: 'Bewerken' }).click()
+      const nu = a.getByRole('group', { name: 'Sectie Nu', exact: true })
+      await nu.getByLabel('Soort tegel').selectOption({ label: 'Getal' })
+      await nu.getByLabel('Weergave', { exact: true }).selectOption({ label: 'Vandaag' })
+      await nu.getByLabel('Titel tegel').fill('e2e tegel')
+      await nu.getByLabel('Kleur').selectOption({ label: 'Rood' })
+      await expect(nu.getByLabel('Boven')).toHaveValue('0')
+      await shot(a, 'composer')
+      await nu.getByRole('button', { name: 'Tegel toevoegen' }).click()
+      await expect(nu.getByText('Getal: Vandaag', { exact: true })).toBeVisible()
+      await a.getByRole('button', { name: 'Opslaan' }).click()
+      await expect(stat(a, 'e2e tegel')).toBeVisible()
+
+      // The administrator's save is the team's copy: an editor lands on it.
+      const copy = (await viewsOf(admin.request)).find((v) => v.skin === 'dashboard' && !before.includes(v.id))
+      expect(copy?.name).toBe('Overzicht')
+      await landing(page)
+      await expect(stat(page, 'e2e tegel')).toBeVisible()
+
+      await expect(rail.getByRole('treeitem')).toHaveCount(2)
+      await rail.getByRole('button', { name: 'Dashboard verwijderen' }).click()
+      await expect.poll(dashboards).toEqual(before)
+      await landing(page)
+      await expect(stat(page, 'Conflicten')).toBeVisible()
+      await expect(stat(page, 'e2e tegel')).toHaveCount(0)
+    } finally {
+      for (const id of (await dashboards()).filter((id) => !before.includes(id)))
+        await admin.request.delete(`/api/views/${id}`)
+      await admin.close()
+    }
+  })
+
+  test('quick-create-activiteit @e2e', async ({ page }) => {
+    const api = page.request
+    await landing(page)
+    await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Nieuwe activiteit' })
+    const productie = dialog.getByRole('combobox', { name: 'Productie', exact: true })
+    // Asked once, with no space chosen; its day and first option filled in.
+    await expect(productie).toHaveCount(1)
+    await expect(dialog.getByRole('textbox', { name: 'Datum', exact: true })).toHaveValue(localDay())
+    await expect(dialog.getByRole('combobox', { name: 'Soort', exact: true })).not.toHaveValue('')
+    await shot(page, 'quick-create')
+    await productie.selectOption({ label: 'Nachtwacht' })
+    await dialog.getByRole('textbox', { name: 'Datum', exact: true }).fill(WEEK.quick)
+    await dialog.getByRole('combobox', { name: 'Soort', exact: true }).selectOption('repetitie')
+    await dialog.getByRole('button', { name: 'Aanmaken' }).click()
+    await expect(dialog).toHaveCount(0)
+    const nachtwacht = await idByName(api, 'productie', 'titel', 'Nachtwacht')
+    const made = (await rowsOf<Values & { id: number }>(api, 'activiteit', { plandag: WEEK.quick })).rows
+    try {
+      expect(made).toHaveLength(1)
+      expect(made[0]).toMatchObject({ productie_id: nachtwacht, soort: 'repetitie' })
+    } finally {
+      for (const row of made) await removeActivity(api, row.id)
+    }
+
+    // The chosen space is filled in and stays changeable.
+    await chooseSpace(page, 'De Kersentuin')
+    await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
+    const kersentuin = await idByName(api, 'productie', 'titel', 'De Kersentuin')
+    await expect(productie).toHaveValue(String(kersentuin))
+    await productie.selectOption({ label: 'Nachtwacht' })
+    await expect(productie).toHaveValue(String(nachtwacht))
+    await dialog.getByRole('button', { name: 'Annuleren' }).click()
+    await expect(dialog).toHaveCount(0)
+  })
+
+  test('editor-cannot-share-dashboard @e2e', async ({ page }) => {
+    const api = page.request
+    const layout = { sections: [], actions: [] }
+    const shared = await api.post('/api/views', {
+      data: { name: 'e2e gedeeld dashboard', skin: 'dashboard', shared: true, layout },
+    })
+    expect(shared.status()).toBe(403)
+    expect(((await shared.json()) as { code: string }).code).toBe('shared_dashboard')
+
+    const own = await api.post('/api/views', { data: { name: 'e2e eigen dashboard', skin: 'dashboard', layout } })
+    expect(own.status(), await own.text()).toBe(201)
+    const id = ((await own.json()) as { id: number }).id
+    try {
+      const patched = await api.patch(`/api/views/${id}`, { data: { shared: true } })
+      expect(patched.status()).toBe(403)
+      expect(((await patched.json()) as { code: string }).code).toBe('shared_dashboard')
+      expect((await viewsOf(api)).find((v) => v.id === id)).toMatchObject({ shared: false })
+
+      // Empty edge: the editor's own dashboard lands, says it is empty, and offers Bewerken.
+      await page.goto('/')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('e2e eigen dashboard')
+      await expect(page.getByText('Dit dashboard is nog leeg.')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Bewerken' })).toBeVisible()
+      await shot(page, 'dashboard-empty')
+    } finally {
+      await api.delete(`/api/views/${id}`)
+    }
+  })
+
+  test('dashboard-empty-space @e2e', async ({ page }) => {
+    const api = page.request
+    const titel = 'e2e lege productie'
+    const productie = await idOf(api, 'productie', { titel, seizoen: '2028', status: 'actief', organisatie_id: 1 })
+    try {
+      await landing(page)
+      await chooseSpace(page, titel)
+      await expect(statValue(page, 'Conflicten')).toHaveText('0')
+      await expect(stat(page, 'Conflicten')).not.toHaveClass(/nv-stat--/)
+      await expect(listTitle(page, 'Vandaag')).toHaveText('Vandaag · 0')
+      await expect(page.getByRole('region', { name: 'Vandaag', exact: true })).toContainText('Geen rijen')
+      await shot(page, 'dashboard-empty-space')
+    } finally {
+      await api.delete(`/api/rows/productie/${productie}`)
+    }
+  })
+
+  test('gallery-batch-boundary @e2e', async ({ page }) => {
+    const api = page.request
+    const nachtwacht = await idByName(api, 'productie', 'titel', 'Nachtwacht')
+    const id = await activity(api, nachtwacht, 'e2e galerij grens', WEEK.empty)
+    try {
+      const upload = await api.post(`/api/attachments/activiteit/${id}?kind=foto&name=pixel.png`, {
+        headers: { 'content-type': 'application/octet-stream' },
+        data: PNG,
+      })
+      expect(upload.status(), await upload.text()).toBe(201)
+      const others = Array.from({ length: 300 }, (_, i) => i + 1).filter((n) => n !== id)
+      const read = (ids: number[]) => api.get(`/api/attachments/activiteit?kind=foto&ids=${ids.join(',')}`)
+
+      const full = await read([...others.slice(0, 199), id])
+      expect(full.status()).toBe(200)
+      const { files } = (await full.json()) as { files: Record<string, { mime: string }> }
+      expect(files[String(id)]?.mime).toBe('image/png')
+
+      const over = await read([...others.slice(0, 200), id])
+      expect(over.status()).toBe(400)
+      expect(((await over.json()) as { code: string }).code).toBe('bad_ids')
+    } finally {
+      await removeActivity(api, id)
+    }
+  })
+  test('tile-no-access @e2e', async ({ browser, page }) => {
+    const admin = await browser.newContext({ storageState: state('admin') })
+    const made: number[] = []
+    try {
+      const own = await admin.request.post('/api/views', {
+        data: {
+          name: 'e2e eigen takenlijst',
+          source: 'taak',
+          skin: 'table',
+          filters: {},
+          sort: [],
+          visible_fields: [],
+        },
+      })
+      expect(own.status(), await own.text()).toBe(201)
+      const view = ((await own.json()) as { id: number }).id
+      made.push(view)
+      const team = await admin.request.post('/api/views', {
+        data: {
+          name: 'e2e teamdashboard',
+          skin: 'dashboard',
+          shared: true,
+          layout: { sections: [{ label: 'Privé', tiles: [{ kind: 'stat', view, measure: 'count' }] }], actions: [] },
+        },
+      })
+      expect(team.status(), await team.text()).toBe(201)
+      made.unshift(((await team.json()) as { id: number }).id)
+
+      // The editor lands on the administrator's shared dashboard; its tile names a view only the administrator reads.
+      await page.goto('/')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('e2e teamdashboard')
+      const section = page.getByRole('region', { name: 'Privé', exact: true })
+      await expect(section).toContainText('Geen toegang')
+      await expect(section).not.toContainText('e2e eigen takenlijst')
+      await shot(page, 'tile-no-access')
+    } finally {
+      for (const id of made) await admin.request.delete(`/api/views/${id}`)
+      await admin.close()
     }
   })
 })
