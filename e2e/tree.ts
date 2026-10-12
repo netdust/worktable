@@ -27,7 +27,14 @@ const plusDays = (day: string, n: number) => {
  * Opens a view on one week, keeping its own conditions: Link kopiëren gives the view's address, its date
  * condition becomes "ligt tussen" that week, and the page lands on that address.
  */
-export async function openWeek(page: Page, view: string, model: string, field: string, monday: string): Promise<void> {
+export async function openWeek(
+  page: Page,
+  view: string,
+  model: string,
+  field: string,
+  monday: string,
+  span = 6,
+): Promise<void> {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/')
   await openView(page, view, model)
@@ -38,7 +45,7 @@ export async function openWeek(page: Page, view: string, model: string, field: s
   const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()))
   const params = new URLSearchParams(copied.hash.slice(1))
   const kept = (JSON.parse(params.get('f') ?? '[]') as { field: string }[]).filter((c) => c.field !== field)
-  params.set('f', JSON.stringify([{ field, op: 'between', values: [monday, plusDays(monday, 6)] }, ...kept]))
+  params.set('f', JSON.stringify([{ field, op: 'between', values: [monday, plusDays(monday, span)] }, ...kept]))
   await page.goto(`/#${params.toString()}`)
   await page.reload()
   // The landing waits for the saved views; under a full run's load that can take a while.
