@@ -341,6 +341,31 @@ describe('lookups on a dataset with owners', () => {
     expect(refusalOf({ ...of, queries: [] })).toContain('team_name')
   })
 
+  // The item's owner is the item itself, so team 1 belongs to another owner: its name must not reach the item's owner.
+  test('owner_visible on a lookup that can reach another owner’s record is refused', () => {
+    const itemOwnsItself: Domain = {
+      ...domain,
+      datasets: domain.datasets.map((d) => (d.name === 'item' ? { ...d, owners: { owner: 'id' } } : d)),
+    }
+    const of = withLookupOn(itemOwnsItself, visibleName, { owner_visible: true })
+    expect(refusalOf({ ...of, queries: [] })).toContain('team_name')
+  })
+
+  test('owner_visible on a lookup into a dataset owned through another column is refused', () => {
+    const teamOwnedByItem = { ...visibleName, owners: { owner: 'lead_id' }, record_link: undefined }
+    const withLead = withLookupOn(withOwnedItem(), teamOwnedByItem, { owner_visible: true })
+    const of: Domain = {
+      ...withLead,
+      queries: [],
+      datasets: withLead.datasets.map((d) =>
+        d.name === 'team'
+          ? { ...d, columns: { ...d.columns, lead_id: { type: 'integer', label: 'Lead', relation: 'item', nullable: true } } }
+          : d,
+      ),
+    }
+    expect(refusalOf(of)).toContain('team_name')
+  })
+
   test('an owner_visible lookup is served, filtered and sorted for its owner', async () => {
     expect(refusalOf(withOwnerVisibleName())).toBe('')
     const { owner } = await owned(withOwnerVisibleName())

@@ -222,11 +222,11 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
     if (field.type === 'json' || field.type === 'boolean') {
       throw at(lookup.field, `field "${lookup.field}" is ${field.type}`)
     }
-    // An owner may read a related field only where that field is served to an owner of its own record (threat 2).
-    if (lookup.owner_visible && !(field.owner_visible && target.owners)) {
+    // An owner reads a related field only from its own record: through its owner column, into the dataset its subject is (threat 2).
+    if (lookup.owner_visible && !(field.owner_visible && target.owners?.owner === 'id' && lookup.via === dataset.owners?.owner)) {
       throw at(
         name,
-        `is owner_visible, but "${target.name}.${lookup.field}" is not an owner_visible field of a dataset with owners`,
+        `is owner_visible, but it does not read an owner_visible field of the owner's own "${target.name}" record through the owner column`,
       )
     }
     if (lookup.own === undefined) continue
