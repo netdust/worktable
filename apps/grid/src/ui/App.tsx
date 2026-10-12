@@ -43,7 +43,7 @@ import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevi
 import { useFillViewport } from './viewport'
 import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
-import { monthWeeks } from '../calendar/layout'
+import { calendarWindow, monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -271,7 +271,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
   // A calendar shows the condition's days, else this week; a month reads its whole weeks.
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
-  const calendarShown = conditionDays ?? weekOf(new Date())
+  const calendarShown = calendarWindow(conditionDays, new Date())
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : {}
   const windowKey = JSON.stringify(window)

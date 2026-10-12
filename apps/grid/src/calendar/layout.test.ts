@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarDef, Row } from '../types'
-import { monthWeeks, placeEvents, weekGrid } from './layout'
+import { calendarWindow, monthWeeks, placeEvents, weekGrid } from './layout'
 
 const CAL: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'] }
 const WEEK = { from: '2026-10-12', to: '2026-10-18' }
@@ -107,5 +107,21 @@ describe('weekGrid', () => {
     ]
     const blocks = weekGrid(placedOf(rows), WEEK_DAYS, lanes).timed['2026-10-12'] ?? []
     expect(blocks.map((b) => [b.event.row.id, b.column, b.columns])).toEqual([[2, 0, 2], [1, 1, 2], [3, 0, 1]])
+  })
+})
+
+describe('calendarWindow', () => {
+  const today = new Date(2026, 9, 14)
+
+  it('shows this week without a condition, and keeps a whole week or month', () => {
+    expect(calendarWindow(null, today)).toEqual({ from: '2026-10-12', to: '2026-10-18' })
+    expect(calendarWindow({ from: '2026-11-02', to: '2026-11-08' }, today)).toEqual({ from: '2026-11-02', to: '2026-11-08' })
+    expect(calendarWindow({ from: '2026-11-01', to: '2026-11-30' }, today)).toEqual({ from: '2026-11-01', to: '2026-11-30' })
+  })
+
+  it('turns any other condition into the week it starts in: a day, a year, a range', () => {
+    expect(calendarWindow({ from: '2026-10-15', to: '2026-10-15' }, today)).toEqual({ from: '2026-10-12', to: '2026-10-18' })
+    expect(calendarWindow({ from: '2026-01-01', to: '2026-12-31' }, today)).toEqual({ from: '2025-12-29', to: '2026-01-04' })
+    expect(calendarWindow({ from: '2026-10-14', to: '2026-12-02' }, today)).toEqual({ from: '2026-10-12', to: '2026-10-18' })
   })
 })

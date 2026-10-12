@@ -1,5 +1,5 @@
 import type { CalendarDef, DateWindow, Row } from '../types'
-import { iso, parse } from '../ui/Window'
+import { isMonth, isWeek, iso, parse, weekOf } from '../ui/Window'
 
 export interface Lane {
   id: number | null
@@ -139,4 +139,11 @@ export function weekGrid(events: Placed[], days: string[], lanes: Lane[]) {
   const from = Math.min(DAY_START, ...hours.map((event) => Math.floor(event.from / 60) * 60))
   const to = Math.max(DAY_END, ...hours.map((event) => Math.ceil(Math.max(event.to, event.from + 1) / 60) * 60))
   return { allDay, timed, hours: { from, to } }
+}
+
+/** The days a calendar shows for a date condition: a whole week or month as it is, else the week the condition starts in. */
+export function calendarWindow(condition: DateWindow | null, today: Date): DateWindow {
+  if (!condition) return weekOf(today)
+  if (isWeek(condition) || isMonth(condition)) return condition
+  return weekOf(parse(condition.from) ?? today)
 }
