@@ -84,7 +84,7 @@
 - **Denied actor** (T3, T2). An owner filtering or sorting `?filter={"datum":…}` on its own Toewijzing gets 400, never rows. An owner gets 404 on every new query.
 - **Empty** (T7). A slot with no candidates shows "Geen kandidaten" and "Iedereen tonen", never an empty silent list. A caller who cannot read the source gets the plain picker.
 - **Boundary** (T6). An event crossing midnight sits on its plandag. A month starting on a Sunday renders six week rows. An event with `end` before `start` is drawn as a point, not a negative block.
-- **Shape, not behaviour** (T8, T9). The badge test renders the cell with 0, 1 and 3 and reads what is on screen. The gate drives a real fix (state → geannuleerd) and reads the badge gone after the grid reloads its rows.
+- **Shape, not behaviour** (T8, T9). The badge test renders the cell with 0, 1 and 3 and reads what is on screen. The gate drives a real fix (Familiefeest's soort → beschikbaar) and reads the same row present with no badge after the grid reloads its rows.
 
 ---
 
@@ -93,7 +93,7 @@
 **Files:**
 - Modify: `packages/theatre/src/datasets.ts` (add `persoonRol`, `taak`; `soort` on `beschikbaarheid`)
 - Modify: `packages/theatre/src/writers.ts` (add `persoonRolWriter`, `taakWriter`)
-- Modify: `packages/theatre/src/seed.ts` (append the rows below; add the two parameters)
+- Modify: `packages/theatre/src/seed.ts` (append the rows below; add the two parameters; add `soort` to the Afwezigheden view's `visible_fields` after `persoon_id`, so the badge-clears flow edits it in the grid: review 2 S4)
 - Modify: `packages/theatre/src/index.ts` (register both datasets and writers; Persoon_rol under "Gegevens", Taak under "Planning")
 - Modify: `scripts/vocabulary-allow.txt`. Add `record` (generic English; the engine's record links and record ids, theatre's Taak.record_id), `aan` (Dutch 'to', in theatre's toegewezen_aan and gekoppeld_aan; one engine test string), `ander` (Dutch 'other', in conflicten's ander_* columns; one engine test string), and `taak` (the engine test fixture's invented dataset; theatre declares Taak) (orchestrator ruling, 2026-10-12: allow-list, as `aantal` and `mijn`).
 - Test: `packages/theatre/test/step3-data.test.ts`, `packages/theatre/test/migrate.test.ts`
@@ -120,13 +120,13 @@
 - Produces `beschikbaarheid.soort`: text, default `'afwezig'`, options afwezig · onzeker · beschikbaar · voorkeur, tones bad · warn · ok · sky, `owner_visible: true` and `owner_writable: true`. A person sets their own soort; check `checkOwnerWritable` allows it.
 - Produces the own organisation's `parameters` seed `{ dag_grens_uur: 5, waarschuwingshorizon_dagen: 14, bevestigingstermijn_dagen: 7 }`.
 - Seed ids that later tasks use. Appended rows take the next ids, so read them back by match, never by literal id, in tests.
-  - activity **A-dubbel**, appended after `untimed`: `[2, 'vergadering', '2026-10-12T10:00', '2026-10-12T11:00', 'bevestigd', 'Gent']`, which overlaps activity 1 (production 1, Gent, 09:00–13:00);
+  - activity **A-dubbel**, appended after `untimed`: production 2, soort vergadering, omschrijving `perspresentatie Gent` (its own words: "vergadering Gent" is activity 12's, and `step-0b`/`step-0d` locate by it; review 2 S1), 2026-10-12T10:00–11:00, bevestigd, Gent, which overlaps activity 1 (production 1, Gent, 09:00–13:00);
   - toewijzingen appended:
     - Lotte (1) voorlopig on activity 13 (production 2 repetitie, 10:00–17:00 on 10-12), which overlaps her bevestigd on activity 2 (14:00–18:00): **overlap, conflict**. Her Studiedag (until 10-12 12:00) also makes it an afwezig row; harmless;
     - Noor (3) bevestigd on activity 16 (vergadering Antwerpen, 2026-10-14 17:30), against her afwezig on 10-14: **afwezig**. Not on activity 15, so her only exclusion from slot 15 is afwezig (plan review S1);
-    - Sam (4) voorlopig on activity 15: **already assigned**;
+    - Sam (4) voorlopig on activity 15: **already assigned**. `e2e/step-0c.spec.ts:196` then finds two Sam rows: narrow its locator to the row it means;
     - an open slot on activity 15: `rol_id` Speler, `aantal` 1, `state` open;
-    - Lotte (1) bevestigd on activity 26 (the untimed overnachting Antwerpen, 2026-10-15, production Nachtwacht): an all-day row in her calendar, logistics, so no conflict (plan review S3);
+    - Lotte (1) **voorlopig** on activity 26 (the untimed overnachting Antwerpen, 2026-10-15, production Nachtwacht): an all-day row in her calendar, logistics, so no conflict. Voorlopig, not bevestigd, because `mijn_producties` lists bevestigd rows and `e2e/step-2.spec.ts:961-964` asserts Lotte's page has no Nachtwacht (review 2 S2);
   - beschikbaarheid appended: Bram (2), soort onzeker, 2026-10-12T20:00–23:00, against his uitgenodigd on activity 4 (20:30): **onzeker**;
   - persoon_rol: Speler for Bram (voorkeur true), Lotte, Noor and Sam; Lichttechnicus for Noor (dagtarief 300). Bram (id 2) has voorkeur and Lotte (id 1) not, so the rank order and the id order disagree (plan review B3);
   - taak: two rows, one open assigned to Lotte with deadline 2026-10-16, and one gedaan.
@@ -137,11 +137,12 @@
   - `beschikbaarheid without soort is afwezig` → created row `soort === 'afwezig'`;
   - `an owner sets soort on its own beschikbaarheid` → 200;
   - `an owner cannot read persoon_rol or taak` → 404 on both `/rows`;
-  - `taak refuses a status outside open, gedaan` → 400.
+  - `taak refuses a status outside open, gedaan` → 400; `taak refuses a gekoppeld_aan outside its options` → 400;
+  - `an owner cannot set soort outside its options on its own beschikbaarheid` → 400;
   - in `migrate.test.ts`, `soort is added to an existing beschikbaarheid table by ALTER`: a database migrated with the step-2 declaration and holding rows migrates with the new one without a `.pre-migrate` copy (no rebuild), and the existing rows read `soort === 'afwezig'` (plan review S8).
 - [ ] **Step 2: Run** `bun test packages/theatre/test/step3-data.test.ts` → FAIL (unknown dataset).
-- [ ] **Step 3: Implement** the datasets, the two writers (`forPlanners` + `checkRates` on Persoon_rol; `ctx.exists('persoon_rol', { persoon_id, rol_id }, id)` for uniqueness; `forPlanners` on Taak), the seeds and the registrations.
-- [ ] **Step 4: Run** the file → PASS; then `bun test packages`, `bun run check`, and the e2e specs the new seed rows can move (`bunx playwright test e2e/grid-ux.spec.ts e2e/step-1.spec.ts e2e/step-2.spec.ts e2e/dagplanning.spec.ts`); fix any count an appended seed changed (for example `grid-ux.spec.ts:328/339/394`, `step-1.spec.ts:261`, the Nachtwacht matrix), naming each in the report (plan review N3).
+- [ ] **Step 3: Implement** the datasets, the two writers (`forPlanners` + `checkRates` on Persoon_rol; `ctx.exists('persoon_rol', { persoon_id, rol_id }, id)` for uniqueness; `forPlanners` and `checkOption` on Taak's `status` and `gekoppeld_aan`), `checkOption` on `soort` in `beschikbaarheidWriter` (an owner writes it; review 2 S9), the seeds and the registrations.
+- [ ] **Step 4: Run** the file → PASS; then `bun test packages`, `bun run check`, and the whole e2e suite (`bun run e2e`); fix any count or locator an appended seed changed (known: `grid-ux.spec.ts:328/339/394`, `step-1.spec.ts:261`, `step-0c.spec.ts:196`, the Nachtwacht matrix, the Afwezigheden headers), naming each in the report (reviews N3 and S1).
 - [ ] **Step 5: Commit** `feat(theatre): Persoon_rol with admin-only rates, Taak, soort on Beschikbaarheid (afwezig by default), seeds for step 3`
 
 ### Task 2: Theatre queries — conflicten, persoon_dag, locatie_dag, kandidaten, werklijst
@@ -249,9 +250,12 @@
     - `PATCH /rows/toewijzing/<Noor's row on activity 16>` with `{ state: 'geannuleerd' }`, sent as the grid sends a mapped write;
     - then `GET /rows/persoon_dag` shows `conflicten: 0` for that row, and before the write it was 1;
     - a disallowed transition (geannuleerd → bevestigd is refused by the lifecycle) answers the lifecycle's refusal.
+  - `kandidaten leave out a timed overlap and an inactive person`: give Lotte a live assignment on activity 16's day overlapping slot 15's window (a new timed activity on 2026-10-14 11:00–12:00) → Lotte absent; set Bram `actief: false` → Bram absent (review 2 S8).
+  - `werklijst lists open slots and unanswered invitations`: an open slot on an activity dated today + 2 → a row of soort open_slot with `persoon_id` null; Sam's uitgenodigd row backdated 30 days (created_at) → a row of soort onbeantwoord with Sam's `persoon_id`.
+  - `locatie_dag counts the venue clash on both rows`: activity 1 and A-dubbel each read `conflicten: 1`.
   - `a cleared absence clears the count`: setting Noor's Familiefeest `soort` to beschikbaar leaves her persoon_dag row present with `conflicten: 0`.
   - `werklijst`: the open Taak for Lotte is listed. A PATCH of `status: 'gedaan'` on its row lands on Taak. The seeded optie activities within 14 days are listed only when the test inserts one dated today + 3.
-  - `owners read none of them`: an owner gets 404 on all five `/rows/<query>`.
+  - `owners read none of them`: an owner gets 404 on all five `/rows/<query>`, and none of the five is in its `/schema` (review 2 N6).
 - [ ] **Step 2: Run** → FAIL (unknown source).
 - [ ] **Step 3: Implement** the five SQL files and the declarations. Use `UNION ALL` per conflict type, and a CTE for the window terms in each file. SQLite views cannot share a CTE, so repeat the terms; each file stays under one screen per type.
 - [ ] **Step 4: Run** the file → PASS; `bun test packages` and `bun run check` → PASS.
@@ -264,7 +268,8 @@
 - Modify: `packages/engine/src/declare.ts` (`LookupDecl.owner_visible?: true`)
 - Modify: `packages/engine/src/validate.ts:210-240` (`checkLookups`: drop the owners refusal at :214; refuse `owner_visible` unless the target field is `owner_visible` and the target dataset declares `owners`)
 - Modify: `packages/engine/src/lookups.ts` (add `lookupsFor(source: Source, scope: Scope): string[]`: every lookup under `all`, else only `owner_visible` ones)
-- Modify: `packages/engine/src/rows.ts:137` (the select uses `lookupsFor`); `packages/engine/src/filter.ts:36` (`resolveKey` takes the scope and refuses a lookup outside `lookupsFor` with `bad_filter` "unknown filter key"; `/history`'s `whereOf` passes the scope); `packages/engine/src/params.ts:119-122` (`parseSort` and `parseGroup` take the scope and refuse such a lookup with `bad_sort` / `bad_group`, so `orderOf` never sees one); `packages/engine/src/app.ts:153` (`servedLookups` uses the actor's scope)
+- Modify: `packages/engine/src/rows.ts` — the refusal lives here, in one file (review 2 S7, the simpler alternative): `readRows` and `readIds` hold the scope already; `whereOf(source, table, params, domain, scope: Scope)` and `orderOf(source, table, params, scope: Scope)` take it as a **required** parameter, and before compiling, `refuseHiddenLookups(source, scope, params)` throws `bad_filter` for a filter or stored-filter key, `bad_sort` for a sort key and `bad_group` for the group that names a lookup outside `lookupsFor(source, scope)`. This covers `/rows`, `/history` (through `readIds`) and owner views. The select at `:137` and the write reply at `writes.ts:657` use `lookupsFor` (review 2 N3). `packages/engine/src/app.ts:153` (`servedLookups` uses the actor's scope).
+- R2's "only an owner-visible lookup may appear in a view for owners" already holds: `forOwnersProblem` (`views.ts:356`) admits only query views, and lookups exist only on datasets (review 2 N2).
 - Modify: `packages/theatre/src/datasets.ts` (toewijzing `lookups`: `datum`, `start_at`, `eind_at` and `productie`, each `via: 'activiteit_id'`)
 - Modify: `docs/SPEC.md` only if a line disagrees with what the code must do (stop and report instead)
 - Test: `packages/engine/test/lookups-privacy.test.ts` (the shared `fixtures/lookup-domain.ts` stays as it is)
@@ -275,7 +280,7 @@
 - [ ] **Step 1: Turn the probes around (RED).**
   - Flip the existing `withOwnedItem` probes in `lookups-privacy.test.ts` (`item` owned through `team_id`, already carrying `team_name`): "validateDomain refuses owners" becomes "validates", and the scoped-read test keeps asserting no `team_name` (plan review S6).
   - Add these tests, on `withOwnedItem`:
-    - `an owner's rows carry no lookup` → no `home_name` key;
+    - `an owner's rows carry no lookup` → no `team_name` key;
     - `an owner's filter on a lookup is 400 bad_filter`;
     - `an owner's sort on a lookup is 400 bad_sort`;
     - `an owner's group on a lookup is 400`;
@@ -283,7 +288,8 @@
     - `/schema for an owner serves no lookup`;
     - `an editor reads, filters and sorts it` → 200 with values;
     - `owner_visible on a lookup whose field is not owner_visible is refused` (validateDomain throws, naming the lookup);
-    - `an owner_visible lookup is served, filtered and sorted for its owner`.
+    - `an owner_visible lookup is served, filtered and sorted for its owner`, on a variant `withOwnerVisibleName` (built in the test file like `withOwnedItem`, with `team.name` declared `owner_visible` and `team` declaring `owners`, and the `team_name` lookup `owner_visible: true`);
+    - `owner_visible on a lookup whose target dataset declares no owners is refused` (threat 2; review 2 N6).
 - [ ] **Step 2: Run** `bun test packages/engine/test/lookups-privacy.test.ts` → FAIL on validation (owners refusal) and on the owner filter (no refusal).
 - [ ] **Step 3: Implement** as listed in Files.
 - [ ] **Step 4: Run** the file and `bun test packages` → PASS. The theatre tests show Toewijzing rows carrying `lookups.datum` for an editor and none for Lotte's owner session (add that case to `packages/theatre/test/lookups.test.ts`).
@@ -373,7 +379,7 @@
   ```
   where `Placed = { row: Row; day: string; lane: number | null; allDay: boolean; from: number; to: number }`. `from` and `to` are minutes after 00:00 of `day`, and a time past midnight on the same plandag counts beyond 1440.
 - Create: `apps/grid/src/calendar/Calendar.tsx`:
-  - a header with Maand · Week, previous and next (`shift` / `shiftMonth` from `ui/Window.tsx`), today, and the lane select from `cal.lanes` written to the view's group;
+  - a header with Maand · Week, previous and next, today (each an `onWindow(condition)` callback App writes into the view's date condition), and the lane select from `cal.lanes` written to the view's group;
   - week: one row per lane, seven day columns, all-day chips above the timed blocks;
   - month: a Monday-first grid of 5 or 6 weeks, each event a chip prefixed with its lane title;
   - clicking an event opens `PanelDrawer`'s pattern (`matrix/Matrix.tsx:543-560`) for the row.
@@ -384,11 +390,11 @@
   - :369 maps skin `calendar` to type `calendar`.
 - Modify: `apps/grid/src/api.ts:302` (type calendar → skin calendar)
 - Modify: `apps/grid/src/ui/App.tsx`:
-  - :264-271: calendar window = the shown week, or the month's whole weeks;
+  - :264-271: calendar window = `conditionDays` widened to whole weeks, or today's week without a condition;
   - :488-499: the `Calendar` branch;
   - the toolbar takes no add and no export on a calendar.
 - Modify: `apps/grid/src/ui/Rail.tsx:91` (Kalender runs `onNew('calendar')` when `table.types` includes it, else stays blocked; `kindCalendar` already exists at `i18n.ts:198`), `ui/NewViewDialog.tsx:18,29`, `ui/ViewList.tsx:107` (icon `CalendarDays` from lucide-react), `i18n.ts` (`month: 'Maand'`, `week: 'Week'`, `allDay: 'Hele dag'`)
-- Ruling (plan review N8): the shown week or month is state in `App.tsx` (`calendarShown: { mode: 'week' | 'month'; anchor: string }`, starting on today's week), because the rows window is computed there; `Calendar` gets it and an `onShown` callback, and App derives `window` from it.
+- The calendar's window is the view's date condition, as the matrix's is (`App.tsx:265-270`, `conditionDays`): a week or a month condition shows as week or month, none shows today's week. Maand, Week, previous, next and today rewrite that condition with `weekOf` / `shift` / `shiftMonth` (`ui/Window.tsx`), so `openWeek` pins a week in e2e and a saved view keeps its period (review 2 S5; this replaces the App-state ruling of review 1 N8).
 - Test: `apps/grid/src/calendar/layout.test.ts`, `apps/grid/src/calendar/Calendar.test.tsx`, `apps/grid/src/engine.test.ts` (mapping)
 
 **Interfaces:**
@@ -429,6 +435,8 @@
 - Modify: `apps/grid/src/grid/cells/RelationPicker.tsx` (optional `candidates?: () => Promise<{id: number; title: string}[]>`: listed in that order, plus "Iedereen tonen" switching to `records`), `grid/cells/Relation.tsx:49-71` (pass `candidates` when the field has `options_from`, the row is open and the persoon is empty; filled rows keep the plain picker), `grid/Drawer.tsx:226-235` (same, from the action input and the drawer's row)
 - Modify: `apps/grid/src/matrix/store.ts` / `engine.ts:223-228` `openOf` (carry the fill input's `options_from` onto `open`)
 - Modify: `i18n.ts` (`candidatesNone: 'Geen kandidaten'`, `candidatesAll: 'Iedereen tonen'`)
+- The search box stays and searches the candidates while candidates are shown, and everyone after Iedereen tonen.
+- Modify: `e2e/step-2.spec.ts:176-183` `fillFromMatrix`: press Iedereen tonen before searching, since its people (Ines Brievenbus at `:365`) hold no Persoon_rol (review 2 S10).
 - Test: `apps/grid/src/api.test.ts`, `apps/grid/src/matrix/Matrix.test.tsx`, `apps/grid/src/grid/cells/RelationPicker.test.tsx` (create if missing)
 
 **Interfaces:**
@@ -441,7 +449,7 @@
   - `a filled row's relation cell keeps the plain picker`.
 - [ ] **Step 2: Run** the grid tests → FAIL.
 - [ ] **Step 3: Implement** as listed in Files.
-- [ ] **Step 4: Run** → PASS.
+- [ ] **Step 4: Run** → PASS; then `bunx playwright test e2e/step-2.spec.ts e2e/action-inputs.spec.ts` → PASS.
 - [ ] **Step 5: Commit** `feat(grid): slot pickers list candidates from the declared query, with Iedereen tonen`
 
 ### Task 8: Grid — the badge cell
@@ -452,7 +460,7 @@
 - Modify: `i18n.ts` (`badgeCount: '{count} {label}'`, with the column's label, as `i18n.ts:92` already does; no theatre word in the grid)
 - Test: `apps/grid/src/grid/cells/Badge.test.tsx`
 
-- [ ] **Step 1: Write the failing test** `shows 3 and 1 as badges and nothing at 0`, rendering with a real `Column` built by `fieldColumn`.
+- [ ] **Step 1: Write the failing test** `shows 3 and 1 as badges and nothing at 0`, rendering with a real `Column` built by `columnsFor` (`fieldColumn` is private; review 2 N4).
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** → PASS.
 - [ ] **Step 5: Commit** `feat(grid): badge cells — a tinted count above 0, nothing at 0`
 
@@ -467,7 +475,7 @@
   - `Bedrijfsweek` (productie_dag, calendar, `group_by: 'productie_id'`);
   - `Werklijst` (werklijst, table, filter none, sort `deadline`);
   - `Kandidaten` (kandidaten, table).
-- Create: `e2e/step-3.spec.ts`. Use `openView` and `openWeek` from `e2e/tree.ts`, and `writeDb` copied from `e2e/step-2.spec.ts:105` (move it to a shared `e2e/db.ts` and import it in both).
+- Create: `e2e/step-3.spec.ts`. Use `openView` and `openWeek` from `e2e/tree.ts`, and `writeDb` from `e2e/step-2.spec.ts:112` (move it, with what it needs from `THEATRE`, to a shared `e2e/db.ts` and import it in both; review 2 N5).
   - **candidates-picker**:
     - in "Toewijzingen per activiteit", in the week of 2026-10-12 (production Nachtwacht), open activity 15's open cell;
     - the picker lists Bram De Wilde before Lotte Verhaegen, and neither Noor Claes (afwezig) nor Sam Peeters (assigned). The e2e database is shared and earlier specs assign people (plan review N2): assert order and exclusions, not the full list, and check in Task 9 that no earlier spec puts Bram or Lotte on activity 15 or clears Noor's absence;
@@ -482,13 +490,15 @@
     - in Afwezigheden, set Familiefeest's Soort to Beschikbaar;
     - back in "Per persoon per dag", after the grid reloads, Noor's row is still there and shows no badge (plan review S2: a state change would filter the row out and prove nothing).
   - **person-calendar**:
-    - open Persoonskalender, which shows the calendar (the Week toggle is visible);
+    - open Persoonskalender and pin the week of 2026-10-12 with `openWeek`; the calendar shows (the Week toggle is visible);
     - in the week of 2026-10-12 there is a lane "Lotte Verhaegen" with her repetitie chip;
     - Lotte's untimed overnachting on 2026-10-15 (seeded in Task 1) shows under "Hele dag" in her lane; laned by production it sits in Nachtwacht's lane (plan review S3).
-  - **company-week**: open Bedrijfsweek; the week of 2026-10-12 shows lanes De Kersentuin and Nachtwacht.
+  - **company-week**: open Bedrijfsweek and pin the week of 2026-10-12 with `openWeek`; it shows lanes De Kersentuin and Nachtwacht.
 - Create: `e2e/smoke/step-3.spec.ts`: `/api/rows/conflicten asks for a session @smoke` → 401; `a calendar link lands on the sign-in page @smoke`.
 - Modify: `specs/CHECKS.md` (register the five flows `@e2e` and the two `@smoke`; `/shakeout` refines them)
 
+- Test: in `packages/theatre/test/step3-queries.test.ts`, `every seeded view saves through the views route`: POST each seeded view's fields to `/views` as an administrator → 201, since seeding inserts views without `skinOf`/`groupOf` (review 2 N7).
+- Not in this plan (review 2 N1, sent to the orchestrator): the matrix's `away` marks every Beschikbaarheid row whatever its soort, so an onzeker or beschikbaar row still shows the person away there.
 - [ ] **Step 1: Write the e2e spec** and run it: `bunx playwright test e2e/step-3.spec.ts` → it fails only where Task 9's seed views are missing.
 - [ ] **Step 2: Add the seed views.** Run again → PASS. Then `bun run gate` → PASS.
 - [ ] **Step 3: Commit** `test(e2e): step 3 gate — candidates in the slot picker, six conflict types, the badge clears, the person calendar and the company week; seeded views`
