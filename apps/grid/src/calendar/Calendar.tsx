@@ -27,6 +27,8 @@ const NO_LANE = '-'
 /** One block hour on the week's time axis, in pixels. */
 export const HOUR_PX = 48
 const MIN_BLOCK = 20
+// Below two lines' height a block shows its time and name side by side.
+const TWO_LINES = 40
 // The lanes' colours, in order; the status tones are left to statuses.
 const LANE_TONES = ['sky', 'violet', 'amber', 'teal', 'rose', 'green', 'slate', 'grey']
 const monthOf = (date: Date): DateWindow => shiftMonth({ from: iso(date), to: iso(date) }, 0)
@@ -49,18 +51,20 @@ function dayHead(day: string): string {
   return `${weekday} ${date.getDate()}`
 }
 
-function Event({ event, laneTitle, named = false, style, onOpen }: {
-  event: Placed; laneTitle?: string; named?: boolean; style: CSSProperties; onOpen: (row: Row) => void
+function Event({ event, laneTitle, named = false, short = false, style, onOpen }: {
+  event: Placed; laneTitle?: string; named?: boolean; short?: boolean; style: CSSProperties; onOpen: (row: Row) => void
 }) {
   const time = event.allDay ? '' : event.to > event.from ? `${hhmm(event.from)}–${hhmm(event.to)}` : hhmm(event.from)
   return (
-    <button type="button" className={`nv-cal__event${event.allDay ? ' nv-cal__event--all' : ''}`} style={style}
-      title={laneTitle} onClick={() => onOpen(event.row)}>
+    <button type="button" className={`nv-cal__event${event.allDay ? ' nv-cal__event--all' : ''}${short ? ' nv-cal__event--short' : ''}`}
+      style={style} title={laneTitle ? `${laneTitle} · ${event.row.title}` : event.row.title} onClick={() => onOpen(event.row)}>
       {time && <span className="nv-cal__time">{time}</span>}
       <span className="nv-cal__title">{named && laneTitle && laneTitle !== event.row.title ? `${laneTitle} · ${event.row.title}` : event.row.title}</span>
     </button>
   )
 }
+
+const blockHeight = (event: Placed) => Math.max(((event.to - event.from) / 60) * HOUR_PX, MIN_BLOCK)
 
 function Legend({ lanes, toneOf }: { lanes: Lane[]; toneOf: ToneOf }) {
   return (
@@ -102,11 +106,12 @@ function Week({ days, lanes, events, timed, toneOf, onOpen }: {
           {days.map((day) => (
             <section key={day} aria-label={dayHead(day)} className="nv-week__day" style={{ height, backgroundSize: `100% ${HOUR_PX}px` }}>
               {(grid.timed[day] ?? []).map(({ event, column, columns: across }) => (
-                <Event key={event.row.id} event={event} laneTitle={titleOf(event.lane)} onOpen={onOpen} style={{
+                <Event key={event.row.id} event={event} laneTitle={titleOf(event.lane)} onOpen={onOpen}
+                  short={blockHeight(event) < TWO_LINES} style={{
                   ...toneOf(event.lane),
                   position: 'absolute',
                   top: `${((event.from - grid.hours.from) / 60) * HOUR_PX}px`,
-                  height: `${Math.max(((event.to - event.from) / 60) * HOUR_PX, MIN_BLOCK)}px`,
+                  height: `${blockHeight(event)}px`,
                   left: `${(column / across) * 100}%`,
                   width: `${100 / across}%`,
                 }} />

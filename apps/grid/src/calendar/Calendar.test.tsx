@@ -45,6 +45,13 @@ describe('the calendar', () => {
     expect(screen.getByTestId('hours').textContent).toContain('08:00')
   })
 
+  it('a block too short for two lines puts its time and name on one line, and names the activity on hover', () => {
+    shown({ rows: [row(4, 'voorstelling zonder einde', '2026-10-12', '2026-10-12T20:00', [1, 'Lotte Verhaegen'])] })
+    const block = screen.getByRole('button', { name: /20:00.*voorstelling zonder einde/ })
+    expect(block.classList.contains('nv-cal__event--short')).toBe(true)
+    expect(block.title).toBe('Lotte Verhaegen · voorstelling zonder einde')
+  })
+
   it('an untimed event sits in the all-day band above the hours', () => {
     shown()
     const band = screen.getByRole('group', { name: 'Hele dag do 15' })

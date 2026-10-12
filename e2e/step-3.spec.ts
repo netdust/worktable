@@ -317,7 +317,7 @@ test.describe('step 3', () => {
       await expect(page.getByRole('list', { name: 'Rijen' }).getByText('Nachtwacht', { exact: true })).toBeVisible()
       await expect(band.getByRole('button', { name: /e2e kalender overnachting/ })).toHaveAttribute(
         'title',
-        'Nachtwacht',
+        'Nachtwacht · e2e kalender overnachting',
       )
 
       await page.getByRole('button', { name: /e2e kalender repetitie/ }).click()
@@ -543,9 +543,7 @@ test.describe('step 3', () => {
   })
 
   // Found in the shake-out: a timed activity with no end is a 20 px block, and its name is clipped to nothing.
-  // Expected to fail until the calendar shows the name; then drop test.fail.
   test('point-event-shows-its-name @e2e', async ({ page }) => {
-    test.fail()
     const api = page.request
     const day = WEEK.point
     const who = await person(api, 'Punt', 'Proef')
