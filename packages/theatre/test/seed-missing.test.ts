@@ -11,7 +11,16 @@ import theatre from '../src'
 const SPEELDAG = 'speeldag op locatie (met plaatsen)'
 const serve = join(import.meta.dir, '../../engine/src/serve.ts')
 const ROOT = join(import.meta.dir, '../../..')
-const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties']
+const STEP_3 = [
+  'Conflicten',
+  'Per persoon per dag',
+  'Persoonskalender',
+  'Locatiekalender',
+  'Bedrijfsweek',
+  'Werklijst',
+  'Kandidaten',
+]
+const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties', ...STEP_3]
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
 const PLANNING = ['start_at', 'omschrijving', 'soort', 'speelreeks_id', 'locatie', 'mensen', 'status']
 const WEEK = { plandag: { $period: 'week' } }
@@ -124,7 +133,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   expect(result.out).toContain('seed-missing: rol 4 inserted, 0 present')
   expect(result.out).toContain('seed-missing: sjabloon 1 inserted, 0 present\n')
   expect(result.out).toContain('seed-missing: persoon skipped (not config)')
-  expect(result.out).toContain('seed-missing: views 4 added, 1 updated, 7 present')
+  expect(result.out).toContain('seed-missing: views 11 added, 1 updated, 7 present')
 
   expect(read(db, 'SELECT naam FROM rol ORDER BY id').map((r) => r.naam)).toEqual([
     'Speler',
@@ -145,7 +154,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   const again = await seedMissing(db)
   expect(again.code).toBe(0)
   expect(again.out).toContain('seed-missing: rol 0 inserted, 4 present')
-  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 12 present')
+  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 19 present')
   expect(read(db, 'SELECT COUNT(*) AS n FROM batch')).toEqual([{ n: 1 }])
 }, 30_000)
 

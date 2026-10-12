@@ -324,3 +324,15 @@ test('owners read none of them', async () => {
   const sources = Object.keys(schema.body.sources as Body)
   for (const source of QUERIES) expect(sources).not.toContain(source)
 })
+
+// Seeding inserts views without the views route's checks; each one must also save through it.
+test('every seeded view saves through the views route', async () => {
+  for (const { name, ...fields } of theatre.views) {
+    const res = await admin('POST', '/api/views', { name: `${name} (copy)`, ...fields, shared: false })
+    expect({ name, status: res.status, body: res.status === 201 ? null : res.body }).toEqual({
+      name,
+      status: 201,
+      body: null,
+    })
+  }
+})

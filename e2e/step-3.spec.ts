@@ -1,0 +1,310 @@
+import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
+import { writeDb } from './db'
+import { openEditor } from './editor'
+import { shot } from './shots'
+import { openView, openWeek } from './tree'
+
+// Weeks the seed and the other specs leave empty, one per flow, so the shared database never moves a flow's rows.
+const WEEK = {
+  picker: '2028-04-03',
+  conflicts: '2028-04-10',
+  badge: '2028-04-17',
+  calendar: '2028-04-24',
+  away: '2028-05-01',
+}
+const MATRIX = 'Toewijzingen per activiteit'
+
+type Api = APIRequestContext
+type Values = Record<string, unknown>
+
+const plusDays = (day: string, n: number) => {
+  const d = new Date(`${day}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+// SQL's today is the server's local date.
+const localDay = (offset: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+async function rowsOf<T = Values>(api: Api, dataset: string, filter?: Values): Promise<T[]> {
+  const query = filter ? `&filter=${encodeURIComponent(JSON.stringify(filter))}` : ''
+  const response = await api.get(`/api/rows/${dataset}?limit=500${query}`)
+  expect(response.status()).toBe(200)
+  return ((await response.json()) as { rows: T[] }).rows
+}
+
+async function idOf(api: Api, dataset: string, values: Values): Promise<number> {
+  const response = await api.post(`/api/rows/${dataset}`, { data: values })
+  expect(response.status(), await response.text()).toBe(201)
+  return ((await response.json()) as { id: number }).id
+}
+
+const idByName = async (api: Api, dataset: string, column: string, name: string) =>
+  (await rowsOf<Values & { id: number }>(api, dataset)).find((r) => r[column] === name)?.id as number
+
+const nachtwacht = (api: Api) => idByName(api, 'productie', 'titel', 'Nachtwacht')
+
+async function activity(
+  api: Api,
+  omschrijving: string,
+  day: string,
+  times: [string, string] | null,
+  soort = 'repetitie',
+) {
+  return idOf(api, 'activiteit', {
+    productie_id: await nachtwacht(api),
+    soort,
+    status: 'bevestigd',
+    omschrijving,
+    datum: day,
+    ...(times ? { start_at: `${day}T${times[0]}`, eind_at: `${day}T${times[1]}` } : {}),
+  })
+}
+
+const assign = (api: Api, activiteit_id: number, persoon_id: number, state = 'voorlopig') =>
+  idOf(api, 'toewijzing', { activiteit_id, persoon_id, state })
+
+const absence = (api: Api, persoon_id: number, day: string, soort: string, reden: string) =>
+  idOf(api, 'beschikbaarheid', { persoon_id, soort, reden, start_at: `${day}T00:00`, eind_at: `${day}T23:59` })
+
+const person = (api: Api, voornaam: string, achternaam: string) => idOf(api, 'persoon', { voornaam, achternaam })
+
+async function removeActivity(api: Api, id: number) {
+  for (const t of await rowsOf<{ id: number }>(api, 'toewijzing', { activiteit_id: id }))
+    await api.delete(`/api/rows/toewijzing/${t.id}`)
+  await api.delete(`/api/rows/activiteit/${id}`)
+}
+
+/** The row of a grid or matrix by its title. */
+const row = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
+
+/** A matrix cell: one per person column, counted past the label and the open column. */
+async function spot(page: Page, title: string, name: string): Promise<Locator> {
+  const head = page.locator(`thead th.nv-mx__head[title="${name}"]`)
+  await expect(head).toBeVisible()
+  const index = await page
+    .locator('thead th.nv-mx__head')
+    .evaluateAll((heads, wanted) => heads.findIndex((th) => th.getAttribute('title') === wanted), name)
+  return row(page, title).locator('td[data-cell]').nth(index)
+}
+
+async function cellOf(page: Page, title: string, label: string): Promise<Locator> {
+  let index = -1
+  await expect
+    .poll(async () => {
+      index = await page
+        .locator('thead th')
+        .evaluateAll(
+          (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
+          label,
+        )
+      return index
+    })
+    .toBeGreaterThanOrEqual(0)
+  return row(page, title).locator('td').nth(index)
+}
+
+test.describe('step 3', () => {
+  test('candidates-picker @e2e', async ({ page }) => {
+    const api = page.request
+    const title = 'e2e kandidaten'
+    const day = WEEK.picker
+    const id = await activity(api, title, day, ['10:00', '12:00'])
+    const [noor, sam] = [
+      await idByName(api, 'persoon', 'weergavenaam', 'Noor Claes'),
+      await idByName(api, 'persoon', 'weergavenaam', 'Sam Peeters'),
+    ]
+    const away = await absence(api, noor, day, 'afwezig', 'e2e kandidaten afwezig')
+    try {
+      await idOf(api, 'toewijzing', { activiteit_id: id, rol_id: await idByName(api, 'rol', 'naam', 'Speler') })
+      await assign(api, id, sam)
+      await openWeek(page, MATRIX, 'Activiteiten', 'plandag', day)
+      await row(page, title).locator('[data-testid="open"]').getByRole('button').click()
+      const picker = page.getByRole('region', { name: 'Open plek invullen' })
+      const names = picker.locator('.nv-mx__pick')
+      await expect(names.first()).toBeVisible()
+      const listed = await names.allTextContents()
+      expect(listed.indexOf('Bram De Wilde')).toBeGreaterThanOrEqual(0)
+      expect(listed.indexOf('Bram De Wilde')).toBeLessThan(listed.indexOf('Lotte Verhaegen'))
+      expect(listed).not.toContain('Noor Claes')
+      expect(listed).not.toContain('Sam Peeters')
+      await shot(page, 'candidates-picker')
+
+      await picker.getByRole('button', { name: 'Iedereen tonen' }).click()
+      await expect(picker.getByRole('button', { name: 'Noor Claes', exact: true })).toBeVisible()
+      await picker.getByRole('searchbox', { name: 'Kies een persoon' }).fill('Bram')
+      const filled = page.waitForResponse(
+        (res) => res.request().method() === 'POST' && res.url().endsWith('/api/actions/vul_slot'),
+      )
+      await picker.getByRole('button', { name: 'Bram De Wilde', exact: true }).click()
+      expect((await filled).status()).toBe(201)
+      const bram = await idByName(api, 'persoon', 'weergavenaam', 'Bram De Wilde')
+      expect(await rowsOf(api, 'toewijzing', { activiteit_id: id, persoon_id: bram })).toEqual([
+        expect.objectContaining({ state: 'voorlopig' }),
+      ])
+    } finally {
+      await removeActivity(api, id)
+      await api.delete(`/api/rows/beschikbaarheid/${away}`)
+    }
+  })
+
+  // The shared e2e database is changed by earlier specs, so this flow makes one conflict of each kind in its own week.
+  // The seeded six are pinned on a fresh database by packages/theatre/test/step3-queries.test.ts.
+  test('conflicten-six-types @e2e', async ({ page }) => {
+    const api = page.request
+    const day = (n: number) => plusDays(WEEK.conflicts, n)
+    const who = await person(api, 'Conflict', 'Proef')
+    const spiegel = await idByName(api, 'organisatie', 'naam', 'Zaal De Spiegel')
+    const kersentuin = await idByName(api, 'productie', 'titel', 'De Kersentuin')
+    const made: number[] = []
+    const absences: number[] = []
+    const make = async (omschrijving: string, on: string, times: [string, string], extra: Values = {}) => {
+      const id = await activity(api, omschrijving, on, times)
+      if (Object.keys(extra).length > 0)
+        expect((await api.patch(`/api/rows/activiteit/${id}`, { data: extra })).status()).toBe(200)
+      made.push(id)
+      return id
+    }
+    try {
+      await assign(api, await make('e2e overlap een', day(0), ['10:00', '12:00']), who)
+      await assign(api, await make('e2e overlap twee', day(0), ['11:00', '13:00']), who)
+      absences.push(await absence(api, who, day(1), 'afwezig', 'e2e conflict afwezig'))
+      await assign(api, await make('e2e afwezig', day(1), ['10:00', '12:00']), who)
+      absences.push(await absence(api, who, day(2), 'onzeker', 'e2e conflict onzeker'))
+      await assign(api, await make('e2e onzeker', day(2), ['10:00', '12:00']), who)
+      await make('e2e zaal een', day(3), ['10:00', '12:00'], { locatie_id: spiegel })
+      await make('e2e zaal twee', day(3), ['11:00', '13:00'], { locatie_id: spiegel, productie_id: kersentuin })
+      const soon = await make('e2e open plaats morgen', localDay(1), ['10:00', '12:00'])
+      await idOf(api, 'toewijzing', { activiteit_id: soon, rol_id: await idByName(api, 'rol', 'naam', 'Speler') })
+      const slot = await assign(api, await make('e2e onbevestigd', day(4), ['10:00', '12:00']), who, 'uitgenodigd')
+      const longAgo = new Date(Date.now() - 30 * 86_400_000).toISOString()
+      writeDb('UPDATE toewijzing SET created_at = ? WHERE id = ?', longAgo, slot)
+      writeDb("UPDATE revision SET at = ? WHERE entity = 'toewijzing' AND record_id = ?", longAgo, slot)
+
+      await page.goto('/')
+      await openView(page, 'Conflicten', 'Conflicten')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conflicten')
+      const types = page.locator('tbody')
+      for (const label of ['Overlap', 'Afwezig', 'Onzeker', 'Open plaats', 'Onbevestigd', 'Locatie dubbel']) {
+        await expect(types.getByRole('gridcell', { name: label, exact: true }).first()).toBeVisible()
+      }
+      await shot(page, 'conflicten')
+    } finally {
+      for (const id of made) await removeActivity(api, id)
+      for (const id of absences) await api.delete(`/api/rows/beschikbaarheid/${id}`)
+    }
+  })
+
+  test('badge-clears @e2e', async ({ page }) => {
+    const api = page.request
+    const title = 'e2e badge repetitie'
+    const day = WEEK.badge
+    const id = await activity(api, title, day, ['10:00', '12:00'])
+    const who = await person(api, 'Badge', 'Proef')
+    const away = await absence(api, who, day, 'afwezig', 'e2e badge afwezig')
+    try {
+      await assign(api, id, who, 'bevestigd')
+      await openWeek(page, 'Per persoon per dag', 'Per persoon per dag', 'plandag', day)
+      await expect(row(page, title).locator('.nv-badge')).toHaveText('1')
+      await shot(page, 'badge')
+
+      await openWeek(page, 'Afwezigheden', 'Beschikbaarheden', 'start_at', day)
+      const soort = await cellOf(page, 'Badge Proef', 'Soort')
+      await soort.click()
+      await soort.press('Enter')
+      const saved = page.waitForResponse(
+        (res) => res.request().method() === 'PATCH' && /\/api\/rows\/beschikbaarheid\/\d+$/.test(res.url()),
+      )
+      await openEditor(page).getByRole('option', { name: 'Beschikbaar', exact: true }).click()
+      expect((await saved).status()).toBe(200)
+
+      await openWeek(page, 'Per persoon per dag', 'Per persoon per dag', 'plandag', day)
+      await expect(row(page, title)).toHaveCount(1)
+      await expect(row(page, title).locator('.nv-badge')).toHaveCount(0)
+    } finally {
+      await removeActivity(api, id)
+      await api.delete(`/api/rows/beschikbaarheid/${away}`)
+    }
+  })
+
+  test('away-only-afwezig @e2e', async ({ page }) => {
+    const api = page.request
+    const title = 'e2e afwezig in de matrix'
+    const day = WEEK.away
+    const id = await activity(api, title, day, ['10:00', '12:00'])
+    const [gone, unsure] = [await person(api, 'Weg', 'Proef'), await person(api, 'Twijfel', 'Proef')]
+    const away = await absence(api, gone, day, 'afwezig', 'e2e weg')
+    const maybe = await absence(api, unsure, day, 'onzeker', 'e2e misschien')
+    try {
+      await assign(api, id, gone)
+      await assign(api, id, unsure)
+      await openWeek(page, MATRIX, 'Activiteiten', 'plandag', day)
+      await expect(await spot(page, title, 'Weg Proef')).toHaveClass(/nv-mx__away/)
+      await expect(await spot(page, title, 'Twijfel Proef')).not.toHaveClass(/nv-mx__away/)
+
+      expect((await api.patch(`/api/rows/beschikbaarheid/${away}`, { data: { soort: 'beschikbaar' } })).status()).toBe(
+        200,
+      )
+      await page.reload()
+      await expect(await spot(page, title, 'Weg Proef')).not.toHaveClass(/nv-mx__away/)
+    } finally {
+      await removeActivity(api, id)
+      await api.delete(`/api/rows/beschikbaarheid/${away}`)
+      await api.delete(`/api/rows/beschikbaarheid/${maybe}`)
+    }
+  })
+
+  test('person-calendar @e2e', async ({ page }) => {
+    const api = page.request
+    const day = WEEK.calendar
+    const timed = await activity(api, 'e2e kalender repetitie', day, ['14:00', '17:00'])
+    const untimed = await activity(api, 'e2e kalender overnachting', plusDays(day, 2), null, 'overnachting')
+    const who = await person(api, 'Kalender', 'Proef')
+    try {
+      await assign(api, timed, who)
+      await assign(api, untimed, who)
+      await openWeek(page, 'Persoonskalender', 'Per persoon per dag', 'plandag', day)
+      await expect(page.getByRole('radio', { name: 'Week' })).toBeChecked()
+      // A calendar, not a table: the timed one on the hour axis of its day, the untimed one in that day's all-day band.
+      await expect(page.getByTestId('hours')).toContainText('08:00')
+      const monday = page.getByRole('region', { name: 'ma 24', exact: true })
+      await expect(monday.getByRole('button', { name: /14:00–17:00.*e2e kalender repetitie/ })).toBeVisible()
+      const band = page.getByRole('group', { name: 'Hele dag wo 26', exact: true })
+      await expect(band.getByRole('button', { name: /e2e kalender overnachting/ })).toBeVisible()
+      await expect(page.getByRole('list', { name: 'Rijen' })).toContainText('Kalender Proef')
+      await shot(page, 'person-calendar')
+
+      await page.getByRole('radio', { name: 'Productie' }).click()
+      await expect(page.getByRole('list', { name: 'Rijen' }).getByText('Nachtwacht', { exact: true })).toBeVisible()
+      await expect(band.getByRole('button', { name: /e2e kalender overnachting/ })).toHaveAttribute(
+        'title',
+        'Nachtwacht',
+      )
+
+      await page.getByRole('button', { name: /e2e kalender repetitie/ }).click()
+      await expect(page.getByRole('complementary', { name: 'e2e kalender repetitie' })).toBeVisible()
+    } finally {
+      await removeActivity(api, timed)
+      await removeActivity(api, untimed)
+    }
+  })
+
+  test('company-week @e2e', async ({ page }) => {
+    await openWeek(page, 'Bedrijfsweek', 'Per productie per dag', 'plandag', '2026-10-12')
+    await expect(page.getByRole('radio', { name: 'Week' })).toBeChecked()
+    // productie_dag has no start: only the all-day band, the productions told apart by colour and legend.
+    await expect(page.getByTestId('hours')).toHaveCount(0)
+    const legend = page.getByRole('list', { name: 'Rijen' })
+    await expect(legend.getByText('De Kersentuin', { exact: true })).toBeVisible()
+    await expect(legend.getByText('Nachtwacht', { exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('group', { name: 'Hele dag ma 12', exact: true }).getByRole('button').first(),
+    ).toBeVisible()
+    await shot(page, 'company-week')
+  })
+})

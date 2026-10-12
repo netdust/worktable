@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type APIRequestContext, type Browser, expect, type Locator, type Page, test } from '@playwright/test'
 import { SERVICE, state, THEATRE } from './auth'
+import { writeDb } from './db'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -100,16 +101,6 @@ function readDb(sql: string, ...params: (string | number)[]): unknown {
     const row = new Database(${JSON.stringify(THEATRE.db)}, { readonly: true }).query(${JSON.stringify(sql)}).get(...${JSON.stringify(params)})
     console.log(JSON.stringify(row ? Object.values(row)[0] : null))`
   return JSON.parse(execFileSync('bun', ['-e', script]).toString().trim() || 'null')
-}
-
-/** One write to the e2e database: the clock moved past a token's end is a write the running engine reads on its next request. */
-function writeDb(sql: string, ...params: (string | number)[]): number {
-  const script = `import { Database } from 'bun:sqlite'
-    const db = new Database(${JSON.stringify(THEATRE.db)})
-    db.exec('PRAGMA busy_timeout = 5000')
-    db.query(${JSON.stringify(sql)}).run(...${JSON.stringify(params)})
-    console.log(JSON.stringify(String(db.query('SELECT changes() AS n').get().n)))`
-  return Number(JSON.parse(execFileSync('bun', ['-e', script]).toString().trim()))
 }
 
 /** The engine's CLI on the e2e database, as global setup runs it. */
