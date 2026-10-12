@@ -337,19 +337,28 @@ export const sjabloonWriter: Writer = {
   },
 }
 
+// A rate belongs to the person and role an administrator set it for: only they move or remove a rated row.
+function checkRated(ctx: WriteContext, moves: boolean): void {
+  const rated = ctx.current?.dagtarief != null || ctx.current?.uurtarief != null
+  if (rated && moves && ctx.actor.role !== 'administrator') forbid('Alleen een beheerder wijzigt tarieven.')
+}
+
+const persoonRolAccept: Accept = (values, ctx) => {
+  checkRates(values, ctx)
+  checkRated(ctx, changes(values, ctx, 'persoon_id') || changes(values, ctx, 'rol_id'))
+  checkRequired(values, ctx, 'persoon_id', 'Persoon is verplicht.')
+  checkRequired(values, ctx, 'rol_id', 'Rol is verplicht.')
+  checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+  checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
+  const { persoon_id, rol_id } = merged(values, ctx)
+  if (ctx.exists('persoon_rol', { persoon_id, rol_id }, ctx.current?.id as number | undefined)) {
+    refuse('Deze persoon heeft deze rol al.')
+  }
+  return values
+}
+
 export const persoonRolWriter = forPlanners(
-  writerOf((values, ctx) => {
-    checkRates(values, ctx)
-    checkRequired(values, ctx, 'persoon_id', 'Persoon is verplicht.')
-    checkRequired(values, ctx, 'rol_id', 'Rol is verplicht.')
-    checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
-    checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
-    const { persoon_id, rol_id } = merged(values, ctx)
-    if (ctx.exists('persoon_rol', { persoon_id, rol_id }, ctx.current?.id as number | undefined)) {
-      refuse('Deze persoon heeft deze rol al.')
-    }
-    return values
-  }),
+  { ...writerOf(persoonRolAccept), delete: (ctx) => checkRated(ctx, true) },
   'rollen per persoon',
 )
 

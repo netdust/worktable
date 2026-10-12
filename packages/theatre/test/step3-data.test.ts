@@ -51,6 +51,23 @@ describe('persoon_rol', () => {
     expect((await admin('POST', '/api/rows/persoon_rol', { ...NEW_ROL, persoon_id: 3, rol_id: 4 })).status).toBe(201)
   })
 
+  // An administrator's rate stays with the person and role it was set for (review SS-S1).
+  test('an editor cannot move or delete a row that carries a rate', async () => {
+    const rated = await admin('POST', '/api/rows/persoon_rol', { ...NEW_ROL, persoon_id: 3, rol_id: 4 })
+    const id = rated.body.id as number
+    const moved = await editor('PATCH', `/api/rows/persoon_rol/${id}`, { persoon_id: 5 })
+    const dropped = await editor('DELETE', `/api/rows/persoon_rol/${id}`)
+    expect([moved.status, moved.body.message, dropped.status, dropped.body.message]).toEqual([
+      403,
+      'Alleen een beheerder wijzigt tarieven.',
+      403,
+      'Alleen een beheerder wijzigt tarieven.',
+    ])
+    expect((await editor('PATCH', `/api/rows/persoon_rol/${id}`, { voorkeur: true })).status).toBe(200)
+    const plain = await editor('POST', '/api/rows/persoon_rol', { persoon_id: 2, rol_id: 3 })
+    expect((await editor('PATCH', `/api/rows/persoon_rol/${plain.body.id}`, { rol_id: 4 })).status).toBe(200)
+  })
+
   test('one persoon_rol per person and role', async () => {
     const res = await editor('POST', '/api/rows/persoon_rol', { persoon_id: 2, rol_id: 1 })
     expect({ status: res.status, message: res.body.message }).toEqual({
