@@ -289,6 +289,27 @@ describe('persoon_dag', () => {
 })
 
 describe('locatie_dag', () => {
+  // A clash between two productions shows under each, and the badge still counts it once per row (review CR-S2).
+  test('a clash between productions is listed under both, counted once per side', async () => {
+    const p = await newPerson()
+    const DAY = '2026-11-09'
+    const one = await assign(await activity({ datum: DAY, start_at: `${DAY}T10:00`, eind_at: `${DAY}T12:00` }), p)
+    const two = await assign(
+      await activity({ datum: DAY, start_at: `${DAY}T11:00`, eind_at: `${DAY}T13:00`, productie_id: 2 }),
+      p,
+    )
+    const overlaps = (productie_id: number) =>
+      rows('conflicten', { type: 'overlap', persoon_id: p, productie_id }).then((found) => found.length)
+    expect([await overlaps(1), await overlaps(2)]).toEqual([1, 1])
+    const counts = (await rows('persoon_dag', { persoon_id: p })).map((r) => [r.id, r.conflicten])
+    expect(counts).toEqual([
+      [one, 1],
+      [two, 1],
+    ])
+    const venue = await rows('conflicten', { type: 'locatie_dubbel' })
+    expect(venue.map((c) => c.productie_id).sort()).toEqual([1, 2])
+  })
+
   test('locatie_dag counts the venue clash on both rows', async () => {
     const counted = (await rows('locatie_dag')).filter((r) => r.conflicten !== 0)
     expect(counted.map((r) => [r.id, r.conflicten])).toEqual([

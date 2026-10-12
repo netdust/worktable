@@ -14,7 +14,9 @@ SELECT t.id, t.id AS toewijzing_id, t.persoon_id, act.id AS activiteit_id, act.p
       AND ((datetime(b.start_at) < act.tot AND act.van < datetime(b.eind_at)) OR datetime(b.start_at) = act.van)
     ORDER BY CASE b.soort WHEN 'afwezig' THEN 1 WHEN 'onzeker' THEN 2 WHEN 'voorkeur' THEN 3 ELSE 4 END, b.id
     LIMIT 1) AS beschikbaarheid,
-  (SELECT COUNT(*) FROM conflicten c WHERE c.toewijzing_id = t.id OR c.ander_toewijzing_id = t.id) AS conflicten
+  -- A pair between productions has a row per side; the other side's row is not this row's.
+  (SELECT COUNT(*) FROM conflicten c
+    WHERE c.toewijzing_id = t.id OR (c.ander_toewijzing_id = t.id AND c.productie_id = act.productie_id)) AS conflicten
 FROM toewijzing t
 JOIN act ON act.id = t.activiteit_id
 WHERE t.deleted_at IS NULL AND t.persoon_id IS NOT NULL

@@ -37,6 +37,18 @@ alle AS (
   WHERE NOT x.logistiek AND NOT y.logistiek
     AND (NOT (x.getimed AND y.getimed) OR (x.van < y.tot AND y.van < x.tot) OR x.van = y.van)
 
+  -- Between two productions the pair is listed again from the other side, so each production's planner sees it.
+  UNION ALL
+  SELECT 7, y.id, x.id, 'overlap',
+    CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
+    y.persoon_id, y.id, x.id, y.activiteit_id, x.activiteit_id,
+    y.locatie_id, y.productie_id, y.plandag,
+    y.naam || ' staat dubbel ingepland: ' || y.wat || ' en ' || x.wat || '.'
+  FROM tw x
+  JOIN tw y ON y.persoon_id = x.persoon_id AND y.plandag = x.plandag AND y.id > x.id
+  WHERE NOT x.logistiek AND NOT y.logistiek AND x.productie_id != y.productie_id
+    AND (NOT (x.getimed AND y.getimed) OR (x.van < y.tot AND y.van < x.tot) OR x.van = y.van)
+
   UNION ALL
   SELECT CASE b.soort WHEN 'afwezig' THEN 2 ELSE 3 END, x.id, b.id, b.soort,
     CASE b.soort WHEN 'afwezig' THEN 'conflict' ELSE 'waarschuwing' END,
@@ -79,6 +91,17 @@ alle AS (
   WHERE NOT x.logistiek AND NOT y.logistiek
     AND (x.productie_id != y.productie_id
       OR (x.speelreeks_id IS NOT NULL AND y.speelreeks_id IS NOT NULL AND x.speelreeks_id != y.speelreeks_id))
+    AND CASE WHEN x.getimed AND y.getimed THEN (x.van < y.tot AND y.van < x.tot) OR x.van = y.van ELSE x.plandag = y.plandag END
+
+  UNION ALL
+  SELECT 8, y.id, x.id, 'locatie_dubbel',
+    CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
+    NULL, NULL, NULL, y.id, x.id, y.locatie_id, y.productie_id, y.plandag,
+    COALESCE(o.naam, 'Een locatie') || ' is dubbel geboekt: ' || y.wat || ' en ' || x.wat || '.'
+  FROM act x
+  JOIN act y ON y.locatie_id = x.locatie_id AND y.id > x.id
+  LEFT JOIN organisatie o ON o.id = x.locatie_id
+  WHERE NOT x.logistiek AND NOT y.logistiek AND x.productie_id != y.productie_id
     AND CASE WHEN x.getimed AND y.getimed THEN (x.van < y.tot AND y.van < x.tot) OR x.van = y.van ELSE x.plandag = y.plandag END
 )
 SELECT code * 1000000000000 + x * 1000000 + y AS id, type, ernst, persoon_id, toewijzing_id, ander_toewijzing_id,

@@ -8,6 +8,7 @@ WITH act AS (
 SELECT act.id, act.id AS activiteit_id, act.locatie_id, act.productie_id, act.omschrijving, act.soort, act.plandag,
   act.datum, act.start_at, act.eind_at, act.status,
   (SELECT COUNT(*) FROM conflicten c
-    WHERE c.type = 'locatie_dubbel' AND (c.activiteit_id = act.id OR c.ander_activiteit_id = act.id)) AS conflicten
+    WHERE c.type = 'locatie_dubbel'
+      AND (c.activiteit_id = act.id OR (c.ander_activiteit_id = act.id AND c.productie_id = act.productie_id))) AS conflicten
 FROM act
 WHERE act.locatie_id IS NOT NULL
