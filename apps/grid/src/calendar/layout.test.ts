@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarDef, Row } from '../types'
-import { monthWeeks, placeEvents } from './layout'
+import { monthWeeks, placeEvents, weekGrid } from './layout'
 
 const CAL: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'] }
 const WEEK = { from: '2026-10-12', to: '2026-10-18' }
+const WEEK_DAYS = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']
 
 const row = (id: number, fields: Record<string, unknown>, lane?: { id: number; title: string }): Row => ({
   id,
@@ -74,5 +75,37 @@ describe('monthWeeks', () => {
   it('October 2026 spans five weeks', () => {
     const weeks = monthWeeks({ from: '2026-10-01', to: '2026-10-31' })
     expect(weeks.map((w) => w[0])).toEqual(['2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'])
+  })
+})
+
+describe('weekGrid', () => {
+  const placedOf = (rows: Row[]) => placeEvents(rows, CAL, WEEK, 'persoon_id').events
+
+  it('puts untimed rows in the all-day band and timed ones on the hours, by day', () => {
+    const grid = weekGrid(placedOf([
+      row(1, { plandag: '2026-10-12', start_at: '2026-10-12T14:00', eind_at: '2026-10-12T17:00' }),
+      row(2, { plandag: '2026-10-15', start_at: null }),
+    ]), WEEK_DAYS, [])
+    expect(grid.allDay['2026-10-15']?.map((e) => e.row.id)).toEqual([2])
+    expect(grid.timed['2026-10-12']?.map((b) => b.event.row.id)).toEqual([1])
+  })
+
+  it('spans 08:00 to 20:00 at least, and widens to whole hours around the events', () => {
+    expect(weekGrid([], WEEK_DAYS, []).hours).toEqual({ from: 480, to: 1200 })
+    const late = placedOf([row(1, { plandag: '2026-10-12', start_at: '2026-10-12T22:30', eind_at: '2026-10-13T01:15' })])
+    expect(weekGrid(late, WEEK_DAYS, []).hours).toEqual({ from: 480, to: 1560 })
+    const early = placedOf([row(1, { plandag: '2026-10-12', start_at: '2026-10-12T06:45', eind_at: '2026-10-12T07:00' })])
+    expect(weekGrid(early, WEEK_DAYS, []).hours.from).toBe(360)
+  })
+
+  it('sets overlapping events side by side, grouped by lane', () => {
+    const lanes = [{ id: 1, title: 'Bram' }, { id: 2, title: 'Noor' }]
+    const rows = [
+      row(1, { plandag: '2026-10-12', start_at: '2026-10-12T10:00', eind_at: '2026-10-12T12:00', persoon_id: 2 }, { id: 2, title: 'Noor' }),
+      row(2, { plandag: '2026-10-12', start_at: '2026-10-12T11:00', eind_at: '2026-10-12T13:00', persoon_id: 1 }, { id: 1, title: 'Bram' }),
+      row(3, { plandag: '2026-10-12', start_at: '2026-10-12T15:00', eind_at: '2026-10-12T16:00', persoon_id: 2 }, { id: 2, title: 'Noor' }),
+    ]
+    const blocks = weekGrid(placedOf(rows), WEEK_DAYS, lanes).timed['2026-10-12'] ?? []
+    expect(blocks.map((b) => [b.event.row.id, b.column, b.columns])).toEqual([[2, 0, 2], [1, 1, 2], [3, 0, 1]])
   })
 })
