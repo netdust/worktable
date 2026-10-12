@@ -654,7 +654,7 @@ export function rowOf(store: Store, dataset: DatasetDecl, id: number, scope: Sco
   const table = tableOf(dataset)
   const idColumn = (table as unknown as Record<string, SQLiteColumn>).id as SQLiteColumn
   const raw = store.db
-    .select({ ...getTableColumns(table), ...(scope === 'all' ? lookupSelect(dataset) : {}) })
+    .select({ ...getTableColumns(table), ...lookupSelect(dataset, scope) })
     .from(table)
     .where(eq(idColumn, id))
     .get() as Values

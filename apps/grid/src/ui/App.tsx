@@ -41,7 +41,9 @@ import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { days, formatWindow, MATRIX_DAYS, weekOf } from './Window'
+import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
+import { Calendar } from '../calendar/Calendar'
+import { calendarWindow, monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -267,7 +269,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // A matrix reads one bounded window: the condition's days, else the current week (none, or over the engine's cap).
   const conditioned = layout ? layout.filters.some((f) => f !== dateCondition && complete(f)) : false
   const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
-  const window = view?.type === 'matrix' ? matrixDays : {}
+  // A calendar shows the condition's days, else this week; a month reads its whole weeks.
+  const calendar = view?.type === 'calendar' ? view.calendar : undefined
+  const calendarShown = calendarWindow(conditionDays, new Date())
+  const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
+  const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : {}
   const windowKey = JSON.stringify(window)
 
   const shownKey = useRef<string | null>(null)
@@ -472,7 +478,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={addBlocked}
-          onAdd={matrix ? undefined : add}
+          onAdd={matrix || calendar ? undefined : add}
           share={share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -485,7 +491,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         />
         <div className="nv-work">
         <section className="nv-sheet">
-          {matrix && model && view && result.status === 'ready' && cells && layout ? (
+          {calendar && model && view && layout && result.status === 'ready' ? (
+            <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
+              lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
+              onShown={(next) => view.date_field && setLayout(withFilters(layout, [
+                { field: view.date_field, op: 'between', values: [next.from, next.to] },
+                ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
+              ]))} />
+          ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
               layout={layout} onLayout={setLayout} filters={filters} />
@@ -514,6 +527,13 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       )}
     </div>
   )
+}
+
+/** A month's whole Monday-first weeks. */
+function monthSpan(month: DateWindow): DateWindow {
+  const weeks = monthWeeks(month)
+  const last = weeks[weeks.length - 1]
+  return weeks[0] && last ? { from: weeks[0][0], to: last[6] } : month
 }
 
 /** What a query's `+ Nieuw` creates in its dataset: that dataset's own new row, on the window's day and in the selected space. */

@@ -1,6 +1,6 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { Layout } from './grid/layout'
-import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
+import type { Account, ActView, ApiError, DateWindow, HistoryEntry, MatrixAway, NewView, OptionsFrom, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -191,7 +191,7 @@ export async function history(view: ViewRead, window: Partial<DateWindow>, scope
 /** The away rows overlapping the window: begun before its end, ended after its start. Not the dated window, which would miss a period begun before it. */
 export async function awayRows(away: MatrixAway, window: Partial<DateWindow>): Promise<Row[]> {
   if (!window.from || !window.to) return []
-  const filter = { [away.date_field]: { $lte: `${window.to}T23:59:59` }, [away.end_field]: { $gte: window.from } }
+  const filter = { ...away.where, [away.date_field]: { $lte: `${window.to}T23:59:59` }, [away.end_field]: { $gte: window.from } }
   return (await rowsOf(away.model, { filter: JSON.stringify(filter) })).rows
 }
 
@@ -206,6 +206,25 @@ async function everyRow(model: string): Promise<Row[]> {
     all.push(...page.rows)
     if (page.rows.length === 0 || all.length >= page.total) return all
   }
+}
+
+/** The records a relation's options source offers for one row, in the source's order, each once. */
+export async function optionsFrom(from: OptionsFrom, record: Record<string, unknown>): Promise<Row[]> {
+  const filter = JSON.stringify(Object.fromEntries(Object.entries(from.match).map(([column, own]) => [column, record[own] ?? null])))
+  const sort = from.sort?.length ? { sort: from.sort.join(',') } : {}
+  const found: Row[] = []
+  for (;;) {
+    const page = await rowsOf(from.source, { filter, ...sort, limit: String(pageSize()), offset: String(found.length) })
+    found.push(...page.rows)
+    if (page.rows.length === 0 || found.length >= page.total) break
+  }
+  const seen = new Set<number>()
+  return found.flatMap((row) => {
+    const id = Number(row.fields[from.value])
+    if (!Number.isSafeInteger(id) || seen.has(id)) return []
+    seen.add(id)
+    return [{ id, title: row.lookups?.[from.value]?.title ?? `#${id}`, status: '', fields: {} }]
+  })
 }
 
 /** A model's records for a picker: titles holding `search`, every record without one. The engine has no search: the titles are narrowed here. */
@@ -299,7 +318,7 @@ export async function savedViews(): Promise<SavedView[]> {
 
 export async function createView(view: NewView): Promise<SavedView> {
   const stored = toStoredView(view.arrangement, view.fixed ?? {}, await sourceOf(view.table))
-  const skin = view.type === 'matrix' ? 'matrix' : 'table'
+  const skin = view.type === 'grid' || !view.type ? 'table' : view.type
   return savedOf(await request<EngineView>('POST', '/views', {}, { name: view.name, source: view.table, skin, shared: view.shared, ...stored }))
 }
 

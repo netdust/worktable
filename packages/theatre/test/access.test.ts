@@ -57,8 +57,8 @@ describe('an owner reads only its own rows', () => {
   })
 
   test('Toewijzingen: only its own', async () => {
-    expect(ids((await owner('GET', '/api/rows/toewijzing')).body)).toEqual([1, 4])
-    expect(ids((await editor('GET', '/api/rows/toewijzing')).body)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(ids((await owner('GET', '/api/rows/toewijzing')).body)).toEqual([1, 4, 7, 11])
+    expect(ids((await editor('GET', '/api/rows/toewijzing')).body)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
   })
 
   test("another person's Toewijzing by id is 404", async () => {

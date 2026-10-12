@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import { t } from '../../i18n'
-import type { Model, Row, Scope } from '../../types'
+import { optionsFrom } from '../../api'
+import type { Model, OptionsFrom, Row, Scope } from '../../types'
 import { type Column, firstId } from '../columns'
 import type { CellProps, EditorProps } from './props'
 import { RelationPicker } from './RelationPicker'
@@ -46,6 +47,8 @@ function holds(value: unknown, id: number): boolean {
   return (Array.isArray(value) ? value : [value]).map((v) => firstId(v)).includes(String(id))
 }
 
+const candidatesOf = (from: OptionsFrom, row: Row) => () => optionsFrom(from, { ...row.fields, id: row.id })
+
 export function RelationEditor({ column, row, editing, onCommit, onPick, onCancel, onClose }: EditorProps) {
   const { models, scope, spaceModel } = useContext(RelationContext)
   const target = column.relation?.model ?? ''
@@ -64,6 +67,7 @@ export function RelationEditor({ column, row, editing, onCommit, onPick, onCance
         onCancel={onCancel}
         onClose={onClose}
         onClear={column.required ? undefined : () => onCommit('', 'stay')}
+        candidates={column.options_from && column.text(row) === '' ? candidatesOf(column.options_from, row) : undefined}
       />
     </>
   )

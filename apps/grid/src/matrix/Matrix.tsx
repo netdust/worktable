@@ -6,7 +6,9 @@ import { hide, type Layout, show as unhide } from '../grid/layout'
 import type { CellError } from '../grid/store'
 import { groupRows } from '../grid/group'
 import { rowCount, t } from '../i18n'
-import type { MatrixCell, MatrixColumn, Model, Row, View } from '../types'
+import { optionsFrom } from '../api'
+import type { MatrixCell, MatrixColumn, Model, OptionsFrom, Row, View } from '../types'
+import { Spinner } from '../ui/Spinner'
 import { absentOn } from './away'
 import { ColumnPicker } from './ColumnPicker'
 import { buildColumns, cellFor, loadPicked, markFor, OPEN, type OpenSlot, openSlots, savePicked, visibleColumns } from './columns'
@@ -152,17 +154,28 @@ function OpenCell({ row, slots, error, onFill }: { row: number; slots: OpenSlot[
 }
 
 /** In the page, nothing floats: the role first when more than one waits, then the person. */
-function FillPicker({ row, slots, titles, taken, onPick, onClose }: {
-  row: Row; slots: OpenSlot[]; titles: Map<number, string>; taken: number[]; onPick: (cell: number, record: number) => void; onClose: () => void
+function FillPicker({ row, slots, titles, taken, from, onPick, onClose }: {
+  row: Row; slots: OpenSlot[]; titles: Map<number, string>; taken: number[]; from?: OptionsFrom; onPick: (cell: number, record: number) => void; onClose: () => void
 }) {
   const [slot, setSlot] = useState<OpenSlot | null>(slots.length === 1 ? slots[0] : null)
   const [query, setQuery] = useState('')
+  // A declared source lists the slot's candidates, best first, until the planner asks for everyone.
+  const [candidates, setCandidates] = useState<[number, string][] | null>(null)
+  const [everyone, setEveryone] = useState(!from)
   const ref = useRef<HTMLElement>(null)
   useEffect(() => ref.current?.querySelector<HTMLElement>('input, .nv-mx__pick')?.focus(), [slot])
+  useEffect(() => {
+    if (!from || !slot || everyone) return
+    let live = true
+    setCandidates(null)
+    optionsFrom(from, slot.record).then((found) => live && setCandidates(found.map((r) => [r.id, r.title])), () => live && setCandidates([]))
+    return () => {
+      live = false
+    }
+  }, [from, slot, everyone])
   const words = query.trim().toLocaleLowerCase()
-  const people = [...titles]
-    .filter(([id, title]) => !taken.includes(id) && title.toLocaleLowerCase().includes(words))
-    .sort((a, b) => a[1].localeCompare(b[1]))
+  const listed = everyone ? [...titles].sort((a, b) => a[1].localeCompare(b[1])) : (candidates ?? [])
+  const people = listed.filter(([id, title]) => !taken.includes(id) && title.toLocaleLowerCase().includes(words))
   return (
     <section ref={ref} className="nv-mx__picker" aria-label={t('fillSlot')} onKeyDown={(event) => event.key === 'Escape' && onClose()}>
       <p className="nv-picker__note">{[row.title, slot?.label].filter(Boolean).join(' · ')}</p>
@@ -179,7 +192,9 @@ function FillPicker({ row, slots, titles, taken, onPick, onClose }: {
           <ul className="nv-mx__picks">
             {people.map(([id, title]) => <li key={id}><button type="button" className="nv-mx__pick" onClick={() => onPick(slot.cell, id)}>{title}</button></li>)}
           </ul>
-          {people.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
+          {!everyone && candidates === null && <Spinner small />}
+          {people.length === 0 && (everyone || candidates !== null) && <p className="nv-picker__note">{t(everyone || words ? 'noMatches' : 'candidatesNone')}</p>}
+          {!everyone && <button type="button" className="nv-bar__button" onClick={() => setEveryone(true)}>{t('candidatesAll')}</button>}
         </>
       )}
       <button type="button" className="nv-bar__button" onClick={onClose}>{t('cancel')}</button>
@@ -461,7 +476,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
         {filters}
       </div>
       {fillRow && (
-        <FillPicker key={fillRow.id} row={fillRow} slots={openSlots(view, fillRow)} titles={titles} onClose={() => closeFill(fillRow.id)}
+        <FillPicker key={fillRow.id} row={fillRow} slots={openSlots(view, fillRow)} titles={titles} from={join.open?.options_from} onClose={() => closeFill(fillRow.id)}
           taken={everyColumn.flatMap((column) => (column.id && cellFor(view, fillRow, column) ? [column.id] : []))} onPick={(cell, record) => fill(fillRow, cell, record)} />
       )}
       {picking && <ColumnPicker model={models[join.model]?.fields[join.column_field]?.relation?.model ?? ''} taken={everyColumn.flatMap((c) => (c.id ? [c.id] : []))} onPick={pick}

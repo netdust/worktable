@@ -1,5 +1,15 @@
 import { type DatasetDecl, forbid, refuse, type WriteContext, type Writer } from '@worktable/engine'
-import { activiteit, organisatie, persoon, productie, rol, speelreeks, toewijzing } from './datasets'
+import {
+  activiteit,
+  beschikbaarheid,
+  organisatie,
+  persoon,
+  productie,
+  rol,
+  speelreeks,
+  taak,
+  toewijzing,
+} from './datasets'
 import { plandag } from './plandag'
 
 const DAY_LINE_HOUR = 5
@@ -207,6 +217,7 @@ export const beschikbaarheidWriter = writerOf((values, ctx) => {
   checkRequired(values, ctx, 'start_at', 'Start is verplicht.')
   checkRequired(values, ctx, 'eind_at', 'Einde is verplicht.')
   checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+  checkOption(beschikbaarheid, 'soort', values, 'Ongeldige soort.')
   checkOrder(values, ctx)
   return values
 })
@@ -325,3 +336,39 @@ export const sjabloonWriter: Writer = {
     return values
   },
 }
+
+// A rate belongs to the person and role an administrator set it for: only they move or remove a rated row.
+function checkRated(ctx: WriteContext, moves: boolean): void {
+  const rated = ctx.current?.dagtarief != null || ctx.current?.uurtarief != null
+  if (rated && moves && ctx.actor.role !== 'administrator') forbid('Alleen een beheerder wijzigt tarieven.')
+}
+
+const persoonRolAccept: Accept = (values, ctx) => {
+  checkRates(values, ctx)
+  checkRated(ctx, changes(values, ctx, 'persoon_id') || changes(values, ctx, 'rol_id'))
+  checkRequired(values, ctx, 'persoon_id', 'Persoon is verplicht.')
+  checkRequired(values, ctx, 'rol_id', 'Rol is verplicht.')
+  checkLive(ctx, 'persoon', values.persoon_id, 'Persoon bestaat niet.')
+  checkLive(ctx, 'rol', values.rol_id, 'Rol bestaat niet.')
+  const { persoon_id, rol_id } = merged(values, ctx)
+  if (ctx.exists('persoon_rol', { persoon_id, rol_id }, ctx.current?.id as number | undefined)) {
+    refuse('Deze persoon heeft deze rol al.')
+  }
+  return values
+}
+
+export const persoonRolWriter = forPlanners(
+  { ...writerOf(persoonRolAccept), delete: (ctx) => checkRated(ctx, true) },
+  'rollen per persoon',
+)
+
+export const taakWriter = forPlanners(
+  writerOf((values, ctx) => {
+    if (!filled(merged(values, ctx).titel)) refuse('Titel is verplicht.')
+    checkOption(taak, 'status', values, 'Ongeldige status.')
+    checkOption(taak, 'gekoppeld_aan', values, 'Ongeldige koppeling.')
+    checkLive(ctx, 'persoon', values.toegewezen_aan, 'Persoon bestaat niet.')
+    return values
+  }),
+  'taken',
+)

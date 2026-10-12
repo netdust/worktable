@@ -183,7 +183,10 @@ describe('Organisatie parameters', () => {
     ))
 
   test('an editor may echo them unchanged with another edit', async () => {
-    const res = await editor('PATCH', '/api/rows/organisatie/1', { naam: 'Lantaarn', parameters: { dag_grens_uur: 5 } })
+    const res = await editor('PATCH', '/api/rows/organisatie/1', {
+      naam: 'Lantaarn',
+      parameters: { dag_grens_uur: 5, waarschuwingshorizon_dagen: 14, bevestigingstermijn_dagen: 7 },
+    })
     expect(res.status).toBe(200)
   })
 

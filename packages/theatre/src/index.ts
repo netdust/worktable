@@ -5,31 +5,56 @@ import {
   beschikbaarheid,
   organisatie,
   persoon,
+  persoonRol,
   productie,
   rol,
   sjabloon,
   speelreeks,
+  taak,
   toewijzing,
 } from './datasets'
-import { mijnProducties, productieDag, voorstellingen } from './queries'
+import {
+  conflicten,
+  kandidaten,
+  locatieDag,
+  mijnProducties,
+  persoonDag,
+  productieDag,
+  voorstellingen,
+  werklijst,
+} from './queries'
 import { seed, views } from './seed'
 import {
   activiteitWriter,
   beschikbaarheidWriter,
   organisatieWriter,
+  persoonRolWriter,
   persoonWriter,
   productieWriter,
   rolWriter,
   sjabloonWriter,
   speelreeksWriter,
+  taakWriter,
   toewijzingWriter,
 } from './writers'
 
 export { plandag } from './plandag'
 
 const theatre: Domain = {
-  datasets: [organisatie, productie, speelreeks, activiteit, persoon, toewijzing, beschikbaarheid, rol, sjabloon],
-  queries: [productieDag, voorstellingen, mijnProducties],
+  datasets: [
+    organisatie,
+    productie,
+    speelreeks,
+    activiteit,
+    persoon,
+    toewijzing,
+    beschikbaarheid,
+    rol,
+    sjabloon,
+    persoonRol,
+    taak,
+  ],
+  queries: [conflicten, persoonDag, locatieDag, kandidaten, werklijst, productieDag, voorstellingen, mijnProducties],
   writers: {
     organisatie: organisatieWriter,
     productie: productieWriter,
@@ -40,15 +65,29 @@ const theatre: Domain = {
     rol: rolWriter,
     speelreeks: speelreeksWriter,
     sjabloon: sjabloonWriter,
+    persoon_rol: persoonRolWriter,
+    taak: taakWriter,
   },
   actions: { sjabloon_toepassen: sjabloonToepassen, vul_slot: vulSlot, tourstop_verschuiven: tourstopVerschuiven },
   space: { dataset: 'productie' },
   // Section names and order are a draft, pending Stefan's approval.
   sections: [
-    { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
-    { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
+    { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid', 'taak'] },
+    { label: 'Gegevens', sources: ['productie', 'persoon', 'persoon_rol', 'organisatie'] },
     { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
-    { label: 'Overzichten', sources: ['productie_dag', 'voorstellingen', 'mijn_producties'] },
+    {
+      label: 'Overzichten',
+      sources: [
+        'conflicten',
+        'persoon_dag',
+        'locatie_dag',
+        'kandidaten',
+        'werklijst',
+        'productie_dag',
+        'voorstellingen',
+        'mijn_producties',
+      ],
+    },
   ],
   seed,
   views,

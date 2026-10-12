@@ -87,6 +87,21 @@ describe('toSchema: space, sections and facts', () => {
     expect(view).toMatchObject({ space: 'scoped', facts: declared.sources.session.group_facts })
   })
 
+  it('a calendar source offers the calendar type and its declaration', () => {
+    const calendar = { day: 'day', lanes: ['season_id'] }
+    const schema = toSchema({ sources: { ...declared.sources, session: { ...declared.sources.session, calendar } } })
+    const session = schema.tables.find((t) => t.key === 'session')
+    expect(session?.types).toEqual(['grid', 'calendar'])
+    expect(session?.calendar).toEqual({ day: 'day', start: null, end: null, lanes: ['season_id'] })
+    expect(schema.tables.find((t) => t.key === 'season')?.types).toEqual(['grid'])
+  })
+
+  it('skin calendar maps to type calendar', () => {
+    const sources = { ...declared.sources, session: { ...declared.sources.session, calendar: { day: 'day', lanes: ['season_id'] } } }
+    const [view] = toSavedViews([{ ...views[0], id: 6, source: 'session', source_type: 'query', skin: 'calendar', filters: {}, sort: [], visible_fields: [] }], sources)
+    expect(view?.type).toBe('calendar')
+  })
+
   it("maps an administrator's icon onto its table, and none where the engine serves null", () => {
     const iconed: EngineSchema = { sources: { ...declared.sources, season: { ...declared.sources.season, icon: 'star' }, session: { ...declared.sources.session, icon: null } } }
     const schema = toSchema(iconed)

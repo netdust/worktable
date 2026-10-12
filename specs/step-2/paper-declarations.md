@@ -88,16 +88,16 @@ Neither domain needs the matrix or `open`. The agency's `bezetting` is person ×
 
 | # | Engine change | cargo | agency | Decision (Stefan, 2026-10-11) |
 |---|---|---|---|---|
-| C1 | Several owner columns per source; `record_link` names its column | yes | – | deferred until cargo is real |
+| C1 | Several owner columns per source; `record_link` names its column | yes | – | closed as website work (Stefan, 2026-10-12) |
 | C2 | Public create, as an action, answering the record link | yes | – | not in the finding: already specified, built when a domain needs it |
-| C3 | Dry-run create (quote) | yes | – | deferred until cargo is real |
+| C3 | Dry-run create (quote) | yes | – | closed as website work (Stefan, 2026-10-12) |
 | C4 | Hook mail receives the record link | yes | – | accepted (with C5) |
 | C5 | Several mails per hook | yes | yes | accepted (with C4) |
 | C6 | Link account writes a declared column | yes | yes | accepted (with C8) |
 | C7 | Board skin | yes | yes | not in the finding: already specified, built when a domain needs it |
 | C8 | Attachment, read and written by owners and link accounts | yes | yes | accepted (with C6) |
 | C9 | `$period: today` | yes | – | accepted |
-| C10 | Administrator account routes | yes | – | deferred until cargo is real |
+| C10 | Administrator account routes | yes | – | closed as website work (Stefan, 2026-10-12) |
 | S4 | Non-relation action inputs | yes | yes | accepted |
 | S3, S5, S6, S7 | Record-link counter, `ctx.count`, renderers, visitor filters | – | – | dropped (came from the assumed studio) |
 | A1 | `exists`/`findBy` matching null | – | yes | new; for Stefan's decision |

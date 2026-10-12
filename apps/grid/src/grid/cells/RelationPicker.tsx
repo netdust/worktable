@@ -33,12 +33,21 @@ interface Props {
   hide?: (row: Row) => boolean
   /** A multiselect: the search empties after each pick, ready for the next. */
   clearOnPick?: boolean
+  /** The records this row should pick from, best first; the planner may still ask for everyone. */
+  candidates?: () => Promise<Row[]>
 }
 
 type Found = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number }
 
 function ordered(rows: Row[], first: Props['first']): Row[] {
   return first ? [...rows.filter(first), ...rows.filter((r) => !first(r))] : rows
+}
+
+// The candidates whose titles hold the search, in the order they came.
+async function candidatesHolding(candidates: Props['candidates'], search: string) {
+  const wanted = search.toLocaleLowerCase()
+  const rows = ((await candidates?.()) ?? []).filter((row) => row.title.toLocaleLowerCase().includes(wanted))
+  return { rows, total: rows.length }
 }
 
 /** The list shows from the start: the picker is the search, not a field that may offer one. */
@@ -52,8 +61,9 @@ const keepFocus = (event: MouseEvent) => event.preventDefault()
 const stop = (event: MouseEvent) => event.stopPropagation()
 
 /** A search over one model's records with a listbox under it: ↑↓ move, Enter picks, Escape cancels. */
-export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, before, hide, clearOnPick }: Props) {
+export function RelationPicker({ model, label, query: opening = '', first, onPick, onCancel, onClose = onCancel, onClear, before, hide, clearOnPick, candidates }: Props) {
   const [query, setQuery] = useState(opening)
+  const [everyone, setEveryone] = useState(!candidates)
   const [found, setFound] = useState<Found>({ status: 'loading' })
   const input = useRef<HTMLInputElement>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -68,7 +78,8 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
   useEffect(() => {
     let live = true
     const timer = setTimeout(() => {
-      records(model, query.trim()).then(
+      const asked = everyone ? records(model, query.trim()) : candidatesHolding(candidates, query.trim())
+      asked.then(
         (r) => live && setFound({ status: 'ready', rows: ordered(r.rows, first).slice(0, PICKER_CAP), total: r.total }),
         () => live && setFound({ status: 'ready', rows: [], total: 0 }),
       )
@@ -77,7 +88,7 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
       live = false
       clearTimeout(timer)
     }
-  }, [model, query])
+  }, [model, query, everyone])
 
   // A picker in a column near the right edge would run off the screen: it moves left by what overflows.
   useLayoutEffect(() => {
@@ -149,7 +160,13 @@ export function RelationPicker({ model, label, query: opening = '', first, onPic
               {(row) => <ListBoxItem id={row.id} textValue={row.title} className="nv-pop__option">{row.title}</ListBoxItem>}
             </ListBox>
             {found.status === 'loading' && <Spinner small />}
-            {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t('noMatches')}</p>}
+            {found.status === 'ready' && rows.length === 0 && <p className="nv-picker__note">{t(everyone || query.trim() ? 'noMatches' : 'candidatesNone')}</p>}
+            {!everyone && (
+              <button type="button" className="nv-bar__button" onClick={() => {
+                setEveryone(true)
+                setFound({ status: 'loading' })
+              }}>{t('candidatesAll')}</button>
+            )}
             {found.status === 'ready' && found.total > found.rows.length && <p className="nv-picker__note">{t('moreResults', { n: found.total - found.rows.length })}</p>}
           </div>
         </Pop>

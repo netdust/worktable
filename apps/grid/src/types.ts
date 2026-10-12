@@ -7,6 +7,14 @@ export type FieldType =
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'rose' | 'violet' | 'amber' | 'sky' | 'slate' | 'green' | 'teal' | 'grey'
 
+/** A relation's picker lists the `value` records of `source`'s rows whose `match` columns equal the row's, in `sort` order. */
+export interface OptionsFrom {
+  source: string
+  match: Record<string, string>
+  value: string
+  sort?: string[]
+}
+
 export interface Field {
   type: FieldType
   label: string
@@ -30,6 +38,9 @@ export interface Field {
   link?: Link
   /** Served to the row's owner in a view for owners. */
   owner_visible?: true
+  options_from?: OptionsFrom
+  /** An integer shown as a tinted count above 0. */
+  badge?: Tone
 }
 
 export interface Link {
@@ -80,7 +91,7 @@ export interface Model {
 
 /** One input of an action: a record of `relation`, picked; or a typed value, filled in. */
 export type ActionInput =
-  | { relation: string; label: string }
+  | { relation: string; label: string; options_from?: OptionsFrom }
   | { type: 'integer' | 'date' | 'text' | 'boolean'; label: string; min?: number; max?: number; required?: boolean }
 
 /** A declared action: every input is given before it runs, but one declared `required: false`. */
@@ -90,7 +101,15 @@ export interface ModelAction {
   input: Record<string, ActionInput>
 }
 
-export type ViewType = 'grid' | 'matrix'
+export type ViewType = 'grid' | 'matrix' | 'calendar'
+
+/** A calendar table: rows placed on `day`, timed by `start` and `end` (none is all-day), laned by one of `lanes`. */
+export interface CalendarDef {
+  day: string
+  start: string | null
+  end: string | null
+  lanes: string[]
+}
 
 /** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
 export interface TableDef {
@@ -121,6 +140,8 @@ export interface TableDef {
   join?: MatrixJoin
   /** A matrix table: the table whose rows say which columns are away when. */
   away?: MatrixAway
+  /** A calendar table: how its rows sit on days. */
+  calendar?: CalendarDef
   types: ViewType[]
 }
 
@@ -205,7 +226,7 @@ export interface MatrixJoin {
   /** The join's lifecycle column: when it is the cell field, a cell's undo goes through the batch undo. */
   lifecycle?: string
   /** A join row with neither record nor name is open: it waits for a `match_field` record, `count_field` times; `action` fills it, its record put under `input`. */
-  open?: { match_field: string; count_field: string; action: string; input: string }
+  open?: { match_field: string; count_field: string; action: string; input: string; options_from?: OptionsFrom }
 }
 
 export interface MatrixAway {
@@ -215,6 +236,8 @@ export interface MatrixAway {
   model: string
   date_field: string
   end_field: string
+  /** Only the away rows whose columns equal these values. */
+  where?: Record<string, string | number | boolean>
 }
 
 /** A join record as a row carries it under `rollups.cells`; its lookups title what its relations point at. */

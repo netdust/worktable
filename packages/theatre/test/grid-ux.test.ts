@@ -35,17 +35,29 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
       .filter(([, s]) => (s as Schema).space === 'scoped')
       .map(([name]) => name)
       .sort()
-    expect(scoped).toEqual(['activiteit', 'productie_dag', 'speelreeks'])
+    expect(scoped).toEqual(['activiteit', 'conflicten', 'locatie_dag', 'persoon_dag', 'productie_dag', 'speelreeks'])
     for (const s of Object.values(body.sources) as Schema[]) expect(['scoped', 'global']).toContain(s.space)
   })
 
   test('an editor gets the sections in their draft order, the queries last under Overzichten', async () => {
     const body = await schemaAs('editor')
     expect(body.sections).toEqual([
-      { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid'] },
-      { label: 'Gegevens', sources: ['productie', 'persoon', 'organisatie'] },
+      { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid', 'taak'] },
+      { label: 'Gegevens', sources: ['productie', 'persoon', 'persoon_rol', 'organisatie'] },
       { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
-      { label: 'Overzichten', sources: ['productie_dag', 'voorstellingen', 'mijn_producties'] },
+      {
+        label: 'Overzichten',
+        sources: [
+          'conflicten',
+          'persoon_dag',
+          'locatie_dag',
+          'kandidaten',
+          'werklijst',
+          'productie_dag',
+          'voorstellingen',
+          'mijn_producties',
+        ],
+      },
     ])
     expect(body.sources.beschikbaarheid.label).toBe('Beschikbaarheden')
   })
@@ -54,6 +66,11 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     const body = await schemaAs('editor')
     const queries = Object.entries(body.sources).filter(([, s]) => (s as Schema).kind === 'query')
     expect(queries.map(([name, s]) => [name, (s as Schema).of])).toEqual([
+      ['conflicten', undefined],
+      ['persoon_dag', undefined],
+      ['locatie_dag', undefined],
+      ['kandidaten', undefined],
+      ['werklijst', undefined],
       ['productie_dag', undefined],
       ['voorstellingen', undefined],
       ['mijn_producties', undefined],
@@ -102,10 +119,17 @@ describe('theatre declares the details: icons, colours, an end time and create-f
       speelreeks: 'film',
       activiteit: 'calendar',
       persoon: 'user',
+      persoon_rol: 'users',
       toewijzing: 'users',
       beschikbaarheid: 'clock',
       rol: 'check',
       sjabloon: 'list',
+      taak: 'check',
+      conflicten: 'flag',
+      persoon_dag: 'user',
+      locatie_dag: 'pin',
+      kandidaten: 'users',
+      werklijst: 'check',
       productie_dag: 'table',
       voorstellingen: 'table',
       mijn_producties: 'star',

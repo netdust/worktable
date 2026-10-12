@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type APIRequestContext, type Browser, expect, type Locator, type Page, test } from '@playwright/test'
 import { SERVICE, state, THEATRE } from './auth'
+import { writeDb } from './db'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -102,16 +103,6 @@ function readDb(sql: string, ...params: (string | number)[]): unknown {
   return JSON.parse(execFileSync('bun', ['-e', script]).toString().trim() || 'null')
 }
 
-/** One write to the e2e database: the clock moved past a token's end is a write the running engine reads on its next request. */
-function writeDb(sql: string, ...params: (string | number)[]): number {
-  const script = `import { Database } from 'bun:sqlite'
-    const db = new Database(${JSON.stringify(THEATRE.db)})
-    db.exec('PRAGMA busy_timeout = 5000')
-    db.query(${JSON.stringify(sql)}).run(...${JSON.stringify(params)})
-    console.log(JSON.stringify(String(db.query('SELECT changes() AS n').get().n)))`
-  return Number(JSON.parse(execFileSync('bun', ['-e', script]).toString().trim()))
-}
-
 /** The engine's CLI on the e2e database, as global setup runs it. */
 function cli(...args: string[]): string {
   const run = spawnSync(
@@ -176,6 +167,8 @@ const answered = (page: Page, method: string, path: RegExp) =>
 async function fillFromMatrix(page: Page, title: string, name: string) {
   await openCell(page, title).getByRole('button').click()
   const picker = page.getByRole('region', { name: 'Open plek invullen' })
+  // The picker opens on the slot's candidates; these flows fill with anyone, a person made here included.
+  await picker.getByRole('button', { name: 'Iedereen tonen' }).click()
   await picker.getByRole('searchbox', { name: 'Kies een persoon' }).fill(name)
   const reply = answered(page, 'POST', /^\/api\/actions\/vul_slot$/)
   await picker.getByRole('button', { name, exact: true }).click()

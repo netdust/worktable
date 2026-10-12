@@ -6,7 +6,7 @@ import { defaults } from '../grid/layout'
 import type { Model, Row, View } from '../types'
 import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
-const api = vi.hoisted(() => ({ records: vi.fn() }))
+const api = vi.hoisted(() => ({ records: vi.fn(), optionsFrom: vi.fn() }))
 vi.mock('../api', () => api)
 const { Matrix } = await import('./Matrix')
 const { dayLabel } = await import('../grid/group')
@@ -495,14 +495,14 @@ describe('the open column', () => {
     activity(3, 'Leeg', '2026-05-19'),
   ]
 
-  function setup() {
+  function setup(shownView: View = openView) {
     const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
     writes.runAction.mockResolvedValue({ batch: 'f1', created: [] })
     writes.undoBatch.mockResolvedValue('uf1')
     const store = createMatrixStore({ view: openView, rows, api: writes, onStale: async () => rows })
     function Live() {
       const state = useSyncExternalStore(store.subscribe, store.getState)
-      return <Matrix {...props} view={openView} rows={state.rows} store={store} writable />
+      return <Matrix {...props} view={shownView} rows={state.rows} store={store} writable />
     }
     render(<Live />)
     const openCell = (title: RegExp) => within(screen.getByRole('row', { name: title })).getByTestId('open')
@@ -556,6 +556,41 @@ describe('the open column', () => {
     })
 
     expect(writes.runAction).toHaveBeenCalledWith('fill_slot', 23, { person: 7 })
+  })
+
+  describe('with a candidates source', () => {
+    const from = { source: 'candidates', match: { slot_id: 'id' }, value: 'person', sort: ['rank'] }
+    const fromView: View = { ...openView, join: { ...openView.join!, open: { ...openView.join!.open!, options_from: from } } }
+    const person = (id: number, title: string) => ({ id, title, status: '', fields: {} })
+
+    it('lists the candidates only, in their order, then everyone after Iedereen tonen', async () => {
+      api.optionsFrom.mockResolvedValue([person(7, 'Marit'), person(5, 'Sien')])
+      const { writes, openCell } = setup(fromView)
+
+      fireEvent.click(within(openCell(/Repetitie/)).getByRole('button'))
+      const picker = screen.getByRole('region', { name: 'Open plek invullen' })
+      await act(async () => undefined)
+      expect(api.optionsFrom).toHaveBeenCalledWith(from, expect.objectContaining({ id: 23 }))
+      expect(within(picker).getAllByRole('button').map((b) => b.textContent)).toEqual(['Marit', 'Sien', 'Iedereen tonen', 'Annuleren'])
+
+      fireEvent.click(within(picker).getByRole('button', { name: 'Iedereen tonen' }))
+      expect(within(picker).getAllByRole('button', { name: 'Sien' })).toHaveLength(2)
+      await act(async () => {
+        fireEvent.click(within(picker).getByRole('button', { name: 'Marit' }))
+      })
+      expect(writes.runAction).toHaveBeenCalledWith('fill_slot', 23, { person: 7 })
+    })
+
+    it('says Geen kandidaten for an empty list, and still offers everyone', async () => {
+      api.optionsFrom.mockResolvedValue([])
+      const { openCell } = setup(fromView)
+
+      fireEvent.click(within(openCell(/Repetitie/)).getByRole('button'))
+      await act(async () => undefined)
+      const picker = screen.getByRole('region', { name: 'Open plek invullen' })
+      expect(within(picker).getByText('Geen kandidaten')).toBeTruthy()
+      expect(within(picker).getByRole('button', { name: 'Iedereen tonen' })).toBeTruthy()
+    })
   })
 
   it('takes the keyboard into the picker, and Escape gives it back to the open cell', () => {

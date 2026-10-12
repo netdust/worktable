@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { defineQuery } from '@worktable/engine'
+import { soorten } from './datasets'
 
 const count = (label: string) => ({ type: 'integer' as const, label })
 
@@ -9,6 +10,7 @@ export const productieDag = defineQuery({
   icon: 'table',
   title: 'productie',
   date: 'plandag',
+  calendar: { day: 'plandag', lanes: ['productie_id'] },
   scoped: 'productie_id',
   sql: readFileSync(new URL('./queries/productie_dag.sql', import.meta.url), 'utf8'),
   columns: {
@@ -66,5 +68,158 @@ export const mijnProducties = defineQuery({
     vanaf: shown('date', 'Eerste dag'),
     laatste_dag: shown('date', 'Laatste dag'),
     toegang_vervalt: shown('date', 'Toegang tot'),
+  },
+})
+
+const sqlOf = (name: string) => readFileSync(new URL(`./queries/${name}.sql`, import.meta.url), 'utf8')
+const toActiviteit = (field: string) => ({ dataset: 'activiteit', field, key: 'activiteit_id' })
+
+// A query column never relates to toewijzing, whose title goes through a relation: those ids are plain integers.
+export const conflicten = defineQuery({
+  name: 'conflicten',
+  label: 'Conflicten',
+  icon: 'flag',
+  title: 'omschrijving',
+  date: 'plandag',
+  scoped: 'productie_id',
+  sql: sqlOf('conflicten'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    type: {
+      type: 'text',
+      label: 'Type',
+      options: {
+        overlap: 'Overlap',
+        afwezig: 'Afwezig',
+        onzeker: 'Onzeker',
+        open_slot: 'Open plaats',
+        onbevestigd: 'Onbevestigd',
+        locatie_dubbel: 'Locatie dubbel',
+      },
+    },
+    ernst: {
+      type: 'text',
+      label: 'Ernst',
+      options: { conflict: 'Conflict', waarschuwing: 'Waarschuwing' },
+      tones: { conflict: 'bad', waarschuwing: 'warn' },
+    },
+    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
+    toewijzing_id: { type: 'integer', label: 'Toewijzing', nullable: true },
+    ander_toewijzing_id: { type: 'integer', label: 'Andere toewijzing', nullable: true },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    ander_activiteit_id: { type: 'integer', label: 'Andere activiteit', nullable: true, relation: 'activiteit' },
+    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
+    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+    plandag: { type: 'date', label: 'Plandag' },
+    omschrijving: { type: 'text', label: 'Omschrijving' },
+  },
+})
+
+export const persoonDag = defineQuery({
+  name: 'persoon_dag',
+  label: 'Per persoon per dag',
+  icon: 'user',
+  title: 'omschrijving',
+  date: 'plandag',
+  calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id', 'productie_id'] },
+  scoped: 'productie_id',
+  sql: sqlOf('persoon_dag'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    toewijzing_id: { type: 'integer', label: 'Toewijzing' },
+    persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+    rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol' },
+    omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
+    soort: { type: 'text', label: 'Soort', ...soorten },
+    plandag: { type: 'date', label: 'Plandag' },
+    datum: { type: 'date', label: 'Datum' },
+    start_at: { type: 'datetime', label: 'Start', nullable: true },
+    eind_at: { type: 'datetime', label: 'Einde', nullable: true },
+    locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
+    state: {
+      type: 'text',
+      label: 'Status',
+      writes: { dataset: 'toewijzing', field: 'state', key: 'toewijzing_id' },
+    },
+    beschikbaarheid: {
+      type: 'text',
+      label: 'Beschikbaarheid',
+      nullable: true,
+      options: { afwezig: 'Afwezig', onzeker: 'Onzeker', beschikbaar: 'Beschikbaar', voorkeur: 'Voorkeur' },
+      tones: { afwezig: 'bad', onzeker: 'warn', beschikbaar: 'ok', voorkeur: 'sky' },
+    },
+    conflicten: { ...count('Conflicten'), badge: 'bad' },
+  },
+})
+
+export const locatieDag = defineQuery({
+  name: 'locatie_dag',
+  label: 'Per locatie per dag',
+  icon: 'pin',
+  title: 'omschrijving',
+  date: 'plandag',
+  calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['locatie_id', 'productie_id'] },
+  scoped: 'productie_id',
+  sql: sqlOf('locatie_dag'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    locatie_id: { type: 'integer', label: 'Locatie', relation: 'organisatie' },
+    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+    omschrijving: { type: 'text', label: 'Omschrijving', nullable: true },
+    soort: { type: 'text', label: 'Soort', ...soorten },
+    plandag: { type: 'date', label: 'Plandag' },
+    datum: { type: 'date', label: 'Datum' },
+    start_at: { type: 'datetime', label: 'Start', nullable: true, writes: toActiviteit('start_at') },
+    eind_at: { type: 'datetime', label: 'Einde', nullable: true, writes: toActiviteit('eind_at') },
+    status: { type: 'text', label: 'Status', writes: toActiviteit('status') },
+    conflicten: { ...count('Conflicten'), badge: 'bad' },
+  },
+})
+
+export const kandidaten = defineQuery({
+  name: 'kandidaten',
+  label: 'Kandidaten',
+  icon: 'users',
+  title: 'naam',
+  sql: sqlOf('kandidaten'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    toewijzing_id: { type: 'integer', label: 'Open plaats' },
+    persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
+    naam: { type: 'text', label: 'Naam' },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    rol_id: { type: 'integer', label: 'Rol', relation: 'rol' },
+    voorkeur: { type: 'boolean', label: 'Voorkeur' },
+    rang: { type: 'integer', label: 'Rang' },
+  },
+})
+
+export const werklijst = defineQuery({
+  name: 'werklijst',
+  label: 'Werklijst',
+  icon: 'check',
+  title: 'titel',
+  date: 'deadline',
+  sql: sqlOf('werklijst'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    soort: {
+      type: 'text',
+      label: 'Soort',
+      options: { taak: 'Taak', open_slot: 'Open plaats', onbeantwoord: 'Onbeantwoord', optie: 'Optie' },
+    },
+    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
+    titel: { type: 'text', label: 'Titel' },
+    deadline: { type: 'date', label: 'Deadline', nullable: true },
+    taak_id: { type: 'integer', label: 'Taak', nullable: true, relation: 'taak' },
+    status: {
+      type: 'text',
+      label: 'Status',
+      nullable: true,
+      writes: { dataset: 'taak', field: 'status', key: 'taak_id' },
+    },
   },
 })

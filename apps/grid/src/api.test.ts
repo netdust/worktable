@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { attachmentsOf, fileUrl, removeAttachment, uploadAttachment, actOn, actView, ownerRows, ownerViews, recordLink, rotateRecordLink, setForOwners, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
+import { attachmentsOf, fileUrl, optionsFrom, removeAttachment, uploadAttachment, actOn, actView, ownerRows, ownerViews, recordLink, rotateRecordLink, setForOwners, awayRows, consumeLink, create, createView, deleteView, forgetSchema, history, me, onNotices, onUnauthenticated, prefs, publishView, records, remove, restoreView, rows, requestLink, runAction, savePrefs, savedViews, schema, setDisplay, signOut, undoBatch, update, updateView } from './api'
 import { type EngineRow, type EngineSchema, type EngineView, toRow } from './engine'
 import { defaults } from './grid/layout'
 import { createStore } from './grid/store'
@@ -644,6 +644,30 @@ describe('the matrix on the engine', () => {
 
     expect(found.map((r) => r.fields.reden)).toEqual(['Studiedag'])
     expect(sent()).toEqual([[`/api/rows/beschikbaarheid?filter=${JSON.stringify({ start_at: { $lte: '2026-10-18T23:59:59' }, eind_at: { $gte: '2026-10-12' } })}`, 'GET', undefined]])
+  })
+
+  it('adds the away where to its filter', async () => {
+    const away: MatrixAway = { table: 'beschikbaarheid', model: 'beschikbaarheid', column_field: 'persoon_id', label_field: 'reden', date_field: 'start_at', end_field: 'eind_at', where: { soort: 'afwezig' } }
+    on(() => json({ rows: [], total: 0 }))
+
+    await awayRows(away, { from: '2026-10-12', to: '2026-10-18' })
+
+    expect(sent()).toEqual([[`/api/rows/beschikbaarheid?filter=${JSON.stringify({ soort: 'afwezig', start_at: { $lte: '2026-10-18T23:59:59' }, eind_at: { $gte: '2026-10-12' } })}`, 'GET', undefined]])
+  })
+
+  it('optionsFrom filters the source on the match, sends the declared sort and keeps its order', async () => {
+    const from = { source: 'kandidaten', match: { toewijzing_id: 'id' }, value: 'persoon_id', sort: ['rang'] }
+    const candidate = (id: number, persoon: number, naam: string) =>
+      ({ id, persoon_id: persoon, toewijzing_id: 7, title: naam, custom: {}, lookups: { persoon_id: { id: persoon, title: naam } } })
+    on(() => json({ rows: [candidate(7000002, 2, 'Bram De Wilde'), candidate(7000001, 1, 'Lotte Verhaegen'), candidate(7000009, 2, 'Bram De Wilde')], total: 3 }))
+
+    const found = await optionsFrom(from, { id: 7, aantal: 1 })
+
+    const url = new URL(String(sent()[0][0]), 'http://x')
+    expect(url.pathname).toBe('/api/rows/kandidaten')
+    expect(url.searchParams.get('filter')).toBe(JSON.stringify({ toewijzing_id: 7 }))
+    expect(url.searchParams.get('sort')).toBe('rang')
+    expect(found.map((row) => [row.id, row.title])).toEqual([[2, 'Bram De Wilde'], [1, 'Lotte Verhaegen']])
   })
 
   it('a cell create sends one id per relation; clearing it sends DELETE', async () => {

@@ -13,3 +13,7 @@ aantal # a count; the engine test fixture declares it, and theatre's Toewijzing 
 mijn # Dutch 'my': the engine's tests name views 'Mijn …'; theatre declares mijn_producties
 ref # OpenAPI's $ref in the generated description
 items # JSON Schema's array items in the generated description
+record # generic English; the engine's record links and record ids, theatre's Taak.record_id
+aan # Dutch 'to', in theatre's toegewezen_aan and gekoppeld_aan; one engine test string
+ander # Dutch 'other', in conflicten's ander_* columns; one engine test string
+taak # the engine test fixture's invented dataset; theatre declares Taak

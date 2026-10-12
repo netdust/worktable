@@ -76,6 +76,8 @@ export interface OpenSlot {
   label: string
   count: number
   cell: number
+  /** The open row a fill acts on, as an options source matches it. */
+  record: Record<string, unknown>
 }
 
 export function openSlots(view: View, row: Row): OpenSlot[] {
@@ -87,7 +89,7 @@ export function openSlots(view: View, row: Row): OpenSlot[] {
     const count = Math.max(0, Number(cell.fields[open.count_field] ?? 1) || 0)
     const slot = slots.get(key)
     if (slot) slot.count += count
-    else slots.set(key, { key, label: cell.lookups?.[open.match_field]?.title ?? '', count, cell: cell.id })
+    else slots.set(key, { key, label: cell.lookups?.[open.match_field]?.title ?? '', count, cell: cell.id, record: { ...cell.fields, id: cell.id } })
   }
   return [...slots.values()]
 }

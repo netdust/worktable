@@ -12,7 +12,7 @@ Read against `docs/SPEC.md` and `packages/engine/src` at main `67f9962`. Nothing
 | S4 | Non-relation action inputs | accepted |
 | C4 + C5 | A hook mail carries the record link; several mails per hook | accepted |
 | C9 | `$period: today` | accepted |
-| C1, C3, C10 | Several owner columns; dry-run quote; administrator account routes | deferred until cargo is real |
+| C1, C3, C10 | Several owner columns; dry-run quote; administrator account routes | closed as website work (Stefan, 2026-10-12; was deferred until cargo is real) |
 | S3, S5, S6, S7 | Record-link counter; `ctx.count`; per-record renderers; visitor filters on public views | dropped |
 | C2, C7 | Public create; board skin | not in this finding: already specified, built when a domain needs them |
 | A1 | `exists`/`findBy` matching null | not now (Stefan left it to me, 2026-10-11): no domain in the repo needs it; built with the agency |

@@ -1,4 +1,5 @@
 import { locale, t } from '../../i18n'
+import { BadgeCell } from './Badge'
 import { BoolCell } from './Bool'
 import { DateCell, DateEditor, DateTimeEditor } from './Date'
 import { LinksCell, LinksEditor } from './Links'
@@ -36,6 +37,7 @@ function Value({ column, row, onToggle, active }: CellProps & { onToggle: () => 
     case 'bool':
       return <BoolCell column={column} row={row} onToggle={onToggle} />
     case 'number':
+      return column.badge ? <BadgeCell column={column} row={row} /> : <NumberCell column={column} row={row} />
     case 'rollup':
       return <NumberCell column={column} row={row} />
     default:

@@ -26,6 +26,14 @@ export type Tone = (typeof TONES)[number]
 
 export type ColumnType = 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'datetime' | 'json'
 
+/** A relation's picker lists the `value` records of `source`'s rows whose `match` columns equal this row's, in `sort` order. */
+export interface OptionsFrom {
+  source: string
+  match: Record<string, string>
+  value: string
+  sort?: string[]
+}
+
 export interface ColumnDecl {
   type: ColumnType
   label: string
@@ -43,6 +51,9 @@ export interface ColumnDecl {
   owner_writable?: true
   /** The grid never offers or shows it; still stored, imported and written through the API. */
   hidden?: boolean
+  options_from?: OptionsFrom
+  /** An integer the grid shows as a tinted count above 0, and not at all at 0. */
+  badge?: Tone
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -62,7 +73,14 @@ export interface MatrixDecl {
   keys: Record<string, string>
   marks: Record<string, string>
   count: string
-  away?: { dataset: string; across: string; label: string; end: string }
+  /** `where` keeps only the away rows whose columns equal its values. */
+  away?: {
+    dataset: string
+    across: string
+    label: string
+    end: string
+    where?: Record<string, string | number | boolean>
+  }
   /** A join row with neither across nor label is open: `match` says what it waits for, `count` how many, `fill` the action that fills it. */
   open?: { match: string; count: string; fill: string }
 }
@@ -77,13 +95,14 @@ export interface LinkDecl {
   state?: string
 }
 
-/** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. */
+/** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. `owner_visible` serves it to the row's owner too. */
 export interface LookupDecl {
   label: string
   via: string
   field: string
   own?: string
   from?: string
+  owner_visible?: true
 }
 
 /** Files on a dataset's records: `kinds` keyed by identifier, at most `max_mb` each (default 10). */
@@ -97,12 +116,21 @@ export interface AttachmentsDecl {
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
 export type Owners = Partial<Record<'owner', string>>
 
+/** Rows placed on `day`, timed by `start` and `end` (none is all-day), grouped by one of `lanes`. */
+export interface CalendarDecl {
+  day: string
+  start?: string
+  end?: string
+  lanes: string[]
+}
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
   label: string
   title: TitleDecl
   date?: string
+  calendar?: CalendarDecl
   columns: Record<string, ColumnDecl>
   indexes?: string[][]
   custom: boolean
@@ -133,6 +161,7 @@ export interface QueryDecl {
   label: string
   title: string
   date?: string
+  calendar?: CalendarDecl
   sql: string
   columns: Record<string, ColumnDecl>
   owners?: Owners
@@ -150,7 +179,7 @@ export interface SavedViewSeed {
   name: string
   source_type: 'dataset' | 'query'
   source: string
-  skin: 'table' | 'matrix'
+  skin: 'table' | 'matrix' | 'calendar'
   filters: FilterInput
   sort: string[]
   group_by: string | null
@@ -242,7 +271,7 @@ export const MAX_INPUT_TEXT = 500
 
 /** A record picked by id, which `run` receives as the record; or a typed value, checked before `run`. */
 export type ActionInput =
-  | { relation: string; label: string }
+  | { relation: string; label: string; options_from?: OptionsFrom }
   | { type: InputType; label: string; min?: number; max?: number; required?: boolean }
 
 /** What `run` receives per input: the picked record, or the typed value (absent when not required and left out). */

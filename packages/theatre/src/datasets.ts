@@ -1,4 +1,12 @@
-import { defineDataset, type GroupFact, type HookResult, type WriteContext } from '@worktable/engine'
+import { defineDataset, type GroupFact, type HookResult, type OptionsFrom, type WriteContext } from '@worktable/engine'
+
+// An open slot's person picker lists its candidates, best first.
+export const KANDIDATEN: OptionsFrom = {
+  source: 'kandidaten',
+  match: { toewijzing_id: 'id' },
+  value: 'persoon_id',
+  sort: ['rang'],
+}
 
 // A day band's facts on the planning sources.
 export const dagFacts: GroupFact[] = [
@@ -206,12 +214,18 @@ export const toewijzing = defineDataset({
     keys: { v: 'voorlopig', u: 'uitgenodigd', b: 'bevestigd', g: 'geweigerd', x: 'geannuleerd' },
     marks: { voorlopig: '~', uitgenodigd: '?', bevestigd: '✓', geweigerd: '✗', geannuleerd: '–' },
     count: 'bevestigd',
-    away: { dataset: 'beschikbaarheid', across: 'persoon_id', label: 'reden', end: 'eind_at' },
+    away: {
+      dataset: 'beschikbaarheid',
+      across: 'persoon_id',
+      label: 'reden',
+      end: 'eind_at',
+      where: { soort: 'afwezig' },
+    },
     open: { match: 'rol_id', count: 'aantal', fill: 'vul_slot' },
   },
   columns: {
     activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit', owner_visible: true },
-    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
+    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon', options_from: KANDIDATEN },
     naam: { type: 'text', label: 'Naam', nullable: true },
     rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol', owner_visible: true },
     aantal: { type: 'integer', label: 'Aantal', default: 1 },
@@ -233,6 +247,12 @@ export const toewijzing = defineDataset({
     },
     notitie: { type: 'text', label: 'Notitie', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
+  },
+  lookups: {
+    datum: { label: 'Datum', via: 'activiteit_id', field: 'datum' },
+    start_at: { label: 'Start', via: 'activiteit_id', field: 'start_at' },
+    eind_at: { label: 'Einde', via: 'activiteit_id', field: 'eind_at' },
+    productie: { label: 'Productie', via: 'activiteit_id', field: 'productie_id' },
   },
   lifecycle: {
     column: 'state',
@@ -266,6 +286,15 @@ export const beschikbaarheid = defineDataset({
     persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
     start_at: { type: 'datetime', label: 'Start', owner_visible: true },
     eind_at: { type: 'datetime', label: 'Einde', owner_visible: true },
+    soort: {
+      type: 'text',
+      label: 'Soort',
+      default: 'afwezig',
+      owner_visible: true,
+      owner_writable: true,
+      options: { afwezig: 'Afwezig', onzeker: 'Onzeker', beschikbaar: 'Beschikbaar', voorkeur: 'Voorkeur' },
+      tones: { afwezig: 'bad', onzeker: 'warn', beschikbaar: 'ok', voorkeur: 'sky' },
+    },
     reden: { type: 'text', label: 'Reden', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
@@ -329,4 +358,53 @@ export const sjabloon = defineDataset({
     naam: { type: 'text', label: 'Naam' },
     items: { type: 'json', label: 'Items' },
   },
+})
+
+export const persoonRol = defineDataset({
+  name: 'persoon_rol',
+  label: 'Rollen per persoon',
+  new_label: 'Nieuwe rol voor een persoon',
+  icon: 'users',
+  title: { via: 'persoon_id', else: 'notitie' },
+  custom: true,
+  columns: {
+    persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
+    rol_id: { type: 'integer', label: 'Rol', relation: 'rol' },
+    dagtarief: { type: 'real', label: 'Dagtarief', nullable: true },
+    uurtarief: { type: 'real', label: 'Uurtarief', nullable: true },
+    voorkeur: { type: 'boolean', label: 'Voorkeur', default: false },
+    notitie: { type: 'text', label: 'Notitie', nullable: true },
+  },
+  indexes: [['persoon_id'], ['rol_id']],
+})
+
+export const taak = defineDataset({
+  name: 'taak',
+  label: 'Taken',
+  new_label: 'Nieuwe taak',
+  icon: 'check',
+  title: 'titel',
+  date: 'deadline',
+  custom: true,
+  columns: {
+    titel: { type: 'text', label: 'Titel' },
+    deadline: { type: 'date', label: 'Deadline', nullable: true },
+    toegewezen_aan: { type: 'integer', label: 'Toegewezen aan', nullable: true, relation: 'persoon' },
+    gekoppeld_aan: {
+      type: 'text',
+      label: 'Gekoppeld aan',
+      nullable: true,
+      options: { productie: 'Productie', speelreeks: 'Tourstop', activiteit: 'Activiteit', organisatie: 'Organisatie' },
+    },
+    record_id: { type: 'integer', label: 'Record', nullable: true },
+    status: {
+      type: 'text',
+      label: 'Status',
+      default: 'open',
+      options: { open: 'Open', gedaan: 'Gedaan' },
+      tones: { gedaan: 'ok' },
+    },
+    notitie: { type: 'text', label: 'Notitie', nullable: true },
+  },
+  indexes: [['deadline']],
 })
