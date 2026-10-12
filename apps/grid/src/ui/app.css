@@ -4520,3 +4520,41 @@
   height: 100%;
   background: var(--color-success-fg);
 }
+
+/* The dashboard in edit mode: sections with their tiles in order, and what to add. */
+.nv-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nv-compose__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.nv-compose__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.nv-compose__row > span {
+  flex: 1;
+}
+
+.nv-compose__tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 16px;
+}
+
+.nv-dash__edit {
+  margin-left: auto;
+}

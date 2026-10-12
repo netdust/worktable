@@ -495,7 +495,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         <div className="nv-work">
         <section className="nv-sheet">
           {dashboard ? (
-            <Dashboard key={dashboard.key} dashboard={dashboard as SavedView} models={models} tables={served.tables} onOpenView={setActiveKey}
+            <Dashboard key={dashboard.key} dashboard={dashboard as SavedView} models={models} tables={served.tables} onOpenView={setActiveKey} role={role}
+              onSaved={(saved) => savedViews().then((list) => { load(list); setActiveKey(saved.key) }, () => undefined)}
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}

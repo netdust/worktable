@@ -30,7 +30,7 @@ const dashboard = (tiles: unknown[], actions: unknown[] = []): SavedView =>
   ({ ...base(9, 'Overzicht', ''), type: 'dashboard', layout: { sections: [{ label: 'Deze week', tiles }], actions } }) as unknown as SavedView
 
 function show(tiles: unknown[], actions: unknown[] = []) {
-  return render(<Dashboard dashboard={dashboard(tiles, actions)} views={[week, filled, all]} models={models} tables={tables} scope={null} onOpenView={() => undefined} />)
+  return render(<Dashboard dashboard={dashboard(tiles, actions)} views={[week, filled, all]} models={models} tables={tables} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
 }
 
 beforeEach(() => {

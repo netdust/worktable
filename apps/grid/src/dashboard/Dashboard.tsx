@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
 import { t } from '../i18n'
-import type { Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
+import type { Account, Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
+import { Composer } from './Composer'
 import { ProgressTile } from './ProgressTile'
 import { QuickCreate } from './QuickCreate'
 import { WeekTile } from './WeekTile'
@@ -18,13 +19,17 @@ interface Props {
   tables: TableDef[]
   /** The space switcher's choice, applied to each tile whose view the space scopes. */
   scope: Scope | null
+  role: Account['role']
   onOpenView: (key: string) => void
+  /** A composed dashboard was saved, in place or as a copy; it opens. */
+  onSaved: (view: SavedView) => void
 }
 
 const viewsOf = (tile: Tile): number[] => (tile.kind === 'progress' ? [tile.done, tile.total] : [tile.view])
 
 /** The page the grid opens on: sections of tiles over saved views, fresh on every return to the window. */
-export function Dashboard({ dashboard, views, models, tables, scope, onOpenView }: Props) {
+export function Dashboard({ dashboard, views, models, tables, scope, role, onOpenView, onSaved }: Props) {
+  const [editing, setEditing] = useState(false)
   const [version, setVersion] = useState(0)
   const refresh = () => setVersion((n) => n + 1)
   useEffect(() => {
@@ -69,14 +74,16 @@ export function Dashboard({ dashboard, views, models, tables, scope, onOpenView 
   const actions = (dashboard.layout?.actions ?? []).filter((action) => models[action.create])
   return (
     <div className="nv-frame">
-      {actions.length > 0 && (
-        <div className="nv-bar nv-dash__actions">
-          {actions.map((action) => (
-            <button key={action.create} type="button" className="nv-bar__button" onClick={() => setCreating(action)}>{action.label}</button>
-          ))}
-        </div>
-      )}
+      <div className="nv-bar nv-dash__actions">
+        {actions.map((action) => (
+          <button key={action.create} type="button" className="nv-bar__button" onClick={() => setCreating(action)}>{action.label}</button>
+        ))}
+        {!editing && <button type="button" className="nv-bar__button nv-dash__edit" onClick={() => setEditing(true)}>{t('edit')}</button>}
+      </div>
       <div className="nv-body">
+        {editing ? (
+          <div className="nv-dash"><Composer dashboard={dashboard} views={views} role={role} onDone={() => setEditing(false)} onSaved={onSaved} /></div>
+        ) : (
         <div className="nv-dash">
           {sections.length === 0 && <p className="nv-tile__note">{t('dashboardEmpty')}</p>}
           {sections.map((section, s) => (
@@ -86,6 +93,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, onOpenView 
             </section>
           ))}
         </div>
+        )}
         {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} />}
       </div>
       {creating && models[creating.create] && (
