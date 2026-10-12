@@ -93,6 +93,22 @@ async function spot(page: Page, title: string, name: string): Promise<Locator> {
   return row(page, title).locator('td[data-cell]').nth(index)
 }
 
+async function columnOf(page: Page, label: string): Promise<number> {
+  let index = -1
+  await expect
+    .poll(async () => {
+      index = await page
+        .locator('thead th')
+        .evaluateAll(
+          (heads, wanted) => heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === wanted),
+          label,
+        )
+      return index
+    })
+    .toBeGreaterThanOrEqual(0)
+  return index
+}
+
 async function cellOf(page: Page, title: string, label: string): Promise<Locator> {
   let index = -1
   await expect
@@ -158,7 +174,7 @@ test.describe('step 3', () => {
   test('conflicten-six-types @e2e', async ({ page }) => {
     const api = page.request
     const day = (n: number) => plusDays(WEEK.conflicts, n)
-    const who = await person(api, 'Conflict', 'Proef')
+    const who = await person(api, 'Botsing', 'Proef')
     const spiegel = await idByName(api, 'organisatie', 'naam', 'Zaal De Spiegel')
     const kersentuin = await idByName(api, 'productie', 'titel', 'De Kersentuin')
     const made: number[] = []
@@ -189,9 +205,20 @@ test.describe('step 3', () => {
       await page.goto('/')
       await openView(page, 'Conflicten', 'Conflicten')
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conflicten')
-      const types = page.locator('tbody')
-      for (const label of ['Overlap', 'Afwezig', 'Onzeker', 'Open plaats', 'Onbevestigd', 'Locatie dubbel']) {
-        await expect(types.getByRole('gridcell', { name: label, exact: true }).first()).toBeVisible()
+      // Each of this flow's own rows, found by its sentence, with its type and its weight.
+      const expected: [string, string, string][] = [
+        ['e2e overlap een en e2e overlap twee', 'Overlap', 'Conflict'],
+        ['afwezig tijdens e2e afwezig', 'Afwezig', 'Conflict'],
+        ['niet beschikbaar tijdens e2e onzeker', 'Onzeker', 'Waarschuwing'],
+        ['e2e open plaats morgen', 'Open plaats', 'Conflict'],
+        ['e2e onbevestigd', 'Onbevestigd', 'Conflict'],
+        ['e2e zaal een en e2e zaal twee', 'Locatie dubbel', 'Conflict'],
+      ]
+      const [type, ernst] = [await columnOf(page, 'Type'), await columnOf(page, 'Ernst')]
+      for (const [text, label, weight] of expected) {
+        const found = page.locator('tbody tr.nv-tr').filter({ hasText: text }).first()
+        await expect(found.locator('td').nth(type)).toHaveText(label)
+        await expect(found.locator('td').nth(ernst)).toHaveText(weight)
       }
       await shot(page, 'conflicten')
     } finally {
