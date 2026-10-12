@@ -40,7 +40,7 @@ The spec of record is `docs/SPEC.md` at `8768723`. The design is in `specs/step-
 
 ## Gate
 
-- **G** An open slot's picker lists candidates and excludes anyone afwezig or already assigned. The Conflicten view lists all six types from seeded data. A person calendar and the company week open on the calendar skin. A badge appears on a conflicting row and disappears when fixed. The untimed rule's counts on the real copy are reported, not asserted.
+- **G** An open slot's picker lists candidates and excludes anyone afwezig or already assigned. The Conflicten view lists all six types: four from seeded data, open_slot and onbevestigd from rows the gate creates relative to today (Stefan via the orchestrator, 2026-10-12, review CR-S5). A person calendar and the company week open on the calendar skin. A badge appears on a conflicting row and disappears when fixed. The untimed rule's counts on the real copy are reported, not asserted.
   Source: brief, "Gate".
 
 ## Out
