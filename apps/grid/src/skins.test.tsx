@@ -45,6 +45,18 @@ describe('the gallery', () => {
   })
 })
 
+describe('the gallery past 200 rows', () => {
+  it('reads every row’s image, 200 ids a read', async () => {
+    api.filesOf.mockReset()
+    api.filesOf.mockImplementation(async (_: string, ids: number[]) => (ids.includes(450) ? { 450: { id: 99, mime: 'image/png', name: 'z.png' } } : {}))
+    const activity = { ...model, key: 'activiteit', fields: {} } as unknown as Model
+    const rows = Array.from({ length: 450 }, (_, at) => row(at + 1, `Rij ${at + 1}`, null))
+    render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{}} rows={rows} kind="foto" />)
+    expect((await screen.findByRole('img', { name: 'Rij 450' })).getAttribute('src')).toBe('/api/attachments/file/99')
+    expect(api.filesOf.mock.calls.map(([, ids]) => ids.length)).toEqual([200, 200, 50])
+  })
+})
+
 describe('the timeline', () => {
   it('draws a bar per row over its days, in lanes', () => {
     const cal = { day: 'start_datum', start: null, end: 'eind_datum', lanes: ['productie_id'], spans: true as const }

@@ -5,14 +5,21 @@ import type { Model, Row, View } from '../types'
 
 type Files = Record<number, { id: number; mime: string; name: string }>
 
-/** A card per row with its newest image of the gallery's kind, read for the page at once; a click opens the row. */
+/** The engine's cap on one batched read. */
+const BATCH = 200
+
+const batchesOf = (ids: number[]): number[][] => Array.from({ length: Math.ceil(ids.length / BATCH) }, (_, at) => ids.slice(at * BATCH, (at + 1) * BATCH))
+
+/** A card per row with its newest image of the gallery's kind, read 200 rows a request; a click opens the row. */
 export function Gallery({ view, model, models, rows, kind }: { view: View; model: Model; models: Record<string, Model>; rows: Row[]; kind: string }) {
   const [openRow, drawer] = useOpenRow(model, view, models)
   const [files, setFiles] = useState<Files>({})
-  const ids = rows.slice(0, 200).map((row) => row.id)
+  const ids = rows.map((row) => row.id)
   useEffect(() => {
     let live = true
-    if (ids.length > 0) filesOf(view.model, ids, kind).then((found) => live && setFiles(found), () => live && setFiles({}))
+    setFiles({})
+    for (const batch of batchesOf(ids))
+      filesOf(view.model, batch, kind).then((found) => live && setFiles((was) => ({ ...was, ...found })), () => undefined)
     return () => {
       live = false
     }
