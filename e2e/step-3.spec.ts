@@ -306,5 +306,23 @@ test.describe('step 3', () => {
       page.getByRole('group', { name: 'Hele dag ma 12', exact: true }).getByRole('button').first(),
     ).toBeVisible()
     await shot(page, 'company-week')
+
+    // The month fills the view, its chips carry the lane colours, and a click opens the row drawer beside it.
+    await page.getByRole('radio', { name: 'Maand' }).click()
+    await expect(page.getByRole('radio', { name: 'Maand' })).toBeChecked()
+    const month = page.locator('table.nv-cal--month')
+    const [table, body] = [await month.boundingBox(), await page.locator('.nv-cal__body').boundingBox()]
+    expect((table?.y ?? 0) + (table?.height ?? 0)).toBeGreaterThan((body?.y ?? 0) + (body?.height ?? 0) - 4)
+    const chip = month.getByRole('button', { name: /Nachtwacht/ }).first()
+    expect(await chip.evaluate((el) => getComputedStyle(el).borderRadius)).toBe('0px')
+    await page.getByRole('radio', { name: 'Donker' }).click()
+    await shot(page, 'company-month-dark')
+    await chip.click()
+    const drawer = page.getByRole('complementary')
+    await expect(drawer).toBeVisible()
+    const [aside, cal] = [await drawer.boundingBox(), await page.locator('.nv-cal__body').boundingBox()]
+    expect(aside?.x ?? 0).toBeGreaterThanOrEqual((cal?.x ?? 0) + (cal?.width ?? 0) - 1)
+    await shot(page, 'company-month-drawer')
+    await page.getByRole('radio', { name: 'Auto' }).click()
   })
 })

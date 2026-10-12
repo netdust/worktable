@@ -4094,8 +4094,21 @@
 
 .nv-cal__body {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   padding: 0 0 16px;
+}
+
+/* A month fills the view's height: its week rows stretch, as the week's hour area does. */
+.nv-cal__body--month {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.nv-cal__body--month .nv-cal--month {
+  flex: 1;
+  height: 100%;
 }
 
 .nv-cal__legend {
@@ -4202,7 +4215,8 @@
 }
 
 .nv-cal--month td {
-  height: 96px;
+  height: auto;
+  min-height: 96px;
 }
 
 .nv-cal__out {
@@ -4224,7 +4238,7 @@
   overflow: hidden;
   border: 0;
   border-left: 3px solid var(--tone, var(--color-accent-default));
-  border-radius: 4px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 16%, var(--color-bg-surface));
   color: var(--color-fg-default);
   font: inherit;

@@ -57,7 +57,7 @@ function Event({ event, laneTitle, named = false, style, onOpen }: {
     <button type="button" className={`nv-cal__event${event.allDay ? ' nv-cal__event--all' : ''}`} style={style}
       title={laneTitle} onClick={() => onOpen(event.row)}>
       {time && <span className="nv-cal__time">{time}</span>}
-      <span className="nv-cal__title">{named && laneTitle ? `${laneTitle} · ${event.row.title}` : event.row.title}</span>
+      <span className="nv-cal__title">{named && laneTitle && laneTitle !== event.row.title ? `${laneTitle} · ${event.row.title}` : event.row.title}</span>
     </button>
   )
 }
@@ -130,7 +130,7 @@ function Month({ month, weeks, lanes, events, toneOf, onOpen }: {
       </thead>
       <tbody>
         {weeks.map((week) => (
-          <tr key={week[0]}>
+          <tr key={week[0]} style={{ height: `${100 / weeks.length}%` }}>
             {week.map((day) => (
               <td key={day} className={day < month.from || day > month.to ? 'nv-cal__out' : undefined}>
                 <span className="nv-cal__date">{parse(day)?.getDate()}</span>
@@ -184,13 +184,15 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onShown,
         </ToggleButtonGroup>
         {filters}
       </div>
-      <div className="nv-cal__body">
-        {lane && <Legend lanes={lanes} toneOf={toneOf} />}
-        {month
-          ? <Month month={shown} weeks={weeks} lanes={lanes} events={events} toneOf={toneOf} onOpen={setOpen} />
-          : <Week days={days} lanes={lanes} events={events} timed={cal.start !== null} toneOf={toneOf} onOpen={setOpen} />}
+      <div className="nv-body">
+        <div className={`nv-cal__body${month ? ' nv-cal__body--month' : ''}`}>
+          {lane && <Legend lanes={lanes} toneOf={toneOf} />}
+          {month
+            ? <Month month={shown} weeks={weeks} lanes={lanes} events={events} toneOf={toneOf} onOpen={setOpen} />
+            : <Week days={days} lanes={lanes} events={events} timed={cal.start !== null} toneOf={toneOf} onOpen={setOpen} />}
+        </div>
+        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} />}
       </div>
-      {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} />}
     </div>
   )
 }

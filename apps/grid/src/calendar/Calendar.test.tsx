@@ -68,6 +68,24 @@ describe('the calendar', () => {
     expect(within(screen.getByRole('group', { name: 'Hele dag ma 12' })).getByRole('button', { name: /repetitie Gent/ })).toBeTruthy()
   })
 
+  it("the row drawer opens beside the calendar, as the grid's does, not under it", () => {
+    shown()
+    fireEvent.click(screen.getByRole('button', { name: /repetitie Gent/ }))
+    const drawer = screen.getByRole('complementary', { name: 'repetitie Gent' })
+    const body = drawer.parentElement as HTMLElement
+    expect(body.className).toBe('nv-body')
+    expect(body.querySelector(':scope > .nv-cal__body')).toBeTruthy()
+  })
+
+  it("a month carries each lane's colour, as the week and the legend do", () => {
+    shown({ shown: { from: '2026-10-01', to: '2026-10-31' } })
+    const legend = screen.getByRole('list', { name: 'Rijen' })
+    const noor = within(legend).getByText('Noor Claes').closest('li') as HTMLElement
+    const chip = screen.getByRole('button', { name: /Noor Claes · vergadering Antwerpen/ })
+    expect(chip.style.getPropertyValue('--tone')).not.toBe('')
+    expect(chip.style.getPropertyValue('--tone')).toBe(noor.style.getPropertyValue('--tone'))
+  })
+
   it('clicking an event opens the drawer on its row', () => {
     shown()
     fireEvent.click(screen.getByRole('button', { name: /repetitie Gent/ }))
