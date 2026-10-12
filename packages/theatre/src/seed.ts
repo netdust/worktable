@@ -364,8 +364,10 @@ export const views: SavedViewSeed[] = [
     filters: { state: { $nin: ['geweigerd', 'geannuleerd'] } },
     sort: ['plandag', 'start_at'],
     group_by: null,
+    // The badge sits by the name, so it never scrolls off a 1280 px screen.
     visible_fields: [
       'persoon_id',
+      'conflicten',
       'plandag',
       'start_at',
       'soort',
@@ -373,7 +375,6 @@ export const views: SavedViewSeed[] = [
       'locatie_id',
       'state',
       'beschikbaarheid',
-      'conflicten',
     ],
   },
   {
