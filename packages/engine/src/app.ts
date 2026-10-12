@@ -7,7 +7,7 @@ import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
-import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
+import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl, OptionsFrom } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
 import { lookupColumn, lookupsFor, targetOf } from './lookups'
@@ -103,13 +103,34 @@ function sectionsOf(domain: Domain, actor: Actor): { label: string; sources: str
 }
 
 // A column that writes to a dataset reads with that column's options and tones, unless it declares its own options.
-function servedColumn(domain: Domain, column: ColumnDecl, actor: Actor): ColumnDecl {
+function servedColumn(domain: Domain, declared: ColumnDecl, actor: Actor): ColumnDecl {
+  const column = withReadableOptions(domain, declared, actor)
   if (!column.writes || column.options) return column
   const target = sourceOf(domain, column.writes.dataset)
   const decl = target?.columns[column.writes.field]
   if (!target || !decl?.options || !readable(actor, target)) return column
   return { ...column, options: decl.options, ...(decl.tones ? { tones: decl.tones } : {}) }
 }
+
+// A picker's options source is served only to a caller who can read it.
+function withReadableOptions<T extends { options_from?: OptionsFrom }>(domain: Domain, decl: T, actor: Actor): T {
+  if (!decl.options_from) return decl
+  const source = sourceOf(domain, decl.options_from.source)
+  if (source && readable(actor, source)) return decl
+  const { options_from: _, ...rest } = decl
+  return rest as T
+}
+
+const servedInput = (domain: Domain, input: ActionInput, actor: Actor): ActionInput =>
+  'relation' in input ? withReadableOptions(domain, input, actor) : input
+
+const servedActions = (domain: Domain, dataset: string, actor: Actor) =>
+  actionsOn(domain, dataset).map((action) => ({
+    ...action,
+    input: Object.fromEntries(
+      Object.entries(action.input).map(([key, input]) => [key, servedInput(domain, input, actor)]),
+    ),
+  }))
 
 const servedColumns = (domain: Domain, source: Source, actor: Actor): Record<string, ColumnDecl> =>
   Object.fromEntries(Object.entries(source.columns).map(([name, c]) => [name, servedColumn(domain, c, actor)]))
@@ -276,7 +297,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
               : {}),
             writable: isWritable(domain, s),
             deletable: s.kind === 'dataset' && Boolean(writerOf(domain, s.name)?.delete),
-            actions: actionsOn(domain, s.name),
+            actions: servedActions(domain, s.name, actor),
             ...(space ? { space: s.scoped ? 'scoped' : 'global' } : {}),
             ...(s.group_facts ? { group_facts: s.group_facts } : {}),
           },

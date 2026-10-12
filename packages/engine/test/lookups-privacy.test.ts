@@ -359,7 +359,10 @@ describe('lookups on a dataset with owners', () => {
       queries: [],
       datasets: withLead.datasets.map((d) =>
         d.name === 'team'
-          ? { ...d, columns: { ...d.columns, lead_id: { type: 'integer', label: 'Lead', relation: 'item', nullable: true } } }
+          ? {
+              ...d,
+              columns: { ...d.columns, lead_id: { type: 'integer', label: 'Lead', relation: 'item', nullable: true } },
+            }
           : d,
       ),
     }

@@ -1,4 +1,5 @@
 import { type ActionCreate, type ActionDecl, refuse, type WriteContext } from '@worktable/engine'
+import { KANDIDATEN } from './datasets'
 import { validateItems } from './writers'
 
 type Values = Record<string, unknown>
@@ -112,7 +113,7 @@ const STILL_OPEN = { state: 'open' }
 export const vulSlot: ActionDecl = {
   label: 'Open plek invullen',
   on: 'toewijzing',
-  input: { persoon_id: { relation: 'persoon', label: 'Persoon' } },
+  input: { persoon_id: { relation: 'persoon', label: 'Persoon', options_from: KANDIDATEN } },
   run(slot, input) {
     const filled = { persoon_id: (input.persoon_id as Values).id, state: 'voorlopig' }
     const aantal = Number(slot.aantal)

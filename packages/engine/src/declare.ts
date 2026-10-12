@@ -26,6 +26,14 @@ export type Tone = (typeof TONES)[number]
 
 export type ColumnType = 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'datetime' | 'json'
 
+/** A relation's picker lists the `value` records of `source`'s rows whose `match` columns equal this row's, in `sort` order. */
+export interface OptionsFrom {
+  source: string
+  match: Record<string, string>
+  value: string
+  sort?: string[]
+}
+
 export interface ColumnDecl {
   type: ColumnType
   label: string
@@ -43,6 +51,7 @@ export interface ColumnDecl {
   owner_writable?: true
   /** The grid never offers or shows it; still stored, imported and written through the API. */
   hidden?: boolean
+  options_from?: OptionsFrom
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -243,7 +252,7 @@ export const MAX_INPUT_TEXT = 500
 
 /** A record picked by id, which `run` receives as the record; or a typed value, checked before `run`. */
 export type ActionInput =
-  | { relation: string; label: string }
+  | { relation: string; label: string; options_from?: OptionsFrom }
   | { type: InputType; label: string; min?: number; max?: number; required?: boolean }
 
 /** What `run` receives per input: the picked record, or the typed value (absent when not required and left out). */

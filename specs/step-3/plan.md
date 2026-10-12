@@ -25,6 +25,8 @@
 - the badge is a column hint;
 - F2 closes the two leaks already pinned by `lookups-privacy.test.ts`.
 
+**Execution:** Tasks 1–3 subagent-driven; Tasks 4–10 native (executing-plans), TDD, one commit per task, covered by the whole-branch review at close (Stefan, 2026-10-12).
+
 **Tech Stack:** Bun, Hono, Drizzle, SQLite, TypeScript, React with React Aria Components; Bun tests (engine, theatre), Vitest + Testing Library (grid), Playwright (e2e).
 
 **Spec:** `specs/step-3/spec.md` (R1–R12, G). Design: `specs/step-3/findings.md`. Spec of record: `docs/SPEC.md` at `8768723` (Dataset, Skin needs and Skins rows; Conflict types; queries table; step 3 rows).

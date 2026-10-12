@@ -1,4 +1,12 @@
-import { defineDataset, type GroupFact, type HookResult, type WriteContext } from '@worktable/engine'
+import { defineDataset, type GroupFact, type HookResult, type OptionsFrom, type WriteContext } from '@worktable/engine'
+
+// An open slot's person picker lists its candidates, best first.
+export const KANDIDATEN: OptionsFrom = {
+  source: 'kandidaten',
+  match: { toewijzing_id: 'id' },
+  value: 'persoon_id',
+  sort: ['rang'],
+}
 
 // A day band's facts on the planning sources.
 export const dagFacts: GroupFact[] = [
@@ -211,7 +219,7 @@ export const toewijzing = defineDataset({
   },
   columns: {
     activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit', owner_visible: true },
-    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
+    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon', options_from: KANDIDATEN },
     naam: { type: 'text', label: 'Naam', nullable: true },
     rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol', owner_visible: true },
     aantal: { type: 'integer', label: 'Aantal', default: 1 },

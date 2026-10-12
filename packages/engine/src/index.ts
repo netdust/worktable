@@ -21,6 +21,7 @@ export type {
   LinkDecl,
   LookupDecl,
   MatrixDecl,
+  OptionsFrom,
   Owners,
   QueryDecl,
   Role,

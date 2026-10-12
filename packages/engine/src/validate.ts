@@ -6,6 +6,7 @@ import {
   type Domain,
   ICONS,
   type InputType,
+  type OptionsFrom,
   type QueryDecl,
   TONES,
 } from './declare'
@@ -223,7 +224,10 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
       throw at(lookup.field, `field "${lookup.field}" is ${field.type}`)
     }
     // An owner reads a related field only from its own record: through its owner column, into the dataset its subject is (threat 2).
-    if (lookup.owner_visible && !(field.owner_visible && target.owners?.owner === 'id' && lookup.via === dataset.owners?.owner)) {
+    if (
+      lookup.owner_visible &&
+      !(field.owner_visible && target.owners?.owner === 'id' && lookup.via === dataset.owners?.owner)
+    ) {
       throw at(
         name,
         `is owner_visible, but it does not read an owner_visible field of the owner's own "${target.name}" record through the owner column`,
@@ -400,6 +404,40 @@ function checkRecordLink(dataset: DatasetDecl): void {
   }
 }
 
+// A picker's options come from a query's rows matched to the row the picker sits on.
+function checkOptionsFrom(
+  domain: Domain,
+  row: DatasetDecl | QueryDecl,
+  at: (message: string) => DomainError,
+  from: OptionsFrom,
+  target: string | undefined,
+): void {
+  if (!target) throw at('options_from needs a relation')
+  const source = domain.queries.find((q) => q.name === from.source)
+  if (!source) throw at(`options_from source "${from.source}" is not a declared query`)
+  if (source.columns[from.value]?.relation !== target) {
+    throw at(`options_from value "${from.value}" is not a relation of "${source.name}" to "${target}"`)
+  }
+  for (const [column, rowColumn] of Object.entries(from.match)) {
+    if (!Object.hasOwn(source.columns, column))
+      throw at(`options_from match "${column}" is not a column of "${source.name}"`)
+    if (!declared(row, rowColumn)) throw at(`options_from match "${rowColumn}" is not a column of "${row.name}"`)
+  }
+  for (const key of from.sort ?? []) {
+    const column = key.startsWith('-') ? key.slice(1) : key
+    if (!Object.hasOwn(source.columns, column))
+      throw at(`options_from sort "${column}" is not a column of "${source.name}"`)
+  }
+}
+
+function checkColumnOptions(domain: Domain, source: DatasetDecl | QueryDecl): void {
+  for (const [name, column] of Object.entries(source.columns)) {
+    if (!column.options_from) continue
+    const at = (message: string) => new DomainError(source.name, name, `${name}: ${message}`)
+    checkOptionsFrom(domain, source, at, column.options_from, column.relation)
+  }
+}
+
 const ACTION_NAME = /^[a-z][a-z0-9_]*$/
 
 const INPUT_TYPES: InputType[] = ['integer', 'date', 'text', 'boolean']
@@ -426,7 +464,13 @@ function checkActions(domain: Domain): void {
     if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
       throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
     }
-    for (const [key, input] of Object.entries(action.input)) checkInput(name, key, input, datasets)
+    for (const [key, input] of Object.entries(action.input)) {
+      checkInput(name, key, input, datasets)
+      if (!('relation' in input) || !input.options_from) continue
+      const on = domain.datasets.find((d) => d.name === action.on) as DatasetDecl
+      const at = (message: string) => new DomainError(name, key, `input ${key} ${message}`)
+      checkOptionsFrom(domain, on, at, input.options_from, input.relation)
+    }
   }
 }
 
@@ -502,6 +546,7 @@ export function validateDomain(domain: Domain): void {
     checkIcon(source)
     checkFacts(source)
     checkLinks(domain, source)
+    checkColumnOptions(domain, source)
     if (source.kind === 'query' && Object.hasOwn(source, 'attachments')) {
       throw new DomainError(source.name, 'attachments', 'attachments are declared on a dataset, never a query')
     }
