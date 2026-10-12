@@ -2,6 +2,8 @@
 
 Stefan, 2026-10-12 (the step 3 brief): "Findings (stop for approval): F1 Candidates option source … F2 Lookups on owner datasets … F3 Calendar skin." Scope 3a: Persoon_rol, soort on Beschikbaarheid, Taak, conflicten with six types, kandidaten, werklijst, the untimed rule. Scope 3b: persoon_dag, locatie_dag, the company week, the calendar skin on them, the Conflicten view with its badge on rows. Out: werktijd, Publication, Field, the board skin, any website page.
 
+**Decision (Stefan via the orchestrator, 2026-10-12):** approved as filed, F4 included; all six questions on the recommended answers.
+
 Read against `docs/SPEC.md` and the source at `6c76f6b` (main `3997cb5` plus the spec-additions commit). Nothing here is built.
 
 ## What exists
