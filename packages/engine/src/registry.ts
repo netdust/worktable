@@ -6,7 +6,7 @@ export function sourcesOf(domain: Domain): Source[] {
   return [...domain.datasets, ...domain.queries]
 }
 
-export function sourceOf(domain: Domain, name: string): Source | null {
+export function sourceOf(domain: Domain, name: string | null): Source | null {
   return sourcesOf(domain).find((s) => s.name === name) ?? null
 }
 

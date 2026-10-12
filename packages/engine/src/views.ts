@@ -3,10 +3,11 @@ import { timingSafeEqual } from 'node:crypto'
 import type { Context, Hono } from 'hono'
 import { forbid, may, readable } from './access'
 import { type AuthEnv, secret, sha256 } from './auth'
-import type { Actor, Domain, SavedViewSeed } from './declare'
+import { layoutOf } from './dashboard'
+import type { Actor, DashboardLayout, Domain, SavedViewSeed } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
-import { lookupOf } from './lookups'
+import { hasColumn, hasField } from './lookups'
 import { ApiError, keysProblem, parseRowsParams } from './params'
 import { checkLimits } from './rate-limit'
 import { type Source, sourceOf } from './registry'
@@ -15,7 +16,12 @@ import { savedView } from './saved-view'
 import { tableOf } from './tables'
 import { bodyOf, revise, type Store } from './writes'
 
-export type SavedViewRow = SavedViewSeed & { id: number }
+export type SavedViewRow = Omit<SavedViewSeed, 'source_type' | 'source' | 'layout'> & {
+  id: number
+  source_type: 'dataset' | 'query' | null
+  source: string | null
+  layout: DashboardLayout | null
+}
 export type ViewOut = SavedViewRow & {
   shared: boolean
   public: boolean
@@ -25,7 +31,8 @@ export type ViewOut = SavedViewRow & {
   editable: boolean
 }
 type Skin = SavedViewSeed['skin']
-export type ViewFields = Omit<SavedViewSeed, 'skin'> & { skin: Skin; shared: boolean }
+export type ViewFields = Omit<SavedViewRow, 'id'> & { shared: boolean }
+type Sourced = Omit<ViewFields, 'name' | 'shared'>
 
 type Raw = Record<string, string | number | null>
 type Change = [field: string, old: string | number | null, value: string | number | null]
@@ -36,31 +43,32 @@ const FIXED = ['source', 'skin']
 const MAX_TOKEN = 128
 const PUBLIC_PARAMS = ['from', 'to']
 const DEFAULTS = { skin: 'table', filters: {}, sort: [], group_by: null, visible_fields: [], shared: false }
+const EMPTY_LAYOUT: DashboardLayout = { sections: [], actions: [] }
 
 const bad = (message: string) => new ApiError(400, 'bad_view', message)
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const hasColumn = (source: Source, key: string): boolean =>
-  Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id') || !!lookupOf(source, key)
-// A link is shown like a column, never sorted or grouped on.
-const hasField = (source: Source, key: string): boolean =>
-  hasColumn(source, key) || Object.hasOwn(source.links ?? {}, key)
 
 export function viewOf(raw: Raw): SavedViewRow {
   return {
     id: raw.id as number,
     name: raw.name as string,
     source_type: raw.source_type as SavedViewRow['source_type'],
-    source: raw.source as string,
+    source: raw.source as string | null,
     skin: raw.skin as SavedViewRow['skin'],
     filters: JSON.parse(raw.filters as string),
     sort: JSON.parse(raw.sort as string),
     group_by: raw.group_by as string | null,
     visible_fields: JSON.parse(raw.visible_fields as string),
+    layout: raw.layout == null ? null : JSON.parse(raw.layout as string),
   }
 }
 
+/** What matches a seeded view to its row: its name and source, a dashboard's source being none. */
+export const viewKey = (name: string, source: string | null | undefined): string => `${name}\u0000${source ?? ''}`
+
 // Seeded views belong to no account: read-only for everyone, copied by a plain POST.
 export const SYSTEM_OWNER = -1
+export const SYSTEM: Actor = { id: SYSTEM_OWNER, role: 'administrator', subject: null }
 
 const isPublic = (raw: Raw): boolean => raw.public === 1
 const isForOwners = (raw: Raw): boolean => raw.for_owners === 1
@@ -95,7 +103,7 @@ function sourceNamed(domain: Domain, value: unknown): Source {
 function skinOf(domain: Domain, source: Source, value: unknown): Skin {
   if (value === 'table') return value
   if (value === 'matrix' && matrixOf(domain, source)) return value
-  if (value === 'calendar' && source.calendar) return value
+  if ((value === 'calendar' || value === 'timeline') && source.calendar) return value
   throw bad(`skin "${String(value)}" is not available on "${source.name}"`)
 }
 
@@ -129,7 +137,8 @@ function columnsOf(
 function groupOf(source: Source, skin: Skin, value: unknown): string | null {
   if (value === null) return null
   if (typeof value !== 'string' || !hasColumn(source, value)) throw bad(`cannot group on "${String(value)}"`)
-  if (skin === 'calendar' && !source.calendar?.lanes.includes(value)) throw bad(`cannot group a calendar on "${value}"`)
+  if ((skin === 'calendar' || skin === 'timeline') && !source.calendar?.lanes.includes(value))
+    throw bad(`cannot group a ${skin} on "${value}"`)
   return value
 }
 
@@ -151,14 +160,11 @@ const fieldCount = (source: Source): number =>
   (source.kind === 'dataset' ? 1 + Object.keys(source.lookups ?? {}).length : 0) +
   Object.keys(source.links ?? {}).length
 
-// On create the input is the body; on update it is the stored view with the patch laid over it.
-export function viewBody(input: unknown, domain: Domain, creating: boolean): ViewFields {
-  if (!isObject(input)) throw bad('body must be a JSON object')
-  const v = creating ? { ...DEFAULTS, ...input } : input
+function sourcedFields(domain: Domain, v: Record<string, unknown>): Sourced {
+  if (v.layout != null) throw bad('only a dashboard takes a layout')
   const source = sourceNamed(domain, v.source)
   const skin = skinOf(domain, source, v.skin)
-  return checkSize({
-    name: nameOf(v.name),
+  return {
     source_type: source.kind,
     source: source.name,
     skin,
@@ -166,8 +172,34 @@ export function viewBody(input: unknown, domain: Domain, creating: boolean): Vie
     sort: columnsOf(source, 'sort', v.sort, (key) => key.replace(/^-/, '')),
     group_by: groupOf(source, skin, v.group_by),
     visible_fields: columnsOf(source, 'visible_fields', v.visible_fields, undefined, hasField, fieldCount(source)),
-    shared: sharedOf(v.shared),
-  })
+    layout: null,
+  }
+}
+
+type ViewCtx = { sqlite: Database; actor: Actor }
+
+function dashboardFields(domain: Domain, v: Record<string, unknown>, { sqlite, actor }: ViewCtx): Sourced {
+  if (v.source != null) throw bad('a dashboard takes no source')
+  const empty = Bun.deepEquals(v.filters, {}) && Bun.deepEquals(v.sort, []) && Bun.deepEquals(v.visible_fields, [])
+  if (!empty || v.group_by !== null) throw bad('a dashboard takes no filters, sort, group or visible fields')
+  return {
+    source_type: null,
+    source: null,
+    skin: 'dashboard',
+    filters: {},
+    sort: [],
+    group_by: null,
+    visible_fields: [],
+    layout: layoutOf(domain, sqlite, v.layout ?? EMPTY_LAYOUT, actor),
+  }
+}
+
+// On create the input is the body; on update it is the stored view with the patch laid over it.
+export function viewBody(input: unknown, domain: Domain, creating: boolean, ctx: ViewCtx): ViewFields {
+  if (!isObject(input)) throw bad('body must be a JSON object')
+  const v = creating ? { ...DEFAULTS, ...input } : input
+  const fields = v.skin === 'dashboard' ? dashboardFields(domain, v, ctx) : sourcedFields(domain, v)
+  return checkSize({ name: nameOf(v.name), ...fields, shared: sharedOf(v.shared) })
 }
 
 const unknownView = (id: number | string) => new ApiError(404, 'unknown_view', `unknown view ${id}`)
@@ -203,8 +235,15 @@ function viewId(raw: string): number {
 
 function stored(fields: ViewFields): Raw {
   const json = (value: unknown) => JSON.stringify(value)
-  const { filters, sort, visible_fields, shared } = fields
-  return { ...fields, filters: json(filters), sort: json(sort), visible_fields: json(visible_fields), shared: +shared }
+  const { filters, sort, visible_fields, layout, shared } = fields
+  return {
+    ...fields,
+    filters: json(filters),
+    sort: json(sort),
+    visible_fields: json(visible_fields),
+    layout: layout === null ? null : json(layout),
+    shared: +shared,
+  }
 }
 
 function changed(next: Raw, current: Raw): Change[] {
@@ -248,7 +287,9 @@ function patchOf(body: Record<string, unknown>): Record<string, unknown> {
 
 function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
   const sql = 'SELECT * FROM saved_view WHERE deleted_at IS NULL AND (owner_id = ? OR shared = 1) ORDER BY id'
+  // A dashboard has no source; it is never listed to an owner (attack 1).
   const onReadable = (raw: Raw): boolean => {
+    if (raw.skin === 'dashboard') return actor.role !== 'owner'
     const source = sourceOf(domain, raw.source as string)
     return source !== null && readable(actor, source)
   }
@@ -259,8 +300,9 @@ function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
 
 // The system's seeded views come first, in the order the domain declares them; every other view follows by id.
 function seedOrdered(domain: Domain, rows: Raw[]): Raw[] {
-  const declared = new Map(domain.views.map((seed, at) => [`${seed.name}\u0000${seed.source}`, at]))
-  const at = (raw: Raw) => (raw.owner_id === SYSTEM_OWNER ? declared.get(`${raw.name}\u0000${raw.source}`) : undefined)
+  const declared = new Map(domain.views.map((seed, at) => [viewKey(seed.name, seed.source), at]))
+  const at = (raw: Raw) =>
+    raw.owner_id === SYSTEM_OWNER ? declared.get(viewKey(raw.name as string, raw.source as string | null)) : undefined
   const seeded = rows.filter((raw) => at(raw) !== undefined)
   seeded.sort((a, b) => (at(a) as number) - (at(b) as number))
   return [...seeded, ...rows.filter((raw) => at(raw) === undefined)]
@@ -279,7 +321,7 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
 
   app.post('/views', async (c) => {
     const actor = changing(c.get('actor'))
-    const fields = viewBody(await bodyOf(c), domain, true)
+    const fields = viewBody(await bodyOf(c), domain, true, { sqlite, actor })
     const id = write(() => create(sqlite, fields, actor))
     return c.json(outById(id, actor), 201)
   })
@@ -290,7 +332,7 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
     const patch = patchOf(await bodyOf(c))
     write(() => {
       const current = ownedView(sqlite, id, actor)
-      const next = stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false))
+      const next = stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false, { sqlite, actor }))
       // A view for owners must not gain a hidden column later (attack 13).
       const problem = isForOwners(current) ? forOwnersProblem(domain, { ...current, ...next }) : null
       if (problem) throw problem

@@ -175,15 +175,43 @@ export interface QueryDecl {
   links?: Record<string, LinkDecl>
 }
 
+/** A tile names a view: by name in a seed, by id once stored. */
+export type Tile =
+  | {
+      kind: 'stat'
+      view: string | number
+      label?: string
+      measure: 'count' | { sum: string }
+      tone?: { above: number; tone: Tone }
+    }
+  | {
+      kind: 'list'
+      view: string | number
+      rows: number
+      columns?: string[]
+      set?: { column: string; value: string; label: string }
+    }
+  | { kind: 'week'; view: string | number }
+  | { kind: 'progress'; done: string | number; total: string | number; label: string }
+
+export type QuickAction = { create: string; label: string }
+
+export interface DashboardLayout {
+  sections: { label: string; tiles: Tile[] }[]
+  actions: QuickAction[]
+}
+
+/** A dashboard has no source and holds a layout; every other skin has a source and no layout. */
 export interface SavedViewSeed {
   name: string
-  source_type: 'dataset' | 'query'
-  source: string
-  skin: 'table' | 'matrix' | 'calendar'
+  source_type?: 'dataset' | 'query'
+  source?: string
+  skin: 'table' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'
   filters: FilterInput
   sort: string[]
   group_by: string | null
   visible_fields: string[]
+  layout?: DashboardLayout
 }
 
 export interface Domain {

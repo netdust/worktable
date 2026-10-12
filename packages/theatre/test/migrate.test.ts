@@ -75,7 +75,7 @@ test('a step-1 theatre database migrates to step 2 keeping every row, revision a
   const added: Record<string, string[]> = {
     toewijzing: ['rol_id', 'aantal'],
     beschikbaarheid: ['soort'],
-    saved_view: ['for_owners'],
+    saved_view: ['for_owners', 'layout'],
     account: ['kind', 'name', 'token_hash'],
   }
   for (const n of names) {
