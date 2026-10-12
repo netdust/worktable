@@ -77,13 +77,14 @@ export interface LinkDecl {
   state?: string
 }
 
-/** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. */
+/** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. `owner_visible` serves it to the row's owner too. */
 export interface LookupDecl {
   label: string
   via: string
   field: string
   own?: string
   from?: string
+  owner_visible?: true
 }
 
 /** Files on a dataset's records: `kinds` keyed by identifier, at most `max_mb` each (default 10). */

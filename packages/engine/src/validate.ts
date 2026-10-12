@@ -211,7 +211,6 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
   const owns = new Set<string>()
   for (const [name, lookup] of Object.entries(dataset.lookups ?? {})) {
     const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lookup ${name} ${message}`)
-    if (dataset.owners) throw at(name, 'is on a dataset with owners, which reads only titles through a relation')
     if (LOOKUP_RESERVED.has(name)) throw at(name, 'has a name the engine uses on every row')
     if (declared(dataset, name) || Object.hasOwn(dataset.links ?? {}, name)) {
       throw at(name, 'has the name of a column or a link')
@@ -222,6 +221,13 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
     if (!field) throw at(lookup.field, `field "${lookup.field}" is not a column of "${target.name}"`)
     if (field.type === 'json' || field.type === 'boolean') {
       throw at(lookup.field, `field "${lookup.field}" is ${field.type}`)
+    }
+    // An owner may read a related field only where that field is served to an owner of its own record (threat 2).
+    if (lookup.owner_visible && !(field.owner_visible && target.owners)) {
+      throw at(
+        name,
+        `is owner_visible, but "${target.name}.${lookup.field}" is not an owner_visible field of a dataset with owners`,
+      )
     }
     if (lookup.own === undefined) continue
     if (lookup.from === undefined) throw at(name, 'has an own column but no from')

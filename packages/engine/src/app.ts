@@ -10,7 +10,7 @@ import { type AuthEnv, authRoutes } from './auth'
 import type { Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
-import { lookupColumn, targetOf } from './lookups'
+import { lookupColumn, lookupsFor, targetOf } from './lookups'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
 import { openApiOf } from './openapi'
 import { ownerViewGuard, ownerViewRoutes } from './owner-views'
@@ -149,10 +149,12 @@ function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Re
 
 type ServedLookup = ColumnDecl & { inherited?: true; from?: string }
 
-// A lookup is served only to a reader of the dataset it reads through, as a link is.
+// A lookup is served only to a reader of the dataset it reads through, as a link is, and to an owner only when owner_visible.
 function servedLookups(domain: Domain, source: Source, actor: Actor): { lookups?: Record<string, ServedLookup> } {
   if (source.kind !== 'dataset' || !source.lookups) return {}
+  const forScope = new Set(lookupsFor(source, scopeOf(actor, source)))
   const served = Object.entries(source.lookups).flatMap(([name, lookup]): [string, ServedLookup][] => {
+    if (!forScope.has(name)) return []
     const target = sourceOf(domain, targetOf(source, lookup))
     if (!target || !readable(actor, target)) return []
     const column: ColumnDecl = lookupColumn(domain, source, name)

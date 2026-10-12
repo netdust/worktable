@@ -3,9 +3,9 @@ import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
 import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
-import { filterWhere } from './filter'
-import { INHERITED, lookupColumn, lookupOf, lookupSelect, lookupValue } from './lookups'
-import type { RowsParams } from './params'
+import { filterKeys, filterWhere } from './filter'
+import { INHERITED, lookupColumn, lookupOf, lookupSelect, lookupsFor, lookupValue } from './lookups'
+import { ApiError, type RowsParams } from './params'
 import { type Source, sourceOf } from './registry'
 import { tableOf } from './tables'
 
@@ -29,6 +29,12 @@ function scopeWhere(table: SQLiteTable, scope: Scope): SQL | undefined {
   return scope === 'none' ? sql`0` : eq(columnOf(table, scope.column), scope.id)
 }
 
+// A lookup the scope may not read is refused as an unknown key would be, so no filter or sort can probe its value (threat 1).
+function hiddenLookup(source: Source, scope: Scope): (key: string) => boolean {
+  const served = new Set(lookupsFor(source, scope))
+  return (key) => lookupOf(source, key) !== undefined && !served.has(key)
+}
+
 function whereOf(
   domain: Domain,
   source: Source,
@@ -36,6 +42,10 @@ function whereOf(
   params: RowsParams,
   scope: Scope,
 ): SQL | undefined {
+  const hidden = [params.stored, params.filter]
+    .flatMap((f) => (f ? filterKeys(f) : []))
+    .find(hiddenLookup(source, scope))
+  if (hidden !== undefined) throw new ApiError(400, 'bad_filter', `unknown filter key "${hidden}"`)
   const dateColumn = source.date ? columnOf(table, source.date) : null
   const window = (op: '>=' | '<=', day: string | null): SQL | undefined =>
     day && dateColumn ? sql`substr(${dateColumn}, 1, 10) ${sql.raw(op)} ${day}` : undefined
@@ -50,7 +60,13 @@ function whereOf(
   return parts.length ? and(...parts) : undefined
 }
 
-function orderOf(source: Source, table: SQLiteTable, params: RowsParams): SQL[] {
+function orderOf(source: Source, table: SQLiteTable, params: RowsParams, scope: Scope): SQL[] {
+  const hidden = hiddenLookup(source, scope)
+  if (params.group !== null && hidden(params.group)) {
+    throw new ApiError(400, 'bad_group', `cannot group on "${params.group}"`)
+  }
+  const sorted = params.sort.find((k) => hidden(k.column))
+  if (sorted) throw new ApiError(400, 'bad_sort', `cannot sort on "${sorted.column}"`)
   const keys = [...(params.group ? [{ column: params.group, desc: false }] : []), ...params.sort]
   const sortValue = (key: string) =>
     source.kind === 'dataset' && lookupOf(source, key) ? lookupValue(source, key) : columnOf(table, key)
@@ -134,10 +150,10 @@ export function readRows(
   const table = tableOf(source)
   const where = whereOf(domain, source, table, params, scope)
   const raws = db
-    .select({ ...getTableColumns(table), ...(scope === 'all' ? lookupSelect(source) : {}) })
+    .select({ ...getTableColumns(table), ...lookupSelect(source, scope) })
     .from(table)
     .where(where)
-    .orderBy(...orderOf(source, table, params))
+    .orderBy(...orderOf(source, table, params, scope))
     .limit(params.limit)
     .offset(params.offset)
     .all() as Raw[]
@@ -160,7 +176,7 @@ export function readIds(
     .select({ id: columnOf(table, 'id') })
     .from(table)
     .where(whereOf(domain, source, table, params, scope))
-    .orderBy(...orderOf(source, table, params))
+    .orderBy(...orderOf(source, table, params, scope))
     .limit(params.limit)
     .offset(params.offset)
     .all() as { id: number }[]

@@ -196,12 +196,11 @@ describe('lookups and who reads them', () => {
     expect(schema.body.sources).not.toHaveProperty('item')
   })
 
-  test('validation refuses owners on a dataset with lookups', () => {
-    expect(refusalOf(withOwnedItem())).toContain('team_name')
+  test('validation accepts lookups on a dataset with owners', () => {
+    expect(refusalOf(withOwnedItem())).toBe('')
   })
 
-  // Lifting the owners refusal requires closing the filter oracle (specs/virtual-columns/future-lookups-on-owners.md).
-  test('a scoped read serves no lookup value, and stays unreachable for owners: owned datasets carry no lookups', async () => {
+  test('a scoped read serves no lookup value', () => {
     const sqlite = new Database(':memory:')
     migrate(sqlite, lookupDomain)
     seedDomain(sqlite, lookupDomain)
@@ -212,10 +211,6 @@ describe('lookups and who reads them', () => {
     })
     expect(scoped.rows.length).toBeGreaterThan(0)
     for (const row of scoped.rows) expect(Object.hasOwn(row, 'team_name')).toBe(false)
-    expect(refusalOf(withOwnedItem())).toContain('team_name')
-    const { app } = await engineOf(domain)
-    const owner = send(app, await signIn(app, 'owner', { dataset: 'team', id: 1 }))
-    expect((await owner('GET', '/api/rows/item')).status).toBe(404)
   })
 
   test('a deleted target reads null, plain and inherited', async () => {
@@ -236,5 +231,125 @@ describe('lookups and who reads them', () => {
     const inheriting = lines.body.rows.find((r: { id: number }) => r.id === 2)
     expect(inheriting.team).toBe(1)
     expect(inheriting.lookups.team).toEqual({ id: 1, title: 'One' })
+  })
+})
+
+const withLookupOn = (of: Domain, target: Partial<DatasetDecl>, lookup: Record<string, unknown>): Domain => ({
+  ...of,
+  datasets: of.datasets.map((d) => {
+    if (d.name === 'team') return { ...d, ...target }
+    if (d.name !== 'item') return d
+    const lookups = d.lookups as DatasetDecl['lookups'] & { team_name: object }
+    return { ...d, lookups: { team_name: { ...lookups.team_name, ...lookup } } } as DatasetDecl
+  }),
+})
+
+const visibleName = { columns: { name: { type: 'text', label: 'Name', owner_visible: true } } } as Partial<DatasetDecl>
+const withWritableName = (of: Domain): Domain => ({
+  ...of,
+  datasets: of.datasets.map((d) =>
+    d.name === 'item'
+      ? {
+          ...d,
+          columns: { ...d.columns, name: { type: 'text', label: 'Name', owner_visible: true, owner_writable: true } },
+        }
+      : d,
+  ),
+})
+const withOwnerVisibleName = (): Domain => withLookupOn(withOwnedItem(), visibleName, { owner_visible: true })
+
+describe('lookups on a dataset with owners', () => {
+  const q = (params: Record<string, string>) => new URLSearchParams(params).toString()
+  const byName = q({ filter: json({ team_name: 'One' }) })
+
+  async function owned(of: Domain = withOwnedItem()) {
+    const engine = await engineOf(of)
+    const owner = send(engine.app, await signIn(engine.app, 'owner', { dataset: 'team', id: 1 }))
+    const rename = (name: string) => owner('PATCH', '/api/rows/item/1', { body: json({ name }) })
+    return { ...engine, owner, rename }
+  }
+
+  test("an owner's rows carry no lookup", async () => {
+    const { owner } = await owned()
+    const rows = await owner('GET', '/api/rows/item')
+    expect(rows.status).toBe(200)
+    expect(rows.body.rows.length).toBeGreaterThan(0)
+    for (const row of rows.body.rows) expect(Object.hasOwn(row, 'team_name')).toBe(false)
+  })
+
+  test("an owner's write reply carries no lookup", async () => {
+    const { rename } = await owned(withWritableName(withOwnedItem()))
+    const res = await rename('Renamed')
+    expect([res.status, res.body.name]).toEqual([200, 'Renamed'])
+    expect(Object.hasOwn(res.body, 'team_name')).toBe(false)
+  })
+
+  test("an owner's filter on a lookup is 400 bad_filter", async () => {
+    const { owner } = await owned()
+    const res = await owner('GET', `/api/rows/item?${byName}`)
+    expect([res.status, res.body.code]).toEqual([400, 'bad_filter'])
+    const inOr = await owner(
+      'GET',
+      `/api/rows/item?${q({ filter: json({ $or: [{ name: 'x' }, { team_name: 'One' }] }) })}`,
+    )
+    expect([inOr.status, inOr.body.code]).toEqual([400, 'bad_filter'])
+  })
+
+  test("an owner's sort on a lookup is 400 bad_sort", async () => {
+    const { owner } = await owned()
+    const res = await owner('GET', '/api/rows/item?sort=-team_name')
+    expect([res.status, res.body.code]).toEqual([400, 'bad_sort'])
+  })
+
+  test("an owner's group on a lookup is 400", async () => {
+    const { owner } = await owned()
+    const res = await owner('GET', '/api/rows/item?group=team_name')
+    expect([res.status, res.body.code]).toEqual([400, 'bad_group'])
+  })
+
+  test("an owner's /history filter on a lookup is 400", async () => {
+    const { owner } = await owned()
+    const res = await owner('GET', `/api/history/item?${byName}`)
+    expect([res.status, res.body.code]).toEqual([400, 'bad_filter'])
+  })
+
+  test('/schema for an owner serves no lookup', async () => {
+    const { owner } = await owned()
+    const schema = await owner('GET', '/api/schema')
+    expect(schema.body.sources).toHaveProperty('item')
+    expect(schema.body.sources.item).not.toHaveProperty('lookups')
+  })
+
+  test('an editor reads, filters and sorts it', async () => {
+    const { editor } = await owned()
+    const filtered = await editor('GET', `/api/rows/item?${byName}&sort=-team_name`)
+    expect(filtered.status).toBe(200)
+    expect(filtered.body.rows.map((r: { team_name: string }) => r.team_name)).toEqual(['One'])
+    const none = await editor('GET', `/api/rows/item?${q({ filter: json({ team_name: 'Two' }) })}`)
+    expect(none.body.rows).toEqual([])
+    const schema = await editor('GET', '/api/schema')
+    expect(schema.body.sources.item.lookups).toHaveProperty('team_name')
+  })
+
+  test('owner_visible on a lookup whose field is not owner_visible is refused', () => {
+    expect(refusalOf(withLookupOn(withOwnedItem(), {}, { owner_visible: true }))).toContain('team_name')
+  })
+
+  test('owner_visible on a lookup whose target dataset declares no owners is refused', () => {
+    const noOwners = { ...visibleName, owners: undefined, record_link: undefined }
+    const of = withLookupOn(withOwnedItem(), noOwners, { owner_visible: true })
+    expect(refusalOf({ ...of, queries: [] })).toContain('team_name')
+  })
+
+  test('an owner_visible lookup is served, filtered and sorted for its owner', async () => {
+    expect(refusalOf(withOwnerVisibleName())).toBe('')
+    const { owner } = await owned(withOwnerVisibleName())
+    const rows = await owner('GET', `/api/rows/item?${byName}&sort=-team_name&group=team_name`)
+    expect(rows.status).toBe(200)
+    expect(rows.body.rows.map((r: { team_name: string }) => r.team_name)).toEqual(['One'])
+    const schema = await owner('GET', '/api/schema')
+    expect(schema.body.sources.item.lookups).toHaveProperty('team_name')
+    const { rename } = await owned(withWritableName(withOwnerVisibleName()))
+    expect((await rename('Renamed')).body.team_name).toBe('One')
   })
 })

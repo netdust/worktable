@@ -234,6 +234,12 @@ export const toewijzing = defineDataset({
     notitie: { type: 'text', label: 'Notitie', nullable: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
+  lookups: {
+    datum: { label: 'Datum', via: 'activiteit_id', field: 'datum' },
+    start_at: { label: 'Start', via: 'activiteit_id', field: 'start_at' },
+    eind_at: { label: 'Einde', via: 'activiteit_id', field: 'eind_at' },
+    productie: { label: 'Productie', via: 'activiteit_id', field: 'productie_id' },
+  },
   lifecycle: {
     column: 'state',
     transitions: [

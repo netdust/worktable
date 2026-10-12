@@ -1,4 +1,5 @@
 import { type SQL, sql } from 'drizzle-orm'
+import type { Scope } from './access'
 import type { ColumnDecl, DatasetDecl, Domain, LookupDecl } from './declare'
 import { ApiError } from './params'
 import { type Source, sourceOf } from './registry'
@@ -56,10 +57,19 @@ export function lookupInherited(source: DatasetDecl, name: string): SQL {
 
 export const INHERITED = 'inherited:'
 
-export function lookupSelect(source: Source): Record<string, SQL> {
+/** The lookups a reader in `scope` may read, filter, sort and group by: every one under `all`, else the owner_visible ones. */
+export function lookupsFor(source: Source, scope: Scope): string[] {
+  if (source.kind !== 'dataset') return []
+  return Object.entries(source.lookups ?? {})
+    .filter(([, lookup]) => scope === 'all' || lookup.owner_visible)
+    .map(([name]) => name)
+}
+
+export function lookupSelect(source: Source, scope: Scope): Record<string, SQL> {
   if (source.kind !== 'dataset') return {}
   const select: Record<string, SQL> = {}
-  for (const [name, lookup] of Object.entries(source.lookups ?? {})) {
+  for (const name of lookupsFor(source, scope)) {
+    const lookup = declaredLookup(source, name)
     select[name] = lookupValue(source, name)
     if (lookup.own) select[INHERITED + name] = lookupInherited(source, name)
   }

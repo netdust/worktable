@@ -231,8 +231,10 @@ describe('validateDomain refuses a lookups declaration', () => {
     expect(bad(changed('item', { columns }))).toBe('inherited')
   })
 
-  test('refuses lookups on an owned dataset', () => {
-    expect(bad(onItem({ team_name: lookup() }, { owners: { owner: 'id' } }))).toBe('team_name')
+  test('refuses an owner_visible lookup on an owned dataset whose field owners are not served', () => {
+    expect(bad(onItem({ team_name: { ...lookup(), owner_visible: true } }, { owners: { owner: 'id' } }))).toBe(
+      'team_name',
+    )
   })
 
   test('defineDataset refuses a lookup name that is not an identifier', () => {

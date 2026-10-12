@@ -7,12 +7,12 @@ import theatre from '../src'
 // biome-ignore lint/suspicious/noExplicitAny: response bodies are asserted structurally
 type Body = Record<string, any>
 
-async function editor() {
+async function editor(...as: Parameters<typeof signIn> extends [unknown, ...infer R] ? R : never) {
   const sqlite = new Database(':memory:')
   migrate(sqlite, theatre)
   seedDomain(sqlite, theatre)
   const app = testEngine(sqlite, theatre)
-  const cookie = await signIn(app, 'editor')
+  const cookie = await signIn(app, ...as)
   return async (method: string, path: string, body?: unknown): Promise<{ status: number; body: Body }> => {
     const headers: Record<string, string> = { host: '127.0.0.1:4310', cookie }
     if (body !== undefined) headers['content-type'] = 'application/json'
@@ -101,5 +101,36 @@ describe('a view may show every field of its source', () => {
     expect(visible_fields.length).toBeGreaterThan(16)
     const made = await as('POST', '/api/views', { name: 'Alles', source: 'activiteit', visible_fields })
     expect(made.status).toBe(201)
+  })
+})
+
+describe('toewijzing carries the activity it is for', () => {
+  test("an editor reads the activity's date, times and production; Lotte reads none of them", async () => {
+    const staff = await editor()
+    const { body } = await staff('GET', '/api/rows/toewijzing?sort=datum')
+    const row = body.rows.find((r: Body) => r.persoon_id === 1)
+    const activiteit = (
+      await staff('GET', `/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id: row.activiteit_id }))}`)
+    ).body.rows[0]
+    expect(row.datum).toBe(activiteit.datum)
+    expect(row.start_at).toBe(activiteit.start_at)
+    expect(row.eind_at).toBe(activiteit.eind_at)
+    expect(row.productie).toBe(activiteit.productie_id)
+    expect(row.lookups.productie.id).toBe(activiteit.productie_id)
+
+    const lotte = await editor('owner', { dataset: 'persoon', id: 1 })
+    const own = await lotte('GET', '/api/rows/toewijzing')
+    expect(own.status).toBe(200)
+    expect(own.body.rows.length).toBeGreaterThan(0)
+    for (const r of own.body.rows) {
+      for (const name of ['datum', 'start_at', 'eind_at', 'productie']) expect(Object.hasOwn(r, name)).toBe(false)
+      expect(Object.hasOwn(r.lookups, 'productie')).toBe(false)
+    }
+    const probe = await lotte(
+      'GET',
+      `/api/rows/toewijzing?filter=${encodeURIComponent(JSON.stringify({ datum: '2026-10-12' }))}`,
+    )
+    expect([probe.status, probe.body.code]).toEqual([400, 'bad_filter'])
+    expect((await lotte('GET', '/api/rows/toewijzing?sort=datum')).body.code).toBe('bad_sort')
   })
 })
