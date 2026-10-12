@@ -176,6 +176,8 @@ const answered = (page: Page, method: string, path: RegExp) =>
 async function fillFromMatrix(page: Page, title: string, name: string) {
   await openCell(page, title).getByRole('button').click()
   const picker = page.getByRole('region', { name: 'Open plek invullen' })
+  // The picker opens on the slot's candidates; these flows fill with anyone, a person made here included.
+  await picker.getByRole('button', { name: 'Iedereen tonen' }).click()
   await picker.getByRole('searchbox', { name: 'Kies een persoon' }).fill(name)
   const reply = answered(page, 'POST', /^\/api\/actions\/vul_slot$/)
   await picker.getByRole('button', { name, exact: true }).click()

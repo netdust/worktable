@@ -1,9 +1,9 @@
 import { X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type ReactNode, useEffect, useId, useState } from 'react'
-import { type Attachment, attachmentsOf, fileUrl, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
+import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
 import { errorText, fileSize, type StringKey, t } from '../i18n'
-import type { Account, ActionInput, ApiError, Model, ModelAction, Row } from '../types'
+import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, Row } from '../types'
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
@@ -54,7 +54,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
       </dl>}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} onRun={(input) => onAction(action, input)} />)}
+      {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
     </SidePanel>
   )
@@ -199,7 +199,7 @@ const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
   Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
 
 /** Keyed by its record, so another row starts with nothing picked. */
-function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<string, unknown>) => Promise<void> }) {
+function Action({ action, record, onRun }: { action: ModelAction; record: Record<string, unknown>; onRun: (input: Record<string, unknown>) => Promise<void> }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
   const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
@@ -227,6 +227,7 @@ function Action({ action, onRun }: { action: ModelAction; onRun: (input: Record<
           <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
           {open === key && (
             <RelationPicker model={input.relation} label={input.label} onCancel={() => setOpen(null)}
+              candidates={input.options_from ? () => optionsFrom(input.options_from as OptionsFrom, record) : undefined}
               onPick={(record) => {
                 setPicked((was) => ({ ...was, [key]: record }))
                 setOpen(null)

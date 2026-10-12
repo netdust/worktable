@@ -7,7 +7,7 @@ import { Grid } from '../Grid'
 import { defaults } from '../layout'
 import { createStore, type StoreApi } from '../store'
 
-const remote = vi.hoisted(() => ({ records: vi.fn() }))
+const remote = vi.hoisted(() => ({ records: vi.fn(), optionsFrom: vi.fn() }))
 vi.mock('../../api', () => remote)
 
 const organisation: Model = {
@@ -47,6 +47,32 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.resetAllMocks()
+})
+
+describe('a relation with a candidates source', () => {
+  const from = { source: 'candidates', match: { activity_id: 'id' }, value: 'location' }
+  const withSource: Model = { ...activity, fields: { ...activity.fields, location: { ...activity.fields.location, options_from: from } } }
+  const known = { ...models, activity: withSource }
+  const emptied = calais.map((r) => (r.title === 'Lunch bistrot' ? { ...r, fields: { ...r.fields, location: '' }, lookups: {} } : r))
+
+  it('an empty cell lists the candidates of its row', async () => {
+    remote.optionsFrom.mockResolvedValue([org(15, 'Vooruit')])
+    renderGrid(null, 'production', withSource, known, emptied)
+    open()
+
+    expect(await titles()).toEqual(['Vooruit'])
+    expect(remote.optionsFrom).toHaveBeenCalledWith(from, expect.objectContaining({ id: emptied.find((r) => r.title === 'Lunch bistrot')?.id }))
+    expect(screen.getByRole('button', { name: 'Iedereen tonen' })).toBeTruthy()
+  })
+
+  it("a filled row's relation cell keeps the plain picker", async () => {
+    renderGrid(null, 'production', withSource, known)
+    open()
+
+    expect(await titles()).toEqual(['Bijloke', 'Vooruit', 'Le Grenier, Calais'])
+    expect(remote.optionsFrom).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Iedereen tonen' })).toBeNull()
+  })
 })
 
 describe('the relation picker', () => {

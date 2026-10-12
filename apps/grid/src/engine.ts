@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DateWindow, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
+import type { CalendarDef, DateWindow, OptionsFrom, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -18,6 +18,8 @@ export interface EngineColumn {
   owner_visible?: boolean
   /** Stored and written through the API, never shown in the grid. */
   hidden?: true
+  options_from?: OptionsFrom
+  badge?: Tone
 }
 
 /** A dataset's lookup: the related row's field, typed as that field; an inherited one is the row's own when set. */
@@ -33,7 +35,7 @@ export interface EngineMatrix {
   keys: Record<string, string>
   marks: Record<string, string>
   count: string
-  away?: { dataset: string; across: string; label: string; end: string }
+  away?: { dataset: string; across: string; label: string; end: string; where?: Record<string, string | number | boolean> }
   open?: { match: string; count: string; fill: string }
 }
 
@@ -156,6 +158,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
     ...(declared.owner_visible ? { owner_visible: true as const } : {}),
+    ...(declared.options_from ? { options_from: declared.options_from } : {}),
   }
 }
 
@@ -225,12 +228,14 @@ function openOf(m: EngineMatrix, joined: EngineSource): Pick<MatrixJoin, 'open'>
   const fill = joined.actions?.find((action) => action.name === m.open?.fill)
   const [input] = Object.keys(fill?.input ?? {})
   if (!m.open || !fill || input === undefined) return {}
-  return { open: { match_field: m.open.match, count_field: m.open.count, action: fill.name, input } }
+  const declared = fill.input[input]
+  const options_from = declared && 'relation' in declared ? declared.options_from : undefined
+  return { open: { match_field: m.open.match, count_field: m.open.count, action: fill.name, input, ...(options_from ? { options_from } : {}) } }
 }
 
 function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): MatrixAway {
   const date_field = sources[away.dataset]?.date ?? ''
-  return { table: away.dataset, model: away.dataset, column_field: away.across, label_field: away.label, date_field, end_field: away.end }
+  return { table: away.dataset, model: away.dataset, column_field: away.across, label_field: away.label, date_field, end_field: away.end, ...(away.where ? { where: away.where } : {}) }
 }
 
 function calendarOf({ day, start, end, lanes }: NonNullable<EngineSource['calendar']>): CalendarDef {

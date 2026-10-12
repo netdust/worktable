@@ -107,6 +107,8 @@ const strings = {
   fillSlot: 'Open plek invullen',
   fillPickRole: 'Kies eerst een rol',
   fillPickPerson: 'Kies een persoon',
+  candidatesNone: 'Geen kandidaten',
+  candidatesAll: 'Iedereen tonen',
   hideColumn: 'Verbergen',
   showColumn: 'Tonen',
   awayReason: 'Afwezig: {reason}',
