@@ -109,7 +109,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, onOpen }: {
       </div>
       {spans ? (
         <div className="nv-week__row nv-week__band nv-week__band--bars" role="group" aria-label={t('allDay')} style={columns}>
-          <span className="nv-week__axis" style={{ gridRow: '1 / span 99' }}>{t('allDay')}</span>
+          <span className="nv-week__axis" style={{ gridColumn: 1, gridRow: 1 }}>{t('allDay')}</span>
           <Bars days={days} events={events} lanes={lanes} cal={spans} offset={1} firstRow={1} toneOf={toneOf} onOpen={onOpen} />
         </div>
       ) : (

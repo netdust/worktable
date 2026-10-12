@@ -258,6 +258,8 @@ test.describe('step 3c', () => {
   })
 
   test('skins-open @e2e', async ({ page }) => {
+    // Opens seven skins, each on rows it makes: 18 s alone, near 30 s under load.
+    test.slow()
     test.setTimeout(90_000)
     const api = page.request
     const day = WEEK.skins

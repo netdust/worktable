@@ -217,7 +217,8 @@
 }
 
 #root .nv-views [aria-current="page"],
-#root .nv-views .nv-view__button[aria-current="page"] {
+#root .nv-views .nv-view__button[aria-current="page"],
+#root .nv-tree__dashboards .nv-view__button[aria-current="page"] {
   background: var(--color-bg-selected);
   color: var(--color-accent-default);
   font-weight: 500;
