@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { DateWindow, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
+import type { CalendarDef, DateWindow, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -49,6 +49,7 @@ export interface EngineSource {
   /** On a matrix's down source: the join dataset. */
   matrix_join?: string
   date: string | null
+  calendar?: { day: string; start?: string; end?: string; lanes: string[] }
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
@@ -89,7 +90,7 @@ export interface EngineView extends EngineArrangement {
   name: string
   source_type: 'dataset' | 'query'
   source: string
-  skin: 'table' | 'matrix'
+  skin: 'table' | 'matrix' | 'calendar'
   shared: boolean
   owner_id: number
   mine: boolean
@@ -232,6 +233,10 @@ function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): Matr
   return { table: away.dataset, model: away.dataset, column_field: away.across, label_field: away.label, date_field, end_field: away.end }
 }
 
+function calendarOf({ day, start, end, lanes }: NonNullable<EngineSource['calendar']>): CalendarDef {
+  return { day, start: start ?? null, end: end ?? null, lanes }
+}
+
 function tableDefOf(name: string, source: EngineSource, sources: Sources): TableDef {
   const table: TableDef = {
     key: name, label: source.label, model: name,
@@ -241,13 +246,14 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.of ? { of: source.of } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
-    types: ['grid'],
+    types: source.calendar ? ['grid', 'calendar'] : ['grid'],
+    ...(source.calendar ? { calendar: calendarOf(source.calendar) } : {}),
   }
   const joined = source.matrix_join ? sources[source.matrix_join] : undefined
   const matrix = joined?.matrix
   if (!source.matrix_join || !joined || !matrix) return table
   const join = joinOf(source.matrix_join, matrix, joined)
-  return { ...table, types: ['grid', 'matrix'], join, ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
+  return { ...table, types: [...table.types, 'matrix'], join, ...(matrix.away ? { away: awayOf(matrix.away, sources) } : {}) }
 }
 
 /** A table for every source: the rail lists those a saved view is on. */
@@ -366,7 +372,7 @@ export function toSavedViews(views: EngineView[], sources: Sources): SavedView[]
       label: view.name,
       table: view.source,
       table_label: source.label,
-      type: view.skin === 'matrix' ? 'matrix' : 'grid',
+      type: view.skin === 'table' ? 'grid' : view.skin,
       starting: false,
       id: view.id,
       arrangement,

@@ -299,7 +299,7 @@ export async function savedViews(): Promise<SavedView[]> {
 
 export async function createView(view: NewView): Promise<SavedView> {
   const stored = toStoredView(view.arrangement, view.fixed ?? {}, await sourceOf(view.table))
-  const skin = view.type === 'matrix' ? 'matrix' : 'table'
+  const skin = view.type === 'grid' || !view.type ? 'table' : view.type
   return savedOf(await request<EngineView>('POST', '/views', {}, { name: view.name, source: view.table, skin, shared: view.shared, ...stored }))
 }
 

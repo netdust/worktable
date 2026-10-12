@@ -4085,3 +4085,100 @@
   font-family: var(--font-mono);
   font-size: 12px;
 }
+
+/* The calendar: a week of lanes, or a month of days; events are buttons that open their row. */
+.nv-cal__bar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nv-cal__body {
+  flex: 1;
+  overflow: auto;
+}
+
+.nv-cal {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.nv-cal th,
+.nv-cal td {
+  padding: 4px 6px;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  vertical-align: top;
+  text-align: left;
+}
+
+.nv-cal thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--color-fg-muted);
+  font-weight: 500;
+}
+
+.nv-cal__lane {
+  width: 160px;
+  color: var(--color-fg-default);
+  font-weight: 500;
+}
+
+.nv-cal--month td {
+  height: 96px;
+}
+
+.nv-cal__out {
+  opacity: 0.45;
+}
+
+.nv-cal__date {
+  display: block;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-cal__event {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  margin: 2px 0;
+  padding: 2px 6px;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid var(--color-accent-default);
+  border-radius: 4px;
+  background: var(--color-accent-subtle);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nv-cal__event--all {
+  border-left-color: var(--color-fg-subtle);
+  background: var(--color-bg-muted);
+}
+
+.nv-cal__event:hover {
+  background: var(--color-bg-hover);
+}
+
+.nv-cal__event:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+
+.nv-cal__time {
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-cal__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

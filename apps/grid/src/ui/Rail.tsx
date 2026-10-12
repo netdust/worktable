@@ -88,7 +88,9 @@ function kinds(table: Table, onNew: (type: ViewType) => void): Action[] {
   return [
     { label: t('kindGrid'), run: () => onNew('grid') },
     ...(table.types.includes('matrix') ? [{ label: t('matrix'), run: () => onNew('matrix') }] : []),
-    { label: t('kindCalendar'), run: () => undefined, blocked: t('later') },
+    table.types.includes('calendar')
+      ? { label: t('kindCalendar'), run: () => onNew('calendar') }
+      : { label: t('kindCalendar'), run: () => undefined, blocked: t('later') },
     { label: t('kindBoard'), run: () => undefined, blocked: t('later') },
   ]
 }

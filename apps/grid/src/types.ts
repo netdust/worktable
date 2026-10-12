@@ -90,7 +90,15 @@ export interface ModelAction {
   input: Record<string, ActionInput>
 }
 
-export type ViewType = 'grid' | 'matrix'
+export type ViewType = 'grid' | 'matrix' | 'calendar'
+
+/** A calendar table: rows placed on `day`, timed by `start` and `end` (none is all-day), laned by one of `lanes`. */
+export interface CalendarDef {
+  day: string
+  start: string | null
+  end: string | null
+  lanes: string[]
+}
 
 /** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
 export interface TableDef {
@@ -121,6 +129,8 @@ export interface TableDef {
   join?: MatrixJoin
   /** A matrix table: the table whose rows say which columns are away when. */
   away?: MatrixAway
+  /** A calendar table: how its rows sit on days. */
+  calendar?: CalendarDef
   types: ViewType[]
 }
 
