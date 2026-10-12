@@ -13,7 +13,16 @@ import {
   taak,
   toewijzing,
 } from './datasets'
-import { mijnProducties, productieDag, voorstellingen } from './queries'
+import {
+  conflicten,
+  kandidaten,
+  locatieDag,
+  mijnProducties,
+  persoonDag,
+  productieDag,
+  voorstellingen,
+  werklijst,
+} from './queries'
 import { seed, views } from './seed'
 import {
   activiteitWriter,
@@ -45,7 +54,7 @@ const theatre: Domain = {
     persoonRol,
     taak,
   ],
-  queries: [productieDag, voorstellingen, mijnProducties],
+  queries: [conflicten, persoonDag, locatieDag, kandidaten, werklijst, productieDag, voorstellingen, mijnProducties],
   writers: {
     organisatie: organisatieWriter,
     productie: productieWriter,
@@ -66,7 +75,19 @@ const theatre: Domain = {
     { label: 'Planning', sources: ['speelreeks', 'activiteit', 'toewijzing', 'beschikbaarheid', 'taak'] },
     { label: 'Gegevens', sources: ['productie', 'persoon', 'persoon_rol', 'organisatie'] },
     { label: 'Instellingen', sources: ['rol', 'sjabloon'] },
-    { label: 'Overzichten', sources: ['productie_dag', 'voorstellingen', 'mijn_producties'] },
+    {
+      label: 'Overzichten',
+      sources: [
+        'conflicten',
+        'persoon_dag',
+        'locatie_dag',
+        'kandidaten',
+        'werklijst',
+        'productie_dag',
+        'voorstellingen',
+        'mijn_producties',
+      ],
+    },
   ],
   seed,
   views,
