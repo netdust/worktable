@@ -47,7 +47,7 @@ export interface Column {
 }
 
 const WIDTH: Record<CellKind, number> = {
-  title: 300, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 150,
+  title: 280, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 150,
   bool: 80, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
 }
 

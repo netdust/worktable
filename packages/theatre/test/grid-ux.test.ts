@@ -170,17 +170,17 @@ describe('theatre declares the details: icons, colours, an end time and create-f
     expect(sources.activiteit.columns.eind_at).toMatchObject({ type: 'datetime', nullable: true })
   })
 
-  test('the Planning view, on activiteit, shows time, omschrijving, soort, tourstop, locatie, mensen and status', () => {
+  test('the Planning view, on activiteit, shows time, omschrijving, soort, locatie and status, as the prototype, then tourstop and mensen', () => {
     const view = theatre.views.find((v) => v.name === 'Planning')
     expect(view?.source).toBe('activiteit')
     expect(view?.visible_fields).toEqual([
       'start_at',
       'omschrijving',
       'soort',
-      'speelreeks_id',
       'locatie',
-      'mensen',
       'status',
+      'speelreeks_id',
+      'mensen',
     ])
   })
 

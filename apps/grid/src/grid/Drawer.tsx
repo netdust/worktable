@@ -8,6 +8,7 @@ import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
 import { Display } from './cells'
+import { ICON } from './GridHeader'
 import { RelationPicker } from './cells/RelationPicker'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
@@ -49,12 +50,15 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen}>
       {columns.length > 0 && <dl className="nv-drawer__fields">
-        {columns.filter((column) => column.id !== 'title').map((column) => (
+        {columns.filter((column) => column.id !== 'title').map((column) => {
+          const Icon = ICON[column.kind]
+          return (
           <div key={column.id} className="nv-drawer__field">
-            <dt>{column.label}</dt>
+            <dt><Icon className="nv-drawer__icon" size={14} aria-hidden="true" />{column.label}</dt>
             <dd>{column.text(row) ? <Display column={column} row={row} onToggle={noToggle} /> : t('empty')}</dd>
           </div>
-        ))}
+          )
+        })}
       </dl>}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}

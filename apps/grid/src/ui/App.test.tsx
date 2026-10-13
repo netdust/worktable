@@ -1921,7 +1921,7 @@ describe('a link that carries conditions', () => {
     await shell()
 
     await waitFor(() => expect(lastFilters()).toEqual(optie))
-    expect((await screen.findByText('Status is Optie')).closest('.nv-chip--filter')).toBeTruthy()
+    expect((await screen.findByText((_, el) => el?.classList.contains('nv-chip--filter') === true && el.textContent === 'Status is Optie')).closest('.nv-chip--filter')).toBeTruthy()
     expect(params().get('f')).toBeNull()
     expect(params().get('view')).toBe('planning')
   })

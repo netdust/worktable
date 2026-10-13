@@ -5,7 +5,8 @@ import {
 import type { Row } from '../types'
 import type { CellKind, Column } from './columns'
 
-const ICON: Record<CellKind, LucideIcon> = {
+/** A column's kind as an icon: the header's, and the drawer's beside each label. */
+export const ICON: Record<CellKind, LucideIcon> = {
   title: Type, text: Type, longtext: TextAlignStart, select: Tag, date: Calendar, datetime: CalendarClock, time: Clock,
   relation: Link2, bool: SquareCheck, number: Hash, lookup: CornerDownRight, rollup: Sigma, links: Users, other: List,
 }

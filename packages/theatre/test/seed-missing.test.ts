@@ -22,6 +22,7 @@ const STEP_3 = [
 ]
 const STEP_3C = [
   'Bord toewijzingen',
+  'Per status',
   'Tijdlijn tourstops',
   'Galerij activiteiten',
   'Kalender activiteiten',
@@ -35,7 +36,7 @@ const STEP_3C = [
 ]
 const ADDED = ['Tourstops', 'Rollen', 'Sjablonen', 'Mijn producties', ...STEP_3, ...STEP_3C]
 const PRE_STEP_ONE_DAGPLANNING = ['productie', 'soort', 'start_at', 'status']
-const PLANNING = ['start_at', 'omschrijving', 'soort', 'speelreeks_id', 'locatie', 'mensen', 'status']
+const PLANNING = ['start_at', 'omschrijving', 'soort', 'locatie', 'status', 'speelreeks_id', 'mensen']
 const WEEK = { plandag: { $period: 'week' } }
 const KEPT = ['organisatie', 'productie', 'activiteit', 'persoon', 'toewijzing', 'beschikbaarheid', 'speelreeks']
 
@@ -146,7 +147,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   expect(result.out).toContain('seed-missing: rol 4 inserted, 0 present')
   expect(result.out).toContain('seed-missing: sjabloon 1 inserted, 0 present\n')
   expect(result.out).toContain('seed-missing: persoon skipped (not config)')
-  expect(result.out).toContain('seed-missing: views 22 added, 1 updated, 7 present')
+  expect(result.out).toContain('seed-missing: views 23 added, 1 updated, 7 present')
 
   expect(read(db, 'SELECT naam FROM rol ORDER BY id').map((r) => r.naam)).toEqual([
     'Speler',
@@ -167,7 +168,7 @@ test('an existing database gets the Rol rows, the Sjabloon and the later views, 
   const again = await seedMissing(db)
   expect(again.code).toBe(0)
   expect(again.out).toContain('seed-missing: rol 0 inserted, 4 present')
-  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 30 present')
+  expect(again.out).toContain('seed-missing: views 0 added, 0 updated, 31 present')
   expect(read(db, 'SELECT COUNT(*) AS n FROM batch')).toEqual([{ n: 1 }])
 }, 30_000)
 

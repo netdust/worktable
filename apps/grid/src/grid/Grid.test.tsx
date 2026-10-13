@@ -1373,7 +1373,7 @@ async function addCondition(field: string, value: string) {
     await screen.findByRole('grid', { name: planning.label })
 
     expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [{ field: 'status', op: 'in', values: ['option'] }] }))
-    expect(within(bar()).getByText('Status is Optie')).toBeTruthy()
+    expect(within(bar()).getByText((_, el) => el?.classList.contains('nv-chip--filter') === true && el.textContent === 'Status is Optie')).toBeTruthy()
 
     fireEvent.click(within(bar()).getByRole('button', { name: 'Filter Status wissen' }))
     await screen.findByRole('grid', { name: planning.label })

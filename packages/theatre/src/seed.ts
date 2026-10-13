@@ -224,7 +224,7 @@ export const views: SavedViewSeed[] = [
     filters: { plandag: { $period: 'week' } },
     sort: ['start_at'],
     group_by: 'plandag',
-    visible_fields: ['start_at', 'omschrijving', 'soort', 'speelreeks_id', 'locatie', 'mensen', 'status'],
+    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie', 'status', 'speelreeks_id', 'mensen'],
   },
   {
     name: 'Toewijzingen per activiteit',
@@ -436,6 +436,16 @@ export const views: SavedViewSeed[] = [
     sort: ['activiteit_id'],
     group_by: null,
     visible_fields: ['activiteit_id', 'rol_id', 'datum'],
+  },
+  {
+    name: 'Per status',
+    source_type: 'dataset',
+    source: 'activiteit',
+    skin: 'board',
+    filters: { plandag: { $period: 'week' } },
+    sort: ['plandag', 'start_at'],
+    group_by: null,
+    visible_fields: ['soort', 'plandag', 'start_at', 'eind_at', 'locatie', 'mensen'],
   },
   {
     name: 'Tijdlijn tourstops',

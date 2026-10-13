@@ -863,6 +863,10 @@
   padding-right: 4px;
 }
 
+.nv-chip__op {
+  opacity: 0.75;
+}
+
 .nv-chip--filter b {
   color: inherit;
   font-weight: 500;
@@ -2633,9 +2637,17 @@
 }
 
 .nv-drawer__field dt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 0;
   color: var(--color-fg-subtle);
   font-size: 12.5px;
+}
+
+.nv-drawer__icon {
+  flex: none;
+  color: var(--color-fg-subtle);
 }
 
 .nv-drawer__field dd {
