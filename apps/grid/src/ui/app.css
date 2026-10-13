@@ -2399,25 +2399,130 @@
 
 /* What scrolls a cell into view stops short of the frozen header, first column and foot. */
 .nv-mx__scroll {
-  scroll-padding: 36px 0 36px 256px;
+  scroll-padding: 52px 0 36px 412px;
+}
+
+.nv-mx .nv-th {
+  height: 52px;
+  vertical-align: bottom;
 }
 
 .nv-mx .nv-th__label {
   display: block;
-  padding: 7px 10px;
+  padding: 0 10px 8px;
   overflow: hidden;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  font-weight: 400;
   text-overflow: ellipsis;
 }
 
 .nv-mx .nv-th.nv-first .nv-th__label {
-  padding-left: 16px;
+  padding-left: 12px;
 }
 
+/* A person's head: the face over the name, as the prototype. */
 .nv-mx .nv-mx__head {
   text-align: center;
 }
 
+.nv-mx__who {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 0 6px 8px;
+}
+
+.nv-mx__who .nv-avatar--sm {
+  box-shadow: none;
+}
+
+/* The initials come from an attribute so the head's text stays the name. */
+.nv-mx__who .nv-avatar--sm::before {
+  content: attr(data-initials);
+}
+
+.nv-mx .nv-mx__who .nv-th__label {
+  max-width: 100%;
+  padding: 0;
+  color: var(--color-fg-default);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nv-mx .nv-mx__cross,
+.nv-mx .nv-tr .nv-first.nv-mx__cross {
+  background: var(--color-bg-hover);
+}
+
+.nv-mx .nv-group th {
+  height: 32px;
+  border-bottom-color: var(--color-border-default);
+  background: var(--color-band);
+}
+
+.nv-mx .nv-group__in {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+}
+
+.nv-mx .nv-group__day {
+  color: var(--color-fg-default);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nv-grid.nv-mx .nv-group__date {
+  color: var(--color-fg-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.nv-mx__today {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.nv-mx .nv-first.nv-td {
+  padding: 0 12px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.nv-mx__rowhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nv-mx__rowhead .nv-cell__title {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.nv-mx__time {
+  flex: none;
+  width: 92px;
+  font: 12.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-mx__untimed {
+  color: var(--color-fg-subtle);
+  font-family: var(--font-sans);
+}
+
 .nv-mx .nv-mx__cell {
+  position: relative;
+  border-left: 1px solid var(--color-border-subtle);
   text-align: center;
 }
 
@@ -2431,36 +2536,62 @@
 
 .nv-mx .nv-mx__mark {
   color: var(--color-fg-subtle);
-  font-size: 14px;
-  font-weight: 600;
+  font: 600 14px var(--font-mono);
 }
 
-.nv-mx .nv-mx__mark[data-counted="true"] {
-  color: var(--color-success-fg);
+/* A status on its tone's tint; refused stays quiet; away is hatched with its reason; away and on the row is red. */
+.nv-mx .nv-mx__cell--on {
+  background: color-mix(in srgb, var(--c) 13%, var(--color-bg-surface));
+}
+
+.nv-mx .nv-mx__cell--on .nv-mx__mark {
+  color: var(--c);
+}
+
+.nv-mx .nv-mx__cell--no .nv-mx__mark {
+  font-weight: 400;
+}
+
+.nv-mx .nv-mx__away {
+  background: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-fg-subtle) 20%, transparent) 5px 6px);
+}
+
+.nv-mx .nv-mx__reason {
+  color: var(--color-fg-subtle);
+  font-size: 10.5px;
+}
+
+.nv-mx .nv-mx__cell--bad {
+  background: var(--color-danger-bg);
+}
+
+.nv-mx .nv-mx__cell--bad .nv-mx__mark,
+.nv-mx .nv-mx__warn {
+  color: var(--color-danger-fg);
 }
 
 .nv-mx .nv-mx__warn {
-  margin-left: 4px;
-  color: var(--color-warning-fg);
-  font-size: 12px;
+  margin-left: 2px;
+  font-size: 11px;
+  vertical-align: 1px;
 }
 
 .nv-mx .nv-mx__dot {
-  display: inline-block;
-  margin-left: 2px;
-  vertical-align: super;
+  position: absolute;
+  top: 5px;
+  right: 5px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: var(--color-accent-default);
 }
 
-.nv-mx .nv-mx__away {
-  background: repeating-linear-gradient(135deg, var(--color-warning-bg) 0 4px, var(--color-bg-surface) 4px 8px);
+.nv-mx .nv-tr:hover .nv-mx__cell--on {
+  background: color-mix(in srgb, var(--c) 18%, var(--color-bg-hover));
 }
 
-.nv-mx .nv-tr:hover .nv-mx__away {
-  background: repeating-linear-gradient(135deg, var(--color-warning-bg) 0 4px, var(--color-bg-subtle) 4px 8px);
+.nv-mx .nv-tr:hover .nv-mx__away:not(.nv-mx__cell--bad) {
+  background-color: var(--color-bg-hover);
 }
 
 .nv-mx:not([aria-readonly="true"]) .nv-mx__cell {
@@ -2472,12 +2603,12 @@
   background: var(--color-accent-subtle);
 }
 
-.nv-mx .nv-first.nv-td {
-  font-weight: 500;
-  text-align: left;
+.nv-mx .nv-mx__open-cell {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: -2px;
 }
 
-/* The open column: what still waits for someone, before the people. */
+/* The open column: what still waits for someone, before the people, as a warning pill. */
 .nv-mx .nv-mx__open {
   border-right: 1px solid var(--color-border-default);
   text-align: left;
@@ -2488,28 +2619,80 @@
 
 .nv-mx td.nv-mx__open {
   padding: 0 10px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
 }
 
 #root .nv-mx__fill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   max-width: 100%;
-  padding: 2px 0;
+  padding: 2px 8px;
   border: 0;
-  background: none;
-  color: inherit;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-warning-fg) 13%, transparent);
+  color: var(--color-warning-fg);
   font: inherit;
-  text-align: left;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
 }
 
-#root .nv-mx__fill:hover .nv-mx__roles {
-  text-decoration: underline;
+#root .nv-mx__fill b {
+  font: 600 11.5px var(--font-mono);
+}
+
+#root .nv-mx__fill:hover {
+  background: color-mix(in srgb, var(--color-warning-fg) 20%, transparent);
+}
+
+.nv-mx .nv-mx__fill .nv-mx__roles {
+  color: inherit;
+  font-size: 12px;
 }
 
 .nv-mx .nv-mx__roles {
   color: var(--color-fg-subtle);
   font-size: 12px;
+}
+
+/* The matrix's legend at the end of the foot. */
+.nv-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nv-legend i {
+  display: inline-grid;
+  width: 18px;
+  height: 15px;
+  place-items: center;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--c);
+  font: 600 10.5px/1 var(--font-mono);
+  font-style: normal;
+}
+
+.nv-legend .nv-legend__away {
+  background: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb, var(--color-fg-subtle) 35%, transparent) 3px 4px);
+}
+
+.nv-legend .nv-legend__bad {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
 }
 
 .nv-mx__picker {

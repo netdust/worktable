@@ -171,6 +171,8 @@ const strings = {
   showColumn: 'Tonen',
   awayReason: 'Afwezig: {reason}',
   awayWarning: 'Afwezig en toegewezen',
+  away: 'Afwezig',
+  legend: 'Legende',
   statusLabel: 'Status',
   noteLabel: 'Notitie',
   sharedCell: 'Ook in deze cel',

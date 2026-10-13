@@ -8,8 +8,8 @@ import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
 const api = vi.hoisted(() => ({ records: vi.fn(), optionsFrom: vi.fn() }))
 vi.mock('../api', () => api)
+const { Legend } = await import('./Legend')
 const { Matrix } = await import('./Matrix')
-const { dayLabel } = await import('../grid/group')
 const { absentOn } = await import('./away')
 const { buildColumns, cellFor, markFor } = await import('./columns')
 
@@ -133,7 +133,7 @@ describe('the matrix', () => {
     expect(within(grid).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
       expect.arrayContaining(['Activiteit', 'Sien', 'Sien', 'Lieve']),
     )
-    expect([...container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual([dayLabel('2026-05-18'), dayLabel('2026-05-19')])
+    expect([...container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Monday May 18', 'Tuesday May 19'])
     expect(container.querySelector('thead th.nv-first.nv-th')).not.toBeNull()
     expect(container.querySelectorAll('tbody tr.nv-tr > .nv-first')).toHaveLength(3)
   })
@@ -156,7 +156,7 @@ describe('the matrix', () => {
     ]
     const { container } = render(<Matrix {...props} layout={{ ...layout, group: 'kind' }} rows={rows} />)
 
-    expect([...container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
+    expect([...container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
   })
 
   it('shows a row for an activity nobody is on, with empty cells', () => {
@@ -195,6 +195,23 @@ describe('the matrix', () => {
     const free = within(screen.getByRole('row', { name: /Leeg/ })).getByRole('gridcell', { name: /Afwezig: Examen/ })
     expect(free.getAttribute('aria-label')).not.toContain('assigned')
     expect(free.classList.contains('nv-mx__away')).toBe(true)
+  })
+
+  it('tints a status by its tone, keeps a refusal quiet, reds away-and-on, and names the reason where nobody is', () => {
+    const toned = { ...models, assignment: { ...models.assignment, fields: { ...models.assignment.fields, status: { ...models.assignment.fields.status, tones: { confirmed: 'ok', maybe: 'warn', declined: 'bad' } } } } } as Record<string, Model>
+    render(<Matrix {...props} models={toned} />)
+    const cell = (row: RegExp, name: RegExp) => within(screen.getByRole('row', { name: row })).getByRole('gridcell', { name })
+    const lieve = cell(/Montage/, /Lieve/)
+    expect([lieve.classList.contains('nv-mx__cell--on'), lieve.style.getPropertyValue('--c')]).toEqual([true, 'var(--color-warning-fg)'])
+    expect(cell(/Montage/, /Sien.*Bevestigd/).classList.contains('nv-mx__cell--bad')).toBe(true)
+    expect(cell(/Repetitie/, /Sien.*Afgezegd/).classList.contains('nv-mx__cell--no')).toBe(true)
+    expect(cell(/Leeg/, /Afwezig: Examen/).textContent).toBe('Examen')
+  })
+
+  it('explains the toned marks and the away shades in a legend', () => {
+    const toned = { ...models, assignment: { ...models.assignment, fields: { ...models.assignment.fields, status: { ...models.assignment.fields.status, tones: { confirmed: 'ok', maybe: 'warn', declined: 'bad' } } } } } as Record<string, Model>
+    render(<Legend view={view} models={toned} />)
+    expect(within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['✓bevestigd', '?misschien', 'afwezig', '⚠afwezig en toegewezen'])
   })
 
   it('names the window when it has no activities', () => {
@@ -313,10 +330,10 @@ describe('the matrix arrangement', () => {
     ]
     const { container } = render(<Matrix {...props} rows={rows} layout={{ ...layout, group: null }} />)
 
-    expect([...container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual([dayLabel('2026-05-18'), dayLabel('2026-05-19')])
+    expect([...container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Monday May 18', 'Tuesday May 19'])
     cleanup()
     const grouped = render(<Matrix {...props} rows={rows} layout={{ ...layout, group: 'kind' }} />)
-    expect([...grouped.container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
+    expect([...grouped.container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
   })
 })
 

@@ -47,6 +47,7 @@ import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
+import { Legend } from '../matrix/Legend'
 import { Gallery } from '../gallery/Gallery'
 import { Timeline } from '../timeline/Timeline'
 import { timelineWindow } from '../timeline/layout'
@@ -534,7 +535,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
-              layout={layout} onLayout={setLayout} filters={filters} />
+              layout={layout} onLayout={setLayout} filters={filters} scope={scopeChip} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
@@ -553,6 +554,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           <span>↑↓←→ {t('hintMove')}</span>
           <span>↵ {t('hintEdit')}</span>
           <span>⌘Z {t('hintUndo')}</span>
+          {matrix && view && <Legend view={view} models={models} />}
         </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>
           {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}

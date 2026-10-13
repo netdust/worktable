@@ -748,11 +748,11 @@ describe('a matrix view with the table\'s filters', () => {
 
   const bar = () => document.querySelector<HTMLElement>('.nv-bar')!
 
-  it('offers the table\'s filter fields on the matrix in the bar after + Column, not in the toolbar', async () => {
+  it('offers the table\'s filter fields on the matrix in the chip row before + Column, not in the toolbar', async () => {
     render(<App />)
 
     await screen.findByRole('button', { name: 'Filter' })
-    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['+ Kolom', 'Filter'])
+    expect(within(bar()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Filter', '+ Kolom'])
     expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Filter' })).toBeNull()
   })
 

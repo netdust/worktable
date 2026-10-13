@@ -1,14 +1,18 @@
-import { type ClipboardEvent, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { columnsFor } from '../grid/columns'
+import { type ClipboardEvent, type CSSProperties, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type Column, columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
 import { filterRows } from '../grid/filter'
 import { hide, type Layout, show as unhide } from '../grid/layout'
 import type { CellError } from '../grid/store'
 import { groupRows } from '../grid/group'
-import { rowCount, t } from '../i18n'
+import { locale, rowCount, t } from '../i18n'
 import { optionsFrom } from '../api'
-import type { MatrixCell, MatrixColumn, Model, OptionsFrom, Row, View } from '../types'
+import type { MatrixCell, MatrixColumn, Model, OptionsFrom, Row, Tone, View } from '../types'
+import { ChipRow } from '../ui/ChipRow'
 import { Spinner } from '../ui/Spinner'
+import { toneColor } from '../ui/tone'
+import { iso } from '../ui/Window'
+import { initials, whenOf } from '../ui/when'
 import { absentOn } from './away'
 import { ColumnPicker } from './ColumnPicker'
 import { buildColumns, cellFor, loadPicked, markFor, OPEN, type OpenSlot, openSlots, savePicked, visibleColumns } from './columns'
@@ -40,6 +44,8 @@ export interface MatrixProps {
   onLayout: (layout: Layout) => void
   /** The filter chips, shown in the bar after "+ Column". */
   filters?: ReactNode
+  /** The space's chip, first in the bar. */
+  scope?: string | null
 }
 
 /** A cell by its row's id and its column's key, so it survives a repaint. */
@@ -73,10 +79,10 @@ function blockOf(text: string): string[][] {
   return lines.map((line) => line.split('\t'))
 }
 
-const LABEL_WIDTH = 240
-const COLUMN_WIDTH = 92
+const LABEL_WIDTH = 280
+const COLUMN_WIDTH = 84
 const COUNT_WIDTH = 64
-const OPEN_WIDTH = 128
+const OPEN_WIDTH = 132
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -98,6 +104,8 @@ interface CellState {
   spot: string
   active: boolean
   selected: boolean
+  /** The cell the panel shows. */
+  open: boolean
   split: boolean
   focusable: boolean
   error: CellError | null
@@ -111,6 +119,12 @@ function keepFocusOnShift(event: MouseEvent<HTMLTableCellElement>): void {
   if (event.shiftKey) event.preventDefault()
 }
 
+/** A cell's look: its status tinted by its tone, a refused one quiet, away hatched, away and still on the row red. */
+function toneClass(cell: MatrixCell | undefined, tone: Tone | undefined, away: Row | undefined): string {
+  const look = !cell ? '' : tone === 'bad' ? 'nv-mx__cell--no' : away ? 'nv-mx__cell--bad' : tone ? 'nv-mx__cell--on' : ''
+  return [away ? 'nv-mx__away' : '', look].filter(Boolean).join(' ')
+}
+
 function Cell({ view, models, cell, column, away, date, state }: {
   view: View; models: Record<string, Model>; cell: MatrixCell | undefined; column: MatrixColumn; away: Row | undefined; date: string; state: CellState
 }) {
@@ -119,6 +133,7 @@ function Cell({ view, models, cell, column, away, date, state }: {
   const note = cell && join.note_field ? text(cell.fields[join.note_field]).trim() : ''
   const word = models[join.model]?.fields[join.cell_field]?.options?.[status] ?? status
   const reason = away && view.away ? text(away.fields[view.away.label_field]) : ''
+  const tone = models[join.model]?.fields[join.cell_field]?.tones?.[status]
   const label = [
     column.title,
     cell && `${t('statusLabel')}: ${word}`,
@@ -129,15 +144,24 @@ function Cell({ view, models, cell, column, away, date, state }: {
 
   return (
     <td role="gridcell" aria-label={label} data-column={column.key} data-date={date} data-cell={state.spot}
-      className={['nv-td', 'nv-mx__cell', state.split ? 'nv-mx__split' : '', away ? 'nv-mx__away' : '', state.selected ? 'nv-mx__selected' : '', state.active ? 'nv-td--active' : '', state.error ? 'nv-td--error' : ''].filter(Boolean).join(' ')}
+      className={['nv-td', 'nv-mx__cell', state.split ? 'nv-mx__split' : '', toneClass(cell, tone, away), state.selected ? 'nv-mx__selected' : '', state.open ? 'nv-mx__open-cell' : '', state.active ? 'nv-td--active' : '', state.error ? 'nv-td--error' : ''].filter(Boolean).join(' ')}
+      style={cell && tone ? ({ '--c': toneColor(tone) } as CSSProperties) : undefined}
       tabIndex={state.focusable ? 0 : -1} aria-selected={state.selected} aria-invalid={state.error ? true : undefined}
       onMouseDown={keepFocusOnShift} onClick={(event) => state.onClick(event.shiftKey)} onDoubleClick={state.onOpen} onFocus={state.onFocus}>
       {cell && <span className="nv-mx__mark" data-counted={status === join.count}>{markFor(view, status)}</span>}
+      {!cell && away && <span className="nv-mx__reason" aria-hidden="true">{reason}</span>}
       {cell && away && <span className="nv-mx__warn" aria-hidden="true">⚠</span>}
       {note !== '' && <span className="nv-mx__dot" aria-hidden="true" />}
       {state.error && <span className="nv-td__error" role="alert">{state.error.message}</span>}
     </td>
   )
+}
+
+/** A row's hours before its title, "14:00–15:30", or that it has none. */
+function Hours({ row, dates }: { row: Row; dates: Column[] }) {
+  if (dates.length === 0) return null
+  const { from, to } = whenOf(row, dates)
+  return from ? <span className="nv-time nv-mx__time">{from}{to && <span className="nv-time__end">–{to}</span>}</span> : <span className="nv-mx__time nv-mx__untimed">{t('noTime')}</span>
 }
 
 function OpenCell({ row, slots, error, onFill }: { row: number; slots: OpenSlot[]; error: CellError | null; onFill?: () => void }) {
@@ -203,7 +227,7 @@ function FillPicker({ row, slots, titles, taken, from, onPick, onClose }: {
 }
 
 /** Rows by day, one column per record or name, and what each has on a row; typed into like a sheet. */
-export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters }: MatrixProps) {
+export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters, scope = null }: MatrixProps) {
   const [picked, setPicked] = useState(() => loadPicked(view))
   const [picking, setPicking] = useState(false)
   // A column stays for the visit once shown: removing its last cell must not pull it from under the cursor.
@@ -439,6 +463,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
     spot: `${r}-${c}`,
     active: here?.r === r && here.c === c,
     selected: rect !== null && r >= rect.top && r <= rect.bottom && c >= rect.left && c <= rect.right,
+    open: open?.row === row.id && open.column === column.key,
     split: cellClass(c) !== '',
     focusable: here ? here.r === r && here.c === c : r === 0 && c === 0,
     error: store?.cellError(row.id, column) ?? null,
@@ -464,17 +489,16 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   })
 
   const model = models[view.model]
+  const dates = useMemo(() => (model ? columnsFor(model, { ...view, columns: undefined, lookups: undefined, rollups: undefined }, false, models).filter((c) => c.kind === 'datetime') : []), [model, view, models])
+  const today = iso(new Date())
   const span = columns.length + (hasOpen ? 3 : 2)
   const openRow = open ? rows.find((row) => row.id === open.row) : undefined
   const openColumn = open?.column ? columns.find((column) => column.key === open.column) : undefined
   return (
     <div className="nv-frame">
-      <div className="nv-bar">
-        <b>{model?.label ?? view.label}</b>
-        <span>{rowCount(rows.length)}</span>
-        <button type="button" className="nv-bar__button" aria-expanded={picking} onClick={() => setPicking(!picking)}>{t('addColumn')}</button>
-        {filters}
-      </div>
+      <ChipRow scope={scope} filters={filters} group={by?.label} count={rows.length}>
+        <button type="button" className="nv-chip" aria-expanded={picking} onClick={() => setPicking(!picking)}>{t('addColumn')}</button>
+      </ChipRow>
       {fillRow && (
         <FillPicker key={fillRow.id} row={fillRow} slots={openSlots(view, fillRow)} titles={titles} from={join.open?.options_from} onClose={() => closeFill(fillRow.id)}
           taken={everyColumn.flatMap((column) => (column.id && cellFor(view, fillRow, column) ? [column.id] : []))} onPick={(cell, record) => fill(fillRow, cell, record)} />
@@ -498,8 +522,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 <th className="nv-th nv-first" scope="col"><span className="nv-th__label">{model?.label ?? ''}</span></th>
                 {hasOpen && <th className="nv-th nv-mx__open" scope="col"><span className="nv-th__label">{t('openColumn')}</span></th>}
                 {columns.map((column, c) => (
-                  <th key={column.key} className={`nv-th nv-mx__head ${cellClass(c)}`.trim()} scope="col" title={column.title}>
-                    <span className="nv-th__label">{column.title}</span>
+                  <th key={column.key} className={[`nv-th nv-mx__head`, cellClass(c), open?.column === column.key ? 'nv-mx__cross' : ''].filter(Boolean).join(' ')} scope="col" title={column.title}>
+                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{column.title}</span></span>
                   </th>
                 ))}
                 <th className="nv-th nv-end" scope="col" title={countWord}>
@@ -511,7 +535,13 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
               {body.map((section) => (
                 <Fragment key={section.key}>
                   <tr className="nv-group">
-                    <th role="rowheader" colSpan={span}><span className="nv-sticky">{section.label}</span></th>
+                    <th role="rowheader" colSpan={span}>
+                      <span className="nv-sticky nv-group__in">
+                        <span className="nv-group__label">{section.day ? <><span className="nv-group__day">{section.day.weekday}</span> <span className="nv-group__date">{section.day.date}</span></> : section.label}</span>
+                        <span className="nv-group__count">{section.count}</span>
+                        {section.key === today && <span className="nv-mx__today">{t('today').toLocaleLowerCase(locale())}</span>}
+                      </span>
+                    </th>
                   </tr>
                   {section.rows.map((row) => {
                     const at = grid.findIndex((g) => g.row.id === row.id)
@@ -519,8 +549,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                     const date = dateOf(view, row)
                     return (
                       <tr key={row.id} className="nv-tr" data-title={row.title}>
-                        <th scope="row" className="nv-td nv-first" onMouseDown={(event) => event.preventDefault()} onClick={() => showRow(r, row.id)}>
-                          <span className="nv-cell__title">{row.title}</span>
+                        <th scope="row" className={open?.row === row.id ? 'nv-td nv-first nv-mx__cross' : 'nv-td nv-first'} onMouseDown={(event) => event.preventDefault()} onClick={() => showRow(r, row.id)}>
+                          <span className="nv-mx__rowhead"><Hours row={row} dates={dates} /><span className="nv-cell__title">{row.title}</span></span>
                         </th>
                         {hasOpen && <OpenCell row={row.id} slots={openSlots(view, row)} error={store?.cellError(row.id, OPEN) ?? null} onFill={editable ? () => setFilling(row.id) : undefined} />}
                         {columns.map((column, c) => (
