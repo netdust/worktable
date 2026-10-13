@@ -525,7 +525,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onShown={showDays} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} onShown={showDays} filters={filters} />
+              lane={layout.group} onShown={showDays} filters={filters} scope={scopeChip} onTitle={setShown} />
           ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} scope={scopeChip} filters={filters} onShown={setShown} />
           ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (

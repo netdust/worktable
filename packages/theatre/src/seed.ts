@@ -452,7 +452,7 @@ export const views: SavedViewSeed[] = [
     source_type: 'dataset',
     source: 'speelreeks',
     skin: 'timeline',
-    filters: {},
+    filters: { start_datum: { $period: 'month' } },
     sort: ['start_datum'],
     group_by: 'productie_id',
     visible_fields: [],

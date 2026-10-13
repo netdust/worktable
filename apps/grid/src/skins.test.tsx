@@ -93,6 +93,6 @@ describe('the timeline', () => {
     render(<Timeline view={{ ...view, model: 'speelreeks' } as View} model={model} models={{}} rows={rows} cal={cal} shown={{ from: '2026-10-12', to: '2026-10-18' }} lane="productie_id" onShown={() => undefined} />)
     const lane = screen.getByRole('row', { name: 'De Kersentuin' })
     const bar = within(lane).getByRole('button', { name: /Brugge/ })
-    expect([bar.style.left, bar.style.width]).toEqual([`${(1 / 7) * 100}%`, `${(3 / 7) * 100}%`])
+    expect([bar.style.left, bar.style.width]).toEqual(['calc(14.2857% + 2px)', 'calc(42.8571% - 4px)'])
   })
 })
