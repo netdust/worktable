@@ -523,7 +523,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 {hasOpen && <th className="nv-th nv-mx__open" scope="col"><span className="nv-th__label">{t('openColumn')}</span></th>}
                 {columns.map((column, c) => (
                   <th key={column.key} className={[`nv-th nv-mx__head`, cellClass(c), open?.column === column.key ? 'nv-mx__cross' : ''].filter(Boolean).join(' ')} scope="col" title={column.title}>
-                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{column.title}</span></span>
+                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{column.title.trim().split(/\s+/)[0]}</span></span>
                   </th>
                 ))}
                 <th className="nv-th nv-end" scope="col" title={countWord}>

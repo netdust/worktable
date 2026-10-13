@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
@@ -60,7 +61,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     if (tile.kind === 'week') {
       const view = viewOf(tile.view) as SavedView
       return (
-        <WeekTile key={at} view={view} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
+        <WeekTile key={at} view={view} model={models[view.model]} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
           onOpenRow={(row) => setOpened({ row, view })} />
       )
     }
@@ -76,7 +77,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     <div className="nv-frame">
       <div className="nv-bar nv-dash__actions">
         {actions.map((action) => (
-          <button key={action.create} type="button" className="nv-bar__button" onClick={() => setCreating(action)}>{action.label}</button>
+          <button key={action.create} type="button" className="nv-chip" onClick={() => setCreating(action)}><Plus size={14} aria-hidden="true" />{action.label}</button>
         ))}
         {!editing && <button type="button" className="nv-bar__button nv-dash__edit" onClick={() => setEditing(true)}>{t('edit')}</button>}
       </div>

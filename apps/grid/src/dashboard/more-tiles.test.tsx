@@ -71,7 +71,7 @@ describe('the progress tile', () => {
   it('reads done of total', async () => {
     api.rows.mockImplementation(async (view: SavedView) => ({ rows: [], total: view.id === 4 ? 3 : 5 }))
     show([{ kind: 'progress', done: 4, total: 5, label: 'Plaatsen gevuld' }])
-    expect(await screen.findByText('3 van 5')).toBeTruthy()
+    await waitFor(() => expect(document.querySelector('.nv-progress__value')?.textContent).toBe('3 van 5'))
     expect(screen.getByRole('progressbar', { name: 'Plaatsen gevuld' }).getAttribute('aria-valuenow')).toBe('3')
   })
 })

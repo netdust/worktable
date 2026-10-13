@@ -227,7 +227,8 @@ describe('the matrix', () => {
     const { container } = render(<Matrix {...props} rows={rows} titles={new Map([[5, evil]])} away={[]} />)
 
     expect(container.querySelector('img')).toBeNull()
-    expect(screen.getAllByText(evil).length).toBeGreaterThanOrEqual(3)
+    expect(screen.getAllByText(evil).length).toBeGreaterThanOrEqual(1)
+    expect([...container.querySelectorAll('th.nv-mx__head')].map((th) => th.getAttribute('title'))).toEqual([evil, evil])
   })
 
   it('opens no floating layer: no dialog, no popover', async () => {
