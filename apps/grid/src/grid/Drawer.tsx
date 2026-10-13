@@ -7,6 +7,7 @@ import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, R
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
+import { Display } from './cells'
 import { RelationPicker } from './cells/RelationPicker'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
@@ -40,6 +41,9 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
   return role === 'administrator' && model.record_link ? model.key : undefined
 }
 
+/** The drawer reads; a checkbox's toggle is the sheet's. */
+const noToggle = () => undefined
+
 /** One record read whole, beside the sheet — not a modal: the grid stays live. */
 export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined }: Props) {
   return (
@@ -48,7 +52,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
         {columns.filter((column) => column.id !== 'title').map((column) => (
           <div key={column.id} className="nv-drawer__field">
             <dt>{column.label}</dt>
-            <dd>{column.text(row) || t('empty')}</dd>
+            <dd>{column.text(row) ? <Display column={column} row={row} onToggle={noToggle} /> : t('empty')}</dd>
           </div>
         ))}
       </dl>}

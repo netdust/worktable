@@ -1635,9 +1635,15 @@
   padding: 0 12px;
 }
 
-.nv-grid:not(.nv-mx) .nv-td,
-.nv-grid:not(.nv-mx) .nv-th {
+/* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
+#root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
+#root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
   border-right: 1px solid var(--color-border-subtle);
+}
+
+/* Zebra rows on request (Bijstellen › Zebrarijen). */
+#root[data-zebra="on"] .nv-grid:not(.nv-mx) .nv-tr:nth-child(even of .nv-tr) .nv-td {
+  background: var(--color-bg-subtle);
 }
 
 /* The row numbers: frozen at the left with the first column, never a cell the keys reach. */
@@ -1691,10 +1697,11 @@
   line-height: 1.4;
 }
 
-/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. */
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet.
+   The approved prototype drew its table text at the browser's 16px (no doctype); kept on purpose. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 13.5px;
+  font-size: 16px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1704,6 +1711,19 @@
 
 .nv-grid:not(.nv-mx) .nv-dot {
   font-size: 12.5px;
+}
+
+/* Small marks keep to the middle of a 16px line. */
+.nv-grid:not(.nv-mx) .nv-dot,
+.nv-grid:not(.nv-mx) .nv-pill,
+.nv-grid:not(.nv-mx) .nv-blank,
+.nv-grid:not(.nv-mx) .nv-cell__tabular {
+  vertical-align: middle;
+}
+
+/* The frozen first column draws no line of its own; Rasterlijnen draws them all. */
+.nv-grid:not(.nv-mx) .nv-first {
+  border-right: 0;
 }
 
 .nv-grid:not(.nv-mx) .nv-pill {
@@ -2298,8 +2318,21 @@
 
 .nv-grid .nv-group__date {
   color: var(--color-fg-muted);
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 400;
+}
+
+/* Dagkop Lijn: the day as a heading line on the sheet instead of a band. */
+#root[data-groups="line"] .nv-grid .nv-group--fold th {
+  height: 44px;
+  padding-bottom: 6px;
+  border-top: 0;
+  background: var(--color-bg-surface);
+  vertical-align: bottom;
+}
+
+#root[data-groups="line"] .nv-grid .nv-group__label {
+  font-size: 15px;
 }
 
 .nv-grid .nv-group__num {
@@ -2809,6 +2842,23 @@
 
 .nv-drawer__editor {
   padding: 0 16px 16px;
+}
+
+/* A record's delete is there when needed, never the loudest thing in the drawer. */
+#root .nv-drawer__editor .nv-button--destructive:not([data-pressed]) {
+  border-color: transparent;
+  background: none;
+  color: var(--color-danger-fg);
+}
+
+#root .nv-drawer__editor .nv-button--destructive[data-hovered] {
+  background: var(--color-danger-bg);
+}
+
+.nv-drawer__field dd .nv-time,
+.nv-drawer__field dd .nv-cell__tabular {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 #root .nv-files__none {

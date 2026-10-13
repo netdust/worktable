@@ -47,12 +47,12 @@ export interface Column {
 }
 
 const WIDTH: Record<CellKind, number> = {
-  title: 240, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 170,
-  bool: 80, number: 90, lookup: 170, rollup: 90, links: 240, other: 140,
+  title: 300, text: 160, longtext: 220, select: 130, date: 108, datetime: 140, time: 76, relation: 150,
+  bool: 80, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
 }
 
 /** Room for a value and its "via" tag side by side. */
-const INHERITED_WIDTH = 290
+const INHERITED_WIDTH = 240
 
 const TIME = /^(\d{1,2})(?:[:.h]?(\d{2}))?$/
 
