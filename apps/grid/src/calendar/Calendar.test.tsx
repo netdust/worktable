@@ -78,6 +78,13 @@ describe('the calendar', () => {
     expect([tone(/repetitie Gent/), tone(/vergadering Antwerpen/)]).toEqual(['var(--tone-violet)', 'var(--tone-sky)'])
   })
 
+  it('with a lane chosen, events keep the lane colours even when none of them has one', () => {
+    const toned = { ...model, fields: { ...model.fields, soort: { label: 'Soort', type: 'select', options: { repetitie: 'Repetitie' }, tones: { repetitie: 'violet' } } } } as unknown as Model
+    const loose: Row = { ...rows[0], fields: { ...rows[0].fields, persoon_id: null, soort: 'repetitie' }, lookups: {} }
+    shown({ model: toned, models: { persoon_dag: toned }, rows: [loose] })
+    expect(screen.getByRole('button', { name: /repetitie Gent/ }).style.getPropertyValue('--tone')).not.toBe('var(--tone-violet)')
+  })
+
   it('a source without a start column shows only the all-day band, stacked per day', () => {
     shown({ cal: { ...CAL, start: null, end: null } })
     expect(screen.queryByTestId('hours')).toBeNull()

@@ -26,7 +26,9 @@ function Line({ row, shown }: { row: Row; shown: Column[] }) {
       <span className="nv-list__title">{row.title}{rest.map((c) => c.text(row) && <span key={c.id} className="nv-list__cell">{c.text(row)}</span>)}</span>
       {days.map((c) => {
         const day = String(c.value(row) ?? '').slice(0, 10)
-        return <span key={c.id} className={day && day < iso(new Date()) ? 'nv-list__day nv-list__day--late' : 'nv-list__day'}>{whenOf(row, [c]).day ?? c.text(row)}</span>
+        const today = iso(new Date())
+        const when = !day ? '' : day < today ? ' nv-list__day--late' : day === today ? ' nv-list__day--now' : ''
+        return <span key={c.id} className={`nv-list__day${when}`}>{whenOf(row, [c]).day ?? c.text(row)}</span>
       })}
     </>
   )

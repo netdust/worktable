@@ -5169,6 +5169,11 @@ table.nv-cal--month .nv-cal__event:hover {
   font-weight: 600;
 }
 
+.nv-list__day--now {
+  color: var(--color-warning-fg);
+  font-weight: 600;
+}
+
 .nv-list__act {
   flex: none;
   min-width: 84px;

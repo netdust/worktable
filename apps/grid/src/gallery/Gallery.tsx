@@ -18,8 +18,11 @@ const batchesOf = (ids: number[]): number[][] => Array.from({ length: Math.ceil(
 
 const noToggle = () => undefined
 
-/** "Pr", what a card without a picture shows: its title's first letters. */
-const mark = (title: string) => title.trim().slice(0, 2).replace(/^./, (c) => c.toLocaleUpperCase())
+/** What a card without a picture shows: "OG" for "opbouw Gent", "Pr" for a one-word title. */
+function mark(title: string): string {
+  const words = title.trim().split(/\s+/)
+  return words.length > 1 ? (words[0][0] + words[1][0]).toLocaleUpperCase() : words[0].slice(0, 2)
+}
 
 function Card({ row, file, columns, selected, onOpen }: { row: Row; file?: Files[number]; columns: Column[]; selected: boolean; onOpen: () => void }) {
   const kind = columns.find((c) => c.kind === 'select' && c.tones)

@@ -83,7 +83,7 @@ describe('the gallery card', () => {
     render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{}} rows={[row(1, 'Repetitie', 'open'), row(2, 'opbouw Gent', 'bevestigd')]} kind="foto" onShown={onShown} />)
     await screen.findByRole('img', { name: 'Repetitie' })
     const card = screen.getByRole('button', { name: /opbouw Gent/ })
-    expect(card.querySelector('.nv-gallery__mark')?.textContent).toBe('Op')
+    expect(card.querySelector('.nv-gallery__mark')?.textContent).toBe('OG')
     expect((card.querySelector('.nv-gallery__blank') as HTMLElement).style.getPropertyValue('--s')).toBe('var(--color-success-fg)')
     expect(card.textContent).toContain('Bevestigd')
     expect(onShown).toHaveBeenLastCalledWith({ rows: 2, groups: null, cut: false, pictures: 1 })

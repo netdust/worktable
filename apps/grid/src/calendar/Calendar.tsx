@@ -48,7 +48,7 @@ type ToneOf = (lane: number | null, row?: Row) => CSSProperties
 /** Laned, an event takes its lane's colour; unlaned, the tone of its first toned option, as the prototype tints by soort. */
 function lanePalette(lanes: Lane[], toned: Column | undefined): ToneOf {
   return (lane, row) => {
-    if (toned && row && lanes.every((l) => l.id === null))
+    if (toned && row)
       return { '--tone': toneColor(toned.tones?.[String(toned.value(row) ?? '')]) } as CSSProperties
     const at = Math.max(0, lanes.findIndex((l) => l.id === lane))
     return { '--tone': `var(--tone-${LANE_TONES[at % LANE_TONES.length]})` } as CSSProperties
@@ -226,7 +226,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onShown,
   const place = columns.find((c) => c.kind === 'relation' && !cal.lanes.includes(c.id))
   const whereOf = (row: Row) => place?.text(row) ?? ''
   const toned = columns.find((c) => c.kind === 'select' && c.tones)
-  const toneOf = useMemo(() => lanePalette(lanes, toned), [lanes, toned])
+  const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned), [lanes, lane, toned])
   const step = (by: number) => onShown(month ? shiftMonth(shown, by) : shift(shown, 7 * by))
   // A week's Thursday names its month; a month's first day names its first week.
   const from = parse(shown.from) ?? new Date()

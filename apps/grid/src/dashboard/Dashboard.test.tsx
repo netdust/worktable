@@ -91,6 +91,16 @@ describe('a list tile', () => {
     expect(item.querySelector('.nv-list__day--late')?.textContent).toMatch(/6/)
   })
 
+  it('marks a row whose day is today', async () => {
+    const dated = { ...werklijst, fields: { ...werklijst.fields, deadline: { type: 'date', label: 'Deadline', required: false, fact: false } } } as unknown as Model
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    api.rows.mockResolvedValue({ rows: [{ ...row(1, 'Rider versturen', 5), fields: { ...row(1, '', 5).fields, deadline: today } }], total: 1 })
+    render(<Dashboard dashboard={dashboard([{ ...list, columns: ['soort', 'deadline'] }])} views={[conflicten, lijst]} models={{ ...models, werklijst: dated }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+    const item = (await screen.findAllByRole('listitem'))[0]
+    expect(item.querySelector('.nv-list__day')?.className).toBe('nv-list__day nv-list__day--now')
+  })
+
   it('shows its total, its rows, Alles tonen, and Gedaan only where the row writes', async () => {
     api.rows.mockResolvedValue({ rows: [row(1, 'Rider versturen', 5), row(2, 'Open plaats Speler', null)], total: 12 })
     const open = show([list])
