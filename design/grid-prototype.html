@@ -330,6 +330,7 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
 .avatar[style*="--h"] { background: color-mix(in srgb, var(--h) 16%, var(--color-bg-surface)); color: color-mix(in srgb, var(--h) 78%, var(--color-fg-default)) }
 
+
 :root[data-density="compact"] { --row-h: 32px }
 :root[data-density="roomy"] { --row-h: 46px }
 .gridwrap { flex: 1; overflow: auto; min-height: 0 }
@@ -645,7 +646,7 @@ const MODELS = [
 const shell = { active: '', space: 'nw', open: new Set(), onSpace: () => {} }
 
 function renderTree() {
-  let html = `<div class="section-label">Dashboards</div><a class="view dash" href="#" title="In dit prototype niet uitgewerkt">${icon('dash')}<span class="vname">Overzicht</span></a>`
+  let html = `<div class="section-label">Dashboards</div><a class="view dash ${shell.active === 'overzicht' ? 'active' : ''}" href="dashboard-prototype.html" ${shell.active === 'overzicht' ? 'aria-current="page"' : ''}>${icon('dash')}<span class="vname">Overzicht</span></a>`
   let section = ''
   for (const m of MODELS) {
     if (m.section !== section) { section = m.section; html += `<div class="section-label">${section}</div>` }
@@ -780,7 +781,7 @@ function drawer({ kind, kindHtml, pos, hero = '', title, sub = '', alert = '', p
       <button class="tool" aria-label="Volledig openen">${icon('expand')}</button><button class="tool" data-close-drawer aria-label="Sluiten">${icon('x')}</button></div>
     <div class="dw-body">${hero}<h2 class="dw-title" contenteditable="true" spellcheck="false">${esc(title)}</h2><div class="dw-sub">${sub}</div>${alert}
       <dl class="props">${props.map(([ic, label, html, ro]) => `<dt>${icon(ic)}${label}</dt><dd class="${ro ? 'ro' : ''}">${html}</dd>`).join('')}</dl>
-      ${secs.map((s) => `<section class="dw-sec"><h3>${s.title}${s.n !== undefined ? `<span class="n">${s.n}</span>` : ''}${s.right ? `<span class="r">${s.right}</span>` : ''}</h3>${s.html}</section>`).join('')}</div>`
+      ${secs.map((s) => `<section class="dw-sec">${s.title ? `<h3>${s.title}${s.n !== undefined ? `<span class="n">${s.n}</span>` : ''}${s.right ? `<span class="r">${s.right}</span>` : ''}</h3>` : ''}${s.html}</section>`).join('')}</div>`
 }
 const alertBox = (title, text, acts = [], tone = '') => `<div class="dw-alert ${tone}">${icon('alert')}<div><b>${title}</b>${text}${acts.length ? `<div class="acts">${acts.map((a) => `<button>${a}</button>`).join('')}</div>` : ''}</div></div>`
 const timeHtml = (a) => (a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>')
@@ -854,6 +855,7 @@ function boot(note) {
   const theme = store.get('theme'); if (theme) setTweak('theme', theme, false)
   renderSpace(); renderTree()
 }
+
 
 // ---------- the grid, as approved in design/grid-prototype.html; only the shell around it is shared ----------
 shell.active = 'planning'

@@ -330,11 +330,7 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
 .avatar[style*="--h"] { background: color-mix(in srgb, var(--h) 16%, var(--color-bg-surface)); color: color-mix(in srgb, var(--h) 78%, var(--color-fg-default)) }
 
-.cal { --gut: 64px; --hour: 46px; min-height: 100%; display: flex; flex-direction: column; background: var(--color-bg-surface) }
-.period { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums }
-.period span { color: var(--color-fg-subtle); font-weight: 400; margin-left: 6px }
-
-/* week */
+/* The week band: the calendar's all-day band, also the dashboard's week tile. */
 .wk-head { position: sticky; top: 0; z-index: 6; background: var(--color-bg-surface); display: grid; grid-template-columns: var(--gut) repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--color-border-default) }
 .wk-head .gut { font: 10.5px var(--font-mono); color: var(--color-fg-subtle); display: grid; align-items: end; justify-items: end; padding: 0 8px 6px }
 .wk-day { padding: 8px 10px 6px; display: flex; align-items: baseline; gap: 6px; border-left: 1px solid var(--color-border-subtle) }
@@ -359,6 +355,12 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .band-bar:hover { background: color-mix(in srgb, var(--c) 26%, var(--color-bg-surface)) }
 .band-bar.sel { background: color-mix(in srgb, var(--c) 34%, var(--color-bg-surface)) }
 .band-empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; color: var(--color-fg-subtle) }
+
+.cal { --gut: 64px; --hour: 46px; min-height: 100%; display: flex; flex-direction: column; background: var(--color-bg-surface) }
+.period { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums }
+.period span { color: var(--color-fg-subtle); font-weight: 400; margin-left: 6px }
+
+/* week */
 
 .dateonly .band { position: static; flex: 1; box-shadow: none; border-bottom: 0 }
 .dateonly .band-track { min-height: 100%; --bh: 34px }
@@ -615,7 +617,7 @@ const MODELS = [
 const shell = { active: '', space: 'nw', open: new Set(), onSpace: () => {} }
 
 function renderTree() {
-  let html = `<div class="section-label">Dashboards</div><a class="view dash" href="#" title="In dit prototype niet uitgewerkt">${icon('dash')}<span class="vname">Overzicht</span></a>`
+  let html = `<div class="section-label">Dashboards</div><a class="view dash ${shell.active === 'overzicht' ? 'active' : ''}" href="dashboard-prototype.html" ${shell.active === 'overzicht' ? 'aria-current="page"' : ''}>${icon('dash')}<span class="vname">Overzicht</span></a>`
   let section = ''
   for (const m of MODELS) {
     if (m.section !== section) { section = m.section; html += `<div class="section-label">${section}</div>` }
@@ -750,7 +752,7 @@ function drawer({ kind, kindHtml, pos, hero = '', title, sub = '', alert = '', p
       <button class="tool" aria-label="Volledig openen">${icon('expand')}</button><button class="tool" data-close-drawer aria-label="Sluiten">${icon('x')}</button></div>
     <div class="dw-body">${hero}<h2 class="dw-title" contenteditable="true" spellcheck="false">${esc(title)}</h2><div class="dw-sub">${sub}</div>${alert}
       <dl class="props">${props.map(([ic, label, html, ro]) => `<dt>${icon(ic)}${label}</dt><dd class="${ro ? 'ro' : ''}">${html}</dd>`).join('')}</dl>
-      ${secs.map((s) => `<section class="dw-sec"><h3>${s.title}${s.n !== undefined ? `<span class="n">${s.n}</span>` : ''}${s.right ? `<span class="r">${s.right}</span>` : ''}</h3>${s.html}</section>`).join('')}</div>`
+      ${secs.map((s) => `<section class="dw-sec">${s.title ? `<h3>${s.title}${s.n !== undefined ? `<span class="n">${s.n}</span>` : ''}${s.right ? `<span class="r">${s.right}</span>` : ''}</h3>` : ''}${s.html}</section>`).join('')}</div>`
 }
 const alertBox = (title, text, acts = [], tone = '') => `<div class="dw-alert ${tone}">${icon('alert')}<div><b>${title}</b>${text}${acts.length ? `<div class="acts">${acts.map((a) => `<button>${a}</button>`).join('')}</div>` : ''}</div></div>`
 const timeHtml = (a) => (a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>')
@@ -825,6 +827,26 @@ function boot(note) {
   renderSpace(); renderTree()
 }
 
+// ---------- the band: rows that span days, packed into lanes, one bar each ----------
+function bandBars(rows, from, n, { barH = 24, gap = 4, top = 5, sel = null } = {}) {
+  const to = addDays(from, n - 1), lanes = []
+  const inRange = rows.filter((r) => r.date <= to && r.end2 >= from).sort((a, b) => a.date.localeCompare(b.date) || daysBetween(b.date, b.end2) - daysBetween(a.date, a.end2))
+  const html = inRange.map((r) => {
+    const s = r.date < from ? from : r.date, e = r.end2 > to ? to : r.end2
+    let lane = lanes.findIndex((l) => l < s); if (lane < 0) { lanes.push(''); lane = lanes.length - 1 }
+    lanes[lane] = e
+    const i = daysBetween(from, s), len = daysBetween(s, e) + 1
+    const when = r.start ? `<span class="m">${r.start}</span>` : r.end2 !== r.date ? `<span class="m">${span(r.date, r.end2)}</span>` : ''
+    return `<div class="band-bar ${r.status === 'optie' ? 'optie' : ''} ${r.date < from ? 'cont-l' : ''} ${r.end2 > to ? 'cont-r' : ''} ${sel === r.id ? 'sel' : ''}" data-id="${r.id}" tabindex="0"
+      style="--c:${r.color};left:calc(${i} * 100% / ${n} + 3px);width:calc(${len} * 100% / ${n} - 6px);top:${top + lane * (barH + gap)}px">${r.conflict ? `<span class="alert-badge" title="${esc(r.conflict)}">${icon('alert')}</span>` : ''}${when}<strong>${esc(r.label)}</strong>${len > 1 && r.venue ? `<span class="v">${esc(r.venue)}</span>` : ''}</div>`
+  }).join('')
+  return { html, lanes: lanes.length }
+}
+
+function dayHead(days, withGut = true) {
+  return `<div class="wk-head">${withGut ? `<div class="gut">W${weekNo(days[0])}</div>` : ''}${days.map((d) => { const dw = D(d).getDay(); return `<div class="wk-day ${d === TODAY ? 'today' : ''} ${dw === 0 || dw === 6 ? 'we' : ''}"><span class="dn">${DAYS_NL[dw]}</span><span class="num">${D(d).getDate()}</span></div>` }).join('')}</div>`
+}
+
 // ---------- one calendar for every source ----------
 const params = new URLSearchParams(location.search)
 const cal = { src: params.get('bron') === 'speelreeks' ? 'speelreeks' : 'activiteit', mode: 'week', anchor: TODAY, sel: null, tile: false }
@@ -865,26 +887,7 @@ function visible() {
 }
 const minutes = (hhmm) => +hhmm.slice(0, 2) * 60 + +hhmm.slice(3)
 
-// ---------- the band: rows that span days, packed into lanes, one bar each ----------
-function bandBars(rows, from, n, { barH = 24, gap = 4, top = 5, dayCell = false } = {}) {
-  const to = addDays(from, n - 1), lanes = []
-  const inRange = rows.filter((r) => r.date <= to && r.end2 >= from).sort((a, b) => a.date.localeCompare(b.date) || daysBetween(b.date, b.end2) - daysBetween(a.date, a.end2))
-  const html = inRange.map((r) => {
-    const s = r.date < from ? from : r.date, e = r.end2 > to ? to : r.end2
-    let lane = lanes.findIndex((l) => l < s); if (lane < 0) { lanes.push(''); lane = lanes.length - 1 }
-    lanes[lane] = e
-    const i = daysBetween(from, s), len = daysBetween(s, e) + 1
-    const when = r.start ? `<span class="m">${r.start}</span>` : r.end2 !== r.date ? `<span class="m">${span(r.date, r.end2)}</span>` : ''
-    return `<div class="band-bar ${r.status === 'optie' ? 'optie' : ''} ${r.date < from ? 'cont-l' : ''} ${r.end2 > to ? 'cont-r' : ''} ${cal.sel === r.id ? 'sel' : ''}" data-id="${r.id}" tabindex="0"
-      style="--c:${r.color};left:calc(${i} * 100% / ${n} + 3px);width:calc(${len} * 100% / ${n} - 6px);top:${top + lane * (barH + gap)}px">${r.conflict ? `<span class="alert-badge" title="${esc(r.conflict)}">${icon('alert')}</span>` : ''}${when}<strong>${esc(r.label)}</strong>${len > 1 && r.venue ? `<span class="v">${esc(r.venue)}</span>` : ''}</div>`
-  }).join('')
-  return { html, lanes: lanes.length }
-}
-
 // ---------- week ----------
-function dayHead(days, withGut = true) {
-  return `<div class="wk-head">${withGut ? `<div class="gut">W${weekNo(days[0])}</div>` : ''}${days.map((d) => { const dw = D(d).getDay(); return `<div class="wk-day ${d === TODAY ? 'today' : ''} ${dw === 0 || dw === 6 ? 'we' : ''}"><span class="dn">${DAYS_NL[dw]}</span><span class="num">${D(d).getDate()}</span></div>` }).join('')}</div>`
-}
 function columns(rows) {
   // events that overlap share the day's width
   const out = []
@@ -898,7 +901,7 @@ function columns(rows) {
 function week(rows) {
   const mon = mondayOf(cal.anchor), days = Array.from({ length: 7 }, (_, i) => addDays(mon, i))
   const hasTimes = ROWS[cal.src].some(timed)
-  const band = bandBars(rows.filter((r) => !timed(r)), mon, 7, hasTimes ? {} : { barH: 34, gap: 6, top: 10 })
+  const band = bandBars(rows.filter((r) => !timed(r)), mon, 7, hasTimes ? { sel: cal.sel } : { barH: 34, gap: 6, top: 10, sel: cal.sel })
   const cols = 'repeating-linear-gradient(90deg, var(--color-border-subtle) 0 1px, transparent 1px calc(100% / 7))'
   let hours = ''
   if (hasTimes) {
@@ -922,7 +925,7 @@ function month(rows) {
   const first = cal.anchor.slice(0, 8) + '01', start = mondayOf(first), m = D(first).getMonth()
   const weeks = Array.from({ length: 6 }, (_, w) => addDays(start, w * 7))
   return `<div class="cal"><div class="mo-head"><div></div>${['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d) => `<div>${d}</div>`).join('')}</div><div class="mo-grid">${weeks.map((ws) => {
-    const band = bandBars(rows.filter((r) => !timed(r)), ws, 7, { barH: 20, gap: 3, top: 28 })
+    const band = bandBars(rows.filter((r) => !timed(r)), ws, 7, { barH: 20, gap: 3, top: 28, sel: cal.sel })
     const pad = band.lanes * 23
     return `<div class="mo-week"><div class="mo-wn">W${weekNo(ws)}</div><div class="mo-cells">${Array.from({ length: 7 }, (_, i) => {
       const d = addDays(ws, i), dw = D(d).getDay(), items = rows.filter((r) => timed(r) && r.date === d).sort((a, b) => a.start.localeCompare(b.start))
@@ -937,7 +940,7 @@ function month(rows) {
 // ---------- the dashboard's week tile is this band ----------
 function tile(rows) {
   const mon = mondayOf(cal.anchor), days = Array.from({ length: 7 }, (_, i) => addDays(mon, i))
-  const band = bandBars(rows, mon, 7)
+  const band = bandBars(rows, mon, 7, { sel: cal.sel })
   return `<div class="tile-wrap"><div class="tile"><header>${icon('cal')}Deze week <span class="muted">${esc(title())}</span><button class="tool" aria-label="Naar de kalender">${icon('expand')}</button></header>
     <div class="cal">${dayHead(days, false).replace('class="wk-head"', 'class="wk-head" style="grid-template-columns:repeat(7,minmax(0,1fr))"')}
     <div class="band" style="grid-template-columns:minmax(0,1fr)"><div class="band-track" style="--cols:repeating-linear-gradient(90deg, var(--color-border-subtle) 0 1px, transparent 1px calc(100% / 7));--lanes:${Math.max(band.lanes, 1)}">${band.html}</div></div></div></div>
