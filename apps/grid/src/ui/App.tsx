@@ -47,6 +47,8 @@ import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
+import { barOf } from './bar'
+import { ChipBar } from './ChipBar'
 import { Legend } from '../matrix/Legend'
 import { Gallery } from '../gallery/Gallery'
 import { Timeline } from '../timeline/Timeline'
@@ -205,6 +207,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const reloadView = () => setReloads((n) => n + 1)
   const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
   const [quick, setQuick] = useState(false)
+  // "+ Kolom" on a matrix: the chip row holds the button, the matrix the picker.
+  const [picking, setPicking] = useState(false)
   useFillViewport(frame)
 
   useEffect(() => {
@@ -298,7 +302,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       { field: view.date_field, op: 'between', values: [next.from, next.to] },
       ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
     ]))
+  // The period chips sit where the view reads days by its dated column: a windowed skin always, another where a period is set.
+  const period = !view?.date_field ? null
+    : calendar ? { shown: calendarShown, onShown: showDays }
+    : timeline ? { shown: timelineShown, onShown: showDays }
+    : view.type === 'matrix' ? { shown: matrixDays, onShown: showDays }
+    : conditionDays?.from && conditionDays.to ? { shown: { from: conditionDays.from, to: conditionDays.to }, onShown: showDays }
+    : null
   const windowKey = JSON.stringify(window)
+  useEffect(() => setPicking(false), [view?.key])
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
@@ -517,6 +529,13 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           fixed={Object.keys(view?.fixed ?? {}).length}
           onHistory={view && !dashboard ? () => setHistoryOpen((open) => !open) : undefined}
         />
+        {!dashboard && view && model && layout && (
+          <ChipBar {...barOf({
+            view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period,
+            told: told?.view === view.key ? told.shown : null,
+            ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
+          })} />
+        )}
         <div className="nv-work">
         <section className="nv-sheet">
           {dashboard ? (
@@ -525,23 +544,22 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
-              lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
-              onShown={showDays} scope={scopeChip} onTitle={setShown} />
+              lane={layout.group} onTitle={setShown} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} onShown={showDays} filters={filters} scope={scopeChip} onTitle={setShown} />
+              lane={layout.group} onTitle={setShown} />
           ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
-            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} scope={scopeChip} filters={filters} onShown={setShown} />
+            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} onShown={setShown} />
           ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} scope={scopeChip} filters={filters} onShown={setShown} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
-              layout={layout} onLayout={setLayout} filters={filters} scope={scopeChip} />
+              layout={layout} onLayout={setLayout} picking={picking} onPicking={setPicking} onShown={setShown} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act} onNotice={(message) => notify({ message })}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onNotice={(message) => notify({ message })}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} recordLink={model ? linkedDataset(role, model) : undefined} reloads={reloads} />
           ) : (
             <Sheet hasView={view !== undefined} result={result} />

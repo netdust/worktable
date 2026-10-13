@@ -30,10 +30,8 @@ const rows = [
 afterEach(cleanup)
 
 const shown = (over: Partial<Parameters<typeof Calendar>[0]> = {}) => {
-  const onShown = vi.fn()
   render(<Calendar view={view} model={model} models={{ persoon_dag: model }} rows={rows} cal={CAL} shown={{ from: '2026-10-12', to: '2026-10-18' }}
-    lane="persoon_id" onShown={onShown} onLane={() => undefined} {...over} />)
-  return onShown
+    lane="persoon_id" {...over} />)
 }
 
 describe('the calendar', () => {
@@ -115,14 +113,6 @@ describe('the calendar', () => {
     expect(screen.getByRole('complementary', { name: 'repetitie Gent' })).toBeTruthy()
   })
 
-  it('Maand asks for the month the week sits in, and the arrows move a week', () => {
-    const onShown = shown()
-    fireEvent.click(screen.getByRole('radio', { name: 'Maand' }))
-    expect(onShown).toHaveBeenLastCalledWith({ from: '2026-10-01', to: '2026-10-31' })
-    fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }))
-    expect(onShown).toHaveBeenLastCalledWith({ from: '2026-10-19', to: '2026-10-25' })
-  })
-
   it('a month shows each event on its day, named with its lane', () => {
     shown({ shown: { from: '2026-10-01', to: '2026-10-31' } })
     expect(screen.getByRole('button', { name: /Noor Claes · vergadering Antwerpen/ })).toBeTruthy()
@@ -134,7 +124,7 @@ describe('a spanning row', () => {
   const stop = (id: number, title: string, from: string, to: string): Row => ({ id, title, status: '', fields: { start_datum: from, eind_datum: to } })
   const spanning = (shownDays: { from: string; to: string }, list: Row[]) =>
     render(<Calendar view={{ ...view, calendar: SPANS } as View} model={model} models={{ persoon_dag: model }} rows={list} cal={SPANS}
-      shown={shownDays} lane={null} onShown={() => undefined} onLane={() => undefined} />)
+      shown={shownDays} lane={null} />)
 
   it('is one bar across its days in the week, not a chip per day', () => {
     spanning({ from: '2026-10-12', to: '2026-10-18' }, [stop(1, 'Brugge', '2026-10-12', '2026-10-15')])

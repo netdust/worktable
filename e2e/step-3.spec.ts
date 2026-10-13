@@ -313,7 +313,9 @@ test.describe('step 3', () => {
       await expect(page.getByRole('list', { name: 'Rijen' })).toContainText('Kalender Proef')
       await shot(page, 'person-calendar')
 
-      await page.getByRole('radio', { name: 'Productie' }).click()
+      // The lanes are the Groep chip's choices, as on every view.
+      await page.getByRole('button', { name: /^Groep/ }).click()
+      await page.getByRole('group', { name: 'Groeperen' }).getByRole('button', { name: 'Productie' }).click()
       await expect(page.getByRole('list', { name: 'Rijen' }).getByText('Nachtwacht', { exact: true })).toBeVisible()
       await expect(band.getByRole('button', { name: /e2e kalender overnachting/ })).toHaveAttribute(
         'title',

@@ -1,14 +1,11 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react'
-import { type Key, ToggleButton, ToggleButtonGroup } from 'react-aria-components'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { Drawer } from '../grid/Drawer'
 import { type Column, columnsFor } from '../grid/columns'
 import { t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
-import { ChipRow } from '../ui/ChipRow'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
-import { formatWindow, isMonth, iso, isoWeek, parse, shift, shiftMonth, weekOf } from '../ui/Window'
+import { formatWindow, isMonth, iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
 interface Props {
@@ -21,10 +18,6 @@ interface Props {
   shown: DateWindow
   /** The lane relation, or none. */
   lane: string | null
-  onShown: (next: DateWindow) => void
-  onLane: (lane: string | null) => void
-  filters?: ReactNode
-  scope?: string | null
   /** The title line says the period. */
   onTitle?: (shown: Shown) => void
 }
@@ -38,7 +31,6 @@ const TWO_LINES = 40
 const THREE_LINES = 58
 // The lanes' colours, in order; the status tones are left to statuses.
 const LANE_TONES = ['sky', 'violet', 'amber', 'teal', 'rose', 'green', 'slate', 'grey']
-const monthOf = (date: Date): DateWindow => shiftMonth({ from: iso(date), to: iso(date) }, 0)
 const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) || a.from - b.from
@@ -212,7 +204,7 @@ function Month({ month, weeks, lanes, events, toneOf, onOpen }: {
 }
 
 /** Rows on their days, a week or a month, in lanes; read-only: an event opens its row. */
-export function Calendar({ view, model, models, rows, cal, shown, lane, onShown, onLane, filters, scope = null, onTitle }: Props) {
+export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle }: Props) {
   const [open, setOpen] = useState<Row | null>(null)
   const month = isMonth(shown)
   const weeks = useMemo(() => (month ? monthWeeks(shown) : []), [month, shown.from, shown.to])
@@ -227,32 +219,9 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onShown,
   const whereOf = (row: Row) => place?.text(row) ?? ''
   const toned = columns.find((c) => c.kind === 'select' && c.tones)
   const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned), [lanes, lane, toned])
-  const step = (by: number) => onShown(month ? shiftMonth(shown, by) : shift(shown, 7 * by))
-  // A week's Thursday names its month; a month's first day names its first week.
-  const from = parse(shown.from) ?? new Date()
-  const choose = (mode: Key) =>
-    onShown(mode === 'month' ? monthOf(new Date(from.getFullYear(), from.getMonth(), from.getDate() + 3)) : weekOf(from))
   useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false, label: formatWindow(shown) }), [rows.length, shown.from, shown.to])
-  const laneOptions = [...cal.lanes.map((key) => ({ key, label: model.fields[key]?.label ?? key })), { key: NO_LANE, label: t('noLane') }]
   return (
     <div className="nv-frame">
-      <ChipRow scope={scope} filters={filters} count={rows.length}>
-        <button type="button" className="nv-chip" onClick={() => onShown(month ? monthOf(new Date()) : weekOf(new Date()))}>{t('today')}</button>
-        <button type="button" className="nv-chip nv-chip--icon" aria-label={t('previousPeriod')} onClick={() => step(-1)}><ChevronLeft size={14} aria-hidden="true" /></button>
-        <button type="button" className="nv-chip nv-chip--icon" aria-label={t('nextPeriod')} onClick={() => step(1)}><ChevronRight size={14} aria-hidden="true" /></button>
-        <ToggleButtonGroup className="nv-chips" aria-label={t('period')} selectionMode="single" disallowEmptySelection
-          selectedKeys={[month ? 'month' : 'week']} onSelectionChange={(keys) => choose([...keys][0] ?? 'week')}>
-          <ToggleButton id="month" className="nv-chip">{t('month')}</ToggleButton>
-          <ToggleButton id="week" className="nv-chip">{t('week')}</ToggleButton>
-        </ToggleButtonGroup>
-        <ToggleButtonGroup className="nv-chips nv-chips--group" aria-label={t('lane')} selectionMode="single" disallowEmptySelection
-          selectedKeys={[lane ?? NO_LANE]} onSelectionChange={(keys) => {
-            const key = String([...keys][0] ?? NO_LANE)
-            onLane(key === NO_LANE ? null : key)
-          }}>
-          {laneOptions.map((option) => <ToggleButton key={option.key} id={option.key} className="nv-chip">{option.label}</ToggleButton>)}
-        </ToggleButtonGroup>
-      </ChipRow>
       <div className="nv-body">
         <div className={`nv-cal__body${month ? ' nv-cal__body--month' : ''}`}>
           {lane && <Legend lanes={lanes} toneOf={toneOf} />}

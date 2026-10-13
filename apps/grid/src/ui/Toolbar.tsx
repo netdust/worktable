@@ -4,6 +4,7 @@ import { hint as titled } from './hint'
 import { type Action, MoreMenu } from './MoreMenu'
 import { createElement, type ReactNode } from 'react'
 import { fixedCount, summary, t } from '../i18n'
+import type { Column } from '../grid/columns'
 import type { StoreState } from '../grid/store'
 import type { ViewType } from '../types'
 import { VIEW_ICONS } from './NewViewDialog'
@@ -18,6 +19,8 @@ export interface Shown {
   columns?: number
   /** A gallery's cards with a picture. */
   pictures?: number
+  /** A sheet's columns, as Kolommen offers them. */
+  menu?: Column[]
   /** Said in place of the counts: a calendar's period. */
   label?: string
 }

@@ -1,12 +1,10 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef } from 'react'
+import { type CSSProperties, useEffect, useMemo, useRef } from 'react'
 import { type Column, columnsFor } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
-import { ChipRow } from '../ui/ChipRow'
 import type { Shown } from '../ui/Toolbar'
-import { days, isMonth, iso, isoWeek, parse, shift, shiftMonth, weekOf } from '../ui/Window'
+import { iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, bars } from './layout'
 
 const MONTH = (date: Date) => new Intl.DateTimeFormat(locale(), { month: 'short' }).format(date).replace(/\./g, '')
@@ -45,8 +43,6 @@ function packed(lane: Bar[]): { bar: Bar; row: number }[] {
   })
 }
 
-/** The month holding a day: the timeline's window when it reads a month. */
-const monthOf = (date: Date): DateWindow => ({ from: iso(new Date(date.getFullYear(), date.getMonth(), 1)), to: iso(new Date(date.getFullYear(), date.getMonth() + 1, 0)) })
 
 /** A day's width on the scale, as the prototype's week zoom. */
 const DAY_PX = 44
@@ -54,9 +50,8 @@ const DAY_PX = 44
 const TONE_CLASS = { warn: 'nv-tl__bar--option', bad: 'nv-tl__bar--cancelled' } as const
 
 /** Rows as bars across the window's days, in lanes; read-only, a bar opens its row. */
-export function Timeline({ view, model, models, rows, cal, shown, lane, onShown, filters, scope = null, onTitle }: {
+export function Timeline({ view, model, models, rows, cal, shown, lane, onTitle }: {
   view: View; model: Model; models: Record<string, Model>; rows: Row[]; cal: CalendarDef; shown: DateWindow; lane: string | null
-  onShown: (next: DateWindow) => void; filters?: ReactNode; scope?: string | null
   /** What the title line says it shows: the bars and the lanes. */
   onTitle?: (shown: Shown) => void
 }) {
@@ -66,7 +61,6 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, onShown,
   // A bar's second line: its place, the first relation that is not the lane; its tone: the first toned option, as optie is hatched.
   const place: Column | undefined = columns.find((c) => c.kind === 'relation' && c.id !== lane)
   const toned: Column | undefined = columns.find((c) => c.kind === 'select' && c.tones)
-  const step = (by: number) => onShown(isMonth(shown) ? shiftMonth(shown, by) : shift(shown, by * days(shown)))
   const window = useMemo(() => Array.from({ length: laid.days }, (_, i) => iso(new Date((parse(shown.from) as Date).getTime() + i * 86_400_000 + 43_200_000))), [shown.from, laid.days])
   const today = iso(new Date())
   const pct = (n: number) => `${(n / laid.days) * 100}%`
@@ -91,11 +85,6 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, onShown,
   useEffect(pin, [shown.from, todayAt, rows])
   return (
     <div className="nv-frame">
-      <ChipRow scope={scope} filters={filters} group={field?.label} count={rows.length}>
-        <button type="button" className="nv-chip" onClick={() => onShown(isMonth(shown) ? monthOf(new Date()) : weekOf(new Date()))}>{t('today')}</button>
-        <button type="button" className="nv-chip nv-chip--icon" aria-label={t('previousPeriod')} onClick={() => step(-1)}><ChevronLeft size={14} aria-hidden="true" /></button>
-        <button type="button" className="nv-chip nv-chip--icon" aria-label={t('nextPeriod')} onClick={() => step(1)}><ChevronRight size={14} aria-hidden="true" /></button>
-      </ChipRow>
       <div className="nv-body">
         <div className="nv-tl" role="table" aria-label={view.label} ref={frame} onScroll={pin} style={{ '--days': laid.days } as CSSProperties}>
           <div className="nv-tl__axis" role="row">

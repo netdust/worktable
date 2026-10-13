@@ -4534,11 +4534,6 @@
 }
 
 /* The calendar: a week on an hour axis with an all-day band, or a month of days; lanes colour the events. */
-.nv-cal__bar {
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .nv-cal__body {
   flex: 1;
   min-width: 0;
@@ -5190,10 +5185,6 @@ table.nv-cal--month .nv-cal__event:hover {
   padding: 8px 14px;
   color: var(--color-danger-fg);
   font-size: 12px;
-}
-
-.nv-dash__actions {
-  gap: 8px;
 }
 
 /* The week strip: seven days as the calendar's head, the rows as one-line tinted bars. */

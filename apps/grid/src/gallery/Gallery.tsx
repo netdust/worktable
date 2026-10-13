@@ -1,10 +1,9 @@
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { filesOf, fileUrl } from '../api'
 import { Display } from '../grid/cells'
 import { type Column, columnsFor } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
 import type { Model, Row, View } from '../types'
-import { ChipRow } from '../ui/ChipRow'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
 import { whenOf } from '../ui/when'
@@ -55,10 +54,8 @@ function Card({ row, file, columns, selected, onOpen }: { row: Row; file?: Files
 }
 
 /** A card per row with its newest image of the gallery's kind, read 200 rows a request; a click opens the row. */
-export function Gallery({ view, model, models, rows, kind, scope = null, filters, onShown }: {
+export function Gallery({ view, model, models, rows, kind, onShown }: {
   view: View; model: Model; models: Record<string, Model>; rows: Row[]; kind: string
-  /** The grid's chips for this view: the space and the filters. */
-  scope?: string | null; filters?: ReactNode
   /** What the title line says it shows: the cards and how many have a picture. */
   onShown?: (shown: Shown) => void
 }) {
@@ -79,7 +76,6 @@ export function Gallery({ view, model, models, rows, kind, scope = null, filters
   useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, pictures }), [rows.length, pictures])
   return (
     <div className="nv-frame">
-      <ChipRow scope={scope} filters={filters} count={rows.length} />
       <div className="nv-body">
         <div className="nv-gallery">
           {rows.map((row) => <Card key={row.id} row={row} file={files[row.id]} columns={columns} selected={open?.id === row.id} onOpen={() => openRow(row)} />)}

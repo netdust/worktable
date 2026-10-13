@@ -1,4 +1,4 @@
-import { type ClipboardEvent, type CSSProperties, Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ClipboardEvent, type CSSProperties, Fragment, type KeyboardEvent, type MouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Column, columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
 import { filterRows } from '../grid/filter'
@@ -8,8 +8,8 @@ import { groupRows } from '../grid/group'
 import { locale, rowCount, t } from '../i18n'
 import { optionsFrom } from '../api'
 import type { MatrixCell, MatrixColumn, Model, OptionsFrom, Row, Tone, View } from '../types'
-import { ChipRow } from '../ui/ChipRow'
 import { Spinner } from '../ui/Spinner'
+import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
 import { iso } from '../ui/Window'
 import { initials, whenOf } from '../ui/when'
@@ -42,10 +42,11 @@ export interface MatrixProps {
   /** The viewer's arrangement: hidden columns, filters and the row grouping, applied here to the window's rows. */
   layout: Layout
   onLayout: (layout: Layout) => void
-  /** The filter chips, shown in the bar after "+ Column". */
-  filters?: ReactNode
-  /** The space's chip, first in the bar. */
-  scope?: string | null
+  /** Whether the "+ Kolom" picker is open; the chip row above holds its button. */
+  picking?: boolean
+  onPicking?: (open: boolean) => void
+  /** What the chip row counts: the rows the search leaves. */
+  onShown?: (shown: Shown) => void
 }
 
 /** A cell by its row's id and its column's key, so it survives a repaint. */
@@ -227,13 +228,13 @@ function FillPicker({ row, slots, titles, taken, from, onPick, onClose }: {
 }
 
 /** Rows by day, one column per record or name, and what each has on a row; typed into like a sheet. */
-export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, filters, scope = null }: MatrixProps) {
+export function Matrix({ view, title, models, rows: windowRows, away, titles, emptyTitle, emptyHint, store, writable = false, query = '', layout, onLayout, picking = false, onPicking = () => undefined, onShown }: MatrixProps) {
   const [picked, setPicked] = useState(() => loadPicked(view))
-  const [picking, setPicking] = useState(false)
   // A column stays for the visit once shown: removing its last cell must not pull it from under the cursor.
   const kept = useRef<number[]>([])
   const keptNames = useRef<MatrixColumn[]>([])
   const rows = useMemo(() => filterRows(windowRows, query), [windowRows, query])
+  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false }), [rows.length])
   const everyColumn = useMemo(() => {
     const built = buildColumns(view, windowRows, titles, [...picked, ...kept.current], keptNames.current)
     kept.current = built.flatMap((column) => (column.id ? [column.id] : []))
@@ -267,7 +268,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
     const next = [...picked, id]
     setPicked(next)
     savePicked(view, next)
-    setPicking(false)
+    onPicking(false)
   }
   const hasOpen = join.open !== undefined
   const openTotal = hasOpen ? rows.reduce((sum, row) => sum + openSlots(view, row).reduce((n, slot) => n + slot.count, 0), 0) : 0
@@ -499,9 +500,6 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const openColumn = open?.column ? columns.find((column) => column.key === open.column) : undefined
   return (
     <div className="nv-frame">
-      <ChipRow scope={scope} filters={filters} group={by?.label} count={rows.length}>
-        <button type="button" className="nv-chip" aria-expanded={picking} onClick={() => setPicking(!picking)}>{t('addColumn')}</button>
-      </ChipRow>
       {fillRow && (
         <FillPicker key={fillRow.id} row={fillRow} slots={openSlots(view, fillRow)} titles={titles} from={join.open?.options_from} onClose={() => closeFill(fillRow.id)}
           taken={everyColumn.flatMap((column) => (column.id && cellFor(view, fillRow, column) ? [column.id] : []))} onPick={(cell, record) => fill(fillRow, cell, record)} />
