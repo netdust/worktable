@@ -181,12 +181,11 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0 }
 .top { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border-default); padding: 10px 18px; display: flex; align-items: center; gap: 10px; min-height: 55px }
 .top .spacer { display: none }
-.title .sum, .title .on-model, .insight { flex: none }
+.title .sum, .insight { flex: none }
 .title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; overflow: hidden }
 .title .tglyph { width: 30px; height: 30px; border-radius: var(--radius-md); background: var(--color-bg-muted); display: grid; place-items: center; color: var(--color-fg-default); flex: none }
 .title h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap }
 .title .sum { font-size: 12px; color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; white-space: nowrap }
-.title .on-model { font-size: 12.5px; color: var(--color-fg-subtle); white-space: nowrap }
 .lockmark { color: var(--color-fg-subtle); display: inline-flex }
 .insight { font-size: 12px; color: var(--color-fg-muted); white-space: nowrap }
 .insight b { color: var(--color-danger-fg); font-weight: 600 }
@@ -199,12 +198,11 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .bar .grow { flex: 1 }
 .bar .rows { color: var(--color-fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap }
 .bar .iconbtn { width: 28px; height: 28px }
+.bar .tools { margin-left: auto; display: flex; align-items: center; gap: 10px }
 .bar .divider { width: 1px; height: 18px; background: var(--color-border-default); margin: 0 2px }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--color-border-default); color: var(--color-fg-muted); font-size: 12.5px; background: var(--color-bg-surface); cursor: pointer; white-space: nowrap }
 .chip:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
 .chip.set { border-color: transparent; background: var(--color-accent-subtle); color: var(--color-accent-default) }
-.chip.scope { border-color: transparent; background: var(--color-bg-muted); color: var(--color-fg-default) }
-.chip.scope i { width: 8px; height: 8px; border-radius: 2px; background: var(--c) }
 .chip .op { opacity: .75 }
 .chip b { font-weight: 600 }
 .chip .x { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0 -4px 0 0; border-radius: 50%; opacity: .7 }
@@ -266,7 +264,7 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .dw-sub { color: var(--color-fg-muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-bottom: 14px }
 .dw-hero { margin: -16px -16px 14px; height: 200px; overflow: hidden; border-bottom: 1px solid var(--color-border-subtle) }
 .dw-hero svg { width: 100%; height: 100%; display: block }
-.dw-alert { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-danger-bg); color: var(--color-danger-fg); font-size: 12.5px; margin-bottom: 14px }
+.dw-alert { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 10px 16px; margin-left: -16px !important; margin-right: -16px !important; background: var(--color-danger-bg); color: var(--color-danger-fg); font-size: 12.5px; margin-bottom: 14px }
 .dw-alert b { font-weight: 600; display: block; margin-bottom: 2px }
 .dw-alert .acts { display: flex; gap: 12px; margin-top: 6px }
 .dw-alert .acts button { border: 0; background: none; padding: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-size: 12.5px; font-weight: 500 }
@@ -317,7 +315,6 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 *::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
 *::-webkit-scrollbar-corner { background: transparent }
 
-@media (max-width: 1720px) { .app.with-drawer .title .on-model { display: none } }
 @media (max-width: 760px) {
   body { overflow: auto }
   .app, .app.with-drawer { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100% }
@@ -347,17 +344,15 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .tl-r2 > div.today b { background: color-mix(in srgb, var(--today) 14%, transparent); border-radius: 4px; padding: 0 4px; font-weight: 600 }
 
 .lane { display: flex; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface) }
-.lane-head { position: sticky; left: 0; z-index: 4; width: var(--lane-w); flex: none; background: var(--color-bg-surface); border-right: 1px solid var(--color-border-default); padding: 10px 10px 10px 14px; display: grid; grid-template-columns: 26px 1fr auto; gap: 2px 10px; align-content: start; box-shadow: inset 3px 0 0 var(--c) }
-.lane-head .mark { grid-row: span 2; width: 26px; height: 26px; border-radius: var(--radius-sm); display: grid; place-items: center; font-weight: 600; font-size: 11px; color: #fff; background: var(--c) }
-.lane-head strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-.lane-head .cnt { font: 11px var(--font-mono); color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 1px 6px; align-self: center }
-.lane-head small { grid-column: 2 / 4; color: var(--color-fg-subtle); font-size: 12px; display: flex; gap: 8px; align-items: center }
-.lane-head small i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px }
+.lane-head { position: sticky; left: 0; z-index: 6; width: var(--lane-w); flex: none; background: var(--color-bg-surface); border-right: 1px solid var(--color-border-default); padding: 12px 12px 12px 16px; display: flex; align-items: flex-start; gap: 8px }
+.lane-head strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 8px; min-width: 0 }
+.lane-head strong::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none }
+.lane-head .cnt { font: 11px var(--font-mono); color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 1px 6px; margin-left: auto }
 .lane-track { position: relative; flex: none; background-image: var(--grid) }
 .lane.collapsed .lane-track { opacity: .5 }
 
 .bar-t { position: absolute; height: 40px; border-radius: var(--radius-sm); display: grid; align-content: center; gap: 1px; padding: 0 8px 0 10px; font-size: 12.5px; white-space: nowrap; overflow: hidden; cursor: grab; user-select: none;
-  background: color-mix(in srgb, var(--c) 16%, var(--color-bg-surface)); color: var(--color-fg-default); box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px color-mix(in srgb, var(--c) 34%, transparent); transition: box-shadow .12s }
+  background: color-mix(in srgb, var(--c) 16%, var(--color-bg-surface)); color: var(--color-fg-default); transition: background-color .12s }
 .bar-t strong { font-weight: 600 }
 .bar-t .l1 { display: flex; align-items: center; gap: 6px; min-width: 0 }
 .bar-t .l1 strong { overflow: hidden; text-overflow: ellipsis }
@@ -365,40 +360,29 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .bar-t .v { overflow: hidden; text-overflow: ellipsis; min-width: 0 }
 .bar-t .d { font: 11px var(--font-mono); flex: none }
 .bar-t .d::after { content: " ·"; font-family: var(--font-sans) }
-.bar-t.optie { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--c) 22%, var(--color-bg-surface)) 5px 10px); box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent) }
-.bar-t.geannuleerd { background: var(--color-bg-subtle); color: var(--color-fg-subtle); box-shadow: inset 3px 0 0 var(--color-border-strong), inset 0 0 0 1px var(--color-border-default) }
-.bar-t.geannuleerd strong { text-decoration: line-through }
 .bar-t.short .v { display: none }
 .bar-t.short .d::after { content: none }
 .bar-t.tiny { overflow: visible; padding: 0 }
 .bar-t.tiny .l1, .bar-t.tiny .l2 { position: absolute; left: calc(100% + 6px); white-space: nowrap }
 .bar-t.tiny .l1 { top: 3px } .bar-t.tiny .l2 { top: 20px }
 .bar-t.tiny .edge { display: none }
-.bar-t:hover, .bar-t.hover { box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1px var(--c), 0 2px 6px rgba(20, 30, 45, .14) }
-.bar-t.sel { box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px var(--color-accent-default) }
-.bar-t .edge { position: absolute; top: 4px; bottom: 4px; width: 5px; border-radius: 2px; cursor: ew-resize; opacity: 0 }
-.bar-t .edge.l { left: 4px } .bar-t .edge.r { right: 2px }
-.bar-t:hover .edge, .bar-t.hover .edge { opacity: 1; background: color-mix(in srgb, var(--c) 60%, transparent) }
+.bar-t.optie { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--c) 20%, var(--color-bg-surface)) 5px 10px) }
+.bar-t.geannuleerd { background: var(--color-bg-muted); color: var(--color-fg-subtle) }
+.bar-t.geannuleerd strong { text-decoration: line-through }
+.bar-t:hover, .bar-t.hover { background: color-mix(in srgb, var(--c) 24%, var(--color-bg-surface)) }
+.bar-t.sel, .bar-t.sel:hover { background: color-mix(in srgb, var(--c) 32%, var(--color-bg-surface)) }
+.bar-t .edge { position: absolute; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; cursor: ew-resize; opacity: 0; background: var(--color-fg-subtle) }
+.bar-t .edge.l { left: 3px } .bar-t .edge.r { right: 3px }
+.bar-t:hover .edge { opacity: .6 }
 .bar-t .warn { color: var(--color-danger-fg); display: inline-flex; flex: none }
 .bar-t .warn .icon { width: 14px; height: 14px; stroke-width: 1.9 }
-.bar-t.moving { cursor: grabbing; box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px var(--color-accent-default), var(--shadow-pop); z-index: 3 }
+.bar-t.moving { cursor: grabbing; box-shadow: var(--shadow-pop); z-index: 3 }
 
 .today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--today); z-index: 5; pointer-events: none }
 .today-line::before { content: ""; position: absolute; top: -4px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--today) }
 
-.tip { position: fixed; z-index: 65; width: 290px; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: 12px 14px; display: grid; gap: 8px; pointer-events: none; font-size: 12.5px }
-.tip-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted) }
-.tip-top .pill { margin-left: auto }
-.tip h4 { margin: 0; font-size: 15px; font-weight: 600 }
-.tip .row { display: flex; align-items: center; gap: 8px; color: var(--color-fg-muted) }
-.tip .row .icon { width: 14px; height: 14px; color: var(--color-fg-subtle) }
-.tip .row .mono { color: var(--color-fg-default); font-size: 12px }
-.tip .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; border-top: 1px solid var(--color-border-subtle); padding-top: 8px }
-.tip .facts div { display: grid; gap: 1px; font-size: 11px; color: var(--color-fg-subtle) }
-.tip .facts b { font: 600 14px var(--font-mono); color: var(--color-fg-default) }
-.tip .bad { color: var(--color-danger-fg); display: flex; gap: 6px; align-items: center }
-.tip .bad .icon { width: 14px; height: 14px; color: inherit }
-.tip .hint-k { font-size: 11.5px; color: var(--color-fg-subtle); border-top: 1px solid var(--color-border-subtle); padding-top: 6px }
+.tip { position: fixed; z-index: 65; background: var(--color-fg-default); color: var(--color-bg-surface); border-radius: var(--radius-sm); padding: 5px 9px; font-size: 12px; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow-pop) }
+.tip .mono { font-size: 11.5px; opacity: .85 }
 
 .dw-acts { list-style: none; margin: 0; padding: 0; display: grid }
 .dw-acts li { display: grid; grid-template-columns: 92px 1fr auto; gap: 10px; padding: 7px 6px; border-radius: var(--radius-sm); align-items: center; font-size: 12.5px }
@@ -407,7 +391,7 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .dw-acts .crew { font-size: 11.5px }
 .mini-tl { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin: 2px 0 6px }
 .mini-tl div { height: 26px; border-radius: 3px; background: var(--color-bg-muted); display: grid; place-items: center; font: 10.5px var(--font-mono); color: var(--color-fg-subtle) }
-.mini-tl div.on { background: color-mix(in srgb, var(--c) 22%, var(--color-bg-surface)); color: var(--color-fg-default); box-shadow: inset 0 -2px 0 var(--c) }
+.mini-tl div.on { background: color-mix(in srgb, var(--c) 22%, var(--color-bg-surface)); color: var(--color-fg-default) }
 
 </style>
 </head>
@@ -653,7 +637,9 @@ document.addEventListener('click', (e) => {
   pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-space]'); if (b) { shell.space = b.dataset.space; closePop(); renderSpace(); shell.onSpace() } })
 })
 const inSpace = (p) => shell.space === 'all' || p === shell.space
-const scopeChip = () => shell.space === 'all' ? '' : `<span class="chip scope" title="Gekozen in de productiekiezer" style="--c:${prod(shell.space).color}"><i></i>Productie is <b>${esc(prod(shell.space).titel)}</b></span>`
+const scopeChip = () => shell.space === 'all' ? '' : `<span class="chip set" title="Gekozen in de productiekiezer">${icon('tag')}Productie is ${esc(prod(shell.space).titel)}</span>`
+const groupChip = (label) => `<button class="chip set" id="group-btn" data-pop aria-expanded="false">${icon('group')}Groep: ${esc(label)}</button>`
+const barTools = (rows) => `<span class="tools"><span class="rows">${rows}</span><button class="iconbtn" title="Kolommen" aria-label="Kolommen">${icon('cols')}</button></span>`
 
 // ---------- filters: field · operator · value ----------
 const NO_VALUE = ['week', 'next', 'month', 'empty', 'filled']
@@ -767,9 +753,9 @@ function activityDrawer(a, list, hero = '') {
 }
 
 // ---------- the title line ----------
-function renderTitle({ glyph, name, on, lock, sum, insight }) {
+function renderTitle({ glyph, name, lock, sum, insight }) {
   $('#crumbs').innerHTML = `<span class="tglyph">${icon(glyph)}</span><h1>${esc(name)}</h1>${lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
-    ${on ? `<span class="on-model">op ${esc(on)}</span>` : ''}${sum ? `<span class="sum">${sum}</span>` : ''}${insight ?? ''}`
+    ${sum ? `<span class="sum">${sum}</span>` : ''}${insight ?? ''}`
 }
 
 // ---------- toast ----------
@@ -874,9 +860,7 @@ function render() {
   const grid = z === 'week' ? `repeating-linear-gradient(90deg, var(--color-border-default) 0 1px, transparent 1px ${7 * px}px), repeating-linear-gradient(90deg, var(--color-border-subtle) 0 1px, transparent 1px ${px}px), ${weekend}` : `repeating-linear-gradient(90deg, var(--color-border-subtle) 0 1px, transparent 1px ${7 * px}px)`
   const lanes = L.keys().map((k) => {
     const mine = stops.filter((t) => L.of(t) === k), rows = pack(mine), h = L.head(k)
-    const conf = mine.filter((t) => t.status === 'bevestigd').length, opt = mine.filter((t) => t.status === 'optie').length
-    return `<div class="lane" style="--c:${h.color}"><div class="lane-head"><span class="mark">${esc(h.mark)}</span><strong>${esc(h.titel)}</strong><span class="cnt">${mine.length}</span>
-      <small>${tl.lanes === 'prod' ? `<span><i style="background:var(--color-success-fg)"></i>${conf} bevestigd</span><span><i style="background:var(--color-warning-fg)"></i>${opt} optie</span>` : `${mine.reduce((n, t) => n + nights(t), 0)} dagen`}</small></div>
+    return `<div class="lane" style="--c:${h.color}"><div class="lane-head"><strong>${esc(h.titel)}</strong><span class="cnt">${mine.length}</span></div>
       <div class="lane-track" style="width:${width}px;height:${rows * 48 + 16}px;--grid:${grid}">${mine.map((t) => bar(t, z, stops)).join('')}</div></div>`
   }).join('')
   const todayX = (daysBetween(start, TODAY) + 0.45) * px
@@ -893,30 +877,20 @@ function render() {
 }
 
 function renderBar(stops) {
-  $('#bar').innerHTML = `${scopeChip()}${filterChips()}<span class="divider"></span>
-    <button class="chip set" id="lane-btn" data-pop aria-expanded="false">${icon('group')}<span class="lbl">Rijen:</span> <b>${LANES[tl.lanes].label}</b>${icon('down', 'down')}</button>
-    <span class="grow"></span><span class="rows">${stops.length} tourstops</span>
-    <button class="btn sm" id="today-btn">Vandaag</button><span class="seg"><button class="tool" id="prev" aria-label="Vorige periode">${icon('left')}</button><button class="tool" id="next" aria-label="Volgende periode">${icon('right')}</button></span>
-    <span class="seg" role="group" aria-label="Zoom">${[['week', 'Week'], ['maand', 'Maand']].map(([k, l]) => `<button data-zoom="${k}" class="${tl.zoom === k ? 'on' : ''}">${l}</button>`).join('')}</span>`
+  $('#bar').innerHTML = `${scopeChip()}${filterChips()}${groupChip(LANES[tl.lanes].label.toLowerCase())}
+    <button class="chip" id="today-btn">Vandaag</button><button class="chip" id="prev" aria-label="Vorige periode">${icon('left')}</button><button class="chip" id="next" aria-label="Volgende periode">${icon('right')}</button>
+    ${[['week', 'Week'], ['maand', 'Maand']].map(([k, l]) => `<button class="chip ${tl.zoom === k ? 'set' : ''}" data-zoom="${k}" aria-pressed="${tl.zoom === k}">${l}</button>`).join('')}
+    ${barTools(`${stops.length} rijen`)}`
 }
 
 // ---------- the hovered bar's details ----------
 function showTip(b) {
   hideTip()
-  const t = TOURSTOPS.find((x) => x.id === b.dataset.id), s = statsOf(t), p = prod(t.prod), r = b.getBoundingClientRect()
-  const clash = TOURSTOPS.find((x) => overlaps(x, t))
+  const t = TOURSTOPS.find((x) => x.id === b.dataset.id), r = b.getBoundingClientRect(), st = $('#stage').getBoundingClientRect()
   const tip = document.createElement('div'); tip.className = 'tip'; tip.id = 'tip'
-  tip.innerHTML = `<div class="tip-top"><span class="prod-tag" style="--c:${p.color}"><i></i>${esc(p.titel)}</span><span class="pill ${t.status}">${STATUS[t.status].toLowerCase()}</span></div>
-    <h4>${esc(t.naam)}${t.note ? ` <span class="muted" style="font-weight:400;font-size:13px">· ${esc(t.note)}</span>` : ''}</h4>
-    <div class="row">${icon('pin')}${esc(t.venue)}</div>
-    <div class="row">${icon('cal')}<span class="mono">${dayShort(t.start)} – ${dayShort(t.end)}</span><span class="muted">· ${nights(t)} ${nights(t) === 1 ? 'dag' : 'dagen'}</span></div>
-    <div class="facts"><div><b>${s.acts}</b>activiteiten</div><div><b>${s.shows}</b>voorstellingen</div><div><b>${s.have}/${s.need}</b>bezetting</div></div>
-    ${clash ? `<div class="bad">${icon('alert')}Overlapt met ${esc(clash.naam)} op ${dayNum(clash.start > t.start ? clash.start : t.start)}</div>` : ''}
-    <div class="hint-k">Klik om te openen · sleep om te verschuiven · sleep een rand om de duur te wijzigen</div>`
+  tip.innerHTML = `${esc(t.naam)} · ${esc(t.venue)} · <span class="mono">${dayShort(t.start)} – ${dayShort(t.end)}</span> · ${STATUS[t.status].toLowerCase()}`
   document.body.append(tip)
-  const st = $('#stage').getBoundingClientRect(), left = Math.min(Math.max(st.left + 8, r.left), st.right - tip.offsetWidth - 8)
-  const below = r.bottom + 8 + tip.offsetHeight < innerHeight
-  Object.assign(tip.style, { left: left + 'px', top: (below ? r.bottom + 8 : r.top - tip.offsetHeight - 8) + 'px' })
+  Object.assign(tip.style, { left: Math.min(Math.max(st.left + 8, r.left), st.right - tip.offsetWidth - 8) + 'px', top: r.bottom + 6 + 'px' })
 }
 function hideTip() { $('#tip')?.remove() }
 
@@ -939,7 +913,7 @@ function stopDrawer(t) {
     secs: [
       { title: `Week ${weekNo(t.start)}`, html: `<div class="mini-tl" style="--c:${p.color}">${week.map((d) => `<div class="${d >= t.start && d <= t.end ? 'on' : ''}">${DAYS_NL[D(d).getDay()]} ${D(d).getDate()}</div>`).join('')}</div>` },
       { title: 'Activiteiten', n: acts.length || s.acts, right: '+ Sjabloon toepassen', html: actList },
-      { title: 'Bezetting', html: `<span class="crew"><span class="meter ${s.have < s.need ? 'short' : ''}" style="width:120px"><b style="width:${(s.have / s.need) * 100}%"></b></span>${s.have}/${s.need} plaatsen gevuld</span>` },
+      { title: 'Bezetting', html: `<p class="note"><span class="mono">${s.have}/${s.need}</span> plaatsen gevuld</p>` },
       { title: 'Geschiedenis', html: `<ul class="hist"><li>${avatar('lv', 'sm')}<span><b>Lotte</b> zette de status op bevestigd<span class="t"> · 28 sep</span></span></li><li>${avatar('lv', 'sm')}<span><b>Lotte</b> paste sjabloon <b>Speeldag op locatie</b> toe · 21 activiteiten<span class="t"> · 2 okt</span></span></li></ul>` },
     ],
   })
@@ -950,9 +924,9 @@ document.addEventListener('click', (e) => {
   const zb = e.target.closest('[data-zoom]'); if (zb) { tl.zoom = zb.dataset.zoom; tl.demoTip = null; hideTip(); return render() }
   if (e.target.closest('#today-btn')) { const { start, px } = ZOOM[tl.zoom]; $('#stage').scrollTo({ left: Math.max(0, (daysBetween(start, TODAY) - 3) * px), behavior: 'smooth' }); return }
   const pn = e.target.closest('#prev, #next'); if (pn) { const { px } = ZOOM[tl.zoom]; $('#stage').scrollBy({ left: (pn.id === 'next' ? 1 : -1) * 7 * px * (tl.zoom === 'week' ? 1 : 4), behavior: 'smooth' }); return }
-  const lb = e.target.closest('#lane-btn'); if (!lb) return
+  const lb = e.target.closest('#group-btn'); if (!lb) return
   if (popEl) return closePop()
-  const pop = openPop(lb, `<div class="pop-head">Een rij per</div>${Object.entries(LANES).map(([k, l]) => `<button class="pop-item ${k === tl.lanes ? 'current' : ''}" data-lanes="${k}">${icon(k === 'prod' ? 'film' : 'check')}${l.label}</button>`).join('')}`, { width: 220 })
+  const pop = openPop(lb, `<div class="pop-head">Groep</div>${Object.entries(LANES).map(([k, l]) => `<button class="pop-item ${k === tl.lanes ? 'current' : ''}" data-lanes="${k}">${l.label}</button>`).join('')}`, { width: 220 })
   pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-lanes]'); if (b) { tl.lanes = b.dataset.lanes; closePop(); render() } })
 })
 $('#q').addEventListener('input', render)
@@ -995,8 +969,8 @@ $('#stage').addEventListener('pointerup', () => {
 })
 document.addEventListener('keydown', (e) => { const b = e.target.closest?.('.bar-t'); if (b && e.key === 'Enter') { tl.sel = b.dataset.id; render() } })
 
-$('#foot').innerHTML = '<span>Sleep een balk om te verschuiven</span><span>Sleep een rand om de duur te wijzigen</span><span>↵ openen</span><span>⌘Z ongedaan maken</span>'
-boot('De tijdlijn opent met de details van Gent alsof je erover beweegt.')
+$('#foot').innerHTML = '<span>Sleep om te verschuiven</span><span>Sleep een rand om de duur te wijzigen</span><span>⌘Z ongedaan maken</span>'
+boot('De tijdlijn opent alsof je over Gent beweegt.')
 render()
 $('#stage').scrollLeft = (daysBetween(ZOOM.week.start, TODAY) - 2) * ZOOM.week.px
 if (tl.demoTip) requestAnimationFrame(() => showTip($(`.bar-t[data-id="${tl.demoTip}"]`)))
