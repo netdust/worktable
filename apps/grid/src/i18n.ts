@@ -109,6 +109,7 @@ const strings = {
   hintSearch: 'zoeken en springen',
   hintUndo: 'ongedaan maken',
   noTime: 'zonder tijd',
+  noneOf: 'Geen {label}',
   hints: 'Sneltoetsen',
   shortcuts: 'Sneltoetsen',
   changed: 'Gewijzigd',
@@ -424,9 +425,10 @@ export function fileSize(bytes: number): string {
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */
-export function summary(rows: number, groups: number | null, cut = false): string {
+export function summary(rows: number, groups: number | null, cut = false, columns?: number): string {
   const said = [rowCount(rows, cut)]
   if (groups !== null) said.push(groups === 1 ? '1 groep' : `${groups} groepen`)
+  if (columns !== undefined) said.push(columns === 1 ? '1 kolom' : `${columns} kolommen`)
   return said.join(' · ')
 }
 

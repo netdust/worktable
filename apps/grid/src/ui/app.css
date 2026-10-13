@@ -323,6 +323,28 @@
   color: var(--color-fg-muted);
 }
 
+/* A dialog's own fields, as the prototype's .input and .select. */
+#root .nv-dialog__field > select,
+#root .nv-dialog__field > input:not([type="checkbox"]) {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-weight: 400;
+}
+
+#root .nv-dialog__field > select:focus,
+#root .nv-dialog__field > input:focus {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
 #root .nv-dialog__input {
   width: 100%;
   box-sizing: border-box;

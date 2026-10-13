@@ -46,6 +46,7 @@ import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
+import { QuickCreate } from '../dashboard/QuickCreate'
 import { Gallery } from '../gallery/Gallery'
 import { Timeline } from '../timeline/Timeline'
 import { timelineWindow } from '../timeline/layout'
@@ -201,6 +202,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
   const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
+  // A board's new card is asked for in the dashboard's quick create: a board has no draft row to type in.
+  const [quick, setQuick] = useState(false)
   useFillViewport(frame)
 
   useEffect(() => {
@@ -498,8 +501,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
-          addBlocked={addBlocked}
-          onAdd={matrix || calendar || dashboard || view?.type === 'timeline' || view?.type === 'board' || view?.type === 'gallery' ? undefined : add}
+          addBlocked={view?.type === 'board' ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
+          onAdd={view?.type === 'board' ? () => setQuick(true) : matrix || calendar || dashboard || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -524,7 +527,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
               lane={layout.group} onShown={showDays} filters={filters} />
           ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
-            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} scope={scopeChip} filters={filters} />
+            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} scope={scopeChip} filters={filters} onShown={setShown} />
           ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
@@ -555,6 +558,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         </div>
       </main>
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
+      {quick && model && (
+        <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
+          onClose={() => setQuick(false)} onCreated={() => { setQuick(false); reloadView() }} />
+      )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
           scope={adding.table.space === 'scoped' && space.status === 'ready' ? space.selected?.title ?? null : null}

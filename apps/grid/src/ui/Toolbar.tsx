@@ -14,6 +14,8 @@ export interface Shown {
   groups: number | null
   /** The read limit cut the rows: the count is what loaded. */
   cut: boolean
+  /** A board's columns. */
+  columns?: number
 }
 
 interface Props {
@@ -76,7 +78,7 @@ export function Toolbar({ title, kind = 'grid', locked, shown, search, saving, a
         <span className="nv-toolbar__glyph" aria-hidden="true">{createElement(VIEW_ICONS[kind], { size: 16 })}</span>
         <h1 className="nv-toolbar__title">{title}</h1>
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
-        {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups, shown.cut)}</span>}
+        {shown && <span className="nv-toolbar__summary">{summary(shown.rows, shown.groups, shown.cut, shown.columns)}</span>}
       </div>
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}

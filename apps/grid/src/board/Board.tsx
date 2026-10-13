@@ -1,5 +1,6 @@
-import { type CSSProperties, type ReactNode, useMemo } from 'react'
+import { type CSSProperties, type ReactNode, useEffect, useMemo } from 'react'
 import { ChipRow } from '../ui/ChipRow'
+import type { Shown } from '../ui/Toolbar'
 import { Display } from '../grid/cells'
 import { type Column, columnsFor, linksOf } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
@@ -70,10 +71,12 @@ interface Props {
   /** The grid's chips for this view: the space and the filters. */
   scope?: string | null
   filters?: ReactNode
+  /** What the title line says it shows: the cards and the columns. */
+  onShown?: (shown: Shown) => void
 }
 
 /** Cards in a column per option of the board's column, in its order, "Geen" last when it holds a card; read-only, a card opens its row. */
-export function Board({ view, model, models, rows, column, scope = null, filters }: Props) {
+export function Board({ view, model, models, rows, column, scope = null, filters, onShown }: Props) {
   const [openRow, drawer, open] = useOpenRow(model, view, models)
   const field = model.fields[column]
   const options = Object.entries(field?.options ?? {})
@@ -90,6 +93,8 @@ export function Board({ view, model, models, rows, column, scope = null, filters
   }
   const lanes = [...options.map(([key, label]) => ({ key, label })), { key: NONE, label: t('noLane') }]
     .filter((lane) => lane.key !== NONE || rows.some((row) => keyOf(row) === NONE))
+  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length }), [rows.length, lanes.length])
+  const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   return (
     <div className="nv-frame">
       <ChipRow scope={scope} filters={filters} group={field?.label} count={rows.length} />
@@ -108,7 +113,7 @@ export function Board({ view, model, models, rows, column, scope = null, filters
                     <Card row={row} columns={shown} selected={open?.id === row.id} onOpen={() => openRow(row)} />
                   </li>
                 ))}
-                {cards.length === 0 && <li className="nv-board__empty">{t('noRows')}</li>}
+                {cards.length === 0 && <li className="nv-board__empty">{none}</li>}
               </ul>
             )
           })}
