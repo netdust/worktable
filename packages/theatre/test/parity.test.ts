@@ -191,7 +191,10 @@ describe('Persoon weergavenaam', () => {
 
 describe('deleting what live rows reference', () => {
   test('an organisatie used as a venue is 409 in_use', () =>
-    inUse('organisatie', 2, [{ label: 'Tourstops', count: 3 }, { label: 'Activiteiten', count: 8 }]))
+    inUse('organisatie', 2, [
+      { label: 'Tourstops', count: 3 },
+      { label: 'Activiteiten', count: 8 },
+    ]))
 
   test('an organisatie used by nobody is deleted', async () => {
     expect((await remove('organisatie', 5)).status).toBe(200)
@@ -199,7 +202,10 @@ describe('deleting what live rows reference', () => {
   })
 
   test('a productie with activiteiten is 409 in_use', () =>
-    inUse('productie', 1, [{ label: 'Tourstops', count: 2 }, { label: 'Activiteiten', count: 12 }]))
+    inUse('productie', 1, [
+      { label: 'Tourstops', count: 2 },
+      { label: 'Activiteiten', count: 12 },
+    ]))
 })
 
 describe('voorstellingen', () => {
