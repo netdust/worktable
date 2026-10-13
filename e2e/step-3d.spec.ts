@@ -74,6 +74,11 @@ const conditionChips = (page: Page) => bar(page).locator('.nv-chip--filter')
 /** The chip row's slots in the order the page draws them, each by a short name. */
 async function slotsOf(page: Page): Promise<string[]> {
   await expect(bar(page)).toHaveCount(1)
+  // The condition chips and Filter come once the view's rows name their fields; a page with none (a dashboard) has no Filter to wait for.
+  await bar(page)
+    .getByRole('button', { name: /^Filter/ })
+    .waitFor({ timeout: 10_000 })
+    .catch(() => undefined)
   return bar(page).evaluate((row) => {
     const said: string[] = []
     for (const el of row.querySelectorAll<HTMLElement>('*')) {
