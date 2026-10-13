@@ -1,7 +1,7 @@
-import { ChevronRight, Combine, Plus, Rows3 } from 'lucide-react'
+import { ChevronRight, Combine, LayoutDashboard, Plus, Rows3, X } from 'lucide-react'
 import { type FocusEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { t } from '../i18n'
-import type { Schema, ViewType } from '../types'
+import type { SavedView, Schema, View, ViewType } from '../types'
 import { ICONS, iconNamed } from './icons'
 import { type Action, MoreMenu } from './MoreMenu'
 import { RailFoot, type Signed } from './RailFoot'
@@ -39,9 +39,13 @@ interface Props {
   modelActions?: ModelActions
   /** The signed-in account in the foot, with sign out. */
   signed?: Signed
+  /** The dashboards the reader can open, in landing order; the tree's first group. */
+  dashboards?: View[]
+  /** An administrator's delete of a dashboard it may edit; absent for anyone else. */
+  onRemoveDashboard?: (view: SavedView) => void
 }
 
-export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed }: Props) {
+export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed, dashboards = [], onRemoveDashboard }: Props) {
   const current = tableOf(tables, active)
   const [open, setOpen] = useOpenModels(current?.key)
   const fold = (table: Table) => setOpen(table.key, !open.has(table.key))
@@ -53,6 +57,23 @@ export function Rail({ tables, sections, active, onSelect, onTable = (table) => 
     <nav className="nv-rail" aria-label={t('views')}>
       {space}
       <div className="nv-tree" role="tree" aria-label={t('views')}>
+        {dashboards.length > 0 && (
+          <div className="nv-tree__section nv-tree__dashboards" role="group" aria-label={t('dashboard')}>
+            {dashboards.map((view) => (
+              <div key={view.key} role="treeitem" aria-selected={view.key === active} className="nv-view">
+                <button type="button" className="nv-view__button" aria-current={view.key === active ? 'page' : undefined} onClick={() => onSelect(view.key)}>
+                  <LayoutDashboard size={14} aria-hidden="true" />
+                  <span>{view.label}</span>
+                </button>
+                {onRemoveDashboard && (view as SavedView).editable && (
+                  <button type="button" className="nv-view__remove" aria-label={t('removeDashboard')} onClick={() => onRemoveDashboard(view as SavedView)}>
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {sectionsOf(tables, sections).map((section) => (
           <div key={section.label ?? ''} className="nv-tree__section" role="group" aria-label={section.label ?? undefined}>
             {section.label && <p className="nv-tree__label" aria-hidden="true">{section.label}</p>}
@@ -85,13 +106,15 @@ interface NodeProps {
 
 /** The kinds `+` offers: those the model can be, then the ones still to come. */
 function kinds(table: Table, onNew: (type: ViewType) => void): Action[] {
+  const offered = (type: ViewType, label: string): Action =>
+    table.types.includes(type) ? { label, run: () => onNew(type) } : { label, run: () => undefined, blocked: t('later') }
   return [
     { label: t('kindGrid'), run: () => onNew('grid') },
     ...(table.types.includes('matrix') ? [{ label: t('matrix'), run: () => onNew('matrix') }] : []),
-    table.types.includes('calendar')
-      ? { label: t('kindCalendar'), run: () => onNew('calendar') }
-      : { label: t('kindCalendar'), run: () => undefined, blocked: t('later') },
-    { label: t('kindBoard'), run: () => undefined, blocked: t('later') },
+    offered('calendar', t('kindCalendar')),
+    offered('timeline', t('kindTimeline')),
+    offered('board', t('kindBoard')),
+    offered('gallery', t('kindGallery')),
   ]
 }
 

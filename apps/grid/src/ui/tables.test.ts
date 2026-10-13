@@ -1,6 +1,7 @@
+import type { SavedView } from '../types'
 import { describe, expect, it } from 'vitest'
 import type { TableDef, View } from '../types'
-import { byFirstView, groupTables, sectionsOf, tableOf } from './tables'
+import { byFirstView, dashboardsOf, groupTables, sectionsOf, tableOf } from './tables'
 
 const table = (key: string, extra: Partial<TableDef> = {}): TableDef => ({ key, label: key.toUpperCase(), model: 'record', types: ['grid'], ...extra })
 const view = (key: string, of: string, extra: Partial<View> = {}): View => ({ key, label: key.toUpperCase(), model: 'record', table: of, ...extra })
@@ -110,5 +111,14 @@ describe('the sections', () => {
     const sections = sectionsOf(tables, [{ label: 'Gone', sources: ['missing'] }, { label: 'All', sources: ['one', 'two', 'three', 'four'] }])
 
     expect(shape(sections)).toEqual([['All', ['one', 'two', 'three', 'four']]])
+  })
+})
+
+describe('dashboardsOf', () => {
+  const board = (id: number, owner: number, mine: boolean) =>
+    ({ key: String(id), id, type: 'dashboard', owner: { id: owner, name: '' }, mine }) as unknown as SavedView
+  it('lands on the reader’s own, then one shared by someone else, then the system’s', () => {
+    const order = dashboardsOf([board(1, -1, false), board(2, 7, false), board(3, 4, true), { ...board(4, 4, true), type: 'grid' } as SavedView])
+    expect(order.map((v) => v.id)).toEqual([3, 2, 1])
   })
 })

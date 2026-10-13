@@ -1,4 +1,4 @@
-import type { Schema, TableDef, View, ViewType } from '../types'
+import type { SavedView, Schema, TableDef, View, ViewType } from '../types'
 
 /** A set of data and the views on it: one node of the tree. */
 export interface Table {
@@ -58,4 +58,12 @@ export function byFirstView<T extends { key: string }>(tables: T[], views: View[
 
 export function tableOf(tables: Table[], viewKey: string | undefined): Table | undefined {
   return tables.find((table) => table.views.some((view) => view.key === viewKey))
+}
+
+const SYSTEM = -1
+
+/** The dashboards in landing order: the reader's own, then those shared by someone else, then the system's. */
+export function dashboardsOf(views: SavedView[]): SavedView[] {
+  const rank = (view: SavedView) => (view.owner.id === SYSTEM ? 2 : view.mine ? 0 : 1)
+  return views.filter((view) => view.type === 'dashboard').sort((a, b) => rank(a) - rank(b) || a.id - b.id)
 }

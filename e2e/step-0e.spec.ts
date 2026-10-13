@@ -208,15 +208,20 @@ const named = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-t
 
 /** + New, the production picked: the row is created at once, on top, untitled; it is named so it can be found again. */
 async function createActivity(page: Page, title: string): Promise<Record<string, unknown>> {
-  const posted = page.waitForRequest(
-    (req) => req.method() === 'POST' && new URL(req.url()).pathname === '/api/rows/activiteit',
+  const posted = page.waitForResponse(
+    (res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/rows/activiteit',
   )
   await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
   await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
   await page.getByRole('option', { name: 'Nachtwacht' }).click()
-  const body = (await posted).postDataJSON() as Record<string, unknown>
+  const response = await posted
+  const body = response.request().postDataJSON() as Record<string, unknown>
+  const { id } = (await response.json()) as { id: number }
   await expect(page.locator('tbody tr.nv-tr--draft')).toHaveCount(0)
-  await typeInto(await cellOf(page, page.locator('tbody tr.nv-tr').first(), 'Omschrijving'), title)
+  // The seed's rows dated before today sort ahead of a new one: the title goes on the row the POST made, not the grid's first.
+  expect((await page.request.patch(`/api/rows/activiteit/${id}`, { data: { omschrijving: title } })).status()).toBe(200)
+  await page.reload()
+  await pick(page, 'Optie of bevestigd', 'Activiteiten')
   await expect(named(page, title)).toBeVisible()
   return body
 }
@@ -341,6 +346,8 @@ test.describe('undo restores what the writer changed with the edit', () => {
   })
 
   test('undo-day-line-move', async ({ page }) => {
+    // Four datetime edits typed segment by segment: 20 s alone, past 30 s under a full run's load.
+    test.slow()
     await page.goto('/')
     await pick(page, VIEW, 'Activiteiten')
     const datum = (await createActivity(page, 'undo nacht e2e')).datum as string

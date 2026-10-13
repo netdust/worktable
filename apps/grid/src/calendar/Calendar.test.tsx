@@ -112,3 +112,26 @@ describe('the calendar', () => {
     expect(screen.getByRole('button', { name: /Noor Claes · vergadering Antwerpen/ })).toBeTruthy()
   })
 })
+
+describe('a spanning row', () => {
+  const SPANS: CalendarDef = { day: 'start_datum', start: null, end: 'eind_datum', lanes: [], spans: true }
+  const stop = (id: number, title: string, from: string, to: string): Row => ({ id, title, status: '', fields: { start_datum: from, eind_datum: to } })
+  const spanning = (shownDays: { from: string; to: string }, list: Row[]) =>
+    render(<Calendar view={{ ...view, calendar: SPANS } as View} model={model} models={{ persoon_dag: model }} rows={list} cal={SPANS}
+      shown={shownDays} lane={null} onShown={() => undefined} onLane={() => undefined} />)
+
+  it('is one bar across its days in the week, not a chip per day', () => {
+    spanning({ from: '2026-10-12', to: '2026-10-18' }, [stop(1, 'Brugge', '2026-10-12', '2026-10-15')])
+    const bars = screen.getAllByRole('button', { name: 'Brugge' })
+    expect(bars).toHaveLength(1)
+    expect(bars[0].style.gridColumn).toBe('2 / span 4')
+  })
+
+  it('is one bar per week it crosses in the month', () => {
+    spanning({ from: '2026-10-01', to: '2026-10-31' }, [stop(1, 'Brugge', '2026-10-16', '2026-10-20')])
+    const bars = screen.getAllByRole('button', { name: 'Brugge' })
+    expect(bars.map((bar) => bar.style.gridColumn)).toEqual(['5 / span 3', '1 / span 2'])
+    expect(bars[0].className).toContain('nv-cal__event--after')
+    expect(bars[1].className).toContain('nv-cal__event--before')
+  })
+})

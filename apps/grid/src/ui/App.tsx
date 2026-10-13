@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch } from '../api'
+import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -13,12 +13,12 @@ import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
 import { complete, type Filter, isDate, joinOf, readConditions, windowOf } from '../grid/conditions'
 import { type Layout, withFilters } from '../grid/layout'
-import { type NewRow, newRow } from '../grid/newRow'
+import { madeFrom, type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, DateWindow, Model, ModelAction, Row, Schema, Scope, TableDef, View, ViewType } from '../types'
+import type { Account, ApiError, DateWindow, Model, ModelAction, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -43,6 +43,11 @@ import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevi
 import { useFillViewport } from './viewport'
 import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
+import { Board } from '../board/Board'
+import { Dashboard } from '../dashboard/Dashboard'
+import { Gallery } from '../gallery/Gallery'
+import { Timeline } from '../timeline/Timeline'
+import { timelineWindow } from '../timeline/layout'
 import { calendarWindow, monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
@@ -214,8 +219,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const starting = served?.views ?? []
   const declared = useMemo(() => (served?.tables ?? []).map((table) => displayed(table, displays[table.key])), [served, displays])
   const current = useRef<string | undefined>(undefined)
-  const { load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
-  const view = tables.flatMap((table) => table.views).find((v) => v.key === activeKey) ?? tables[0]?.views[0] ?? starting[0]
+  const { dashboards, load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
+  // The grid opens on the first dashboard the reader can open, else on its first view.
+  const view = [...dashboards, ...tables.flatMap((table) => table.views)].find((v) => v.key === activeKey) ?? dashboards[0] ?? tables[0]?.views[0] ?? starting[0]
+  const dashboard = view?.type === 'dashboard' ? view : undefined
   current.current = view?.key
 
   useEffect(() => {
@@ -271,20 +278,30 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
   // A calendar shows the condition's days, else this week; a month reads its whole weeks.
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
+  const timeline = view?.type === 'timeline' ? view.calendar : undefined
   const calendarShown = calendarWindow(conditionDays, new Date())
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
-  const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : {}
+  const timelineShown = timelineWindow(conditionDays, new Date())
+  const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
+  // Rows that span days are read by overlap with the window, so one begun before it still shows.
+  const readRows = (calendar ?? timeline)?.spans ? spanRows : rows
+  // A calendar's or timeline's days are set by its date condition.
+  const showDays = (next: DateWindow) =>
+    view?.date_field && layout && setLayout(withFilters(layout, [
+      { field: view.date_field, op: 'between', values: [next.from, next.to] },
+      ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
+    ]))
   const windowKey = JSON.stringify(window)
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
-    if (!settled || !view || scope === undefined) return
+    if (!settled || !view || scope === undefined || dashboard) return
     let live = true
     // The same view asked again (a condition, a sort) keeps its rows on screen, so an open filter builder stays open.
     if (shownKey.current !== view.key) setResult({ status: 'loading' })
     const asked = window
     const away = view.type === 'matrix' ? view.away : undefined
-    Promise.all([rows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
+    Promise.all([readRows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
       ([r, away, titles]) => {
         if (!live) return
         shownKey.current = view.key
@@ -312,7 +329,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
   const live = useRef(store)
   live.current = store
-  const reload = () => (view ? rows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
+  const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
@@ -464,22 +481,23 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   return (
     <div className="nv-app" ref={frame}>
-      <Rail signed={signed} tables={tables} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
-        onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions} space={space.status === 'ready' && served?.space && (
+      <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
+        onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
+        onRemoveDashboard={role === 'administrator' ? actions.remove : undefined} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />
       <main className="nv-main">
         <Toolbar
           title={view?.label ?? title}
-          matrix={matrix}
+          kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
           shown={matrix ? null : shown}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={addBlocked}
-          onAdd={matrix || calendar ? undefined : add}
-          share={share}
+          onAdd={matrix || calendar || dashboard || view?.type === 'timeline' || view?.type === 'board' || view?.type === 'gallery' ? undefined : add}
+          share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
             onRevert: revert,
@@ -487,17 +505,25 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           } : null}
           viewNote={viewNote}
           fixed={Object.keys(view?.fixed ?? {}).length}
-          onHistory={view ? () => setHistoryOpen((open) => !open) : undefined}
+          onHistory={view && !dashboard ? () => setHistoryOpen((open) => !open) : undefined}
         />
         <div className="nv-work">
         <section className="nv-sheet">
-          {calendar && model && view && layout && result.status === 'ready' ? (
+          {dashboard ? (
+            <Dashboard key={dashboard.key} dashboard={dashboard as SavedView} models={models} tables={served.tables} onOpenView={setActiveKey} role={role}
+              onSaved={(saved) => savedViews().then((list) => { load(list); setActiveKey(saved.key) }, () => undefined)}
+              views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
+          ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
               lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
-              onShown={(next) => view.date_field && setLayout(withFilters(layout, [
-                { field: view.date_field, op: 'between', values: [next.from, next.to] },
-                ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
-              ]))} />
+              onShown={showDays} />
+          ) : timeline && model && view && layout && result.status === 'ready' ? (
+            <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
+              lane={layout.group} onShown={showDays} filters={filters} />
+          ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
+            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} />
+          ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
@@ -536,12 +562,6 @@ function monthSpan(month: DateWindow): DateWindow {
   return weeks[0] && last ? { from: weeks[0][0], to: last[6] } : month
 }
 
-/** What a query's `+ Nieuw` creates in its dataset: that dataset's own new row, on the window's day and in the selected space. */
-function madeFrom(target: Model, tables: TableDef[], window: Partial<DateWindow> | null, scope: Scope | null): NewRow {
-  const table = tables.find((t) => t.model === target.key)
-  const view: View = { key: target.key, label: target.label, table: target.key, model: target.key, ...(table?.date_field ? { date_field: table.date_field } : {}) }
-  return newRow(target, view, window, new Date(), table?.space === 'scoped' ? scope : null)
-}
 
 /** Why a query's `+ Nieuw` is off: its dataset is read-only, or a row there still needs what only a pick gives. */
 function createBlocked(target: Model, made: NewRow | null, writable: boolean): string | null {

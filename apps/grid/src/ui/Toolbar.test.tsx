@@ -159,3 +159,17 @@ describe('a change kept in this browser', () => {
     expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
   })
 })
+
+describe("the heading's icon", () => {
+  it.each([
+    ['grid', 'lucide-table'],
+    ['calendar', 'lucide-calendar-days'],
+    ['board', 'lucide-kanban'],
+    ['timeline', 'lucide-chart-gantt'],
+    ['gallery', 'lucide-images'],
+    ['dashboard', 'lucide-layout-dashboard'],
+  ] as const)('a %s view shows its own skin', (kind, icon) => {
+    const { container } = render(<Toolbar {...base} kind={kind} />)
+    expect(container.querySelector('.nv-toolbar__glyph svg')?.getAttribute('class')).toContain(icon)
+  })
+})

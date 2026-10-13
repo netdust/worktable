@@ -227,6 +227,12 @@ const EXPECTED: { method: string; path: string; body?: unknown; type?: string; s
   },
   {
     method: 'GET',
+    // A link reads its own record's files one record at a time; the batch is not on its allowlist.
+    path: '/api/attachments/project?ids=1&kind=doc',
+    status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },
+  },
+  {
+    method: 'GET',
     path: '/api/attachments/project/1',
     status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
   },

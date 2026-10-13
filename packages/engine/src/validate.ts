@@ -78,14 +78,30 @@ function checkCalendar(source: DatasetDecl | QueryDecl): void {
   if (!cal) return
   const at = (bad: string, message: string) => new DomainError(source.name, bad, `calendar ${message}`)
   if (cal.day !== source.date) throw at(cal.day, `day "${cal.day}" is not the date "${source.date}"`)
-  for (const column of [cal.start, cal.end]) {
-    if (column !== undefined && source.columns[column]?.type !== 'datetime') {
-      throw at(column, `"${column}" is not a datetime column`)
-    }
+  const type = (column: string) => source.columns[column]?.type
+  if (cal.start !== undefined && type(cal.start) !== 'datetime') {
+    throw at(cal.start, `"${cal.start}" is not a datetime column`)
+  }
+  if (cal.end !== undefined && type(cal.end) !== 'datetime' && !(cal.spans && type(cal.end) === 'date')) {
+    throw at(cal.end, `"${cal.end}" is not a ${cal.spans ? 'date or datetime' : 'datetime'} column`)
   }
   if (cal.lanes.length === 0) throw at('lanes', 'lanes must name at least one relation')
   for (const lane of cal.lanes) {
     if (!source.columns[lane]?.relation) throw at(lane, `lane "${lane}" is not a relation column`)
+  }
+}
+
+function checkBoard(source: DatasetDecl | QueryDecl): void {
+  const column = source.board?.column
+  if (column !== undefined && !source.columns[column]?.options) {
+    throw new DomainError(source.name, column, `board column "${column}" is not an options column`)
+  }
+}
+
+function checkGallery(dataset: DatasetDecl): void {
+  const kind = dataset.gallery?.kind
+  if (kind !== undefined && !Object.hasOwn(dataset.attachments?.kinds ?? {}, kind)) {
+    throw new DomainError(dataset.name, kind, `gallery kind "${kind}" is not one of its attachment kinds`)
   }
 }
 
@@ -579,12 +595,16 @@ export function validateDomain(domain: Domain): void {
     checkHidden(source)
     checkTones(source)
     checkCalendar(source)
+    checkBoard(source)
     checkIcon(source)
     checkFacts(source)
     checkLinks(domain, source)
     checkColumnOptions(domain, source)
     if (source.kind === 'query' && Object.hasOwn(source, 'attachments')) {
       throw new DomainError(source.name, 'attachments', 'attachments are declared on a dataset, never a query')
+    }
+    if (source.kind === 'query' && Object.hasOwn(source, 'gallery')) {
+      throw new DomainError(source.name, 'gallery', 'a gallery is declared on a dataset, never a query')
     }
   }
   checkSpace(domain)
@@ -604,6 +624,7 @@ export function validateDomain(domain: Domain): void {
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
     checkAttachments(dataset)
+    checkGallery(dataset)
     checkConfig(domain, dataset)
     checkLookups(domain, dataset)
     for (const index of dataset.indexes ?? []) for (const column of index) checkColumn(dataset, 'index column', column)

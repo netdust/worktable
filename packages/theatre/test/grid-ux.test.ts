@@ -35,7 +35,16 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
       .filter(([, s]) => (s as Schema).space === 'scoped')
       .map(([name]) => name)
       .sort()
-    expect(scoped).toEqual(['activiteit', 'conflicten', 'locatie_dag', 'persoon_dag', 'productie_dag', 'speelreeks'])
+    expect(scoped).toEqual([
+      'activiteit',
+      'conflicten',
+      'locatie_dag',
+      'persoon_dag',
+      'plaatsen',
+      'productie_dag',
+      'speelreeks',
+      'werklijst',
+    ])
     for (const s of Object.values(body.sources) as Schema[]) expect(['scoped', 'global']).toContain(s.space)
   })
 
@@ -53,6 +62,7 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
           'locatie_dag',
           'kandidaten',
           'werklijst',
+          'plaatsen',
           'productie_dag',
           'voorstellingen',
           'mijn_producties',
@@ -71,6 +81,7 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
       ['locatie_dag', undefined],
       ['kandidaten', undefined],
       ['werklijst', undefined],
+      ['plaatsen', undefined],
       ['productie_dag', undefined],
       ['voorstellingen', undefined],
       ['mijn_producties', undefined],
@@ -130,6 +141,7 @@ describe('theatre declares the details: icons, colours, an end time and create-f
       locatie_dag: 'pin',
       kandidaten: 'users',
       werklijst: 'check',
+      plaatsen: 'users',
       productie_dag: 'table',
       voorstellingen: 'table',
       mijn_producties: 'star',

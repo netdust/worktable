@@ -101,7 +101,19 @@ export interface ModelAction {
   input: Record<string, ActionInput>
 }
 
-export type ViewType = 'grid' | 'matrix' | 'calendar'
+export type ViewType = 'grid' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'
+
+/** A dashboard tile names saved views by id. */
+export type Tile =
+  | { kind: 'stat'; view: number; label?: string; measure: 'count' | { sum: string }; tone?: { above: number; tone: Tone } }
+  | { kind: 'list'; view: number; rows: number; columns?: string[]; set?: { column: string; value: string; label: string } }
+  | { kind: 'week'; view: number }
+  | { kind: 'progress'; done: number; total: number; label: string }
+
+export interface DashboardLayout {
+  sections: { label: string; tiles: Tile[] }[]
+  actions: { create: string; label: string }[]
+}
 
 /** A calendar table: rows placed on `day`, timed by `start` and `end` (none is all-day), laned by one of `lanes`. */
 export interface CalendarDef {
@@ -109,6 +121,8 @@ export interface CalendarDef {
   start: string | null
   end: string | null
   lanes: string[]
+  /** A row covers every day from `day` to `end`. */
+  spans?: true
 }
 
 /** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
@@ -142,6 +156,10 @@ export interface TableDef {
   away?: MatrixAway
   /** A calendar table: how its rows sit on days. */
   calendar?: CalendarDef
+  /** A board table: the options column its cards are grouped by. */
+  board?: { column: string }
+  /** A gallery table: the attachment kind its cards show. */
+  gallery?: { kind: string }
   types: ViewType[]
 }
 
@@ -161,6 +179,8 @@ export interface View extends Omit<TableDef, 'types'> {
   starting?: boolean
   /** The saved filters no chip shows (`$in`, a range, `custom.<key>`), by column; kept on every Save. */
   fixed?: Record<string, unknown>
+  /** A dashboard's sections, tiles and quick actions. */
+  layout?: DashboardLayout
 }
 
 /** A view's arrangement in the app: the grid's layout, plus the columns a matrix picked. */
@@ -202,6 +222,7 @@ export interface NewView {
   shared: boolean
   arrangement: StoredArrangement
   fixed?: Record<string, unknown>
+  layout?: DashboardLayout
 }
 
 /** A user's own order of each table's views and the view last used there, by table key. */

@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite'
 import { chmodSync, rmSync, writeFileSync } from 'node:fs'
+import { seededLayout } from './dashboard'
 import { datasetDdl, viewDdl } from './ddl'
 import type { DatasetDecl, Domain, QueryDecl } from './declare'
 import { engineTables, MIGRATIONS } from './engine-tables'
@@ -7,7 +8,7 @@ import { MigrationError } from './migration-error'
 import { savedView } from './saved-view'
 import { applyChange, type Change, planChange } from './schema-diff'
 import { validateDomain } from './validate'
-import { SYSTEM_OWNER } from './views'
+import { SYSTEM, SYSTEM_OWNER, viewKey } from './views'
 import { revise } from './writes'
 
 const hashOf = (statements: string[]): string =>
@@ -113,12 +114,13 @@ function moveView(sqlite: Database, id: number, owner: number, now: string): voi
 
 // Views from before accounts were stored with owner 0: a seed goes to the system owner, any other to an administrator.
 function adoptUnowned(sqlite: Database, domain: Domain): void {
-  type Orphan = { id: number; name: string; source: string }
+  type Orphan = { id: number; name: string; source: string | null }
   const orphans = sqlite.query('SELECT id, name, source FROM saved_view WHERE owner_id = 0').all() as Orphan[]
   if (orphans.length === 0) return
   const sql = "SELECT MIN(id) AS id FROM account WHERE role = 'administrator'"
   const admin = (sqlite.query(sql).get() as { id: number | null }).id
-  const isSeed = (v: Orphan) => domain.views.some((seed) => seed.name === v.name && seed.source === v.source)
+  const isSeed = (v: Orphan) =>
+    domain.views.some((seed) => viewKey(seed.name, seed.source) === viewKey(v.name, v.source))
   const now = new Date().toISOString()
   let left = 0
   for (const view of orphans) {
@@ -144,10 +146,15 @@ function insertRows(sqlite: Database, table: string, rows: Record<string, unknow
 export function seedDomain(sqlite: Database, domain: Domain): void {
   sqlite.transaction(() => {
     domain.seed((dataset, rows) => insertRows(sqlite, dataset, rows))
+    const system = { owner_id: SYSTEM_OWNER, shared: true }
+    // A dashboard's tiles name seeded views, so it goes in after them.
     insertRows(
       sqlite,
       'saved_view',
-      domain.views.map((v) => ({ ...v, owner_id: SYSTEM_OWNER, shared: true })),
+      domain.views.filter((v) => v.skin !== 'dashboard').map((v) => ({ ...v, ...system })),
     )
+    for (const seed of domain.views.filter((v) => v.skin === 'dashboard')) {
+      insertRows(sqlite, 'saved_view', [{ ...seed, layout: seededLayout(sqlite, domain, seed, SYSTEM), ...system }])
+    }
   })()
 }

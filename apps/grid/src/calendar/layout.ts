@@ -61,11 +61,68 @@ function lanesOf(events: Placed[], lane: string | null): Lane[] {
   return events.some((event) => event.lane === null) ? [...named, { id: null, title: '' }] : named
 }
 
+/** The days a spanning row covers, from its day to its end's date, each in the all-day band. */
+export function spanDays(row: Row, cal: CalendarDef): string[] {
+  const first = text(row.fields[cal.day])?.slice(0, 10)
+  if (!first) return []
+  const last = (cal.end ? text(row.fields[cal.end])?.slice(0, 10) : null) ?? first
+  return last < first ? [first] : daysOf({ from: first, to: last })
+}
+
+function spanned(row: Row, cal: CalendarDef, lane: string | null): Placed[] {
+  const laneId = lane ? row.fields[lane] : null
+  return spanDays(row, cal).map((day) => ({ row, day, lane: typeof laneId === 'number' ? laneId : null, allDay: true, from: 0, to: 0 }))
+}
+
+/** A spanning row as one bar over the days it covers: `start` and `length` in days, stacked on `line`; `before` and `after` where it runs on past them. */
+export interface Bar {
+  row: Row
+  lane: number | null
+  start: number
+  length: number
+  line: number
+  before: boolean
+  after: boolean
+}
+
+/** Each spanning row among `days` as one bar, in lane order then by start, each on the first line free over its days. */
+export function spanBars(events: Placed[], days: string[], cal: CalendarDef, laneOrder: (event: Placed) => number): Bar[] {
+  const at = new Map(days.map((day, index) => [day, index]))
+  const runs = new Map<number, { event: Placed; first: number; last: number }>()
+  for (const event of events) {
+    const index = at.get(event.day)
+    if (index === undefined) continue
+    const run = runs.get(event.row.id)
+    if (run) {
+      run.first = Math.min(run.first, index)
+      run.last = Math.max(run.last, index)
+    } else runs.set(event.row.id, { event, first: index, last: index })
+  }
+  const ordered = [...runs.values()].sort((a, b) => laneOrder(a.event) - laneOrder(b.event) || a.first - b.first || b.last - a.last)
+  const ends: number[] = []
+  return ordered.map(({ event, first, last }) => {
+    const covered = spanDays(event.row, cal)
+    const free = ends.findIndex((end) => end < first)
+    const line = free < 0 ? ends.length : free
+    ends[line] = last
+    return {
+      row: event.row,
+      lane: event.lane,
+      start: first,
+      length: last - first + 1,
+      line,
+      before: covered[0] < days[first],
+      after: covered[covered.length - 1] > days[last],
+    }
+  })
+}
+
 /** The window's days, its rows placed on them and the lanes they fall in, by lane title with no lane last. */
 export function placeEvents(rows: Row[], cal: CalendarDef, window: DateWindow, lane: string | null) {
   const days = daysOf(window)
   const inWindow = new Set(days)
   const events = rows.flatMap((row) => {
+    if (cal.spans) return spanned(row, cal, lane).filter((event) => inWindow.has(event.day))
     const event = placed(row, cal, lane)
     return event && inWindow.has(event.day) ? [event] : []
   })

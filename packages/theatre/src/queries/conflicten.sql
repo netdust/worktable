@@ -6,7 +6,7 @@ WITH eigen AS (
     SELECT parameters FROM organisatie WHERE soort = 'eigen' AND deleted_at IS NULL ORDER BY id LIMIT 1
   ) o
 ),
-act AS (
+act AS MATERIALIZED (
   SELECT a.id, a.productie_id, a.speelreeks_id, a.soort, a.plandag,
     COALESCE(a.omschrijving, a.soort) AS wat,
     COALESCE(a.locatie_id, sr.locatie_id) AS locatie_id,
@@ -17,6 +17,10 @@ act AS (
   FROM activiteit a
   LEFT JOIN speelreeks sr ON sr.id = a.speelreeks_id AND sr.deleted_at IS NULL
   WHERE a.deleted_at IS NULL AND a.status != 'geannuleerd'
+),
+-- Activities on a venue, the only ones a venue clash can name: the self-join below reads these, not every activity.
+plek AS MATERIALIZED (
+  SELECT * FROM act WHERE locatie_id IS NOT NULL AND NOT logistiek
 ),
 tw AS (
   SELECT t.id, t.persoon_id, t.state, t.created_at, p.weergavenaam AS naam, act.id AS activiteit_id,
@@ -85,8 +89,8 @@ alle AS (
     CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
     NULL, NULL, NULL, x.id, y.id, x.locatie_id, x.productie_id, x.plandag,
     COALESCE(o.naam, 'Een locatie') || ' is dubbel geboekt: ' || x.wat || ' en ' || y.wat || '.'
-  FROM act x
-  JOIN act y ON y.locatie_id = x.locatie_id AND y.id > x.id
+  FROM plek x
+  JOIN plek y ON y.locatie_id = x.locatie_id AND y.id > x.id
   LEFT JOIN organisatie o ON o.id = x.locatie_id
   WHERE NOT x.logistiek AND NOT y.logistiek
     AND (x.productie_id != y.productie_id
@@ -98,8 +102,8 @@ alle AS (
     CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
     NULL, NULL, NULL, y.id, x.id, y.locatie_id, y.productie_id, y.plandag,
     COALESCE(o.naam, 'Een locatie') || ' is dubbel geboekt: ' || y.wat || ' en ' || x.wat || '.'
-  FROM act x
-  JOIN act y ON y.locatie_id = x.locatie_id AND y.id > x.id
+  FROM plek x
+  JOIN plek y ON y.locatie_id = x.locatie_id AND y.id > x.id
   LEFT JOIN organisatie o ON o.id = x.locatie_id
   WHERE NOT x.logistiek AND NOT y.logistiek AND x.productie_id != y.productie_id
     AND CASE WHEN x.getimed AND y.getimed THEN (x.van < y.tot AND y.van < x.tot) OR x.van = y.van ELSE x.plandag = y.plandag END

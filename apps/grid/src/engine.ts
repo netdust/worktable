@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DateWindow, OptionsFrom, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View } from './types'
+import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -51,7 +51,9 @@ export interface EngineSource {
   /** On a matrix's down source: the join dataset. */
   matrix_join?: string
   date: string | null
-  calendar?: { day: string; start?: string; end?: string; lanes: string[] }
+  calendar?: { day: string; start?: string; end?: string; lanes: string[]; spans?: true }
+  board?: { column: string }
+  gallery?: { kind: string }
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
@@ -90,9 +92,11 @@ export interface EngineArrangement {
 export interface EngineView extends EngineArrangement {
   id: number
   name: string
-  source_type: 'dataset' | 'query'
-  source: string
-  skin: 'table' | 'matrix' | 'calendar'
+  /** Null on a dashboard, which reads other views and has no source of its own. */
+  source_type: 'dataset' | 'query' | null
+  source: string | null
+  skin: 'table' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'
+  layout?: DashboardLayout | null
   shared: boolean
   owner_id: number
   mine: boolean
@@ -239,8 +243,18 @@ function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): Matr
   return { table: away.dataset, model: away.dataset, column_field: away.across, label_field: away.label, date_field, end_field: away.end, ...(away.where ? { where: away.where } : {}) }
 }
 
-function calendarOf({ day, start, end, lanes }: NonNullable<EngineSource['calendar']>): CalendarDef {
-  return { day, start: start ?? null, end: end ?? null, lanes }
+/** The skins a source declares a need for; every source has the grid, and a calendar source a timeline too. */
+function typesOf(source: EngineSource): ViewType[] {
+  return [
+    'grid',
+    ...(source.calendar ? (['calendar', 'timeline'] as const) : []),
+    ...(source.board ? (['board'] as const) : []),
+    ...(source.gallery ? (['gallery'] as const) : []),
+  ]
+}
+
+function calendarOf({ day, start, end, lanes, spans }: NonNullable<EngineSource['calendar']>): CalendarDef {
+  return { day, start: start ?? null, end: end ?? null, lanes, ...(spans ? { spans } : {}) }
 }
 
 function tableDefOf(name: string, source: EngineSource, sources: Sources): TableDef {
@@ -252,8 +266,10 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.of ? { of: source.of } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
-    types: source.calendar ? ['grid', 'calendar'] : ['grid'],
+    types: typesOf(source),
     ...(source.calendar ? { calendar: calendarOf(source.calendar) } : {}),
+    ...(source.board ? { board: source.board } : {}),
+    ...(source.gallery ? { gallery: source.gallery } : {}),
   }
   const joined = source.matrix_join ? sources[source.matrix_join] : undefined
   const matrix = joined?.matrix
@@ -369,14 +385,15 @@ export function toStoredView(arrangement: StoredArrangement, fixed: Record<strin
 /** Each saved view merged over its source's table, as `Json::saved` merged one over its table; a view on a source not served is left out. */
 export function toSavedViews(views: EngineView[], sources: Sources): SavedView[] {
   return views.flatMap((view) => {
-    const source = sources[view.source]
+    if (view.skin === 'dashboard') return [dashboardOf(view)]
+    const source = view.source === null ? undefined : sources[view.source]
     if (!source) return []
     const { arrangement, fixed } = fromStoredView(view, source)
     return [{
-      ...tableDefOf(view.source, source, sources),
+      ...tableDefOf(view.source as string, source, sources),
       key: String(view.id),
       label: view.name,
-      table: view.source,
+      table: view.source as string,
       table_label: source.label,
       type: view.skin === 'table' ? 'grid' : view.skin,
       starting: false,
@@ -391,6 +408,20 @@ export function toSavedViews(views: EngineView[], sources: Sources): SavedView[]
       ...(view.for_owners ? { for_owners: true } : {}),
     }]
   })
+}
+
+/** The table key a dashboard sits under; no source has it, since source names start with a letter and hold no capitals. */
+export const DASHBOARD = 'Dashboard'
+
+const NO_ARRANGEMENT = { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }
+
+/** A dashboard has no table: its tiles name the views they read. */
+function dashboardOf(view: EngineView): SavedView {
+  return {
+    key: String(view.id), label: view.name, model: '', table: DASHBOARD, type: 'dashboard', types: ['dashboard'],
+    layout: view.layout ?? { sections: [], actions: [] }, starting: false, id: view.id, arrangement: NO_ARRANGEMENT, fixed: {},
+    shared: view.shared, owner: { id: view.owner_id, name: '' }, mine: view.mine, editable: view.editable,
+  }
 }
 
 function lookupOf(found: { id: number; title: string } | null): Lookup | null {

@@ -1,4 +1,4 @@
-import type { DateWindow, Field, Model, Scope, View } from '../types'
+import type { DateWindow, Field, Model, Scope, TableDef, View } from '../types'
 
 /**
  * `needs`: the fields the draft row asks for, in order, before it is created; none creates it at once.
@@ -47,4 +47,11 @@ export function newRow(model: Model, view: View, window: Partial<DateWindow> | n
   const offered = offers.filter(shown).sort((a, b) => Number(model.fields[b].required) - Number(model.fields[a].required))
 
   return missing.length > 0 ? { missing } : { fields, needs, offers: offered }
+}
+
+/** What a create in another dataset fills in: that dataset's own new row, on the window's day and in the selected space where the space scopes it. */
+export function madeFrom(target: Model, tables: TableDef[], window: Partial<DateWindow> | null, scope: Scope | null): NewRow {
+  const table = tables.find((t) => t.model === target.key)
+  const view: View = { key: target.key, label: target.label, table: target.key, model: target.key, ...(table?.date_field ? { date_field: table.date_field } : {}) }
+  return newRow(target, view, window, new Date(), table?.space === 'scoped' ? scope : null)
 }

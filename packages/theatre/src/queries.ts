@@ -203,6 +203,7 @@ export const werklijst = defineQuery({
   icon: 'check',
   title: 'titel',
   date: 'deadline',
+  scoped: 'productie_id',
   sql: sqlOf('werklijst'),
   columns: {
     id: { type: 'integer', label: 'Id' },
@@ -221,5 +222,38 @@ export const werklijst = defineQuery({
       nullable: true,
       writes: { dataset: 'taak', field: 'status', key: 'taak_id' },
     },
+    productie_id: { type: 'integer', label: 'Productie', nullable: true, relation: 'productie' },
+  },
+})
+
+// Each assignment with its activity's day and production, so a dashboard's places narrow to the chosen production.
+export const plaatsen = defineQuery({
+  name: 'plaatsen',
+  label: 'Plaatsen',
+  icon: 'users',
+  title: 'wat',
+  date: 'datum',
+  scoped: 'productie_id',
+  sql: sqlOf('plaatsen'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
+    wat: { type: 'text', label: 'Activiteit' },
+    rol_id: { type: 'integer', label: 'Rol', nullable: true, relation: 'rol' },
+    persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
+    state: {
+      type: 'text',
+      label: 'Status',
+      options: {
+        open: 'Open',
+        voorlopig: 'Voorlopig',
+        uitgenodigd: 'Uitgenodigd',
+        bevestigd: 'Bevestigd',
+        geweigerd: 'Geweigerd',
+        geannuleerd: 'Geannuleerd',
+      },
+    },
+    datum: { type: 'date', label: 'Datum' },
+    productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
   },
 })

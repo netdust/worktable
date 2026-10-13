@@ -374,12 +374,63 @@ test('owners read none of them', async () => {
 
 // Seeding inserts views without the views route's checks; each one must also save through it.
 test('every seeded view saves through the views route', async () => {
+  const listed = (await admin('GET', '/api/views')).body.views as { id: number; name: string; owner_id: number }[]
+  // A seed's tiles name views; a stored layout names them by id.
+  const idOf = (name: unknown) => listed.find((v) => v.name === name)?.id ?? name
+  const byId = (layout: Body) =>
+    JSON.parse(JSON.stringify(layout), (key, value) => (['view', 'done', 'total'].includes(key) ? idOf(value) : value))
   for (const { name, ...fields } of theatre.views) {
-    const res = await admin('POST', '/api/views', { name: `${name} (copy)`, ...fields, shared: false })
+    const body = fields.layout ? { ...fields, layout: byId(fields.layout as unknown as Body) } : fields
+    const res = await admin('POST', '/api/views', { name: `${name} (copy)`, ...body, shared: false })
     expect({ name, status: res.status, body: res.status === 201 ? null : res.body }).toEqual({
       name,
       status: 201,
       body: null,
     })
   }
+})
+
+describe('the space narrows every dashboard tile', () => {
+  type Tile = { kind: string; view?: number; done?: number; total?: number }
+  type View = {
+    id: number
+    name: string
+    skin: string
+    source: string | null
+    layout?: { sections: { tiles: Tile[] }[] } | null
+  }
+
+  test('every Overzicht tile reads a source scoped to the space', async () => {
+    const sources = (await admin('GET', '/api/schema')).body.sources as Record<string, { space?: string }>
+    const views = (await admin('GET', '/api/views')).body.views as View[]
+    const overzicht = views.find((v) => v.skin === 'dashboard' && v.name === 'Overzicht')
+    const ids = (overzicht?.layout?.sections ?? [])
+      .flatMap((s) => s.tiles)
+      .flatMap((t) => (t.kind === 'progress' ? [t.done, t.total] : [t.view]))
+    const unscoped = ids
+      .map((id) => views.find((v) => v.id === id)?.source as string)
+      .filter((source) => sources[source]?.space !== 'scoped')
+    expect(unscoped).toEqual([])
+  })
+
+  test('an open slot narrows with its production on werklijst and plaatsen', async () => {
+    const soon = await activity({ datum: localDay(2), productie_id: 2 })
+    const slot = await create('toewijzing', { activiteit_id: soon, rol_id: SPELER })
+    const listed = async (source: string, id: number, productie_id: number) =>
+      (await rows(source, { productie_id })).some((r) => r.id === id)
+    expect(await listed('werklijst', 2_000_000_000_000 + slot, 2)).toBe(true)
+    expect(await listed('werklijst', 2_000_000_000_000 + slot, 1)).toBe(false)
+    expect(await listed('plaatsen', slot, 2)).toBe(true)
+    expect(await listed('plaatsen', slot, 1)).toBe(false)
+  })
+
+  test('a taak narrows with the production it is linked to, and drops out of any other', async () => {
+    const linked = await create('taak', { titel: 'Decor ophalen', gekoppeld_aan: 'productie', record_id: 2 })
+    const loose = await create('taak', { titel: 'Kantoor opruimen' })
+    const ids = async (productie_id: number) => (await rows('werklijst', { productie_id })).map((r) => r.taak_id)
+    expect(await ids(2)).toContain(linked)
+    expect(await ids(1)).not.toContain(linked)
+    expect([...(await ids(1)), ...(await ids(2))]).not.toContain(loose)
+    expect((await rows('werklijst')).map((r) => r.taak_id)).toContain(loose)
+  })
 })

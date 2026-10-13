@@ -1,9 +1,10 @@
-import { CalendarDays, Combine, Grid3x3, GripVertical, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
+import { Combine, GripVertical, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { usePress } from 'react-aria'
 import { Button, DropIndicator, type DropTarget, GridList, GridListItem, type Key, useDragAndDrop } from 'react-aria-components'
 import { t } from '../i18n'
 import type { SavedView, View } from '../types'
+import { VIEW_ICONS } from './NewViewDialog'
 import { type Action, MoreMenu } from './MoreMenu'
 import type { Table } from './tables'
 import { hint } from './hint'
@@ -104,7 +105,7 @@ export function landing(all: string[], block: string[], key: string, target: Dro
 /** A view's own button: it opens the view. The row around it is the list's tab stop and carries the drag. */
 function ViewButton({ view, active, onSelect, onRename }: { view: View; active: boolean; onSelect: () => void; onRename: () => void }) {
   const { pressProps } = usePress({ onPress: onSelect })
-  const Icon = view.type === 'matrix' ? Grid3x3 : view.type === 'calendar' ? CalendarDays : view.query ? Combine : TableIcon
+  const Icon = view.type && view.type !== 'grid' ? VIEW_ICONS[view.type] : view.query ? Combine : TableIcon
   return (
     // A click focuses it: the grid must not take that focus to its first row.
     <button type="button" {...pressProps} className="nv-view__button" tabIndex={-1} aria-current={active ? 'page' : undefined} onDoubleClick={onRename}

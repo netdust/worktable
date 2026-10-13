@@ -9,6 +9,12 @@ export function lookupOf(source: Source, key: string): LookupDecl | undefined {
   return source.lookups[key]
 }
 
+export const hasColumn = (source: Source, key: string): boolean =>
+  Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id') || !!lookupOf(source, key)
+// A link is shown like a column, never sorted or grouped on.
+export const hasField = (source: Source, key: string): boolean =>
+  hasColumn(source, key) || Object.hasOwn(source.links ?? {}, key)
+
 function declaredLookup(source: DatasetDecl, name: string): LookupDecl {
   const lookup = lookupOf(source, name)
   if (!lookup) throw new Error(`${source.name} declares no lookup "${name}"`)
