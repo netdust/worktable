@@ -496,7 +496,7 @@ export const views: SavedViewSeed[] = [
     source_type: 'dataset',
     source: 'activiteit',
     skin: 'gallery',
-    filters: {},
+    filters: { plandag: { $period: 'week' } },
     sort: ['plandag', 'start_at'],
     group_by: null,
     visible_fields: ['plandag', 'start_at', 'eind_at', 'soort', 'productie_id'],

@@ -202,7 +202,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
   const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
-  // A board's, a timeline's or a calendar's new row is asked for in the dashboard's quick create: neither has a draft row to type in.
   const [quick, setQuick] = useState(false)
   useFillViewport(frame)
 
@@ -285,6 +284,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
   const timeline = view?.type === 'timeline' ? view.calendar : undefined
   const calendarShown = calendarWindow(conditionDays, new Date())
+  // A skin with no draft row to type in asks for its new row in the dashboard's quick create.
+  const quickAdd = view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' || Boolean(calendar)
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
   const timelineShown = timelineWindow(conditionDays, new Date())
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
@@ -501,8 +502,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
-          addBlocked={view?.type === 'board' || view?.type === 'timeline' || calendar ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={view?.type === 'board' || view?.type === 'timeline' || calendar ? () => setQuick(true) : matrix || dashboard || view?.type === 'gallery' ? undefined : add}
+          addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
+          onAdd={quickAdd ? () => setQuick(true) : matrix || dashboard ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
