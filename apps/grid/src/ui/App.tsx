@@ -202,7 +202,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
   const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
-  // A board's new card is asked for in the dashboard's quick create: a board has no draft row to type in.
+  // A board's or a timeline's new row is asked for in the dashboard's quick create: neither has a draft row to type in.
   const [quick, setQuick] = useState(false)
   useFillViewport(frame)
 
@@ -501,8 +501,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
-          addBlocked={view?.type === 'board' ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={view?.type === 'board' ? () => setQuick(true) : matrix || calendar || dashboard || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
+          addBlocked={view?.type === 'board' || view?.type === 'timeline' ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
+          onAdd={view?.type === 'board' || view?.type === 'timeline' ? () => setQuick(true) : matrix || calendar || dashboard || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
