@@ -5825,9 +5825,8 @@ table.nv-cal--month .nv-cal__event:hover {
   z-index: 2;
   display: flex;
   flex: none;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 2px;
+  align-items: flex-end;
+  gap: 8px;
   width: 232px;
   box-sizing: border-box;
   padding: 8px 14px;
@@ -5841,6 +5840,7 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 .nv-tl__corner span {
+  margin-bottom: 1px;
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
