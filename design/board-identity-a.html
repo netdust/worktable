@@ -1,13 +1,21 @@
-<!-- Richting: Speelvloer. Speelvloer: de zwarte balletvloer van de zaal, alles afgeplakt met spiketape in kleur, opschriften in stift en de tijd als het eerste wat je leest. -->
 <!doctype html>
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<!-- The client sheet. Everything that makes this Worktable look like Zaalrood is in this block: the font links and the tokens. Swap it for another sheet and the same app takes that identity. The mark is one shared SVG coloured by --sig and --sig-on. -->
+<!-- Zaalrood: een warm papieren canvas, bordeauxrood als enige kleur voor het merk, de knop en waar je bent, Geist in twee gewichten. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style id="client-sheet">
+html:root { --side-bg: #f2ede5; --side-ink: #27211b; --side-ink-muted: #5f564b; --side-ink-subtle: #988c7e; --side-hover: #e9e2d7; --side-card: #fffdf9; --side-line: #e3dbcd; --mark-bg: #fff6ef; --mark-fg: #8c1c2f; --font-sans: "Geist", system-ui, sans-serif; --font-mono: "Geist Mono", ui-monospace, monospace; --font-display: "Geist", system-ui, sans-serif; --display-weight: 600; --display-track: -.035em; --voice-style: normal; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --shadow-pop: 0 12px 32px rgba(30, 20, 10, .16), 0 1px 3px rgba(30, 20, 10, .08); --color-bg-canvas: #f2ede5; --color-bg-sidebar: #f2ede5; --color-bg-surface: #fffdf9; --color-bg-subtle: #f6f1ea; --color-bg-muted: #ece5da; --color-bg-hover: #f6f1ea; --color-bg-selected: #f5e3e2; --color-bg-column: #f5f0e8; --color-bg-card: #fffdf9; --color-band: #f6f1ea; --color-border-subtle: #ebe3d6; --color-border-default: #ddd2c2; --color-border-strong: #c4b7a3; --color-fg-default: #27211b; --color-fg-muted: #5f564b; --color-fg-subtle: #988c7e; --sig: #8c1c2f; --sig-on: #ffffff; --sig-hover: #731525; --sig-tint: #f5e3e2; --sig-ink: #7c1828; --color-accent-default: #7c1828; --color-accent-hover: #731525; --color-accent-subtle: #f5e3e2; --color-fg-on-accent: #ffffff; --color-success-fg: #2f6b3a; --color-success-bg: #e2efdc; --color-warning-fg: #8a5a00; --color-warning-bg: #f7eacf; --color-danger-fg: #b0242f; --color-danger-bg: #f8e0dd; --strip-bg: #8c1c2f; --strip-fg: #fff6ef; --strip-line: #731525; --today: #8c1c2f }
+html:root[data-theme="dark"] { --side-bg: #161311; --side-ink: #f1eae1; --side-ink-muted: #b6aa9b; --side-ink-subtle: #7f7468; --side-hover: #231e1a; --side-card: #1e1a17; --side-line: #2c2621; --mark-bg: #fff6ef; --mark-fg: #5e1220; --color-bg-canvas: #161311; --color-bg-sidebar: #161311; --color-bg-surface: #1e1a17; --color-bg-subtle: #25201c; --color-bg-muted: #2f2924; --color-bg-hover: #25201c; --color-bg-selected: #3a1d21; --color-bg-column: #221d19; --color-bg-card: #26211d; --color-band: #25201c; --color-border-subtle: #2c2621; --color-border-default: #3a332c; --color-border-strong: #4b4239; --color-fg-default: #f1eae1; --color-fg-muted: #b6aa9b; --color-fg-subtle: #7f7468; --sig: #c9485a; --sig-on: #ffffff; --sig-hover: #d85d6e; --sig-tint: #3a1d21; --sig-ink: #f0a0aa; --color-accent-default: #f0a0aa; --color-accent-hover: #d85d6e; --color-accent-subtle: #3a1d21; --color-fg-on-accent: #ffffff; --color-success-fg: #86d28f; --color-success-bg: #1d3322; --color-warning-fg: #f0c46a; --color-warning-bg: #3a2c12; --color-danger-fg: #ff8f8a; --color-danger-bg: #3d1c1b; --strip-bg: #5e1220; --strip-fg: #fff6ef; --strip-line: #3d0b15; --today: #f0a0aa; color-scheme: dark }
+@media (prefers-color-scheme: dark) { html:root:not([data-theme="light"]) { --side-bg: #161311; --side-ink: #f1eae1; --side-ink-muted: #b6aa9b; --side-ink-subtle: #7f7468; --side-hover: #231e1a; --side-card: #1e1a17; --side-line: #2c2621; --mark-bg: #fff6ef; --mark-fg: #5e1220; --color-bg-canvas: #161311; --color-bg-sidebar: #161311; --color-bg-surface: #1e1a17; --color-bg-subtle: #25201c; --color-bg-muted: #2f2924; --color-bg-hover: #25201c; --color-bg-selected: #3a1d21; --color-bg-column: #221d19; --color-bg-card: #26211d; --color-band: #25201c; --color-border-subtle: #2c2621; --color-border-default: #3a332c; --color-border-strong: #4b4239; --color-fg-default: #f1eae1; --color-fg-muted: #b6aa9b; --color-fg-subtle: #7f7468; --sig: #c9485a; --sig-on: #ffffff; --sig-hover: #d85d6e; --sig-tint: #3a1d21; --sig-ink: #f0a0aa; --color-accent-default: #f0a0aa; --color-accent-hover: #d85d6e; --color-accent-subtle: #3a1d21; --color-fg-on-accent: #ffffff; --color-success-fg: #86d28f; --color-success-bg: #1d3322; --color-warning-fg: #f0c46a; --color-warning-bg: #3a2c12; --color-danger-fg: #ff8f8a; --color-danger-bg: #3d1c1b; --strip-bg: #5e1220; --strip-fg: #fff6ef; --strip-line: #3d0b15; --today: #f0a0aa; color-scheme: dark } }
+</style>
+<!-- end of the client sheet -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bord Speelvloer</title>
+<title>Bord Zaalrood</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Chivo:wght@400;500;600;700;800;900&family=Chivo+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: the app shell and the grid's toolbar; Activiteiten as a board, one column per option of the group column, the record drawer open on the right. */
 /* Token names follow apps/grid/src/ui/theme.css and design/grid-prototype.html, the approved design language. Invented data only. */
@@ -357,109 +365,100 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .card.floating { position: fixed; z-index: 80; pointer-events: none; margin: 0; transform: rotate(2deg); box-shadow: var(--shadow-pop); cursor: grabbing }
 .slot { background: color-mix(in srgb, var(--color-accent-default) 12%, transparent); border-radius: var(--radius-md); display: grid; place-items: center; color: var(--color-accent-default); font-size: 12.5px; font-weight: 500 }
 body.dragging, body.dragging * { cursor: grabbing !important }
-.stamp, .pmark { display: none }
-/* Speelvloer: de zwarte balletvloer van de zaal, alles afgeplakt met spiketape in kleur, opschriften in stift en de tijd als het eerste wat je leest. */
-:root {
-  --font-sans: "Chivo", "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "Chivo Mono", "IBM Plex Mono", ui-monospace, monospace;
-  --font-display: "Chivo", "IBM Plex Sans", sans-serif;
-  --color-bg-canvas: #d5d6d9; --color-bg-surface: #f4f4f2; --color-bg-subtle: #ebebe9; --color-bg-muted: #e0e0de;
-  --color-bg-sidebar: #e6e7e9; --color-bg-hover: #e8e8e6; --color-bg-selected: #fff3b0; --color-bg-card: #f8f8f6; --color-bg-column: #c9cacd;
-  --color-fg-default: #18191b; --color-fg-muted: #4b4d52; --color-fg-subtle: #7d8087;
-  --color-border-subtle: #d6d7d9; --color-border-default: #c4c5c8; --color-border-strong: #a5a7ab;
-  --color-accent-default: #18191b; --color-accent-hover: #000; --color-accent-subtle: #fff3b0;
-  --tape-yellow: #ffd23f; --tape-green: #4fd17f; --tape-pink: #ff5f8f; --tape-white: #f7f6f0; --tape-blue: #43b0ff;
-  --color-success-fg: #13703c; --color-warning-fg: #7a5a00; --color-danger-fg: #b8123d;
-  --color-success-bg: var(--tape-green); --color-warning-bg: var(--tape-yellow); --color-danger-bg: var(--tape-pink);
-  --p-nw: var(--tape-blue); --p-kt: var(--tape-pink); --p-zs: var(--tape-green); --today: #ff5f2e;
-  --radius-sm: 3px; --radius-md: 4px; --radius-lg: 4px;
-  --shadow-pop: 0 14px 34px rgba(0, 0, 0, .28), 0 1px 2px rgba(0, 0, 0, .2);
-}
-:root[data-theme="dark"] {
-  --color-bg-canvas: #1a1b1e; --color-bg-surface: #222327; --color-bg-subtle: #26272b; --color-bg-muted: #2e2f34;
-  --color-bg-sidebar: #141518; --color-bg-hover: #2b2c31; --color-bg-selected: #3a3416; --color-bg-card: #26272c; --color-bg-column: #151619;
-  --color-fg-default: #eeece5; --color-fg-muted: #a9a8a2; --color-fg-subtle: #6e6f74;
-  --color-border-subtle: #2a2b30; --color-border-default: #34353b; --color-border-strong: #4a4b52;
-  --color-accent-default: #ffd23f; --color-accent-hover: #ffe170; --color-accent-subtle: #3a3416;
-  --color-success-fg: #4fd17f; --color-warning-fg: #ffd23f; --color-danger-fg: #ff5f8f;
-  --color-success-bg: var(--tape-green); --color-warning-bg: var(--tape-yellow); --color-danger-bg: var(--tape-pink);
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --color-bg-canvas: #1a1b1e; --color-bg-surface: #222327; --color-bg-subtle: #26272b; --color-bg-muted: #2e2f34;
-  --color-bg-sidebar: #141518; --color-bg-hover: #2b2c31; --color-bg-selected: #3a3416; --color-bg-card: #26272c; --color-bg-column: #151619;
-  --color-fg-default: #eeece5; --color-fg-muted: #a9a8a2; --color-fg-subtle: #6e6f74;
-  --color-border-subtle: #2a2b30; --color-border-default: #34353b; --color-border-strong: #4a4b52;
-  --color-accent-default: #ffd23f; --color-accent-hover: #ffe170; --color-accent-subtle: #3a3416;
-  --color-success-fg: #4fd17f; --color-warning-fg: #ffd23f; --color-danger-fg: #ff5f8f;
-  --color-success-bg: var(--tape-green); --color-warning-bg: var(--tape-yellow); --color-danger-bg: var(--tape-pink);
-} }
+/* the identity strip above the app: the mark, the colours, the type, the voice */
+html, body { height: 100% }
+body { display: flex; flex-direction: column; background: var(--side-bg); font-family: var(--font-sans) }
+.idstrip { height: 160px; flex: none; display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); gap: 44px; align-items: center; padding: 0 36px; background: var(--strip-bg); color: var(--strip-fg); border-bottom: 1px solid var(--strip-line) }
+.idstrip .lbl { font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; opacity: .62; margin-bottom: 10px }
+.id-mark { display: flex; align-items: center; gap: 16px }
+.id-mark b { font: var(--display-weight, 600) 38px/1 var(--font-display); letter-spacing: var(--display-track, -.02em) }
+.id-mark small { display: block; font-size: 13px; opacity: .7; margin-top: 6px; letter-spacing: 0 }
+.swatches { display: flex; gap: 10px }
+.sw { display: grid; gap: 6px; font: 11px var(--font-mono) }
+.sw i { width: 64px; height: 40px; border-radius: 8px; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08) }
+.sw span { opacity: .75 }
+.type { display: flex; align-items: baseline; gap: 14px }
+.type .aa { font: var(--display-weight, 600) 54px/1 var(--font-display); letter-spacing: var(--display-track, -.02em) }
+.type .names { display: grid; gap: 3px; font-size: 12.5px }
+.type .names .m { font-family: var(--font-mono); font-size: 11.5px; opacity: .75 }
+.voice { font: var(--voice-style, normal) 400 19px/1.35 var(--font-display); max-width: 520px; justify-self: end }
+.voice small { display: block; font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; opacity: .62; margin-bottom: 10px; font-style: normal }
 
-/* spike tape: a flat strip with torn ends, marker text on it */
-.tape, .col-name, .pmark, .pill, .alert-badge, .card-top .soort { clip-path: polygon(0 12%, 3px 0, calc(100% - 4px) 6%, 100% 0, calc(100% - 2px) 50%, 100% 94%, calc(100% - 5px) 100%, 2px 90%, 0 100%, 2px 50%) }
+/* the app sits on a canvas with a temperature; the work is one raised panel */
+.app { height: auto; flex: 1; min-height: 0; background: var(--side-bg) }
+.side { background: transparent; border-right: 0; color: var(--side-ink); --color-fg-default: var(--side-ink); --color-fg-muted: var(--side-ink-muted); --color-fg-subtle: var(--side-ink-subtle); --color-bg-hover: var(--side-hover); --color-bg-surface: var(--side-card); --color-bg-subtle: var(--side-hover); --color-bg-muted: var(--side-hover); --color-border-subtle: var(--side-line); --color-border-default: var(--side-line); --color-border-strong: var(--side-line) }
+.brand { padding: 16px 16px 8px; gap: 10px; text-transform: none; letter-spacing: 0 }
+.brand b { font: var(--display-weight, 600) 19px var(--font-display); letter-spacing: var(--display-track, -.02em); color: var(--color-fg-default) }
+.space { margin: 8px 12px 12px }
+.space-btn { border: 0; border-radius: 12px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(30, 20, 10, .06), 0 0 0 1px var(--color-border-subtle) }
+.space-mark { border-radius: 8px }
+.section-label { font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; padding: 16px 8px 6px }
+.model { height: 34px } .view { height: 32px }
+.model .name { font-weight: 500 }
+.view.active { background: var(--sig); color: var(--sig-on); font-weight: 500 }
+.view.active .icon, .view.active .lock { color: var(--sig-on) }
+.views::before { border-color: var(--color-border-default) }
+.side-foot { border-top: 0; padding: 12px 16px 16px; color: var(--color-fg-default) }
+.who-b { display: grid; line-height: 1.25 } .who-b b { font-weight: 500; font-size: 13px } .who-b small { color: var(--color-fg-subtle); font-size: 11.5px }
+.tweaks { border: 0; box-shadow: 0 0 0 1px var(--color-border-subtle); border-radius: 12px }
 
-body { font-size: 13.5px }
-.title h1 { font: 800 24px/1 var(--font-display); letter-spacing: -.025em }
-.title .sum, .rows, .chip, .section-label, .props dt, .dw-head, .foot { font-family: var(--font-mono) }
-.title .sum { background: none; padding: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .04em }
-.section-label { letter-spacing: .08em; font-weight: 500 }
-.brand b { font-weight: 800; letter-spacing: -.02em }
-.chip { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; border-radius: var(--radius-sm) }
-.chip.set { background: var(--color-fg-default); color: var(--color-bg-surface) }
-.chip .count { background: var(--tape-yellow); color: #18191b }
-.view.active { background: var(--color-bg-selected); color: var(--color-fg-default) }
-.btn.primary { background: var(--tape-yellow); border-color: var(--tape-yellow); color: #18191b; font-weight: 700 }
-.btn.primary:hover { background: #ffdc66 }
-.avatar { border-radius: var(--radius-sm) !important; font-family: var(--font-mono); font-weight: 600; font-size: 9.5px }
-.space-mark { font-family: var(--font-mono) }
+.main { background: var(--color-bg-surface); border-radius: 18px 0 0 0; margin-top: 10px; box-shadow: 0 0 0 1px var(--color-border-subtle), 0 2px 12px rgba(30, 20, 10, .04) }
+.top { background: transparent; border-bottom: 0; padding: 20px 28px 4px; align-items: flex-start; min-height: 0 }
+.title { display: grid; gap: 4px; align-content: start }
+.crumb { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--color-fg-subtle) }
+.crumb .icon { width: 15px; height: 15px }
+.crumb .sl { opacity: .5 } .crumb b { color: var(--color-fg-default); font-weight: 500 }
+.headline { display: flex; align-items: center; gap: 14px; margin-top: 8px }
+.headline h1 { margin: 0; font: var(--display-weight, 600) 36px/1.05 var(--font-display); letter-spacing: var(--display-track, -.02em); white-space: nowrap }
+.state { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; background: var(--sig-tint); color: var(--sig-ink); font-size: 13px; font-weight: 500 }
+.state i { width: 7px; height: 7px; border-radius: 50%; background: var(--sig) }
+.story { margin: 4px 0 0; font-size: 15px; line-height: 1.45; color: var(--color-fg-muted); max-width: 680px }
+.search, .iconbtn, .btn { border-radius: 10px }
+.search { border: 0; background: var(--color-bg-subtle) }
+.iconbtn { border: 0; background: var(--color-bg-subtle) }
+.btn.primary { background: var(--sig); border-color: var(--sig); color: var(--sig-on); font-weight: 500 }
+.btn.primary:hover { background: var(--sig-hover); border-color: var(--sig-hover) }
 
-/* the floor: columns are taped-off zones on the stage floor */
-.stage { background: var(--color-bg-canvas) }
-.board { gap: 14px; padding: 16px 18px 28px }
-.col { width: 296px; background: var(--color-bg-column); border: 0; border-radius: var(--radius-md) }
-.col-head { background: var(--color-bg-column); padding: 12px 10px 10px; gap: 10px }
-.col-name { background: var(--t-tape, var(--tape-white)); color: #18191b; font: 700 13px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; padding: 4px 12px 3px; transform: rotate(-1.2deg) }
-.col-name::before { display: none }
-.col-head[data-key="optie"] { --t-tape: var(--tape-yellow) } .col-head[data-key="bevestigd"] { --t-tape: var(--tape-green) } .col-head[data-key="geannuleerd"] { --t-tape: var(--tape-pink) }
-.col-count { background: none; font: 600 13px var(--font-mono); color: var(--color-fg-muted); padding: 0 }
-.col-body { gap: 6px; padding: 2px 8px 10px }
-.col-empty { font: 12px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; padding: 20px 8px }
-.col.drop { background: color-mix(in srgb, var(--tape-yellow) 16%, var(--color-bg-column)) }
+.bar { background: transparent; padding: 10px 28px 14px; border-bottom: 1px solid var(--color-border-subtle) }
+.chip { border: 0; background: var(--color-bg-subtle); color: var(--color-fg-muted); padding: 5px 12px; font-size: 13px }
+.chip:hover { background: var(--color-bg-muted); color: var(--color-fg-default) }
+.chip.set { background: var(--sig-tint); color: var(--sig-ink) }
+.chip .count { background: var(--sig); color: var(--sig-on) }
+.bar .rows { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .04em }
 
-/* the card: the time first, big, in the mono; the soort and the production as tape */
-.card { border: 0; border-radius: var(--radius-sm); background: var(--color-bg-card); padding: 9px 10px 9px; gap: 3px; box-shadow: 0 1px 0 rgba(0, 0, 0, .12) }
-.card:hover { border: 0; background: var(--color-bg-surface) }
-.card.sel { background: var(--color-bg-selected) }
-.card-top { min-height: 0; margin-bottom: 2px }
-.card-top .soort { background: var(--sc); color: #18191b; font: 600 10px var(--font-mono); text-transform: uppercase; letter-spacing: .07em; padding: 2px 8px 1px }
-.card-top .soort i { display: none }
-.card[data-soort="voorstelling"] { --sc: #ff8fb1 } .card[data-soort="repetitie"] { --sc: #b9a6ff } .card[data-soort="opbouw"], .card[data-soort="afbouw"] { --sc: #ffc164 }
-.card[data-soort="reis"] { --sc: #8fd0ff } .card[data-soort="overnachting"], .card[data-soort="andere"] { --sc: #d9d9d4 } .card[data-soort="maaltijd"] { --sc: #93e2b0 } .card[data-soort="vergadering"] { --sc: #7fe0dc }
-.pmark { display: inline-block; order: 3; margin-left: auto; background: var(--p-nw); color: #18191b; font: 700 9.5px var(--font-mono); letter-spacing: .08em; padding: 2px 6px 1px }
-.pmark[data-p="kt"] { background: var(--p-kt) } .pmark[data-p="zs"] { background: var(--p-zs) }
-.card-top .alert-badge { order: 2; margin-left: 6px }
-.card-line:has(.date) { order: 1 } .card-title { order: 2 } .card-line:has(.ell) { order: 3 } .card-foot { order: 4 }
-.card { display: flex; flex-direction: column }
-.card-line .time { font: 600 16px var(--font-mono); letter-spacing: -.02em; order: 1 }
-.card-line .time .end { color: var(--color-fg-subtle); font-weight: 400 }
-.card-line .date { font: 11px var(--font-mono); text-transform: uppercase; color: var(--color-fg-subtle); margin-left: auto; order: 2 }
-.card-line:has(.date) .muted { order: 1; font-family: var(--font-mono); font-size: 13px }
-.card-title { font: 700 14px/1.25 var(--font-display); letter-spacing: -.01em }
-.card-line .ell { font-size: 12px }
-.card-foot { padding-top: 4px }
-.stack .avatar { box-shadow: 0 0 0 2px var(--color-bg-card) }
-.alert-badge { border-radius: 0; background: var(--tape-pink); color: #18191b; font: 700 10px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px 1px }
-.alert-badge .icon { display: none }
-.pill { border-radius: 0; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: .07em; color: #18191b !important; padding: 2px 9px 1px }
-.pill::before { display: none }
-.slot { background: color-mix(in srgb, var(--tape-yellow) 30%, transparent); border-radius: var(--radius-sm); color: var(--color-fg-default); font: 600 12px var(--font-mono); text-transform: uppercase; letter-spacing: .08em }
-.card.floating { transform: rotate(1.5deg) }
+/* the board on the panel */
+.stage { background: var(--color-bg-surface) }
+.board { padding: 18px 28px 30px; gap: 16px }
+.col { background: var(--color-bg-column); border: 0; border-radius: 14px; width: 310px }
+.col-head { border-radius: 14px 14px 0 0; padding: 14px 14px 10px }
+.col-name { font: 500 14px var(--font-sans) }
+.col-name::before { width: 8px; height: 8px }
+.col-count { background: var(--color-bg-surface); border-radius: 999px; padding: 1px 8px; font: 500 11.5px var(--font-mono) }
+.col-body { padding: 0 10px 12px; gap: 10px }
+.col.drop { background: var(--sig-tint) }
+.slot { background: color-mix(in srgb, var(--sig) 14%, transparent); color: var(--sig-ink); border-radius: var(--radius-md) }
+.card { background: var(--color-bg-card); border: 0; border-radius: var(--radius-md); padding: 12px 14px 12px; gap: 6px; box-shadow: 0 1px 2px rgba(30, 20, 10, .07), 0 0 0 1px var(--color-border-subtle) }
+.card:hover { box-shadow: 0 6px 18px -6px rgba(30, 20, 10, .18), 0 0 0 1px var(--color-border-subtle) }
+.card.sel { background: var(--sig-tint); box-shadow: none }
+.card-title { font: 500 15px/1.3 var(--font-sans) }
+.card-top .soort { font-size: 12.5px }
+.card-line .date { font: 12.5px var(--font-mono) }
+.card-line .time { font-family: var(--font-mono) }
+.alert-badge { background: var(--color-danger-bg); color: var(--color-danger-fg); padding: 2px 9px 2px 7px }
+.card.floating { box-shadow: 0 24px 40px -14px rgba(30, 20, 10, .4) }
 
-.dw-title { font-weight: 800; letter-spacing: -.025em }
-.dw-alert { background: var(--tape-pink); color: #18191b }
-.dw-sec h3 { font-family: var(--font-mono); font-weight: 500 }
-.time { font-family: var(--font-mono) }
-.dw-head .kind { white-space: nowrap; overflow: hidden; font-size: 11px; text-transform: uppercase; letter-spacing: .05em }
-.title .sum { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis }
+.avatar.face { overflow: hidden; padding: 0; background: none }
+.avatar.face svg { display: block; width: 100%; height: 100% }
+.stack .avatar.face { box-shadow: 0 0 0 2px var(--color-bg-card) }
+
+.drawer { background: var(--color-bg-surface); margin-top: 10px; border-left: 1px solid var(--color-border-subtle) }
+.dw-title { font: var(--display-weight, 600) 26px/1.15 var(--font-display); letter-spacing: var(--display-track, -.02em) }
+.dw-sec h3, .props dt { font-family: var(--font-mono) }
+.dw-sec h3 { font-weight: 500; font-size: 10.5px; letter-spacing: .12em }
+.dw-alert { margin-left: 0 !important; margin-right: 0 !important; border-radius: 12px }
+.pill { padding: 2px 10px }
+.foot { background: transparent; border-top: 1px solid var(--color-border-subtle); font-family: var(--font-mono); font-size: 11px; letter-spacing: .03em }
+@media (max-width: 760px) { .idstrip { height: auto; grid-template-columns: 1fr; gap: 16px; padding: 18px 16px } .voice { justify-self: start } .headline h1 { font-size: 26px } .story { white-space: normal } }
 
 </style>
 </head>
@@ -511,6 +510,7 @@ body { font-size: 13.5px }
   <symbol id="i-hash" viewBox="0 0 16 16"><path d="M6 2.5l-1.5 11M11.5 2.5L10 13.5M3 6h10.5M2.5 10H13"/></symbol>
 </svg>
 
+<header class="idstrip" aria-label="Identiteit"><div class="id-mark"><svg width="64" height="64" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--mark-bg)"/><path d="M14 6.5 L20.5 19 H7.5 Z" fill="var(--mark-fg)" opacity=".28"/><circle cx="14" cy="7.5" r="3" fill="var(--mark-fg)"/><rect x="6" y="19.5" width="16" height="2.6" rx="1.3" fill="var(--mark-fg)"/></svg><div><b>Worktable</b><small>Zaalrood · de planning van het gezelschap</small></div></div><div><div class="lbl">Kleur</div><div class="swatches"><div class="sw"><i style="--c:#8C1C2F"></i><b>Zaalrood</b><span>#8C1C2F</span></div><div class="sw"><i style="--c:#F2EDE5"></i><b>Papier</b><span>#F2EDE5</span></div><div class="sw"><i style="--c:#27211B"></i><b>Inkt</b><span>#27211B</span></div><div class="sw"><i style="--c:#F5E3E2"></i><b>Roos</b><span>#F5E3E2</span></div></div></div><div><div class="lbl">Letter</div><div class="type"><span class="aa">Aa</span><span class="names"><b>Geist</b><span class="m">Geist Mono</span></span></div></div><p class="voice"><small>Stem</small>Morgen spelen we in Brugge. Bram is dan op examen: kies iemand voor zijn plaats.</p></header>
 <div class="app" id="app">
   <aside class="side" aria-label="Navigatie">
     <div class="brand"><b>Worktable</b> · Gezelschap Lantaarn</div>
@@ -580,7 +580,7 @@ const PEOPLE = {
   yd: ['Yara Dubois', 'Speler', '#8a4fb5'], wj: ['Wout Janssens', 'Chauffeur', '#2f8a57'],
 }
 const initials = (k) => PEOPLE[k][0].split(' ').filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).slice(0, 2).join('')
-const avatar = (k, cls = '') => `<span class="avatar ${cls}" style="--h:${PEOPLE[k][2]}" title="${esc(PEOPLE[k][0])}">${initials(k)}</span>`
+let avatar = (k, cls = '') => `<span class="avatar ${cls}" style="--h:${PEOPLE[k][2]}" title="${esc(PEOPLE[k][0])}">${initials(k)}</span>`
 const stack = (keys, open = 0, max = 3) => `<span class="stack">${keys.slice(0, max).map((k) => avatar(k, 'sm')).join('')}${open ? '<span class="avatar sm open" title="Open plek">+</span>' : ''}${keys.length > max ? `<span class="more">+${keys.length - max}</span>` : ''}</span>`
 
 const TOURSTOPS = [
@@ -863,10 +863,45 @@ function boot(note) {
 }
 
 
-const DIRECTION = 'Speelvloer: de zwarte balletvloer van de zaal, alles afgeplakt met spiketape in kleur, opschriften in stift en de tijd als het eerste wat je leest.'
+// ---------- the identity layer: the mark, people with faces, a title that tells the story ----------
+const MARK = (size = 28) => `<svg class="mark" width="${size}" height="${size}" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--sig)"/><path d="M14 6.5 L20.5 19 H7.5 Z" fill="var(--sig-on)" opacity=".28"/><circle cx="14" cy="7.5" r="3" fill="var(--sig-on)"/><rect x="6" y="19.5" width="16" height="2.6" rx="1.3" fill="var(--sig-on)"/></svg>`
+
+// Invented faces, drawn: a skin tone, a hair colour and a cut per person, so the people read as people.
+const FACES = {
+  lv: ['#f1c7a8', '#3b2a20', 'long'], bw: ['#d9a07a', '#1d1714', 'short'], nc: ['#f3d2bb', '#c47a3a', 'bob'], sp: ['#8d5a3b', '#120d0b', 'crop'],
+  jm: ['#e8b896', '#6b6b6b', 'bald'], iw: ['#f5d6c0', '#d8b56a', 'long'], rj: ['#c98d68', '#2b1d16', 'short'], fm: ['#f0c4a4', '#7a3b25', 'bun'],
+  kv: ['#e9bf9f', '#4a3426', 'crop'], yd: ['#6f4630', '#0f0b0a', 'curls'], wj: ['#efc2a0', '#a6743f', 'short'],
+}
+function face(k, size) {
+  const [skin, hair, cut] = FACES[k], tint = PEOPLE[k][2]
+  const hairPath = {
+    long: '<path d="M7 13 Q6 4 12 4 Q18 4 17 13 L17 17 Q15 12 12 11 Q9 12 7 17 Z"/>', short: '<path d="M7.6 10.5 Q8 4.6 12 4.6 Q16 4.6 16.4 10.5 Q14 7.6 12 7.8 Q10 7.6 7.6 10.5 Z"/>',
+    bob: '<path d="M7 14 Q6 4.5 12 4.5 Q18 4.5 17 14 Q15.6 9 12 8.6 Q8.4 9 7 14 Z"/>', crop: '<path d="M8 9.8 Q8.4 5.2 12 5.2 Q15.6 5.2 16 9.8 Q12 7.4 8 9.8 Z"/>',
+    bald: '<path d="M7.8 10.6 Q8 9 8.6 8.6 L8.6 10.8 Z M16.2 10.6 Q16 9 15.4 8.6 L15.4 10.8 Z"/>', bun: '<circle cx="12" cy="3.6" r="2.4"/><path d="M7.8 10.6 Q8 5 12 5 Q16 5 16.2 10.6 Q12 7.6 7.8 10.6 Z"/>',
+    curls: '<path d="M6.6 12 Q5.6 4 12 4 Q18.4 4 17.4 12 Q16.4 8.4 12 8.2 Q7.6 8.4 6.6 12 Z"/><circle cx="7.2" cy="9" r="1.9"/><circle cx="16.8" cy="9" r="1.9"/><circle cx="12" cy="4.6" r="2.2"/>',
+  }[cut]
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect width="24" height="24" fill="color-mix(in srgb, ${tint} 22%, #f4efe8)"/>
+    <path d="M3.5 24 Q4.5 17 12 16.6 Q19.5 17 20.5 24 Z" fill="color-mix(in srgb, ${tint} 75%, #222)"/><rect x="10.3" y="13.4" width="3.4" height="4" fill="${skin}"/>
+    <ellipse cx="12" cy="10.6" rx="4.3" ry="5" fill="${skin}"/><g fill="${hair}">${hairPath}</g></svg>`
+}
+avatar = (k, cls = '') => `<span class="avatar face ${cls}" title="${esc(PEOPLE[k][0])}">${face(k, cls.includes('sm') ? 22 : 26)}</span>`
+
+// The title: where you are, the name, a state pill, and one sentence of what is going on.
+function story() {
+  const rows = typeof visible === 'function' ? visible() : []
+  const optie = rows.filter((a) => a.status === 'optie').length, bad = rows.filter((a) => a.conflict).sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start))
+  const scope = shell.space === 'all' ? 'Alle producties' : prod(shell.space).titel
+  const first = bad[0], when = first && (first.date === addDays(TODAY, 1) ? 'morgen' : DAYS_LONG[D(first.date).getDay()])
+  return `${esc(scope)} · ${rows.length} activiteiten deze week · ${optie} nog in optie${bad.length ? ` · ${bad.length === 1 ? 'één conflict' : `${bad.length} conflicten`}, ${when} ${first.start ? `om ${first.start}` : ''} in ${esc(stopOf(first)?.naam ?? first.venue)}` : ' · geen conflicten'}`
+}
+renderTitle = function ({ glyph, name }) {
+  $('#crumbs').innerHTML = `<div class="crumb">${icon('cal')}<span>Activiteiten</span><span class="sl">/</span><b>${esc(name)}</b></div>
+    <div class="headline"><h1>${esc(name)}</h1><span class="state"><i></i>Week ${weekNo(TODAY)}</span></div><p class="story">${story()}</p>`
+}
+$('.brand').innerHTML = `${MARK(26)}<b>Worktable</b>`
+$('.side-foot').innerHTML = `${avatar('lv')}<span class="who-b"><b>Lotte Verhaegen</b><small>Productieleider</small></span>`
 // ---------- the board ----------
 shell.active = 'perstatus'
-shell.space = 'all'
 shell.open = new Set(['activiteit'])
 const GROUPS = {
   status: { label: 'Status', options: STATUS, tone: (k) => ({ optie: 'var(--color-warning-fg)', bevestigd: 'var(--color-success-fg)', geannuleerd: 'var(--color-danger-fg)' })[k] },
@@ -892,10 +927,8 @@ function visible() {
 
 function card(a) {
   const [have, need] = a.crew
-  const d = D(a.date)
-  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" data-p="${a.prod}" data-soort="${a.soort}" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
-    <span class="stamp" data-p="${a.prod}" aria-hidden="true"><b>${d.getDate()}</b><i>${DAYS_NL[d.getDay()]}</i><i>${MONTHS_NL[d.getMonth()]}</i></span>
-    <div class="card-top"><span class="pmark" data-p="${a.prod}" title="${esc(prod(a.prod).titel)}">${prod(a.prod).mark}</span><span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}</div>
+  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
+    <div class="card-top"><span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}</div>
     <div class="card-title">${esc(a.title)}</div>
     <div class="card-line"><span class="date">${dayShort(a.date)}</span>${a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>'}</div>
     ${a.venue ? `<div class="card-line"><span class="ell ${a.inherited ? 'inherited' : ''}">${esc(a.venue)}</span></div>` : ''}
@@ -906,7 +939,7 @@ function card(a) {
 function column(key, rows) {
   const g = GROUPS[board.group]
   return `<section class="col" data-key="${key}" style="--t:${g.tone(key)}" aria-label="${esc(g.options[key])}">
-    <header class="col-head" data-key="${key}"><span class="col-name">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
+    <header class="col-head"><span class="col-name">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
       <button class="tool" data-new="${key}" aria-label="Nieuwe activiteit in ${esc(g.options[key])}">${icon('plus')}</button></header>
     <div class="col-body">${rows.map(card).join('') || '<div class="col-empty">Geen activiteiten</div>'}</div></section>`
 }
@@ -1016,7 +1049,7 @@ function stageDemo() {
 
 TWEAKS.push({ key: 'demo', label: 'Sleepvoorbeeld', options: [['on', 'Aan'], ['off', 'Uit']], value: 'on', apply: (v) => { endDrag(false); board.demo = v === 'on'; if (board.demo) requestAnimationFrame(stageDemo) } })
 $('#foot').innerHTML = '<span>Sleep een kaart naar een andere kolom</span><span>↵ openen</span><span>⌘Z ongedaan maken</span>'
-boot(DIRECTION)
+boot('Het bord opent met één kaart halverwege het slepen. Klik ergens om het te stoppen.')
 render()
 requestAnimationFrame(() => requestAnimationFrame(stageDemo))
 

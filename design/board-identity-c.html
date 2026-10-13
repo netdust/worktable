@@ -1,13 +1,21 @@
-<!-- Richting: Regieboek. Regieboek: het boek van de inspiciënt, gelinieerd papier, potloodblauw, markeerstift per status en elke begintijd omcirkeld als een cue. -->
 <!doctype html>
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<!-- The client sheet. Everything that makes this Worktable look like Inktblauw is in this block: the font links and the tokens. Swap it for another sheet and the same app takes that identity. The mark is one shared SVG coloured by --sig and --sig-on. -->
+<!-- Inktblauw: krijtwit met een groene ondertoon, ultramarijn als inkt van het programmaboekje, Newsreader voor titels en stem, Hanken Grotesk om te lezen. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style id="client-sheet">
+html:root { --side-bg: #eef0ea; --side-ink: #1a1d29; --side-ink-muted: #4f5464; --side-ink-subtle: #8b909b; --side-hover: #e4e7df; --side-card: #fcfcf9; --side-line: #dde0d7; --mark-bg: #2b3bcc; --mark-fg: #ffffff; --font-sans: "Hanken Grotesk", system-ui, sans-serif; --font-mono: "Spline Sans Mono", ui-monospace, monospace; --font-display: "Newsreader", Georgia, serif; --display-weight: 500; --display-track: -.015em; --voice-style: italic; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --shadow-pop: 0 12px 32px rgba(30, 20, 10, .16), 0 1px 3px rgba(30, 20, 10, .08); --color-bg-canvas: #eef0ea; --color-bg-sidebar: #eef0ea; --color-bg-surface: #fcfcf9; --color-bg-subtle: #f3f4ef; --color-bg-muted: #e7e9e2; --color-bg-hover: #f3f4ef; --color-bg-selected: #e6e9fb; --color-bg-column: #f2f3ee; --color-bg-card: #fefefc; --color-band: #f3f4ef; --color-border-subtle: #e3e6de; --color-border-default: #d3d7cd; --color-border-strong: #b7bcb0; --color-fg-default: #1a1d29; --color-fg-muted: #4f5464; --color-fg-subtle: #8b909b; --sig: #2b3bcc; --sig-on: #ffffff; --sig-hover: #2231a8; --sig-tint: #e6e9fb; --sig-ink: #2433b0; --color-accent-default: #2433b0; --color-accent-hover: #2231a8; --color-accent-subtle: #e6e9fb; --color-fg-on-accent: #ffffff; --color-success-fg: #2b6b45; --color-success-bg: #dff0e4; --color-warning-fg: #875c00; --color-warning-bg: #f6ebcf; --color-danger-fg: #b0243a; --color-danger-bg: #f9e0e4; --strip-bg: #eef0ea; --strip-fg: #1a1d29; --strip-line: #d3d7cd; --today: #2b3bcc }
+html:root[data-theme="dark"] { --side-bg: #11131b; --side-ink: #ecebf3; --side-ink-muted: #aeb0c2; --side-ink-subtle: #767a8e; --side-hover: #1e2230; --side-card: #181b25; --side-line: #242838; --mark-bg: #8e9bff; --mark-fg: #10121a; --color-bg-canvas: #11131b; --color-bg-sidebar: #11131b; --color-bg-surface: #181b25; --color-bg-subtle: #1e2230; --color-bg-muted: #272b3a; --color-bg-hover: #1e2230; --color-bg-selected: #232a52; --color-bg-column: #1c1f2b; --color-bg-card: #202432; --color-band: #1e2230; --color-border-subtle: #242838; --color-border-default: #30354a; --color-border-strong: #424862; --color-fg-default: #ecebf3; --color-fg-muted: #aeb0c2; --color-fg-subtle: #767a8e; --sig: #8e9bff; --sig-on: #10121a; --sig-hover: #a6b0ff; --sig-tint: #232a52; --sig-ink: #b6bfff; --color-accent-default: #b6bfff; --color-accent-hover: #a6b0ff; --color-accent-subtle: #232a52; --color-fg-on-accent: #10121a; --color-success-fg: #86d4a2; --color-success-bg: #16301f; --color-warning-fg: #f0c86a; --color-warning-bg: #3a2c12; --color-danger-fg: #ff92a4; --color-danger-bg: #3d1a22; --strip-bg: #11131b; --strip-fg: #ecebf3; --strip-line: #000; --today: #b6bfff; color-scheme: dark }
+@media (prefers-color-scheme: dark) { html:root:not([data-theme="light"]) { --side-bg: #11131b; --side-ink: #ecebf3; --side-ink-muted: #aeb0c2; --side-ink-subtle: #767a8e; --side-hover: #1e2230; --side-card: #181b25; --side-line: #242838; --mark-bg: #8e9bff; --mark-fg: #10121a; --color-bg-canvas: #11131b; --color-bg-sidebar: #11131b; --color-bg-surface: #181b25; --color-bg-subtle: #1e2230; --color-bg-muted: #272b3a; --color-bg-hover: #1e2230; --color-bg-selected: #232a52; --color-bg-column: #1c1f2b; --color-bg-card: #202432; --color-band: #1e2230; --color-border-subtle: #242838; --color-border-default: #30354a; --color-border-strong: #424862; --color-fg-default: #ecebf3; --color-fg-muted: #aeb0c2; --color-fg-subtle: #767a8e; --sig: #8e9bff; --sig-on: #10121a; --sig-hover: #a6b0ff; --sig-tint: #232a52; --sig-ink: #b6bfff; --color-accent-default: #b6bfff; --color-accent-hover: #a6b0ff; --color-accent-subtle: #232a52; --color-fg-on-accent: #10121a; --color-success-fg: #86d4a2; --color-success-bg: #16301f; --color-warning-fg: #f0c86a; --color-warning-bg: #3a2c12; --color-danger-fg: #ff92a4; --color-danger-bg: #3d1a22; --strip-bg: #11131b; --strip-fg: #ecebf3; --strip-line: #000; --today: #b6bfff; color-scheme: dark } }
+</style>
+<!-- end of the client sheet -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bord Regieboek</title>
+<title>Bord Inktblauw</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=Fragment+Mono:ital@0;1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: the app shell and the grid's toolbar; Activiteiten as a board, one column per option of the group column, the record drawer open on the right. */
 /* Token names follow apps/grid/src/ui/theme.css and design/grid-prototype.html, the approved design language. Invented data only. */
@@ -357,100 +365,100 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .card.floating { position: fixed; z-index: 80; pointer-events: none; margin: 0; transform: rotate(2deg); box-shadow: var(--shadow-pop); cursor: grabbing }
 .slot { background: color-mix(in srgb, var(--color-accent-default) 12%, transparent); border-radius: var(--radius-md); display: grid; place-items: center; color: var(--color-accent-default); font-size: 12.5px; font-weight: 500 }
 body.dragging, body.dragging * { cursor: grabbing !important }
-.stamp, .pmark { display: none }
-/* Regieboek: het boek van de inspiciënt, gelinieerd papier, potloodblauw, markeerstift per status en elke begintijd omcirkeld als een cue. */
-:root {
-  --font-sans: "Instrument Sans", "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "Fragment Mono", "IBM Plex Mono", ui-monospace, monospace;
-  --font-display: "Instrument Serif", Georgia, serif;
-  --color-bg-canvas: #eceff3; --color-bg-surface: #fbfcfd; --color-bg-subtle: #f3f5f8; --color-bg-muted: #e6eaf0;
-  --color-bg-sidebar: #f2f4f7; --color-bg-hover: #edf1f6; --color-bg-selected: #e3e9f7; --color-bg-card: transparent; --color-bg-column: #fbfcfd;
-  --color-fg-default: #20252e; --color-fg-muted: #525b69; --color-fg-subtle: #8d95a3;
-  --color-border-subtle: #e2e7ee; --color-border-default: #d3dae3; --color-border-strong: #b3bcc8;
-  --color-accent-default: #2846a8; --color-accent-hover: #1f3a8f; --color-accent-subtle: #e3e9f7;
-  --hl-yellow: #fbe68a; --hl-green: #c8ebb4; --hl-pink: #ffc9d4; --hl-blue: #cfdcfb;
-  --color-success-fg: #2b6a27; --color-warning-fg: #6e5600; --color-danger-fg: #9c1d33;
-  --color-success-bg: var(--hl-green); --color-warning-bg: var(--hl-yellow); --color-danger-bg: var(--hl-pink);
-  --rule: #dfe6ef; --margin-rule: #cdd3db; --today: #c2410c;
-  --radius-sm: 2px; --radius-md: 3px; --radius-lg: 4px;
-}
-:root[data-theme="dark"] {
-  --color-bg-canvas: #101318; --color-bg-surface: #171b22; --color-bg-subtle: #1c212a; --color-bg-muted: #262c37;
-  --color-bg-sidebar: #0d1015; --color-bg-hover: #1f2530; --color-bg-selected: #202c48; --color-bg-card: transparent; --color-bg-column: #161a21;
-  --color-fg-default: #e9e6dd; --color-fg-muted: #aab0bb; --color-fg-subtle: #6f7784;
-  --color-border-subtle: #232934; --color-border-default: #2c3340; --color-border-strong: #3c4555;
-  --color-accent-default: #93abff; --color-accent-hover: #b2c3ff; --color-accent-subtle: #1f2a47;
-  --hl-yellow: rgba(242, 212, 80, .3); --hl-green: rgba(130, 210, 110, .26); --hl-pink: rgba(255, 120, 150, .28); --hl-blue: rgba(130, 160, 255, .28);
-  --color-success-fg: #9fdc8c; --color-warning-fg: #f0d36a; --color-danger-fg: #ff9cb0;
-  --rule: #1f2530; --margin-rule: #2f3642; --today: #ff8a4c;
-}
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --color-bg-canvas: #101318; --color-bg-surface: #171b22; --color-bg-subtle: #1c212a; --color-bg-muted: #262c37;
-  --color-bg-sidebar: #0d1015; --color-bg-hover: #1f2530; --color-bg-selected: #202c48; --color-bg-card: transparent; --color-bg-column: #161a21;
-  --color-fg-default: #e9e6dd; --color-fg-muted: #aab0bb; --color-fg-subtle: #6f7784;
-  --color-border-subtle: #232934; --color-border-default: #2c3340; --color-border-strong: #3c4555;
-  --color-accent-default: #93abff; --color-accent-hover: #b2c3ff; --color-accent-subtle: #1f2a47;
-  --hl-yellow: rgba(242, 212, 80, .3); --hl-green: rgba(130, 210, 110, .26); --hl-pink: rgba(255, 120, 150, .28); --hl-blue: rgba(130, 160, 255, .28);
-  --color-success-fg: #9fdc8c; --color-warning-fg: #f0d36a; --color-danger-fg: #ff9cb0;
-  --rule: #1f2530; --margin-rule: #2f3642; --today: #ff8a4c;
-} }
+/* the identity strip above the app: the mark, the colours, the type, the voice */
+html, body { height: 100% }
+body { display: flex; flex-direction: column; background: var(--side-bg); font-family: var(--font-sans) }
+.idstrip { height: 160px; flex: none; display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); gap: 44px; align-items: center; padding: 0 36px; background: var(--strip-bg); color: var(--strip-fg); border-bottom: 1px solid var(--strip-line) }
+.idstrip .lbl { font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; opacity: .62; margin-bottom: 10px }
+.id-mark { display: flex; align-items: center; gap: 16px }
+.id-mark b { font: var(--display-weight, 600) 38px/1 var(--font-display); letter-spacing: var(--display-track, -.02em) }
+.id-mark small { display: block; font-size: 13px; opacity: .7; margin-top: 6px; letter-spacing: 0 }
+.swatches { display: flex; gap: 10px }
+.sw { display: grid; gap: 6px; font: 11px var(--font-mono) }
+.sw i { width: 64px; height: 40px; border-radius: 8px; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08) }
+.sw span { opacity: .75 }
+.type { display: flex; align-items: baseline; gap: 14px }
+.type .aa { font: var(--display-weight, 600) 54px/1 var(--font-display); letter-spacing: var(--display-track, -.02em) }
+.type .names { display: grid; gap: 3px; font-size: 12.5px }
+.type .names .m { font-family: var(--font-mono); font-size: 11.5px; opacity: .75 }
+.voice { font: var(--voice-style, normal) 400 19px/1.35 var(--font-display); max-width: 520px; justify-self: end }
+.voice small { display: block; font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; opacity: .62; margin-bottom: 10px; font-style: normal }
 
-body { font-size: 14px; word-spacing: .1em }
-.title h1 { font: 400 30px/1 var(--font-display); letter-spacing: 0 }
-.title .sum { background: none; padding: 0; font: 12.5px var(--font-mono); color: var(--color-fg-subtle) }
-.title .tglyph { background: none; width: 22px }
-.brand b, .dw-title { font-family: var(--font-display); font-weight: 400 }
-.brand b { font-size: 17px }
-.section-label { font-family: var(--font-mono); font-weight: 400; letter-spacing: .04em; text-transform: none; font-size: 11.5px }
-.section-label::before { content: "§ "; color: var(--color-fg-subtle) }
-.view.active { background: none; color: var(--color-accent-default); box-shadow: inset 0 -.55em 0 var(--hl-blue) }
-.chip { border-color: var(--color-border-strong); font-size: 13px }
-.chip.set { background: none; border-color: transparent; color: var(--color-fg-default); box-shadow: inset 0 -.6em 0 var(--hl-blue) }
-.btn.primary { background: var(--color-fg-default); border-color: var(--color-fg-default); color: var(--color-bg-surface) }
-.btn.primary:hover { background: var(--color-accent-default); border-color: var(--color-accent-default) }
+/* the app sits on a canvas with a temperature; the work is one raised panel */
+.app { height: auto; flex: 1; min-height: 0; background: var(--side-bg) }
+.side { background: transparent; border-right: 0; color: var(--side-ink); --color-fg-default: var(--side-ink); --color-fg-muted: var(--side-ink-muted); --color-fg-subtle: var(--side-ink-subtle); --color-bg-hover: var(--side-hover); --color-bg-surface: var(--side-card); --color-bg-subtle: var(--side-hover); --color-bg-muted: var(--side-hover); --color-border-subtle: var(--side-line); --color-border-default: var(--side-line); --color-border-strong: var(--side-line) }
+.brand { padding: 16px 16px 8px; gap: 10px; text-transform: none; letter-spacing: 0 }
+.brand b { font: var(--display-weight, 600) 19px var(--font-display); letter-spacing: var(--display-track, -.02em); color: var(--color-fg-default) }
+.space { margin: 8px 12px 12px }
+.space-btn { border: 0; border-radius: 12px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(30, 20, 10, .06), 0 0 0 1px var(--color-border-subtle) }
+.space-mark { border-radius: 8px }
+.section-label { font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; padding: 16px 8px 6px }
+.model { height: 34px } .view { height: 32px }
+.model .name { font-weight: 500 }
+.view.active { background: var(--sig); color: var(--sig-on); font-weight: 500 }
+.view.active .icon, .view.active .lock { color: var(--sig-on) }
+.views::before { border-color: var(--color-border-default) }
+.side-foot { border-top: 0; padding: 12px 16px 16px; color: var(--color-fg-default) }
+.who-b { display: grid; line-height: 1.25 } .who-b b { font-weight: 500; font-size: 13px } .who-b small { color: var(--color-fg-subtle); font-size: 11.5px }
+.tweaks { border: 0; box-shadow: 0 0 0 1px var(--color-border-subtle); border-radius: 12px }
 
-/* the page: ruled paper with a margin, a column is a sheet */
-.stage { background: var(--color-bg-canvas) }
-.board { gap: 18px; padding: 18px 22px 30px }
-.col { width: 316px; border: 0; border-radius: 0; box-shadow: 0 1px 0 var(--color-border-default), 0 10px 24px -18px rgba(20, 30, 50, .35);
-  background: linear-gradient(90deg, transparent 30px, var(--margin-rule) 30px 31px, transparent 31px), var(--color-bg-column) }
-.col-head { background: var(--color-bg-column); padding: 14px 14px 10px 42px; border-bottom: 1.5px solid var(--color-fg-default); border-radius: 0; align-items: baseline }
-.col-name { font: italic 400 26px/1 var(--font-display); letter-spacing: 0 }
-.col-name::before { display: none }
-.col-name { background: linear-gradient(transparent 58%, var(--t-hl) 58% 92%, transparent 92%); padding: 0 4px; margin-left: -4px }
-.col-head[data-key="optie"] { --t-hl: var(--hl-yellow) } .col-head[data-key="bevestigd"] { --t-hl: var(--hl-green) } .col-head[data-key="geannuleerd"] { --t-hl: var(--hl-pink) }
-.col-count { background: none; font: 13px var(--font-mono); color: var(--color-fg-subtle); padding: 0 }
-.col-body { gap: 0; padding: 0 0 12px }
-.col-empty { font: italic 18px var(--font-display); color: var(--color-fg-subtle); padding: 28px 12px 28px 42px; text-align: left }
+.main { background: var(--color-bg-surface); border-radius: 18px 0 0 0; margin-top: 10px; box-shadow: 0 0 0 1px var(--color-border-subtle), 0 2px 12px rgba(30, 20, 10, .04) }
+.top { background: transparent; border-bottom: 0; padding: 20px 28px 4px; align-items: flex-start; min-height: 0 }
+.title { display: grid; gap: 4px; align-content: start }
+.crumb { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--color-fg-subtle) }
+.crumb .icon { width: 15px; height: 15px }
+.crumb .sl { opacity: .5 } .crumb b { color: var(--color-fg-default); font-weight: 500 }
+.headline { display: flex; align-items: center; gap: 14px; margin-top: 8px }
+.headline h1 { margin: 0; font: var(--display-weight, 600) 36px/1.05 var(--font-display); letter-spacing: var(--display-track, -.02em); white-space: nowrap }
+.state { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; background: var(--sig-tint); color: var(--sig-ink); font-size: 13px; font-weight: 500 }
+.state i { width: 7px; height: 7px; border-radius: 50%; background: var(--sig) }
+.story { margin: 4px 0 0; font-size: 15px; line-height: 1.45; color: var(--color-fg-muted); max-width: 680px }
+.search, .iconbtn, .btn { border-radius: 10px }
+.search { border: 0; background: var(--color-bg-subtle) }
+.iconbtn { border: 0; background: var(--color-bg-subtle) }
+.btn.primary { background: var(--sig); border-color: var(--sig); color: var(--sig-on); font-weight: 500 }
+.btn.primary:hover { background: var(--sig-hover); border-color: var(--sig-hover) }
 
-.card { background: none; border: 0; border-bottom: 1px solid var(--color-border-default); border-radius: 0; padding: 12px 14px 12px 42px; gap: 4px }
-.card:hover { border-color: var(--color-border-default); background: color-mix(in srgb, var(--hl-blue) 35%, transparent) }
-.card.sel { background: color-mix(in srgb, var(--hl-blue) 70%, transparent) }
-.card-title { font: 400 19px/1.15 var(--font-display) }
-.card-top { font-size: 12px; min-height: 0 }
-.soort { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-fg-muted) }
-.soort i { border-radius: 50% }
-.card-line .date { font-size: 12px; color: var(--color-fg-muted) }
-/* the cue: the start time circled in pencil, as in a prompt book */
-.card-line .time { font-size: 12.5px }
-.card-line .time { border: 1.3px solid var(--color-fg-default); border-radius: 999px; padding: 0 7px; margin-left: 2px }
-.card-line .time .end { color: var(--color-fg-subtle) }
-.card-line .ell { font-size: 12.5px }
-.inherited { font-style: italic }
-.alert-badge { background: linear-gradient(transparent 20%, var(--hl-pink) 20% 90%, transparent 90%); border-radius: 0; color: var(--color-danger-fg); font-family: var(--font-mono); font-weight: 400 }
-.pill { background: none !important; padding: 0 3px; font-family: var(--font-mono); font-weight: 400; border-radius: 0 }
-.pill::before { display: none }
-.pill.optie { box-shadow: inset 0 -.65em 0 var(--hl-yellow) } .pill.bevestigd { box-shadow: inset 0 -.65em 0 var(--hl-green) } .pill.geannuleerd { box-shadow: inset 0 -.65em 0 var(--hl-pink) }
-.avatar { background: none !important; border: 1px solid var(--color-border-strong); color: var(--color-fg-muted) !important; font-family: var(--font-mono); font-weight: 400 }
-.stack .avatar { box-shadow: none; background: var(--color-bg-column) !important }
-.slot { background: var(--hl-blue); border-radius: 0; color: var(--color-accent-default); font: italic 18px var(--font-display) }
-.col.drop { background: linear-gradient(90deg, transparent 30px, var(--margin-rule) 30px 31px, transparent 31px), color-mix(in srgb, var(--hl-blue) 40%, var(--color-bg-column)) }
-.card.floating { background: var(--color-bg-surface); transform: rotate(-1.5deg) }
+.bar { background: transparent; padding: 10px 28px 14px; border-bottom: 1px solid var(--color-border-subtle) }
+.chip { border: 0; background: var(--color-bg-subtle); color: var(--color-fg-muted); padding: 5px 12px; font-size: 13px }
+.chip:hover { background: var(--color-bg-muted); color: var(--color-fg-default) }
+.chip.set { background: var(--sig-tint); color: var(--sig-ink) }
+.chip .count { background: var(--sig); color: var(--sig-on) }
+.bar .rows { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .04em }
 
-.dw-title { font-size: 28px }
-.dw-alert { background: var(--hl-pink); color: var(--color-danger-fg) }
-.dw-sec h3 { font-family: var(--font-mono); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 12px }
-.dw-sec h3::before { content: "§"; margin-right: 2px }
+/* the board on the panel */
+.stage { background: var(--color-bg-surface) }
+.board { padding: 18px 28px 30px; gap: 16px }
+.col { background: var(--color-bg-column); border: 0; border-radius: 14px; width: 310px }
+.col-head { border-radius: 14px 14px 0 0; padding: 14px 14px 10px }
+.col-name { font: 500 14px var(--font-sans) }
+.col-name::before { width: 8px; height: 8px }
+.col-count { background: var(--color-bg-surface); border-radius: 999px; padding: 1px 8px; font: 500 11.5px var(--font-mono) }
+.col-body { padding: 0 10px 12px; gap: 10px }
+.col.drop { background: var(--sig-tint) }
+.slot { background: color-mix(in srgb, var(--sig) 14%, transparent); color: var(--sig-ink); border-radius: var(--radius-md) }
+.card { background: var(--color-bg-card); border: 0; border-radius: var(--radius-md); padding: 12px 14px 12px; gap: 6px; box-shadow: 0 1px 2px rgba(30, 20, 10, .07), 0 0 0 1px var(--color-border-subtle) }
+.card:hover { box-shadow: 0 6px 18px -6px rgba(30, 20, 10, .18), 0 0 0 1px var(--color-border-subtle) }
+.card.sel { background: var(--sig-tint); box-shadow: none }
+.card-title { font: 500 15px/1.3 var(--font-sans) }
+.card-top .soort { font-size: 12.5px }
+.card-line .date { font: 12.5px var(--font-mono) }
+.card-line .time { font-family: var(--font-mono) }
+.alert-badge { background: var(--color-danger-bg); color: var(--color-danger-fg); padding: 2px 9px 2px 7px }
+.card.floating { box-shadow: 0 24px 40px -14px rgba(30, 20, 10, .4) }
+
+.avatar.face { overflow: hidden; padding: 0; background: none }
+.avatar.face svg { display: block; width: 100%; height: 100% }
+.stack .avatar.face { box-shadow: 0 0 0 2px var(--color-bg-card) }
+
+.drawer { background: var(--color-bg-surface); margin-top: 10px; border-left: 1px solid var(--color-border-subtle) }
+.dw-title { font: var(--display-weight, 600) 26px/1.15 var(--font-display); letter-spacing: var(--display-track, -.02em) }
+.dw-sec h3, .props dt { font-family: var(--font-mono) }
+.dw-sec h3 { font-weight: 500; font-size: 10.5px; letter-spacing: .12em }
+.dw-alert { margin-left: 0 !important; margin-right: 0 !important; border-radius: 12px }
+.pill { padding: 2px 10px }
+.foot { background: transparent; border-top: 1px solid var(--color-border-subtle); font-family: var(--font-mono); font-size: 11px; letter-spacing: .03em }
+@media (max-width: 760px) { .idstrip { height: auto; grid-template-columns: 1fr; gap: 16px; padding: 18px 16px } .voice { justify-self: start } .headline h1 { font-size: 26px } .story { white-space: normal } }
 
 </style>
 </head>
@@ -502,6 +510,7 @@ body { font-size: 14px; word-spacing: .1em }
   <symbol id="i-hash" viewBox="0 0 16 16"><path d="M6 2.5l-1.5 11M11.5 2.5L10 13.5M3 6h10.5M2.5 10H13"/></symbol>
 </svg>
 
+<header class="idstrip" aria-label="Identiteit"><div class="id-mark"><svg width="64" height="64" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--mark-bg)"/><path d="M14 6.5 L20.5 19 H7.5 Z" fill="var(--mark-fg)" opacity=".28"/><circle cx="14" cy="7.5" r="3" fill="var(--mark-fg)"/><rect x="6" y="19.5" width="16" height="2.6" rx="1.3" fill="var(--mark-fg)"/></svg><div><b>Worktable</b><small>Inktblauw · de planning van het gezelschap</small></div></div><div><div class="lbl">Kleur</div><div class="swatches"><div class="sw"><i style="--c:#2B3BCC"></i><b>Inktblauw</b><span>#2B3BCC</span></div><div class="sw"><i style="--c:#EEF0EA"></i><b>Krijt</b><span>#EEF0EA</span></div><div class="sw"><i style="--c:#1A1D29"></i><b>Inkt</b><span>#1A1D29</span></div><div class="sw"><i style="--c:#E6E9FB"></i><b>Programma</b><span>#E6E9FB</span></div></div></div><div><div class="lbl">Letter</div><div class="type"><span class="aa">Aa</span><span class="names"><b>Newsreader</b><span class="m">Hanken Grotesk · Spline Sans Mono</span></span></div></div><p class="voice"><small>Stem</small>Vanavond is het stil. Morgen Brugge: zeven plaatsen, zes gevuld, één open voor een speler.</p></header>
 <div class="app" id="app">
   <aside class="side" aria-label="Navigatie">
     <div class="brand"><b>Worktable</b> · Gezelschap Lantaarn</div>
@@ -571,7 +580,7 @@ const PEOPLE = {
   yd: ['Yara Dubois', 'Speler', '#8a4fb5'], wj: ['Wout Janssens', 'Chauffeur', '#2f8a57'],
 }
 const initials = (k) => PEOPLE[k][0].split(' ').filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).slice(0, 2).join('')
-const avatar = (k, cls = '') => `<span class="avatar ${cls}" style="--h:${PEOPLE[k][2]}" title="${esc(PEOPLE[k][0])}">${initials(k)}</span>`
+let avatar = (k, cls = '') => `<span class="avatar ${cls}" style="--h:${PEOPLE[k][2]}" title="${esc(PEOPLE[k][0])}">${initials(k)}</span>`
 const stack = (keys, open = 0, max = 3) => `<span class="stack">${keys.slice(0, max).map((k) => avatar(k, 'sm')).join('')}${open ? '<span class="avatar sm open" title="Open plek">+</span>' : ''}${keys.length > max ? `<span class="more">+${keys.length - max}</span>` : ''}</span>`
 
 const TOURSTOPS = [
@@ -854,10 +863,45 @@ function boot(note) {
 }
 
 
-const DIRECTION = 'Regieboek: het boek van de inspiciënt, gelinieerd papier, potloodblauw, markeerstift per status en elke begintijd omcirkeld als een cue.'
+// ---------- the identity layer: the mark, people with faces, a title that tells the story ----------
+const MARK = (size = 28) => `<svg class="mark" width="${size}" height="${size}" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--sig)"/><path d="M14 6.5 L20.5 19 H7.5 Z" fill="var(--sig-on)" opacity=".28"/><circle cx="14" cy="7.5" r="3" fill="var(--sig-on)"/><rect x="6" y="19.5" width="16" height="2.6" rx="1.3" fill="var(--sig-on)"/></svg>`
+
+// Invented faces, drawn: a skin tone, a hair colour and a cut per person, so the people read as people.
+const FACES = {
+  lv: ['#f1c7a8', '#3b2a20', 'long'], bw: ['#d9a07a', '#1d1714', 'short'], nc: ['#f3d2bb', '#c47a3a', 'bob'], sp: ['#8d5a3b', '#120d0b', 'crop'],
+  jm: ['#e8b896', '#6b6b6b', 'bald'], iw: ['#f5d6c0', '#d8b56a', 'long'], rj: ['#c98d68', '#2b1d16', 'short'], fm: ['#f0c4a4', '#7a3b25', 'bun'],
+  kv: ['#e9bf9f', '#4a3426', 'crop'], yd: ['#6f4630', '#0f0b0a', 'curls'], wj: ['#efc2a0', '#a6743f', 'short'],
+}
+function face(k, size) {
+  const [skin, hair, cut] = FACES[k], tint = PEOPLE[k][2]
+  const hairPath = {
+    long: '<path d="M7 13 Q6 4 12 4 Q18 4 17 13 L17 17 Q15 12 12 11 Q9 12 7 17 Z"/>', short: '<path d="M7.6 10.5 Q8 4.6 12 4.6 Q16 4.6 16.4 10.5 Q14 7.6 12 7.8 Q10 7.6 7.6 10.5 Z"/>',
+    bob: '<path d="M7 14 Q6 4.5 12 4.5 Q18 4.5 17 14 Q15.6 9 12 8.6 Q8.4 9 7 14 Z"/>', crop: '<path d="M8 9.8 Q8.4 5.2 12 5.2 Q15.6 5.2 16 9.8 Q12 7.4 8 9.8 Z"/>',
+    bald: '<path d="M7.8 10.6 Q8 9 8.6 8.6 L8.6 10.8 Z M16.2 10.6 Q16 9 15.4 8.6 L15.4 10.8 Z"/>', bun: '<circle cx="12" cy="3.6" r="2.4"/><path d="M7.8 10.6 Q8 5 12 5 Q16 5 16.2 10.6 Q12 7.6 7.8 10.6 Z"/>',
+    curls: '<path d="M6.6 12 Q5.6 4 12 4 Q18.4 4 17.4 12 Q16.4 8.4 12 8.2 Q7.6 8.4 6.6 12 Z"/><circle cx="7.2" cy="9" r="1.9"/><circle cx="16.8" cy="9" r="1.9"/><circle cx="12" cy="4.6" r="2.2"/>',
+  }[cut]
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><rect width="24" height="24" fill="color-mix(in srgb, ${tint} 22%, #f4efe8)"/>
+    <path d="M3.5 24 Q4.5 17 12 16.6 Q19.5 17 20.5 24 Z" fill="color-mix(in srgb, ${tint} 75%, #222)"/><rect x="10.3" y="13.4" width="3.4" height="4" fill="${skin}"/>
+    <ellipse cx="12" cy="10.6" rx="4.3" ry="5" fill="${skin}"/><g fill="${hair}">${hairPath}</g></svg>`
+}
+avatar = (k, cls = '') => `<span class="avatar face ${cls}" title="${esc(PEOPLE[k][0])}">${face(k, cls.includes('sm') ? 22 : 26)}</span>`
+
+// The title: where you are, the name, a state pill, and one sentence of what is going on.
+function story() {
+  const rows = typeof visible === 'function' ? visible() : []
+  const optie = rows.filter((a) => a.status === 'optie').length, bad = rows.filter((a) => a.conflict).sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start))
+  const scope = shell.space === 'all' ? 'Alle producties' : prod(shell.space).titel
+  const first = bad[0], when = first && (first.date === addDays(TODAY, 1) ? 'morgen' : DAYS_LONG[D(first.date).getDay()])
+  return `${esc(scope)} · ${rows.length} activiteiten deze week · ${optie} nog in optie${bad.length ? ` · ${bad.length === 1 ? 'één conflict' : `${bad.length} conflicten`}, ${when} ${first.start ? `om ${first.start}` : ''} in ${esc(stopOf(first)?.naam ?? first.venue)}` : ' · geen conflicten'}`
+}
+renderTitle = function ({ glyph, name }) {
+  $('#crumbs').innerHTML = `<div class="crumb">${icon('cal')}<span>Activiteiten</span><span class="sl">/</span><b>${esc(name)}</b></div>
+    <div class="headline"><h1>${esc(name)}</h1><span class="state"><i></i>Week ${weekNo(TODAY)}</span></div><p class="story">${story()}</p>`
+}
+$('.brand').innerHTML = `${MARK(26)}<b>Worktable</b>`
+$('.side-foot').innerHTML = `${avatar('lv')}<span class="who-b"><b>Lotte Verhaegen</b><small>Productieleider</small></span>`
 // ---------- the board ----------
 shell.active = 'perstatus'
-shell.space = 'all'
 shell.open = new Set(['activiteit'])
 const GROUPS = {
   status: { label: 'Status', options: STATUS, tone: (k) => ({ optie: 'var(--color-warning-fg)', bevestigd: 'var(--color-success-fg)', geannuleerd: 'var(--color-danger-fg)' })[k] },
@@ -883,10 +927,8 @@ function visible() {
 
 function card(a) {
   const [have, need] = a.crew
-  const d = D(a.date)
-  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" data-p="${a.prod}" data-soort="${a.soort}" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
-    <span class="stamp" data-p="${a.prod}" aria-hidden="true"><b>${d.getDate()}</b><i>${DAYS_NL[d.getDay()]}</i><i>${MONTHS_NL[d.getMonth()]}</i></span>
-    <div class="card-top"><span class="pmark" data-p="${a.prod}" title="${esc(prod(a.prod).titel)}">${prod(a.prod).mark}</span><span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}</div>
+  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
+    <div class="card-top"><span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}</div>
     <div class="card-title">${esc(a.title)}</div>
     <div class="card-line"><span class="date">${dayShort(a.date)}</span>${a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>'}</div>
     ${a.venue ? `<div class="card-line"><span class="ell ${a.inherited ? 'inherited' : ''}">${esc(a.venue)}</span></div>` : ''}
@@ -897,7 +939,7 @@ function card(a) {
 function column(key, rows) {
   const g = GROUPS[board.group]
   return `<section class="col" data-key="${key}" style="--t:${g.tone(key)}" aria-label="${esc(g.options[key])}">
-    <header class="col-head" data-key="${key}"><span class="col-name">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
+    <header class="col-head"><span class="col-name">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
       <button class="tool" data-new="${key}" aria-label="Nieuwe activiteit in ${esc(g.options[key])}">${icon('plus')}</button></header>
     <div class="col-body">${rows.map(card).join('') || '<div class="col-empty">Geen activiteiten</div>'}</div></section>`
 }
@@ -1007,7 +1049,7 @@ function stageDemo() {
 
 TWEAKS.push({ key: 'demo', label: 'Sleepvoorbeeld', options: [['on', 'Aan'], ['off', 'Uit']], value: 'on', apply: (v) => { endDrag(false); board.demo = v === 'on'; if (board.demo) requestAnimationFrame(stageDemo) } })
 $('#foot').innerHTML = '<span>Sleep een kaart naar een andere kolom</span><span>↵ openen</span><span>⌘Z ongedaan maken</span>'
-boot(DIRECTION)
+boot('Het bord opent met één kaart halverwege het slepen. Klik ergens om het te stoppen.')
 render()
 requestAnimationFrame(() => requestAnimationFrame(stageDemo))
 
