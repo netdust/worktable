@@ -107,7 +107,10 @@ for (const { view, dataset, title, link } of [
     expect(linked.length).toBeGreaterThan(0)
     // The seeded tourstops point at the same productie and venue; they are named first, as the writer lists them.
     const stops = (await rows<Record<string, number | null>>(page, 'speelreeks')).filter((s) => s[link] === id)
-    const by = [...(stops.length > 0 ? [{ label: 'Tourstops', count: stops.length }] : []), { label: 'Activiteiten', count: linked.length }]
+    const by = [
+      ...(stops.length > 0 ? [{ label: 'Tourstops', count: stops.length }] : []),
+      { label: 'Activiteiten', count: linked.length },
+    ]
     const history = await revisions(page, dataset, id)
 
     const response = await pressDelete(page, view, title)
