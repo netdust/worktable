@@ -58,11 +58,13 @@ function Event({ event, laneTitle, named = false, short = false, bar, where, sty
 }) {
   const time = event.allDay ? '' : event.to > event.from ? `${hhmm(event.from)}–${hhmm(event.to)}` : hhmm(event.from)
   const barClass = bar ? ` nv-cal__event--bar${bar.before ? ' nv-cal__event--before' : ''}${bar.after ? ' nv-cal__event--after' : ''}` : ''
+  // A row made without a title still shows, by its absence: an empty event would be a sliver nobody can read.
+  const name = event.row.title || t('untitled')
   return (
     <button type="button" className={`nv-cal__event${event.allDay ? ' nv-cal__event--all' : ''}${short ? ' nv-cal__event--short' : ''}${barClass}`}
-      style={style} title={laneTitle ? `${laneTitle} · ${event.row.title}` : event.row.title} onClick={() => onOpen(event.row)}>
+      style={style} title={laneTitle ? `${laneTitle} · ${name}` : name} onClick={() => onOpen(event.row)}>
       {time && <span className="nv-cal__time">{time}</span>}
-      <span className="nv-cal__title">{named && laneTitle && laneTitle !== event.row.title ? `${laneTitle} · ${event.row.title}` : event.row.title}</span>
+      <span className={event.row.title ? 'nv-cal__title' : 'nv-cal__title nv-cal__title--none'}>{named && laneTitle && laneTitle !== event.row.title ? `${laneTitle} · ${name}` : name}</span>
       {where && <span className="nv-cal__where">{where}</span>}
     </button>
   )

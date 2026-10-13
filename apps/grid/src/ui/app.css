@@ -4828,6 +4828,12 @@ table.nv-cal--month .nv-cal__event:hover {
   text-overflow: ellipsis;
 }
 
+.nv-cal__title--none {
+  color: var(--color-fg-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
 .nv-cal__where {
   overflow: hidden;
   color: var(--color-fg-muted);

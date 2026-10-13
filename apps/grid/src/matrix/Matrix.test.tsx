@@ -225,12 +225,20 @@ describe('the matrix', () => {
     expect(within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['✓bevestigd', '?misschien', 'afwezig', '⚠afwezig en toegewezen'])
   })
 
-  it('heads a column with its first name, and with the whole name where two first names meet', () => {
+  it('heads a person column with its first name, and with the whole name where two first names meet', () => {
     const names = new Map([[5, 'Sien Peeters'], [6, 'Sien Claes'], [7, 'Marit Vos']])
-    const { container } = render(<WithBar {...props} titles={names} />)
+    const people = { ...models, person: { key: 'person', label: 'Personen', title_label: 'Naam', title_readonly: false, record_link: true, fields: {} } } as Record<string, Model>
+    const { container } = render(<WithBar {...props} models={people} titles={names} />)
     const heads = [...container.querySelectorAll('th.nv-mx__head')].map((th) => [th.querySelector('.nv-th__label')?.textContent, th.getAttribute('title')])
     expect(heads).toContainEqual(['Sien Peeters', 'Sien Peeters'])
     expect(heads).toContainEqual(['Sien Claes', 'Sien Claes'])
+  })
+
+  it('heads any other column with its whole value, a place too', () => {
+    const places = new Map([[5, 'Zaal De Spiegel'], [6, 'Theater Het Anker'], [7, 'Marit Vos']])
+    const { container } = render(<WithBar {...props} titles={places} />)
+    const heads = [...container.querySelectorAll('th.nv-mx__head .nv-th__label')].map((label) => label.textContent)
+    expect(heads).toContain('Zaal De Spiegel')
   })
 
   it('names the window when it has no activities', () => {

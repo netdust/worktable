@@ -262,6 +262,7 @@ const strings = {
   today: 'Vandaag',
   lane: 'Rijen',
   noLane: 'Geen',
+  untitled: 'Zonder titel',
   kindBoard: 'Bord',
   later: 'later',
   newViewOf: 'Nieuwe {kind}weergave',

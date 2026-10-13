@@ -398,7 +398,6 @@ test.describe('step 3d', () => {
   // Defect found by this shake-out: the dialog asks no title and no time, so the new row lands in the day's band
   // as a 4px button with no text and no accessible name. Expected to fail until the fix pass.
   test('quick-create-calendar-readable @e2e', async ({ page }) => {
-    test.fail()
     const api = page.request
     const day = plusDays(WEEK.quick, 2)
     await openWeek(page, 'Kalender activiteiten', 'Activiteiten', 'plandag', WEEK.quick)

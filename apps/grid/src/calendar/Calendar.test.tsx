@@ -83,6 +83,12 @@ describe('the calendar', () => {
     expect(screen.getByRole('button', { name: /repetitie Gent/ }).style.getPropertyValue('--tone')).not.toBe('var(--tone-violet)')
   })
 
+  it('an event with no title still reads, as untitled', () => {
+    shown({ rows: [{ ...rows[1], title: '' }] })
+    const band = screen.getByRole('group', { name: 'Hele dag do 15' })
+    expect(within(band).getByRole('button', { name: /Zonder titel/ }).textContent).toBe('Zonder titel')
+  })
+
   it('a source without a start column shows only the all-day band, stacked per day', () => {
     shown({ cal: { ...CAL, start: null, end: null } })
     expect(screen.queryByTestId('hours')).toBeNull()
