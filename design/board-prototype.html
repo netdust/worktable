@@ -299,8 +299,10 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .toast button { border: 0; background: none; color: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px }
 
 /* ---------- tweak panel ---------- */
-.tweaks { position: fixed; left: 16px; bottom: 54px; z-index: 30; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: 12px; display: grid; gap: 10px; width: 236px; font-size: 12.5px }
-.tweaks h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-fg-subtle); display: flex; justify-content: space-between; align-items: center }
+.tweaks { margin: 0 10px 10px; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 10px; font-size: 12.5px; max-height: 60vh; overflow: auto; flex: none }
+.tweaks.min { padding: 6px 8px 6px 12px }
+.tweaks.min #tw-min { transform: rotate(180deg) }
+.tweaks h3 { margin: 0; cursor: default; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-fg-subtle); display: flex; justify-content: space-between; align-items: center }
 .tweaks .row { display: grid; gap: 4px }
 .tweaks .seg { display: flex }
 .tweaks .seg button { flex: 1; padding: 3px 4px }
@@ -415,6 +417,7 @@ body.dragging, body.dragging * { cursor: grabbing !important }
       </button>
     </div>
     <nav class="tree" id="tree"></nav>
+    <div class="tweaks" id="tweaks"></div>
     <div class="side-foot"><span class="avatar" style="--h:#2563ab">LV</span><span>lotte@lantaarn.test</span></div>
   </aside>
   <main class="main">
@@ -422,8 +425,8 @@ body.dragging, body.dragging * { cursor: grabbing !important }
       <div class="title" id="crumbs"></div>
       <span class="spacer"></span>
       <label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="q" placeholder="Zoeken" aria-label="Zoeken"><kbd>⌘K</kbd></label>
-      <button class="iconbtn" title="Geschiedenis" aria-label="Geschiedenis"><svg class="icon"><use href="#i-history"/></svg></button>
-      <button class="iconbtn" title="Exporteren / delen" aria-label="Exporteren / delen"><svg class="icon"><use href="#i-share"/></svg></button>
+      <button class="iconbtn" id="history-btn" title="Geschiedenis" aria-label="Geschiedenis"><svg class="icon"><use href="#i-history"/></svg></button>
+      <button class="iconbtn" id="share-btn" title="Exporteren of delen" aria-label="Exporteren of delen"><svg class="icon"><use href="#i-share"/></svg></button>
       <button class="btn primary" id="primary"><svg class="icon"><use href="#i-plus"/></svg>Nieuwe activiteit</button>
     </header>
     <div class="bar" id="bar"></div>
@@ -432,7 +435,6 @@ body.dragging, body.dragging * { cursor: grabbing !important }
   </main>
   <aside class="drawer" id="drawer" aria-label="Record"></aside>
 </div>
-<div class="tweaks" id="tweaks"></div>
 <script>
 const $ = (s, el = document) => el.querySelector(s)
 const $$ = (s, el = document) => [...el.querySelectorAll(s)]
@@ -539,6 +541,8 @@ const MODELS = [
   { section: 'Gegevens', key: 'productie', label: 'Producties', glyph: 'tag', count: 3, views: [{ id: 'prod', name: 'Producties', skin: 'grid', lock: true }] },
   { section: 'Gegevens', key: 'persoon', label: 'Personen', glyph: 'user', count: 15, views: [{ id: 'pers', name: 'Personen', skin: 'grid', lock: true }] },
   { section: 'Gegevens', key: 'organisatie', label: 'Organisaties', glyph: 'pin', count: 22, views: [{ id: 'org', name: 'Organisaties', skin: 'grid', lock: true }] },
+  { section: 'Instellingen', key: 'rol', label: 'Rollen', glyph: 'check', count: 4, views: [{ id: 'rollen', name: 'Rollen', skin: 'grid', lock: true }] },
+  { section: 'Instellingen', key: 'sjabloon', label: 'Sjablonen', glyph: 'list', count: 1, views: [{ id: 'sjablonen', name: 'Sjablonen', skin: 'grid', lock: true }] },
 ]
 const shell = { active: '', space: 'nw', open: new Set(), onSpace: () => {} }
 
@@ -648,7 +652,7 @@ function renderFilterPop(pop) {
 document.addEventListener('click', (e) => {
   const x = e.target.closest('[data-unfilter]')
   if (x) { filterState.list.splice(+x.closest('[data-fi]').dataset.fi, 1); return filterState.onChange() }
-  const btn = e.target.closest('#filter-btn'); if (!btn) return
+  const btn = e.target.closest('#filter-btn'); if (!btn || !Object.keys(filterState.fields).length) return
   if (popEl) return closePop()
   const pop = openPop(btn, '')
   const refresh = () => { renderFilterPop(pop); filterState.onChange(); $('#filter-btn')?.setAttribute('aria-expanded', 'true') }
@@ -734,7 +738,7 @@ function toast(text, undo) {
 const root = document.documentElement
 const TWEAKS = [{ key: 'theme', label: 'Thema', options: [['auto', 'Auto'], ['light', 'Licht'], ['dark', 'Donker']], value: 'auto', apply: (v) => (v === 'auto' ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', v)) }]
 function renderTweaks(note = '') {
-  $('#tweaks').innerHTML = `<h3>Bijstellen <button class="tool" id="tw-min" aria-label="Inklappen">${icon('down')}</button></h3>
+  $('#tweaks').innerHTML = `<h3>Bijstellen <button class="tool" id="tw-min" aria-label="In- of uitklappen">${icon('up')}</button></h3>
     ${TWEAKS.map((t) => `<div class="row">${t.label}<div class="seg" data-key="${t.key}">${t.options.map(([v, l]) => `<button data-v="${v}" class="${v === t.value ? 'on' : ''}">${l}</button>`).join('')}</div></div>`).join('')}${note ? `<p class="note-t">${note}</p>` : ''}`
 }
 function setTweak(key, v, persist = true) {
@@ -743,11 +747,12 @@ function setTweak(key, v, persist = true) {
   $$(`.seg[data-key="${key}"] button`).forEach((b) => b.classList.toggle('on', b.dataset.v === v))
 }
 document.addEventListener('click', (e) => {
-  if (e.target.closest('#tw-min')) return $('#tweaks').classList.toggle('min')
+  if (e.target.closest('#tw-min')) { const min = $('#tweaks').classList.toggle('min'); store.set('tweaks-open', min ? '0' : '1'); return }
   const b = e.target.closest('#tweaks .seg button'); if (b) setTweak(b.closest('.seg').dataset.key, b.dataset.v)
 })
 function boot(note) {
   renderTweaks(note)
+  $('#tweaks').classList.toggle('min', store.get('tweaks-open') !== '1')
   const theme = store.get('theme'); if (theme) setTweak('theme', theme, false)
   renderSpace(); renderTree()
 }
