@@ -111,4 +111,16 @@ describe('the timeline', () => {
     const bar = within(lane).getByRole('button', { name: /Brugge/ })
     expect([bar.style.left, bar.style.width]).toEqual(['calc(14.2857% + 2px)', 'calc(42.8571% - 4px)'])
   })
+  it('without a lane, packs the bars into one shared lane by overlap, its head the count alone', () => {
+    const cal = { day: 'start_datum', start: null, end: 'eind_datum', lanes: ['productie_id'], spans: true as const }
+    const stop = (id: number, title: string, from: string, to: string): Row => ({ id, title, status: '', fields: { start_datum: from, eind_datum: to } })
+    const rows = [stop(1, 'Brugge', '2026-10-13', '2026-10-15'), stop(2, 'Gent', '2026-10-14', '2026-10-16'), stop(3, 'Lier', '2026-10-17', '2026-10-18')]
+    render(<Timeline view={{ ...view, model: 'speelreeks' } as View} model={model} models={{}} rows={rows} cal={cal} shown={{ from: '2026-10-12', to: '2026-10-18' }} lane={null} onShown={() => undefined} />)
+    const lanes = screen.getAllByRole('row').filter((r) => r.classList.contains('nv-tl__lane'))
+    expect(lanes).toHaveLength(1)
+    expect(within(lanes[0]).getByRole('rowheader').textContent).toBe('3')
+    const top = (name: RegExp) => within(lanes[0]).getByRole('button', { name }).style.top
+    expect(top(/Brugge/)).not.toBe(top(/Gent/))
+    expect(top(/Lier/)).toBe(top(/Brugge/))
+  })
 })

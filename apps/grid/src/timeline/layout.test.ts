@@ -20,9 +20,9 @@ describe('timelineWindow', () => {
 
 describe('bars', () => {
   const week = { from: '2026-10-12', to: '2026-10-18' }
-  it('places a span from its first to its last day, clipped to the window', () => {
+  it('places a span from its first to its last day, clipped to the window; without a lane, all bars share one', () => {
     const { lanes } = bars([row(1, '2026-10-14', '2026-10-15'), row(2, '2026-10-01', '2026-11-30')], CAL, week, null)
-    expect(lanes.map((l) => l.bars.map((b) => [b.row.id, b.start, b.length]))).toEqual([[[1, 2, 2]], [[2, 0, 7]]])
+    expect(lanes.map((l) => [l.id, l.title, l.bars.map((b) => [b.row.id, b.start, b.length])])).toEqual([[null, '', [[1, 2, 2], [2, 0, 7]]]])
   })
 
   it('groups bars by lane, by title, and leaves out rows outside the window', () => {

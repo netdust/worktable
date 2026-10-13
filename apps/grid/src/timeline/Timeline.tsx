@@ -87,8 +87,8 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, onShown,
   }
   useEffect(() => {
     if (frame.current && todayAt > 2) frame.current.scrollLeft = (todayAt - 2) * DAY_PX
-    pin()
-  }, [shown.from, todayAt, rows])
+  }, [shown.from, todayAt])
+  useEffect(pin, [shown.from, todayAt, rows])
   return (
     <div className="nv-frame">
       <ChipRow scope={scope} filters={filters} group={field?.label} count={rows.length}>
@@ -99,7 +99,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, onShown,
       <div className="nv-body">
         <div className="nv-tl" role="table" aria-label={view.label} ref={frame} onScroll={pin} style={{ '--days': laid.days } as CSSProperties}>
           <div className="nv-tl__axis" role="row">
-            <div className="nv-tl__corner" role="columnheader">{field?.label ?? view.label}<span>{laid.lanes.length} {t('lane').toLocaleLowerCase(locale())}</span></div>
+            <div className="nv-tl__corner" role="columnheader">{field?.label ?? view.label}{lane && <span className="nv-tl__count">{laid.lanes.length}</span>}</div>
             <div className="nv-tl__scale" aria-hidden="true">
               <div className="nv-tl__weeks">
                 {weeksOf(window).map((w) => <div key={w.label} style={{ width: pct(w.days) }}>{w.label}<span>{w.span}</span></div>)}
@@ -121,8 +121,8 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, onShown,
               const placed = packed(l.bars)
               const height = Math.max(1, ...placed.map((p) => p.row + 1))
               return (
-                <div key={l.id ?? 'none'} role="row" aria-label={l.title || t('noLane')} className="nv-tl__lane">
-                  <span role="rowheader" className="nv-tl__head"><strong>{l.title || t('noLane')}</strong><span className="nv-tl__count">{l.bars.length}</span></span>
+                <div key={l.id ?? 'none'} role="row" aria-label={lane ? l.title || t('noLane') : view.label} className="nv-tl__lane">
+                  <span role="rowheader" className="nv-tl__head">{lane && <strong>{l.title || t('noLane')}</strong>}<span className="nv-tl__count">{l.bars.length}</span></span>
                   <div role="cell" className="nv-tl__track" style={{ height: height * 48 + 16, '--day': pct(1) } as CSSProperties}>
                     {window.map((day, i) => weekend(day) && <span key={day} className="nv-tl__weekend" style={{ left: pct(i), width: pct(1) }} />)}
                     {placed.map(({ bar, row }) => {

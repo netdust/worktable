@@ -1,5 +1,5 @@
 import { spanDays } from '../calendar/layout'
-import type { CalendarDef, DateWindow, Row } from '../types'
+import type { CalendarDef, DateWindow, Row, StoredArrangement } from '../types'
 import { days, isMonth, isWeek, parse, weekOf } from '../ui/Window'
 
 /** The longest window a timeline draws as it is. */
@@ -10,6 +10,17 @@ export function timelineWindow(condition: DateWindow | null, today: Date): DateW
   if (!condition) return weekOf(today)
   if (isWeek(condition) || isMonth(condition) || days(condition) <= TIMELINE_DAYS) return condition
   return weekOf(parse(condition.from) ?? today)
+}
+
+/** What a new timeline opens on, as the prototype: this month on its dated column, in lanes by the first lane its table declares. */
+export function timelineStart(arrangement: StoredArrangement, cal: CalendarDef | undefined): StoredArrangement {
+  if (!cal) return arrangement
+  const dated = arrangement.filters.some((f) => f.field === cal.day)
+  return {
+    ...arrangement,
+    filters: dated ? arrangement.filters : [...arrangement.filters, { field: cal.day, op: 'month', values: [] }],
+    group: arrangement.group ?? cal.lanes[0] ?? null,
+  }
 }
 
 export interface Bar {
@@ -25,7 +36,7 @@ export interface TimelineLane {
   bars: Bar[]
 }
 
-/** Each row as a bar over the days it covers, clipped to the window; in lanes by title, or one lane per row without a lane. */
+/** Each row as a bar over the days it covers, clipped to the window; in lanes by title, or all in one lane without a lane. */
 export function bars(rows: Row[], cal: CalendarDef, window: DateWindow, lane: string | null): { days: number; lanes: TimelineLane[] } {
   const span = days(window)
   const index = (day: string) => Math.round(((parse(day)?.getTime() ?? 0) - (parse(window.from)?.getTime() ?? 0)) / 86_400_000)
@@ -35,7 +46,7 @@ export function bars(rows: Row[], cal: CalendarDef, window: DateWindow, lane: st
     const last = Math.min(span - 1, Math.max(...covered))
     return covered.length > 0 && last >= first ? [{ row, start: first, length: last - first + 1 }] : []
   })
-  if (!lane) return { days: span, lanes: placed.map((bar) => ({ id: bar.row.id, title: bar.row.title, bars: [bar] })) }
+  if (!lane) return { days: span, lanes: placed.length > 0 ? [{ id: null, title: '', bars: placed }] : [] }
   const byLane = new Map<number | null, TimelineLane>()
   for (const bar of placed) {
     const id = typeof bar.row.fields[lane] === 'number' ? (bar.row.fields[lane] as number) : null
