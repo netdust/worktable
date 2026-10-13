@@ -1,0 +1,59 @@
+# Shake-out: step-3d
+
+Driven 2026-10-13 on `feature/step-3d` at 21ff052, the reviewed and fixed code, through the repo's own Playwright harness
+(`playwright.config.ts`). The harness starts a fresh invented theatre engine and its grid on 127.0.0.1:4311 and :5174, and
+signs in its invented accounts through the magic-link form. The editor `planner@e2e.test` drives every flow. Every flow ran
+in a real Chromium at 1280×720, except the drawer flow, which ran at 1600×900, then 820 and 700 wide. Each flow makes its
+own invented records on the API and deletes them in a `finally`:
+- activities of Nachtwacht in weeks of July and September 2028 that no other spec uses;
+- tourstops in August 2028;
+- the persons "Zelda Proef", "Zelda Anders" and "Quirijn Proef";
+- one view, "e2e nieuwe tijdlijn".
+
+Each screenshot is the viewport, written by `e2e/shots.ts` with `SHAKEOUT_SHOTS=specs/step-3d/shakeout`.
+
+Sweep:
+- the grid's Vitest suite: 65 files, 1149 tests, green;
+- `e2e/step-3d.spec.ts` with `e2e/smoke/step-3d.spec.ts`: 16 tests, 15 passed and row 7's expected failure (`test.fail()`),
+  in 1.8 min. Every screenshot is from that run.
+
+`bun run gate` was not run here; the gate and the shake-out never overlap.
+
+Flows: the plan's Test map lists only existing flows in its E2E flows column (`grid-ux`, `step-3`, `step-3c`, `dagplanning`,
+`step-0e`), which the gate already runs. The flows below are the twelve the orchestrator named, one per behaviour approved
+in this step. Row 7 is a defect found while driving row 6. Row 11 covers the review's Minor 4 fix, which the bite check
+found covered by no test. Each has its edges per `edge-classes.md`.
+
+The flows are in `e2e/step-3d.spec.ts` (`@e2e`); the read-only checks are in `e2e/smoke/step-3d.spec.ts` (`@smoke`).
+
+| # | Flow | Layer | Verdict | Evidence |
+|---|---|---|---|---|
+| 1 | looks-gridlines (spec §1 row 31, §2 row 46): on Planning, Bijstellen is folded by default and its rows are absent. `#root` reads `data-lines="off"` and a body cell's `border-right-width` is `0px`. Opened, the card shows the radiogroups Rijhoogte, Dagkop, Rasterlijnen, Zebrarijen and Thema; Rasterlijnen starts on "Uit". "Aan" sets `data-lines="on"` and the border to `1px`. Re-entry: after folding the card and a reload, the card stays folded, the choice holds and the border is still `1px`. | browser | pass | Browser: http://127.0.0.1:5174/#view=1 · shakeout/looks-gridlines.png — Test: `e2e/step-3d.spec.ts` › `looks-gridlines @e2e` |
+| 2 | drawer-in-slot (spec §1 row 36; Review Focus 2): at 1600×900 a card of "Per status" opens its drawer. The `aside` is a child of `.nv-drawer-slot`, the sibling after `main.nv-main`. It is full height (top 0, height 900, right edge 1600), and `main` narrows by the drawer's width. With focus in the drawer, Escape closes it through the portal and `main` takes its width back. Boundary: at 820 wide the slot is `position: fixed` and `main` keeps its width (overlay, shakeout/drawer-overlay-narrow.png); at 700 wide the drawer is 700 wide. Measured: the drawer is 393px, 392 plus its 1px border, because the app's drawer is content-box and the prototype's is border-box. Escape with focus still on the clicked card does nothing: skins open their drawer with `focusOnOpen={false}` (`useOpenRow`), which predates this step. | browser | pass | Browser: http://127.0.0.1:5174/#view=21 · shakeout/drawer-in-slot.png — Test: `e2e/step-3d.spec.ts` › `drawer-in-slot @e2e` |
+| 3 | one-chip-row (spec §9): on each view there is exactly one `.nv-bar`, and its slots come in the fixed order. Grid Planning: condition · Filter · Groep · Vandaag ‹ › Maand Week · count · Kolommen. Board "Per status": the same up to the count; "Groep: status" is a static span; no Kolommen. Gallery: "Groep: geen", then the period. Calendar and timeline: Filter · Groep · period. Matrix: … period · + Kolom; "Groep: plandag". Boundary: Producties has no dated period and shows no period chips. Dashboard: no Groep, period or count. | browser | pass | Browser: http://127.0.0.1:5174/#view=1 · shakeout/one-chip-row.png — Test: `e2e/step-3d.spec.ts` › `one-chip-row @e2e` |
+| 4 | calendar-lanes-in-groep (spec §9, calendar): "Kalender activiteiten" reads "Groep: geen". Its popover lists Productie, Tourstop, Geen, with Geen pressed. Choosing Productie gives "Groep: productie" and the lane legend (list "Rijen"). Re-entry: Geen takes it back and the legend leaves. The timeline's Groep lists Productie and Geen. | browser | pass | Browser: http://127.0.0.1:5174/#view=24 · shakeout/calendar-lanes-in-groep.png — Test: `e2e/step-3d.spec.ts` › `calendar-lanes-in-groep @e2e` |
+| 5 | grid-period-steps (spec §9, grid): Planning on 2028-09-04…10. › moves the condition to 09-11…17, and an invented row dated 09-12 appears. ‹ ‹ moves it to 08-28…09-03. Boundary: that week crosses a month end, and Maand picks the month of its Thursday (08-01…31). › in a month steps by a month (09-01…30). Week returns to 08-28…09-03. Vandaag lands on this week with Week checked. | browser | pass | Browser: http://127.0.0.1:5174/#view=1 · shakeout/grid-period-steps.png — Test: `e2e/step-3d.spec.ts` › `grid-period-steps @e2e` |
+| 6 | quick-create-calendar (approved quick create; review Important 1): on "Kalender activiteiten" this week, "Nieuwe activiteit" opens the dialog with Datum = today. On the week of 2028-07-17, which does not hold today, Datum starts on 2028-07-17. Productie Nachtwacht and Soort Repetitie, then Aanmaken double-clicked (re-entry): exactly one activiteit on the server with plandag 2028-07-17. Without a reload it lands in "Hele dag ma 17", and the count reads "1 rij" (shakeout/quick-create-calendar-made.png). "Per status" and "Galerij activiteiten" offer an enabled "Nieuwe activiteit", and "Tijdlijn tourstops" an enabled "Nieuwe tourstop". | browser | pass | Browser: http://127.0.0.1:5174/#view=24 · shakeout/quick-create-calendar.png — Test: `e2e/step-3d.spec.ts` › `quick-create-calendar @e2e` |
+| 7 | quick-create-calendar-readable: a record made through the calendar's quick create, with no Omschrijving (the dialog asks only Productie, Soort and Datum), reads where it was made. Found as a defect driving row 6 (a 4px all-day sliver with no name); fixed in the fix pass: an untitled event reads "Zonder titel", muted, at a line's height. Re-driven green with `test.fail()` removed. | browser | pass | Browser: http://127.0.0.1:5174/#view=24 · shakeout/quick-create-calendar-readable.png — Test: `e2e/step-3d.spec.ts` › `quick-create-calendar-readable @e2e` |
+| 8 | no-add-on-query-calendar (review Important 1, denied path): on Persoonskalender and Bedrijfsweek (query calendars) the toolbar has no "Nieuw…" button, no `.nv-toolbar__note--hint` and no "alleen-lezen" text. | browser | pass | Browser: http://127.0.0.1:5174/#view=15 · shakeout/no-add-on-query-calendar.png — Test: `e2e/step-3d.spec.ts` › `no-add-on-query-calendar @e2e` |
+| 9 | new-timeline-defaults (approved): Tourstops › + › Tijdlijn › "e2e nieuwe tijdlijn" › Weergave maken. The view opens with Maand checked, the condition "Start deze maand", and as many day columns as this month has days (31). It reads "Groep: productie" (the first lane Tourstops declares), and the corner has its lane count. Re-entry: after a reload, opened again, it keeps both. | browser | pass | Browser: http://127.0.0.1:5174/#view=34 · shakeout/new-timeline-defaults.png — Test: `e2e/step-3d.spec.ts` › `new-timeline-defaults @e2e` |
+| 10 | unlaned-timeline-one-lane (approved): three invented tourstops in August 2028, two overlapping (07–12 and 10–15) and one apart (21–23). In lanes, the Nachtwacht lane shows and the corner count reads 1. With Groep › Geen there is one `.nv-tl__lane`: its rowheader reads "3" with no name, and the corner has no count. Packed by overlap: the bars sit at top 9px, 57px and 9px. | browser | pass | Browser: http://127.0.0.1:5174/#view=22 · shakeout/unlaned-timeline-one-lane.png — Test: `e2e/step-3d.spec.ts` › `unlaned-timeline-one-lane @e2e` |
+| 11 | timeline-scroll-holds (review Minor 4): "Tijdlijn tourstops" on this month scrolls `.nv-tl` to today once (`scrollLeft` > 0). Then `scrollLeft` is set to 0, and Groep › Geen reads the rows again in the same window: `scrollLeft` stays 0. A new window (› then ‹, back to this month) scrolls to today again. | browser | pass | Browser: http://127.0.0.1:5174/#view=22 · shakeout/timeline-scroll-holds.png — Test: `e2e/step-3d.spec.ts` › `timeline-scroll-holds @e2e` |
+| 12 | matrix-heads-and-legend (review Important 3): an invented activity on 2028-07-25 with Zelda Proef (bevestigd), Zelda Anders (voorlopig) and Quirijn Proef (uitgenodigd). The heads read "Quirijn", "Zelda Proef" and "Zelda Anders": first names, and the whole name where two first names meet. At least two cells carry `nv-mx__cell--on` (tinted). The foot holds the list "Legende" with its items, and leaving for Planning takes it away. Observation: at 1280 "Zelda Anders" is clipped to "Zelda An…" by the column width; the two Zeldas are still told apart. | browser | pass | Browser: http://127.0.0.1:5174/#view=2 · shakeout/matrix-heads-and-legend.png — Test: `e2e/step-3d.spec.ts` › `matrix-heads-and-legend @e2e` |
+| 13 | gallery-placeholder (review Minor 1, spec §6): three activities on 2028-08-01. "opbouw Gent" has no picture and its placeholder reads "OG"; the one-word "Zonnewende" reads "Zo". "e2e met foto" has a picture uploaded on the API, shows its `img` and has no placeholder. The title line reads "3 rijen · 1 met beeld". | browser | pass | Browser: http://127.0.0.1:5174/#view=23 · shakeout/gallery-placeholder.png — Test: `e2e/step-3d.spec.ts` › `gallery-placeholder @e2e` |
+| 14 | summary-per-view (review Important 2): "Kalender activiteiten" shows its summary pill. Opening Overzicht afterwards shows no `.nv-toolbar__summary`. Re-entry: back on the calendar the same pill returns, and "Per status" after it shows its own ("… rij…"), not the calendar's. | browser | pass | Browser: http://127.0.0.1:5174/#view=31 · shakeout/summary-per-view.png — Test: `e2e/step-3d.spec.ts` › `summary-per-view @e2e` |
+| 15 | smoke, the shell carries the prototype tokens: sessionless, `/` answers 200 with the sign-in form; `--today` and `--color-bg-column` resolve on `:root`; no error text. | wire | pass | Test: `e2e/smoke/step-3d.spec.ts` › `the shell carries the prototype tokens @smoke` |
+| 16 | smoke, a timeline view link lands on the sign-in page: sessionless `/#view=speelreeks` answers 200 with the sign-in form and no error text. | wire | pass | Test: `e2e/smoke/step-3d.spec.ts` › `a timeline view link lands on the sign-in page @smoke` |
+
+Bite check, the review's fixed paths and the test that goes red if each breaks:
+- quick create on a query calendar: row 8;
+- the stale summary on a dashboard: row 14;
+- first-name collision in the matrix heads: row 12;
+- gallery initials: row 13;
+- the drawer leaving the slot or overlaying at 1600: row 2;
+- Rasterlijnen on by default: row 1;
+- a second chip row, or a slot out of order: row 3;
+- the period chips on a grid: row 5;
+- a new timeline not on this month or not in lanes: row 9;
+- an unlaned timeline not packed: row 10;
+- the timeline scrolling back to today on every reload: row 11 (the Vitest suite has no `scrollLeft` assertion).

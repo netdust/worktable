@@ -21,8 +21,12 @@ interface SavedView {
 }
 
 /** A column header by its exact label, the sort arrow aside. */
+// A matrix head shows a first name and carries the full one in its title.
 const header = (page: Page, label: string) =>
-  page.locator('thead th').filter({ hasText: new RegExp(`^\\s*${label}\\s*[↑↓]?\\s*$`) })
+  page
+    .locator('thead th')
+    .filter({ hasText: new RegExp(`^\\s*${label}\\s*[↑↓]?\\s*$`) })
+    .or(page.locator(`thead th[title="${label}"]`))
 
 /** Picks a view in the rail and waits for `ready`, content only that view shows, so nothing is read off the view it replaced. */
 async function pick(page: Page, view: string, ready: Locator, model = view) {

@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { writeDb } from './db'
-import { openEditor } from './editor'
+import { openEditor, openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -313,7 +313,9 @@ test.describe('step 3', () => {
       await expect(page.getByRole('list', { name: 'Rijen' })).toContainText('Kalender Proef')
       await shot(page, 'person-calendar')
 
-      await page.getByRole('radio', { name: 'Productie' }).click()
+      // The lanes are the Groep chip's choices, as on every view.
+      await page.getByRole('button', { name: /^Groep/ }).click()
+      await page.getByRole('group', { name: 'Groeperen' }).getByRole('button', { name: 'Productie' }).click()
       await expect(page.getByRole('list', { name: 'Rijen' }).getByText('Nachtwacht', { exact: true })).toBeVisible()
       await expect(band.getByRole('button', { name: /e2e kalender overnachting/ })).toHaveAttribute(
         'title',
@@ -349,6 +351,7 @@ test.describe('step 3', () => {
     expect((table?.y ?? 0) + (table?.height ?? 0)).toBeGreaterThan((body?.y ?? 0) + (body?.height ?? 0) - 4)
     const chip = month.getByRole('button', { name: /Nachtwacht/ }).first()
     expect(await chip.evaluate((el) => getComputedStyle(el).borderRadius)).toBe('0px')
+    await openLooks(page)
     await page.getByRole('radio', { name: 'Donker' }).click()
     await shot(page, 'company-month-dark')
     await chip.click()
@@ -532,9 +535,10 @@ test.describe('step 3', () => {
   test('month-starting-sunday @e2e', async ({ page }) => {
     await openWeek(page, 'Bedrijfsweek', 'Per productie per dag', 'plandag', '2026-10-12')
     await page.getByRole('radio', { name: 'Maand' }).click()
-    await expect(page.locator('.nv-cal__bar')).toContainText('oktober 2026')
+    // The month the calendar shows is named in the title line's summary.
+    await expect(page.locator('.nv-toolbar__summary')).toContainText('oktober 2026')
     await page.getByRole('button', { name: 'Volgende periode' }).click()
-    await expect(page.locator('.nv-cal__bar')).toContainText('november 2026')
+    await expect(page.locator('.nv-toolbar__summary')).toContainText('november 2026')
     const month = page.locator('table.nv-cal--month')
     await expect(month.locator('tbody tr')).toHaveCount(6)
     await expect(month.locator('tbody tr').first().locator('td').last().locator('.nv-cal__date')).toHaveText('1')

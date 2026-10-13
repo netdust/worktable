@@ -6,6 +6,7 @@ import { Grid } from '../Grid'
 import { defaults } from '../layout'
 import { createStore, type StoreApi } from '../store'
 import type { LinkActions } from './Links'
+import { barOf } from '../../ui/bar'
 
 const remote = vi.hoisted(() => ({ records: vi.fn() }))
 vi.mock('../../api', () => remote)
@@ -222,7 +223,7 @@ describe('a links cell', () => {
     fireEvent.keyDown(cell(), { key: 'Delete' })
     expect(actions.remove).not.toHaveBeenCalled()
     expect(filterFields(day, [lunch]).map((f) => f.field)).not.toContain('people')
-    fireEvent.click(screen.getByRole('button', { name: /^Groep/ }))
-    expect(screen.queryByRole('menuitemradio', { name: 'Mensen' })).toBeNull()
+    const bar = barOf({ view, model: day, layout: defaults(view), onLayout: () => undefined, scope: null, told: null, period: null })
+    expect(bar.group?.options?.map((o) => o.key)).not.toContain('people')
   })
 })

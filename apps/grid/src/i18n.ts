@@ -65,7 +65,15 @@ const strings = {
   themeAuto: 'Auto',
   themeLight: 'Licht',
   themeDark: 'Donker',
-  density: 'Dichtheid',
+  density: 'Rijhoogte',
+  looks: 'Bijstellen',
+  dayHead: 'Dagkop',
+  dayHeadBand: 'Band',
+  dayHeadLine: 'Lijn',
+  gridLines: 'Rasterlijnen',
+  zebra: 'Zebrarijen',
+  off: 'Uit',
+  on: 'Aan',
   densityCompact: 'Compact',
   densityNormal: 'Normaal',
   densityRoomy: 'Ruim',
@@ -97,9 +105,10 @@ const strings = {
   matrix: 'Matrix',
   hintMove: 'bewegen',
   hintEdit: 'bewerken',
-  hintCancel: 'annuleren',
-  hintSearch: 'zoeken en springen',
-  shortcuts: 'Sneltoetsen',
+  hintUndo: 'ongedaan maken',
+  noTime: 'zonder tijd',
+  noneOf: 'Geen {label}',
+  hints: 'Sneltoetsen',
   changed: 'Gewijzigd',
   addColumn: '+ Kolom',
   openColumn: 'Open',
@@ -110,6 +119,7 @@ const strings = {
   candidatesNone: 'Geen kandidaten',
   candidatesAll: 'Iedereen tonen',
   dashboard: 'Dashboard',
+  dashboards: 'Dashboards',
   dashboardEmpty: 'Dit dashboard is nog leeg.',
   noAccess: 'Geen toegang',
   showAll: 'Alles tonen',
@@ -158,6 +168,8 @@ const strings = {
   showColumn: 'Tonen',
   awayReason: 'Afwezig: {reason}',
   awayWarning: 'Afwezig en toegewezen',
+  away: 'Afwezig',
+  legend: 'Legende',
   statusLabel: 'Status',
   noteLabel: 'Notitie',
   sharedCell: 'Ook in deze cel',
@@ -250,6 +262,7 @@ const strings = {
   today: 'Vandaag',
   lane: 'Rijen',
   noLane: 'Geen',
+  untitled: 'Zonder titel',
   kindBoard: 'Bord',
   later: 'later',
   newViewOf: 'Nieuwe {kind}weergave',
@@ -412,9 +425,11 @@ export function fileSize(bytes: number): string {
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */
-export function summary(rows: number, groups: number | null, cut = false): string {
+export function summary(rows: number, groups: number | null, cut = false, columns?: number, pictures?: number): string {
   const said = [rowCount(rows, cut)]
   if (groups !== null) said.push(groups === 1 ? '1 groep' : `${groups} groepen`)
+  if (columns !== undefined) said.push(columns === 1 ? '1 kolom' : `${columns} kolommen`)
+  if (pictures !== undefined) said.push(`${pictures} met beeld`)
   return said.join(' · ')
 }
 

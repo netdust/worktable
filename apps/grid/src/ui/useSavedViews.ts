@@ -1,6 +1,7 @@
 import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'react'
 import { createView, deleteView, restoreView, savePrefs, savedViews, updateView } from '../api'
 import { errorText, t } from '../i18n'
+import { timelineStart } from '../timeline/layout'
 import type { ApiError, Prefs, SavedView, TableDef, View, ViewType } from '../types'
 import { byFirstView, dashboardsOf, type Table, groupTables, tableOf } from './tables'
 import type { Notice } from './Toast'
@@ -139,7 +140,8 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
   /** A new view on a table, from its starting view of that type when it has one: no other view is needed. */
   const create = (table: string, name: string, type: ViewType, shared: boolean) => {
     const model = startingOf(table, type)
-    const arrangement = model ? toStored(arrangementOf(model)) : blank()
+    const start = model ? toStored(arrangementOf(model)) : blank()
+    const arrangement = type === 'timeline' ? timelineStart(start, declared.find((d) => d.key === table)?.calendar) : start
     return createView({ name, table, type, field: null, shared, arrangement }).then(added)
   }
 

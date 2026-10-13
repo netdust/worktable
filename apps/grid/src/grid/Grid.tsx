@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ClipboardEvent, type KeyboardEvent, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
@@ -10,7 +10,6 @@ import { Drawer, type RunAction } from './Drawer'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
-import { GridBar } from './GridBar'
 import { type BodyActions, GridBody } from './GridBody'
 import { EmptyState } from '../ui/EmptyState'
 import { GridFoot } from './GridFoot'
@@ -43,16 +42,13 @@ export interface GridProps {
   /** Set to a reader of what is on screen, for the toolbar's export. */
   snapshot?: RefObject<(() => OnScreen) | null>
   /** Told what is on screen, for the title line's summary. */
-  onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void
+  /** What the title line and the chip row say: the rows, the groups, and the columns Kolommen offers. */
+  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[] } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
   scope?: Scope | null
   spaceModel?: string | null
-  /** The filter chips, shown in the bar over the sheet. */
-  filters?: ReactNode
-  /** The scope chip's words, "Productie is Nachtwacht"; null when the view is not scoped. */
-  scopeChip?: string | null
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
   /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
@@ -79,7 +75,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, filters, scopeChip = null, onAction, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -126,8 +122,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const shownRows = total(groups)
   const shownGroups = by ? groups.length : null
   useEffect(() => {
-    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null })
-  }, [shownRows, shownGroups, cut])
+    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns })
+  }, [shownRows, shownGroups, cut, columns])
   useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)
@@ -330,7 +326,6 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     <LinksContext.Provider value={links ?? null}>
     <RelationContext.Provider value={{ models, scope, spaceModel, openRelated }}>
     <div className="nv-frame">
-      <GridBar model={model} columns={columns} layout={layout} onLayout={onLayout} count={shown.length} cut={cut !== null} filters={filters} scope={scopeChip} />
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState title={emptyTitle} description={emptyHint ?? ''} />

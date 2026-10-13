@@ -197,3 +197,19 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Grid shell · landing | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "the landing page shows the sign-in @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
 | GET /api/attachments/activiteit?ids | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/attachments/activiteit batch asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
 | Grid shell · skin link | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "a skin view link lands on the sign-in page @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
+| Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Chiprij · elke weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "one-chip-row @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Kalender · Groep (rijen) | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "calendar-lanes-in-groep @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Planning · periode stappen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "grid-period-steps @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Kalender · Nieuwe activiteit | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Kalender · Nieuwe activiteit leesbaar (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar-readable @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Persoonskalender, Bedrijfsweek · geen Nieuw | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "no-add-on-query-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Nieuwe tijdlijn · deze maand, rijen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "new-timeline-defaults @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Tijdlijn · Groep geen, één rij | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "unlaned-timeline-one-lane @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Tijdlijn · naar vandaag eenmaal per venster | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "timeline-scroll-holds @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Matrix · koppen en legende | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "matrix-heads-and-legend @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Galerij · initialen, met beeld | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "gallery-placeholder @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Titelregel · samenvatting per weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "summary-per-view @e2e"` | e2e/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Grid shell · tokens | smoke | `bunx playwright test e2e/smoke/step-3d.spec.ts --grep "the shell carries the prototype tokens @smoke"` | e2e/smoke/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |
+| Grid shell · tijdlijnlink | smoke | `bunx playwright test e2e/smoke/step-3d.spec.ts --grep "a timeline view link lands on the sign-in page @smoke"` | e2e/smoke/step-3d.spec.ts | step-3d | 21ff052 2026-10-13 |

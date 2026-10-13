@@ -1,7 +1,7 @@
 /* The grid's whole look: the rail, toolbar and sheet of the mockup, and the React Aria parts. Every class carries nv-. */
 #root {
   --row-h: 40px;
-  font: 13px/1.45 var(--font-sans);
+  font: 13.5px/1.4 var(--font-sans);
   color: var(--color-fg-default);
   background: var(--color-bg-surface);
   -webkit-font-smoothing: antialiased;
@@ -21,11 +21,10 @@
 
 .nv-app {
   display: grid;
-  grid-template-columns: 268px 1fr;
+  grid-template-columns: 268px minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
-  border-left: 1px solid var(--color-border-subtle);
 }
 
 .nv-rail {
@@ -35,7 +34,27 @@
   min-height: 0;
   padding: 0;
   background: var(--color-bg-sidebar);
-  border-right: 1px solid var(--color-border-subtle);
+  border-right: 1px solid var(--color-border-default);
+}
+
+/* The brand line over the switcher: the product's name, small. */
+.nv-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px 4px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nv-brand b {
+  color: var(--color-fg-default);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* The tree: sections of models, each folding open on its views. It scrolls between the switcher and the foot; its menus open in a layer above it. */
@@ -44,6 +63,30 @@
   min-height: 0;
   overflow-y: auto;
   padding: 2px 8px 16px;
+}
+
+/* The dashboards sit under their own label, as a section does. */
+#root .nv-tree__dashboards .nv-view {
+  display: flex;
+}
+
+#root .nv-tree__dashboards .nv-view__button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  cursor: pointer;
+}
+
+#root .nv-tree__dashboards .nv-view__button:hover {
+  background: var(--color-bg-hover);
 }
 
 /* The sources no section lists, set apart from the last labelled one. */
@@ -280,6 +323,28 @@
   color: var(--color-fg-muted);
 }
 
+/* A dialog's own fields, as the prototype's .input and .select. */
+#root .nv-dialog__field > select,
+#root .nv-dialog__field > input:not([type="checkbox"]) {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-weight: 400;
+}
+
+#root .nv-dialog__field > select:focus,
+#root .nv-dialog__field > input:focus {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
 #root .nv-dialog__input {
   width: 100%;
   box-sizing: border-box;
@@ -380,8 +445,7 @@
 
 /* The name and its summary read whole up to 40% of the bar; the toolbar's end (the hint, the search) gives way instead. */
 .nv-toolbar > .nv-toolbar__name {
-  flex: none;
-  max-width: 40%;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
 }
@@ -436,7 +500,7 @@
 
 .nv-toolbar > .nv-toolbar__end {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   align-items: center;
   gap: 8px;
@@ -454,92 +518,112 @@
 }
 
 
-/* The rail's foot, compact so the tree keeps its height: the keys behind one item, theme and density on one row, the account. */
+/* The rail's foot: Bijstellen as one card, folded by default, then who is signed in. */
 .nv-rail__foot {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   margin-top: auto;
-  padding: 10px 14px;
-  border-top: 1px solid var(--color-border-default);
-  color: var(--color-fg-subtle);
+  color: var(--color-fg-muted);
   font-size: 12px;
 }
 
-.nv-rail__looks {
+.nv-looks {
+  display: grid;
+  gap: 10px;
+  max-height: 60vh;
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  font-size: 12.5px;
+}
+
+.nv-looks--folded {
+  padding: 6px 8px 6px 12px;
+}
+
+#root .nv-looks__head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 4px;
-}
-
-#root .nv-rail__looks .nv-theme {
-  gap: 0;
-  padding: 2px;
-}
-
-#root .nv-rail__looks .nv-theme__option {
-  padding: 2px 3px;
-  font-size: 10.5px;
-}
-
-.nv-keys > summary {
-  width: max-content;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-muted);
+  width: 100%;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
-.nv-keys > summary:hover {
-  background: var(--color-bg-hover);
+.nv-looks__head > svg {
+  transform: rotate(180deg);
+  transition: transform 120ms ease;
+}
+
+.nv-looks--folded .nv-looks__head > svg {
+  transform: none;
+}
+
+.nv-looks__body {
+  display: grid;
+  gap: 10px;
+}
+
+.nv-looks__row {
+  display: grid;
+  gap: 4px;
   color: var(--color-fg-default);
 }
 
-.nv-keys__list {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 8px;
-  margin: 6px 4px 2px;
+#root .nv-looks .nv-theme {
+  display: flex;
 }
 
-.nv-keys__list dd {
-  margin: 0;
+#root .nv-looks .nv-theme__option {
+  flex: 1;
+  padding: 3px 4px;
 }
 
-/* A few choices side by side: the chosen one lifts off the track. */
+/* A few choices side by side, as the prototype's .seg: a bordered track, the chosen one on muted. */
 .nv-theme {
   display: inline-flex;
   gap: 2px;
-  padding: 4px;
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  padding: 2px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
   font-family: var(--font-sans);
 }
 
 #root .nv-theme__option {
   flex: none;
   min-width: 0;
-  padding: 3px 4px;
+  padding: 3px 10px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--color-fg-muted);
   font: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 20px;
+  font-size: 12.5px;
   white-space: nowrap;
   cursor: pointer;
 }
 
-#root .nv-theme__option[data-hovered],
-#root .nv-theme__option[data-selected] {
+#root .nv-theme__option[data-hovered] {
   color: var(--color-fg-default);
 }
 
 #root .nv-theme__option[data-selected] {
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 3px 0 rgba(16, 15, 12, 0.1), 0 1px 2px 0 rgba(16, 15, 12, 0.06);
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+  font-weight: 600;
 }
 
 #root .nv-theme__option[data-focus-visible] {
@@ -550,16 +634,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
+  padding: 0 4px;
   border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
-  box-shadow: 0 1px 0 var(--color-border-strong);
-  color: var(--color-fg-muted);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  color: var(--color-fg-subtle);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
   white-space: nowrap;
   user-select: none;
 }
@@ -802,6 +884,10 @@
   padding-right: 4px;
 }
 
+.nv-chip__op {
+  opacity: 0.75;
+}
+
 .nv-chip--filter b {
   color: inherit;
   font-weight: 500;
@@ -857,7 +943,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
@@ -924,17 +1010,17 @@
 #root .nv-search__field {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 8px;
-  border: 1px solid var(--color-border-subtle);
+  gap: 6px;
+  min-width: 180px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
-  color: var(--color-fg-muted);
+  color: var(--color-fg-subtle);
 }
 
 #root .nv-search__field:focus-within {
-  border-color: var(--color-border-strong);
-  border-width: 1.5px;
+  border-color: var(--color-accent-default);
 }
 
 #root .nv-search__field > svg {
@@ -951,8 +1037,6 @@
   background: none;
   color: var(--color-fg-default);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
   line-height: 20px;
 }
 
@@ -967,6 +1051,23 @@
 
 .nv-toolbar__end > :not(.nv-search):not(.nv-save) {
   flex: none;
+}
+
+/* The title row's icon buttons, as the prototype's: 32px, bordered. */
+#root .nv-toolbar__end .nv-more {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+}
+
+#root .nv-toolbar__end .nv-more:hover,
+#root .nv-toolbar__end .nv-more[aria-expanded="true"] {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
 }
 
 /* Why the button is off needs room the bar lacks below 1360px; the button's tooltip says it there. */
@@ -985,7 +1086,7 @@
 /* The rail's space: the record being worked in, or every record, and its searchable list. */
 .nv-space {
   position: relative;
-  margin: 12px 10px 10px;
+  margin: 6px 10px 10px;
 }
 
 #root .nv-space__button {
@@ -1559,9 +1660,15 @@
   padding: 0 12px;
 }
 
-.nv-grid:not(.nv-mx) .nv-td,
-.nv-grid:not(.nv-mx) .nv-th {
+/* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
+#root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
+#root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
   border-right: 1px solid var(--color-border-subtle);
+}
+
+/* Zebra rows on request (Bijstellen › Zebrarijen). */
+#root[data-zebra="on"] .nv-grid:not(.nv-mx) .nv-tr:nth-child(even of .nv-tr) .nv-td {
+  background: var(--color-bg-subtle);
 }
 
 /* The row numbers: frozen at the left with the first column, never a cell the keys reach. */
@@ -1615,10 +1722,11 @@
   line-height: 1.4;
 }
 
-/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. */
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet.
+   The approved prototype drew its table text at the browser's 16px (no doctype); kept on purpose. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 13.5px;
+  font-size: 16px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1628,6 +1736,19 @@
 
 .nv-grid:not(.nv-mx) .nv-dot {
   font-size: 12.5px;
+}
+
+/* Small marks keep to the middle of a 16px line. */
+.nv-grid:not(.nv-mx) .nv-dot,
+.nv-grid:not(.nv-mx) .nv-pill,
+.nv-grid:not(.nv-mx) .nv-blank,
+.nv-grid:not(.nv-mx) .nv-cell__tabular {
+  vertical-align: middle;
+}
+
+/* The frozen first column draws no line of its own; Rasterlijnen draws them all. */
+.nv-grid:not(.nv-mx) .nv-first {
+  border-right: 0;
 }
 
 .nv-grid:not(.nv-mx) .nv-pill {
@@ -1856,12 +1977,12 @@
   left: 6px;
   top: 32px;
   z-index: 5;
-  min-width: 190px;
-  padding: 6px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
   background: var(--color-bg-surface);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-pop);
   white-space: normal;
 }
 
@@ -2222,8 +2343,21 @@
 
 .nv-grid .nv-group__date {
   color: var(--color-fg-muted);
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 400;
+}
+
+/* Dagkop Lijn: the day as a heading line on the sheet instead of a band. */
+#root[data-groups="line"] .nv-grid .nv-group--fold th {
+  height: 44px;
+  padding-bottom: 6px;
+  border-top: 0;
+  background: var(--color-bg-surface);
+  vertical-align: bottom;
+}
+
+#root[data-groups="line"] .nv-grid .nv-group__label {
+  font-size: 15px;
 }
 
 .nv-grid .nv-group__num {
@@ -2265,25 +2399,130 @@
 
 /* What scrolls a cell into view stops short of the frozen header, first column and foot. */
 .nv-mx__scroll {
-  scroll-padding: 36px 0 36px 256px;
+  scroll-padding: 52px 0 36px 412px;
+}
+
+.nv-mx .nv-th {
+  height: 52px;
+  vertical-align: bottom;
 }
 
 .nv-mx .nv-th__label {
   display: block;
-  padding: 7px 10px;
+  padding: 0 10px 8px;
   overflow: hidden;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  font-weight: 400;
   text-overflow: ellipsis;
 }
 
 .nv-mx .nv-th.nv-first .nv-th__label {
-  padding-left: 16px;
+  padding-left: 12px;
 }
 
+/* A person's head: the face over the name, as the prototype. */
 .nv-mx .nv-mx__head {
   text-align: center;
 }
 
+.nv-mx__who {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 0 6px 8px;
+}
+
+.nv-mx__who .nv-avatar--sm {
+  box-shadow: none;
+}
+
+/* The initials come from an attribute so the head's text stays the name. */
+.nv-mx__who .nv-avatar--sm::before {
+  content: attr(data-initials);
+}
+
+.nv-mx .nv-mx__who .nv-th__label {
+  max-width: 100%;
+  padding: 0;
+  color: var(--color-fg-default);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nv-mx .nv-mx__cross,
+.nv-mx .nv-tr .nv-first.nv-mx__cross {
+  background: var(--color-bg-hover);
+}
+
+.nv-mx .nv-group th {
+  height: 32px;
+  border-bottom-color: var(--color-border-default);
+  background: var(--color-band);
+}
+
+.nv-mx .nv-group__in {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+}
+
+.nv-mx .nv-group__day {
+  color: var(--color-fg-default);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nv-grid.nv-mx .nv-group__date {
+  color: var(--color-fg-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.nv-mx__today {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.nv-mx .nv-first.nv-td {
+  padding: 0 12px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.nv-mx__rowhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.nv-mx__rowhead .nv-cell__title {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.nv-mx__time {
+  flex: none;
+  width: 92px;
+  font: 12.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-mx__untimed {
+  color: var(--color-fg-subtle);
+  font-family: var(--font-sans);
+}
+
 .nv-mx .nv-mx__cell {
+  position: relative;
+  border-left: 1px solid var(--color-border-subtle);
   text-align: center;
 }
 
@@ -2297,36 +2536,62 @@
 
 .nv-mx .nv-mx__mark {
   color: var(--color-fg-subtle);
-  font-size: 14px;
-  font-weight: 600;
+  font: 600 14px var(--font-mono);
 }
 
-.nv-mx .nv-mx__mark[data-counted="true"] {
-  color: var(--color-success-fg);
+/* A status on its tone's tint; refused stays quiet; away is hatched with its reason; away and on the row is red. */
+.nv-mx .nv-mx__cell--on {
+  background: color-mix(in srgb, var(--c) 13%, var(--color-bg-surface));
+}
+
+.nv-mx .nv-mx__cell--on .nv-mx__mark {
+  color: var(--c);
+}
+
+.nv-mx .nv-mx__cell--no .nv-mx__mark {
+  font-weight: 400;
+}
+
+.nv-mx .nv-mx__away {
+  background: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-fg-subtle) 20%, transparent) 5px 6px);
+}
+
+.nv-mx .nv-mx__reason {
+  color: var(--color-fg-subtle);
+  font-size: 10.5px;
+}
+
+.nv-mx .nv-mx__cell--bad {
+  background: var(--color-danger-bg);
+}
+
+.nv-mx .nv-mx__cell--bad .nv-mx__mark,
+.nv-mx .nv-mx__warn {
+  color: var(--color-danger-fg);
 }
 
 .nv-mx .nv-mx__warn {
-  margin-left: 4px;
-  color: var(--color-warning-fg);
-  font-size: 12px;
+  margin-left: 2px;
+  font-size: 11px;
+  vertical-align: 1px;
 }
 
 .nv-mx .nv-mx__dot {
-  display: inline-block;
-  margin-left: 2px;
-  vertical-align: super;
+  position: absolute;
+  top: 5px;
+  right: 5px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: var(--color-accent-default);
 }
 
-.nv-mx .nv-mx__away {
-  background: repeating-linear-gradient(135deg, var(--color-warning-bg) 0 4px, var(--color-bg-surface) 4px 8px);
+.nv-mx .nv-tr:hover .nv-mx__cell--on {
+  background: color-mix(in srgb, var(--c) 18%, var(--color-bg-hover));
 }
 
-.nv-mx .nv-tr:hover .nv-mx__away {
-  background: repeating-linear-gradient(135deg, var(--color-warning-bg) 0 4px, var(--color-bg-subtle) 4px 8px);
+.nv-mx .nv-tr:hover .nv-mx__away:not(.nv-mx__cell--bad) {
+  background-color: var(--color-bg-hover);
 }
 
 .nv-mx:not([aria-readonly="true"]) .nv-mx__cell {
@@ -2338,12 +2603,12 @@
   background: var(--color-accent-subtle);
 }
 
-.nv-mx .nv-first.nv-td {
-  font-weight: 500;
-  text-align: left;
+.nv-mx .nv-mx__open-cell {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: -2px;
 }
 
-/* The open column: what still waits for someone, before the people. */
+/* The open column: what still waits for someone, before the people, as a warning pill. */
 .nv-mx .nv-mx__open {
   border-right: 1px solid var(--color-border-default);
   text-align: left;
@@ -2354,28 +2619,80 @@
 
 .nv-mx td.nv-mx__open {
   padding: 0 10px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
 }
 
 #root .nv-mx__fill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   max-width: 100%;
-  padding: 2px 0;
+  padding: 2px 8px;
   border: 0;
-  background: none;
-  color: inherit;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-warning-fg) 13%, transparent);
+  color: var(--color-warning-fg);
   font: inherit;
-  text-align: left;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
 }
 
-#root .nv-mx__fill:hover .nv-mx__roles {
-  text-decoration: underline;
+#root .nv-mx__fill b {
+  font: 600 11.5px var(--font-mono);
+}
+
+#root .nv-mx__fill:hover {
+  background: color-mix(in srgb, var(--color-warning-fg) 20%, transparent);
+}
+
+.nv-mx .nv-mx__fill .nv-mx__roles {
+  color: inherit;
+  font-size: 12px;
 }
 
 .nv-mx .nv-mx__roles {
   color: var(--color-fg-subtle);
   font-size: 12px;
+}
+
+/* The matrix's legend at the end of the foot. */
+.nv-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nv-legend i {
+  display: inline-grid;
+  width: 18px;
+  height: 15px;
+  place-items: center;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--c);
+  font: 600 10.5px/1 var(--font-mono);
+  font-style: normal;
+}
+
+.nv-legend .nv-legend__away {
+  background: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb, var(--color-fg-subtle) 35%, transparent) 3px 4px);
+}
+
+.nv-legend .nv-legend__bad {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
 }
 
 .nv-mx__picker {
@@ -2428,54 +2745,122 @@
   background: var(--color-bg-muted);
 }
 
+/* The keys the sheet answers to, in one quiet line under every skin. */
+.nv-foot {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  padding: 6px 18px;
+  overflow: hidden;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* The drawer: the app's third column, full height beside the work, never over it. */
+.nv-drawer-slot {
+  display: flex;
+  min-height: 0;
+}
+
 .nv-drawer {
-  flex: 0 0 360px;
+  flex: 0 0 392px;
+  width: 392px;
   min-height: 0;
   overflow: auto;
-  border-left: 1px solid var(--color-border-subtle);
+  border-left: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
+}
+
+@media (max-width: 760px) {
+  .nv-drawer-slot {
+    left: 0;
+  }
+
+  .nv-drawer-slot .nv-drawer {
+    flex: 1;
+    width: auto;
+  }
 }
 
 .nv-drawer__head {
   position: sticky;
   top: 0;
+  z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 10px 12px 10px 16px;
+  padding: 14px 12px 12px 16px;
   border-bottom: 1px solid var(--color-border-subtle);
   background: var(--color-bg-surface);
 }
 
 #root .nv-drawer__title {
   flex: 1;
+  min-width: 0;
   margin: 0;
   padding: 0;
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-fg-default);
+  overflow-wrap: anywhere;
+}
+
+#root .nv-drawer__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-drawer__close[data-hovered] {
+  background: var(--color-bg-muted);
   color: var(--color-fg-default);
 }
 
 .nv-drawer__fields {
   margin: 0;
-  padding: 8px 16px 16px;
+  padding: 12px 16px 18px;
 }
 
 .nv-drawer__field {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  grid-template-columns: 112px 1fr;
+  align-items: center;
 }
 
 .nv-drawer__field dt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
   color: var(--color-fg-subtle);
-  font-size: 12px;
+  font-size: 12.5px;
+}
+
+.nv-drawer__icon {
+  flex: none;
+  color: var(--color-fg-subtle);
 }
 
 .nv-drawer__field dd {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
   margin: 0;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2656,15 +3041,40 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border-subtle);
+  margin: 4px 16px 16px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
+/* A drawer section's heading, as the prototype's: small capitals in the subtle ink. */
 #root .nv-files__title {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--color-fg-subtle);
+}
+
+.nv-drawer__editor {
+  padding: 0 16px 16px;
+}
+
+/* A record's delete is there when needed, never the loudest thing in the drawer. */
+#root .nv-drawer__editor .nv-button--destructive:not([data-pressed]) {
+  border-color: transparent;
+  background: none;
+  color: var(--color-danger-fg);
+}
+
+#root .nv-drawer__editor .nv-button--destructive[data-hovered] {
+  background: var(--color-danger-bg);
+}
+
+.nv-drawer__field dd .nv-time,
+.nv-drawer__field dd .nv-cell__tabular {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 #root .nv-files__none {
@@ -3460,25 +3870,47 @@
 
 .nv-rail__account {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--color-border-subtle);
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-default);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+
+.nv-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .nv-rail__email {
-  overflow-wrap: anywhere;
-  color: var(--color-fg-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #root .nv-rail__signout {
+  margin-left: auto;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-accent-default);
+  color: var(--color-fg-subtle);
   font: inherit;
   cursor: pointer;
+}
+
+#root .nv-rail__signout:hover {
+  color: var(--color-accent-default);
 }
 
 .nv-viewpanel__refusal {
@@ -3517,6 +3949,20 @@
   }
 
   .nv-rail__foot {
+    display: none;
+  }
+
+  /* No third column: the drawer lies over the work at the right, full height, never as a row under it. */
+  .nv-drawer-slot {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-pop);
+  }
+
+  .nv-drawer-slot:empty {
     display: none;
   }
 }
@@ -4088,11 +4534,6 @@
 }
 
 /* The calendar: a week on an hour axis with an all-day band, or a month of days; lanes colour the events. */
-.nv-cal__bar {
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .nv-cal__body {
   flex: 1;
   min-width: 0;
@@ -4140,56 +4581,126 @@
 .nv-week__head {
   position: sticky;
   top: 0;
-  z-index: 2;
-  border-bottom: 1px solid var(--color-border-subtle);
+  z-index: 6;
+  border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
 }
 
 .nv-week__dayhead {
-  padding: 6px 8px;
-  color: var(--color-fg-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.nv-week__wk {
+  align-self: end;
+  padding: 0 0 8px 10px;
+  color: var(--color-fg-subtle);
+  font: 11px var(--font-mono);
+}
+
+.nv-week__dn {
+  color: var(--color-fg-subtle);
   font-size: 12px;
+}
+
+.nv-week__num {
+  color: var(--color-fg-default);
+  font-size: 20px;
   font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-week__dayhead--today .nv-week__dn {
+  color: var(--today);
+  font-weight: 600;
+}
+
+.nv-week__dayhead--today .nv-week__num {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .nv-week__band {
+  position: sticky;
+  top: 49px;
+  z-index: 5;
   border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  box-shadow: 0 2px 4px -2px rgba(20, 30, 45, 0.08);
 }
 
 .nv-week__allday {
   min-height: 28px;
-  padding: 3px 4px;
+  padding: 3px;
   border-left: 1px solid var(--color-border-subtle);
 }
 
 .nv-week__axis {
   position: relative;
-  padding: 6px 6px 0 0;
+  padding: 8px 8px 0 0;
   color: var(--color-fg-subtle);
   font-size: 11px;
+  line-height: 1.2;
   text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .nv-week__hours .nv-week__axis span {
   position: absolute;
-  right: 6px;
+  right: 8px;
+  font: 10.5px var(--font-mono);
   transform: translateY(-50%);
 }
 
 .nv-week__day {
   position: relative;
   border-left: 1px solid var(--color-border-subtle);
-  background-image: linear-gradient(to bottom, var(--color-border-subtle) 1px, transparent 1px);
+  background-image: linear-gradient(to bottom, var(--color-border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), color-mix(in srgb, var(--color-border-subtle) 55%, transparent) calc(50% - 0.5px), color-mix(in srgb, var(--color-border-subtle) 55%, transparent) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.nv-week__now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: 2px;
+  background: var(--today);
+  pointer-events: none;
+}
+
+.nv-week__now::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--today);
 }
 
 .nv-week__day .nv-cal__event {
   flex-direction: column;
-  gap: 0;
+  gap: 1px;
   margin: 0;
-  padding: 2px 4px;
-  border-right: 2px solid var(--color-bg-surface);
+  padding: 3px 6px 3px 8px;
+  box-shadow: 0 0 0 1px var(--color-bg-surface);
   white-space: normal;
+}
+
+.nv-week__day .nv-cal__title {
+  order: -1;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .nv-week__day .nv-cal__event--short {
@@ -4208,8 +4719,10 @@
 
 .nv-cal th,
 .nv-cal td {
-  padding: 4px 6px;
-  border: 1px solid var(--color-border-subtle);
+  padding: 6px 6px 4px;
+  border: 0;
+  border-left: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   vertical-align: top;
   text-align: left;
@@ -4219,8 +4732,22 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  color: var(--color-fg-muted);
-  font-weight: 500;
+  padding: 8px 10px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nv-cal--month td.nv-cal__today .nv-cal__date {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-weight: 600;
 }
 
 .nv-cal--month td {
@@ -4229,13 +4756,19 @@
 }
 
 .nv-cal__out {
-  opacity: 0.45;
+  background: var(--color-bg-subtle);
+}
+
+.nv-cal__out .nv-cal__date {
+  color: var(--color-fg-subtle);
 }
 
 .nv-cal__date {
   display: block;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
+  color: var(--color-fg-default);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .nv-cal__event {
@@ -4246,9 +4779,8 @@
   padding: 2px 6px;
   overflow: hidden;
   border: 0;
-  border-left: 3px solid var(--tone, var(--color-accent-default));
   border-radius: 0;
-  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 16%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 15%, var(--color-bg-surface));
   color: var(--color-fg-default);
   font: inherit;
   font-size: 12px;
@@ -4258,7 +4790,27 @@
 }
 
 .nv-cal__event:hover {
-  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 28%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 22%, var(--color-bg-surface));
+}
+
+/* A month's timed rows read as lines: a toned square, the time, the title. */
+table.nv-cal--month .nv-cal__event {
+  align-items: center;
+  padding: 1px 4px;
+  background: none;
+}
+
+table.nv-cal--month .nv-cal__event::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--tone, var(--color-accent-default));
+}
+
+table.nv-cal--month .nv-cal__event:hover {
+  background: var(--color-bg-hover);
 }
 
 .nv-cal__event:focus-visible {
@@ -4268,12 +4820,30 @@
 
 .nv-cal__time {
   color: var(--color-fg-muted);
-  font-variant-numeric: tabular-nums;
+  font: 11px var(--font-mono);
 }
 
 .nv-cal__title {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nv-cal__title--none {
+  color: var(--color-fg-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.nv-cal__where {
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-cal__event--short .nv-cal__where {
+  display: none;
 }
 
 /* A count on a row, tinted by its declared tone; nothing shows at 0. */
@@ -4336,40 +4906,74 @@
   --tone: var(--tone-grey);
 }
 
-/* The dashboard: sections of tiles, each a number, a list or a strip over a saved view. */
+/* The dashboard: sections of tiles, each a number, a list or a strip over a saved view (design/dashboard-prototype.html). */
 .nv-dash {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   overflow: auto;
-  padding: 16px 20px 24px;
-  gap: 20px;
+  padding: 16px 22px 36px;
+  gap: 24px;
+  background: var(--color-bg-canvas);
 }
 
 .nv-dash__heading {
   margin: 0 0 8px;
-  color: var(--color-fg-muted);
-  font-size: 12px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .nv-dash__tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
+/* The week beside today, as the prototype's wide row. */
+.nv-dash__tiles:has(> .nv-week-tile) {
+  grid-template-columns: minmax(0, 2.6fr) minmax(0, 1fr);
+  align-items: start;
+}
+
 .nv-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 14px 16px 13px;
   border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
   background: var(--color-bg-surface);
+  transition: background-color 0.12s;
+}
+
+/* A tile with a header line and rows under it. */
+.nv-tile--panel {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.nv-tile__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+}
+
+.nv-tile__head b {
+  font-weight: 600;
+}
+
+.nv-tile__muted {
+  color: var(--color-fg-muted);
+  font-size: 12px;
 }
 
 .nv-tile--none,
@@ -4378,25 +4982,64 @@
   font-size: 13px;
 }
 
+.nv-tile--panel .nv-tile__note {
+  margin: 0;
+  padding: 12px 14px;
+}
+
 .nv-tile__title {
   padding: 0;
   border: 0;
   background: none;
   color: var(--color-fg-muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
   text-align: left;
   cursor: pointer;
 }
 
 .nv-tile__title:hover {
   color: var(--color-fg-default);
+}
+
+.nv-tile__head .nv-tile__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-fg-default);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#root .nv-tile__link,
+#root .nv-tile__more {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-default);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+#root .nv-tile__link:hover,
+#root .nv-tile__more:hover {
   text-decoration: underline;
 }
 
-.nv-stat {
-  border-left: 3px solid var(--tone, var(--color-border-default));
+.nv-tile__n {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font: 400 11px var(--font-mono);
+}
+
+.nv-stat:hover,
+.nv-progress:hover {
+  background: var(--color-bg-hover);
 }
 
 .nv-stat--bad {
@@ -4411,108 +5054,35 @@
   --tone: var(--color-success-fg);
 }
 
-.nv-stat__value {
+.nv-stat__value,
+.nv-progress__value {
   color: var(--tone, var(--color-fg-default));
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
+}
+
+.nv-progress__value small {
+  margin-left: 4px;
+  color: var(--color-fg-muted);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .nv-stat__change {
   color: var(--color-fg-subtle);
   font-size: 12px;
-}
-
-.nv-list {
-  grid-column: span 2;
-}
-
-.nv-list__rows {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.nv-list__row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  min-height: 32px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 13px;
-}
-
-.nv-list__title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nv-list__cell {
-  color: var(--color-fg-muted);
-  white-space: nowrap;
-}
-
-.nv-tile__more {
-  align-self: flex-start;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-accent-default);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.nv-tile__refusal {
-  margin: 0;
-  color: var(--color-danger-fg);
-  font-size: 12px;
-}
-
-.nv-dash__actions {
-  gap: 8px;
-}
-
-.nv-week-tile {
-  grid-column: 1 / -1;
-}
-
-.nv-week-tile__days {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.nv-week-tile__day {
-  min-height: 72px;
-  padding: 4px;
-  border: 1px solid var(--color-border-subtle);
-}
-
-.nv-week-tile__day--today {
-  border-color: var(--color-accent-default);
-  box-shadow: inset 0 2px 0 var(--color-accent-default);
-}
-
-.nv-week-tile__head {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
-}
-
-.nv-progress__value {
-  font-size: 20px;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .nv-progress__bar {
   height: 6px;
+  margin: 6px 0 2px;
+  overflow: hidden;
+  border-radius: 3px;
   background: var(--color-bg-muted);
 }
 
@@ -4522,7 +5092,203 @@
   background: var(--color-success-fg);
 }
 
-/* The dashboard in edit mode: sections with their tiles in order, and what to add. */
+/* A list tile: rows of hours, kind, title and day, the tile's write at the end. */
+.nv-list {
+  grid-column: 1 / -1;
+}
+
+.nv-dash__tiles:has(> .nv-week-tile) > .nv-list {
+  grid-column: auto;
+}
+
+.nv-list__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-list__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+  transition: background-color 0.12s;
+}
+
+.nv-list__row:first-child {
+  border-top: 0;
+}
+
+.nv-list__row:hover {
+  background: var(--color-bg-hover);
+}
+
+.nv-list__time {
+  flex: none;
+  width: 96px;
+  font: 12.5px var(--font-mono);
+}
+
+.nv-list__kind {
+  flex: none;
+  width: 128px;
+  max-width: 128px;
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+.nv-list__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-list__cell {
+  margin-left: 6px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.nv-list__day {
+  flex: none;
+  width: 92px;
+  color: var(--color-fg-muted);
+  font: 12px var(--font-mono);
+  text-align: right;
+}
+
+.nv-list__day--late {
+  color: var(--color-danger-fg);
+  font-weight: 600;
+}
+
+.nv-list__day--now {
+  color: var(--color-warning-fg);
+  font-weight: 600;
+}
+
+.nv-list__act {
+  flex: none;
+  min-width: 84px;
+  text-align: right;
+}
+
+#root .nv-list__act.nv-bar__button {
+  min-width: 0;
+  margin-left: auto;
+}
+
+.nv-tile__refusal {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--color-danger-fg);
+  font-size: 12px;
+}
+
+/* The week strip: seven days as the calendar's head, the rows as one-line tinted bars. */
+.nv-week-tile__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.nv-week-tile__day {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 112px;
+  padding: 0 4px 8px;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.nv-week-tile__day:first-child {
+  border-left: 0;
+}
+
+.nv-week-tile__day:nth-child(n + 6) {
+  background: var(--color-bg-subtle);
+}
+
+.nv-week-tile__head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 -4px 4px;
+  padding: 7px 8px 5px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.nv-week-tile__dn {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  text-transform: lowercase;
+}
+
+.nv-week-tile__num {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-week-tile__day--today .nv-week-tile__dn {
+  color: var(--today);
+  font-weight: 600;
+}
+
+.nv-week-tile__day--today .nv-week-tile__num {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#root .nv-week-tile__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c) 18%, var(--color-bg-surface));
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#root .nv-week-tile__bar:hover {
+  background: color-mix(in srgb, var(--c) 26%, var(--color-bg-surface));
+}
+
+.nv-week-tile__time {
+  flex: none;
+  color: var(--color-fg-muted);
+  font: 11px var(--font-mono);
+}
+
+.nv-week-tile__title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+/* The dashboard in edit mode: sections with their tiles in order, and what to add, as the dialog's fields. */
 .nv-compose {
   display: flex;
   flex-direction: column;
@@ -4532,116 +5298,382 @@
 .nv-compose__section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+.nv-compose__legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 0;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .nv-compose__row {
   display: flex;
   gap: 6px;
   align-items: center;
+  min-height: 32px;
 }
 
 .nv-compose__row > span {
   flex: 1;
+  font-size: 13px;
 }
 
 .nv-compose__tiles {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   margin: 0;
   padding: 0 0 0 16px;
+}
+
+.nv-compose__tiles > .nv-compose__row {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+#root .nv-compose input,
+#root .nv-compose select {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 13px;
+}
+
+#root .nv-compose input:focus,
+#root .nv-compose select:focus {
+  outline: 2px solid var(--color-accent-default);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+#root .nv-compose__section > .nv-compose__row:first-child input {
+  font-weight: 600;
+}
+
+#root .nv-compose__row > .nv-bar__button[aria-label] {
+  width: 28px;
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  color: var(--color-fg-muted);
+}
+
+#root .nv-compose > .nv-bar__button {
+  justify-content: center;
+  height: 36px;
+  border-style: dashed;
+  color: var(--color-fg-muted);
+}
+
+/* Beside the week, a row's kind is its dot. */
+.nv-dash__tiles:has(> .nv-week-tile) .nv-list__kind {
+  width: auto;
+  font-size: 0;
 }
 
 .nv-dash__edit {
   margin-left: auto;
 }
 
-/* The board: a column per option, cards that open their row. */
+/* The board: a column per option, cards that open their row (design/board-prototype.html). */
 .nv-board {
   display: flex;
   flex: 1;
   gap: 12px;
   min-width: 0;
   overflow: auto;
-  padding: 12px 16px;
+  padding: 14px 18px 28px;
   align-items: flex-start;
 }
 
 .nv-board__column {
   display: flex;
-  flex: 0 0 240px;
+  flex: 0 0 300px;
   flex-direction: column;
-  gap: 6px;
   margin: 0;
-  padding: 8px;
-  background: var(--color-bg-subtle);
+  padding: 0 0 10px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-column);
   list-style: none;
 }
 
+.nv-board__column > li:not(.nv-board__head) {
+  padding: 0 10px;
+}
+
+.nv-board__column > li + li:not(.nv-board__head) {
+  margin-top: 8px;
+}
+
 .nv-board__head {
-  align-self: flex-start;
-  margin-bottom: 4px;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 8px 12px;
+}
+
+.nv-board__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
   font-weight: 600;
 }
 
-.nv-board__card,
-.nv-gallery__card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.nv-board__name::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.nv-board__count {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font: 11px var(--font-mono);
+}
+
+.nv-board__empty {
+  padding: 22px 12px !important;
+  color: var(--color-fg-subtle);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+#root .nv-board__card {
+  display: grid;
+  gap: 5px;
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-surface);
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
   color: var(--color-fg-default);
   font: inherit;
-  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
 
-.nv-board__card span {
-  color: var(--color-fg-muted);
-  font-size: 12px;
-}
-
-.nv-board__card:hover,
-.nv-gallery__card:hover {
+#root .nv-board__card:hover {
   border-color: var(--color-border-strong);
 }
 
-/* The gallery: a card per row with its image. */
+#root .nv-board__card--open {
+  background: var(--color-bg-selected);
+}
+
+.nv-board__kind {
+  font-size: 12px;
+  color: var(--color-fg-muted);
+}
+
+.nv-board__kind .nv-dot,
+.nv-board__kind .nv-pill {
+  font-size: 12px;
+}
+
+.nv-board__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.nv-board__when,
+.nv-board__fact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--color-fg-muted);
+  font-size: 12.5px;
+}
+
+.nv-board__day,
+.nv-board__when .nv-time {
+  font: 12.5px var(--font-mono);
+}
+
+.nv-board__day {
+  color: var(--color-fg-default);
+}
+
+.nv-board__untimed {
+  color: var(--color-fg-subtle);
+}
+
+.nv-board__fact > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-board__faces {
+  display: flex;
+  align-items: center;
+  padding-top: 3px;
+}
+
+.nv-avatar--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 9.5px;
+  box-shadow: 0 0 0 2px var(--color-bg-card);
+}
+
+.nv-avatar--sm + .nv-avatar--sm {
+  margin-left: -2px;
+}
+
+.nv-board__more {
+  margin-left: 6px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+}
+
+/* The gallery: a card per row with its picture, as the prototype's tiles. */
 .nv-gallery {
   display: grid;
   flex: 1;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  grid-auto-rows: max-content;
+  gap: 14px;
   align-content: start;
   min-width: 0;
   overflow: auto;
-  padding: 12px 16px;
+  padding: 16px 18px 28px;
+  background: var(--color-bg-canvas);
 }
 
 .nv-gallery__card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s, box-shadow 0.15s;
 }
 
-.nv-gallery__card img,
-.nv-gallery__blank {
+.nv-gallery__card:hover {
+  box-shadow: 0 4px 16px rgb(20 30 45 / 10%);
+}
+
+.nv-gallery__card--open {
+  background: var(--color-bg-selected);
+}
+
+.nv-gallery__pic {
+  position: relative;
   display: block;
-  width: 100%;
+  flex: none;
+  overflow: hidden;
   aspect-ratio: 4 / 3;
-  object-fit: cover;
   background: var(--color-bg-muted);
 }
 
+.nv-gallery__pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.nv-gallery__card:hover .nv-gallery__pic img {
+  transform: scale(1.035);
+}
+
+.nv-gallery__blank {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--s) 30%, transparent) 1px, transparent 1.4px) 0 0 / 14px 14px,
+    color-mix(in srgb, var(--s) 9%, var(--color-bg-surface));
+}
+
+.nv-gallery__mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--s) 16%, var(--color-bg-surface));
+  color: color-mix(in srgb, var(--s) 85%, var(--color-fg-default));
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.nv-gallery__meta {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+
 .nv-gallery__title {
-  padding: 6px 8px;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-gallery__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nv-gallery__when {
+  color: var(--color-fg-default);
+  font-family: var(--font-mono);
+}
+
+.nv-gallery__of {
+  overflow: hidden;
+  color: var(--color-fg-subtle);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-gallery__card,
+  .nv-gallery__pic img {
+    transition: none;
+  }
 }
 
 /* The timeline: lanes down, days across, a bar per row. */
@@ -4768,4 +5800,320 @@
 }
 .nv-cal__weekrow .nv-cal__date {
   padding: 4px 8px 2px;
+}
+
+/* The timeline (design/timeline-prototype.html): a scale of weeks and days, a lane per production, bars as flat tints. */
+.nv-tl {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--color-bg-surface);
+}
+
+.nv-tl__axis,
+.nv-tl__body {
+  min-width: calc(232px + var(--days, 7) * 44px);
+}
+
+.nv-tl__axis {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+}
+
+.nv-tl__corner {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 8px;
+  width: 232px;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border-right: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nv-tl__corner span {
+  margin-bottom: 1px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.nv-tl__scale {
+  flex: 1;
+  min-width: 0;
+}
+
+.nv-tl__weeks,
+.nv-tl__days {
+  display: flex;
+}
+
+.nv-tl__weeks > div {
+  flex: none;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 6px 8px 0;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border-default);
+  color: var(--color-fg-default);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nv-tl__weeks span {
+  margin-left: 6px;
+  color: var(--color-fg-subtle);
+  font: 11px var(--font-mono);
+}
+
+.nv-tl__days > div {
+  display: grid;
+  flex: none;
+  box-sizing: border-box;
+  height: 26px;
+  place-items: center;
+  border-left: 1px solid var(--color-border-subtle);
+  color: var(--color-fg-subtle);
+  font: 11px var(--font-mono);
+  line-height: 1.1;
+}
+
+.nv-tl__days b {
+  color: var(--color-fg-muted);
+  font-weight: 500;
+}
+
+.nv-tl__days .nv-tl__mon {
+  border-left-color: var(--color-border-default);
+}
+
+.nv-tl__days .nv-tl__we {
+  color: color-mix(in srgb, var(--color-fg-subtle) 70%, transparent);
+}
+
+.nv-tl__days .nv-tl__today b {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--today) 14%, transparent);
+  color: var(--today);
+  font-weight: 600;
+}
+
+.nv-tl__body {
+  position: relative;
+}
+
+.nv-tl__lane {
+  display: flex;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+}
+
+.nv-tl__head {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  width: 232px;
+  box-sizing: border-box;
+  padding: 12px 12px 12px 16px;
+  border-right: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+}
+
+.nv-tl__head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-tl__head strong::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-default);
+}
+
+.nv-tl__count {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font: 11px var(--font-mono);
+}
+
+.nv-tl__track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background-image: linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
+  background-size: var(--day) 100%;
+}
+
+.nv-tl__weekend {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--color-bg-muted) 55%, transparent);
+}
+
+#root .nv-tl__bar {
+  position: absolute;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent-default) 16%, var(--color-bg-surface));
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#root .nv-tl__bar:hover {
+  z-index: 3;
+  background: color-mix(in srgb, var(--color-accent-default) 24%, var(--color-bg-surface));
+}
+
+#root .nv-tl__bar--open,
+#root .nv-tl__bar--open:hover {
+  background: color-mix(in srgb, var(--color-accent-default) 32%, var(--color-bg-surface));
+}
+
+#root .nv-tl__bar--option {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent-default) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--color-accent-default) 20%, var(--color-bg-surface)) 5px 10px);
+}
+
+#root .nv-tl__bar--cancelled {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-subtle);
+}
+
+.nv-tl__bar--cancelled strong {
+  text-decoration: line-through;
+}
+
+.nv-tl__bar strong,
+.nv-tl__line2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nv-tl__bar strong {
+  font-weight: 600;
+}
+
+.nv-tl__line2 {
+  display: flex;
+  gap: 6px;
+  color: var(--color-fg-muted);
+  font-size: 11.5px;
+}
+
+.nv-tl__span {
+  flex: none;
+  font: 11px var(--font-mono);
+}
+
+.nv-tl__where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nv-tl__span:not(:last-child)::after {
+  content: " ·";
+  font-family: var(--font-sans);
+}
+
+/* One line of detail on hover, dark; the drawer has the rest. */
+#root .nv-tl__bar[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--color-fg-default);
+  box-shadow: var(--shadow-pop);
+  color: var(--color-bg-surface);
+  font-size: 12px;
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.nv-tl__now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 2px;
+  background: var(--today);
+  pointer-events: none;
+}
+
+.nv-tl__now::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--today);
+}
+
+#root .nv-chip--icon {
+  padding: 3px 6px;
+}
+
+/* A choice among a few, set as chips in the chip row: the calendar's Maand/Week and its lanes. */
+.nv-chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+#root .nv-chips .nv-chip[data-selected] {
+  border-color: transparent;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+}
+
+#root .nv-chips .nv-chip {
+  cursor: pointer;
 }

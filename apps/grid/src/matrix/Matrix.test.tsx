@@ -8,8 +8,9 @@ import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
 const api = vi.hoisted(() => ({ records: vi.fn(), optionsFrom: vi.fn() }))
 vi.mock('../api', () => api)
+const { Legend } = await import('./Legend')
 const { Matrix } = await import('./Matrix')
-const { dayLabel } = await import('../grid/group')
+const { ChipBar } = await import('../ui/ChipBar')
 const { absentOn } = await import('./away')
 const { buildColumns, cellFor, markFor } = await import('./columns')
 
@@ -55,6 +56,16 @@ const week: Row[] = [
 const away: Row[] = [{ id: 90, title: 'x', status: 'publish', fields: { person: [5], from: '2026-05-18', to: '2026-05-19', reason: 'Examen' } }]
 
 const layout = defaults(view)
+/** The matrix under the chip row that holds its "+ Kolom", as the app shows it. */
+function WithBar(p: Parameters<typeof Matrix>[0]) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <ChipBar addColumn={{ open, onToggle: () => setOpen(!open) }} />
+      <Matrix {...p} picking={open} onPicking={setOpen} />
+    </>
+  )
+}
 const props = { view, models, rows: week, away, titles, layout, onLayout: () => undefined, emptyTitle: 'Geen rijen', emptyHint: 'Week 18 – 24 mei' }
 
 beforeEach(() => {
@@ -118,28 +129,28 @@ describe('the matrix columns', () => {
 
 describe('the matrix', () => {
   it("is named after the title it is given, else after the view's label", () => {
-    render(<Matrix {...props} title="Planning" />)
+    render(<WithBar {...props} title="Planning" />)
     expect(screen.getByRole('grid', { name: 'Planning' })).toBeTruthy()
     cleanup()
 
-    render(<Matrix {...props} />)
+    render(<WithBar {...props} />)
     expect(screen.getByRole('grid', { name: 'Bezetting' })).toBeTruthy()
   })
 
   it('lays the week out by day under a frozen header row and first column', () => {
-    const { container } = render(<Matrix {...props} />)
+    const { container } = render(<WithBar {...props} />)
     const grid = screen.getByRole('grid', { name: 'Bezetting' })
 
     expect(within(grid).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
       expect.arrayContaining(['Activiteit', 'Sien', 'Sien', 'Lieve']),
     )
-    expect([...container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual([dayLabel('2026-05-18'), dayLabel('2026-05-19')])
+    expect([...container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Monday May 18', 'Tuesday May 19'])
     expect(container.querySelector('thead th.nv-first.nv-th')).not.toBeNull()
     expect(container.querySelectorAll('tbody tr.nv-tr > .nv-first')).toHaveLength(3)
   })
 
   it('draws the divider before the first name column down the whole sheet: header, every body cell and foot', () => {
-    const { container } = render(<Matrix {...props} />)
+    const { container } = render(<WithBar {...props} />)
     const split = [...container.querySelectorAll('.nv-mx__split')]
 
     expect(container.querySelectorAll('td[data-column="name:lieve"]')).toHaveLength(3)
@@ -154,20 +165,20 @@ describe('the matrix', () => {
       { ...activity(1, 'Avond', '2026-05-18'), fields: { date: '2026-05-18', kind: 'show' } },
       { ...activity(2, 'Ochtend', '2026-05-19'), fields: { date: '2026-05-19', kind: 'build' } },
     ]
-    const { container } = render(<Matrix {...props} layout={{ ...layout, group: 'kind' }} rows={rows} />)
+    const { container } = render(<WithBar {...props} layout={{ ...layout, group: 'kind' }} rows={rows} />)
 
-    expect([...container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
+    expect([...container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
   })
 
   it('shows a row for an activity nobody is on, with empty cells', () => {
-    render(<Matrix {...props} />)
+    render(<WithBar {...props} />)
     const row = screen.getByRole('row', { name: /Leeg/ })
 
     expect(within(row).getAllByRole('gridcell').every((cell) => !/[✓?✕·]/.test(cell.textContent ?? ''))).toBe(true)
   })
 
   it('counts the confirmed per row, per column and in total', () => {
-    render(<Matrix {...props} />)
+    render(<WithBar {...props} />)
 
     expect(within(screen.getByRole('row', { name: /Montage/ })).getByTestId('row-count').textContent).toBe('1')
     expect(within(screen.getByRole('row', { name: /Repetitie/ })).getByTestId('row-count').textContent).toBe('2')
@@ -177,7 +188,7 @@ describe('the matrix', () => {
   })
 
   it('shows the declared mark, and a dot with the note when there is one', () => {
-    render(<Matrix {...props} />)
+    render(<WithBar {...props} />)
     const montage = screen.getByRole('row', { name: /Montage/ })
 
     expect(within(montage).getByRole('gridcell', { name: /Sien.*Bevestigd/ }).textContent).toContain('✓')
@@ -187,7 +198,7 @@ describe('the matrix', () => {
   })
 
   it('shades a cell where the person is away, with the reason, and warns when they are on it', () => {
-    render(<Matrix {...props} />)
+    render(<WithBar {...props} />)
 
     const planned = within(screen.getByRole('row', { name: /Montage/ })).getByRole('gridcell', { name: /Afwezig: Examen/ })
     expect(planned.getAttribute('aria-label')).toContain('Afwezig en toegewezen')
@@ -197,8 +208,41 @@ describe('the matrix', () => {
     expect(free.classList.contains('nv-mx__away')).toBe(true)
   })
 
+  it('tints a status by its tone, keeps a refusal quiet, reds away-and-on, and names the reason where nobody is', () => {
+    const toned = { ...models, assignment: { ...models.assignment, fields: { ...models.assignment.fields, status: { ...models.assignment.fields.status, tones: { confirmed: 'ok', maybe: 'warn', declined: 'bad' } } } } } as Record<string, Model>
+    render(<WithBar {...props} models={toned} />)
+    const cell = (row: RegExp, name: RegExp) => within(screen.getByRole('row', { name: row })).getByRole('gridcell', { name })
+    const lieve = cell(/Montage/, /Lieve/)
+    expect([lieve.classList.contains('nv-mx__cell--on'), lieve.style.getPropertyValue('--c')]).toEqual([true, 'var(--color-warning-fg)'])
+    expect(cell(/Montage/, /Sien.*Bevestigd/).classList.contains('nv-mx__cell--bad')).toBe(true)
+    expect(cell(/Repetitie/, /Sien.*Afgezegd/).classList.contains('nv-mx__cell--no')).toBe(true)
+    expect(cell(/Leeg/, /Afwezig: Examen/).textContent).toBe('Examen')
+  })
+
+  it('explains the toned marks and the away shades in a legend', () => {
+    const toned = { ...models, assignment: { ...models.assignment, fields: { ...models.assignment.fields, status: { ...models.assignment.fields.status, tones: { confirmed: 'ok', maybe: 'warn', declined: 'bad' } } } } } as Record<string, Model>
+    render(<Legend view={view} models={toned} />)
+    expect(within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['✓bevestigd', '?misschien', 'afwezig', '⚠afwezig en toegewezen'])
+  })
+
+  it('heads a person column with its first name, and with the whole name where two first names meet', () => {
+    const names = new Map([[5, 'Sien Peeters'], [6, 'Sien Claes'], [7, 'Marit Vos']])
+    const people = { ...models, person: { key: 'person', label: 'Personen', title_label: 'Naam', title_readonly: false, record_link: true, fields: {} } } as Record<string, Model>
+    const { container } = render(<WithBar {...props} models={people} titles={names} />)
+    const heads = [...container.querySelectorAll('th.nv-mx__head')].map((th) => [th.querySelector('.nv-th__label')?.textContent, th.getAttribute('title')])
+    expect(heads).toContainEqual(['Sien Peeters', 'Sien Peeters'])
+    expect(heads).toContainEqual(['Sien Claes', 'Sien Claes'])
+  })
+
+  it('heads any other column with its whole value, a place too', () => {
+    const places = new Map([[5, 'Zaal De Spiegel'], [6, 'Theater Het Anker'], [7, 'Marit Vos']])
+    const { container } = render(<WithBar {...props} titles={places} />)
+    const heads = [...container.querySelectorAll('th.nv-mx__head .nv-th__label')].map((label) => label.textContent)
+    expect(heads).toContain('Zaal De Spiegel')
+  })
+
   it('names the window when it has no activities', () => {
-    render(<Matrix {...props} rows={[]} />)
+    render(<WithBar {...props} rows={[]} />)
 
     expect(screen.getByText('Geen rijen')).toBeTruthy()
     expect(screen.getByText('Week 18 – 24 mei')).toBeTruthy()
@@ -207,14 +251,15 @@ describe('the matrix', () => {
   it('renders what the server sent as characters, never as an element', () => {
     const evil = '<img src=x onerror=alert(1)>'
     const rows = [activity(1, evil, '2026-05-18', [join(1, { person: [5], note: evil }), join(2, { name: evil })])]
-    const { container } = render(<Matrix {...props} rows={rows} titles={new Map([[5, evil]])} away={[]} />)
+    const { container } = render(<WithBar {...props} rows={rows} titles={new Map([[5, evil]])} away={[]} />)
 
     expect(container.querySelector('img')).toBeNull()
-    expect(screen.getAllByText(evil).length).toBeGreaterThanOrEqual(3)
+    expect(screen.getAllByText(evil).length).toBeGreaterThanOrEqual(1)
+    expect([...container.querySelectorAll('th.nv-mx__head')].map((th) => th.getAttribute('title'))).toEqual([evil, evil])
   })
 
   it('opens no floating layer: no dialog, no popover', async () => {
-    const { container } = render(<Matrix {...props} />)
+    const { container } = render(<WithBar {...props} />)
     fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
     await screen.findByRole('button', { name: 'Marit' })
 
@@ -223,21 +268,21 @@ describe('the matrix', () => {
   })
 
   it('adds an empty column from the picker, and keeps it for the next visit', async () => {
-    const { unmount } = render(<Matrix {...props} />)
+    const { unmount } = render(<WithBar {...props} />)
     fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Marit' }))
     expect(api.records).toHaveBeenCalledWith('person', '')
 
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Marit')
     unmount()
-    render(<Matrix {...props} />)
+    render(<WithBar {...props} />)
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Marit')
   })
 })
 
 function Held(extra: Partial<Parameters<typeof Matrix>[0]> = {}) {
   const [held, setHeld] = useState(layout)
-  return <Matrix {...props} layout={held} onLayout={setHeld} {...extra} />
+  return <WithBar {...props} layout={held} onLayout={setHeld} {...extra} />
 }
 const headers = () => screen.getAllByRole('columnheader').map((h) => h.textContent)
 const counts = () => within(screen.getByTestId('total')).getAllByTestId('column-count').map((c) => c.textContent)
@@ -278,7 +323,7 @@ describe('the matrix arrangement', () => {
 
   it('hands the layout on with the column hidden, under its key', () => {
     const onLayout = vi.fn()
-    const { container } = render(<Matrix {...props} onLayout={onLayout} />)
+    const { container } = render(<WithBar {...props} onLayout={onLayout} />)
     fireEvent.click(screen.getByRole('button', { name: '+ Kolom' }))
 
     fireEvent.click(strip(container, 'name:lieve'))
@@ -288,20 +333,13 @@ describe('the matrix arrangement', () => {
 
   it('applies no condition itself: the server answered for them, and every row it sent shows', () => {
     const rows = week.map((row) => ({ ...row, fields: { ...row.fields, kind: 'build' } }))
-    render(<Matrix {...props} rows={rows} layout={{ ...layout, filters: [{ field: 'kind', op: 'in', values: ['show'] }] }} />)
+    render(<WithBar {...props} rows={rows} layout={{ ...layout, filters: [{ field: 'kind', op: 'in', values: ['show'] }] }} />)
 
     expect(screen.getByRole('row', { name: /Repetitie/ })).toBeTruthy()
   })
 
-  it('keeps its bar, an active filter chip with it, above an empty window (R10)', () => {
-    render(<Matrix {...props} rows={[]} filters={<button type="button">Locatie: Calais ×</button>} />)
-
-    expect(screen.getByRole('button', { name: 'Locatie: Calais ×' })).toBeTruthy()
-    expect(screen.getByText('Geen rijen')).toBeTruthy()
-  })
-
   it('says no rows match when the search leaves none, and the window is empty only when it is', () => {
-    render(<Matrix {...props} rows={week} query="zzz" />)
+    render(<WithBar {...props} rows={week} query="zzz" />)
     expect(screen.getByText('Geen rijen voor deze zoekterm of filters')).toBeTruthy()
     expect(screen.queryByText('Geen rijen')).toBeNull()
   })
@@ -311,12 +349,12 @@ describe('the matrix arrangement', () => {
       { ...activity(1, 'Avond', '2026-05-18'), fields: { date: '2026-05-18', kind: 'show' } },
       { ...activity(2, 'Ochtend', '2026-05-19'), fields: { date: '2026-05-19', kind: 'build' } },
     ]
-    const { container } = render(<Matrix {...props} rows={rows} layout={{ ...layout, group: null }} />)
+    const { container } = render(<WithBar {...props} rows={rows} layout={{ ...layout, group: null }} />)
 
-    expect([...container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual([dayLabel('2026-05-18'), dayLabel('2026-05-19')])
+    expect([...container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Monday May 18', 'Tuesday May 19'])
     cleanup()
-    const grouped = render(<Matrix {...props} rows={rows} layout={{ ...layout, group: 'kind' }} />)
-    expect([...grouped.container.querySelectorAll('.nv-group')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
+    const grouped = render(<WithBar {...props} rows={rows} layout={{ ...layout, group: 'kind' }} />)
+    expect([...grouped.container.querySelectorAll('.nv-group__label')].map((g) => g.textContent)).toEqual(['Opbouw', 'Voorstelling'])
   })
 })
 

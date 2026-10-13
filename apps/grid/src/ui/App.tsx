@@ -1,7 +1,7 @@
 import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
@@ -39,12 +39,17 @@ import { useFilterNames } from './useFilterNames'
 import { offersForOwners, Share } from './Share'
 import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
+import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
 import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
+import { QuickCreate } from '../dashboard/QuickCreate'
+import { barOf } from './bar'
+import { ChipBar } from './ChipBar'
+import { Legend } from '../matrix/Legend'
 import { Gallery } from '../gallery/Gallery'
 import { Timeline } from '../timeline/Timeline'
 import { timelineWindow } from '../timeline/layout'
@@ -175,7 +180,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [activeKey, setActive] = useState<string | undefined>(() => readHash('view') ?? undefined)
   const [adding, setAdding] = useState<{ table: Table; type: ViewType } | null>(null)
   const [viewNote, setViewNote] = useState<string | null>(null)
-  const [shown, setShown] = useState<Shown | null>(null)
+  // What the title line says, kept with the view that said it: a view that says nothing shows nothing.
+  const [told, setTold] = useState<{ view: string; shown: Shown | null } | null>(null)
   const [notice, notify] = useNotice()
   useEffect(() => onNotices((notices) => notify({ message: notices.join(' ') })), [])
   // A revert remounts the matrix, whose picked columns are its own state.
@@ -199,6 +205,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [reloads, setReloads] = useState(0)
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
+  const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
+  const [quick, setQuick] = useState(false)
+  // "+ Kolom" on a matrix: the chip row holds the button, the matrix the picker.
+  const [picking, setPicking] = useState(false)
   useFillViewport(frame)
 
   useEffect(() => {
@@ -223,6 +233,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // The grid opens on the first dashboard the reader can open, else on its first view.
   const view = [...dashboards, ...tables.flatMap((table) => table.views)].find((v) => v.key === activeKey) ?? dashboards[0] ?? tables[0]?.views[0] ?? starting[0]
   const dashboard = view?.type === 'dashboard' ? view : undefined
+  const setShown = useCallback((shown: Shown | null) => setTold({ view: view?.key ?? '', shown }), [view?.key])
   current.current = view?.key
 
   useEffect(() => {
@@ -291,7 +302,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       { field: view.date_field, op: 'between', values: [next.from, next.to] },
       ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
     ]))
+  // The period chips sit where the view reads days by its dated column: a windowed skin always, another where a period is set.
+  const period = !view?.date_field ? null
+    : calendar ? { shown: calendarShown, onShown: showDays }
+    : timeline ? { shown: timelineShown, onShown: showDays }
+    : view.type === 'matrix' ? { shown: matrixDays, onShown: showDays }
+    : conditionDays?.from && conditionDays.to ? { shown: { from: conditionDays.from, to: conditionDays.to }, onShown: showDays }
+    : null
   const windowKey = JSON.stringify(window)
+  useEffect(() => setPicking(false), [view?.key])
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
@@ -321,6 +340,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
   const model = view ? models[view.model] : undefined
+  // A skin with no draft row to type in asks for its new row in the dashboard's quick create.
+  const quickAdd = !model?.query && (view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' || Boolean(calendar))
   const writable = view ? served?.writable[view.model] === true : false
   const loaded = result.status === 'ready' && model ? result.rows : null
   const matrix = view?.type === 'matrix'
@@ -480,6 +501,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   }
 
   return (
+    <DrawerSlot.Provider value={drawerSlot}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
@@ -491,12 +513,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           title={view?.label ?? title}
           kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
-          shown={matrix ? null : shown}
+          shown={matrix || told?.view !== view?.key ? null : (told?.shown ?? null)}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
-          addBlocked={addBlocked}
-          onAdd={matrix || calendar || dashboard || view?.type === 'timeline' || view?.type === 'board' || view?.type === 'gallery' ? undefined : add}
+          addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
+          onAdd={quickAdd ? () => setQuick(true) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -507,6 +529,13 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           fixed={Object.keys(view?.fixed ?? {}).length}
           onHistory={view && !dashboard ? () => setHistoryOpen((open) => !open) : undefined}
         />
+        {!dashboard && view && model && layout && (
+          <ChipBar {...barOf({
+            view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period,
+            told: told?.view === view.key ? told.shown : null,
+            ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
+          })} />
+        )}
         <div className="nv-work">
         <section className="nv-sheet">
           {dashboard ? (
@@ -515,23 +544,22 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
-              lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
-              onShown={showDays} />
+              lane={layout.group} onTitle={setShown} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} onShown={showDays} filters={filters} />
+              lane={layout.group} onTitle={setShown} />
           ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
-            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} />
+            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} onShown={setShown} />
           ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
-              layout={layout} onLayout={setLayout} filters={filters} />
+              layout={layout} onLayout={setLayout} picking={picking} onPicking={setPicking} onShown={setShown} />
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} filters={filters} scopeChip={scopeChip} onAction={act} onNotice={(message) => notify({ message })}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onNotice={(message) => notify({ message })}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} recordLink={model ? linkedDataset(role, model) : undefined} reloads={reloads} />
           ) : (
             <Sheet hasView={view !== undefined} result={result} />
@@ -542,16 +570,28 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             onUndo={undoBatch} onUndone={reloadView} onRefused={(error) => notify({ message: undoText(error) })} onClose={() => setHistoryOpen(false)} />
         )}
         </div>
+        <footer className="nv-foot" aria-label={t('hints')}>
+          <span>↑↓←→ {t('hintMove')}</span>
+          <span>↵ {t('hintEdit')}</span>
+          <span>⌘Z {t('hintUndo')}</span>
+          {matrix && view && <Legend view={view} models={models} />}
+        </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>
           {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
         </div>
       </main>
+      <div className="nv-drawer-slot" ref={setDrawerSlot} />
+      {quick && model && (
+        <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
+          window={calendar ? calendarShown : null} onClose={() => setQuick(false)} onCreated={() => { setQuick(false); reloadView() }} />
+      )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
           scope={adding.table.space === 'scoped' && space.status === 'ready' ? space.selected?.title ?? null : null}
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </DrawerSlot.Provider>
   )
 }
 

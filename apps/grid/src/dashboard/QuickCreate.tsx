@@ -3,7 +3,7 @@ import { Dialog, Heading, Modal, ModalOverlay } from 'react-aria-components'
 import { create, records } from '../api'
 import { madeFrom, type NewRow } from '../grid/newRow'
 import { errorText, t } from '../i18n'
-import type { ApiError, Field, Model, Row, Scope, TableDef } from '../types'
+import type { ApiError, Field, DateWindow, Model, Row, Scope, TableDef } from '../types'
 
 const INPUT: Partial<Record<Field['type'], string>> = { int: 'number', float: 'number', date: 'date', datetime: 'datetime-local', email: 'email', url: 'url' }
 
@@ -73,10 +73,13 @@ function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
 }
 
 /** A create on one dataset from the dashboard's header: the columns it needs, the space filled in, the writer judging it. */
-export function QuickCreate({ label, model, tables, scope, onClose, onCreated }: {
-  label: string; model: Model; tables: TableDef[]; scope: Scope | null; onClose: () => void; onCreated: () => void
+export function QuickCreate({ label, model, tables, scope, window = null, onClose, onCreated }: {
+  label: string; model: Model; tables: TableDef[]; scope: Scope | null
+  /** The days on screen: a date starts on today when it is among them, else on their first. */
+  window?: DateWindow | null
+  onClose: () => void; onCreated: () => void
 }) {
-  const made = madeFrom(model, tables, null, scope)
+  const made = madeFrom(model, tables, window, scope)
   const titleField: Field = { type: 'text', label: model.title_label, required: true, fact: false }
   const asked = askedOf(model, made, scope)
   const [values, setValues] = useState<Record<string, unknown>>(() =>
@@ -102,7 +105,7 @@ export function QuickCreate({ label, model, tables, scope, onClose, onCreated }:
     <ModalOverlay className="nv-scrim" isOpen isDismissable onOpenChange={(open) => !open && onClose()}>
       <Modal className="nv-dialog">
         <Dialog className="nv-dialog__body" aria-label={label}>
-          <form onSubmit={(e) => { e.preventDefault(); submit() }}>
+          <form className="nv-dialog__form" onSubmit={(e) => { e.preventDefault(); submit() }}>
             <Heading slot="title">{label}</Heading>
             {'missing' in made && <p className="nv-dialog__refusal">{t('needsFields', { fields: made.missing.join(', ') })}</p>}
             {asked.map((key, at) => (

@@ -55,10 +55,12 @@ export function Rail({ tables, sections, active, onSelect, onTable = (table) => 
   }
   return (
     <nav className="nv-rail" aria-label={t('views')}>
+      <p className="nv-brand"><b>Worktable</b></p>
       {space}
       <div className="nv-tree" role="tree" aria-label={t('views')}>
         {dashboards.length > 0 && (
           <div className="nv-tree__section nv-tree__dashboards" role="group" aria-label={t('dashboard')}>
+            <p className="nv-tree__label" aria-hidden="true">{t('dashboards')}</p>
             {dashboards.map((view) => (
               <div key={view.key} role="treeitem" aria-selected={view.key === active} className="nv-view">
                 <button type="button" className="nv-view__button" aria-current={view.key === active ? 'page' : undefined} onClick={() => onSelect(view.key)}>

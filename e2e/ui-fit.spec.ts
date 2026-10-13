@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek, pickIn } from './tree'
 
@@ -50,11 +51,13 @@ async function edit(cell: Locator) {
 }
 
 async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
+  await openLooks(page)
   await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: theme }).click()
 }
 
 async function setDensity(page: Page, density: 'Compact' | 'Normaal' | 'Ruim') {
-  await page.getByRole('radiogroup', { name: 'Dichtheid' }).getByRole('radio', { name: density }).click()
+  await openLooks(page)
+  await page.getByRole('radiogroup', { name: 'Rijhoogte' }).getByRole('radio', { name: density }).click()
 }
 
 /** Light and dark, each shot named after the surface. */

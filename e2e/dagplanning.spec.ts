@@ -279,13 +279,13 @@ async function peopleTags(page: Page) {
   await expect.poll(assigned).toEqual([bram, sam].sort())
   await search.press('Escape')
 
-  // A copy of the view keeps Mensen after Locatie.
+  // A copy of the view keeps Planning's order: Mensen right after Tourstop.
   await page.getByRole('button', { name: 'More actions: Planning' }).click()
   await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
   await page.reload()
   await openView(page, 'Planning (kopie)', 'Activiteiten')
   const heads = (await page.locator('thead th').allTextContents()).map((h) => h.replace(/\s*[↑↓]$/, '').trim())
-  expect(heads.indexOf('Mensen')).toBe(heads.indexOf('Locatie') + 1)
+  expect(heads.indexOf('Mensen')).toBe(heads.indexOf('Tourstop') + 1)
 }
 
 // The shake-out's edges: the people cell's colours and overflow, the removal question by keyboard, the draft row, Tourstop.

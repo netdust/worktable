@@ -50,6 +50,11 @@ export function shiftMonth(window: DateWindow, months: number): DateWindow {
   return { from: iso(new Date(from.getFullYear(), from.getMonth() + months, 1)), to: iso(new Date(from.getFullYear(), from.getMonth() + months + 1, 0)) }
 }
 
+/** The calendar month a day falls in. */
+export function monthOf(date: Date): DateWindow {
+  return shiftMonth({ from: iso(date), to: iso(date) }, 0)
+}
+
 export function isWeek(window: DateWindow): boolean {
   const from = parse(window.from)
   return from !== null && weekOf(from).from === window.from && weekOf(from).to === window.to

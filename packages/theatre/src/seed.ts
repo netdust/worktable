@@ -32,6 +32,39 @@ const producties = [
   { titel: 'Zomerstorm', seizoen: '2025-2026', status: 'archief', organisatie_id: OWN },
 ]
 
+const DAY = 86_400_000
+/** This week's Monday at noon: the tourstops are dated from it, so the timeline never runs out of them (the step-0e lesson). */
+const monday = (() => {
+  const day = new Date()
+  day.setHours(12, 0, 0, 0)
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7))
+  return day
+})()
+const dayFrom = (offset: number): string => {
+  const day = new Date(monday.getTime() + offset * DAY)
+  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+}
+
+// Invented tourstops around this week: productie, naam, locatie, first and last day from Monday, status.
+const tourstops = (
+  [
+    [2, 'Brugge', 3, 2, 4, 'bevestigd'],
+    [2, 'Lier', 2, 8, 9, 'optie'],
+    [2, 'Gent', 2, 9, 11, 'bevestigd'],
+    [2, 'Leuven', 4, 16, 19, 'optie'],
+    [1, 'Repetities', 4, -7, 12, 'bevestigd'],
+    [1, 'Première', 2, 18, 27, 'bevestigd'],
+    [3, 'Oostende', 3, 4, 5, 'bevestigd'],
+  ] as const
+).map(([productie_id, naam, locatie_id, from, to, status]) => ({
+  productie_id,
+  naam,
+  locatie_id,
+  start_datum: dayFrom(from),
+  eind_datum: dayFrom(to),
+  status,
+}))
+
 type Slot = [productieId: number, soort: string, startAt: string, endAt: string, status: string, plaats: string]
 
 const slots: Slot[] = [
@@ -205,6 +238,7 @@ const sjablonen = [
 export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void {
   insert('organisatie', organisaties)
   insert('productie', producties)
+  insert('speelreeks', tourstops)
   insert('activiteit', activiteiten)
   insert('persoon', personen)
   insert('rol', rollen)
@@ -224,7 +258,7 @@ export const views: SavedViewSeed[] = [
     filters: { plandag: { $period: 'week' } },
     sort: ['start_at'],
     group_by: 'plandag',
-    visible_fields: ['start_at', 'omschrijving', 'soort', 'speelreeks_id', 'locatie', 'mensen', 'status'],
+    visible_fields: ['start_at', 'omschrijving', 'soort', 'locatie', 'status', 'speelreeks_id', 'mensen'],
   },
   {
     name: 'Toewijzingen per activiteit',
@@ -438,11 +472,21 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['activiteit_id', 'rol_id', 'datum'],
   },
   {
+    name: 'Per status',
+    source_type: 'dataset',
+    source: 'activiteit',
+    skin: 'board',
+    filters: { plandag: { $period: 'week' } },
+    sort: ['plandag', 'start_at'],
+    group_by: null,
+    visible_fields: ['soort', 'plandag', 'start_at', 'eind_at', 'locatie', 'mensen'],
+  },
+  {
     name: 'Tijdlijn tourstops',
     source_type: 'dataset',
     source: 'speelreeks',
     skin: 'timeline',
-    filters: {},
+    filters: { start_datum: { $period: 'month' } },
     sort: ['start_datum'],
     group_by: 'productie_id',
     visible_fields: [],
@@ -452,10 +496,10 @@ export const views: SavedViewSeed[] = [
     source_type: 'dataset',
     source: 'activiteit',
     skin: 'gallery',
-    filters: {},
+    filters: { plandag: { $period: 'week' } },
     sort: ['plandag', 'start_at'],
     group_by: null,
-    visible_fields: ['plandag', 'soort'],
+    visible_fields: ['plandag', 'start_at', 'eind_at', 'soort', 'productie_id'],
   },
   {
     name: 'Kalender activiteiten',
@@ -464,7 +508,7 @@ export const views: SavedViewSeed[] = [
     skin: 'calendar',
     filters: {},
     sort: ['plandag', 'start_at'],
-    group_by: 'productie_id',
+    group_by: null,
     visible_fields: [],
   },
   {
@@ -550,7 +594,7 @@ export const views: SavedViewSeed[] = [
           label: 'Deze week',
           tiles: [
             { kind: 'week', view: 'Kalender activiteiten' },
-            { kind: 'list', view: 'Vandaag', rows: 5 },
+            { kind: 'list', view: 'Vandaag', rows: 5, columns: ['start_at', 'eind_at', 'soort'] },
           ],
         },
         {

@@ -9,6 +9,9 @@ import type { LinkActions } from './cells/Links'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
 import { createStore, type StoreApi } from './store'
+import { barOf } from '../ui/bar'
+import { ChipBar } from '../ui/ChipBar'
+import type { Shown } from '../ui/Toolbar'
 
 const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
@@ -24,7 +27,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: { rows: number; groups: number | null; cut: boolean } | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: Shown | null) => void } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -36,10 +39,21 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
       saved = next
       setLayout(next)
     }
+    // As the app does: the chip row over the sheet, from what the sheet tells.
+    const [told, setTold] = useState<Shown | null>(null)
+    const shown = (next: Parameters<NonNullable<typeof options.onShown>>[0]) => {
+      setTold(next)
+      options.onShown?.(next)
+    }
+    const model = options.model ?? activity
+    const view = options.view ?? planning
     return (
-      <Grid model={options.model ?? activity} view={options.view ?? planning} store={store} writable layout={layout} onLayout={change} title={options.title}
-        query={options.query ?? ''} emptyTitle="Geen rijen in deze periode" emptyHint="Week 21 · 18–24 mei" filters={options.filters}
-        cut={options.cut} onShown={options.onShown} models={options.models} onNotice={options.onNotice} scope={options.scope ?? null} scopeChip={options.scopeChip ?? null} />
+      <>
+        <ChipBar {...barOf({ view, model, layout, onLayout: change, scope: options.scopeChip ?? null, filters: options.filters, told, period: null })} />
+        <Grid model={model} view={view} store={store} writable layout={layout} onLayout={change} title={options.title}
+          query={options.query ?? ''} emptyTitle="Geen rijen in deze periode" emptyHint="Week 21 · 18–24 mei"
+          cut={options.cut} onShown={shown} models={options.models} onNotice={options.onNotice} scope={options.scope ?? null} />
+      </>
     )
   }
   return { store, ...renderNl(<Harness />) }
@@ -891,7 +905,7 @@ describe('the group bands', () => {
     expect(wednesday.querySelector('.nv-group__totals')?.textContent).toContain('…')
     expect(band('Dinsdag 19 mei').querySelector('.nv-group__count')?.textContent).toBe('2')
     expect(band('Dinsdag 19 mei').querySelector('.nv-group__totals')?.textContent).toContain('24')
-    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: true })
+    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 6, groups: 3, cut: true }))
   })
 
   it('says N+ rijen in the bar and the foot when the read limit cut the rows', () => {
@@ -935,7 +949,7 @@ describe('the group bands', () => {
     const total = screen.getByTestId('total')
     expect(total.textContent).toContain('Totaal · 6 rijen')
     expect(within(total).getByText('47')).toBeTruthy()
-    expect(onShown).toHaveBeenLastCalledWith({ rows: 6, groups: 3, cut: false })
+    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 6, groups: 3, cut: false }))
   })
 
   it('leave folded rows out of keyboard movement', () => {
@@ -1301,7 +1315,7 @@ async function addCondition(field: string, value: string) {
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
     expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
     expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Groep: datum', 'Filter', 'Kolommen'])
+    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Filter', 'Groep: datum', 'Kolommen'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
@@ -1373,7 +1387,7 @@ async function addCondition(field: string, value: string) {
     await screen.findByRole('grid', { name: planning.label })
 
     expect(remote.rows).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), null, expect.objectContaining({ filters: [{ field: 'status', op: 'in', values: ['option'] }] }))
-    expect(within(bar()).getByText('Status is Optie')).toBeTruthy()
+    expect(within(bar()).getByText((_, el) => el?.classList.contains('nv-chip--filter') === true && el.textContent === 'Status is Optie')).toBeTruthy()
 
     fireEvent.click(within(bar()).getByRole('button', { name: 'Filter Status wissen' }))
     await screen.findByRole('grid', { name: planning.label })

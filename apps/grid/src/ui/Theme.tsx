@@ -34,8 +34,8 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
   )
 }
 
-/** One viewer's choice, kept in this browser; `auto` follows the system. */
-export function ThemeToggle() {
+/** One viewer's choice, kept in this browser and set on the root; `auto` follows the system. */
+export function useTheme(): [Theme, (theme: Theme) => void] {
   const [theme, setTheme] = useState<Theme>(stored)
 
   useEffect(() => {
@@ -48,9 +48,7 @@ export function ThemeToggle() {
       // Blocked storage: the choice lasts this visit.
     }
   }, [theme])
-
-  return (
-    <Segmented label={t('theme')} value={theme} onChange={setTheme}
-      options={THEMES.map((value) => ({ value, label: t(WORD[value]) }))} />
-  )
+  return [theme, setTheme]
 }
+
+export const themeOptions = () => THEMES.map((value) => ({ value, label: t(WORD[value]) }))

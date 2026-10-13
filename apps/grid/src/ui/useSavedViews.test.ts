@@ -82,3 +82,18 @@ describe('a view saves itself', () => {
     expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({ arrangement: expect.objectContaining({ group: 'kind' }) }))
   })
 })
+
+describe('a new timeline view', () => {
+  it('reads this month on its dated column, in lanes by the first lane the table declares', async () => {
+    api.savedViews.mockResolvedValue([])
+    api.createView.mockImplementation((made: { name: string }) => Promise.resolve({ ...mine, key: '44', id: 44, label: made.name, type: 'timeline' }))
+    const activiteiten = { key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['grid' as const, 'timeline' as const], calendar: { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['productie_id', 'speelreeks_id'] } }
+    const { result } = renderHook(() => useSavedViews({
+      declared: [activiteiten], starting: [], active: { current: '42' }, open: () => undefined, note: () => undefined, notify: () => undefined,
+    }))
+    await act(async () => result.current.create('activiteit', 'Tijdlijn activiteiten', 'timeline', false))
+    expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({
+      arrangement: expect.objectContaining({ filters: [{ field: 'plandag', op: 'month', values: [] }], group: 'productie_id' }),
+    }))
+  })
+})

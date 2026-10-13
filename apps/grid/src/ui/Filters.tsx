@@ -40,6 +40,12 @@ export function said(condition: Filter, field: FilterField | undefined): string 
   }
 }
 
+/** The field's name in the chip's ink, what it asks of the field quieter, as the prototype sets a chip. */
+function ChipText({ text, label }: { text: string; label: string }) {
+  if (!text.startsWith(`${label} `)) return <>{text}</>
+  return <>{label} <span className="nv-chip__op">{text.slice(label.length + 1)}</span></>
+}
+
 /** The conditions as chips, each with its ×, and the Filter button that opens the builder. */
 export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] }: Props) {
   const fieldOf = (name: string) => fields.find((f) => f.field === name)
@@ -81,7 +87,7 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
           <Fragment key={`${condition.field}:${condition.op}`}>
           {joinWord && <span className="nv-chip-join">{t('filterOr').toLocaleLowerCase()}</span>}
           <span className="nv-chip nv-chip--set nv-chip--filter">
-            {said(condition, fieldOf(condition.field))}
+            <ChipText text={said(condition, fieldOf(condition.field))} label={label} />
             <button type="button" className="nv-chip__remove" aria-label={t('removeFilter', { field: label })} title={t('removeFilter', { field: label })}
               onClick={() => onChange(filters.filter((f) => f !== condition))}>
               <X size={12} aria-hidden="true" />

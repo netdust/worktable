@@ -7,6 +7,8 @@ import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, R
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
 import type { Column } from './columns'
+import { Display } from './cells'
+import { ICON } from './GridHeader'
 import { RelationPicker } from './cells/RelationPicker'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
@@ -40,17 +42,23 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
   return role === 'administrator' && model.record_link ? model.key : undefined
 }
 
+/** The drawer reads; a checkbox's toggle is the sheet's. */
+const noToggle = () => undefined
+
 /** One record read whole, beside the sheet — not a modal: the grid stays live. */
 export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined }: Props) {
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen}>
       {columns.length > 0 && <dl className="nv-drawer__fields">
-        {columns.filter((column) => column.id !== 'title').map((column) => (
+        {columns.filter((column) => column.id !== 'title').map((column) => {
+          const Icon = ICON[column.kind]
+          return (
           <div key={column.id} className="nv-drawer__field">
-            <dt>{column.label}</dt>
-            <dd>{column.text(row) || t('empty')}</dd>
+            <dt><Icon className="nv-drawer__icon" size={14} aria-hidden="true" />{column.label}</dt>
+            <dd>{column.text(row) ? <Display column={column} row={row} onToggle={noToggle} /> : t('empty')}</dd>
           </div>
-        ))}
+          )
+        })}
       </dl>}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}

@@ -80,7 +80,8 @@ describe('App and the window', () => {
     await screen.findByText('Geen rijen in deze periode')
     expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
     expect(api.rows).toHaveBeenLastCalledWith(planning, {}, null, expect.objectContaining({ filters: [{ field: 'date', op: 'week', values: [] }] }))
-    expect(screen.queryByRole('button', { name: 'Volgende periode' })).toBeNull()
+    // The period is set on the dated column: its chips sit in the row as on every other view.
+    expect(screen.getByRole('button', { name: 'Volgende periode' })).toBeTruthy()
   })
 
   it('says only "Geen rijen" on a table with no date condition', async () => {
