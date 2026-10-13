@@ -32,6 +32,35 @@ describe('the board', () => {
   })
 })
 
+describe('a board card', () => {
+  it('reads as the prototype: the soort, the title, the day and hours, the place, from the view\'s own columns', () => {
+    const activity = {
+      key: 'activiteit', label: 'Activiteiten', title_label: 'Omschrijving', title_readonly: false,
+      fields: {
+        status: { type: 'select', label: 'Status', required: true, fact: false, options: { optie: 'Optie', bevestigd: 'Bevestigd' }, tones: { optie: 'warn', bevestigd: 'ok' } },
+        soort: { type: 'select', label: 'Soort', required: true, fact: false, options: { voorstelling: 'Voorstelling' }, tones: { voorstelling: 'rose' } },
+        productie_id: { type: 'relation', label: 'Productie', required: true, fact: false, relation: { model: 'productie', multiple: false } },
+        plandag: { type: 'date', label: 'Plandag', required: false, fact: false },
+        start_at: { type: 'datetime', label: 'Start', required: false, fact: false },
+        eind_at: { type: 'datetime', label: 'Einde', required: false, fact: false },
+        plaats: { type: 'text', label: 'Plaats', required: false, fact: false },
+      },
+    } as unknown as Model
+    const board = { ...view, model: 'activiteit', table: 'activiteit', board: { column: 'status' }, arrangement: { order: ['title', 'soort', 'plandag', 'start_at', 'eind_at', 'plaats'], hidden: ['productie_id'] } } as unknown as View
+    const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'bevestigd', soort: 'voorstelling', productie_id: [2], plandag: '2026-10-13', start_at: '2026-10-13 20:00', eind_at: '2026-10-13 21:15', plaats: 'Theater Het Anker' } }
+    document.documentElement.lang = 'nl'
+    render(<Board view={board} model={activity} models={{ activiteit: activity }} rows={[show]} column="status" />)
+    const card = within(screen.getByRole('list', { name: 'Bevestigd' })).getByRole('button', { name: /Voorstelling Brugge/ })
+    expect(card.textContent).toContain('Voorstelling')
+    expect(card.textContent).toContain('di 13 okt')
+    expect(card.querySelector('.nv-time')?.textContent).toBe('20:00–21:15')
+    expect(card.textContent).toContain('Theater Het Anker')
+    expect(card.textContent).not.toContain('Productie')
+    expect(screen.queryByRole('list', { name: 'Geen' })).toBeNull()
+    document.documentElement.lang = ''
+  })
+})
+
 describe('the gallery', () => {
   it('shows each row’s image from one batched read, and a plain card without one', async () => {
     api.filesOf.mockResolvedValue({ 1: { id: 41, mime: 'image/jpeg', name: 'a.jpg' } })

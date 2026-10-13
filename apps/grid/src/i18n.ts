@@ -108,6 +108,7 @@ const strings = {
   hintCancel: 'annuleren',
   hintSearch: 'zoeken en springen',
   hintUndo: 'ongedaan maken',
+  noTime: 'zonder tijd',
   hints: 'Sneltoetsen',
   shortcuts: 'Sneltoetsen',
   changed: 'Gewijzigd',
