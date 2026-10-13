@@ -508,7 +508,7 @@ export const views: SavedViewSeed[] = [
     skin: 'calendar',
     filters: {},
     sort: ['plandag', 'start_at'],
-    group_by: 'productie_id',
+    group_by: null,
     visible_fields: [],
   },
   {

@@ -2,11 +2,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { type Key, ToggleButton, ToggleButtonGroup } from 'react-aria-components'
 import { Drawer } from '../grid/Drawer'
-import { columnsFor } from '../grid/columns'
+import { type Column, columnsFor } from '../grid/columns'
 import { t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
 import { ChipRow } from '../ui/ChipRow'
 import type { Shown } from '../ui/Toolbar'
+import { toneColor } from '../ui/tone'
 import { formatWindow, isMonth, iso, isoWeek, parse, shift, shiftMonth, weekOf } from '../ui/Window'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
@@ -42,10 +43,13 @@ const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) || a.from - b.from
 
-type ToneOf = (lane: number | null) => CSSProperties
+type ToneOf = (lane: number | null, row?: Row) => CSSProperties
 
-function lanePalette(lanes: Lane[]): ToneOf {
-  return (lane) => {
+/** Laned, an event takes its lane's colour; unlaned, the tone of its first toned option, as the prototype tints by soort. */
+function lanePalette(lanes: Lane[], toned: Column | undefined): ToneOf {
+  return (lane, row) => {
+    if (toned && row && lanes.every((l) => l.id === null))
+      return { '--tone': toneColor(toned.tones?.[String(toned.value(row) ?? '')]) } as CSSProperties
     const at = Math.max(0, lanes.findIndex((l) => l.id === lane))
     return { '--tone': `var(--tone-${LANE_TONES[at % LANE_TONES.length]})` } as CSSProperties
   }
@@ -86,7 +90,7 @@ function Bars({ days, events, lanes, cal, offset, firstRow, named = false, toneO
   return spanBars(events, days, cal, laneOrder).map((bar) => (
     <Event key={bar.row.id} event={{ row: bar.row, day: days[bar.start], lane: bar.lane, allDay: true, from: 0, to: 0 }} bar={bar}
       laneTitle={titleOf(bar.lane)} named={named} onOpen={onOpen}
-      style={{ ...toneOf(bar.lane), gridColumn: `${bar.start + 1 + offset} / span ${bar.length}`, gridRow: bar.line + firstRow }} />
+      style={{ ...toneOf(bar.lane, bar.row), gridColumn: `${bar.start + 1 + offset} / span ${bar.length}`, gridRow: bar.line + firstRow }} />
   ))
 }
 
@@ -130,7 +134,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
         <span className="nv-week__axis">{t('allDay')}</span>
         {days.map((day) => (
           <div key={day} role="group" aria-label={`${t('allDay')} ${dayHead(day)}`} className="nv-week__allday">
-            {(grid.allDay[day] ?? []).map((e) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} style={toneOf(e.lane)} onOpen={onOpen} />)}
+            {(grid.allDay[day] ?? []).map((e) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} style={toneOf(e.lane, e.row)} onOpen={onOpen} />)}
           </div>
         ))}
       </div>
@@ -146,7 +150,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
               {(grid.timed[day] ?? []).map(({ event, column, columns: across }) => (
                 <Event key={event.row.id} event={event} laneTitle={titleOf(event.lane)} where={blockHeight(event) >= THREE_LINES ? whereOf(event.row) : undefined} onOpen={onOpen}
                   short={blockHeight(event) < TWO_LINES} style={{
-                  ...toneOf(event.lane),
+                  ...toneOf(event.lane, event.row),
                   position: 'absolute',
                   top: `${((event.from - grid.hours.from) / 60) * HOUR_PX}px`,
                   height: `${blockHeight(event)}px`,
@@ -197,7 +201,7 @@ function Month({ month, weeks, lanes, events, toneOf, onOpen }: {
               <td key={day} className={[day < month.from || day > month.to ? 'nv-cal__out' : '', day === iso(new Date()) ? 'nv-cal__today' : ''].filter(Boolean).join(' ') || undefined}>
                 <span className="nv-cal__date">{parse(day)?.getDate()}</span>
                 {events.filter((e) => e.day === day).sort(byStart)
-                  .map((e) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane)} onOpen={onOpen} />)}
+                  .map((e) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} onOpen={onOpen} />)}
               </td>
             ))}
           </tr>
@@ -214,7 +218,6 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onShown,
   const weeks = useMemo(() => (month ? monthWeeks(shown) : []), [month, shown.from, shown.to])
   const window = month && weeks.length > 0 ? { from: weeks[0][0], to: weeks[weeks.length - 1][6] } : shown
   const { days, events, lanes } = useMemo(() => placeEvents(rows, cal, window, lane), [rows, cal, window.from, window.to, lane])
-  const toneOf = useMemo(() => lanePalette(lanes), [lanes])
   const columns = useMemo(
     () => columnsFor(model, { ...view, columns: undefined, lookups: undefined, rollups: undefined }, false, models),
     [model, view, models],
@@ -222,6 +225,8 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onShown,
   // An event's third line: its place, the first relation the calendar cannot lane by.
   const place = columns.find((c) => c.kind === 'relation' && !cal.lanes.includes(c.id))
   const whereOf = (row: Row) => place?.text(row) ?? ''
+  const toned = columns.find((c) => c.kind === 'select' && c.tones)
+  const toneOf = useMemo(() => lanePalette(lanes, toned), [lanes, toned])
   const step = (by: number) => onShown(month ? shiftMonth(shown, by) : shift(shown, 7 * by))
   // A week's Thursday names its month; a month's first day names its first week.
   const from = parse(shown.from) ?? new Date()

@@ -69,6 +69,15 @@ describe('the calendar', () => {
     expect(lotte.style.getPropertyValue('--tone')).toBe(tone(/repetitie Gent/))
   })
 
+  it('without a lane, events take the tone of their option and no legend shows', () => {
+    const toned = { ...model, fields: { ...model.fields, soort: { label: 'Soort', type: 'select', options: { repetitie: 'Repetitie', reis: 'Reis' }, tones: { repetitie: 'violet', reis: 'sky' } } } } as unknown as Model
+    const of = (r: Row, soort: string): Row => ({ ...r, fields: { ...r.fields, soort } })
+    shown({ model: toned, models: { persoon_dag: toned }, lane: null, rows: [of(rows[0], 'repetitie'), of(rows[2], 'reis')] })
+    expect(screen.queryByRole('list', { name: 'Rijen' })).toBeNull()
+    const tone = (name: RegExp) => screen.getByRole('button', { name }).style.getPropertyValue('--tone')
+    expect([tone(/repetitie Gent/), tone(/vergadering Antwerpen/)]).toEqual(['var(--tone-violet)', 'var(--tone-sky)'])
+  })
+
   it('a source without a start column shows only the all-day band, stacked per day', () => {
     shown({ cal: { ...CAL, start: null, end: null } })
     expect(screen.queryByTestId('hours')).toBeNull()

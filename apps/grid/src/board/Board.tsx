@@ -1,18 +1,15 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo } from 'react'
 import { ChipRow } from '../ui/ChipRow'
+import { toneColor } from '../ui/tone'
 import type { Shown } from '../ui/Toolbar'
 import { Display } from '../grid/cells'
 import { type Column, columnsFor, linksOf } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
-import type { Model, Row, SavedView, Tone, View } from '../types'
+import type { Model, Row, SavedView, View } from '../types'
 
 const NONE = '\u0000'
 const MAX_FACES = 4
-
-/** A tone as the colour of a column's dot: the status tones keep their own ink. */
-const toneColor = (tone: Tone | undefined) =>
-  !tone ? 'var(--color-fg-subtle)' : tone === 'ok' ? 'var(--color-success-fg)' : tone === 'warn' ? 'var(--color-warning-fg)' : tone === 'bad' ? 'var(--color-danger-fg)' : `var(--tone-${tone})`
 
 const MOMENT = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/
 
