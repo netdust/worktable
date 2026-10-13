@@ -2089,3 +2089,60 @@ describe('a link that carries conditions', () => {
     await waitFor(() => expect(lastFilters()).toEqual([{ field: 'date', op: 'between', values: ['2026-10-12', '2026-10-18'] }]))
   })
 })
+
+describe('the add button on a calendar', () => {
+  const cal = { day: 'plandag', start: null, end: null, lanes: [] }
+  const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+  const calendars: Schema = {
+    models: {
+      activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { plandag } },
+      persoon_dag: { key: 'persoon_dag', label: 'Per persoon per dag', title_label: 'Omschrijving', title_readonly: true, query: true, fields: { plandag } },
+    },
+    tables: [
+      { key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['calendar'] },
+      { key: 'persoon_dag', label: 'Per persoon per dag', model: 'persoon_dag', types: ['calendar'] },
+    ],
+    views: [
+      { key: 'activiteit', label: 'Kalender', table: 'activiteit', model: 'activiteit', type: 'calendar', calendar: cal },
+      { key: 'persoon_dag', label: 'Persoonskalender', table: 'persoon_dag', model: 'persoon_dag', type: 'calendar', calendar: cal },
+    ],
+    writable: { activiteit: true, persoon_dag: false },
+  } as unknown as Schema
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(calendars)
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+  })
+
+  it('offers a new row on a dataset calendar and none on a query calendar', async () => {
+    window.location.hash = 'view=activiteit'
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
+    cleanup()
+    window.location.hash = 'view=persoon_dag'
+    render(<App />)
+    await screen.findByRole('heading', { level: 1, name: 'Persoonskalender' })
+    expect(screen.queryByRole('button', { name: /^Nieuw/ })).toBeNull()
+    expect(screen.queryByText('Alleen lezen')).toBeNull()
+    window.location.hash = ''
+  })
+})
+
+describe('the title line\'s summary', () => {
+  it('drops the calendar\'s window from the title line when a dashboard opens', async () => {
+    const overzicht = {
+      key: '9', id: 9, label: 'Overzicht', table: 'planning', table_label: 'Planning', model: 'activity', type: 'dashboard', starting: false,
+      arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }, layout: { sections: [] },
+      shared: true, owner: { id: 1, name: 'Hester' }, mine: true, editable: true,
+    }
+    const kalender = { key: 'kalender', label: 'Kalender', table: 'planning', model: 'activity', type: 'calendar', calendar: { day: 'date', start: null, end: null, lanes: [] } }
+    api.schema.mockResolvedValue({ ...served, tables: [{ ...served.tables[0], types: ['grid', 'calendar'] }, served.tables[1]], views: [...served.views, kalender] } as unknown as Schema)
+    api.savedViews.mockResolvedValue([overzicht])
+    window.location.hash = '#view=kalender'
+    await shell()
+    await waitFor(() => expect(document.querySelector('.nv-toolbar__summary')?.textContent).toMatch(/^Week \d+/))
+    fireEvent.click(within(rail()).getAllByRole('button', { name: 'Overzicht' })[0])
+    await screen.findByRole('heading', { level: 1, name: 'Overzicht' })
+    expect(document.querySelector('.nv-toolbar__summary')).toBeNull()
+  })
+})

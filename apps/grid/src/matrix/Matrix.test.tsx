@@ -214,6 +214,14 @@ describe('the matrix', () => {
     expect(within(screen.getByRole('list')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['✓bevestigd', '?misschien', 'afwezig', '⚠afwezig en toegewezen'])
   })
 
+  it('heads a column with its first name, and with the whole name where two first names meet', () => {
+    const names = new Map([[5, 'Sien Peeters'], [6, 'Sien Claes'], [7, 'Marit Vos']])
+    const { container } = render(<Matrix {...props} titles={names} />)
+    const heads = [...container.querySelectorAll('th.nv-mx__head')].map((th) => [th.querySelector('.nv-th__label')?.textContent, th.getAttribute('title')])
+    expect(heads).toContainEqual(['Sien Peeters', 'Sien Peeters'])
+    expect(heads).toContainEqual(['Sien Claes', 'Sien Claes'])
+  })
+
   it('names the window when it has no activities', () => {
     render(<Matrix {...props} rows={[]} />)
 

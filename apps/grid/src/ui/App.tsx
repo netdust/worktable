@@ -1,7 +1,7 @@
 import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
@@ -178,7 +178,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [activeKey, setActive] = useState<string | undefined>(() => readHash('view') ?? undefined)
   const [adding, setAdding] = useState<{ table: Table; type: ViewType } | null>(null)
   const [viewNote, setViewNote] = useState<string | null>(null)
-  const [shown, setShown] = useState<Shown | null>(null)
+  // What the title line says, kept with the view that said it: a view that says nothing shows nothing.
+  const [told, setTold] = useState<{ view: string; shown: Shown | null } | null>(null)
   const [notice, notify] = useNotice()
   useEffect(() => onNotices((notices) => notify({ message: notices.join(' ') })), [])
   // A revert remounts the matrix, whose picked columns are its own state.
@@ -228,6 +229,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // The grid opens on the first dashboard the reader can open, else on its first view.
   const view = [...dashboards, ...tables.flatMap((table) => table.views)].find((v) => v.key === activeKey) ?? dashboards[0] ?? tables[0]?.views[0] ?? starting[0]
   const dashboard = view?.type === 'dashboard' ? view : undefined
+  const setShown = useCallback((shown: Shown | null) => setTold({ view: view?.key ?? '', shown }), [view?.key])
   current.current = view?.key
 
   useEffect(() => {
@@ -285,8 +287,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
   const timeline = view?.type === 'timeline' ? view.calendar : undefined
   const calendarShown = calendarWindow(conditionDays, new Date())
-  // A skin with no draft row to type in asks for its new row in the dashboard's quick create.
-  const quickAdd = view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' || Boolean(calendar)
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
   const timelineShown = timelineWindow(conditionDays, new Date())
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
@@ -328,6 +328,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
   const model = view ? models[view.model] : undefined
+  // A skin with no draft row to type in asks for its new row in the dashboard's quick create.
+  const quickAdd = !model?.query && (view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' || Boolean(calendar))
   const writable = view ? served?.writable[view.model] === true : false
   const loaded = result.status === 'ready' && model ? result.rows : null
   const matrix = view?.type === 'matrix'
@@ -499,12 +501,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           title={view?.label ?? title}
           kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
-          shown={matrix ? null : shown}
+          shown={matrix || told?.view !== view?.key ? null : (told?.shown ?? null)}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={quickAdd ? () => setQuick(true) : matrix || dashboard ? undefined : add}
+          onAdd={quickAdd ? () => setQuick(true) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {

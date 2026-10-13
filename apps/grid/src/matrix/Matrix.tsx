@@ -288,6 +288,9 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
     refocus.current = null
   }, [filling])
   const countWord = models[join.model]?.fields[join.cell_field]?.options?.[join.count] ?? join.count
+  // A head shows the first name, the whole one where two first names meet.
+  const firstOf = (name: string) => name.trim().split(/\s+/)[0]
+  const headName = (name: string) => (columns.filter((c) => firstOf(c.title) === firstOf(name)).length > 1 ? name : firstOf(name))
   const cellClass = (c: number) => (c === firstName && c > 0 ? 'nv-mx__split' : '')
 
   const by = useMemo(() => sectionColumn(view, models, layout.group), [view, models, layout.group])
@@ -523,7 +526,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 {hasOpen && <th className="nv-th nv-mx__open" scope="col"><span className="nv-th__label">{t('openColumn')}</span></th>}
                 {columns.map((column, c) => (
                   <th key={column.key} className={[`nv-th nv-mx__head`, cellClass(c), open?.column === column.key ? 'nv-mx__cross' : ''].filter(Boolean).join(' ')} scope="col" title={column.title}>
-                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{column.title.trim().split(/\s+/)[0]}</span></span>
+                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{headName(column.title)}</span></span>
                   </th>
                 ))}
                 <th className="nv-th nv-end" scope="col" title={countWord}>
