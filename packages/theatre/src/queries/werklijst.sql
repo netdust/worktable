@@ -7,18 +7,23 @@ WITH eigen AS (
   ) o
 ),
 act AS (
-  SELECT a.id, a.plandag, a.status, COALESCE(a.omschrijving, a.soort) AS wat
+  SELECT a.id, a.productie_id, a.plandag, a.status, COALESCE(a.omschrijving, a.soort) AS wat
   FROM activiteit a
   WHERE a.deleted_at IS NULL AND a.status != 'geannuleerd'
 )
+-- A taak belongs to the production it is linked to, directly or through a tourstop or an activity; else to none.
 SELECT 1000000000000 + t.id AS id, 'taak' AS soort, t.toegewezen_aan AS persoon_id, t.titel, t.deadline,
-  t.id AS taak_id, t.status
+  t.id AS taak_id, t.status,
+  CASE t.gekoppeld_aan WHEN 'productie' THEN t.record_id WHEN 'speelreeks' THEN sr.productie_id
+    WHEN 'activiteit' THEN ta.productie_id END AS productie_id
 FROM taak t
+LEFT JOIN speelreeks sr ON t.gekoppeld_aan = 'speelreeks' AND sr.id = t.record_id
+LEFT JOIN activiteit ta ON t.gekoppeld_aan = 'activiteit' AND ta.id = t.record_id
 WHERE t.deleted_at IS NULL AND t.status = 'open'
 
 UNION ALL
 SELECT 2000000000000 + t.id, 'open_slot', NULL, 'Open plaats' || COALESCE(' voor ' || r.naam, '') || ': ' || act.wat,
-  act.plandag, NULL, NULL
+  act.plandag, NULL, NULL, act.productie_id
 FROM toewijzing t
 JOIN act ON act.id = t.activiteit_id
 LEFT JOIN rol r ON r.id = t.rol_id AND r.deleted_at IS NULL
@@ -28,7 +33,7 @@ WHERE t.deleted_at IS NULL AND t.state = 'open'
 
 UNION ALL
 SELECT 3000000000000 + t.id, 'onbeantwoord', t.persoon_id, 'Geen antwoord van ' || p.weergavenaam || ': ' || act.wat,
-  act.plandag, NULL, NULL
+  act.plandag, NULL, NULL, act.productie_id
 FROM toewijzing t
 JOIN act ON act.id = t.activiteit_id
 JOIN persoon p ON p.id = t.persoon_id
@@ -40,7 +45,7 @@ WHERE t.deleted_at IS NULL AND t.state = 'uitgenodigd'
     t.created_at), 'localtime') <= date('now', 'localtime', '-' || eigen.termijn || ' days')
 
 UNION ALL
-SELECT 4000000000000 + act.id, 'optie', NULL, 'Nog in optie: ' || act.wat, act.plandag, NULL, NULL
+SELECT 4000000000000 + act.id, 'optie', NULL, 'Nog in optie: ' || act.wat, act.plandag, NULL, NULL, act.productie_id
 FROM act
 WHERE act.status = 'optie'
   AND act.plandag BETWEEN date('now', 'localtime') AND date('now', 'localtime', '+14 days')

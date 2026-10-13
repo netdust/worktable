@@ -509,8 +509,8 @@ export const views: SavedViewSeed[] = [
   },
   {
     name: 'Plaatsen',
-    source_type: 'dataset',
-    source: 'toewijzing',
+    source_type: 'query',
+    source: 'plaatsen',
     skin: 'table',
     filters: { rol_id: { $exists: true }, datum: { $period: 'week' } },
     sort: ['activiteit_id'],
@@ -519,8 +519,8 @@ export const views: SavedViewSeed[] = [
   },
   {
     name: 'Plaatsen gevuld',
-    source_type: 'dataset',
-    source: 'toewijzing',
+    source_type: 'query',
+    source: 'plaatsen',
     skin: 'table',
     filters: { rol_id: { $exists: true }, persoon_id: { $exists: true }, datum: { $period: 'week' } },
     sort: ['activiteit_id'],

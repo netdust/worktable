@@ -230,7 +230,6 @@ test.describe('step 3c', () => {
   // Spec R7: "the space switcher narrows every tile". Werklijst and Toewijzing are not scoped, so with a production
   // chosen that has no rows, Open plaatsen, Onbeantwoord, Plaatsen gevuld and the Werklijst still count every production.
   test('space-narrows-every-tile @e2e', async ({ page }) => {
-    test.fail()
     const api = page.request
     const titel = 'e2e productie zonder plaatsen'
     const productie = await idOf(api, 'productie', { titel, seizoen: '2028', status: 'actief', organisatie_id: 1 })
@@ -242,6 +241,7 @@ test.describe('step 3c', () => {
       await expect(statValue(page, 'Open plaatsen')).toHaveText('0')
       await expect(statValue(page, 'Onbeantwoord')).toHaveText('0')
       await expect(listTitle(page, 'Werklijst')).toHaveText('Werklijst · 0')
+      await expect(page.getByRole('region', { name: 'Plaatsen gevuld', exact: true })).toContainText('0 van 0')
     } finally {
       await api.delete(`/api/rows/productie/${productie}`)
     }
@@ -259,7 +259,6 @@ test.describe('step 3c', () => {
 
   test('skins-open @e2e', async ({ page }) => {
     // Opens seven skins, each on rows it makes: 18 s alone, near 30 s under load.
-    test.slow()
     test.setTimeout(90_000)
     const api = page.request
     const day = WEEK.skins
