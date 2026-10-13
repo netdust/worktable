@@ -522,7 +522,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
               lane={layout.group} onLane={(lane) => setLayout({ ...layout, group: lane })} filters={filters}
-              onShown={showDays} />
+              onShown={showDays} scope={scopeChip} onTitle={setShown} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
               lane={layout.group} onShown={showDays} filters={filters} scope={scopeChip} onTitle={setShown} />

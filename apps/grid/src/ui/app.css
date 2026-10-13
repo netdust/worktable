@@ -445,8 +445,7 @@
 
 /* The name and its summary read whole up to 40% of the bar; the toolbar's end (the hint, the search) gives way instead. */
 .nv-toolbar > .nv-toolbar__name {
-  flex: none;
-  max-width: 40%;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
 }
@@ -501,7 +500,7 @@
 
 .nv-toolbar > .nv-toolbar__end {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   align-items: center;
   gap: 8px;
@@ -4404,56 +4403,126 @@
 .nv-week__head {
   position: sticky;
   top: 0;
-  z-index: 2;
-  border-bottom: 1px solid var(--color-border-subtle);
+  z-index: 6;
+  border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
 }
 
 .nv-week__dayhead {
-  padding: 6px 8px;
-  color: var(--color-fg-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.nv-week__wk {
+  align-self: end;
+  padding: 0 0 8px 10px;
+  color: var(--color-fg-subtle);
+  font: 11px var(--font-mono);
+}
+
+.nv-week__dn {
+  color: var(--color-fg-subtle);
   font-size: 12px;
+}
+
+.nv-week__num {
+  color: var(--color-fg-default);
+  font-size: 20px;
   font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-week__dayhead--today .nv-week__dn {
+  color: var(--today);
+  font-weight: 600;
+}
+
+.nv-week__dayhead--today .nv-week__num {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .nv-week__band {
+  position: sticky;
+  top: 49px;
+  z-index: 5;
   border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  box-shadow: 0 2px 4px -2px rgba(20, 30, 45, 0.08);
 }
 
 .nv-week__allday {
   min-height: 28px;
-  padding: 3px 4px;
+  padding: 3px;
   border-left: 1px solid var(--color-border-subtle);
 }
 
 .nv-week__axis {
   position: relative;
-  padding: 6px 6px 0 0;
+  padding: 8px 8px 0 0;
   color: var(--color-fg-subtle);
   font-size: 11px;
+  line-height: 1.2;
   text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .nv-week__hours .nv-week__axis span {
   position: absolute;
-  right: 6px;
+  right: 8px;
+  font: 10.5px var(--font-mono);
   transform: translateY(-50%);
 }
 
 .nv-week__day {
   position: relative;
   border-left: 1px solid var(--color-border-subtle);
-  background-image: linear-gradient(to bottom, var(--color-border-subtle) 1px, transparent 1px);
+  background-image: linear-gradient(to bottom, var(--color-border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), color-mix(in srgb, var(--color-border-subtle) 55%, transparent) calc(50% - 0.5px), color-mix(in srgb, var(--color-border-subtle) 55%, transparent) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.nv-week__now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: 2px;
+  background: var(--today);
+  pointer-events: none;
+}
+
+.nv-week__now::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--today);
 }
 
 .nv-week__day .nv-cal__event {
   flex-direction: column;
-  gap: 0;
+  gap: 1px;
   margin: 0;
-  padding: 2px 4px;
-  border-right: 2px solid var(--color-bg-surface);
+  padding: 3px 6px 3px 8px;
+  box-shadow: 0 0 0 1px var(--color-bg-surface);
   white-space: normal;
+}
+
+.nv-week__day .nv-cal__title {
+  order: -1;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .nv-week__day .nv-cal__event--short {
@@ -4472,8 +4541,10 @@
 
 .nv-cal th,
 .nv-cal td {
-  padding: 4px 6px;
-  border: 1px solid var(--color-border-subtle);
+  padding: 6px 6px 4px;
+  border: 0;
+  border-left: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   vertical-align: top;
   text-align: left;
@@ -4483,8 +4554,22 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  color: var(--color-fg-muted);
-  font-weight: 500;
+  padding: 8px 10px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nv-cal--month td.nv-cal__today .nv-cal__date {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--today);
+  color: #fff;
+  font-weight: 600;
 }
 
 .nv-cal--month td {
@@ -4493,13 +4578,19 @@
 }
 
 .nv-cal__out {
-  opacity: 0.45;
+  background: var(--color-bg-subtle);
+}
+
+.nv-cal__out .nv-cal__date {
+  color: var(--color-fg-subtle);
 }
 
 .nv-cal__date {
   display: block;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
+  color: var(--color-fg-default);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .nv-cal__event {
@@ -4510,9 +4601,8 @@
   padding: 2px 6px;
   overflow: hidden;
   border: 0;
-  border-left: 3px solid var(--tone, var(--color-accent-default));
   border-radius: 0;
-  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 16%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 15%, var(--color-bg-surface));
   color: var(--color-fg-default);
   font: inherit;
   font-size: 12px;
@@ -4522,7 +4612,27 @@
 }
 
 .nv-cal__event:hover {
-  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 28%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--tone, var(--color-accent-default)) 22%, var(--color-bg-surface));
+}
+
+/* A month's timed rows read as lines: a toned square, the time, the title. */
+table.nv-cal--month .nv-cal__event {
+  align-items: center;
+  padding: 1px 4px;
+  background: none;
+}
+
+table.nv-cal--month .nv-cal__event::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--tone, var(--color-accent-default));
+}
+
+table.nv-cal--month .nv-cal__event:hover {
+  background: var(--color-bg-hover);
 }
 
 .nv-cal__event:focus-visible {
@@ -4532,12 +4642,24 @@
 
 .nv-cal__time {
   color: var(--color-fg-muted);
-  font-variant-numeric: tabular-nums;
+  font: 11px var(--font-mono);
 }
 
 .nv-cal__title {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nv-cal__where {
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nv-cal__event--short .nv-cal__where {
+  display: none;
 }
 
 /* A count on a row, tinted by its declared tone; nothing shows at 0. */
@@ -5456,4 +5578,20 @@
 
 #root .nv-chip--icon {
   padding: 3px 6px;
+}
+
+/* A choice among a few, set as chips in the chip row: the calendar's Maand/Week and its lanes. */
+.nv-chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+#root .nv-chips .nv-chip[data-selected] {
+  border-color: transparent;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+}
+
+#root .nv-chips .nv-chip {
+  cursor: pointer;
 }
