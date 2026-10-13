@@ -121,7 +121,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
         <span className="nv-week__wk">W{isoWeek(parse(days[0]) ?? new Date())}</span>
         {days.map((day) => {
           const [name, num] = dayHead(day).split(' ')
-          return <span key={day} className={day === today ? 'nv-week__dayhead nv-week__dayhead--today' : 'nv-week__dayhead'} aria-current={day === today ? 'date' : undefined}><span className="nv-week__dn">{name}</span><span className="nv-week__num">{num}</span></span>
+          return <span key={day} className={day === today ? 'nv-week__dayhead nv-week__dayhead--today' : 'nv-week__dayhead'} aria-current={day === today ? 'date' : undefined}><span className="nv-week__dn">{name}</span> <span className="nv-week__num">{num}</span></span>
         })}
       </div>
       {spans ? (

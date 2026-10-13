@@ -533,9 +533,10 @@ test.describe('step 3', () => {
   test('month-starting-sunday @e2e', async ({ page }) => {
     await openWeek(page, 'Bedrijfsweek', 'Per productie per dag', 'plandag', '2026-10-12')
     await page.getByRole('radio', { name: 'Maand' }).click()
-    await expect(page.locator('.nv-cal__bar')).toContainText('oktober 2026')
+    // The month the calendar shows is named in the title line's summary.
+    await expect(page.locator('.nv-toolbar__summary')).toContainText('oktober 2026')
     await page.getByRole('button', { name: 'Volgende periode' }).click()
-    await expect(page.locator('.nv-cal__bar')).toContainText('november 2026')
+    await expect(page.locator('.nv-toolbar__summary')).toContainText('november 2026')
     const month = page.locator('table.nv-cal--month')
     await expect(month.locator('tbody tr')).toHaveCount(6)
     await expect(month.locator('tbody tr').first().locator('td').last().locator('.nv-cal__date')).toHaveText('1')

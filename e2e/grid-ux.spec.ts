@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { openLooks } from './editor'
 import { shot } from './shots'
 import { modelNode, openModel, openView, openWeek } from './tree'
 
@@ -327,9 +328,12 @@ test('fold-day-band @e2e', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
-  // Row numbers lead every row, and subtle dividers stand between the cells (Stefan, 2026-10-07).
+  // Row numbers lead every row; the dividers between the cells are Bijstellen's Rasterlijnen, off as the prototype opens.
   await expect(gridRows(page).first().locator('td').first()).toHaveText('1')
   await expect(gridRows(page).nth(7).locator('td').first()).toHaveText('8')
+  await expect(gridRows(page).first().locator('td').nth(2)).toHaveCSS('border-right-width', '0px')
+  await openLooks(page)
+  await page.getByRole('radiogroup', { name: 'Rasterlijnen' }).getByRole('radio', { name: 'Aan' }).click()
   await expect(gridRows(page).first().locator('td').nth(2)).not.toHaveCSS('border-right-width', '0px')
 
   const first = bands(page).first()
@@ -481,17 +485,17 @@ test('planning-details @e2e', async ({ page }) => {
   await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag tussen 2027-03-22 en 2027-03-28'])
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
-  // R10.4 and R10.2: #, Tijd, Omschrijving, Soort, Tourstop, Locatie, Mensen, Status; a time range with its end muted.
+  // R10.4 and R10.2, in step 3d's order: #, Tijd, Omschrijving, Soort, Locatie, Status, Tourstop, Mensen; a time range with its end muted.
   const heads = await page.locator('thead th').allTextContents()
   expect(heads.map((h) => h.replace(/\s*[↑↓]$/, '').trim())).toEqual([
     '#',
     'Tijd',
     'Omschrijving',
     'Soort',
-    'Tourstop',
     'Locatie',
-    'Mensen',
     'Status',
+    'Tourstop',
+    'Mensen',
   ])
   const lunch = named(page, 'Lunch').first()
   await expect(lunch.locator('td').nth(1)).toHaveText('13:00–14:00')

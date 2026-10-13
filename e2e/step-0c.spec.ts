@@ -105,16 +105,19 @@ for (const { view, dataset, title, link } of [
     const id = before?.id as number
     const linked = (await rows<Record<string, number | null>>(page, 'activiteit')).filter((a) => a[link] === id)
     expect(linked.length).toBeGreaterThan(0)
-    const by = { label: 'Activiteiten', count: linked.length }
+    // The seeded tourstops point at the same productie and venue; they are named first, as the writer lists them.
+    const stops = (await rows<Record<string, number | null>>(page, 'speelreeks')).filter((s) => s[link] === id)
+    const by = [...(stops.length > 0 ? [{ label: 'Tourstops', count: stops.length }] : []), { label: 'Activiteiten', count: linked.length }]
     const history = await revisions(page, dataset, id)
 
     const response = await pressDelete(page, view, title)
     expect(response.status()).toBe(409)
     const body = (await response.json()) as InUse
     expect(body.code).toBe('in_use')
-    expect(body.by).toEqual([by])
+    expect(body.by).toEqual(by)
 
-    await expect(page.locator('.nv-toolbar')).toContainText(`Nog in gebruik door ${by.label} (${by.count}).`)
+    const named = by.map(({ label, count }) => `${label} (${count})`)
+    await expect(page.locator('.nv-toolbar')).toContainText(`Nog in gebruik door ${named.join(' en ')}.`)
     await expect(row(page, title)).toBeVisible()
     expect((await rows<{ id: number }>(page, dataset)).map((found) => found.id)).toContain(id)
     expect(await revisions(page, dataset, id)).toEqual(history)

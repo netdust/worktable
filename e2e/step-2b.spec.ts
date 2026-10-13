@@ -232,8 +232,9 @@ test('override-and-clear-venue @e2e', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
     await expect(gridRows(page)).toHaveCount(2)
     const shown = await headers(page)
-    expect(shown.indexOf('Tourstop')).toBeGreaterThanOrEqual(0)
-    expect(shown.indexOf('Tourstop')).toBeLessThan(shown.indexOf('Locatie'))
+    // Planning's order since step 3d: Locatie with the facts, Tourstop and Mensen after Status.
+    expect(shown.indexOf('Locatie')).toBeGreaterThanOrEqual(0)
+    expect(shown.indexOf('Locatie')).toBeLessThan(shown.indexOf('Tourstop'))
     expect(shown).toContain('Mensen')
     for (const label of ['Eigen locatie', 'Plaats']) expect(shown).not.toContain(label)
 
