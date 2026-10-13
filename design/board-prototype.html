@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: the app shell; Activiteiten as a board, one column per option of the group column (status by default), the record drawer open on the right. */
+/* Layout: the app shell and the grid's toolbar; Activiteiten as a board, one column per option of the group column, the record drawer open on the right. */
 /* Token names follow apps/grid/src/ui/theme.css and design/grid-prototype.html, the approved design language. Invented data only. */
 :root {
   --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -181,12 +181,11 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0 }
 .top { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border-default); padding: 10px 18px; display: flex; align-items: center; gap: 10px; min-height: 55px }
 .top .spacer { display: none }
-.title .sum, .title .on-model, .insight { flex: none }
+.title .sum, .insight { flex: none }
 .title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; overflow: hidden }
 .title .tglyph { width: 30px; height: 30px; border-radius: var(--radius-md); background: var(--color-bg-muted); display: grid; place-items: center; color: var(--color-fg-default); flex: none }
 .title h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap }
 .title .sum { font-size: 12px; color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; white-space: nowrap }
-.title .on-model { font-size: 12.5px; color: var(--color-fg-subtle); white-space: nowrap }
 .lockmark { color: var(--color-fg-subtle); display: inline-flex }
 .insight { font-size: 12px; color: var(--color-fg-muted); white-space: nowrap }
 .insight b { color: var(--color-danger-fg); font-weight: 600 }
@@ -199,12 +198,11 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .bar .grow { flex: 1 }
 .bar .rows { color: var(--color-fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap }
 .bar .iconbtn { width: 28px; height: 28px }
+.bar .tools { margin-left: auto; display: flex; align-items: center; gap: 10px }
 .bar .divider { width: 1px; height: 18px; background: var(--color-border-default); margin: 0 2px }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--color-border-default); color: var(--color-fg-muted); font-size: 12.5px; background: var(--color-bg-surface); cursor: pointer; white-space: nowrap }
 .chip:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
 .chip.set { border-color: transparent; background: var(--color-accent-subtle); color: var(--color-accent-default) }
-.chip.scope { border-color: transparent; background: var(--color-bg-muted); color: var(--color-fg-default) }
-.chip.scope i { width: 8px; height: 8px; border-radius: 2px; background: var(--c) }
 .chip .op { opacity: .75 }
 .chip b { font-weight: 600 }
 .chip .x { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0 -4px 0 0; border-radius: 50%; opacity: .7 }
@@ -266,7 +264,7 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .dw-sub { color: var(--color-fg-muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-bottom: 14px }
 .dw-hero { margin: -16px -16px 14px; height: 200px; overflow: hidden; border-bottom: 1px solid var(--color-border-subtle) }
 .dw-hero svg { width: 100%; height: 100%; display: block }
-.dw-alert { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-danger-bg); color: var(--color-danger-fg); font-size: 12.5px; margin-bottom: 14px }
+.dw-alert { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 10px 16px; margin-left: -16px !important; margin-right: -16px !important; background: var(--color-danger-bg); color: var(--color-danger-fg); font-size: 12.5px; margin-bottom: 14px }
 .dw-alert b { font-weight: 600; display: block; margin-bottom: 2px }
 .dw-alert .acts { display: flex; gap: 12px; margin-top: 6px }
 .dw-alert .acts button { border: 0; background: none; padding: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-size: 12.5px; font-weight: 500 }
@@ -317,7 +315,6 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 *::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
 *::-webkit-scrollbar-corner { background: transparent }
 
-@media (max-width: 1720px) { .app.with-drawer .title .on-model { display: none } }
 @media (max-width: 760px) {
   body { overflow: auto }
   .app, .app.with-drawer { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100% }
@@ -332,48 +329,30 @@ kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-defaul
 .avatar[style*="--h"] { background: color-mix(in srgb, var(--h) 16%, var(--color-bg-surface)); color: color-mix(in srgb, var(--h) 78%, var(--color-fg-default)) }
 
 .board { display: flex; gap: 12px; padding: 14px 18px 28px; align-items: flex-start; min-width: max-content; min-height: 100% }
-.col { width: 308px; flex: none; background: var(--color-bg-column); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); display: flex; flex-direction: column; transition: border-color .12s, background-color .12s }
-.col-head { position: sticky; top: 0; z-index: 2; background: inherit; border-radius: var(--radius-md) var(--radius-md) 0 0; padding: 10px 10px 8px; display: grid; gap: 6px; box-shadow: inset 0 2px 0 var(--t) }
-.col-row { display: flex; align-items: center; gap: 8px }
-.col-label { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 1px 10px 1px 8px; font-weight: 600; font-size: 12.5px; color: color-mix(in srgb, var(--t) 82%, var(--color-fg-default)); background: color-mix(in srgb, var(--t) 14%, var(--color-bg-surface)) }
-.col-label::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--t) }
+.col { width: 300px; flex: none; background: var(--color-bg-column); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); display: flex; flex-direction: column; transition: background-color .12s }
+.col-head { position: sticky; top: 0; z-index: 2; background: inherit; border-radius: var(--radius-md) var(--radius-md) 0 0; padding: 10px 10px 8px 12px; display: flex; align-items: center; gap: 8px }
+.col-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px }
+.col-name::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--t) }
 .col-count { font: 11px var(--font-mono); color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 1px 6px }
-.col-row .tool:first-of-type { margin-left: auto }
-.col-sum { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted); font-variant-numeric: tabular-nums; min-height: 18px }
-.col-sum .bad { color: var(--color-danger-fg); font-weight: 500; display: inline-flex; align-items: center; gap: 3px }
-.col-sum .bad .icon { width: 13px; height: 13px }
-.col-body { display: grid; gap: 8px; padding: 2px 10px 10px; align-content: start }
-.col.drop { border-color: var(--color-accent-default); background: color-mix(in srgb, var(--color-accent-subtle) 55%, var(--color-bg-column)) }
-.col-add { display: flex; align-items: center; gap: 6px; color: var(--color-fg-subtle); font-size: 12.5px; padding: 6px 4px 2px; border: 0; background: transparent; cursor: pointer; border-radius: var(--radius-sm) }
-.col-add:hover { color: var(--color-fg-default) }
-.col-empty { border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); padding: 18px 14px; text-align: center; color: var(--color-fg-subtle); font-size: 12.5px; display: grid; gap: 4px; justify-items: center }
-.col-empty b { color: var(--color-fg-muted); font-weight: 500 }
-.col-empty .icon { width: 20px; height: 20px; margin-bottom: 2px }
+.col-head .tool { margin-left: auto }
+.col-body { display: grid; gap: 8px; padding: 0 10px 10px; align-content: start }
+.col.drop { background: color-mix(in srgb, var(--color-accent-subtle) 60%, var(--color-bg-column)) }
+.col-empty { padding: 22px 12px; text-align: center; color: var(--color-fg-subtle); font-size: 12.5px }
 
-.card { position: relative; background: var(--color-bg-card); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 10px 12px 10px 14px; display: grid; gap: 6px; cursor: grab; box-shadow: inset 3px 0 0 var(--s); user-select: none; transition: border-color .12s, box-shadow .12s }
-.card:hover { border-color: var(--color-border-strong); box-shadow: inset 3px 0 0 var(--s), 0 1px 3px rgba(20, 30, 45, .08) }
-.card.sel { border-color: var(--color-accent-default); box-shadow: inset 3px 0 0 var(--s), 0 0 0 1px var(--color-accent-default) }
+.card { position: relative; background: var(--color-bg-card); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 5px; cursor: grab; user-select: none; transition: background-color .12s, border-color .12s }
+.card:hover { border-color: var(--color-border-strong) }
+.card.sel { background: var(--color-bg-selected) }
 .card-top { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-fg-muted); min-height: 20px }
-.card-top .sep { color: var(--color-fg-subtle) }
 .card-top .alert-badge { margin-left: auto }
-.card-top .hover-dots { margin-left: auto; opacity: 0; width: 20px; height: 20px }
-.card-top .alert-badge + .hover-dots { margin-left: 0 }
-.card:hover .hover-dots { opacity: 1 }
-.card-title { font-weight: 600; font-size: 14px; line-height: 1.3; color: var(--color-fg-default) }
+.card-title { font-weight: 600; font-size: 14px; line-height: 1.3 }
 .card-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-fg-muted); min-width: 0 }
-.card-line > .icon { width: 14px; height: 14px; color: var(--color-fg-subtle) }
 .card-line .date { font: 12.5px var(--font-mono); color: var(--color-fg-default) }
 .card-line .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
-.card-foot { display: flex; align-items: center; gap: 8px; padding-top: 2px }
-.card-foot .crew { margin-left: auto }
-.card.ghost { opacity: .35; border-style: dashed; box-shadow: none }
-.card.floating { position: fixed; z-index: 80; pointer-events: none; margin: 0; transform: rotate(2.2deg); border-color: var(--color-accent-default); box-shadow: inset 3px 0 0 var(--s), var(--shadow-pop); cursor: grabbing }
-.slot { border: 1.5px dashed var(--color-accent-default); background: color-mix(in srgb, var(--color-accent-subtle) 70%, transparent); border-radius: var(--radius-md); display: grid; place-items: center; color: var(--color-accent-default); font-size: 12.5px; font-weight: 500 }
+.card-foot { padding-top: 3px }
+.card.ghost { opacity: .35 }
+.card.floating { position: fixed; z-index: 80; pointer-events: none; margin: 0; transform: rotate(2deg); box-shadow: var(--shadow-pop); cursor: grabbing }
+.slot { background: color-mix(in srgb, var(--color-accent-default) 12%, transparent); border-radius: var(--radius-md); display: grid; place-items: center; color: var(--color-accent-default); font-size: 12.5px; font-weight: 500 }
 body.dragging, body.dragging * { cursor: grabbing !important }
-.group-pop .pop-item .meta { font: 11px var(--font-mono) }
-.group-pop .hint { font-size: 11.5px; color: var(--color-fg-subtle); padding: 4px 10px 6px; margin: 0 }
-.sort-pop .seg { margin: 4px 10px 6px; display: flex }
-.sort-pop .seg button { flex: 1 }
 
 </style>
 </head>
@@ -619,7 +598,9 @@ document.addEventListener('click', (e) => {
   pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-space]'); if (b) { shell.space = b.dataset.space; closePop(); renderSpace(); shell.onSpace() } })
 })
 const inSpace = (p) => shell.space === 'all' || p === shell.space
-const scopeChip = () => shell.space === 'all' ? '' : `<span class="chip scope" title="Gekozen in de productiekiezer" style="--c:${prod(shell.space).color}"><i></i>Productie is <b>${esc(prod(shell.space).titel)}</b></span>`
+const scopeChip = () => shell.space === 'all' ? '' : `<span class="chip set" title="Gekozen in de productiekiezer">${icon('tag')}Productie is ${esc(prod(shell.space).titel)}</span>`
+const groupChip = (label) => `<button class="chip set" id="group-btn" data-pop aria-expanded="false">${icon('group')}Groep: ${esc(label)}</button>`
+const barTools = (rows) => `<span class="tools"><span class="rows">${rows}</span><button class="iconbtn" title="Kolommen" aria-label="Kolommen">${icon('cols')}</button></span>`
 
 // ---------- filters: field · operator · value ----------
 const NO_VALUE = ['week', 'next', 'month', 'empty', 'filled']
@@ -733,9 +714,9 @@ function activityDrawer(a, list, hero = '') {
 }
 
 // ---------- the title line ----------
-function renderTitle({ glyph, name, on, lock, sum, insight }) {
+function renderTitle({ glyph, name, lock, sum, insight }) {
   $('#crumbs').innerHTML = `<span class="tglyph">${icon(glyph)}</span><h1>${esc(name)}</h1>${lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
-    ${on ? `<span class="on-model">op ${esc(on)}</span>` : ''}${sum ? `<span class="sum">${sum}</span>` : ''}${insight ?? ''}`
+    ${sum ? `<span class="sum">${sum}</span>` : ''}${insight ?? ''}`
 }
 
 // ---------- toast ----------
@@ -779,9 +760,7 @@ const GROUPS = {
   soort: { label: 'Soort', options: SOORT, tone: (k) => `var(--s-${k})` },
   prod: { label: 'Productie', options: Object.fromEntries(PRODUCTIES.filter((p) => p.id !== 'all').map((p) => [p.id, p.titel])), tone: (k) => prod(k).color },
 }
-const SORTS = { when: ['Plandag en tijd', (a) => a.date + (a.start ?? '99')], title: ['Omschrijving', (a) => a.title], crew: ['Bezetting', (a) => String(a.crew[1] - a.crew[0]).padStart(2, '0')] }
-const CARD_FIELDS = { prod: 'Productie', when: 'Plandag en tijd', venue: 'Locatie', people: 'Mensen', crew: 'Bezetting' }
-const board = { group: 'status', sort: 'when', dir: 1, fields: new Set(['prod', 'when', 'venue', 'people', 'crew']), showEmpty: true, sel: 12, demo: true }
+const board = { group: 'status', sel: 12, demo: true }
 filterState.fields = {
   date: { label: 'Plandag', type: 'date' }, status: { label: 'Status', type: 'select', options: STATUS },
   soort: { label: 'Soort', type: 'select', options: SOORT }, title: { label: 'Omschrijving', type: 'text' },
@@ -792,87 +771,48 @@ shell.onSpace = render
 shell.onClose = () => { board.sel = null; $$('.card.sel').forEach((c) => c.classList.remove('sel')) }
 
 const getField = (a, f) => (f === 'prod' ? a.prod : a[f])
+const byWhen = (x, y) => (x.date + (x.start ?? '99')).localeCompare(y.date + (y.start ?? '99'))
 function visible() {
   const q = $('#q').value.trim().toLowerCase()
-  const [, key] = SORTS[board.sort]
-  return ACTS.filter((a) => inSpace(a.prod) && passes(a, getField) && (!q || a.title.toLowerCase().includes(q)))
-    .sort((x, y) => key(x).localeCompare(key(y)) * board.dir)
+  return ACTS.filter((a) => inSpace(a.prod) && passes(a, getField) && (!q || a.title.toLowerCase().includes(q))).sort(byWhen)
 }
 
 function card(a) {
-  const p = prod(a.prod), f = board.fields, [have, need] = a.crew
-  const top = [`<span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>`]
-  if (f.has('prod') && board.group !== 'prod' && shell.space === 'all') top.push(`<span class="sep">·</span><span class="prod-tag" style="--c:${p.color}"><i></i>${esc(p.titel)}</span>`)
-  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" style="--s:var(--s-${a.soort})" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
-    <div class="card-top">${top.join('')}${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}<button class="tool hover-dots" aria-label="Meer">${icon('dots')}</button></div>
+  const [have, need] = a.crew
+  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
+    <div class="card-top"><span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}</div>
     <div class="card-title">${esc(a.title)}</div>
-    ${f.has('when') ? `<div class="card-line">${icon('cal')}<span class="date">${dayShort(a.date)}</span>${a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>'}</div>` : ''}
-    ${f.has('venue') && a.venue ? `<div class="card-line">${icon('pin')}<span class="ell ${a.inherited ? 'inherited' : ''}">${esc(a.venue)}</span>${a.inherited ? '<span class="via">via tourstop</span>' : ''}</div>` : ''}
-    ${f.has('people') || f.has('crew') ? `<div class="card-foot">${f.has('people') ? stack(a.people, need - have) : ''}${f.has('crew') ? `<span class="crew"><span class="meter ${have < need ? 'short' : ''}"><b style="width:${(have / need) * 100}%"></b></span>${have}/${need}</span>` : ''}</div>` : ''}
+    <div class="card-line"><span class="date">${dayShort(a.date)}</span>${a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>'}</div>
+    ${a.venue ? `<div class="card-line"><span class="ell ${a.inherited ? 'inherited' : ''}">${esc(a.venue)}</span></div>` : ''}
+    <div class="card-foot">${stack(a.people, need - have, 4)}</div>
   </article>`
 }
 
 function column(key, rows) {
-  const g = GROUPS[board.group], need = rows.reduce((n, a) => n + a.crew[1], 0), have = rows.reduce((n, a) => n + a.crew[0], 0)
-  const bad = rows.filter((a) => a.conflict).length
-  const empty = `<div class="col-empty">${icon('board')}<b>Geen ${g.options[key].toLowerCase()} activiteiten</b>Sleep een kaart hierheen om ze op ${g.options[key].toLowerCase()} te zetten.</div>`
+  const g = GROUPS[board.group]
   return `<section class="col" data-key="${key}" style="--t:${g.tone(key)}" aria-label="${esc(g.options[key])}">
-    <header class="col-head"><div class="col-row"><span class="col-label">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
-      <button class="tool" data-new="${key}" aria-label="Nieuwe activiteit in ${esc(g.options[key])}">${icon('plus')}</button><button class="tool" aria-label="Meer voor ${esc(g.options[key])}">${icon('dots')}</button></div>
-      <div class="col-sum">${rows.length ? `<span class="crew"><span class="meter ${have < need ? 'short' : ''}"><b style="width:${need ? (have / need) * 100 : 0}%"></b></span>bezetting ${have}/${need}</span>${bad ? `<span class="bad">${icon('alert')}${bad} conflict${bad > 1 ? 'en' : ''}</span>` : ''}` : '<span class="muted">leeg</span>'}</div></header>
-    <div class="col-body">${rows.map(card).join('') || empty}${rows.length ? `<button class="col-add" data-new="${key}">${icon('plus')}Activiteit toevoegen</button>` : ''}</div></section>`
-}
-
-function renderBar() {
-  const g = GROUPS[board.group], [sortLabel] = SORTS[board.sort]
-  $('#bar').innerHTML = `${scopeChip()}${filterChips()}<span class="divider"></span>
-    <button class="chip" id="sort-btn" data-pop aria-expanded="false">${icon('sort')}<span class="lbl">Sorteren:</span> ${sortLabel} ${board.dir > 0 ? '↑' : '↓'}</button>
-    <button class="chip set" id="group-btn" data-pop aria-expanded="false">${icon('board')}<span class="lbl">Groeperen op:</span> <b>${g.label}</b>${icon('down', 'down')}</button>
-    <span class="grow"></span><span class="rows" id="rows"></span>
-    <button class="iconbtn" id="fields-btn" data-pop aria-expanded="false" title="Kaartvelden" aria-label="Kaartvelden">${icon('sliders')}</button>`
+    <header class="col-head"><span class="col-name">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
+      <button class="tool" data-new="${key}" aria-label="Nieuwe activiteit in ${esc(g.options[key])}">${icon('plus')}</button></header>
+    <div class="col-body">${rows.map(card).join('') || '<div class="col-empty">Geen activiteiten</div>'}</div></section>`
 }
 
 function render() {
-  renderBar()
   const rows = visible(), g = GROUPS[board.group]
   const keys = Object.keys(g.options).filter((k) => board.group !== 'prod' || inSpace(k))
-  const cols = keys.map((k) => [k, rows.filter((a) => getField(a, board.group) === k)]).filter(([, r]) => board.showEmpty || r.length)
-  $('#stage').innerHTML = `<div class="board" id="board">${cols.map(([k, r]) => column(k, r)).join('')}</div>`
-  $('#rows').textContent = `${rows.length} activiteiten`
+  $('#bar').innerHTML = `${scopeChip()}${filterChips()}${groupChip(g.label.toLowerCase())}${barTools(`${rows.length} rijen`)}`
+  $('#stage').innerHTML = `<div class="board" id="board">${keys.map((k) => column(k, rows.filter((a) => getField(a, board.group) === k))).join('')}</div>`
   const bad = rows.filter((a) => a.conflict).length
-  renderTitle({ glyph: 'board', name: 'Per status', on: 'Activiteiten', sum: `${rows.length} activiteiten · ${cols.length} kolommen`, insight: bad ? `<span class="insight"><b>${bad}</b> ${bad > 1 ? 'conflicten' : 'conflict'}</span>` : '' })
+  renderTitle({ glyph: 'board', name: 'Per status', sum: `${rows.length} activiteiten · ${keys.length} kolommen`, insight: bad ? `<span class="insight"><b>${bad}</b> ${bad > 1 ? 'conflicten' : 'conflict'}</span>` : '' })
   const a = ACTS.find((x) => x.id === board.sel)
   if (a && rows.includes(a)) openDrawer(activityDrawer(a, rows))
 }
 
-// ---------- toolbar popovers ----------
+// ---------- the group chip offers the column ----------
 document.addEventListener('click', (e) => {
-  const gb = e.target.closest('#group-btn'), sb = e.target.closest('#sort-btn'), fb = e.target.closest('#fields-btn')
-  if ((gb || sb || fb) && popEl) return closePop()
-  if (gb) {
-    const pop = openPop(gb, `<div class="group-pop"><div class="pop-head">Groeperen op</div>
-      ${Object.entries(GROUPS).map(([k, g]) => `<button class="pop-item ${k === board.group ? 'current' : ''}" data-group="${k}">${icon(k === 'prod' ? 'film' : k === 'soort' ? 'tag' : 'check')}${g.label}<span class="meta">${Object.keys(g.options).length} opties</span></button>`).join('')}
-      <p class="hint">Een bord groepeert op een kolom met vaste opties. Een kaart naar een andere kolom slepen wijzigt die waarde.</p><div class="pop-sep"></div>
-      <label class="pop-check"><input type="checkbox" id="show-empty" ${board.showEmpty ? 'checked' : ''}>Lege kolommen tonen</label></div>`, { width: 300 })
-    pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-group]'); if (b) { board.group = b.dataset.group; closePop(); render() } })
-    pop.addEventListener('change', (ev) => { board.showEmpty = ev.target.checked; render(); $('#group-btn').setAttribute('aria-expanded', 'true') })
-  }
-  if (sb) {
-    const pop = openPop(sb, `<div class="sort-pop"><div class="pop-head">Sorteren binnen een kolom</div>
-      ${Object.entries(SORTS).map(([k, [l]]) => `<button class="pop-item ${k === board.sort ? 'current' : ''}" data-sort="${k}">${l}</button>`).join('')}
-      <div class="pop-sep"></div><div class="seg"><button data-dir="1" class="${board.dir > 0 ? 'on' : ''}">Oplopend</button><button data-dir="-1" class="${board.dir < 0 ? 'on' : ''}">Aflopend</button></div></div>`, { width: 240 })
-    pop.addEventListener('click', (ev) => {
-      const s = ev.target.closest('[data-sort]'), d = ev.target.closest('[data-dir]')
-      if (s) board.sort = s.dataset.sort
-      if (d) board.dir = +d.dataset.dir
-      if (s || d) { closePop(); render() }
-    })
-  }
-  if (fb) {
-    const pop = openPop(fb, `<div class="pop-head">Op de kaart</div><label class="pop-check"><input type="checkbox" checked disabled>Omschrijving<span class="meta">titel</span></label>
-      ${Object.entries(CARD_FIELDS).map(([k, l]) => `<label class="pop-check"><input type="checkbox" data-field="${k}" ${board.fields.has(k) ? 'checked' : ''}>${l}</label>`).join('')}`, { align: 'right', width: 220 })
-    pop.addEventListener('change', (ev) => { const k = ev.target.dataset.field; board.fields.has(k) ? board.fields.delete(k) : board.fields.add(k); render(); $('#fields-btn').setAttribute('aria-expanded', 'true') })
-  }
+  const gb = e.target.closest('#group-btn'); if (!gb) return
+  if (popEl) return closePop()
+  const pop = openPop(gb, `<div class="pop-head">Groep</div>${Object.entries(GROUPS).map(([k, g]) => `<button class="pop-item ${k === board.group ? 'current' : ''}" data-group="${k}">${g.label}</button>`).join('')}`, { width: 200 })
+  pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-group]'); if (b) { board.group = b.dataset.group; closePop(); render() } })
 })
 $('#q').addEventListener('input', render)
 
@@ -911,9 +851,9 @@ function moveDrag(x, y) {
   const before = cards.find((c) => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2 })
   const g = GROUPS[board.group]
   drag.slot = document.createElement('div'); drag.slot.className = 'slot'; drag.slot.style.height = drag.h + 'px'
-  drag.slot.textContent = `Loslaten: wordt ${g.options[drag.to].toLowerCase()}`
+  drag.slot.textContent = g.options[drag.to]
   $('.col-empty', body)?.setAttribute('hidden', '')
-  body.insertBefore(drag.slot, before ?? $('.col-add', body) ?? null)
+  body.insertBefore(drag.slot, before ?? null)
 }
 function endDrag(drop) {
   if (!drag) return
@@ -960,7 +900,7 @@ function stageDemo() {
 }
 
 TWEAKS.push({ key: 'demo', label: 'Sleepvoorbeeld', options: [['on', 'Aan'], ['off', 'Uit']], value: 'on', apply: (v) => { endDrag(false); board.demo = v === 'on'; if (board.demo) requestAnimationFrame(stageDemo) } })
-$('#foot').innerHTML = '<span>Sleep een kaart naar een andere kolom om de waarde te wijzigen</span><span>↵ openen</span><span>Esc sluiten</span><span>⌘Z ongedaan maken</span>'
+$('#foot').innerHTML = '<span>Sleep een kaart naar een andere kolom</span><span>↵ openen</span><span>⌘Z ongedaan maken</span>'
 boot('Het bord opent met één kaart halverwege het slepen. Klik ergens om het te stoppen.')
 render()
 requestAnimationFrame(() => requestAnimationFrame(stageDemo))
