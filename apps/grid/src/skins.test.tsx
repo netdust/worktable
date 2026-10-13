@@ -74,6 +74,22 @@ describe('the gallery', () => {
   })
 })
 
+describe('the gallery card', () => {
+  it('without a picture shows its first letters on its tone, and the title line counts the pictures', async () => {
+    api.filesOf.mockReset()
+    api.filesOf.mockResolvedValue({ 1: { id: 41, mime: 'image/jpeg', name: 'a.jpg' } })
+    const activity = { ...model, key: 'activiteit' } as unknown as Model
+    const onShown = vi.fn()
+    render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{}} rows={[row(1, 'Repetitie', 'open'), row(2, 'opbouw Gent', 'bevestigd')]} kind="foto" onShown={onShown} />)
+    await screen.findByRole('img', { name: 'Repetitie' })
+    const card = screen.getByRole('button', { name: /opbouw Gent/ })
+    expect(card.querySelector('.nv-gallery__mark')?.textContent).toBe('Op')
+    expect((card.querySelector('.nv-gallery__blank') as HTMLElement).style.getPropertyValue('--s')).toBe('var(--color-success-fg)')
+    expect(card.textContent).toContain('Bevestigd')
+    expect(onShown).toHaveBeenLastCalledWith({ rows: 2, groups: null, cut: false, pictures: 1 })
+  })
+})
+
 describe('the gallery past 200 rows', () => {
   it('reads every row’s image, 200 ids a read', async () => {
     api.filesOf.mockReset()

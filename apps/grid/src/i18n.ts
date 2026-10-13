@@ -425,10 +425,11 @@ export function fileSize(bytes: number): string {
 }
 
 /** The title line's summary: "21 rijen · 3 groepen"; the groups only where the view groups. */
-export function summary(rows: number, groups: number | null, cut = false, columns?: number): string {
+export function summary(rows: number, groups: number | null, cut = false, columns?: number, pictures?: number): string {
   const said = [rowCount(rows, cut)]
   if (groups !== null) said.push(groups === 1 ? '1 groep' : `${groups} groepen`)
   if (columns !== undefined) said.push(columns === 1 ? '1 kolom' : `${columns} kolommen`)
+  if (pictures !== undefined) said.push(`${pictures} met beeld`)
   return said.join(' · ')
 }
 

@@ -16,6 +16,8 @@ export interface Shown {
   cut: boolean
   /** A board's columns. */
   columns?: number
+  /** A gallery's cards with a picture. */
+  pictures?: number
   /** Said in place of the counts: a calendar's period. */
   label?: string
 }
@@ -80,7 +82,7 @@ export function Toolbar({ title, kind = 'grid', locked, shown, search, saving, a
         <span className="nv-toolbar__glyph" aria-hidden="true">{createElement(VIEW_ICONS[kind], { size: 16 })}</span>
         <h1 className="nv-toolbar__title">{title}</h1>
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
-        {shown && <span className="nv-toolbar__summary">{shown.label ?? summary(shown.rows, shown.groups, shown.cut, shown.columns)}</span>}
+        {shown && <span className="nv-toolbar__summary">{shown.label ?? summary(shown.rows, shown.groups, shown.cut, shown.columns, shown.pictures)}</span>}
       </div>
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}

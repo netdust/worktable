@@ -529,7 +529,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} scope={scopeChip} filters={filters} onShown={setShown} />
           ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} scope={scopeChip} filters={filters} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}

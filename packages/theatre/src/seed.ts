@@ -499,7 +499,7 @@ export const views: SavedViewSeed[] = [
     filters: {},
     sort: ['plandag', 'start_at'],
     group_by: null,
-    visible_fields: ['plandag', 'soort'],
+    visible_fields: ['plandag', 'start_at', 'eind_at', 'soort', 'productie_id'],
   },
   {
     name: 'Kalender activiteiten',
