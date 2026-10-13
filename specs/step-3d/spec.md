@@ -128,6 +128,20 @@ A board view on Activiteiten grouped by status needs a seed declaration: a view 
 | Werklijst: rows of soort dot, title + context, person avatar, deadline mono (red when past, amber today), Gedaan as a small button | `ListTile.tsx` | Matches with the columns the tile declares |
 | Composer (Bewerken): fieldsets with the name in the legend, tiles editable in place, Snelle acties | `Composer.tsx` | Matches in treatment |
 
+## 9. One chip row for every view
+
+**Source:** Stefan, 2026-10-13, relayed by the orchestrator: "the app should be designed so the toolbar should always be the same, everywhere. i don't see much reason to change it per dataset or per query."
+
+One component, `ChipBar`, draws the row under the title line on every view. It is fed by `barOf`, which reads the view's data, not its skin. The order is fixed: scope chip · condition chips · Filter · Groep · period (Vandaag ‹ › Maand/Week) · + Kolom · then, at the end, the row count and Kolommen. A slot is absent only where the data has none: Groep shows on every view, the period wherever the view reads days by its dated column, + Kolom on a matrix, Kolommen on a sheet. Where a prototype's row differs, the component wins:
+
+- Grid: the period chips now sit after Groep whenever the view has a period on its dated column; the prototype shows none.
+- Board: the period chips join the row; Groep names the board's option column and offers no choice.
+- Timeline: Groep opens the lanes the source declares plus Geen, and Maand/Week join Vandaag ‹ ›.
+- Calendar: the lane chips (Productie/Tourstop/Geen) fold into the Groep chip's list; the legend stays where it is.
+- Gallery: Groep reads "Groep: geen" and the S/M/L chips stay out (ledger).
+- Matrix: Groep names the section column (plandag) and lists the sheet's groupable fields; + Kolom moves after the period.
+- Dashboard: no view of rows, so no Groep, period or count; its quick actions and Bewerken are drawn by the same component, in its actions and end slots.
+
 ## Ledger: out, with what each would need
 
 | Element | Needs |
@@ -147,6 +161,6 @@ A board view on Activiteiten grouped by status needs a seed declaration: a view 
 | Toolbar insight ("19 nog in optie") | a per-view insight declaration |
 | Drawer position "n van m", up, down and expand | behaviour |
 | Dashboard "bijgewerkt hh:mm" | a refresh time the dashboard does not keep |
-| Timeline Week/Maand switch | behaviour (a window switch in the timeline) |
+| Dashboard title summary ("Nachtwacht · week 42") | a summary the dashboard declares; the title line shows none on a dashboard |
 | Gallery day sections | behaviour (grouping in the gallery) |
 | Afbouw's own brown hue | a tone decision in theatre (`afbouw` is declared amber) |
