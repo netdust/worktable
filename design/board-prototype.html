@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bord Activiteiten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: the app shell; Activiteiten as a board, one column per option of the group column (status by default), the record drawer open on the right. */
+/* Token names follow apps/grid/src/ui/theme.css and design/grid-prototype.html, the approved design language. Invented data only. */
+:root {
+  --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --color-bg-canvas: #eef0f3;
+  --color-bg-surface: #ffffff;
+  --color-bg-subtle: #f6f7f9;
+  --color-bg-muted: #eceff3;
+  --color-bg-sidebar: #f7f8fa;
+  --color-bg-hover: #eef2f7;
+  --color-bg-selected: #e6eef8;
+  --color-fg-default: #1b2128;
+  --color-fg-muted: #4f5964;
+  --color-fg-subtle: #8a939d;
+  --color-fg-on-accent: #ffffff;
+  --color-border-subtle: #e7eaee;
+  --color-border-default: #d9dee4;
+  --color-border-strong: #c4cbd3;
+  --color-accent-default: #2563ab;
+  --color-accent-hover: #1d4f8c;
+  --color-accent-subtle: #e6eef8;
+  --color-success-fg: #1e7a45;
+  --color-success-bg: #e2f2e8;
+  --color-warning-fg: #8f6100;
+  --color-warning-bg: #fbefd2;
+  --color-danger-fg: #b0302f;
+  --color-danger-bg: #f8e1e1;
+  --color-band: #f1f3f6;
+  --color-bg-card: #ffffff;
+  --color-bg-column: #f3f4f7;
+  --shadow-pop: 0 8px 28px rgba(20, 30, 45, .16), 0 1px 3px rgba(20, 30, 45, .1);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --row-h: 40px;
+  /* soort, one hue each */
+  --s-voorstelling: #c2416b;
+  --s-repetitie: #6d4fc2;
+  --s-opbouw: #b7791f;
+  --s-afbouw: #a0612a;
+  --s-reis: #2b7bb9;
+  --s-overnachting: #5b6675;
+  --s-maaltijd: #2f8a57;
+  --s-vergadering: #138a8a;
+  --s-andere: #7a838d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg-canvas: #0e0f11; --color-bg-surface: #16171a; --color-bg-subtle: #1b1c20; --color-bg-muted: #24262b;
+    --color-bg-sidebar: #0b0c0e; --color-bg-hover: #222429; --color-bg-selected: #1f2b3d; --color-bg-card: #202126; --color-bg-column: #16171a;
+    --color-fg-default: #ececf0; --color-fg-muted: #a4a7b0; --color-fg-subtle: #6c707a; --color-fg-on-accent: #ffffff;
+    --color-border-subtle: #24262b; --color-border-default: #2c2e34; --color-border-strong: #3a3d44;
+    --color-accent-default: #5b9be0; --color-accent-hover: #7db0e8; --color-accent-subtle: #1c2b3d;
+    --color-success-fg: #6cc893; --color-success-bg: #173324; --color-warning-fg: #e2b54f; --color-warning-bg: #352a12;
+    --color-danger-fg: #ee8a89; --color-danger-bg: #3a1c1c; --color-band: #1a1b1f;
+    --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg-canvas: #0e0f11; --color-bg-surface: #16171a; --color-bg-subtle: #1b1c20; --color-bg-muted: #24262b;
+  --color-bg-sidebar: #0b0c0e; --color-bg-hover: #222429; --color-bg-selected: #1f2b3d; --color-bg-card: #202126; --color-bg-column: #16171a;
+  --color-fg-default: #ececf0; --color-fg-muted: #a4a7b0; --color-fg-subtle: #6c707a; --color-fg-on-accent: #ffffff;
+  --color-border-subtle: #24262b; --color-border-default: #2c2e34; --color-border-strong: #3a3d44;
+  --color-accent-default: #5b9be0; --color-accent-hover: #7db0e8; --color-accent-subtle: #1c2b3d;
+  --color-success-fg: #6cc893; --color-success-bg: #173324; --color-warning-fg: #e2b54f; --color-warning-bg: #352a12;
+  --color-danger-fg: #ee8a89; --color-danger-bg: #3a1c1c; --color-band: #1a1b1f;
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+  color-scheme: dark;
+}
+
+:root { --drawer-w: 392px; --today: #d9480f }
+:root[data-theme="dark"] { --today: #ff8a4c }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --today: #ff8a4c } }
+
+* { box-sizing: border-box }
+html, body { height: 100%; margin: 0 }
+body { background: var(--color-bg-canvas); color: var(--color-fg-default); font: 13.5px/1.4 var(--font-sans); overflow: hidden }
+button { font: inherit; color: inherit }
+:focus-visible { outline: 2px solid var(--color-accent-default); outline-offset: 1px }
+.icon { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums }
+
+.app { display: grid; grid-template-columns: 268px minmax(0, 1fr) 0; height: 100%; transition: grid-template-columns .18s ease }
+.app.with-drawer { grid-template-columns: 268px minmax(0, 1fr) var(--drawer-w) }
+
+/* ---------- sidebar ---------- */
+.side { background: var(--color-bg-sidebar); border-right: 1px solid var(--color-border-default); display: flex; flex-direction: column; min-height: 0 }
+.brand { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; font-size: 12px; color: var(--color-fg-subtle); letter-spacing: .04em; text-transform: uppercase }
+.brand b { color: var(--color-fg-default); letter-spacing: 0; text-transform: none; font-size: 13px }
+.space { margin: 6px 10px 10px; position: relative }
+.space-btn { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); cursor: pointer; text-align: left }
+.space-btn:hover { border-color: var(--color-border-strong) }
+.space-mark { width: 28px; height: 28px; border-radius: var(--radius-sm); display: grid; place-items: center; font-weight: 600; font-size: 12px; color: var(--color-fg-on-accent); background: var(--space-color, var(--color-accent-default)); flex: none }
+.space-text { display: flex; flex-direction: column; min-width: 0; flex: 1 }
+.space-text strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.space-text small { color: var(--color-fg-subtle); font-size: 11.5px }
+.tree { overflow: auto; flex: 1; padding: 2px 8px 16px }
+.section-label { padding: 14px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-fg-subtle) }
+.node { position: relative }
+.model { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 2px; border-radius: var(--radius-sm); cursor: pointer; user-select: none }
+.model:hover { background: var(--color-bg-hover) }
+.lead { width: 20px; height: 20px; display: grid; place-items: center; position: relative; flex: none }
+.lead > * { position: absolute; display: grid; place-items: center }
+.model .glyph { color: var(--color-fg-muted) }
+.chev { color: var(--color-fg-muted); opacity: 0; transition: transform .12s }
+.node.open > .model .chev { transform: rotate(90deg) }
+.model:hover .chev { opacity: 1 }
+.model:hover .glyph { opacity: 0 }
+.model .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500 }
+.model .count { font: 11px var(--font-mono); color: var(--color-fg-subtle) }
+.views { display: none; padding: 1px 0 4px 26px; position: relative }
+.views::before { content: ""; position: absolute; left: 13px; top: 0; bottom: 6px; border-left: 1px solid var(--color-border-default) }
+.node.open > .views { display: block }
+.view { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px; border-radius: var(--radius-sm); cursor: pointer; color: var(--color-fg-muted); text-decoration: none }
+.view:hover { background: var(--color-bg-hover); color: var(--color-fg-default) }
+.view.active { background: var(--color-bg-selected); color: var(--color-accent-default); font-weight: 500 }
+.view .vname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.view .lock { color: var(--color-fg-subtle); display: inline-flex }
+.view.dash { padding-left: 4px; color: var(--color-fg-default) }
+.side-foot { border-top: 1px solid var(--color-border-default); padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted) }
+
+/* ---------- people ---------- */
+.avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--color-accent-subtle); color: var(--color-accent-default); display: inline-grid; place-items: center; font-weight: 600; font-size: 10.5px; flex: none; letter-spacing: .01em }
+.avatar.sm { width: 22px; height: 22px; font-size: 9.5px; letter-spacing: 0 }
+.avatar.open { background: transparent; border: 1px dashed var(--color-border-strong); color: var(--color-fg-subtle) }
+.stack { display: inline-flex }
+.stack .avatar { box-shadow: 0 0 0 2px var(--color-bg-card) }
+.stack .avatar + .avatar { margin-left: -2px }
+.stack .more { font-size: 11px; color: var(--color-fg-subtle); margin-left: 6px; align-self: center }
+.who { display: inline-flex; align-items: center; gap: 6px }
+
+/* ---------- popovers ---------- */
+.pop { position: fixed; z-index: 60; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: 4px; min-width: 200px }
+.pop-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; background: transparent; border-radius: var(--radius-sm); cursor: pointer; text-align: left; color: var(--color-fg-default) }
+.pop-item:hover:not([disabled]) { background: var(--color-bg-hover) }
+.pop-item[disabled] { color: var(--color-fg-subtle); cursor: default }
+.pop-item .meta { margin-left: auto; color: var(--color-fg-subtle); font-size: 11.5px }
+.pop-item.current { font-weight: 600 }
+.pop-item.current::after { content: ""; margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent-default) }
+.pop-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none }
+.pop-sep { height: 1px; background: var(--color-border-subtle); margin: 4px 2px }
+.pop-head { padding: 6px 10px 4px; font-size: 11px; color: var(--color-fg-subtle); text-transform: uppercase; letter-spacing: .06em; font-weight: 600 }
+.pop-search { width: 100%; padding: 7px 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-subtle); margin-bottom: 4px; font: inherit; color: inherit }
+.pop-check { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer }
+.pop-check:hover { background: var(--color-bg-hover) }
+.pop-check input { accent-color: var(--color-accent-default); margin: 0 }
+.pop-check .meta { margin-left: auto; color: var(--color-fg-subtle); font-size: 11.5px }
+
+/* ---------- buttons ---------- */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border-default); background: var(--color-bg-surface); cursor: pointer; white-space: nowrap; color: var(--color-fg-default) }
+.btn:hover { border-color: var(--color-border-strong); background: var(--color-bg-subtle) }
+.btn.primary { background: var(--color-accent-default); border-color: var(--color-accent-default); color: var(--color-fg-on-accent) }
+.btn.primary:hover { background: var(--color-accent-hover) }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--color-fg-muted) }
+.btn.ghost:hover { background: var(--color-bg-hover); color: var(--color-fg-default) }
+.btn.sm { padding: 3px 9px; font-size: 12.5px }
+.iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-fg-muted); cursor: pointer; flex: none }
+.iconbtn:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
+.iconbtn.on { color: var(--color-accent-default); border-color: var(--color-accent-default) }
+.tool { width: 24px; height: 24px; display: grid; place-items: center; border: 0; background: transparent; border-radius: var(--radius-sm); cursor: pointer; color: var(--color-fg-muted); flex: none }
+.tool:hover { background: var(--color-bg-muted); color: var(--color-fg-default) }
+.seg { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 2px; gap: 2px; background: var(--color-bg-surface) }
+.seg button { border: 0; background: transparent; padding: 3px 10px; cursor: pointer; font-size: 12.5px; border-radius: var(--radius-sm); color: var(--color-fg-muted) }
+.seg button:hover { color: var(--color-fg-default) }
+.seg button.on { background: var(--color-bg-muted); color: var(--color-fg-default); font-weight: 600 }
+kbd { font: 10.5px var(--font-mono); border: 1px solid var(--color-border-default); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; color: var(--color-fg-subtle) }
+
+/* ---------- main ---------- */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0 }
+.top { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border-default); padding: 10px 18px; display: flex; align-items: center; gap: 10px; min-height: 55px }
+.top .spacer { display: none }
+.title .sum, .title .on-model, .insight { flex: none }
+.title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; overflow: hidden }
+.title .tglyph { width: 30px; height: 30px; border-radius: var(--radius-md); background: var(--color-bg-muted); display: grid; place-items: center; color: var(--color-fg-default); flex: none }
+.title h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap }
+.title .sum { font-size: 12px; color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 999px; padding: 2px 9px; font-variant-numeric: tabular-nums; white-space: nowrap }
+.title .on-model { font-size: 12.5px; color: var(--color-fg-subtle); white-space: nowrap }
+.lockmark { color: var(--color-fg-subtle); display: inline-flex }
+.insight { font-size: 12px; color: var(--color-fg-muted); white-space: nowrap }
+.insight b { color: var(--color-danger-fg); font-weight: 600 }
+.insight.warn b { color: var(--color-warning-fg) }
+.search { display: flex; align-items: center; gap: 6px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 5px 8px; color: var(--color-fg-subtle); flex: 0 1 200px; min-width: 120px; background: var(--color-bg-surface) }
+.search:focus-within { border-color: var(--color-accent-default) }
+.search input { border: 0; background: transparent; outline: 0; font: inherit; color: var(--color-fg-default); width: 100% }
+
+.bar { padding: 8px 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface) }
+.bar .grow { flex: 1 }
+.bar .rows { color: var(--color-fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap }
+.bar .iconbtn { width: 28px; height: 28px }
+.bar .divider { width: 1px; height: 18px; background: var(--color-border-default); margin: 0 2px }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--color-border-default); color: var(--color-fg-muted); font-size: 12.5px; background: var(--color-bg-surface); cursor: pointer; white-space: nowrap }
+.chip:hover { border-color: var(--color-border-strong); color: var(--color-fg-default) }
+.chip.set { border-color: transparent; background: var(--color-accent-subtle); color: var(--color-accent-default) }
+.chip.scope { border-color: transparent; background: var(--color-bg-muted); color: var(--color-fg-default) }
+.chip.scope i { width: 8px; height: 8px; border-radius: 2px; background: var(--c) }
+.chip .op { opacity: .75 }
+.chip b { font-weight: 600 }
+.chip .x { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0 -4px 0 0; border-radius: 50%; opacity: .7 }
+.chip .x:hover { opacity: 1; background: color-mix(in srgb, currentColor 16%, transparent) }
+.chip .x .icon, .chip > .icon.down { width: 12px; height: 12px }
+.chip .count { font: 600 11px var(--font-mono); background: var(--color-accent-default); color: var(--color-fg-on-accent); border-radius: 999px; padding: 0 5px; margin-left: 2px }
+.chip .lbl { color: var(--color-fg-subtle) }
+.chip.set .lbl { color: inherit; opacity: .75 }
+
+.stage { flex: 1; min-height: 0; overflow: auto; position: relative }
+.foot { background: var(--color-bg-subtle); border-top: 1px solid var(--color-border-default); padding: 6px 18px; font-size: 12px; color: var(--color-fg-subtle); display: flex; gap: 16px; white-space: nowrap; overflow: hidden }
+.foot .r { margin-left: auto }
+
+/* ---------- facts ---------- */
+.time { font: 12.5px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-fg-default) }
+.time .end { color: var(--color-fg-subtle) }
+.soort { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px }
+.soort i { width: 8px; height: 8px; border-radius: 2px; flex: none }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor }
+.pill.optie { color: var(--color-warning-fg); background: var(--color-warning-bg) }
+.pill.bevestigd { color: var(--color-success-fg); background: var(--color-success-bg) }
+.pill.geannuleerd { color: var(--color-danger-fg); background: var(--color-danger-bg) }
+.pill.neutral { color: var(--color-fg-muted); background: var(--color-bg-muted) }
+.alert-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 5px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--color-danger-fg); background: var(--color-danger-bg); white-space: nowrap }
+.alert-badge .icon { width: 13px; height: 13px; stroke-width: 1.9 }
+.inherited { color: var(--color-fg-subtle); font-style: italic }
+.via { font-style: normal; font-size: 10.5px; border: 1px solid var(--color-border-default); border-radius: 3px; padding: 0 4px; color: var(--color-fg-subtle); margin-left: 4px }
+.meter { width: 42px; height: 5px; border-radius: 3px; background: var(--color-bg-muted); overflow: hidden; display: inline-block }
+.meter b { display: block; height: 100%; background: var(--color-success-fg) }
+.meter.short b { background: var(--color-warning-fg) }
+.crew { display: inline-flex; align-items: center; gap: 6px; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-fg-muted) }
+.prod-tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap }
+.prod-tag i { width: 6px; height: 14px; border-radius: 2px; background: var(--c) }
+.muted { color: var(--color-fg-subtle) }
+
+/* ---------- filter builder ---------- */
+.fb { width: 560px; padding: 10px }
+.fb-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--color-fg-subtle); margin: 0 2px 8px }
+.fb-row { display: grid; grid-template-columns: 40px 128px 128px 1fr 26px; gap: 6px; align-items: start; margin-bottom: 6px }
+.fb-row .where { font-size: 12px; color: var(--color-fg-subtle); padding-top: 7px; text-align: right }
+.fb select, .fb input[type=text] { height: 30px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-fg-default); font: inherit; padding: 0 6px; width: 100% }
+.fb .add { margin-top: 4px; border: 0; background: none; color: var(--color-accent-default); cursor: pointer; padding: 4px 2px; font: inherit }
+.fb .toks { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; align-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); padding: 3px 4px }
+.fb .tok { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--color-accent-subtle); color: var(--color-accent-default); font-size: 12px; font-weight: 500; border: 0; cursor: pointer }
+.fb .tok.off { background: transparent; color: var(--color-fg-muted); border: 1px dashed var(--color-border-default) }
+.fb-x { width: 26px; height: 30px; border: 0; background: none; color: var(--color-fg-subtle); cursor: pointer; display: grid; place-items: center }
+.fb-x:hover { color: var(--color-danger-fg) }
+
+/* ---------- record drawer: a side panel, part of the layout ---------- */
+.drawer { background: var(--color-bg-surface); border-left: 1px solid var(--color-border-default); display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden }
+.app:not(.with-drawer) .drawer { visibility: hidden }
+.dw-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--color-border-subtle); font-size: 12px; color: var(--color-fg-subtle) }
+.dw-head .kind { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0 }
+.dw-head .pos { font: 11px var(--font-mono) }
+.dw-body { overflow: auto; flex: 1; padding: 16px 16px 24px }
+.dw-title { font-size: 19px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; margin: 0 0 4px; outline: 0; border-radius: var(--radius-sm) }
+.dw-title:hover { background: var(--color-bg-hover); box-shadow: 0 0 0 4px var(--color-bg-hover) }
+.dw-sub { color: var(--color-fg-muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-bottom: 14px }
+.dw-hero { margin: -16px -16px 14px; height: 200px; overflow: hidden; border-bottom: 1px solid var(--color-border-subtle) }
+.dw-hero svg { width: 100%; height: 100%; display: block }
+.dw-alert { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-danger-bg); color: var(--color-danger-fg); font-size: 12.5px; margin-bottom: 14px }
+.dw-alert b { font-weight: 600; display: block; margin-bottom: 2px }
+.dw-alert .acts { display: flex; gap: 12px; margin-top: 6px }
+.dw-alert .acts button { border: 0; background: none; padding: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-size: 12.5px; font-weight: 500 }
+.dw-alert.warn { background: var(--color-warning-bg); color: var(--color-warning-fg) }
+.props { display: grid; grid-template-columns: 112px 1fr; margin: 0 0 18px }
+.props dt { color: var(--color-fg-subtle); font-size: 12.5px; padding: 7px 0; display: flex; align-items: center; gap: 7px }
+.props dt .icon { width: 14px; height: 14px }
+.props dd { margin: 0; padding: 4px 6px; min-height: 32px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-sm); cursor: text; flex-wrap: wrap }
+.props dd:hover { background: var(--color-bg-hover) }
+.props dd.ro { cursor: default }
+.props dd.ro:hover { background: none }
+.dw-sec { border-top: 1px solid var(--color-border-subtle); padding-top: 12px; margin-top: 4px; margin-bottom: 16px }
+.dw-sec h3 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-fg-subtle); display: flex; align-items: center; gap: 8px }
+.dw-sec h3 .n { font: 11px var(--font-mono); letter-spacing: 0; color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 0 5px }
+.dw-sec h3 .r { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; color: var(--color-accent-default); cursor: pointer }
+.dw-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none }
+.dw-list li { display: flex; align-items: center; gap: 10px; padding: 6px 6px; border-radius: var(--radius-sm); min-height: 36px }
+.dw-list li:hover { background: var(--color-bg-hover) }
+.dw-list .main-t { flex: 1; min-width: 0; display: grid }
+.dw-list .main-t span { font-size: 12px; color: var(--color-fg-subtle) }
+.dw-list li.open-slot { color: var(--color-fg-muted) }
+.dw-list li.open-slot .fill { margin-left: auto; color: var(--color-accent-default); font-size: 12.5px; font-weight: 500; border: 0; background: none; cursor: pointer }
+.dw-list li.bad .main-t span { color: var(--color-danger-fg) }
+.note { font-size: 13px; color: var(--color-fg-muted); line-height: 1.5; padding: 8px 10px; background: var(--color-bg-subtle); border-radius: var(--radius-md); margin: 0 }
+.hist { display: grid; gap: 8px; font-size: 12.5px; color: var(--color-fg-muted); margin: 0; padding: 0; list-style: none }
+.hist li { display: grid; grid-template-columns: 20px 1fr; gap: 8px }
+.hist li .t { font-size: 11.5px; color: var(--color-fg-subtle) }
+.hist li b { color: var(--color-fg-default); font-weight: 500 }
+
+/* ---------- toast (top of the stage) ---------- */
+.toast { position: fixed; z-index: 70; transform: translateX(-50%); background: var(--color-fg-default); color: var(--color-bg-surface); border-radius: var(--radius-md); padding: 8px 10px 8px 14px; display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow-pop); font-size: 13px }
+.toast button { border: 0; background: none; color: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px }
+
+/* ---------- tweak panel ---------- */
+.tweaks { position: fixed; left: 16px; bottom: 54px; z-index: 30; background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-pop); padding: 12px; display: grid; gap: 10px; width: 236px; font-size: 12.5px }
+.tweaks h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-fg-subtle); display: flex; justify-content: space-between; align-items: center }
+.tweaks .row { display: grid; gap: 4px }
+.tweaks .seg { display: flex }
+.tweaks .seg button { flex: 1; padding: 3px 4px }
+.tweaks.min > :not(h3) { display: none }
+.tweaks .note-t { font-size: 11.5px; color: var(--color-fg-subtle); margin: 0; line-height: 1.4 }
+
+/* minimal scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--color-border-default) transparent }
+*::-webkit-scrollbar { width: 8px; height: 8px }
+*::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box }
+*::-webkit-scrollbar-thumb:hover { background-color: var(--color-fg-subtle) }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0 }
+*::-webkit-scrollbar-corner { background: transparent }
+
+@media (max-width: 1720px) { .app.with-drawer .title .on-model { display: none } }
+@media (max-width: 760px) {
+  body { overflow: auto }
+  .app, .app.with-drawer { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100% }
+  .side { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--color-border-default) }
+  .main { min-height: 80vh }
+  .drawer { position: fixed; inset: 0; z-index: 50 }
+  .app:not(.with-drawer) .drawer { display: none }
+  .tweaks { display: none }
+  .search { min-width: 0; flex: 1 }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
+.avatar[style*="--h"] { background: color-mix(in srgb, var(--h) 16%, var(--color-bg-surface)); color: color-mix(in srgb, var(--h) 78%, var(--color-fg-default)) }
+
+.board { display: flex; gap: 12px; padding: 14px 18px 28px; align-items: flex-start; min-width: max-content; min-height: 100% }
+.col { width: 308px; flex: none; background: var(--color-bg-column); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); display: flex; flex-direction: column; transition: border-color .12s, background-color .12s }
+.col-head { position: sticky; top: 0; z-index: 2; background: inherit; border-radius: var(--radius-md) var(--radius-md) 0 0; padding: 10px 10px 8px; display: grid; gap: 6px; box-shadow: inset 0 2px 0 var(--t) }
+.col-row { display: flex; align-items: center; gap: 8px }
+.col-label { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 1px 10px 1px 8px; font-weight: 600; font-size: 12.5px; color: color-mix(in srgb, var(--t) 82%, var(--color-fg-default)); background: color-mix(in srgb, var(--t) 14%, var(--color-bg-surface)) }
+.col-label::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--t) }
+.col-count { font: 11px var(--font-mono); color: var(--color-fg-muted); background: var(--color-bg-muted); border-radius: 4px; padding: 1px 6px }
+.col-row .tool:first-of-type { margin-left: auto }
+.col-sum { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-fg-muted); font-variant-numeric: tabular-nums; min-height: 18px }
+.col-sum .bad { color: var(--color-danger-fg); font-weight: 500; display: inline-flex; align-items: center; gap: 3px }
+.col-sum .bad .icon { width: 13px; height: 13px }
+.col-body { display: grid; gap: 8px; padding: 2px 10px 10px; align-content: start }
+.col.drop { border-color: var(--color-accent-default); background: color-mix(in srgb, var(--color-accent-subtle) 55%, var(--color-bg-column)) }
+.col-add { display: flex; align-items: center; gap: 6px; color: var(--color-fg-subtle); font-size: 12.5px; padding: 6px 4px 2px; border: 0; background: transparent; cursor: pointer; border-radius: var(--radius-sm) }
+.col-add:hover { color: var(--color-fg-default) }
+.col-empty { border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); padding: 18px 14px; text-align: center; color: var(--color-fg-subtle); font-size: 12.5px; display: grid; gap: 4px; justify-items: center }
+.col-empty b { color: var(--color-fg-muted); font-weight: 500 }
+.col-empty .icon { width: 20px; height: 20px; margin-bottom: 2px }
+
+.card { position: relative; background: var(--color-bg-card); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 10px 12px 10px 14px; display: grid; gap: 6px; cursor: grab; box-shadow: inset 3px 0 0 var(--s); user-select: none; transition: border-color .12s, box-shadow .12s }
+.card:hover { border-color: var(--color-border-strong); box-shadow: inset 3px 0 0 var(--s), 0 1px 3px rgba(20, 30, 45, .08) }
+.card.sel { border-color: var(--color-accent-default); box-shadow: inset 3px 0 0 var(--s), 0 0 0 1px var(--color-accent-default) }
+.card-top { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-fg-muted); min-height: 20px }
+.card-top .sep { color: var(--color-fg-subtle) }
+.card-top .alert-badge { margin-left: auto }
+.card-top .hover-dots { margin-left: auto; opacity: 0; width: 20px; height: 20px }
+.card-top .alert-badge + .hover-dots { margin-left: 0 }
+.card:hover .hover-dots { opacity: 1 }
+.card-title { font-weight: 600; font-size: 14px; line-height: 1.3; color: var(--color-fg-default) }
+.card-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-fg-muted); min-width: 0 }
+.card-line > .icon { width: 14px; height: 14px; color: var(--color-fg-subtle) }
+.card-line .date { font: 12.5px var(--font-mono); color: var(--color-fg-default) }
+.card-line .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0 }
+.card-foot { display: flex; align-items: center; gap: 8px; padding-top: 2px }
+.card-foot .crew { margin-left: auto }
+.card.ghost { opacity: .35; border-style: dashed; box-shadow: none }
+.card.floating { position: fixed; z-index: 80; pointer-events: none; margin: 0; transform: rotate(2.2deg); border-color: var(--color-accent-default); box-shadow: inset 3px 0 0 var(--s), var(--shadow-pop); cursor: grabbing }
+.slot { border: 1.5px dashed var(--color-accent-default); background: color-mix(in srgb, var(--color-accent-subtle) 70%, transparent); border-radius: var(--radius-md); display: grid; place-items: center; color: var(--color-accent-default); font-size: 12.5px; font-weight: 500 }
+body.dragging, body.dragging * { cursor: grabbing !important }
+.group-pop .pop-item .meta { font: 11px var(--font-mono) }
+.group-pop .hint { font-size: 11.5px; color: var(--color-fg-subtle); padding: 4px 10px 6px; margin: 0 }
+.sort-pop .seg { margin: 4px 10px 6px; display: flex }
+.sort-pop .seg button { flex: 1 }
+
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r=".9" fill="currentColor"/><circle cx="8" cy="8" r=".9" fill="currentColor"/><circle cx="12.5" cy="8" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M6 6.5V13"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6h12M2 9.5h12M6.5 2.5v11"/></symbol>
+  <symbol id="i-matrix" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.8v2.4M11 1.8v2.4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 16 16"><path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.7" cy="4" r=".8" fill="currentColor"/><circle cx="2.7" cy="8" r=".8" fill="currentColor"/><circle cx="2.7" cy="12" r=".8" fill="currentColor"/></symbol>
+  <symbol id="i-board" viewBox="0 0 16 16"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></symbol>
+  <symbol id="i-query" viewBox="0 0 16 16"><path d="M3 4.5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2z"/><path d="M3 4.5v7c0 1.1 2.2 2 5 2"/><path d="M13 4.5v3"/><circle cx="12" cy="11.5" r="2"/><path d="M13.5 13l1.2 1.2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.8-2.3 2.7-3.5 5-3.5s4.2 1.2 5 3.5"/></symbol>
+  <symbol id="i-users" viewBox="0 0 16 16"><circle cx="6" cy="6" r="2.2"/><path d="M2 13c.6-2 2-3 4-3s3.4 1 4 3"/><circle cx="11.2" cy="5.5" r="1.8"/><path d="M11 9.2c1.6 0 2.7.8 3.2 2.6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L13.5 13.5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.5 3.5h11L9.5 8.5v4l-3 1.5v-5.5z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9"/><path d="M2.5 2.5v2.6h2.6"/><path d="M8 5v3l2 1.5"/></symbol>
+  <symbol id="i-share" viewBox="0 0 16 16"><path d="M8 2v8M5 4.5L8 2l3 2.5"/><path d="M3 8.5V13h10V8.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 16 16"><path d="M5 3v10M2.5 10.5L5 13l2.5-2.5M11 13V3M8.5 5.5L11 3l2.5 2.5"/></symbol>
+  <symbol id="i-group" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="4" rx="1"/><rect x="2" y="9.5" width="12" height="4" rx="1"/></symbol>
+  <symbol id="i-cols" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11M10 2.5v11"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 16 16"><path d="M3 4h10M8 4v9"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 16 16"><path d="M2.5 8.5V3a.5.5 0 01.5-.5h5.5l5 5-6 6z"/><circle cx="5.5" cy="5.5" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 16 16"><path d="M8 14s4.5-4.2 4.5-7.5a4.5 4.5 0 00-9 0C3.5 9.8 8 14 8 14z"/><circle cx="8" cy="6.5" r="1.6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8.2l1.7 1.6 3.3-3.4"/></symbol>
+  <symbol id="i-film" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 3v10M11 3v10M2 6h3M2 10h3M11 6h3M11 10h3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/><circle cx="6" cy="4" r="1.3" fill="var(--color-bg-surface)"/><circle cx="10" cy="8" r="1.3" fill="var(--color-bg-surface)"/><circle cx="5" cy="12" r="1.3" fill="var(--color-bg-surface)"/></symbol>
+  <symbol id="i-timeline" viewBox="0 0 16 16"><path d="M2 3v10"/><rect x="4" y="3.5" width="6" height="2.6" rx="1"/><rect x="6.5" y="7" width="7" height="2.6" rx="1"/><rect x="4.5" y="10.5" width="4.5" height="2.6" rx="1"/></symbol>
+  <symbol id="i-gallery" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5.2" height="5.2" rx="1"/><rect x="8.8" y="2.5" width="5.2" height="5.2" rx="1"/><rect x="2" y="9.3" width="5.2" height="4.2" rx="1"/><rect x="8.8" y="9.3" width="5.2" height="4.2" rx="1"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5.5" height="6" rx="1"/><rect x="8.5" y="2.5" width="5.5" height="3.5" rx="1"/><rect x="8.5" y="7" width="5.5" height="6.5" rx="1"/><rect x="2" y="9.5" width="5.5" height="4" rx="1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.5l6 10.5H2z"/><path d="M8 6.8v2.7"/><circle cx="8" cy="11.3" r=".5" fill="currentColor"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 16 16"><circle cx="6" cy="4" r=".9" fill="currentColor"/><circle cx="10" cy="4" r=".9" fill="currentColor"/><circle cx="6" cy="8" r=".9" fill="currentColor"/><circle cx="10" cy="8" r=".9" fill="currentColor"/><circle cx="6" cy="12" r=".9" fill="currentColor"/><circle cx="10" cy="12" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-image" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1.3"/><path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 16 16"><path d="M8 11V3M5 5.5L8 2.5l3 3"/><path d="M3 10.5V13h10v-2.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13 9.5A5.5 5.5 0 016.5 3a5.5 5.5 0 106.5 6.5z"/></symbol>
+  <symbol id="i-car" viewBox="0 0 16 16"><path d="M3 10.5l1.2-4h7.6l1.2 4"/><rect x="2" y="10" width="12" height="3" rx="1"/><circle cx="5" cy="13" r=".8"/><circle cx="11" cy="13" r=".8"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"/></symbol>
+  <symbol id="i-up" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></symbol>
+  <symbol id="i-note" viewBox="0 0 16 16"><path d="M3 2.5h7l3 3v8H3z"/><path d="M5.5 7.5h5M5.5 10h3.5"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 16 16"><path d="M6 2.5l-1.5 11M11.5 2.5L10 13.5M3 6h10.5M2.5 10H13"/></symbol>
+</svg>
+
+<div class="app" id="app">
+  <aside class="side" aria-label="Navigatie">
+    <div class="brand"><b>Worktable</b> · Gezelschap Lantaarn</div>
+    <div class="space">
+      <button class="space-btn" id="space-btn" data-pop aria-haspopup="menu" aria-expanded="false">
+        <span class="space-mark" id="space-mark">NW</span>
+        <span class="space-text"><strong id="space-name">Nachtwacht</strong><small id="space-meta"></small></span>
+        <svg class="icon"><use href="#i-down"/></svg>
+      </button>
+    </div>
+    <nav class="tree" id="tree"></nav>
+    <div class="side-foot"><span class="avatar" style="--h:#2563ab">LV</span><span>lotte@lantaarn.test</span></div>
+  </aside>
+  <main class="main">
+    <header class="top">
+      <div class="title" id="crumbs"></div>
+      <span class="spacer"></span>
+      <label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="q" placeholder="Zoeken" aria-label="Zoeken"><kbd>⌘K</kbd></label>
+      <button class="iconbtn" title="Geschiedenis" aria-label="Geschiedenis"><svg class="icon"><use href="#i-history"/></svg></button>
+      <button class="iconbtn" title="Exporteren / delen" aria-label="Exporteren / delen"><svg class="icon"><use href="#i-share"/></svg></button>
+      <button class="btn primary" id="primary"><svg class="icon"><use href="#i-plus"/></svg>Nieuwe activiteit</button>
+    </header>
+    <div class="bar" id="bar"></div>
+    <div class="stage" id="stage"></div>
+    <div class="foot" id="foot"></div>
+  </main>
+  <aside class="drawer" id="drawer" aria-label="Record"></aside>
+</div>
+<div class="tweaks" id="tweaks"></div>
+<script>
+const $ = (s, el = document) => el.querySelector(s)
+const $$ = (s, el = document) => [...el.querySelectorAll(s)]
+const icon = (id, cls = '') => `<svg class="icon ${cls}"><use href="#i-${id}"/></svg>`
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const store = { get: (k) => { try { return localStorage.getItem('wt-proto-' + k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem('wt-proto-' + k, v) } catch {} } }
+
+// ---------- dates: the mockups live in week 42 of 2026, today is Tuesday 13 October ----------
+const TODAY = '2026-10-13'
+const DAYS_NL = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']
+const DAYS_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
+const MONTHS_NL = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+const MONTHS_LONG = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december']
+const D = (iso) => new Date(iso + 'T12:00:00')
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const addDays = (s, n) => { const d = D(s); d.setDate(d.getDate() + n); return iso(d) }
+const daysBetween = (a, b) => Math.round((D(b) - D(a)) / 864e5)
+const dayShort = (s) => { const d = D(s); return `${DAYS_NL[d.getDay()]} ${d.getDate()} ${MONTHS_NL[d.getMonth()]}` }
+const dayNum = (s) => { const d = D(s); return `${d.getDate()} ${MONTHS_NL[d.getMonth()]}` }
+const weekNo = (s) => { const d = D(s); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const w1 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - w1) / 864e5 - 3 + ((w1.getDay() + 6) % 7)) / 7) }
+const mondayOf = (s) => addDays(s, -((D(s).getDay() + 6) % 7))
+const span = (a, b) => (a === b ? dayNum(a) : D(a).getMonth() === D(b).getMonth() ? `${D(a).getDate()}–${dayNum(b)}` : `${dayNum(a)} – ${dayNum(b)}`)
+
+// ---------- invented example data (the seed's names; no client data) ----------
+const PRODUCTIES = [
+  { id: 'all', titel: 'Alle producties', meta: 'het hele seizoen', mark: '∗', color: 'var(--color-fg-muted)' },
+  { id: 'nw', titel: 'Nachtwacht', meta: '2026–2027 · actief', mark: 'NW', color: '#2563ab' },
+  { id: 'kt', titel: 'De Kersentuin', meta: '2026–2027 · in repetitie', mark: 'KT', color: '#c2416b' },
+  { id: 'zs', titel: 'Zomerstorm', meta: '2025–2026 · reprise', mark: 'ZS', color: '#2f8a57' },
+]
+const prod = (id) => PRODUCTIES.find((p) => p.id === id)
+const SOORT = { voorstelling: 'Voorstelling', repetitie: 'Repetitie', opbouw: 'Opbouw', afbouw: 'Afbouw', reis: 'Reis', overnachting: 'Overnachting', maaltijd: 'Maaltijd', vergadering: 'Vergadering', andere: 'Andere' }
+const STATUS = { optie: 'Optie', bevestigd: 'Bevestigd', geannuleerd: 'Geannuleerd' }
+const PEOPLE = {
+  lv: ['Lotte Verhaegen', 'Productieleider', '#2563ab'], bw: ['Bram De Wilde', 'Speler', '#c2416b'], nc: ['Noor Claes', 'Lichttechnicus', '#2f8a57'],
+  sp: ['Sam Peeters', 'Speler', '#6d4fc2'], jm: ['Jef Maes', 'Chauffeur', '#b7791f'], iw: ['Ilse Wouters', 'Speler', '#138a8a'],
+  rj: ['Ruben Jacobs', 'Speler', '#a0612a'], fm: ['Fien Mertens', 'Gastmuzikant', '#2b7bb9'], kv: ['Kobe Vermeulen', 'Lichttechnicus', '#5b6675'],
+  yd: ['Yara Dubois', 'Speler', '#8a4fb5'], wj: ['Wout Janssens', 'Chauffeur', '#2f8a57'],
+}
+const initials = (k) => PEOPLE[k][0].split(' ').filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).slice(0, 2).join('')
+const avatar = (k, cls = '') => `<span class="avatar ${cls}" style="--h:${PEOPLE[k][2]}" title="${esc(PEOPLE[k][0])}">${initials(k)}</span>`
+const stack = (keys, open = 0, max = 3) => `<span class="stack">${keys.slice(0, max).map((k) => avatar(k, 'sm')).join('')}${open ? '<span class="avatar sm open" title="Open plek">+</span>' : ''}${keys.length > max ? `<span class="more">+${keys.length - max}</span>` : ''}</span>`
+
+const TOURSTOPS = [
+  { id: 't1', prod: 'nw', naam: 'Brugge', venue: 'Theater Het Anker', start: '2026-10-14', end: '2026-10-16', status: 'bevestigd' },
+  { id: 't2', prod: 'nw', naam: 'Lier', venue: 'CC Berkenhof', start: '2026-10-20', end: '2026-10-21', status: 'optie', note: 'try-out' },
+  { id: 't3', prod: 'nw', naam: 'Gent', venue: 'Zaal Kompas', start: '2026-10-21', end: '2026-10-23', status: 'bevestigd' },
+  { id: 't4', prod: 'nw', naam: 'Leuven', venue: 'CC De Vlinder', start: '2026-10-28', end: '2026-10-31', status: 'optie' },
+  { id: 't5', prod: 'nw', naam: 'Hasselt', venue: 'CC Noordkaap', start: '2026-11-05', end: '2026-11-07', status: 'bevestigd' },
+  { id: 't6', prod: 'nw', naam: 'Antwerpen', venue: 'Zaal De Spiegel', start: '2026-11-18', end: '2026-11-21', status: 'bevestigd' },
+  { id: 't7', prod: 'kt', naam: 'Repetities', venue: 'Repetitiekot De Loods', start: '2026-10-05', end: '2026-10-24', status: 'bevestigd' },
+  { id: 't8', prod: 'kt', naam: 'Première', venue: 'Zaal De Spiegel', start: '2026-10-30', end: '2026-11-08', status: 'bevestigd' },
+  { id: 't9', prod: 'kt', naam: 'Mechelen', venue: 'Studio Meridiaan', start: '2026-11-12', end: '2026-11-14', status: 'optie' },
+  { id: 't10', prod: 'kt', naam: 'Brussel', venue: 'Schouwburg Oostmolen', start: '2026-11-25', end: '2026-11-29', status: 'bevestigd' },
+  { id: 't11', prod: 'zs', naam: 'Oostende', venue: 'De Waterpoort', start: '2026-10-16', end: '2026-10-17', status: 'bevestigd' },
+  { id: 't12', prod: 'zs', naam: 'Turnhout', venue: 'CC Heidebloem', start: '2026-11-06', end: '2026-11-06', status: 'bevestigd' },
+  { id: 't13', prod: 'zs', naam: 'Genk', venue: 'Theater De Kaars', start: '2026-11-20', end: '2026-11-20', status: 'optie' },
+  { id: 't14', prod: 'zs', naam: 'Aalst', venue: 'Zaal Pelikaan', start: '2026-12-04', end: '2026-12-05', status: 'geannuleerd' },
+]
+
+// id, production, kind, title, day, start, end, venue (own or from the tourstop), status, crew have/need, people, conflict, picture scene
+const A = (id, p, soort, title, date, start, end, venue, stop, status, need, people, extra = {}) =>
+  ({ id, prod: p, soort, title, date, start, end, venue, stop, inherited: Boolean(stop) && !extra.own, status, crew: [people.length, need], people, conflict: null, scene: null, ...extra })
+const ACTS = [
+  A(1, 'kt', 'repetitie', 'Doorloop akte 1', '2026-10-12', '10:00', '13:00', 'Repetitiekot De Loods', 't7', 'bevestigd', 5, ['bw', 'iw', 'rj', 'yd', 'lv'], { scene: 'rehearsal' }),
+  A(2, 'nw', 'vergadering', 'Productieoverleg', '2026-10-12', '14:00', '15:30', 'Gezelschap Lantaarn', null, 'bevestigd', 3, ['lv', 'nc', 'jm']),
+  A(3, 'nw', 'repetitie', 'Lichtrepetitie', '2026-10-12', '15:30', '19:00', 'Repetitiekot De Loods', null, 'bevestigd', 3, ['nc', 'kv', 'lv'], { scene: 'light' }),
+  A(4, 'kt', 'repetitie', 'Doorloop akte 2', '2026-10-13', '10:00', '13:00', 'Repetitiekot De Loods', 't7', 'bevestigd', 5, ['bw', 'iw', 'rj', 'yd', 'lv'], { scene: 'rehearsal2' }),
+  A(5, 'nw', 'opbouw', 'Decor laden', '2026-10-13', '13:00', '16:00', 'Repetitiekot De Loods', null, 'optie', 3, ['jm', 'kv'], { scene: 'truck' }),
+  A(6, 'kt', 'andere', 'Kostuumpas', '2026-10-13', '14:00', '16:00', 'Atelier Gezelschap Lantaarn', null, 'optie', 4, ['iw', 'yd', 'rj'], { scene: 'costume' }),
+  A(7, 'nw', 'vergadering', 'Persmoment Brugge', '2026-10-13', '17:00', '18:00', 'Theater Het Anker', null, 'optie', 2, ['lv']),
+  A(8, 'nw', 'reis', 'Rit naar Brugge', '2026-10-14', '09:00', '11:00', null, 't1', 'bevestigd', 2, ['jm', 'wj']),
+  A(9, 'nw', 'opbouw', 'Opbouw', '2026-10-14', '11:30', '16:00', 'Theater Het Anker', 't1', 'bevestigd', 4, ['nc', 'kv', 'jm', 'lv'], { scene: 'build' }),
+  A(10, 'kt', 'repetitie', 'Doorloop akte 3', '2026-10-14', '10:00', '13:00', 'Repetitiekot De Loods', 't7', 'bevestigd', 5, ['iw', 'rj', 'yd', 'lv'], { crew: [4, 5] }),
+  A(11, 'nw', 'maaltijd', 'Diner', '2026-10-14', '18:00', '19:00', 'Theater Het Anker', 't1', 'bevestigd', 8, ['bw', 'sp', 'fm', 'nc', 'kv', 'jm', 'lv', 'wj']),
+  A(12, 'nw', 'voorstelling', 'Voorstelling Brugge', '2026-10-14', '20:00', '21:15', 'Theater Het Anker', 't1', 'bevestigd', 7, ['bw', 'sp', 'fm', 'nc', 'kv', 'lv'], { conflict: 'Bram De Wilde is afwezig: examen', scene: 'show' }),
+  A(13, 'nw', 'voorstelling', 'Voorstelling Brugge', '2026-10-15', '20:00', '21:15', 'Theater Het Anker', 't1', 'bevestigd', 7, ['bw', 'sp', 'fm', 'nc', 'kv', 'lv', 'iw'], { scene: 'show2' }),
+  A(14, 'nw', 'overnachting', 'Hotel Ter Reien', '2026-10-15', null, null, 'Hotel Ter Reien', 't1', 'optie', 7, ['bw', 'sp', 'fm', 'nc', 'kv'], { own: true }),
+  A(15, 'kt', 'repetitie', 'Lichtrepetitie', '2026-10-15', '13:00', '18:00', 'Repetitiekot De Loods', 't7', 'optie', 4, ['nc', 'kv', 'lv'], { conflict: 'Noor Claes staat ook op Nachtwacht in Brugge', scene: 'light2' }),
+  A(16, 'zs', 'reis', 'Rit naar Oostende', '2026-10-16', '10:00', '12:30', null, 't11', 'bevestigd', 2, ['wj']),
+  A(17, 'nw', 'voorstelling', 'Voorstelling Brugge', '2026-10-16', '20:00', '21:15', 'Theater Het Anker', 't1', 'bevestigd', 7, ['bw', 'sp', 'fm', 'nc', 'kv'], { scene: 'show3' }),
+  A(18, 'zs', 'voorstelling', 'Voorstelling Oostende', '2026-10-16', '20:30', '22:00', 'De Waterpoort', 't11', 'bevestigd', 5, ['sp', 'rj', 'yd', 'wj'], { conflict: 'Sam Peeters speelt die avond ook Nachtwacht in Brugge', scene: 'sea' }),
+  A(19, 'nw', 'afbouw', 'Afbouw', '2026-10-16', '21:30', '23:30', 'Theater Het Anker', 't1', 'optie', 4, ['jm', 'kv']),
+  A(20, 'zs', 'voorstelling', 'Voorstelling Oostende', '2026-10-17', '20:30', '22:00', 'De Waterpoort', 't11', 'bevestigd', 5, ['sp', 'rj', 'yd', 'wj', 'fm'], { scene: 'sea2' }),
+  A(21, 'kt', 'repetitie', 'Doorloop met publiek', '2026-10-17', '15:00', '17:30', 'Repetitiekot De Loods', 't7', 'optie', 5, ['bw', 'iw', 'rj', 'yd'], { scene: 'audience' }),
+  A(22, 'kt', 'vergadering', 'Nabespreking', '2026-10-17', '17:30', '18:30', 'Repetitiekot De Loods', 't7', 'optie', 5, ['bw', 'iw', 'rj', 'yd', 'lv']),
+]
+ACTS.forEach((a) => { if (!a.venue && a.stop) a.venue = TOURSTOPS.find((t) => t.id === a.stop).venue })
+const stopOf = (a) => TOURSTOPS.find((t) => t.id === a.stop)
+
+// ---------- the tree: every model and its views; a skin with a mockup links to it ----------
+const SKIN_ICON = { grid: 'grid', matrix: 'matrix', calendar: 'cal', board: 'board', timeline: 'timeline', gallery: 'gallery', query: 'query', dashboard: 'dash' }
+const FILES = { board: 'board-prototype.html', timeline: 'timeline-prototype.html', calendar: 'calendar-prototype.html', gallery: 'gallery-prototype.html', matrix: 'matrix-prototype.html', grid: 'grid-prototype.html' }
+const MODELS = [
+  { section: 'Planning', key: 'speelreeks', label: 'Tourstops', glyph: 'film', count: 14, views: [
+    { id: 'stops', name: 'Tourstops', skin: 'grid', lock: true }, { id: 'tijdlijn', name: 'Tijdlijn tourstops', skin: 'timeline', file: 'timeline' }, { id: 'speelkalender', name: 'Speelkalender', skin: 'calendar', file: 'calendar', q: '?bron=speelreeks' }] },
+  { section: 'Planning', key: 'activiteit', label: 'Activiteiten', glyph: 'cal', count: 246, views: [
+    { id: 'planning', name: 'Planning', skin: 'grid', lock: true, file: 'grid' }, { id: 'perstatus', name: 'Per status', skin: 'board', file: 'board' },
+    { id: 'kalender', name: 'Kalender activiteiten', skin: 'calendar', file: 'calendar' }, { id: 'galerij', name: 'Galerij activiteiten', skin: 'gallery', file: 'gallery' },
+    { id: 'dagplanning', name: 'Dagplanning', skin: 'query', lock: true }, { id: 'werklijst', name: 'Werklijst', skin: 'query', lock: true }] },
+  { section: 'Planning', key: 'toewijzing', label: 'Toewijzingen', glyph: 'users', count: 508, views: [
+    { id: 'toew', name: 'Toewijzingen', skin: 'grid', lock: true }, { id: 'matrix', name: 'Toewijzingen per activiteit', skin: 'matrix', file: 'matrix' }, { id: 'plaatsen', name: 'Plaatsen', skin: 'query', lock: true }] },
+  { section: 'Planning', key: 'beschikbaarheid', label: 'Afwezigheden', glyph: 'clock', count: 12, views: [{ id: 'afw', name: 'Afwezigheden', skin: 'grid', lock: true }] },
+  { section: 'Gegevens', key: 'productie', label: 'Producties', glyph: 'tag', count: 3, views: [{ id: 'prod', name: 'Producties', skin: 'grid', lock: true }] },
+  { section: 'Gegevens', key: 'persoon', label: 'Personen', glyph: 'user', count: 15, views: [{ id: 'pers', name: 'Personen', skin: 'grid', lock: true }] },
+  { section: 'Gegevens', key: 'organisatie', label: 'Organisaties', glyph: 'pin', count: 22, views: [{ id: 'org', name: 'Organisaties', skin: 'grid', lock: true }] },
+]
+const shell = { active: '', space: 'nw', open: new Set(), onSpace: () => {} }
+
+function renderTree() {
+  let html = `<div class="section-label">Dashboards</div><a class="view dash" href="#" title="In dit prototype niet uitgewerkt">${icon('dash')}<span class="vname">Overzicht</span></a>`
+  let section = ''
+  for (const m of MODELS) {
+    if (m.section !== section) { section = m.section; html += `<div class="section-label">${section}</div>` }
+    const open = shell.open.has(m.key)
+    html += `<div class="node ${open ? 'open' : ''}" data-model="${m.key}">
+      <div class="model" role="treeitem" aria-expanded="${open}" tabindex="0"><span class="lead"><span class="glyph">${icon(m.glyph)}</span><span class="chev">${icon('chev')}</span></span><span class="name">${esc(m.label)}</span><span class="count">${m.count}</span></div>
+      <div class="views" role="group">${m.views.map((v) => {
+        const href = v.file ? FILES[v.file] + (v.q ?? '') : '#'
+        return `<a class="view ${v.id === shell.active ? 'active' : ''}" href="${href}" ${v.file ? '' : 'title="In dit prototype niet uitgewerkt"'} ${v.id === shell.active ? 'aria-current="page"' : ''}>${icon(SKIN_ICON[v.skin])}<span class="vname">${esc(v.name)}</span>${v.lock ? `<span class="lock" title="Standaardweergave, alleen te kopiëren">${icon('lock')}</span>` : ''}</a>`
+      }).join('')}</div></div>`
+  }
+  $('#tree').innerHTML = html
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('#tree a[href="#"]'); if (a) e.preventDefault()
+  const m = e.target.closest('#tree .model'); if (!m) return
+  const key = m.parentElement.dataset.model
+  shell.open.has(key) ? shell.open.delete(key) : shell.open.add(key); renderTree()
+})
+
+// ---------- popovers ----------
+let popEl = null
+function closePop() { popEl?.remove(); popEl = null; $$('[aria-expanded="true"][data-pop]').forEach((b) => b.setAttribute('aria-expanded', 'false')) }
+function openPop(anchor, html, { align = 'left', width } = {}) {
+  closePop()
+  popEl = document.createElement('div'); popEl.className = 'pop'; popEl.innerHTML = html
+  if (width) popEl.style.width = width + 'px'
+  document.body.append(popEl)
+  const r = anchor.getBoundingClientRect(), w = popEl.offsetWidth, h = popEl.offsetHeight
+  let left = align === 'right' ? r.right - w : r.left, top = r.bottom + 6
+  left = Math.max(8, Math.min(left, innerWidth - w - 8)); top = Math.min(top, innerHeight - h - 8)
+  Object.assign(popEl.style, { left: left + 'px', top: top + 'px' })
+  if (anchor.dataset.pop !== undefined) anchor.setAttribute('aria-expanded', 'true')
+  return popEl
+}
+document.addEventListener('mousedown', (e) => { if (popEl && !popEl.contains(e.target) && !e.target.closest('[data-pop]')) closePop() })
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (popEl) closePop(); else closeDrawer() } })
+
+// ---------- the production switcher ----------
+function renderSpace() {
+  const p = prod(shell.space)
+  $('#space-name').textContent = p.titel; $('#space-meta').textContent = p.meta; $('#space-mark').textContent = p.mark
+  $('#space-mark').style.setProperty('--space-color', p.color)
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#space-btn'); if (!btn) return
+  if (popEl) return closePop()
+  const pop = openPop(btn, `<input class="pop-search" placeholder="Productie zoeken"><div class="pop-head">Producties</div>
+    ${PRODUCTIES.map((p) => `<button class="pop-item ${p.id === shell.space ? 'current' : ''}" data-space="${p.id}"><span class="dot" style="background:${p.color}"></span>${esc(p.titel)}<span class="meta">${esc(p.meta.split(' · ')[1] ?? '')}</span></button>`).join('')}`, { width: btn.offsetWidth })
+  pop.querySelector('input').focus()
+  pop.querySelector('input').addEventListener('input', (ev) => pop.querySelectorAll('[data-space]').forEach((b) => (b.hidden = !b.textContent.toLowerCase().includes(ev.target.value.toLowerCase()))))
+  pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-space]'); if (b) { shell.space = b.dataset.space; closePop(); renderSpace(); shell.onSpace() } })
+})
+const inSpace = (p) => shell.space === 'all' || p === shell.space
+const scopeChip = () => shell.space === 'all' ? '' : `<span class="chip scope" title="Gekozen in de productiekiezer" style="--c:${prod(shell.space).color}"><i></i>Productie is <b>${esc(prod(shell.space).titel)}</b></span>`
+
+// ---------- filters: field · operator · value ----------
+const NO_VALUE = ['week', 'next', 'month', 'empty', 'filled']
+const OPS = { select: [['in', 'is'], ['nin', 'is niet']], date: [['week', 'is deze week'], ['next', 'is volgende week'], ['month', 'is deze maand']], text: [['has', 'bevat']], flag: [['filled', 'is aan'], ['empty', 'is uit']] }
+const filterState = { fields: {}, list: [], onChange: () => {} }
+const complete = (f) => NO_VALUE.includes(f.op) || f.values.length > 0
+function chipText(f) {
+  const field = filterState.fields[f.field], op = OPS[field.type].find(([k]) => k === f.op)[1]
+  if (field.type === 'date') return `${icon('cal')}${field.label} <span class="op">${op.replace(/^is /, '')}</span>`
+  if (field.type === 'flag') return `${field.label} <span class="op">${op}</span>`
+  const shown = f.values.map((v) => esc(field.options?.[v] ?? v))
+  return `${field.label} <span class="op">${op}</span> ${shown.length > 2 ? `${shown.slice(0, 2).join(', ')} +${shown.length - 2}` : shown.join(' of ')}`
+}
+function filterChips() {
+  const done = filterState.list.filter(complete)
+  return `${done.map((f) => `<span class="chip set" data-fi="${filterState.list.indexOf(f)}">${chipText(f)}<span class="x" data-unfilter title="Filter wissen">${icon('x')}</span></span>`).join('')}
+    <button class="chip" id="filter-btn" data-pop aria-expanded="false">${icon('filter')}Filter${done.length ? `<span class="count">${done.length}</span>` : ''}</button>`
+}
+function passes(row, get) {
+  return filterState.list.filter(complete).every((f) => {
+    const v = get(row, f.field)
+    if (f.op === 'in') return f.values.includes(v)
+    if (f.op === 'nin') return !f.values.includes(v)
+    if (f.op === 'week') return v >= mondayOf(TODAY) && v <= addDays(mondayOf(TODAY), 6)
+    if (f.op === 'next') return v >= addDays(mondayOf(TODAY), 7) && v <= addDays(mondayOf(TODAY), 13)
+    if (f.op === 'month') return v?.slice(0, 7) === TODAY.slice(0, 7)
+    if (f.op === 'filled') return Boolean(v)
+    if (f.op === 'empty') return !v
+    return String(v ?? '').toLowerCase().includes((f.values[0] ?? '').toLowerCase())
+  })
+}
+function renderFilterPop(pop) {
+  const F = filterState.fields
+  pop.innerHTML = `<div class="fb"><div class="fb-head"><span>Toon rijen waar</span><span>${filterState.list.filter(complete).length} actief</span></div>
+    ${filterState.list.map((f, i) => {
+      const field = F[f.field]
+      const value = NO_VALUE.includes(f.op) ? '<span></span>' : field.type === 'text' ? `<input type="text" data-v="${i}" value="${esc(f.values[0] ?? '')}" placeholder="tekst">`
+        : `<div class="toks">${Object.entries(field.options).map(([k, l]) => `<button class="tok ${f.values.includes(k) ? '' : 'off'}" data-tok="${i}:${k}">${esc(l)}</button>`).join('')}</div>`
+      return `<div class="fb-row"><span class="where">${i ? 'en' : 'waar'}</span>
+        <select data-f="${i}">${Object.entries(F).map(([k, x]) => `<option value="${k}" ${k === f.field ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
+        <select data-o="${i}">${OPS[field.type].map(([k, l]) => `<option value="${k}" ${k === f.op ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        ${value}<button class="fb-x" data-rm="${i}" aria-label="Voorwaarde weghalen">${icon('x')}</button></div>`
+    }).join('')}<button class="add" data-add>+ Voorwaarde toevoegen</button></div>`
+}
+document.addEventListener('click', (e) => {
+  const x = e.target.closest('[data-unfilter]')
+  if (x) { filterState.list.splice(+x.closest('[data-fi]').dataset.fi, 1); return filterState.onChange() }
+  const btn = e.target.closest('#filter-btn'); if (!btn) return
+  if (popEl) return closePop()
+  const pop = openPop(btn, '')
+  const refresh = () => { renderFilterPop(pop); filterState.onChange(); $('#filter-btn')?.setAttribute('aria-expanded', 'true') }
+  renderFilterPop(pop)
+  pop.addEventListener('change', (ev) => {
+    const t = ev.target, F = filterState.fields
+    if (t.dataset.f) { const f = filterState.list[+t.dataset.f]; f.field = t.value; f.op = OPS[F[f.field].type][0][0]; f.values = [] }
+    else if (t.dataset.o) { const f = filterState.list[+t.dataset.o]; f.op = t.value; f.values = [] }
+    refresh()
+  })
+  pop.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset.v) { filterState.list[+t.dataset.v].values = t.value ? [t.value] : []; filterState.onChange() } })
+  pop.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return
+    if (b.dataset.tok) { const [i, k] = b.dataset.tok.split(':'); const f = filterState.list[+i]; f.values = f.values.includes(k) ? f.values.filter((v) => v !== k) : [...f.values, k]; refresh() }
+    else if (b.dataset.rm) { filterState.list.splice(+b.dataset.rm, 1); refresh() }
+    else if (b.hasAttribute('data-add')) { const k = Object.keys(filterState.fields).find((k) => filterState.fields[k].type === 'select'); filterState.list.push({ field: k, op: 'in', values: [] }); refresh() }
+  })
+})
+
+// ---------- the record drawer: a side panel in the layout, never a bottom panel ----------
+function openDrawer(html) { $('#drawer').innerHTML = html; $('#app').classList.add('with-drawer') }
+function closeDrawer() { $('#app').classList.remove('with-drawer'); shell.onClose?.() }
+document.addEventListener('click', (e) => { if (e.target.closest('[data-close-drawer]')) closeDrawer() })
+function drawer({ kind, kindHtml, pos, hero = '', title, sub = '', alert = '', props = [], secs = [] }) {
+  return `<div class="dw-head"><span class="kind">${kindHtml ?? esc(kind)}</span>${pos ? `<span class="pos">${pos}</span>` : ''}
+      <button class="tool" aria-label="Vorige">${icon('up')}</button><button class="tool" aria-label="Volgende">${icon('down')}</button>
+      <button class="tool" aria-label="Volledig openen">${icon('expand')}</button><button class="tool" data-close-drawer aria-label="Sluiten">${icon('x')}</button></div>
+    <div class="dw-body">${hero}<h2 class="dw-title" contenteditable="true" spellcheck="false">${esc(title)}</h2><div class="dw-sub">${sub}</div>${alert}
+      <dl class="props">${props.map(([ic, label, html, ro]) => `<dt>${icon(ic)}${label}</dt><dd class="${ro ? 'ro' : ''}">${html}</dd>`).join('')}</dl>
+      ${secs.map((s) => `<section class="dw-sec"><h3>${s.title}${s.n !== undefined ? `<span class="n">${s.n}</span>` : ''}${s.right ? `<span class="r">${s.right}</span>` : ''}</h3>${s.html}</section>`).join('')}</div>`
+}
+const alertBox = (title, text, acts = [], tone = '') => `<div class="dw-alert ${tone}">${icon('alert')}<div><b>${title}</b>${text}${acts.length ? `<div class="acts">${acts.map((a) => `<button>${a}</button>`).join('')}</div>` : ''}</div></div>`
+const timeHtml = (a) => (a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>')
+const venueHtml = (a) => !a.venue ? '<span class="muted">—</span>' : a.inherited ? `<span class="inherited">${esc(a.venue)}</span><span class="via">via tourstop</span>` : esc(a.venue)
+
+function activityDrawer(a, list, hero = '') {
+  const p = prod(a.prod), stop = stopOf(a), [have, need] = a.crew
+  const roles = a.people.map((k) => {
+    const away = a.conflict?.startsWith(PEOPLE[k][0])
+    return `<li class="${away ? 'bad' : ''}">${avatar(k)}<span class="main-t">${esc(PEOPLE[k][0])}<span>${away ? esc(a.conflict.replace(PEOPLE[k][0] + ' ', '')) : PEOPLE[k][1]}</span></span>${away ? `<span class="alert-badge">${icon('alert')}Conflict</span>` : '<span class="pill bevestigd">bevestigd</span>'}</li>`
+  }).join('') + Array.from({ length: Math.max(0, need - have) }, () => `<li class="open-slot"><span class="avatar open">+</span><span class="main-t">Open plek<span>Speler</span></span><button class="fill">Open plek invullen</button></li>`).join('')
+  return drawer({
+    kindHtml: `<span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span><span>· Activiteit</span>`,
+    pos: list ? `${list.indexOf(a) + 1} van ${list.length}` : '',
+    hero,
+    title: a.title,
+    sub: `<span class="prod-tag" style="--c:${p.color}"><i></i>${esc(p.titel)}</span>${stop ? `<span>${icon('film')} ${esc(stop.naam)} · ${esc(stop.venue)}</span>` : ''}`,
+    alert: a.conflict ? alertBox('Conflict', esc(a.conflict) + '.', ['Iemand anders kiezen', 'Negeren']) : '',
+    props: [
+      ['check', 'Status', `<span class="pill ${a.status}">${STATUS[a.status].toLowerCase()}</span>`],
+      ['tag', 'Soort', `<span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>`],
+      ['cal', 'Plandag', `<span class="mono">${dayShort(a.date)} 2026</span>`],
+      ['clock', 'Tijd', timeHtml(a)],
+      ['pin', 'Locatie', venueHtml(a)],
+      ['film', 'Tourstop', stop ? `${esc(stop.naam)} <span class="muted mono">${span(stop.start, stop.end)}</span>` : '<span class="muted">—</span>'],
+    ],
+    secs: [
+      { title: 'Bezetting', n: `${have}/${need}`, right: '+ Toewijzen', html: `<ul class="dw-list">${roles}</ul>` },
+      { title: 'Notities', html: `<p class="note">${a.soort === 'voorstelling' ? 'Zaal open om 19:30. Inlaat via de artiesteningang aan de Vlamingstraat; parkeren op de laadkade tot 18:00.' : 'Nog geen notities. Klik om er een toe te voegen.'}</p>` },
+      { title: 'Geschiedenis', html: `<ul class="hist"><li>${avatar('nc', 'sm')}<span><b>Noor</b> zette de status op bevestigd<span class="t"> · gisteren 16:20</span></span></li><li>${avatar('lv', 'sm')}<span><b>Lotte</b> maakte deze activiteit uit sjabloon <b>Speeldag op locatie</b><span class="t"> · 2 okt</span></span></li></ul>` },
+    ],
+  })
+}
+
+// ---------- the title line ----------
+function renderTitle({ glyph, name, on, lock, sum, insight }) {
+  $('#crumbs').innerHTML = `<span class="tglyph">${icon(glyph)}</span><h1>${esc(name)}</h1>${lock ? `<span class="lockmark" title="Standaardweergave: maak een kopie om aan te passen">${icon('lock')}</span>` : ''}
+    ${on ? `<span class="on-model">op ${esc(on)}</span>` : ''}${sum ? `<span class="sum">${sum}</span>` : ''}${insight ?? ''}`
+}
+
+// ---------- toast ----------
+let toastT = 0
+function toast(text, undo) {
+  $('.toast')?.remove(); clearTimeout(toastT)
+  const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status')
+  t.innerHTML = `<span>${text}</span>${undo ? '<button>Ongedaan maken</button>' : ''}`
+  if (undo) t.querySelector('button').onclick = () => { undo(); t.remove() }
+  const st = $('#stage').getBoundingClientRect(); t.style.top = st.top + 12 + 'px'; t.style.left = st.left + st.width / 2 + 'px'
+  document.body.append(t); toastT = setTimeout(() => t.remove(), 5000)
+}
+
+// ---------- tweaks: the theme, plus what a skin adds ----------
+const root = document.documentElement
+const TWEAKS = [{ key: 'theme', label: 'Thema', options: [['auto', 'Auto'], ['light', 'Licht'], ['dark', 'Donker']], value: 'auto', apply: (v) => (v === 'auto' ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', v)) }]
+function renderTweaks(note = '') {
+  $('#tweaks').innerHTML = `<h3>Bijstellen <button class="tool" id="tw-min" aria-label="Inklappen">${icon('down')}</button></h3>
+    ${TWEAKS.map((t) => `<div class="row">${t.label}<div class="seg" data-key="${t.key}">${t.options.map(([v, l]) => `<button data-v="${v}" class="${v === t.value ? 'on' : ''}">${l}</button>`).join('')}</div></div>`).join('')}${note ? `<p class="note-t">${note}</p>` : ''}`
+}
+function setTweak(key, v, persist = true) {
+  const t = TWEAKS.find((x) => x.key === key); if (!t) return
+  t.value = v; t.apply(v); if (persist) store.set(key, v)
+  $$(`.seg[data-key="${key}"] button`).forEach((b) => b.classList.toggle('on', b.dataset.v === v))
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#tw-min')) return $('#tweaks').classList.toggle('min')
+  const b = e.target.closest('#tweaks .seg button'); if (b) setTweak(b.closest('.seg').dataset.key, b.dataset.v)
+})
+function boot(note) {
+  renderTweaks(note)
+  const theme = store.get('theme'); if (theme) setTweak('theme', theme, false)
+  renderSpace(); renderTree()
+}
+
+// ---------- the board ----------
+shell.active = 'perstatus'
+shell.open = new Set(['activiteit'])
+const GROUPS = {
+  status: { label: 'Status', options: STATUS, tone: (k) => ({ optie: 'var(--color-warning-fg)', bevestigd: 'var(--color-success-fg)', geannuleerd: 'var(--color-danger-fg)' })[k] },
+  soort: { label: 'Soort', options: SOORT, tone: (k) => `var(--s-${k})` },
+  prod: { label: 'Productie', options: Object.fromEntries(PRODUCTIES.filter((p) => p.id !== 'all').map((p) => [p.id, p.titel])), tone: (k) => prod(k).color },
+}
+const SORTS = { when: ['Plandag en tijd', (a) => a.date + (a.start ?? '99')], title: ['Omschrijving', (a) => a.title], crew: ['Bezetting', (a) => String(a.crew[1] - a.crew[0]).padStart(2, '0')] }
+const CARD_FIELDS = { prod: 'Productie', when: 'Plandag en tijd', venue: 'Locatie', people: 'Mensen', crew: 'Bezetting' }
+const board = { group: 'status', sort: 'when', dir: 1, fields: new Set(['prod', 'when', 'venue', 'people', 'crew']), showEmpty: true, sel: 12, demo: true }
+filterState.fields = {
+  date: { label: 'Plandag', type: 'date' }, status: { label: 'Status', type: 'select', options: STATUS },
+  soort: { label: 'Soort', type: 'select', options: SOORT }, title: { label: 'Omschrijving', type: 'text' },
+}
+filterState.list = [{ field: 'date', op: 'week', values: [] }]
+filterState.onChange = render
+shell.onSpace = render
+shell.onClose = () => { board.sel = null; $$('.card.sel').forEach((c) => c.classList.remove('sel')) }
+
+const getField = (a, f) => (f === 'prod' ? a.prod : a[f])
+function visible() {
+  const q = $('#q').value.trim().toLowerCase()
+  const [, key] = SORTS[board.sort]
+  return ACTS.filter((a) => inSpace(a.prod) && passes(a, getField) && (!q || a.title.toLowerCase().includes(q)))
+    .sort((x, y) => key(x).localeCompare(key(y)) * board.dir)
+}
+
+function card(a) {
+  const p = prod(a.prod), f = board.fields, [have, need] = a.crew
+  const top = [`<span class="soort"><i style="background:var(--s-${a.soort})"></i>${SOORT[a.soort]}</span>`]
+  if (f.has('prod') && board.group !== 'prod' && shell.space === 'all') top.push(`<span class="sep">·</span><span class="prod-tag" style="--c:${p.color}"><i></i>${esc(p.titel)}</span>`)
+  return `<article class="card ${board.sel === a.id ? 'sel' : ''}" data-id="${a.id}" style="--s:var(--s-${a.soort})" tabindex="0" aria-label="${esc(a.title)}, ${dayShort(a.date)}">
+    <div class="card-top">${top.join('')}${a.conflict ? `<span class="alert-badge" title="${esc(a.conflict)}">${icon('alert')}Conflict</span>` : ''}<button class="tool hover-dots" aria-label="Meer">${icon('dots')}</button></div>
+    <div class="card-title">${esc(a.title)}</div>
+    ${f.has('when') ? `<div class="card-line">${icon('cal')}<span class="date">${dayShort(a.date)}</span>${a.start ? `<span class="time">${a.start}<span class="end">–${a.end}</span></span>` : '<span class="muted">zonder tijd</span>'}</div>` : ''}
+    ${f.has('venue') && a.venue ? `<div class="card-line">${icon('pin')}<span class="ell ${a.inherited ? 'inherited' : ''}">${esc(a.venue)}</span>${a.inherited ? '<span class="via">via tourstop</span>' : ''}</div>` : ''}
+    ${f.has('people') || f.has('crew') ? `<div class="card-foot">${f.has('people') ? stack(a.people, need - have) : ''}${f.has('crew') ? `<span class="crew"><span class="meter ${have < need ? 'short' : ''}"><b style="width:${(have / need) * 100}%"></b></span>${have}/${need}</span>` : ''}</div>` : ''}
+  </article>`
+}
+
+function column(key, rows) {
+  const g = GROUPS[board.group], need = rows.reduce((n, a) => n + a.crew[1], 0), have = rows.reduce((n, a) => n + a.crew[0], 0)
+  const bad = rows.filter((a) => a.conflict).length
+  const empty = `<div class="col-empty">${icon('board')}<b>Geen ${g.options[key].toLowerCase()} activiteiten</b>Sleep een kaart hierheen om ze op ${g.options[key].toLowerCase()} te zetten.</div>`
+  return `<section class="col" data-key="${key}" style="--t:${g.tone(key)}" aria-label="${esc(g.options[key])}">
+    <header class="col-head"><div class="col-row"><span class="col-label">${esc(g.options[key])}</span><span class="col-count">${rows.length}</span>
+      <button class="tool" data-new="${key}" aria-label="Nieuwe activiteit in ${esc(g.options[key])}">${icon('plus')}</button><button class="tool" aria-label="Meer voor ${esc(g.options[key])}">${icon('dots')}</button></div>
+      <div class="col-sum">${rows.length ? `<span class="crew"><span class="meter ${have < need ? 'short' : ''}"><b style="width:${need ? (have / need) * 100 : 0}%"></b></span>bezetting ${have}/${need}</span>${bad ? `<span class="bad">${icon('alert')}${bad} conflict${bad > 1 ? 'en' : ''}</span>` : ''}` : '<span class="muted">leeg</span>'}</div></header>
+    <div class="col-body">${rows.map(card).join('') || empty}${rows.length ? `<button class="col-add" data-new="${key}">${icon('plus')}Activiteit toevoegen</button>` : ''}</div></section>`
+}
+
+function renderBar() {
+  const g = GROUPS[board.group], [sortLabel] = SORTS[board.sort]
+  $('#bar').innerHTML = `${scopeChip()}${filterChips()}<span class="divider"></span>
+    <button class="chip" id="sort-btn" data-pop aria-expanded="false">${icon('sort')}<span class="lbl">Sorteren:</span> ${sortLabel} ${board.dir > 0 ? '↑' : '↓'}</button>
+    <button class="chip set" id="group-btn" data-pop aria-expanded="false">${icon('board')}<span class="lbl">Groeperen op:</span> <b>${g.label}</b>${icon('down', 'down')}</button>
+    <span class="grow"></span><span class="rows" id="rows"></span>
+    <button class="iconbtn" id="fields-btn" data-pop aria-expanded="false" title="Kaartvelden" aria-label="Kaartvelden">${icon('sliders')}</button>`
+}
+
+function render() {
+  renderBar()
+  const rows = visible(), g = GROUPS[board.group]
+  const keys = Object.keys(g.options).filter((k) => board.group !== 'prod' || inSpace(k))
+  const cols = keys.map((k) => [k, rows.filter((a) => getField(a, board.group) === k)]).filter(([, r]) => board.showEmpty || r.length)
+  $('#stage').innerHTML = `<div class="board" id="board">${cols.map(([k, r]) => column(k, r)).join('')}</div>`
+  $('#rows').textContent = `${rows.length} activiteiten`
+  const bad = rows.filter((a) => a.conflict).length
+  renderTitle({ glyph: 'board', name: 'Per status', on: 'Activiteiten', sum: `${rows.length} activiteiten · ${cols.length} kolommen`, insight: bad ? `<span class="insight"><b>${bad}</b> ${bad > 1 ? 'conflicten' : 'conflict'}</span>` : '' })
+  const a = ACTS.find((x) => x.id === board.sel)
+  if (a && rows.includes(a)) openDrawer(activityDrawer(a, rows))
+}
+
+// ---------- toolbar popovers ----------
+document.addEventListener('click', (e) => {
+  const gb = e.target.closest('#group-btn'), sb = e.target.closest('#sort-btn'), fb = e.target.closest('#fields-btn')
+  if ((gb || sb || fb) && popEl) return closePop()
+  if (gb) {
+    const pop = openPop(gb, `<div class="group-pop"><div class="pop-head">Groeperen op</div>
+      ${Object.entries(GROUPS).map(([k, g]) => `<button class="pop-item ${k === board.group ? 'current' : ''}" data-group="${k}">${icon(k === 'prod' ? 'film' : k === 'soort' ? 'tag' : 'check')}${g.label}<span class="meta">${Object.keys(g.options).length} opties</span></button>`).join('')}
+      <p class="hint">Een bord groepeert op een kolom met vaste opties. Een kaart naar een andere kolom slepen wijzigt die waarde.</p><div class="pop-sep"></div>
+      <label class="pop-check"><input type="checkbox" id="show-empty" ${board.showEmpty ? 'checked' : ''}>Lege kolommen tonen</label></div>`, { width: 300 })
+    pop.addEventListener('click', (ev) => { const b = ev.target.closest('[data-group]'); if (b) { board.group = b.dataset.group; closePop(); render() } })
+    pop.addEventListener('change', (ev) => { board.showEmpty = ev.target.checked; render(); $('#group-btn').setAttribute('aria-expanded', 'true') })
+  }
+  if (sb) {
+    const pop = openPop(sb, `<div class="sort-pop"><div class="pop-head">Sorteren binnen een kolom</div>
+      ${Object.entries(SORTS).map(([k, [l]]) => `<button class="pop-item ${k === board.sort ? 'current' : ''}" data-sort="${k}">${l}</button>`).join('')}
+      <div class="pop-sep"></div><div class="seg"><button data-dir="1" class="${board.dir > 0 ? 'on' : ''}">Oplopend</button><button data-dir="-1" class="${board.dir < 0 ? 'on' : ''}">Aflopend</button></div></div>`, { width: 240 })
+    pop.addEventListener('click', (ev) => {
+      const s = ev.target.closest('[data-sort]'), d = ev.target.closest('[data-dir]')
+      if (s) board.sort = s.dataset.sort
+      if (d) board.dir = +d.dataset.dir
+      if (s || d) { closePop(); render() }
+    })
+  }
+  if (fb) {
+    const pop = openPop(fb, `<div class="pop-head">Op de kaart</div><label class="pop-check"><input type="checkbox" checked disabled>Omschrijving<span class="meta">titel</span></label>
+      ${Object.entries(CARD_FIELDS).map(([k, l]) => `<label class="pop-check"><input type="checkbox" data-field="${k}" ${board.fields.has(k) ? 'checked' : ''}>${l}</label>`).join('')}`, { align: 'right', width: 220 })
+    pop.addEventListener('change', (ev) => { const k = ev.target.dataset.field; board.fields.has(k) ? board.fields.delete(k) : board.fields.add(k); render(); $('#fields-btn').setAttribute('aria-expanded', 'true') })
+  }
+})
+$('#q').addEventListener('input', render)
+
+// ---------- open a card, create in a column ----------
+document.addEventListener('click', (e) => {
+  const nb = e.target.closest('[data-new]')
+  if (nb) {
+    const g = GROUPS[board.group], key = nb.dataset.new
+    board.sel = null; $$('.card.sel').forEach((c) => c.classList.remove('sel'))
+    return openDrawer(drawer({ kind: 'Nieuwe activiteit', title: 'Nieuwe activiteit', sub: `<span class="muted">In de kolom <b>${esc(g.options[key])}</b>: ${g.label.toLowerCase()} staat al ingevuld.</span>`,
+      props: [['check', 'Status', board.group === 'status' ? `<span class="pill ${key}">${STATUS[key].toLowerCase()}</span>` : '<span class="pill optie">optie</span>'],
+        ['tag', 'Soort', board.group === 'soort' ? `<span class="soort"><i style="background:var(--s-${key})"></i>${SOORT[key]}</span>` : '<span class="muted">Kies een soort</span>'],
+        ['film', 'Productie', `<span class="prod-tag" style="--c:${prod(board.group === 'prod' ? key : shell.space === 'all' ? 'nw' : shell.space).color}"><i></i>${esc(prod(board.group === 'prod' ? key : shell.space === 'all' ? 'nw' : shell.space).titel)}</span>`],
+        ['cal', 'Plandag', `<span class="mono">${dayShort(TODAY)} 2026</span>`], ['clock', 'Tijd', '<span class="muted">zonder tijd</span>'], ['pin', 'Locatie', '<span class="muted">Kies een locatie</span>']],
+      secs: [{ title: 'Bezetting', html: '<p class="note">Wijs mensen toe zodra de activiteit bewaard is.</p>' }] }))
+  }
+})
+
+// ---------- drag a card to another column: its group value changes ----------
+let drag = null
+function beginDrag(el, x, y) {
+  const r = el.getBoundingClientRect()
+  const ghost = el.cloneNode(true); ghost.classList.add('floating'); ghost.classList.remove('sel')
+  Object.assign(ghost.style, { width: r.width + 'px', left: r.left + 'px', top: r.top + 'px' })
+  document.body.append(ghost); el.classList.add('ghost'); document.body.classList.add('dragging')
+  drag = { el, ghost, dx: x - r.left, dy: y - r.top, h: r.height, from: el.closest('.col').dataset.key, to: null, slot: null }
+}
+function moveDrag(x, y) {
+  drag.ghost.style.left = x - drag.dx + 'px'; drag.ghost.style.top = y - drag.dy + 'px'
+  const col = document.elementFromPoint(x, y)?.closest('.col')
+  $$('.col.drop').forEach((c) => c !== col && c.classList.remove('drop'))
+  drag.slot?.remove(); drag.slot = null; drag.to = null
+  if (!col || col.dataset.key === drag.from) return
+  col.classList.add('drop'); drag.to = col.dataset.key
+  const body = $('.col-body', col), cards = $$('.card', body)
+  const before = cards.find((c) => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2 })
+  const g = GROUPS[board.group]
+  drag.slot = document.createElement('div'); drag.slot.className = 'slot'; drag.slot.style.height = drag.h + 'px'
+  drag.slot.textContent = `Loslaten: wordt ${g.options[drag.to].toLowerCase()}`
+  $('.col-empty', body)?.setAttribute('hidden', '')
+  body.insertBefore(drag.slot, before ?? $('.col-add', body) ?? null)
+}
+function endDrag(drop) {
+  if (!drag) return
+  const { el, ghost, to, slot } = drag
+  ghost.remove(); slot?.remove(); el.classList.remove('ghost'); document.body.classList.remove('dragging'); $$('.col.drop').forEach((c) => c.classList.remove('drop'))
+  drag = null
+  if (!drop || !to) return render()
+  const a = ACTS.find((x) => x.id === +el.dataset.id), field = board.group, was = getField(a, field), g = GROUPS[field]
+  a[field] = to; render()
+  toast(`${g.label} van <b>${esc(a.title)}</b> → ${esc(g.options[to])}`, () => { a[field] = was; render() })
+}
+let press = null
+$('#stage').addEventListener('pointerdown', (e) => {
+  if (board.demo) { board.demo = false; endDrag(false) }
+  const c = e.target.closest('.card'); if (!c || e.button !== 0 || e.target.closest('button')) return
+  press = { c, x: e.clientX, y: e.clientY }
+})
+document.addEventListener('pointermove', (e) => {
+  if (!press) return
+  if (!drag && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) beginDrag(press.c, press.x, press.y)
+  if (drag) moveDrag(e.clientX, e.clientY)
+})
+document.addEventListener('pointerup', () => {
+  if (!press) return
+  const { c } = press; press = null
+  if (drag) return endDrag(true)
+  board.sel = +c.dataset.id; $$('.card.sel').forEach((x) => x.classList.remove('sel')); c.classList.add('sel')
+  openDrawer(activityDrawer(ACTS.find((a) => a.id === board.sel), visible()))
+})
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && drag) { board.demo = false; endDrag(false) }
+  const c = e.target.closest?.('.card'); if (c && e.key === 'Enter') { board.sel = +c.dataset.id; render() }
+})
+
+// The mockup opens mid-drag: Persmoment Brugge lifted from Optie, over Bevestigd, its slot under the second card.
+function stageDemo() {
+  if (innerWidth < 760) return
+  const src = $('.card[data-id="7"]'), target = $$('.col[data-key="bevestigd"] .card')[1]
+  if (!src || !target) return
+  const r = src.getBoundingClientRect(), t = target.getBoundingClientRect()
+  beginDrag(src, r.left + 40, r.top + 20)
+  moveDrag(t.left + 70, t.top + 8)
+  drag.ghost.style.left = t.left + 26 + 'px'
+}
+
+TWEAKS.push({ key: 'demo', label: 'Sleepvoorbeeld', options: [['on', 'Aan'], ['off', 'Uit']], value: 'on', apply: (v) => { endDrag(false); board.demo = v === 'on'; if (board.demo) requestAnimationFrame(stageDemo) } })
+$('#foot').innerHTML = '<span>Sleep een kaart naar een andere kolom om de waarde te wijzigen</span><span>↵ openen</span><span>Esc sluiten</span><span>⌘Z ongedaan maken</span>'
+boot('Het bord opent met één kaart halverwege het slepen. Klik ergens om het te stoppen.')
+render()
+requestAnimationFrame(() => requestAnimationFrame(stageDemo))
+
+</script>
+</body>
+</html>
