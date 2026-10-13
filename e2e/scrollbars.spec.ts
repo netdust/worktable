@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { openLooks } from './editor'
 import { shot } from './shots'
 import { openWeek } from './tree'
 
@@ -33,6 +34,7 @@ test('minimal-scrollbars @e2e', async ({ page }) => {
   const hovered = await page.screenshot({ clip: thumb, animations: 'disabled' })
   expect(hovered.equals(quiet), 'the thumb changes under the pointer').toBe(false)
 
+  await openLooks(page)
   const theme = page.getByRole('radiogroup', { name: 'Thema' })
   try {
     await theme.getByRole('radio', { name: 'Donker' }).click()

@@ -52,6 +52,7 @@ export function GridBar({ model, columns, layout, onLayout, count, cut = false, 
   return (
     <div className="nv-bar">
       {scope && <span className="nv-chip nv-chip--set nv-chip--scope"><Tag size={ICON} aria-hidden="true" />{scope}</span>}
+      {filters}
       <Panel placement="bottom start" label={t('groupBy')} trigger={
         <Button className={layout.group ? 'nv-chip nv-chip--set' : 'nv-chip'}>
           <Rows2 size={ICON} aria-hidden="true" />
@@ -67,7 +68,6 @@ export function GridBar({ model, columns, layout, onLayout, count, cut = false, 
           ))}
         </div>
       </Panel>
-      {filters}
       <span className="nv-bar__end">
         <span className="nv-bar__count">{rowCount(count, cut)}</span>
         <Panel placement="bottom end" label={t('columns')} trigger={

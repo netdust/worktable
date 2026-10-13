@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, type Request, test } from '@playwright/test'
 import { state } from './auth'
-import { openEditor } from './editor'
+import { openEditor, openLooks } from './editor'
 import { fillDate } from './segments'
 import { shot } from './shots'
 import { modelNode, openView, openWeek } from './tree'
@@ -124,6 +124,7 @@ const luminance = (target: Locator): Promise<number> =>
   })
 
 async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
+  await openLooks(page)
   await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: theme }).click()
   await expect(page.locator('#root')).toHaveAttribute('data-theme', theme === 'Donker' ? 'dark' : 'light')
 }

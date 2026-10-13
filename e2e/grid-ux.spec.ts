@@ -437,8 +437,9 @@ test('dark-and-density @e2e', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bevestigd')
   await expect(gridRows(page).first()).toBeVisible()
   const root = page.locator('#root')
+  await openLooks(page)
   const theme = page.getByRole('radiogroup', { name: 'Thema' })
-  const density = page.getByRole('radiogroup', { name: 'Dichtheid' })
+  const density = page.getByRole('radiogroup', { name: 'Rijhoogte' })
 
   const light = await root.evaluate((el) => getComputedStyle(el).backgroundColor)
   await theme.getByRole('radio', { name: 'Donker' }).click()

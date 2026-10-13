@@ -1,5 +1,6 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -118,6 +119,7 @@ test.describe('step 3c', () => {
     await shot(page, 'dashboard')
 
     const root = page.locator('#root')
+    await openLooks(page)
     await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: 'Donker' }).click()
     await expect(root).toHaveAttribute('data-theme', 'dark')
     await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(22, 23, 26)')

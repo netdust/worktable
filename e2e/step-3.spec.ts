@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { writeDb } from './db'
-import { openEditor } from './editor'
+import { openEditor, openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -349,6 +349,7 @@ test.describe('step 3', () => {
     expect((table?.y ?? 0) + (table?.height ?? 0)).toBeGreaterThan((body?.y ?? 0) + (body?.height ?? 0) - 4)
     const chip = month.getByRole('button', { name: /Nachtwacht/ }).first()
     expect(await chip.evaluate((el) => getComputedStyle(el).borderRadius)).toBe('0px')
+    await openLooks(page)
     await page.getByRole('radio', { name: 'Donker' }).click()
     await shot(page, 'company-month-dark')
     await chip.click()

@@ -1,7 +1,7 @@
 /* The grid's whole look: the rail, toolbar and sheet of the mockup, and the React Aria parts. Every class carries nv-. */
 #root {
   --row-h: 40px;
-  font: 13px/1.45 var(--font-sans);
+  font: 13.5px/1.4 var(--font-sans);
   color: var(--color-fg-default);
   background: var(--color-bg-surface);
   -webkit-font-smoothing: antialiased;
@@ -21,11 +21,10 @@
 
 .nv-app {
   display: grid;
-  grid-template-columns: 268px 1fr;
+  grid-template-columns: 268px minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
-  border-left: 1px solid var(--color-border-subtle);
 }
 
 .nv-rail {
@@ -35,7 +34,27 @@
   min-height: 0;
   padding: 0;
   background: var(--color-bg-sidebar);
-  border-right: 1px solid var(--color-border-subtle);
+  border-right: 1px solid var(--color-border-default);
+}
+
+/* The brand line over the switcher: the product's name, small. */
+.nv-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px 4px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nv-brand b {
+  color: var(--color-fg-default);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* The tree: sections of models, each folding open on its views. It scrolls between the switcher and the foot; its menus open in a layer above it. */
@@ -44,6 +63,30 @@
   min-height: 0;
   overflow-y: auto;
   padding: 2px 8px 16px;
+}
+
+/* The dashboards sit under their own label, as a section does. */
+#root .nv-tree__dashboards .nv-view {
+  display: flex;
+}
+
+#root .nv-tree__dashboards .nv-view__button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  cursor: pointer;
+}
+
+#root .nv-tree__dashboards .nv-view__button:hover {
+  background: var(--color-bg-hover);
 }
 
 /* The sources no section lists, set apart from the last labelled one. */
@@ -454,92 +497,112 @@
 }
 
 
-/* The rail's foot, compact so the tree keeps its height: the keys behind one item, theme and density on one row, the account. */
+/* The rail's foot: Bijstellen as one card, folded by default, then who is signed in. */
 .nv-rail__foot {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   margin-top: auto;
-  padding: 10px 14px;
-  border-top: 1px solid var(--color-border-default);
-  color: var(--color-fg-subtle);
+  color: var(--color-fg-muted);
   font-size: 12px;
 }
 
-.nv-rail__looks {
+.nv-looks {
+  display: grid;
+  gap: 10px;
+  max-height: 60vh;
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  font-size: 12.5px;
+}
+
+.nv-looks--folded {
+  padding: 6px 8px 6px 12px;
+}
+
+#root .nv-looks__head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 4px;
-}
-
-#root .nv-rail__looks .nv-theme {
-  gap: 0;
-  padding: 2px;
-}
-
-#root .nv-rail__looks .nv-theme__option {
-  padding: 2px 3px;
-  font-size: 10.5px;
-}
-
-.nv-keys > summary {
-  width: max-content;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  color: var(--color-fg-muted);
+  width: 100%;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
-.nv-keys > summary:hover {
-  background: var(--color-bg-hover);
+.nv-looks__head > svg {
+  transform: rotate(180deg);
+  transition: transform 120ms ease;
+}
+
+.nv-looks--folded .nv-looks__head > svg {
+  transform: none;
+}
+
+.nv-looks__body {
+  display: grid;
+  gap: 10px;
+}
+
+.nv-looks__row {
+  display: grid;
+  gap: 4px;
   color: var(--color-fg-default);
 }
 
-.nv-keys__list {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 8px;
-  margin: 6px 4px 2px;
+#root .nv-looks .nv-theme {
+  display: flex;
 }
 
-.nv-keys__list dd {
-  margin: 0;
+#root .nv-looks .nv-theme__option {
+  flex: 1;
+  padding: 3px 4px;
 }
 
-/* A few choices side by side: the chosen one lifts off the track. */
+/* A few choices side by side, as the prototype's .seg: a bordered track, the chosen one on muted. */
 .nv-theme {
   display: inline-flex;
   gap: 2px;
-  padding: 4px;
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  padding: 2px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
   font-family: var(--font-sans);
 }
 
 #root .nv-theme__option {
   flex: none;
   min-width: 0;
-  padding: 3px 4px;
+  padding: 3px 10px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--color-fg-muted);
   font: inherit;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 20px;
+  font-size: 12.5px;
   white-space: nowrap;
   cursor: pointer;
 }
 
-#root .nv-theme__option[data-hovered],
-#root .nv-theme__option[data-selected] {
+#root .nv-theme__option[data-hovered] {
   color: var(--color-fg-default);
 }
 
 #root .nv-theme__option[data-selected] {
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 3px 0 rgba(16, 15, 12, 0.1), 0 1px 2px 0 rgba(16, 15, 12, 0.06);
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+  font-weight: 600;
 }
 
 #root .nv-theme__option[data-focus-visible] {
@@ -550,16 +613,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
+  padding: 0 4px;
   border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
-  box-shadow: 0 1px 0 var(--color-border-strong);
-  color: var(--color-fg-muted);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  color: var(--color-fg-subtle);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
   white-space: nowrap;
   user-select: none;
 }
@@ -857,7 +918,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
@@ -924,17 +985,17 @@
 #root .nv-search__field {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 8px;
-  border: 1px solid var(--color-border-subtle);
+  gap: 6px;
+  min-width: 180px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
-  color: var(--color-fg-muted);
+  color: var(--color-fg-subtle);
 }
 
 #root .nv-search__field:focus-within {
-  border-color: var(--color-border-strong);
-  border-width: 1.5px;
+  border-color: var(--color-accent-default);
 }
 
 #root .nv-search__field > svg {
@@ -951,8 +1012,6 @@
   background: none;
   color: var(--color-fg-default);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
   line-height: 20px;
 }
 
@@ -967,6 +1026,23 @@
 
 .nv-toolbar__end > :not(.nv-search):not(.nv-save) {
   flex: none;
+}
+
+/* The title row's icon buttons, as the prototype's: 32px, bordered. */
+#root .nv-toolbar__end .nv-more {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-muted);
+}
+
+#root .nv-toolbar__end .nv-more:hover,
+#root .nv-toolbar__end .nv-more[aria-expanded="true"] {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-surface);
+  color: var(--color-fg-default);
 }
 
 /* Why the button is off needs room the bar lacks below 1360px; the button's tooltip says it there. */
@@ -985,7 +1061,7 @@
 /* The rail's space: the record being worked in, or every record, and its searchable list. */
 .nv-space {
   position: relative;
-  margin: 12px 10px 10px;
+  margin: 6px 10px 10px;
 }
 
 #root .nv-space__button {
@@ -1856,12 +1932,12 @@
   left: 6px;
   top: 32px;
   z-index: 5;
-  min-width: 190px;
-  padding: 6px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
   background: var(--color-bg-surface);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-pop);
   white-space: normal;
 }
 
@@ -2428,54 +2504,114 @@
   background: var(--color-bg-muted);
 }
 
+/* The keys the sheet answers to, in one quiet line under every skin. */
+.nv-foot {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  padding: 6px 18px;
+  overflow: hidden;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* The drawer: the app's third column, full height beside the work, never over it. */
+.nv-drawer-slot {
+  display: flex;
+  min-height: 0;
+}
+
 .nv-drawer {
-  flex: 0 0 360px;
+  flex: 0 0 392px;
+  width: 392px;
   min-height: 0;
   overflow: auto;
-  border-left: 1px solid var(--color-border-subtle);
+  border-left: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
+}
+
+@media (max-width: 760px) {
+  .nv-drawer-slot {
+    left: 0;
+  }
+
+  .nv-drawer-slot .nv-drawer {
+    flex: 1;
+    width: auto;
+  }
 }
 
 .nv-drawer__head {
   position: sticky;
   top: 0;
+  z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 10px 12px 10px 16px;
+  padding: 14px 12px 12px 16px;
   border-bottom: 1px solid var(--color-border-subtle);
   background: var(--color-bg-surface);
 }
 
 #root .nv-drawer__title {
   flex: 1;
+  min-width: 0;
   margin: 0;
   padding: 0;
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-fg-default);
+  overflow-wrap: anywhere;
+}
+
+#root .nv-drawer__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-drawer__close[data-hovered] {
+  background: var(--color-bg-muted);
   color: var(--color-fg-default);
 }
 
 .nv-drawer__fields {
   margin: 0;
-  padding: 8px 16px 16px;
+  padding: 12px 16px 18px;
 }
 
 .nv-drawer__field {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 12px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
+  grid-template-columns: 112px 1fr;
+  align-items: center;
 }
 
 .nv-drawer__field dt {
+  padding: 0;
   color: var(--color-fg-subtle);
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 .nv-drawer__field dd {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
   margin: 0;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2656,15 +2792,23 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border-subtle);
+  margin: 4px 16px 16px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
+/* A drawer section's heading, as the prototype's: small capitals in the subtle ink. */
 #root .nv-files__title {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--color-fg-subtle);
+}
+
+.nv-drawer__editor {
+  padding: 0 16px 16px;
 }
 
 #root .nv-files__none {
@@ -3460,25 +3604,47 @@
 
 .nv-rail__account {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--color-border-subtle);
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-default);
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+
+.nv-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .nv-rail__email {
-  overflow-wrap: anywhere;
-  color: var(--color-fg-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #root .nv-rail__signout {
+  margin-left: auto;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-accent-default);
+  color: var(--color-fg-subtle);
   font: inherit;
   cursor: pointer;
+}
+
+#root .nv-rail__signout:hover {
+  color: var(--color-accent-default);
 }
 
 .nv-viewpanel__refusal {
@@ -3517,6 +3683,20 @@
   }
 
   .nv-rail__foot {
+    display: none;
+  }
+
+  /* No third column: the drawer lies over the work at the right, full height, never as a row under it. */
+  .nv-drawer-slot {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-pop);
+  }
+
+  .nv-drawer-slot:empty {
     display: none;
   }
 }

@@ -1301,7 +1301,7 @@ async function addCondition(field: string, value: string) {
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
     expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
     expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Groep: datum', 'Filter', 'Kolommen'])
+    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Filter', 'Groep: datum', 'Kolommen'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()

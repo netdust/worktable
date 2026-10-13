@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(), onNotices: vi.fn(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -298,11 +298,13 @@ describe('App shell', () => {
 describe('the density setting', () => {
   afterEach(() => document.getElementById('root')?.remove())
 
-  it('sets data-density on the root from the rail foot, and keeps it when the app renders again', async () => {
+  it('sets data-density on the root from Bijstellen in the rail foot, and keeps it when the app renders again', async () => {
     const root = Object.assign(document.createElement('div'), { id: 'root' })
     document.body.append(root)
     await shell()
-    const density = () => within(within(rail()).getByRole('contentinfo')).getByRole('radiogroup', { name: 'Dichtheid' })
+    const foot = () => within(rail()).getByRole('contentinfo')
+    const density = () => within(foot()).getByRole('radiogroup', { name: 'Rijhoogte' })
+    if (within(foot()).getByRole('button', { name: 'Bijstellen' }).getAttribute('aria-expanded') === 'false') fireEvent.click(within(foot()).getByRole('button', { name: 'Bijstellen' }))
 
     expect(root.dataset.density).toBe('normal')
     fireEvent.click(within(density()).getByRole('radio', { name: 'Compact' }))
@@ -314,6 +316,18 @@ describe('the density setting', () => {
 
     expect(root.dataset.density).toBe('compact')
     expect(within(density()).getByRole('radio', { name: 'Compact' }).getAttribute('aria-checked')).toBe('true')
+  })
+})
+
+describe('the drawer', () => {
+  it('lands in the app\'s third column, beside the main column, full height', async () => {
+    api.history.mockResolvedValue([])
+    await shell()
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'Geschiedenis' }))
+    const panel = await screen.findByRole('complementary')
+    const slot = panel.parentElement!
+    expect(slot.classList.contains('nv-drawer-slot')).toBe(true)
+    expect(slot.previousElementSibling?.matches('main.nv-main')).toBe(true)
   })
 })
 
@@ -554,6 +568,29 @@ describe('a matrix view', () => {
     expect(api.rows).toHaveBeenCalledWith(matrixSchema.views[0], window, null, expect.any(Object))
     expect(api.awayRows).toHaveBeenCalledWith(bezetting.away, window)
     expect(api.records).toHaveBeenCalledWith('person', '')
+  })
+
+  it('hands the keyboard to the panel in the drawer slot on Enter', async () => {
+    render(<App />)
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    const cell = document.querySelector<HTMLElement>('[data-cell="0-0"]')!
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Enter' })
+    const panel = await screen.findByRole('complementary', { name: 'Sien' })
+    expect(panel.parentElement?.classList.contains('nv-drawer-slot')).toBe(true)
+    await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
+  })
+
+  it('hands the keyboard to the cell panel, not to History, when both sit in the slot', async () => {
+    api.history.mockResolvedValue([])
+    render(<App />)
+    await screen.findByRole('columnheader', { name: 'Sien' })
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nv-toolbar')!).getByRole('button', { name: 'Geschiedenis' }))
+    const cell = document.querySelector<HTMLElement>('[data-cell="0-0"]')!
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Enter' })
+    const panel = await screen.findByRole('complementary', { name: 'Sien' })
+    await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
   })
 
   it('has no add button and a disabled export with its word', async () => {

@@ -84,12 +84,12 @@ export function Toolbar({ title, kind = 'grid', locked, shown, search, saving, a
         {search}
         {saving && <SaveState state={saving} />}
         {exportNote && <span className="nv-toolbar__note" role="alert">{exportNote}</span>}
-        {share}
         {onHistory && (
           <button type="button" className="nv-more" aria-label={t('history')} title={t('history')} onClick={onHistory}>
             <History size={16} aria-hidden="true" />
           </button>
         )}
+        {share}
         {more.length > 0 && <MoreMenu actions={more} />}
         {onAdd && addBlocked && !(locked && addBlocked === t('readOnly')) && <span className="nv-toolbar__note nv-toolbar__note--hint">{addBlocked}</span>}
         {onAdd && (

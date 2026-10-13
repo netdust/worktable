@@ -1,4 +1,4 @@
-import { ChevronsUpDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { type FocusEvent, useContext, useId, useRef, useState } from 'react'
 import { UNSAFE_PortalProvider } from 'react-aria'
 import { Autocomplete, Button, Input, ListBox, ListBoxItem, Popover, Select, SelectStateContext, TextField } from 'react-aria-components'
@@ -43,7 +43,7 @@ export function SpaceSelect({ label, records, selected, onSelect }: Props) {
               <strong id={`${id}-name`}>{selected?.title ?? all}</strong>
               <small>{selected ? label : t('spaceCount', { count: records.length, label: label.toLocaleLowerCase() })}</small>
             </span>
-            <ChevronsUpDown size={14} aria-hidden="true" />
+            <ChevronDown size={16} aria-hidden="true" />
           </Button>
           <Popover isNonModal className="nv-pop nv-space__pop" placement="bottom start" offset={4} containerPadding={0}>
             <Outside>

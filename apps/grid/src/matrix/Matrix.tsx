@@ -291,7 +291,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   useEffect(() => {
     if (toPanel.current) {
       toPanel.current = false
-      const drawer = bodyRef.current?.querySelector('.nv-drawer')
+      const drawer = bodyRef.current?.querySelector('.nv-drawer') ?? document.querySelector('.nv-drawer-slot .nv-panel')?.closest('.nv-drawer')
       return void (drawer?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]') ?? drawer?.querySelector<HTMLElement>('.nv-drawer__head button'))?.focus()
     }
     if (!moved.current || !here) return

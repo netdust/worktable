@@ -39,6 +39,7 @@ import { useFilterNames } from './useFilterNames'
 import { offersForOwners, Share } from './Share'
 import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
+import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
 import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
@@ -199,6 +200,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [reloads, setReloads] = useState(0)
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
+  const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
   useFillViewport(frame)
 
   useEffect(() => {
@@ -480,6 +482,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   }
 
   return (
+    <DrawerSlot.Provider value={drawerSlot}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
@@ -542,16 +545,23 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             onUndo={undoBatch} onUndone={reloadView} onRefused={(error) => notify({ message: undoText(error) })} onClose={() => setHistoryOpen(false)} />
         )}
         </div>
+        <footer className="nv-foot" aria-label={t('hints')}>
+          <span>↑↓←→ {t('hintMove')}</span>
+          <span>↵ {t('hintEdit')}</span>
+          <span>⌘Z {t('hintUndo')}</span>
+        </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>
           {(saves || notice) && <Toast key={view?.key} state={saves?.state} onUndo={() => void saves?.undo()} onRedo={() => void saves?.redo()} notice={notice} />}
         </div>
       </main>
+      <div className="nv-drawer-slot" ref={setDrawerSlot} />
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
           scope={adding.table.space === 'scoped' && space.status === 'ready' ? space.selected?.title ?? null : null}
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </DrawerSlot.Provider>
   )
 }
 
