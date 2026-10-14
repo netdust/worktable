@@ -2129,6 +2129,58 @@ describe('the add button on a calendar', () => {
   })
 })
 
+describe('the footer and the period keys', () => {
+  const cal = { day: 'plandag', start: null, end: null, lanes: [] }
+  const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+  const schema = {
+    models: { activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { plandag } } },
+    tables: [{ key: 'activiteit', label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid', 'calendar'] }],
+    views: [
+      { key: 'kalender', label: 'Kalender', table: 'activiteit', model: 'activiteit', type: 'calendar', calendar: cal, date_field: 'plandag' },
+      { key: 'lijst', label: 'Lijst', table: 'activiteit', model: 'activiteit', date_field: 'plandag' },
+    ],
+    writable: { activiteit: true },
+  } as unknown as Schema
+  const pill = () => document.querySelector('.nv-toolbar__summary')?.textContent
+  const foot = () => [...document.querySelectorAll('.nv-foot > span')].map((span) => span.textContent)
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+  })
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('writes a calendar\'s hints, and steps its period with the arrows and comes back with T', async () => {
+    window.location.hash = 'view=kalender'
+    render(<App />)
+    await screen.findByRole('heading', { level: 1, name: 'Kalender' })
+    await waitFor(() => expect(pill()).toMatch(/^Week \d+/))
+    expect(foot()).toEqual(['Klik om te openen', '←→ vorige of volgende periode', 'T vandaag'])
+    const now = pill()
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' })
+    await waitFor(() => expect(pill()).not.toBe(now))
+    fireEvent.keyDown(document.body, { key: 't' })
+    await waitFor(() => expect(pill()).toBe(now))
+    // In a field the arrows stay the field's.
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Zoeken' }), { key: 'ArrowRight' })
+    expect(pill()).toBe(now)
+  })
+
+  it('leaves a grid\'s arrows to its cursor and writes the grid\'s hints', async () => {
+    window.location.hash = 'view=lijst'
+    render(<App />)
+    await screen.findByRole('heading', { level: 1, name: 'Lijst' })
+    expect(foot()).toEqual(['↑↓←→ bewegen', '↵ bewerken', '⌘Z ongedaan maken'])
+    const before = api.rows.mock.calls.length
+    fireEvent.keyDown(document.body, { key: 't' })
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' })
+    expect(api.rows.mock.calls.length).toBe(before)
+    expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false'])
+  })
+})
+
 describe('the title line\'s summary', () => {
   it('drops the calendar\'s window from the title line when a dashboard opens', async () => {
     const overzicht = {

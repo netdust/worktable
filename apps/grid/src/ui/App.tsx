@@ -42,7 +42,8 @@ import { useSavedViews } from './useSavedViews'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { periodOf, withPeriod } from './period'
+import { periodOf, stepPeriod, todayPeriod, withPeriod } from './period'
+import { hintsOf, stepsPeriod } from './hints'
 import { formatWindow, isMonth, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
@@ -302,6 +303,23 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const setPeriod = (next: Filter | null) => {
     if (period && layout) setLayout(withPeriod(layout, period.field, next))
   }
+  // A calendar's and a timeline's ←→ step the period and T comes back to today, as the prototype; a grid's and a matrix's arrows move the cursor.
+  const stepping = useRef({ period, setPeriod })
+  stepping.current = { period, setPeriod }
+  const keyed = view?.type === 'calendar' || view?.type === 'timeline'
+  useEffect(() => {
+    if (!keyed) return
+    const onKey = (event: KeyboardEvent) => {
+      const { period: p, setPeriod: set } = stepping.current
+      if (!p || event.metaKey || event.ctrlKey || event.altKey || !stepsPeriod(event.target)) return
+      const next = event.key === 'ArrowLeft' ? stepPeriod(p, -1) : event.key === 'ArrowRight' ? stepPeriod(p, 1) : event.key.toLowerCase() === 't' ? todayPeriod(p) : undefined
+      if (next === undefined) return
+      event.preventDefault()
+      set(next)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [keyed])
   const windowKey = JSON.stringify(window)
   useEffect(() => setPicking(false), [view?.key])
   const [size, setSize] = useGallerySize(view)
@@ -570,9 +588,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         )}
         </div>
         <footer className="nv-foot" aria-label={t('hints')}>
-          <span>↑↓←→ {t('hintMove')}</span>
-          <span>↵ {t('hintEdit')}</span>
-          <span>⌘Z {t('hintUndo')}</span>
+          {hintsOf(dashboard ? 'dashboard' : (view?.type ?? 'grid')).map((hint) => <span key={hint}>{hint}</span>)}
           {matrix && view && <Legend view={view} models={models} />}
         </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>
