@@ -3169,6 +3169,43 @@
   flex-wrap: wrap;
 }
 
+/* Open, the line keeps its label beside the badge, the list falls under it. */
+.nv-drawer__field:has(.nv-dw-status[aria-expanded="true"]) {
+  align-items: start;
+}
+
+.nv-drawer__field:has(.nv-dw-status[aria-expanded="true"]) dt {
+  min-height: 32px;
+}
+
+/* The choices as the record drawer's option menu: one quiet list, the chosen one marked. */
+.nv-choices--list {
+  display: grid;
+  gap: 1px;
+  padding: 4px 0 0;
+}
+
+#root .nv-choices--list .nv-choices__option {
+  justify-content: flex-start;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-default);
+  font-size: 13px;
+  text-align: left;
+}
+
+#root .nv-choices--list .nv-choices__option:hover,
+#root .nv-choices--list .nv-choices__option:focus-visible {
+  background: var(--color-bg-hover);
+}
+
+#root .nv-choices--list .nv-choices__option[aria-checked="true"] {
+  color: var(--color-accent-default);
+  font-weight: 500;
+}
+
 .nv-dw-status + .nv-panel__field,
 .nv-dw-status + .nv-choices {
   flex-basis: 100%;

@@ -402,6 +402,18 @@ test.describe('step 3e: the matrix as its prototype', () => {
       await expect(field('Rol')).toHaveText('Speler')
       await expect(field('Activiteit')).toHaveText(title)
       await expect(drawer.locator('.nv-dw-status')).toHaveText('✓ Bevestigd')
+      // Open, the badge stays on the Status line and its choices fall under it as one quiet list.
+      await drawer.locator('.nv-dw-status').click()
+      const middle = (box: { y: number; height: number } | null) => (box ? box.y + box.height / 2 : 0)
+      const label = middle(await drawer.locator('.nv-drawer__field dt', { hasText: /^Status$/ }).boundingBox())
+      expect(Math.abs(middle(await drawer.locator('.nv-dw-status').boundingBox()) - label)).toBeLessThan(4)
+      await expect(drawer.getByRole('radiogroup', { name: 'Status' })).toBeVisible()
+      await expect(
+        drawer
+          .locator('.nv-drawer__field', { has: page.locator('dt', { hasText: /^Status$/ }) })
+          .getByText('Status', { exact: true }),
+      ).toHaveCount(1)
+      await drawer.locator('.nv-dw-status').click()
       const instead = drawer.getByRole('region', { name: 'Wie kan in de plaats' })
       await expect(instead.getByRole('listitem').first()).toBeVisible()
       await shot(page, 'matrix-cell-drawer')

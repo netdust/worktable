@@ -109,7 +109,7 @@ function StatusLine({ view, models, cell, store, row, column, asking = 0 }: { vi
         onClick={() => setOpen(!open)}>
         {cell ? <>{markFor(view, current)} {options[current] ?? current}</> : t('notAssigned')}
       </button>
-      {open && <Choices label={t('statusLabel')} options={choices} value={current} disabled={!store}
+      {open && <Choices list label={t('statusLabel')} options={choices} value={current} disabled={!store}
         onPick={(value) => {
           setOpen(false)
           void store?.set(row.id, column, value === '' ? null : value)
@@ -236,8 +236,10 @@ function Instead({ ref, view, models, row, column, cell, store, date }: { ref: R
 const STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
 
 /** The status as an inline radio group: arrows move, Space or Enter picks; nothing floats. */
-function Choices({ label, options, value, disabled, onPick }: {
+function Choices({ label, options, value, disabled, onPick, list = false }: {
   label: string; options: { value: string; label: string }[]; value: string; disabled: boolean; onPick: (value: string) => void
+  /** Under a badge: one quiet list named by its line, no label of its own. */
+  list?: boolean
 }) {
   const id = useId()
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
@@ -254,18 +256,23 @@ function Choices({ label, options, value, disabled, onPick }: {
     }
   }
 
+  const group = (
+    <div role="radiogroup" aria-labelledby={list ? undefined : id} aria-label={list ? label : undefined} aria-disabled={disabled || undefined}
+      className={list ? 'nv-choices nv-choices--list' : 'nv-choices'} onKeyDown={onKeyDown}>
+      {options.map((option, i) => (
+        <button key={option.value} ref={(el) => { buttons.current[i] = el }} type="button" role="radio" className="nv-choices__option"
+          aria-checked={option.value === value} tabIndex={i === checked ? 0 : -1} disabled={disabled}
+          onClick={() => onPick(option.value)}>
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+  if (list) return group
   return (
     <div className="nv-panel__field">
       <span id={id} className="nv-panel__label">{label}</span>
-      <div role="radiogroup" aria-labelledby={id} aria-disabled={disabled || undefined} className="nv-choices" onKeyDown={onKeyDown}>
-        {options.map((option, i) => (
-          <button key={option.value} ref={(el) => { buttons.current[i] = el }} type="button" role="radio" className="nv-choices__option"
-            aria-checked={option.value === value} tabIndex={i === checked ? 0 : -1} disabled={disabled}
-            onClick={() => onPick(option.value)}>
-            {option.label}
-          </button>
-        ))}
-      </div>
+      {group}
     </div>
   )
 }

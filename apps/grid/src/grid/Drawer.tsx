@@ -4,6 +4,7 @@ import { type ChangeEvent, type CSSProperties, type ReactNode, useContext, useEf
 import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
 import type { Account, ActionInput, ApiError, Link, Model, ModelAction, OptionsFrom, Row, View } from '../types'
+import { iconNamed } from '../ui/icons'
 import { toneColor } from '../ui/tone'
 import { whenOf } from '../ui/when'
 import { SchemaContext } from './drawer/context'
@@ -64,7 +65,7 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
 const noToggle = () => undefined
 
 /** The head line: what kind of record this is · its dataset; where it is in the view; the steps to its neighbours. */
-function Head({ row, model, nav }: { row: Row; model?: Model; nav?: Props['nav'] }) {
+function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; icon?: LucideIcon }) {
   const kind = model ? kindOf(model) : null
   const value = kind ? String(row.fields[kind] ?? '') : ''
   const option = kind && model?.fields[kind]?.options?.[value]
@@ -81,6 +82,7 @@ function Head({ row, model, nav }: { row: Row; model?: Model; nav?: Props['nav']
       step(by)
     }}>
       <span className="nv-dw-head__kind">
+        {!option && Icon && <Icon size={13} aria-hidden="true" />}
         {option && <span className="nv-dot" style={{ '--tone': toneColor(model?.fields[kind as string]?.tones?.[value]) } as CSSProperties}>{option}</span>}
         {option && model && ' · '}
         {model?.label}
@@ -146,7 +148,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable
-      head={<Head row={row} model={model} nav={nav} />}>
+      head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
       {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (

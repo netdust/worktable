@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Model, ModelAction, Row } from '../types'
+import type { Model, ModelAction, Row, Schema } from '../types'
+import { SchemaContext } from './drawer/context'
 
 const remote = vi.hoisted(() => ({ recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
   records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(),
@@ -34,6 +35,15 @@ describe('the drawer as the prototypes draw it', () => {
     onStep.mockClear()
     fireEvent.keyDown(within(drawer).getByRole('button', { name: 'Volgende' }), { key: 'k' })
     expect(onStep).not.toHaveBeenCalled()
+  })
+
+  it('puts the dataset\'s rail icon before its name where the record has no kind', () => {
+    const bare = { ...model, fields: {} } as Model
+    const schema = { models: { [bare.key]: bare }, tables: [{ key: bare.key, label: bare.label, model: bare.key, icon: 'users' }], views: [] } as unknown as Schema
+    render(<SchemaContext.Provider value={schema}><Drawer row={rows[0]} columns={columns} model={bare} onClose={() => undefined} /></SchemaContext.Provider>)
+    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('.nv-dw-head__kind')!
+    expect(head.querySelector('svg.lucide-users')).not.toBeNull()
+    expect(head.textContent).toBe(bare.label)
   })
 
   it('says "–" and steps nowhere once its row left the view, and shows no position without one', () => {
