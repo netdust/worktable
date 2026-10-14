@@ -155,7 +155,10 @@ test.describe('step 3e: the board drags', () => {
       await expect(card(page, 'Optie', title)).toBeVisible()
 
       // Mouse: the card lifts out of Optie and lands in Bevestigd; ⌘Z puts it back.
-      await card(page, 'Optie', title).dragTo(page.getByRole('grid', { name: 'Bevestigd' }))
+      // Dropped near the column's top: a long column's middle can sit below the screen.
+      await card(page, 'Optie', title).dragTo(page.getByRole('grid', { name: 'Bevestigd' }), {
+        targetPosition: { x: 60, y: 20 },
+      })
       await expect(card(page, 'Bevestigd', title)).toBeVisible()
       await expect(card(page, 'Optie', title)).toHaveCount(0)
       await expect
@@ -220,11 +223,16 @@ test.describe('step 3e: the board drags', () => {
       await page.goto('/')
       await openView(page, 'Bord toewijzingen', 'Toewijzingen')
       await expect(card(page, 'Bevestigd', naam)).toBeVisible()
-      // Bevestigd never goes back to Open: the writer refuses, the card snaps back and the refusal shows.
-      await card(page, 'Bevestigd', naam).dragTo(page.getByRole('grid', { name: 'Open' }))
+      // Bevestigd never goes to Geweigerd (only an invitation is declined): the writer refuses, the card snaps back and the refusal shows.
+      // By keyboard, so a long board's scroll never decides where it lands: Enter lifts it onto the next column that takes it, Geweigerd.
+      await card(page, 'Bevestigd', naam)
+        .getByRole('button', { name: `${naam} verslepen` })
+        .focus()
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Enter')
       await expect(page.locator('.nv-toolbar').getByRole('status')).toContainText('Niet')
       await expect(card(page, 'Bevestigd', naam)).toBeVisible()
-      await expect(card(page, 'Open', naam)).toHaveCount(0)
+      await expect(card(page, 'Geweigerd', naam)).toHaveCount(0)
     } finally {
       await api.delete(`/api/rows/toewijzing/${id}`)
       await api.delete(`/api/rows/activiteit/${activiteit}`)
