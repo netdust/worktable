@@ -36,7 +36,7 @@ The e2e sequence will reproduce each of these before its fix.
 | A7/R6 | Groep is a chooser on every skin. The board offers its table's select fields and regroups columns by the chosen one, stored as `layout.group` (layout save only). The gallery offers its date and select fields plus "geen" and draws sections (see B/D5). The calendar keeps its lanes chooser. | brief A7, R6 |
 | A8 | Chip anatomy follows `grid-prototype.html`: a date chip carries the calendar icon, and the Filter count is the mono 11px accent pill (`nv-chip__count` gets its CSS; today it has none). The ×, the Filter icon and the Kolommen radius follow the mockup. | brief A8 |
 | R7 | A skin's own chips sit after the period and before + Kolom: gallery S M L, matrix Afwezigheden. | R7 |
-| A9 | One order on every skin: Maand before Week. The timeline mockup draws Week first. | invented — to rule (Q20) |
+| A9 | One order on every skin: Maand before Week. The timeline mockup draws Week first. | Q20, ruled 2026-10-14 |
 
 ## B. Board
 
@@ -70,14 +70,41 @@ All seven mockups share one drawer function (`grid-prototype.html:778-813`): `.d
 | D1c | The title-line insight: "N nog in optie" counts the rows on the warn-toned option and needs a declared wording (Q12); "N conflicten" needs data (Q2); "1 overlap" on the timeline comes from its packing. | brief D1 |
 | D2 | Rail counts per table, from one `rows(limit 1).total` per dataset when the rail loads. Queries show none. | brief D2 |
 | D3 | Timeline lanes and bars in each production's own tone. `productie` has no colour (Q6). Until it does, lanes take the calendar's lane palette by order. A hover card on a bar shows title · place · time · status (its content already exists as `data-tip`), styled as the mockup's card. | brief D3 |
-| D4 | Calendar week: overlapping events get columns in start order, with lane as the tiebreak (`calendar/layout.ts:142` sorts by lane first). A cluster's width is shared only by the events that overlap, with a 2px gutter, as the mockup packs. Monday 12 Oct is readable. | brief D4 |
+| D4 | Calendar week: overlapping events get columns in start order, with lane as the tiebreak (`calendar/layout.ts:170` sorts by lane first). A cluster's width is shared only by the events that overlap, with a 2px gutter, as the mockup packs. Monday 12 Oct is readable. | brief D4 |
 | D5 | Gallery: sections by Groep with a sticky head and count, S M L at 172/236/330px stored in the layout, and the placeholder as drawn (dotted tint, 52px mark). The picture-count badge needs attachment counts on the row (Q18). | brief D5 |
 | D6 | Matrix: a role line under each head from the column's role (needs seeded `rol_id`, Q8); an Afwezigheden chip (on by default) that shows or hides the away layer. Whether the ✓ count column and Totaal row stay is Q9. | brief D6 |
 | D7 | Dashboard: the title pill "{space} · week 42"; "bijgewerkt hh:mm" from the last read; the stat change line where a stat's view is dated (Q13); Werklijst rows with avatar and Gedaan (context words: Q13); the week tile as a cross-day band, as drawn. | brief D7 |
 | D8 | Conflict marks on cards, bars, events, pictures and the week tile, where the mockups draw them. This needs data (Q2). | brief D8 |
 | D9 | Every rail view is walked, light and dark, and each defect found is listed here before it is fixed. | brief D9 |
-| D10 | Kolommen sits on every skin in the mockups. In the app it exists on the grid only, and on other skins it would control card lines, which no app behaviour does (Q17). | invented — to rule |
+| D10 | Kolommen on grid, board, gallery, calendar and timeline. On a card or bar skin it shows, hides and orders the card's facts through the layout; the title always shows. Matrix has none. | Q17, ruled 2026-10-14 |
 
 ## Open questions (to worktable-ac, one message)
 
 These are numbered as in the report to worktable-ac and filled with the rulings as they come back.
+
+Ruled by worktable-ac, 2026-10-14:
+
+| Q | Ruling |
+|---|---|
+| Q1 long text (NOTITIES) | **Held for Stefan** (engine shape). Fallback: notes stay a field line. |
+| Q2 conflict flags | **Held for Stefan** (engine shape). Fallback: every conflict part is out. The banner's actions are "Openen" and "Toon conflicten", with no "Negeren". |
+| Q3 Over tijd | Dropped. |
+| Q4 Wie kan in de plaats | A theatre SQL change. The open-slot picker's rows and order stay exactly as they are, and its tests pass unchanged. |
+| Q5 dataset name | Plural: "Voorstelling · Activiteiten". With no kind, the dataset name alone. |
+| Q6 production tone | **Held for Stefan** (engine shape). Fallback: the lane palette by order. |
+| Q7 actor | The email's local part. |
+| Q8 role line | Seed `rol_id` (invented fixtures, theatre seed only). |
+| Q9 matrix right column | "Bezet" with have/need, as in the mockup. The Totaal row stays (docs/SPEC.md, the `count` option), styled quietly. |
+| Q10 have/need | have = toewijzingen with a person, not geweigerd or geannuleerd. need = have + open slots. |
+| Q11 group-head totals | **Held for Stefan** (engine shape). Fallback: out. |
+| Q12 insight | The warn-toned option drawn as its badge with its count beside it, in the title line, only where the view's rows hold it. **Rule:** the column is the lifecycle column when the table has one, else the first select whose options carry a `warn` tone. The count comes from the rows the view holds. |
+| Q13 dashboard | The theatre werklijst gets a context column. The change line shows only where the stat's view is dated. |
+| Q14 empty fields | A quiet "+ n lege velden" line at the foot of the fields. |
+| Q15 expand | The drawer widens over the work column; Esc or the same button returns it. |
+| Q16 inbound | Links first, then inbound relations from dated datasets, at most 5 rows. "alle n" opens that dataset's view with a condition on the key. |
+| Q17 Kolommen | On grid, board, gallery, calendar and timeline. On a card or bar skin it shows, hides and orders the facts the card shows, through the same layout. The title always shows. The matrix keeps + Kolom and no Kolommen. |
+| Q18 picture count | Out. |
+| Q19 keys and hints | ← → and T on calendar and timeline only. Timeline and gallery hints as proposed. |
+| Q20 order | Maand Week on every skin. |
+
+Order: the four held parts (Q1, Q2, Q6, Q11) come last and are built only on Stefan's answer. On a yes, docs/SPEC.md changes first, in its own commit.
