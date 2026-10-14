@@ -45,7 +45,7 @@ import { useFillViewport } from './viewport'
 import { insightOf } from './insight'
 import { periodOf, stepPeriod, todayPeriod, withPeriod } from './period'
 import { hintsOf, stepsPeriod } from './hints'
-import { formatWindow, isMonth, weekOf } from './Window'
+import { formatWindow, isMonth, isoWeek, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
@@ -414,6 +414,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       (error: ApiError) => notify({ message: errorText(error.code, error.message) }),
     )
 
+  // A dashboard's title line: the space it reads and this week, as the prototype's.
+  const spaceName = space.status === 'ready' && served?.space ? (space.selected?.title ?? t('allSpace', { label: (served.models[served.space.model]?.label ?? '').toLocaleLowerCase() })) : null
+  const dashboardSum = spaceName ? t('dashboardSum', { space: spaceName, week: isoWeek(new Date()) }) : t('dashboardSum', { space: '', week: isoWeek(new Date()) }).replace(/^ · /, '')
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
     ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
@@ -544,7 +547,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
           shown={told?.view !== view?.key ? null : (told?.shown ?? null)}
-          period={dashboard ? null : (period?.name ?? null)}
+          period={dashboard ? dashboardSum : (period?.name ?? null)}
           insight={!dashboard && model && result.status === 'ready' && !matrix ? insightOf(model, result.rows) : null}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}

@@ -2182,7 +2182,7 @@ describe('the footer and the period keys', () => {
 })
 
 describe('the title line\'s summary', () => {
-  it('drops the calendar\'s window from the title line when a dashboard opens', async () => {
+  it('drops the calendar\'s window from the title line when a dashboard opens, for the dashboard\'s week', async () => {
     const overzicht = {
       key: '9', id: 9, label: 'Overzicht', table: 'planning', table_label: 'Planning', model: 'activity', type: 'dashboard', starting: false,
       arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }, layout: { sections: [] },
@@ -2196,6 +2196,7 @@ describe('the title line\'s summary', () => {
     await waitFor(() => expect(document.querySelector('.nv-toolbar__summary')?.textContent).toMatch(/^Week \d+/))
     fireEvent.click(within(rail()).getAllByRole('button', { name: 'Overzicht' })[0])
     await screen.findByRole('heading', { level: 1, name: 'Overzicht' })
-    expect(document.querySelector('.nv-toolbar__summary')).toBeNull()
+    // The dashboard says its own: this week, not the calendar's window.
+    expect(document.querySelector('.nv-toolbar__summary')?.textContent).toMatch(/^week \d+$/)
   })
 })

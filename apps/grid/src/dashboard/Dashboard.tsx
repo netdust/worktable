@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
-import { t } from '../i18n'
+import { locale, t } from '../i18n'
 import type { Account, Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
 import { ChipBar } from '../ui/ChipBar'
 import { Composer } from './Composer'
@@ -33,7 +33,12 @@ const viewsOf = (tile: Tile): number[] => (tile.kind === 'progress' ? [tile.done
 export function Dashboard({ dashboard, views, models, tables, scope, role, onOpenView, onSaved }: Props) {
   const [editing, setEditing] = useState(false)
   const [version, setVersion] = useState(0)
-  const refresh = () => setVersion((n) => n + 1)
+  // When its tiles were last read: on opening, and on every return to the window.
+  const [read, setRead] = useState(() => new Date())
+  const refresh = () => {
+    setVersion((n) => n + 1)
+    setRead(new Date())
+  }
   useEffect(() => {
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
@@ -78,7 +83,10 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     <div className="nv-frame">
       <ChipBar actions={actions.map((action) => (
         <button key={action.create} type="button" className="nv-chip" onClick={() => setCreating(action)}><Plus size={14} aria-hidden="true" />{action.label}</button>
-      ))} end={!editing && <button type="button" className="nv-bar__button nv-dash__edit" onClick={() => setEditing(true)}>{t('edit')}</button>} />
+      ))} end={!editing && <>
+        <span className="nv-bar__count">{t('updatedAt', { time: read.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}</span>
+        <button type="button" className="nv-bar__button nv-dash__edit" onClick={() => setEditing(true)}>{t('edit')}</button>
+      </>} />
       <div className="nv-body">
         {editing ? (
           <div className="nv-dash"><Composer dashboard={dashboard} views={views} models={models} role={role} onDone={() => setEditing(false)} onSaved={onSaved} /></div>

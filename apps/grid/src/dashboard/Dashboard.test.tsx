@@ -42,6 +42,16 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+describe('the dashboard\'s chip row', () => {
+  it('says when its tiles were read, as the prototype\'s "bijgewerkt hh:mm"', () => {
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+    document.documentElement.lang = 'nl-BE'
+    show([stat])
+    expect(document.querySelector('.nv-bar__count')?.textContent).toMatch(/^bijgewerkt \d{2}[:.]\d{2}$/)
+    document.documentElement.lang = ''
+  })
+})
+
 describe('a stat tile', () => {
   it('shows its count red above 0, and its title opens the view', async () => {
     api.rows.mockResolvedValue({ rows: [], total: 3 })
