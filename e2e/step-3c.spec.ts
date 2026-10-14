@@ -235,6 +235,18 @@ test.describe('step 3c', () => {
     const api = page.request
     const titel = 'e2e productie zonder plaatsen'
     const productie = await idOf(api, 'productie', { titel, seizoen: '2028', status: 'actief', organisatie_id: 1 })
+    // An open place of its own, two days out: the seed's are pinned to its week, and a werklijst counts from today on.
+    const soon = new Date()
+    soon.setDate(soon.getDate() + 2)
+    const day = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`
+    const nachtwacht = await idByName(api, 'productie', 'titel', 'Nachtwacht')
+    const open = await activity(api, nachtwacht, 'e2e open plaats binnenkort', day)
+    const place = await idOf(api, 'toewijzing', {
+      activiteit_id: open,
+      rol_id: await idByName(api, 'rol', 'naam', 'Speler'),
+      aantal: 1,
+      state: 'open',
+    })
     try {
       await landing(page)
       await expect(statValue(page, 'Open plaatsen')).toHaveText(/^[1-9]\d*$/)
@@ -245,6 +257,8 @@ test.describe('step 3c', () => {
       await expect(listTitle(page, 'Werklijst')).toHaveText('Werklijst · 0')
       await expect(page.getByRole('region', { name: 'Plaatsen gevuld', exact: true })).toContainText('0 van 0')
     } finally {
+      await api.delete(`/api/rows/toewijzing/${place}`)
+      await api.delete(`/api/rows/activiteit/${open}`)
       await api.delete(`/api/rows/productie/${productie}`)
     }
   })
