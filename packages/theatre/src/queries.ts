@@ -194,25 +194,7 @@ export const kandidaten = defineQuery({
     rol_id: { type: 'integer', label: 'Rol', relation: 'rol' },
     voorkeur: { type: 'boolean', label: 'Voorkeur' },
     rang: { type: 'integer', label: 'Rang' },
-  },
-})
-
-/** Who could take an assigned place instead: the same role, free, not on the activity yet; ranked as kandidaten ranks an open one. */
-export const vervangers = defineQuery({
-  name: 'vervangers',
-  label: 'Vervangers',
-  icon: 'users',
-  title: 'naam',
-  sql: sqlOf('vervangers'),
-  columns: {
-    id: { type: 'integer', label: 'Id' },
-    toewijzing_id: { type: 'integer', label: 'Toewijzing' },
-    persoon_id: { type: 'integer', label: 'Persoon', relation: 'persoon' },
-    naam: { type: 'text', label: 'Naam' },
-    activiteit_id: { type: 'integer', label: 'Activiteit', relation: 'activiteit' },
-    rol_id: { type: 'integer', label: 'Rol', relation: 'rol' },
-    voorkeur: { type: 'boolean', label: 'Voorkeur' },
-    rang: { type: 'integer', label: 'Rang' },
+    in_plaats_van: { type: 'integer', label: 'In plaats van', nullable: true, relation: 'persoon' },
   },
 })
 

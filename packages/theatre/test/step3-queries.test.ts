@@ -227,7 +227,7 @@ describe('conflicten', () => {
   })
 })
 
-describe('vervangers', () => {
+describe('kandidaten for an assigned place', () => {
   const placeOf = (activiteit: number, persoon: number) =>
     (
       sqlite.query('SELECT id FROM toewijzing WHERE activiteit_id = ? AND persoon_id = ?').get(activiteit, persoon) as {
@@ -236,14 +236,17 @@ describe('vervangers', () => {
     ).id
 
   test('for an assigned place: the same role, not who holds it, not who is on the activity already', async () => {
-    const names = (await rows('vervangers', { toewijzing_id: placeOf(13, SAM) }, 'rang')).map((r) => r.persoon_id)
+    const names = (await rows('kandidaten', { toewijzing_id: placeOf(13, SAM) }, 'rang')).map((r) => r.persoon_id)
     expect(names).toContain(BRAM)
     expect(names).not.toContain(SAM)
     expect(names).not.toContain(LOTTE)
+    expect((await rows('kandidaten', { toewijzing_id: placeOf(13, SAM) })).every((r) => r.in_plaats_van === SAM)).toBe(
+      true,
+    )
   })
 
   test('none where nobody else has the role', async () => {
-    expect(await rows('vervangers', { toewijzing_id: placeOf(16, NOOR) })).toEqual([])
+    expect(await rows('kandidaten', { toewijzing_id: placeOf(16, NOOR) })).toEqual([])
   })
 })
 
