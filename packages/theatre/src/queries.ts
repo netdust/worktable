@@ -215,6 +215,7 @@ export const werklijst = defineQuery({
     },
     persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
     titel: { type: 'text', label: 'Titel' },
+    context: { type: 'text', label: 'Context', nullable: true },
     deadline: { type: 'date', label: 'Deadline', nullable: true },
     taak_id: { type: 'integer', label: 'Taak', nullable: true, relation: 'taak' },
     status: {

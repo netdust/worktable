@@ -606,7 +606,7 @@ export const views: SavedViewSeed[] = [
               kind: 'list',
               view: 'Werklijst',
               rows: 8,
-              columns: ['soort', 'deadline'],
+              columns: ['soort', 'context', 'deadline'],
               set: { column: 'status', value: 'gedaan', label: 'Gedaan' },
             },
           ],
