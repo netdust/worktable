@@ -18,7 +18,7 @@ SELECT 1000000000000 + t.id AS id, 'taak' AS soort, t.toegewezen_aan AS persoon_
     WHEN 'activiteit' THEN ta.productie_id END AS productie_id,
   -- What the line is about, beside its title: the record a taak is linked to, else the production.
   CASE t.gekoppeld_aan WHEN 'productie' THEN tp.titel WHEN 'speelreeks' THEN sr.naam
-    WHEN 'activiteit' THEN COALESCE(ta.omschrijving, ta.soort) END AS context
+    WHEN 'activiteit' THEN COALESCE(ta.omschrijving, ta.soort) END AS onderwerp
 FROM taak t
 LEFT JOIN speelreeks sr ON t.gekoppeld_aan = 'speelreeks' AND sr.id = t.record_id
 LEFT JOIN activiteit ta ON t.gekoppeld_aan = 'activiteit' AND ta.id = t.record_id

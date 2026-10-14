@@ -227,7 +227,7 @@ describe('conflicten', () => {
   })
 })
 
-describe('werklijst context', () => {
+describe('werklijst onderwerp', () => {
   test('a line not linked to a record says its production beside its title', async () => {
     await create('activiteit', {
       productie_id: 1,
@@ -239,7 +239,7 @@ describe('werklijst context', () => {
     const titles = Object.fromEntries((await rows('productie')).map((p) => [p.id, p.titel]))
     const lines = (await rows('werklijst')).filter((r) => r.soort !== 'taak')
     expect(lines.map((r) => r.titel)).toContain('Nog in optie: werklijst context')
-    for (const line of lines) expect(line.context).toBe(titles[line.productie_id as number])
+    for (const line of lines) expect(line.onderwerp).toBe(titles[line.productie_id as number])
   })
 })
 
