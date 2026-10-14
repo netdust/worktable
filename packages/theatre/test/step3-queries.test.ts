@@ -227,6 +227,26 @@ describe('conflicten', () => {
   })
 })
 
+describe('vervangers', () => {
+  const placeOf = (activiteit: number, persoon: number) =>
+    (
+      sqlite.query('SELECT id FROM toewijzing WHERE activiteit_id = ? AND persoon_id = ?').get(activiteit, persoon) as {
+        id: number
+      }
+    ).id
+
+  test('for an assigned place: the same role, not who holds it, not who is on the activity already', async () => {
+    const names = (await rows('vervangers', { toewijzing_id: placeOf(13, SAM) }, 'rang')).map((r) => r.persoon_id)
+    expect(names).toContain(BRAM)
+    expect(names).not.toContain(SAM)
+    expect(names).not.toContain(LOTTE)
+  })
+
+  test('none where nobody else has the role', async () => {
+    expect(await rows('vervangers', { toewijzing_id: placeOf(16, NOOR) })).toEqual([])
+  })
+})
+
 describe('kandidaten', () => {
   const namesFor = async (slot: number) =>
     (await rows('kandidaten', { toewijzing_id: slot }, 'rang')).map((r) => r.naam)

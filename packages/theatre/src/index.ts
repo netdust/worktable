@@ -21,6 +21,7 @@ import {
   persoonDag,
   plaatsen,
   productieDag,
+  vervangers,
   voorstellingen,
   werklijst,
 } from './queries'
@@ -60,6 +61,7 @@ const theatre: Domain = {
     persoonDag,
     locatieDag,
     kandidaten,
+    vervangers,
     werklijst,
     plaatsen,
     productieDag,
@@ -93,6 +95,7 @@ const theatre: Domain = {
         'persoon_dag',
         'locatie_dag',
         'kandidaten',
+        'vervangers',
         'werklijst',
         'plaatsen',
         'productie_dag',
