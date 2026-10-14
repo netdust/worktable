@@ -208,7 +208,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
   const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
-  const [quick, setQuick] = useState(false)
+  // The quick create, open with the values a board column's + presets.
+  const [quick, setQuick] = useState<Record<string, unknown> | null>(null)
   // "+ Kolom" on a matrix: the chip row holds the button, the matrix the picker.
   const [picking, setPicking] = useState(false)
   useFillViewport(frame)
@@ -512,7 +513,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={quickAdd ? () => setQuick(true) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
+          onAdd={quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -544,7 +545,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
               lane={layout.group} layout={layout} onTitle={setShown} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
-            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown} />
+            <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
+              onMove={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (id, field, value) => void store.apply({ id, field, value }) : undefined}
+              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined}
+              onUndo={store ? (redo) => void (redo ? store.redo() : store.undo()) : undefined} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
@@ -578,7 +582,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
       {quick && model && (
         <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
-          window={calendar ? calendarShown : null} onClose={() => setQuick(false)} onCreated={() => { setQuick(false); reloadView() }} />
+          window={calendar ? calendarShown : null} preset={quick} onClose={() => setQuick(null)} onCreated={() => { setQuick(null); reloadView() }} />
       )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}

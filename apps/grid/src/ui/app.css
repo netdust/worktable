@@ -5420,27 +5420,119 @@ table.nv-cal--month .nv-cal__event:hover {
   display: flex;
   flex: 0 0 300px;
   flex-direction: column;
-  margin: 0;
-  padding: 0 0 10px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   background: var(--color-bg-column);
-  list-style: none;
+  transition: background-color 0.12s;
 }
 
-.nv-board__column > li:not(.nv-board__head) {
-  padding: 0 10px;
+.nv-board__column:has(.nv-board__list[data-drop-target]) {
+  background: color-mix(in srgb, var(--color-accent-subtle) 60%, var(--color-bg-column));
 }
 
-.nv-board__column > li + li:not(.nv-board__head) {
-  margin-top: 8px;
+.nv-board__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-content: start;
+  min-height: 48px;
+  padding: 0 10px 10px;
+  outline: none;
+}
+
+.nv-board__item {
+  position: relative;
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: grab;
+}
+
+.nv-board__item[data-focus-visible] {
+  box-shadow: 0 0 0 2px var(--color-accent-default);
+}
+
+.nv-board__item[data-dragging] {
+  opacity: 0.35;
+}
+
+.nv-board__item--open .nv-board__card {
+  background: var(--color-bg-selected) !important;
+}
+
+/* The drop slot, as the prototype's: the target column's option in the accent, a card's height. */
+.nv-board__slot {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent-default) 12%, transparent);
+  color: var(--color-accent-default);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nv-board__slot:not([data-drop-target]) {
+  display: none;
+}
+
+#root .nv-board__card--lifted {
+  width: 278px;
+  transform: rotate(2deg);
+  box-shadow: var(--shadow-pop);
+  font-weight: 600;
+  cursor: grabbing;
+}
+
+/* The keyboard's way to lift a card: out of sight until it has the focus. */
+#root .nv-board__grip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  opacity: 0;
+  cursor: grab;
+}
+
+#root .nv-board__grip[data-focus-visible] {
+  opacity: 1;
+  outline: 2px solid var(--color-accent-default);
+}
+
+#root .nv-board__new {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+#root .nv-board__new:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
 }
 
 .nv-board__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 10px 8px 12px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: inherit;
 }
 
 .nv-board__name {
@@ -5468,7 +5560,8 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 .nv-board__empty {
-  padding: 22px 12px !important;
+  display: block;
+  padding: 22px 12px;
   color: var(--color-fg-subtle);
   font-size: 12.5px;
   text-align: center;
@@ -5557,6 +5650,17 @@ table.nv-cal--month .nv-cal__event:hover {
 
 .nv-avatar--sm + .nv-avatar--sm {
   margin-left: -2px;
+}
+
+.nv-avatar--hue {
+  background: color-mix(in srgb, var(--h) 16%, var(--color-bg-surface));
+  color: color-mix(in srgb, var(--h) 78%, var(--color-fg-default));
+}
+
+.nv-avatar--open {
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-fg-subtle);
 }
 
 .nv-board__more {

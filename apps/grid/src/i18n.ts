@@ -108,6 +108,8 @@ const strings = {
   hintUndo: 'ongedaan maken',
   noTime: 'zonder tijd',
   noneOf: 'Geen {label}',
+  dragCard: '{title} verslepen',
+  openPlace: 'Open plek',
   hints: 'Sneltoetsen',
   changed: 'Gewijzigd',
   addColumn: '+ Kolom',

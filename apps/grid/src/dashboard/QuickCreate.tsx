@@ -73,15 +73,17 @@ function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
 }
 
 /** A create on one dataset from the dashboard's header: the columns it needs, the space filled in, the writer judging it. */
-export function QuickCreate({ label, model, tables, scope, window = null, onClose, onCreated }: {
+export function QuickCreate({ label, model, tables, scope, window = null, preset = {}, onClose, onCreated }: {
   label: string; model: Model; tables: TableDef[]; scope: Scope | null
   /** The days on screen: a date starts on today when it is among them, else on their first. */
   window?: DateWindow | null
+  /** Values the place it opens from sets (a board column's option): not asked, always sent. */
+  preset?: Record<string, unknown>
   onClose: () => void; onCreated: () => void
 }) {
   const made = madeFrom(model, tables, window, scope)
   const titleField: Field = { type: 'text', label: model.title_label, required: true, fact: false }
-  const asked = askedOf(model, made, scope)
+  const asked = askedOf(model, made, scope).filter((key) => !(key in preset))
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     'missing' in made ? {} : Object.fromEntries(asked.filter((key) => key in made.fields).map((key) => [key, made.fields[key]])),
   )
@@ -90,7 +92,7 @@ export function QuickCreate({ label, model, tables, scope, window = null, onClos
   const submit = () => {
     setBusy(true)
     setRefusal(null)
-    create(model.key, values).then(
+    create(model.key, { ...values, ...preset }).then(
       () => {
         onCreated()
         onClose()

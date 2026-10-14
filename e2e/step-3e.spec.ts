@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { openView } from './tree'
+import { openView, openWeek } from './tree'
 
 const bar = (page: Page) => page.locator('.nv-bar')
 const pill = (page: Page) => page.locator('.nv-toolbar__summary')
@@ -116,5 +116,121 @@ test.describe('step 3e: Groep chooses on every skin', () => {
     await expect(groep(page)).toHaveText('Groep: soort')
     await expect(page.getByRole('list', { name: 'Voorstelling' })).toBeVisible()
     await expect(page.getByRole('list', { name: 'Optie' })).toHaveCount(0)
+  })
+})
+
+test.describe('step 3e: the board drags', () => {
+  test.describe.configure({ timeout: 120_000 })
+  // Every column on screen: a drop needs its target in view.
+  test.use({ viewport: { width: 1600, height: 900 } })
+  type Api = Page['request']
+  const DRAG_WEEK = '2028-10-02'
+  async function made(api: Api, dataset: string, data: Record<string, unknown>): Promise<number> {
+    const response = await api.post(`/api/rows/${dataset}`, { data })
+    expect(response.status(), await response.text()).toBe(201)
+    return ((await response.json()) as { id: number }).id
+  }
+  async function nachtwacht(api: Api): Promise<number> {
+    const rows = (
+      (await (await api.get('/api/rows/productie?limit=500')).json()) as { rows: { id: number; titel: string }[] }
+    ).rows
+    return rows.find((r) => r.titel === 'Nachtwacht')?.id as number
+  }
+  const card = (page: Page, column: string, title: string) =>
+    page.getByRole('grid', { name: column }).getByRole('row', { name: new RegExp(title) })
+
+  test('board-drag @e2e', async ({ page }) => {
+    const api = page.request
+    const title = 'e2e sleep mij'
+    const id = await made(api, 'activiteit', {
+      productie_id: await nachtwacht(api),
+      soort: 'repetitie',
+      status: 'optie',
+      datum: '2028-10-03',
+      omschrijving: title,
+    })
+    try {
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
+      await expect(card(page, 'Optie', title)).toBeVisible()
+
+      // Mouse: the card lifts out of Optie and lands in Bevestigd; ⌘Z puts it back.
+      await card(page, 'Optie', title).dragTo(page.getByRole('grid', { name: 'Bevestigd' }))
+      await expect(card(page, 'Bevestigd', title)).toBeVisible()
+      await expect(card(page, 'Optie', title)).toHaveCount(0)
+      await expect
+        .poll(
+          async () =>
+            (
+              (await (
+                await api.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)
+              ).json()) as { rows: { status: string }[] }
+            ).rows[0]?.status,
+        )
+        .toBe('bevestigd')
+      await card(page, 'Bevestigd', title).focus()
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect(card(page, 'Optie', title)).toBeVisible()
+
+      // Keyboard: Enter on the drag button lifts it onto the first column that takes it (Tab goes on to the next); Enter drops it.
+      await card(page, 'Optie', title)
+        .getByRole('button', { name: `${title} verslepen` })
+        .focus()
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Enter')
+      await expect(card(page, 'Bevestigd', title)).toBeVisible()
+      await expect(card(page, 'Optie', title)).toHaveCount(0)
+    } finally {
+      await api.delete(`/api/rows/activiteit/${id}`)
+    }
+  })
+
+  test('board-drag-refused @e2e', async ({ page }) => {
+    const api = page.request
+    const activiteit = await made(api, 'activiteit', {
+      productie_id: await nachtwacht(api),
+      soort: 'repetitie',
+      datum: '2028-10-04',
+      omschrijving: 'e2e weiger mij',
+    })
+    const naam = 'e2e bevestigd blijft'
+    const id = await made(api, 'toewijzing', { activiteit_id: activiteit, naam, state: 'bevestigd' })
+    try {
+      await page.goto('/')
+      await openView(page, 'Bord toewijzingen', 'Toewijzingen')
+      await expect(card(page, 'Bevestigd', naam)).toBeVisible()
+      // Bevestigd never goes back to Open: the writer refuses, the card snaps back and the refusal shows.
+      await card(page, 'Bevestigd', naam).dragTo(page.getByRole('grid', { name: 'Open' }))
+      await expect(page.locator('.nv-toolbar').getByRole('status')).toContainText('Niet')
+      await expect(card(page, 'Bevestigd', naam)).toBeVisible()
+      await expect(card(page, 'Open', naam)).toHaveCount(0)
+    } finally {
+      await api.delete(`/api/rows/toewijzing/${id}`)
+      await api.delete(`/api/rows/activiteit/${activiteit}`)
+    }
+  })
+
+  test('board-column-plus @e2e', async ({ page }) => {
+    const api = page.request
+    await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
+    await page.getByRole('button', { name: 'Nieuw in Geannuleerd' }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel('Status')).toHaveCount(0)
+    await dialog.getByLabel('Productie').selectOption({ label: 'Nachtwacht' })
+    await dialog.getByLabel('Datum').fill('2028-10-05')
+    await dialog.getByRole('button', { name: 'Aanmaken' }).click()
+    await expect(dialog).toHaveCount(0)
+    const found = (
+      (await (
+        await api.get(
+          `/api/rows/activiteit?limit=500&filter=${encodeURIComponent(JSON.stringify({ datum: '2028-10-05' }))}`,
+        )
+      ).json()) as { rows: { id: number; status: string }[] }
+    ).rows
+    try {
+      expect(found.map((r) => r.status)).toEqual(['geannuleerd'])
+    } finally {
+      for (const r of found) await api.delete(`/api/rows/activiteit/${r.id}`)
+    }
   })
 })
