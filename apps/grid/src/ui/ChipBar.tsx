@@ -36,7 +36,7 @@ export interface ChipBarProps {
   addColumn?: { open: boolean; onToggle: () => void }
   /** A dashboard's quick actions, where the period would sit. */
   actions?: ReactNode
-  count?: { rows: number; cut: boolean }
+  count?: { rows: number; cut: boolean; text?: string }
   /** Kolommen: show, hide and move the view's columns. */
   columns?: { list: Column[]; layout: Layout; onLayout: (layout: Layout) => void }
   /** What closes the row on a page that is no view of rows: a dashboard's Bewerken. */
@@ -113,7 +113,7 @@ export function ChipBar({ scope = null, filters, group, period, skin, addColumn,
       {addColumn && <button type="button" className="nv-chip" aria-expanded={addColumn.open} onClick={addColumn.onToggle}>{t('addColumn')}</button>}
       {(count || columns || end) && (
         <span className="nv-bar__end">
-          {count && <span className="nv-bar__count">{rowCount(count.rows, count.cut)}</span>}
+          {count && <span className="nv-bar__count">{count.text ?? rowCount(count.rows, count.cut)}</span>}
           {columns && (
             <Panel placement="bottom end" label={t('columns')} trigger={
               <Button ref={hint(t('columns'))} className="nv-bar__icon" aria-label={t('columns')}><Columns3 size={ICON + 1} aria-hidden="true" /></Button>

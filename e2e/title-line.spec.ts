@@ -9,7 +9,7 @@ test('title-line-reads-in-full @e2e', async ({ page }) => {
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
   const title = page.getByRole('heading', { level: 1, name: 'Planning' })
   await expect(title).toBeVisible()
-  await expect(page.getByText(/^\d+ rijen · \d+ groepen$/)).toBeVisible()
+  await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · /)
   const { scrollWidth, clientWidth } = await title.evaluate((el) => ({
     scrollWidth: el.scrollWidth,
     clientWidth: el.clientWidth,

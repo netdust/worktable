@@ -115,7 +115,9 @@ test('filter-is-vandaag @e2e', async ({ page }) => {
     await shot(page, 'builder-is-vandaag')
     await page.keyboard.press('Escape')
 
-    await expect(page.locator('.nv-bar .nv-chip--filter').first()).toHaveText('Plandag vandaag')
+    // Today is the view's period: named by its day in the title line, never a chip.
+    await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^\d{1,2} \p{L}+$/u)
+    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
     // Boundary: yesterday and tomorrow fall outside the one day.
     await expect.poll(() => gridTitles(page)).toContain(today)
     const titles = await gridTitles(page)
@@ -155,7 +157,9 @@ test('vandaag-kept-after-reload @e2e', async ({ page }) => {
     await page.reload()
     await openView(page, name, 'Activiteiten')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
-    await expect(page.locator('.nv-bar .nv-chip--filter').first()).toHaveText('Plandag vandaag')
+    // Today is the view's period: named by its day in the title line, never a chip.
+    await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^\d{1,2} \p{L}+$/u)
+    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
     await expect.poll(() => gridTitles(page)).toContain(today)
     await filterButton(page).click()
     await expect(conditionOn(page, 'Plandag').getByRole('button', { name: 'Vergelijking: is vandaag' })).toBeVisible()

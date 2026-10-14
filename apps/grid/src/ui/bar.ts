@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { group, type Layout } from '../grid/layout'
-import { t } from '../i18n'
+import { summary, t } from '../i18n'
 import type { Model, View } from '../types'
 import type { ChipBarProps, GroupSlot, PeriodSlot } from './ChipBar'
 import type { Shown } from './Toolbar'
@@ -64,7 +64,8 @@ export function barOf(input: BarInput): ChipBarProps {
     ...(input.period ? { period: input.period } : {}),
     ...(input.skin ? { skin: input.skin } : {}),
     ...(input.adding ? { addColumn: input.adding } : {}),
-    ...(told ? { count: { rows: told.rows, cut: told.cut } } : {}),
+    // Where the title line names the period, the count says what the title line's summary said.
+    ...(told ? { count: { rows: told.rows, cut: told.cut, ...(input.period?.period.name ? { text: summary(told.rows, told.groups, told.cut, told.columns, told.pictures) } : {}) } } : {}),
     // Kolommen wherever the skin shows record fields, the matrix aside: its columns are people.
     ...(view.type !== 'matrix' && told?.menu ? { columns: { list: told.menu, layout, onLayout } } : {}),
   }

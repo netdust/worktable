@@ -16,6 +16,8 @@ interface Props {
   onJoin: (join: Join) => void
   /** Fields whose related names are still being read: their chips wait, never showing an id. */
   waiting?: string[]
+  /** The view's period: the builder edits it, but it is never a chip, as the period chips and the title line show it. */
+  period?: Filter
 }
 
 /** A condition in words: "Status is Optie of Bevestigd", "Plandag deze week". */
@@ -48,9 +50,9 @@ function ChipText({ text, label }: { text: string; label: string }) {
 }
 
 /** The conditions as chips, each with its ×, and the Filter button that opens the builder. */
-export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] }: Props) {
+export function Filters({ fields, filters, join, onChange, onJoin, waiting = [], period }: Props) {
   const fieldOf = (name: string) => fields.find((f) => f.field === name)
-  const shown = filters.filter(complete)
+  const shown = filters.filter((f) => complete(f) && f !== period)
   // Periods first: they always narrow. The rest are joined, and with "of" each after the first says so.
   const chips = [...shown.filter((c) => isDate(c.op)), ...shown.filter((c) => !isDate(c.op))].filter((c) => !waiting.includes(c.field))
   const any = joinOf(filters, join) === 'or'

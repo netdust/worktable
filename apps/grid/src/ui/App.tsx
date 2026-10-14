@@ -42,7 +42,7 @@ import { useSavedViews } from './useSavedViews'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { type Period, periodOf, withPeriod } from './period'
+import { periodOf, withPeriod } from './period'
 import { formatWindow, isMonth, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
@@ -380,7 +380,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
-    ? <Filters fields={named.filter((f) => f.field !== period?.field)} filters={layout.filters.filter((f) => f !== dateCondition)} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withConditions(layout, next, period))}
+    ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
       onJoin={(join) => setLayout({ ...layout, join: join === 'or' ? 'or' : undefined })} />
     : null
   const exportView = () => {
@@ -591,10 +591,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 }
 
 /** A month's whole Monday-first weeks. */
-/** The builder's conditions, with the period it never shows put back. */
-const withConditions = (layout: Layout, next: Filter[], period: Period | null): Layout =>
-  period ? withPeriod(withFilters(layout, next), period.field, period.condition) : withFilters(layout, next)
-
 function monthSpan(month: DateWindow): DateWindow {
   const weeks = monthWeeks(month)
   const last = weeks[weeks.length - 1]
