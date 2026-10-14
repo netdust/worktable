@@ -21,7 +21,6 @@ import {
   persoonDag,
   plaatsen,
   productieDag,
-  vervangers,
   voorstellingen,
   werklijst,
 } from './queries'
