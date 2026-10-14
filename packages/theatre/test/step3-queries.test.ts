@@ -240,9 +240,7 @@ describe('kandidaten for an assigned place', () => {
     expect(names).toContain(BRAM)
     expect(names).not.toContain(SAM)
     expect(names).not.toContain(LOTTE)
-    expect((await rows('kandidaten', { toewijzing_id: placeOf(13, SAM) })).every((r) => r.in_plaats_van === SAM)).toBe(
-      true,
-    )
+    expect((await rows('kandidaten', { toewijzing_id: placeOf(13, SAM) })).every((r) => r.vervangt === SAM)).toBe(true)
   })
 
   test('none where nobody else has the role', async () => {

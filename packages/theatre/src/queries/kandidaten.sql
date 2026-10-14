@@ -19,7 +19,7 @@ slot AS (
   WHERE t.deleted_at IS NULL AND t.persoon_id IS NOT NULL AND t.rol_id IS NOT NULL AND t.state NOT IN ('geannuleerd', 'geweigerd')
 )
 SELECT s.id * 1000000 + p.id AS id, s.id AS toewijzing_id, p.id AS persoon_id, p.weergavenaam AS naam,
-  s.activiteit_id, s.rol_id, pr.voorkeur, s.persoon_id AS in_plaats_van,
+  s.activiteit_id, s.rol_id, pr.voorkeur, s.persoon_id AS vervangt,
   ROW_NUMBER() OVER (
     PARTITION BY s.id ORDER BY pr.voorkeur DESC, COALESCE(pr.dagtarief, r.dagtarief) ASC NULLS LAST, p.weergavenaam
   ) AS rang

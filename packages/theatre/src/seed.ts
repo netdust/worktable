@@ -458,7 +458,7 @@ export const views: SavedViewSeed[] = [
     source: 'kandidaten',
     skin: 'table',
     // The open places only: kandidaten also holds who could stand in for an assigned one.
-    filters: { in_plaats_van: { $eq: null } },
+    filters: { vervangt: { $eq: null } },
     sort: ['toewijzing_id', 'rang'],
     group_by: null,
     visible_fields: ['toewijzing_id', 'rang', 'naam', 'rol_id', 'voorkeur', 'activiteit_id'],

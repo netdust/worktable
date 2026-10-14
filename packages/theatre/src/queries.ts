@@ -194,7 +194,7 @@ export const kandidaten = defineQuery({
     rol_id: { type: 'integer', label: 'Rol', relation: 'rol' },
     voorkeur: { type: 'boolean', label: 'Voorkeur' },
     rang: { type: 'integer', label: 'Rang' },
-    in_plaats_van: { type: 'integer', label: 'In plaats van', nullable: true, relation: 'persoon' },
+    vervangt: { type: 'integer', label: 'Vervangt', nullable: true, relation: 'persoon' },
   },
 })
 
