@@ -228,9 +228,13 @@ test.describe('step 3e: the board drags', () => {
       await card(page, 'Bevestigd', naam)
         .getByRole('button', { name: `${naam} verslepen` })
         .focus()
+      const refused = page.waitForResponse(
+        (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/toewijzing/${id}`,
+      )
       await page.keyboard.press('Enter')
       await page.keyboard.press('Enter')
-      await expect(page.locator('.nv-toolbar').getByRole('status')).toContainText('Niet')
+      expect((await refused).status()).toBe(422)
+      await expect(page.getByText(/statuswijziging is niet toegestaan/).first()).toBeVisible()
       await expect(card(page, 'Bevestigd', naam)).toBeVisible()
       await expect(card(page, 'Geweigerd', naam)).toHaveCount(0)
     } finally {

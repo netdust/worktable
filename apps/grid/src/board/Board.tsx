@@ -102,8 +102,8 @@ function BoardColumn({ lane, cards, tone, columns, none, open, dragging, onOpen,
         }}
         renderEmptyState={() => <span className="nv-board__empty">{none}</span>}>
         {(row) => (
-          <GridListItem id={row.id} textValue={row.title} className={open?.id === row.id ? 'nv-board__item nv-board__item--open' : 'nv-board__item'}>
-            {dragging && <Button slot="drag" className="nv-board__grip" aria-label={t('dragCard', { title: row.title })}>⠿</Button>}
+          <GridListItem id={row.id} textValue={row.title || t('openPlace')} className={open?.id === row.id ? 'nv-board__item nv-board__item--open' : 'nv-board__item'}>
+            {dragging && <Button slot="drag" className="nv-board__grip" aria-label={t('dragCard', { title: row.title || t('openPlace') })}>⠿</Button>}
             <Card row={row} columns={columns} />
           </GridListItem>
         )}
