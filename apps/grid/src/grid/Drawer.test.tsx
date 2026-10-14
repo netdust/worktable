@@ -46,6 +46,16 @@ describe('the drawer as the prototypes draw it', () => {
     expect(head.textContent).toBe(bare.label)
   })
 
+  it('steps with j and k from anywhere in its head, the close button the grid focuses too', () => {
+    const onStep = vi.fn()
+    render(<Drawer row={rows[1]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep }} onClose={() => undefined} />)
+    const close = within(screen.getByRole('complementary', { name: 'Montage' })).getByRole('button', { name: 'Sluiten' })
+    fireEvent.keyDown(close, { key: 'j' })
+    expect(onStep).toHaveBeenLastCalledWith(3)
+    fireEvent.keyDown(close, { key: 'ArrowUp' })
+    expect(onStep).toHaveBeenLastCalledWith(1)
+  })
+
   it('says "–" and steps nowhere once its row left the view, and shows no position without one', () => {
     const { rerender } = render(<Drawer row={row(9, 'Weg')} columns={columns} model={model} nav={{ ids: [1, 2], onStep: vi.fn() }} onClose={() => undefined} />)
     const drawer = screen.getByRole('complementary', { name: 'Weg' })

@@ -1,6 +1,6 @@
 import { Maximize2, Minimize2, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, type KeyboardEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from '../i18n'
 
@@ -16,13 +16,15 @@ interface Props {
   head?: ReactNode
   /** The panel widens over the work column, and Escape or the same button takes it back. */
   expandable?: boolean
+  /** A key pressed anywhere in the head line, its close button too: a drawer's steps. */
+  onHeadKey?: (event: KeyboardEvent<HTMLElement>) => void
 }
 
 /** The app's third column, where every drawer lands full height; without one (a test, a page of its own) a drawer stays where it is mounted. */
 export const DrawerSlot = createContext<HTMLElement | null>(null)
 
 /** Beside the sheet, never over it: the sheet stays live. Closes on Escape, an open list inside first. */
-export function SidePanel({ label, onClose, children, focusOnOpen = true, focusKey, head, expandable = false }: Props) {
+export function SidePanel({ label, onClose, children, focusOnOpen = true, focusKey, head, expandable = false, onHeadKey }: Props) {
   const [wide, setWide] = useState(false)
   const close = useRef<HTMLButtonElement>(null)
   const slot = useContext(DrawerSlot)
@@ -42,7 +44,7 @@ export function SidePanel({ label, onClose, children, focusOnOpen = true, focusK
         else onClose()
       }}
     >
-      <header className="nv-drawer__head">
+      <header className="nv-drawer__head" onKeyDown={onHeadKey}>
         {head ?? <h2 className="nv-drawer__title">{label}</h2>}
         {expandable && (
           <Button className="nv-drawer__tool" aria-label={t(wide ? 'narrow' : 'expand')} onPress={() => setWide(!wide)}>

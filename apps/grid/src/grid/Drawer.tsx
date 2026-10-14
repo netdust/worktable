@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { type ChangeEvent, type CSSProperties, type ReactNode, useContext, useEffect, useId, useState } from 'react'
+import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
 import type { Account, ActionInput, ApiError, Link, Model, ModelAction, OptionsFrom, Row, View } from '../types'
@@ -64,23 +64,30 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
 /** The drawer reads; a checkbox's toggle is the sheet's. */
 const noToggle = () => undefined
 
+/** The row before or after in the view, where there is one. */
+function stepIn(nav: Props['nav'], row: Row, by: 1 | -1): void {
+  const at = nav ? nav.ids.indexOf(row.id) : -1
+  const next = nav?.ids[at + by]
+  if (nav && at >= 0 && next !== undefined) nav.onStep(next)
+}
+
+/** ↑ ↓ and j k anywhere in the head line step through the view's rows. */
+const headKey = (nav: Props['nav'], row: Row) => (event: KeyboardEvent<HTMLElement>) => {
+  const by = event.key === 'ArrowUp' || event.key === 'k' ? -1 : event.key === 'ArrowDown' || event.key === 'j' ? 1 : 0
+  if (!by || !nav) return
+  event.preventDefault()
+  stepIn(nav, row, by)
+}
+
 /** The head line: what kind of record this is · its dataset; where it is in the view; the steps to its neighbours. */
 function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; icon?: LucideIcon }) {
   const kind = model ? kindOf(model) : null
   const value = kind ? String(row.fields[kind] ?? '') : ''
   const option = kind && model?.fields[kind]?.options?.[value]
   const at = nav ? nav.ids.indexOf(row.id) : -1
-  const step = (by: 1 | -1) => {
-    const next = nav?.ids[at + by]
-    if (nav && at >= 0 && next !== undefined) nav.onStep(next)
-  }
+  const step = (by: 1 | -1) => stepIn(nav, row, by)
   return (
-    <div className="nv-dw-head" onKeyDown={(event) => {
-      const by = event.key === 'ArrowUp' || event.key === 'k' ? -1 : event.key === 'ArrowDown' || event.key === 'j' ? 1 : 0
-      if (!by || !nav) return
-      event.preventDefault()
-      step(by)
-    }}>
+    <div className="nv-dw-head">
       <span className="nv-dw-head__kind">
         {!option && Icon && <Icon size={13} aria-hidden="true" />}
         {option && <span className="nv-dot" style={{ '--tone': toneColor(model?.fields[kind as string]?.tones?.[value]) } as CSSProperties}>{option}</span>}
@@ -148,7 +155,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
   const links = columns.filter((c) => c.kind === 'links' && model?.fields[c.field ?? c.id]?.link)
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
   return (
-    <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable
+    <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
       head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>

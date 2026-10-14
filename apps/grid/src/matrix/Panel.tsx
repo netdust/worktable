@@ -156,6 +156,8 @@ export function CellDrawer({ view, models, row, column, columns, away, store, ro
   const day = sameDay(view, rows, row, column)
   const start = fields.find((c) => c.kind === 'datetime')
   const instead = useRef<HTMLElement>(null)
+  // Each line is named by the join's own field: no word of the app's.
+  const labelOf = (field: string) => models[join.model]?.fields[field]?.label ?? field
   const shown: Row = { id: cell?.id ?? -(row.id * 1000000 + at), title: `${column.title} · ${row.title}`, status: cell?.status ?? '', fields: cell?.fields ?? {} }
   return (
     <Drawer row={shown} columns={[]} focusOnOpen={false} onClose={onClose} model={models[join.model]}
@@ -163,10 +165,10 @@ export function CellDrawer({ view, models, row, column, columns, away, store, ro
       alert={absent && <CellAlert name={column.title} date={date} reason={view.away ? text(absent.fields[view.away.label_field]) : ''} assigned={cell !== undefined}
         onOther={() => instead.current?.scrollIntoView({ block: 'nearest' })} />}
       lines={<>
-        <Line icon={User} label={t('person')}><span className="nv-avatar nv-avatar--sm" aria-hidden="true">{initials(column.title)}</span>{column.title}</Line>
-        {join.open && <Line icon={Tag} label={t('role')}>{role || t('empty')}</Line>}
+        <Line icon={User} label={labelOf(join.column_field)}><span className="nv-avatar nv-avatar--sm" aria-hidden="true">{initials(column.title)}</span>{column.title}</Line>
+        {join.open && <Line icon={Tag} label={labelOf(join.open.match_field)}>{role || t('empty')}</Line>}
         <StatusLine view={view} models={models} cell={cell} store={store} row={row} column={column} asking={asking} />
-        <Line icon={CalendarDays} label={t('onActivity')}>
+        <Line icon={CalendarDays} label={labelOf(join.row_field)}>
           {kind && <i className="nv-dw-dot" style={{ '--tone': toneColor(activity?.fields[kind]?.tones?.[text(row.fields[kind])]) } as CSSProperties} aria-hidden="true" />}{row.title}
         </Line>
         {join.note_field && <NoteLine note={note} disabled={!store || !cell} onSave={(next) => void store?.setNote(row.id, column, next)} />}
@@ -191,13 +193,13 @@ export function CellDrawer({ view, models, row, column, columns, away, store, ro
             </ul>
           )}
         </Section>
-        {cell && <Instead ref={instead} view={view} models={models} row={row} column={column} cell={cell} store={store} date={date} />}
+        {cell && <Instead ref={instead} view={view} models={models} row={row} cell={cell} store={store} date={date} />}
       </>} />
   )
 }
 
 /** Who could take this place instead, from the person column's own candidates; Kiezen moves the place to them. */
-function Instead({ ref, view, models, row, column, cell, store, date }: { ref: Ref<HTMLElement>; view: View; models: Record<string, Model>; row: Row; column: MatrixColumn; cell: MatrixCell; store?: MatrixStore; date: string }) {
+function Instead({ ref, view, models, row, cell, store, date }: { ref: Ref<HTMLElement>; view: View; models: Record<string, Model>; row: Row; cell: MatrixCell; store?: MatrixStore; date: string }) {
   const join = view.join!
   const from = models[join.model]?.fields[join.column_field]?.options_from
   const [people, setPeople] = useState<Row[] | null>(null)
@@ -210,12 +212,8 @@ function Instead({ ref, view, models, row, column, cell, store, date }: { ref: R
     }
   }, [cell.id])
   if (!from) return null
-  const status = text(cell.fields[join.cell_field])
-  const choose = async (person: Row) => {
-    if (!store) return
-    const to: MatrixColumn = { key: `record:${person.id}`, kind: 'record', id: person.id, title: person.title }
-    if (await store.set(row.id, to, status || null)) await store.set(row.id, column, null)
-  }
+  // The place keeps its role, note and state: only who holds it changes, in one write and one undo step.
+  const choose = (person: Row) => void store?.move(row.id, cell.id, person.id)
   return (
     <Section ref={ref} title={t('whoInstead')} count={people ? String(people.length) : undefined}>
       {people?.length === 0 ? <p className="nv-dw-none">{t('candidatesNone')}</p> : (
@@ -224,7 +222,7 @@ function Instead({ ref, view, models, row, column, cell, store, date }: { ref: R
             <li key={person.id}>
               <span className="nv-avatar nv-avatar--hue" style={{ '--h': hueOf(person.id) } as CSSProperties} aria-hidden="true">{initials(person.title)}</span>
               <span className="nv-dw-list__main">{person.title}{date && <small>{t('freeOn', { day: shortDay(date) })}</small>}</span>
-              {store && <button type="button" className="nv-button nv-button--secondary nv-button--sm" onClick={() => void choose(person)}>{t('choose')}</button>}
+              {store && <button type="button" className="nv-button nv-button--secondary nv-button--sm" onClick={() => choose(person)}>{t('choose')}</button>}
             </li>
           ))}
         </ul>

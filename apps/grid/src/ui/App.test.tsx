@@ -1990,6 +1990,18 @@ describe('a link that carries conditions', () => {
     await waitFor(() => expect(api.rows.mock.calls.at(-1)?.[3]).toMatchObject({ join: 'or' }))
   })
 
+  it('lands a link followed while the app is open, as a drawer\'s "alle n" does, without a reload', async () => {
+    api.schema.mockResolvedValue({ ...served, models: { ...served.models, activity: { ...served.models.activity, fields: declared } } })
+    await shell()
+    await waitFor(() => expect(api.rows).toHaveBeenCalled())
+    act(() => {
+      window.location.hash = link('planning', optie)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    await waitFor(() => expect(lastFilters()).toEqual(optie))
+    await waitFor(() => expect(params().get('f')).toBeNull())
+  })
+
   it('offers Publiceren on a saved view to an administrator only', async () => {
     const own: SavedView = {
       key: '42', id: 42, label: 'Calais techniek', table: 'planning', table_label: 'Planning', model: 'activity', date_field: 'date', type: 'grid',
@@ -2125,6 +2137,32 @@ describe('the add button on a calendar', () => {
     await screen.findByRole('heading', { level: 1, name: 'Persoonskalender' })
     expect(screen.queryByRole('button', { name: /^Nieuw/ })).toBeNull()
     expect(screen.queryByText('Alleen lezen')).toBeNull()
+    window.location.hash = ''
+  })
+})
+
+describe('the title line\'s insight', () => {
+  const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { optie: 'Optie', vast: 'Vast' }, tones: { optie: 'warn', vast: 'ok' } }
+  const schema = {
+    models: { activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { status } } },
+    tables: [{ key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['grid'] }],
+    views: [{ key: 'lijst', label: 'Lijst', table: 'activiteit', model: 'activiteit' }],
+    writable: { activiteit: true },
+  } as unknown as Schema
+  const row = { id: 1, title: 'Montage', status: 'publish', fields: { status: 'optie' } }
+
+  it('counts the rows as the sheet now holds them: an edit takes the badge with it', async () => {
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockResolvedValue({ rows: [row], total: 1 })
+    api.update.mockResolvedValue({ row: { ...row, fields: { status: null } }, batch: 'b1' })
+    window.location.hash = 'view=lijst'
+    render(<App />)
+    await waitFor(() => expect(document.querySelector('.nv-toolbar__insight')?.textContent).toBe('Optie1'))
+    const cell = await screen.findByRole('gridcell', { name: /Optie/ })
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Delete' })
+    await waitFor(() => expect(api.update).toHaveBeenCalled())
+    await waitFor(() => expect(document.querySelector('.nv-toolbar__insight')).toBeNull())
     window.location.hash = ''
   })
 })

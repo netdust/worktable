@@ -250,8 +250,9 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const [open, setOpen] = useState<Open | null>(null)
   const [filling, setFilling] = useState<number | null>(null)
   const toPanel = useRef(false)
-  // Each hand-off to a cell's drawer asks it to open its status, so the keyboard lands on a choice.
-  const [asking, setAsking] = useState(0)
+  // Each hand-off to a cell's drawer asks that cell's drawer to open its status, so the keyboard lands on a choice; a plain click asks nothing.
+  const [asking, setAsking] = useState<{ key: string; n: number } | null>(null)
+  const ask = (key: string) => setAsking((was) => ({ key, n: (was?.n ?? 0) + 1 }))
   const clickedAt = useRef(0)
   const bodyRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
@@ -368,7 +369,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
     event.stopPropagation()
     if (event.type === 'click' && open?.column) {
       toPanel.current = true
-      setAsking((n) => n + 1)
+      ask(`${open.row}:${open.column}`)
       setOpen({ ...open })
     }
   }
@@ -376,7 +377,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   /** Enter and double-click hand the keyboard to the panel; a click leaves it on the cell. */
   function show(row: number, column: MatrixColumn, focus: boolean): void {
     toPanel.current = focus
-    if (focus) setAsking((n) => n + 1)
+    if (focus) ask(`${row}:${column.key}`)
+    else setAsking(null)
     setOpen({ row, column: column.key })
   }
 
@@ -605,7 +607,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
           </table>
         </div>
         {openRow && (open?.column === null || openColumn) && (
-          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows} asking={asking}
+          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows}
+            asking={asking && openColumn && asking.key === `${openRow.id}:${openColumn.key}` ? asking.n : 0}
             store={editable ? store : undefined} onClose={close} />
         )}
       </div>

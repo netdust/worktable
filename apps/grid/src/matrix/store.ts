@@ -33,6 +33,8 @@ export interface MatrixStore {
   setNote: (row: number, column: MatrixColumn, note: string) => Promise<boolean>
   /** Puts `record` on the open join row `cell` through the join's fill action: one undo step, undone by its batch. */
   fill: (row: number, cell: number, record: number) => Promise<boolean>
+  /** Puts `record` in place of the one on join record `cell`, which keeps every other field: one write, one undo step. */
+  move: (row: number, cell: number, record: number) => Promise<boolean>
   /** The first row's status copied into the rest, in the order given: one undo step. */
   fillDown: (column: MatrixColumn, rowIds: number[]) => Promise<void>
   /** A block of keys, marks or values from the top-left of `at`: one undo step. */
@@ -69,8 +71,8 @@ interface Op {
   batch?: { id: string | null; created: boolean }
   /** An undo or redo of a lifecycle change: undoes `batch` instead of writing the cell. */
   replay?: 'undo' | 'redo'
-  /** A fill of the open row `record` with the record `put`: the action decides what changes, so the row is read back after each step. */
-  fill?: { put: number }
+  /** A fill of the open row `record` with the record `put`: the action decides what changes, so the row is read back after each step. `move`: the record's column is rewritten instead, its other fields kept. */
+  fill?: { put: number; move?: true }
   /** The write landed but its row could not be read back: a refresh follows once it settles. */
   reread?: boolean
   /** The server refused this redo for good (its batch minted tokens): the step leaves the history. */
@@ -276,6 +278,11 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
   }
 
   async function runFill(op: Op, put: number): Promise<void> {
+    if (op.fill?.move) {
+      const saved = await api.update(join.model, op.record.id!, { [join.column_field]: [put] })
+      Object.assign(op.batch!, { id: saved.batch, created: false })
+      return reload(op)
+    }
     const open = join.open!
     const done = await api.runAction(open.action, op.record.id!, { [open.input]: put })
     Object.assign(op.batch!, { id: done.batch, created: done.created.length > 0 })
@@ -504,6 +511,10 @@ export function createMatrixStore({ view, rows, api, onStale, onNotice }: Option
       if (!join.open) return Promise.resolve(false)
       const batch = { id: null, created: false }
       return single({ row, column: OPEN, before: null, after: null, record: { id: cell }, batch, fill: { put: record } })
+    },
+    move(row, cell, record) {
+      const batch = { id: null, created: false }
+      return single({ row, column: OPEN, before: null, after: null, record: { id: cell }, batch, fill: { put: record, move: true } })
     },
     setNote(row, column, note) {
       const before = shown(row, column)

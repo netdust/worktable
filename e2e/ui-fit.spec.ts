@@ -76,66 +76,101 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('select-and-picker-fit @e2e', async ({ page }) => {
-  await page.goto('/')
-  await openView(page, 'Toewijzingen')
-  const row = page.locator('tbody tr.nv-tr').first()
-  await expect(row).toBeVisible()
+  // Its own row, an open place with known candidates: never whatever the earlier specs left first in the list.
+  const api = page.request
+  const rowsOf = async (path: string) =>
+    ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
+  const productie = (await rowsOf('/api/rows/productie?limit=500')).find((r) => r.titel === 'Nachtwacht')?.id
+  const speler = (await rowsOf('/api/rows/rol?limit=500')).find((r) => r.naam === 'Speler')?.id
+  const made = await api.post('/api/rows/activiteit', {
+    data: {
+      productie_id: productie,
+      soort: 'repetitie',
+      datum: '2028-11-07',
+      omschrijving: 'ui-fit eigen rij',
+      start_at: '2028-11-07T10:00',
+      eind_at: '2028-11-07T12:00',
+    },
+  })
+  expect(made.status(), await made.text()).toBe(201)
+  const activiteit = ((await made.json()) as { id: number }).id
+  const place = await api.post('/api/rows/toewijzing', {
+    data: { activiteit_id: activiteit, rol_id: speler, aantal: 1, state: 'open' },
+  })
+  expect(place.status(), await place.text()).toBe(201)
+  try {
+    const view = ((await (await api.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views.find(
+      (v) => v.name === 'Toewijzingen',
+    )
+    const only = JSON.stringify([{ field: 'activiteit_id', op: 'in', values: [String(activiteit)] }])
+    await page.goto(`/#view=${view?.id}&f=${encodeURIComponent(only)}`)
+    await page.reload()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen')
+    const row = page.locator('tbody tr.nv-tr').first()
+    await expect(page.locator('tbody tr.nv-tr')).toHaveCount(1)
 
-  for (const density of ['Compact', 'Normaal', 'Ruim'] as const) {
-    await setDensity(page, density)
+    for (const density of ['Compact', 'Normaal', 'Ruim'] as const) {
+      await setDensity(page, density)
 
-    // Bug 1: the select's options, the current one too, end inside the popover.
-    const status = await cellOf(page, row, 'Status')
-    await edit(status)
-    const select = page.locator('.nv-pop.nv-select')
-    await expect(select.getByRole('option').first()).toBeVisible()
-    expect.soft(await outside(select, '[role="option"]'), `select options, ${density}`).toEqual([])
-    const cell = await rectOf(status)
-    const pop = await rectOf(select)
-    expect.soft(Math.abs(pop.left - cell.left), `select under its cell, ${density}`).toBeLessThanOrEqual(1)
-    await page.keyboard.press('Escape')
-    await expect.soft(select).toHaveCount(0)
+      // Bug 1: the select's options, the current one too, end inside the popover.
+      const status = await cellOf(page, row, 'Status')
+      await edit(status)
+      const select = page.locator('.nv-pop.nv-select')
+      await expect(select.getByRole('option').first()).toBeVisible()
+      expect.soft(await outside(select, '[role="option"]'), `select options, ${density}`).toEqual([])
+      const cell = await rectOf(status)
+      const pop = await rectOf(select)
+      expect.soft(Math.abs(pop.left - cell.left), `select under its cell, ${density}`).toBeLessThanOrEqual(1)
+      await page.keyboard.press('Escape')
+      await expect.soft(select).toHaveCount(0)
 
-    // Bug 3: the to-one picker's search fits its panel, its list is as wide, and both line up under the cell.
-    const person = await cellOf(page, row, 'Persoon')
-    await edit(person)
-    const picker = page.locator('.nv-pop.nv-picker')
-    const list = page.locator('.nv-picker__pop')
-    await expect(list.getByRole('option').first()).toBeVisible()
-    expect.soft(await outside(picker, '.nv-picker__input'), `picker search, ${density}`).toEqual([])
-    expect
-      .soft(await outside(list.locator('.nv-picker__list'), '[role="option"]'), `picker options, ${density}`)
-      .toEqual([])
-    const field = await rectOf(picker)
-    const under = await rectOf(list)
-    const own = await rectOf(person)
-    expect.soft(Math.abs(field.left - own.left), `picker at the cell's left, ${density}`).toBeLessThanOrEqual(1)
-    expect.soft(field.top, `picker under the cell, ${density}`).toBeGreaterThanOrEqual(own.bottom - 0.5)
-    expect.soft(Math.abs(under.width - field.width), `list as wide as the search, ${density}`).toBeLessThanOrEqual(1)
-    expect.soft(Math.abs(under.left - field.left), `list under the search, ${density}`).toBeLessThanOrEqual(1)
-    await page.keyboard.press('Escape')
-    await expect(picker).toHaveCount(0)
+      // Bug 3: the to-one picker's search fits its panel, its list is as wide, and both line up under the cell.
+      const person = await cellOf(page, row, 'Persoon')
+      await edit(person)
+      const picker = page.locator('.nv-pop.nv-picker')
+      const list = page.locator('.nv-picker__pop')
+      await expect(list.getByRole('option').first()).toBeVisible()
+      expect.soft(await outside(picker, '.nv-picker__input'), `picker search, ${density}`).toEqual([])
+      expect
+        .soft(await outside(list.locator('.nv-picker__list'), '[role="option"]'), `picker options, ${density}`)
+        .toEqual([])
+      const field = await rectOf(picker)
+      const under = await rectOf(list)
+      const own = await rectOf(person)
+      expect.soft(Math.abs(field.left - own.left), `picker at the cell's left, ${density}`).toBeLessThanOrEqual(1)
+      expect.soft(field.top, `picker under the cell, ${density}`).toBeGreaterThanOrEqual(own.bottom - 0.5)
+      expect.soft(Math.abs(under.width - field.width), `list as wide as the search, ${density}`).toBeLessThanOrEqual(1)
+      expect.soft(Math.abs(under.left - field.left), `list under the search, ${density}`).toBeLessThanOrEqual(1)
+      await page.keyboard.press('Escape')
+      await expect(picker).toHaveCount(0)
+    }
+    await setDensity(page, 'Normaal')
+
+    await bothThemes(
+      page,
+      'select',
+      async () => {
+        await edit(await cellOf(page, row, 'Status'))
+        await expect(page.locator('.nv-select').getByRole('option').first()).toBeVisible()
+      },
+      () => page.keyboard.press('Escape'),
+    )
+    await bothThemes(
+      page,
+      'picker',
+      async () => {
+        await edit(await cellOf(page, row, 'Persoon'))
+        await expect(page.locator('.nv-picker__pop').getByRole('option').first()).toBeVisible()
+      },
+      () => page.keyboard.press('Escape'),
+    )
+  } finally {
+    for (const t of await rowsOf(
+      `/api/rows/toewijzing?limit=50&filter=${encodeURIComponent(JSON.stringify({ activiteit_id: activiteit }))}`,
+    ))
+      await api.delete(`/api/rows/toewijzing/${t.id}`)
+    await api.delete(`/api/rows/activiteit/${activiteit}`)
   }
-  await setDensity(page, 'Normaal')
-
-  await bothThemes(
-    page,
-    'select',
-    async () => {
-      await edit(await cellOf(page, row, 'Status'))
-      await expect(page.locator('.nv-select').getByRole('option').first()).toBeVisible()
-    },
-    () => page.keyboard.press('Escape'),
-  )
-  await bothThemes(
-    page,
-    'picker',
-    async () => {
-      await edit(await cellOf(page, row, 'Persoon'))
-      await expect(page.locator('.nv-picker__pop').getByRole('option').first()).toBeVisible()
-    },
-    () => page.keyboard.press('Escape'),
-  )
 })
 
 test('space-switcher-fits @e2e', async ({ page }) => {

@@ -345,6 +345,28 @@ describe('undo and redo', () => {
   })
 })
 
+describe('move', () => {
+  it('puts another person on the same join record in one write, keeping its other fields, and one undo takes it back', async () => {
+    const s = setup()
+    const before = { ...s.server.get(11)! }
+    s.server.set(11, { ...before, role: [8], note: 'brengt gitaar' })
+
+    expect(await s.store.move(1, 11, 9)).toBe(true)
+
+    expect(s.api.update).toHaveBeenCalledTimes(1)
+    expect(s.api.update).toHaveBeenCalledWith('assignment', 11, { person: [9] })
+    expect([s.api.create, s.api.remove].map((f) => f.mock.calls.length)).toEqual([0, 0])
+    expect(s.server.get(11)).toMatchObject({ person: [9], role: [8], note: 'brengt gitaar', status: before.status })
+    expect(s.status(1, mira)).toBe(before.status)
+    expect(s.cell(1, sien)).toBeUndefined()
+
+    await s.store.undo()
+    expect(s.api.undoBatch).toHaveBeenCalledTimes(1)
+    expect(s.server.get(11)).toMatchObject({ person: [5], role: [8] })
+    expect(s.status(1, sien)).toBe(before.status)
+  })
+})
+
 describe('fill-down and paste', () => {
   it('fills the first row\'s status down a column as one undo step', async () => {
     const { api, store, status } = setup()

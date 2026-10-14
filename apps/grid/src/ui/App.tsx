@@ -270,6 +270,20 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // A link's conditions land once, on the view it names, in place of the view's own: the colleague sees what the sender saw.
   // It is a local change: only the person's own next change saves. A condition the view's model cannot hold is dropped.
   const landing = useRef({ view: readHash('view'), f: readHash('f'), j: readHash('j') })
+  // A link followed while the app is open (a drawer's "alle n") lands the same way, without a reload.
+  const [landings, setLandings] = useState(0)
+  useEffect(() => {
+    const follow = () => {
+      const [linked, f] = [readHash('view'), readHash('f')]
+      if (!linked || f === null) return
+      landing.current = { view: linked, f, j: readHash('j') }
+      setActiveKey(linked)
+      setLandings((n) => n + 1)
+    }
+    // The page's window: inside this component `window` names the days a view reads.
+    globalThis.addEventListener('hashchange', follow)
+    return () => globalThis.removeEventListener('hashchange', follow)
+  }, [])
   useEffect(() => {
     const { view: linkedKey, f, j } = landing.current
     if (!settled || f === null || !view || !layout) return
@@ -286,7 +300,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     const offered = filterFields(model, [])
     const fits = (c: Filter) => offered.some((field) => field.field === c.field && OPERATORS[field.kind].includes(c.op))
     storeLayout({ ...withFilters(layout, linked.filter(fits)), join: j === 'or' ? 'or' : undefined })
-  }, [settled, view?.key, layout === null])
+  }, [settled, view?.key, layout === null, landings])
   const asks = layout ? JSON.stringify([layout.filters, joinOf(layout.filters, layout.join), layout.sort, layout.group]) : ''
   // The period is the one condition on the view's date column: the days a skin shows, a new row's day and the export's.
   const period = useMemo(() => (view && layout ? periodOf(view, layout, new Date()) : null), [view, layout?.filters])
@@ -417,6 +431,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // A dashboard's title line: the space it reads and this week, as the prototype's.
   const spaceName = space.status === 'ready' && served?.space ? (space.selected?.title ?? t('allSpace', { label: (served.models[served.space.model]?.label ?? '').toLocaleLowerCase() })) : null
   const dashboardSum = spaceName ? t('dashboardSum', { space: spaceName, week: isoWeek(new Date()) }) : t('dashboardSum', { space: '', week: isoWeek(new Date()) }).replace(/^ · /, '')
+  // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
+  const shownRows = store ? state.rows : result.status === 'ready' ? result.rows : null
+  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? insightOf(model, shownRows) : null), [dashboard, model, shownRows, matrix])
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
     ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
@@ -548,7 +565,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           locked={view ? lockOf(view) : null}
           shown={told?.view !== view?.key ? null : (told?.shown ?? null)}
           period={dashboard ? dashboardSum : (period?.name ?? null)}
-          insight={!dashboard && model && result.status === 'ready' && !matrix ? insightOf(model, result.rows) : null}
+          insight={insight}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}

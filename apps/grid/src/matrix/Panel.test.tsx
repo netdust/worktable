@@ -47,7 +47,7 @@ const week = (note = 'komt later'): Row[] => [
 ]
 const away = (reason = 'Examen'): Row[] => [{ id: 90, title: 'x', status: 'publish', fields: { person: [5], from: '2026-05-18', to: '2026-05-18', reason } }]
 
-function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: Row[] } = {}) {
+function setup({ rows = week(), awayRows = away(), models: given = models }: { rows?: Row[]; awayRows?: Row[]; models?: Record<string, Model> } = {}) {
   let next = 500
   const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
   writes.create.mockImplementation(async (_m, data) => ({ row: { id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }, batch: null }))
@@ -58,7 +58,7 @@ function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: 
   vi.spyOn(store, 'setNote')
   function Live({ store }: { store: MatrixStore }) {
     const state = useSyncExternalStore(store.subscribe, store.getState)
-    return <Matrix view={view} models={models} rows={state.rows} away={awayRows} titles={titles} layout={defaults(view)} onLayout={() => undefined} emptyTitle="Geen rijen" store={store} writable />
+    return <Matrix view={view} models={given} rows={state.rows} away={awayRows} titles={titles} layout={defaults(view)} onLayout={() => undefined} emptyTitle="Geen rijen" store={store} writable />
   }
   const utils = render(<Live store={store} />)
   const at = (title: RegExp, key: string) => screen.getByRole('row', { name: title }).querySelector<HTMLElement>(`[data-column="${key}"]`)!
@@ -118,6 +118,26 @@ describe('the cell drawer is the record drawer', () => {
     expect(order[1]).toBe('fields')
     expect(order.at(-1)).toBe('Geschiedenis')
     expect(order.findIndex((label) => label.startsWith('Ook op'))).toBeLessThan(order.indexOf('Geschiedenis'))
+  })
+
+  it('names its lines by the join\'s own field labels, no word of its own', () => {
+    const named = { ...models, assignment: { ...models.assignment, fields: { ...models.assignment.fields,
+      person: { type: 'relation', label: 'Medewerker', required: false, fact: false, relation: { model: 'people', multiple: false } },
+      activity: { type: 'relation', label: 'Klus', required: true, fact: false, relation: { model: 'activity', multiple: false } } } } } as Record<string, Model>
+    const { panel, at } = setup({ models: named })
+    fireEvent.click(at(/Montage/, 'record:5'))
+    const labels = [...panel()!.querySelectorAll('.nv-drawer__field dt')].map((dt) => dt.textContent)
+    expect(labels).toEqual(['Medewerker', 'Status', 'Klus', 'Notitie'])
+  })
+
+  it('opens the status for the hand-off only: a plain click on another cell afterwards shows the badge closed', () => {
+    const { panel, at } = setup()
+    fireEvent.click(at(/Montage/, 'record:5'))
+    fireEvent.keyDown(at(/Montage/, 'record:5'), { key: 'Enter' })
+    expect(within(panel()!).queryByRole('radiogroup', { name: 'Status' })).not.toBeNull()
+    fireEvent.click(at(/Diner/, 'record:7'))
+    expect(within(panel()!).queryByRole('radiogroup', { name: 'Status' })).toBeNull()
+    expect(panel()!.querySelector('.nv-dw-status')?.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('heads its alert with the icon and the title on one line, says the reason as a sentence, and offers its actions as words', () => {
