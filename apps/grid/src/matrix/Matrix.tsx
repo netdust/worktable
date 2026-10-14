@@ -609,6 +609,10 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
         {openRow && (open?.column === null || openColumn) && (
           <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows}
             asking={asking && openColumn && asking.key === `${openRow.id}:${openColumn.key}` ? asking.n : 0}
+            onReturn={() => {
+              const at = open?.column ? indexOf({ row: open.row, column: open.column }) : null
+              if (at) tableRef.current?.querySelector<HTMLElement>(`[data-cell="${at.r}-${at.c}"]`)?.focus()
+            }}
             store={editable ? store : undefined} onClose={close} />
         )}
       </div>

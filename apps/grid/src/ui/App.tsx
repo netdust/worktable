@@ -397,6 +397,23 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
+  // ⌘Z and ⇧⌘Z on the page, for every skin: the toast promises the undo wherever the focus went (a drop, a drawer's button
+  // that unmounted). A cell that handled the key first has prevented it; a field keeps its own.
+  const undoing = useRef(saves)
+  undoing.current = saves
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      const now = undoing.current
+      if (!now) return
+      event.preventDefault()
+      void (event.shiftKey ? now.redo() : now.undo())
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   const fields = useMemo(
     () => (model && loaded ? filterFields(model, loaded, view?.filters).filter((f) => f.field !== spaceField) : []),
     [model, loaded, view?.filters, spaceField],
@@ -605,8 +622,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onMove={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (id, field, value) => void store.apply({ id, field, value }) : undefined}
-              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined}
-              onUndo={store ? (redo) => void (redo ? store.redo() : store.undo()) : undefined} />
+              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (

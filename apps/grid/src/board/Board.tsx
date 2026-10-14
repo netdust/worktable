@@ -126,12 +126,10 @@ interface Props {
   onMove?: (id: number, field: string, value: string | null) => void
   /** A column head's +: a new record with that column's value. */
   onCreate?: (preset: Record<string, unknown>) => void
-  /** ⌘Z and ⇧⌘Z on the board: the tab's undo, as in the grid. */
-  onUndo?: (redo: boolean) => void
 }
 
 /** Cards in a column per option of the board's column, in its order, "Geen" last when it holds a card; a card opens its row, and drags to another column. */
-export function Board({ view, model, models, rows, column, layout, onShown, onMove, onCreate, onUndo }: Props) {
+export function Board({ view, model, models, rows, column, layout, onShown, onMove, onCreate }: Props) {
   const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout)
   const field = model.fields[column]
   const options = Object.entries(field?.options ?? {})
@@ -147,20 +145,6 @@ export function Board({ view, model, models, rows, column, layout, onShown, onMo
   useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all }), [rows.length, lanes.length, all])
   const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   const dragging = useRef<string | null>(null)
-  // ⌘Z wherever the focus went: a mouse's drop leaves it on the page, and the toast promises the undo there.
-  const undo = useRef(onUndo)
-  undo.current = onUndo
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (event.defaultPrevented || !undo.current || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
-      if (target?.closest('input, textarea, [contenteditable="true"]')) return
-      event.preventDefault()
-      undo.current(event.shiftKey)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
   return (
     <div className="nv-frame">
       <div className="nv-body">

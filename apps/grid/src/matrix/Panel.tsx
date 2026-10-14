@@ -30,6 +30,8 @@ export interface PanelProps {
   rows?: Row[]
   /** Moves when the matrix hands the keyboard over: the status opens for it. */
   asking?: number
+  /** Gives the keyboard back to the cell, after a button that goes away with what it did (Kiezen). */
+  onReturn?: () => void
 }
 
 function text(value: unknown): string {
@@ -141,7 +143,7 @@ function NoteLine({ note, disabled, onSave }: { note: string; disabled: boolean;
 }
 
 /** A matrix cell read as the record drawer reads a record: the alert, who, in what role and state, on what; the rest of their day; who could stand in; its history. */
-export function CellDrawer({ view, models, row, column, columns, away, store, rows = [], fields, asking, onClose }: PanelProps & { column: MatrixColumn; fields: Column[]; onClose: () => void }) {
+export function CellDrawer({ view, models, row, column, columns, away, store, rows = [], fields, asking, onReturn, onClose }: PanelProps & { column: MatrixColumn; fields: Column[]; onClose: () => void }) {
   const join = view.join!
   const { word } = useWords(view, models)
   const [cell, ...others] = cellsFor(view, row, column)
@@ -193,13 +195,13 @@ export function CellDrawer({ view, models, row, column, columns, away, store, ro
             </ul>
           )}
         </Section>
-        {cell && <Instead ref={instead} view={view} models={models} row={row} cell={cell} store={store} date={date} />}
+        {cell && <Instead ref={instead} view={view} models={models} row={row} cell={cell} store={store} date={date} onReturn={onReturn} />}
       </>} />
   )
 }
 
 /** Who could take this place instead, from the person column's own candidates; Kiezen moves the place to them. */
-function Instead({ ref, view, models, row, cell, store, date }: { ref: Ref<HTMLElement>; view: View; models: Record<string, Model>; row: Row; cell: MatrixCell; store?: MatrixStore; date: string }) {
+function Instead({ ref, view, models, row, cell, store, date, onReturn }: { ref: Ref<HTMLElement>; view: View; models: Record<string, Model>; row: Row; cell: MatrixCell; store?: MatrixStore; date: string; onReturn?: () => void }) {
   const join = view.join!
   const from = models[join.model]?.fields[join.column_field]?.options_from
   const [people, setPeople] = useState<Row[] | null>(null)
@@ -213,7 +215,10 @@ function Instead({ ref, view, models, row, cell, store, date }: { ref: Ref<HTMLE
   }, [cell.id])
   if (!from) return null
   // The place keeps its role, note and state: only who holds it changes, in one write and one undo step.
-  const choose = (person: Row) => void store?.move(row.id, cell.id, person.id)
+  const choose = (person: Row) => {
+    void store?.move(row.id, cell.id, person.id)
+    onReturn?.()
+  }
   return (
     <Section ref={ref} title={t('whoInstead')} count={people ? String(people.length) : undefined}>
       {people?.length === 0 ? <p className="nv-dw-none">{t('candidatesNone')}</p> : (

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { openEditor } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -509,10 +510,19 @@ test.describe('step 3e: the matrix as its prototype', () => {
           )
         ).length,
       ).toBe(1)
-      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-      await page.locator(`tbody tr.nv-tr[data-title="${title}"] td[data-column]`).first().click()
+      // The keyboard is back on the cell the drawer belongs to, never on the page's body.
+      expect(await page.evaluate(() => document.activeElement?.matches('td[data-column]') ?? false)).toBe(true)
+      // ⌘Z right away, with no click between: the toast's promise holds wherever the focus went.
       await page.keyboard.press('ControlOrMeta+z')
       await expect.poll(async () => (await place())?.persoon_id).toBe(lotte)
+
+      // A status picked in the cell drawer, then ⌘Z with no click between, gives the status back.
+      await row.locator(`td[data-column="record:${lotte}"]`).click()
+      await drawer.locator('.nv-dw-status').click()
+      await drawer.getByRole('radio', { name: 'Geannuleerd' }).click()
+      await expect.poll(async () => (await place())?.state).toBe('geannuleerd')
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect.poll(async () => (await place())?.state).toBe('bevestigd')
 
       // Afwezigheden: on by default, a toggle.
       const away = page.locator('.nv-bar').getByRole('button', { name: 'Afwezigheden' })
@@ -526,6 +536,53 @@ test.describe('step 3e: the matrix as its prototype', () => {
         `/api/rows/toewijzing?limit=50&filter=${encodeURIComponent(JSON.stringify({ activiteit_id: id }))}`,
       ))
         await api.delete(`/api/rows/toewijzing/${t.id}`)
+      await api.delete(`/api/rows/activiteit/${id}`)
+    }
+  })
+})
+
+test.describe('step 3e: ⌘Z on the page', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test('undo-from-the-page @e2e', async ({ page }) => {
+    const api = page.request
+    const json = async (path: string) =>
+      ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
+    const productie = (await json('/api/rows/productie?limit=500')).find((r) => r.titel === 'Nachtwacht')?.id
+    const made = await api.post('/api/rows/activiteit', {
+      data: {
+        productie_id: productie,
+        soort: 'repetitie',
+        datum: '2028-11-14',
+        omschrijving: 'e2e ongedaan vanaf de pagina',
+        start_at: '2028-11-14T10:00',
+        eind_at: '2028-11-14T12:00',
+      },
+    })
+    const id = ((await made.json()) as { id: number }).id
+    const stored = async () =>
+      (await json(`/api/rows/activiteit?limit=5&filter=${encodeURIComponent(JSON.stringify({ id }))}`))[0]
+    try {
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2028-11-13')
+      // A grid cell edited, then a click on the view's title, then ⌘Z: the edit is undone though no cell has the focus.
+      const row = page.locator('tbody tr.nv-tr[data-title="e2e ongedaan vanaf de pagina"]')
+      await expect(row).toBeVisible()
+      const index = await page
+        .locator('thead th')
+        .evaluateAll((heads) =>
+          heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === 'Status'),
+        )
+      const status = row.locator('td').nth(index)
+      await status.click()
+      await status.press('Enter')
+      await expect(openEditor(page)).toBeVisible()
+      await openEditor(page).getByRole('listbox').press('b')
+      await openEditor(page).getByRole('listbox').press('Enter')
+      await expect.poll(async () => (await stored())?.status).toBe('bevestigd')
+      await page.getByRole('heading', { level: 1 }).click()
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect.poll(async () => (await stored())?.status).toBe('optie')
+    } finally {
       await api.delete(`/api/rows/activiteit/${id}`)
     }
   })
