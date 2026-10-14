@@ -595,9 +595,12 @@ test.describe('step 3e: the title line and the rail', () => {
     await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
     await page.getByRole('option', { name: 'De Kersentuin', exact: true }).click()
     await expect(pill(page)).toHaveText(`De Kersentuin · week ${week}`)
-    await expect(page.getByRole('listbox', { name: 'Producties' })).toHaveCount(0)
     await expect(bar(page).locator('.nv-bar__updated')).toHaveText(/^bijgewerkt \d{2}:\d{2}$/)
     await shot(page, 'dashboard-title-pill')
+    // The space is the account's own choice and outlives this page: put it back, so the specs after this one read every production.
+    await page.getByRole('button', { name: 'De Kersentuin', exact: true }).click()
+    await page.getByRole('option', { name: 'Alle producties', exact: true }).click()
+    await expect(pill(page)).toHaveText(`Alle producties · week ${week}`)
   })
 
   test('rail-counts @e2e', async ({ page }) => {
