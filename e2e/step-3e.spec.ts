@@ -63,6 +63,7 @@ test.describe('step 3e: one period, used the same way on every skin', () => {
       await press(page, radio(page, 'Week'))
       await lit(page, 'Week')
       await expect(pill(page)).toHaveText(/^Week \d+ · /)
+      await shot(page, `period-${view.toLowerCase().replaceAll(' ', '-')}`)
       const thisWeek = await weekNo(page)
       await press(page, bar(page).getByRole('button', { name: 'Volgende periode' }))
       await expect.poll(() => weekNo(page)).not.toBe(thisWeek)
@@ -85,6 +86,7 @@ test.describe('step 3e: one period, used the same way on every skin', () => {
     await expect(bar(page).getByRole('button', { name: /^Filter/ })).toBeVisible()
     await expect(bar(page).getByRole('radiogroup', { name: 'Periode' })).toHaveCount(0)
     await expect(bar(page).getByRole('button', { name: 'Vandaag' })).toHaveCount(0)
+    await shot(page, 'no-period-control')
   })
 })
 
@@ -117,6 +119,7 @@ test.describe('step 3e: Groep chooses on every skin', () => {
     await expect(groep(page)).toHaveText('Groep: soort')
     await expect(page.getByRole('grid', { name: 'Voorstelling' })).toBeVisible()
     await expect(page.getByRole('grid', { name: 'Optie' })).toHaveCount(0)
+    await shot(page, 'groep-everywhere')
   })
 })
 
@@ -161,6 +164,7 @@ test.describe('step 3e: the board drags', () => {
       })
       await expect(card(page, 'Bevestigd', title)).toBeVisible()
       await expect(card(page, 'Optie', title)).toHaveCount(0)
+      await shot(page, 'board-drag')
       await expect
         .poll(
           async () =>
@@ -251,6 +255,7 @@ test.describe('step 3e: the board drags', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await expect(dialog.getByLabel('Status')).toHaveCount(0)
+    await shot(page, 'board-column-plus')
     await dialog.getByLabel('Productie').selectOption({ label: 'Nachtwacht' })
     await dialog.getByLabel('Datum').fill('2028-10-05')
     await dialog.getByRole('button', { name: 'Aanmaken' }).click()
@@ -266,6 +271,40 @@ test.describe('step 3e: the board drags', () => {
       expect(found.map((r) => r.status)).toEqual(['geannuleerd'])
     } finally {
       for (const r of found) await api.delete(`/api/rows/activiteit/${r.id}`)
+    }
+  })
+
+  // Found driving board-column-plus: on a week that does not hold today, the dialog's Datum starts on today, so the card
+  // made from the column lands outside the board it was made from and the column still reads "Geen activiteiten". The calendar's quick create starts on
+  // the window's first day (step 3d); App.tsx passes that window to QuickCreate on a calendar only.
+  test('board-column-plus-in-window @e2e', async ({ page }) => {
+    test.fail(true, 'defect: the board passes no window to QuickCreate, Datum starts on today')
+    const api = page.request
+    await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
+    // This week holds no activity of its own: the column reads "Geen activiteiten".
+    const optie = page.getByRole('grid', { name: 'Optie' }).locator('.nv-board__card')
+    await expect(page.getByRole('grid', { name: 'Optie' })).toContainText('Geen activiteiten')
+    await expect(optie).toHaveCount(0)
+    await page.getByRole('button', { name: 'Nieuw in Optie' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Productie').selectOption({ label: 'Nachtwacht' })
+    const day = await dialog.getByLabel('Datum').inputValue()
+    const posted = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/rows/activiteit',
+    )
+    await dialog.getByRole('button', { name: 'Aanmaken' }).click()
+    const response = await posted
+    expect(response.status(), await response.text()).toBe(201)
+    const id = ((await response.json()) as { id: number }).id
+    try {
+      await expect(dialog).toHaveCount(0)
+      await page.waitForLoadState('networkidle')
+      await shot(page, 'board-column-plus-in-window')
+      // The card shows where it was made, without a reload.
+      await expect(optie).toHaveCount(1)
+      expect(day).toBe(DRAG_WEEK)
+    } finally {
+      await api.delete(`/api/rows/activiteit/${id}`)
     }
   })
 })
@@ -325,9 +364,22 @@ test.describe('step 3e: the drawer as the prototypes draw it', () => {
       await expect(drawer.getByRole('region', { name: 'Geschiedenis' })).toBeVisible()
       await shot(page, 'drawer-anatomy')
 
+      // The fold: the other fields unfold under the list.
+      const listed = await drawer.locator('.nv-drawer__field').count()
+      await drawer.getByRole('button', { name: /^\+ \d+ andere velden$/ }).click()
+      await expect.poll(() => drawer.locator('.nv-drawer__field').count()).toBeGreaterThan(listed)
+
+      // j and ↑ anywhere in the head line, the close button included, step through the view's rows.
+      const second = page.getByRole('complementary', { name: 'e2e lade tweede' })
+      await drawer.getByRole('button', { name: 'Sluiten' }).focus()
+      await page.keyboard.press('j')
+      await expect(second.locator('.nv-dw-head__pos')).toHaveText('2 van 2')
+      await second.getByRole('button', { name: 'Sluiten' }).focus()
+      await page.keyboard.press('ArrowUp')
+      await expect(drawer.locator('.nv-dw-head__pos')).toHaveText('1 van 2')
+
       // ↓ steps to the next row of the view; expand widens over the work and Escape gives it back.
       await drawer.getByRole('button', { name: 'Volgende' }).click()
-      const second = page.getByRole('complementary', { name: 'e2e lade tweede' })
       await expect(second.locator('.nv-dw-head__pos')).toHaveText('2 van 2')
       await second.getByRole('button', { name: 'Volledig openen' }).click()
       await expect(second).toHaveClass(/nv-drawer--wide/)
@@ -511,11 +563,109 @@ test.describe('step 3e: the gallery by Groep', () => {
     const small = await width()
     await page.locator('.nv-bar').getByRole('radio', { name: 'Groot' }).click()
     await expect.poll(width).toBeGreaterThan(small)
+    const large = await width()
     await page.locator('.nv-bar').getByRole('radio', { name: 'Middel' }).click()
+    await expect.poll(width).toBeLessThan(large)
+    await shot(page, 'gallery-sections')
     await page
       .locator('.nv-bar')
       .getByRole('button', { name: /^Groep: / })
       .click()
     await page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button', { name: 'Geen' }).click()
+  })
+})
+
+/** The ISO week number of a day, as the title line counts it. */
+function isoWeekOf(day: Date): number {
+  const d = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()))
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  return Math.ceil(((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86_400_000 + 1) / 7)
+}
+
+test.describe('step 3e: the title line and the rail', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test('dashboard-title-pill @e2e', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overzicht')
+    const week = isoWeekOf(new Date())
+    // With no production chosen, every production and this week; the bar says when the tiles were read.
+    await expect(pill(page)).toHaveText(`Alle producties · week ${week}`)
+    await expect(bar(page).locator('.nv-bar__updated')).toHaveText(/^bijgewerkt \d{2}:\d{2}$/)
+    // A production chosen names itself before the week.
+    await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
+    await page.getByRole('option', { name: 'De Kersentuin', exact: true }).click()
+    await expect(pill(page)).toHaveText(`De Kersentuin · week ${week}`)
+    await expect(page.getByRole('listbox', { name: 'Producties' })).toHaveCount(0)
+    await expect(bar(page).locator('.nv-bar__updated')).toHaveText(/^bijgewerkt \d{2}:\d{2}$/)
+    await shot(page, 'dashboard-title-pill')
+  })
+
+  test('rail-counts @e2e', async ({ page }) => {
+    const api = page.request
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overzicht')
+    const rail = page.getByRole('navigation', { name: 'Views' })
+    // A table's count is its whole table, read once as the rail loads.
+    for (const [model, dataset] of [
+      ['Activiteiten', 'activiteit'],
+      ['Tourstops', 'speelreeks'],
+      ['Toewijzingen', 'toewijzing'],
+    ]) {
+      const total = ((await (await api.get(`/api/rows/${dataset}?limit=1`)).json()) as { total: number }).total
+      const node = rail.getByRole('treeitem', { name: model, exact: true })
+      await expect(node.locator('.nv-model__count').first()).toHaveText(String(total))
+      await expect(node.locator('.nv-model__count').first()).toHaveAttribute('aria-label', `${total} records`)
+    }
+    // A query counts nothing.
+    await expect(rail.getByRole('group', { name: 'Overzichten', exact: true }).locator('.nv-model__count')).toHaveCount(
+      0,
+    )
+    await shot(page, 'rail-counts')
+  })
+
+  test('title-line-insight @e2e', async ({ page }) => {
+    const api = page.request
+    const json = async (path: string) =>
+      ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
+    const productie = (await json('/api/rows/productie?limit=500')).find((r) => r.titel === 'Nachtwacht')?.id
+    const made: number[] = []
+    for (const omschrijving of ['e2e inzicht een', 'e2e inzicht twee']) {
+      const response = await api.post('/api/rows/activiteit', {
+        data: { productie_id: productie, soort: 'repetitie', status: 'optie', datum: '2028-10-24', omschrijving },
+      })
+      expect(response.status(), await response.text()).toBe(201)
+      made.push(((await response.json()) as { id: number }).id)
+    }
+    try {
+      await page.setViewportSize({ width: 1600, height: 900 })
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', '2028-10-23')
+      // The warn-toned option, its badge and the rows of the view that hold it.
+      const insight = page.locator('.nv-toolbar__insight')
+      await expect(insight.locator('.nv-pill--warn')).toHaveText('Optie')
+      const before = Number(await insight.locator('b').textContent())
+      const optie = page.getByRole('grid', { name: 'Optie' }).getByRole('row')
+      await expect(optie).toHaveCount(before)
+      await shot(page, 'title-line-insight')
+
+      // A drop out of Optie counts at once, without a reload; ⌘Z counts it back.
+      const card = optie.filter({ hasText: 'e2e inzicht een' })
+      await card.getByRole('button', { name: 'e2e inzicht een verslepen' }).focus()
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Enter')
+      await expect(
+        page.getByRole('grid', { name: 'Bevestigd' }).getByRole('row', { name: /e2e inzicht een/ }),
+      ).toBeVisible()
+      await expect(insight.locator('b')).toHaveText(String(before - 1))
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect(insight.locator('b')).toHaveText(String(before))
+
+      // A view holding no row on the option shows no insight.
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', '2031-03-03')
+      await expect(page.locator('.nv-toolbar__insight')).toHaveCount(0)
+    } finally {
+      for (const id of made) await api.delete(`/api/rows/activiteit/${id}`)
+    }
   })
 })

@@ -355,8 +355,9 @@ test('link-to-a-view-not-yours @e2e', async ({ page, browser }) => {
     await page.goto('/')
     await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible()
     const before = (await views(page)).filter((v) => v.mine)
+    // Opened cold, as from a mail: a same-page hash change lands while the app is open, and a reload would lose its note.
+    await page.goto('about:blank')
     await page.goto(`/${link.hash}`)
-    await page.reload()
     await expect(
       page.getByText(/^De gedeelde weergave is er niet voor jou; je ziet .+ zonder de filters van de link\.$/),
     ).toBeVisible()
