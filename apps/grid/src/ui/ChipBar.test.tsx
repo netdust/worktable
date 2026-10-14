@@ -227,6 +227,19 @@ describe('one chip row for every skin', () => {
     expect(chosen).toBe('plandag')
   })
 
+  it('closes the Groep panel on a pick, a single choice, the chosen option marked as pressed', async () => {
+    let layoutNow = { ...layout, group: null as string | null }
+    const { rerender } = renderNl(<ChipBar {...barOf({ view: skins.board as never, model: activity, layout: layoutNow, onLayout: (next) => { layoutNow = next }, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: /^Groep: / }))
+    const dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
+    click(within(dialog).getByRole('button', { name: 'Soort' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Groeperen' })).toBeNull())
+    rerender(<ChipBar {...barOf({ view: skins.board as never, model: activity, layout: layoutNow, onLayout: () => undefined, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: soort' }))
+    const again = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(again).getByRole('button', { name: 'Soort' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('shows Kolommen on every skin that reports its fields, never on a matrix', () => {
     for (const type of ['grid', 'board', 'gallery', 'calendar', 'timeline'] as const) expect(rowFor(type).found, type).toContain('columns')
     expect(rowFor('matrix').found).not.toContain('columns')

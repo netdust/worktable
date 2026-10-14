@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -325,6 +325,19 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const windowKey = JSON.stringify(window)
   useEffect(() => setPicking(false), [view?.key])
   const [size, setSize] = useGallerySize(view)
+  // Each dataset's records, beside its name in the rail: one count read per table, as the page loads.
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const countKey = tables.filter((table) => !table.query).map((table) => table.key).join(',')
+  useEffect(() => {
+    let live = true
+    for (const table of tables.filter((each) => !each.query)) {
+      const model = table.views[0]?.model
+      if (model) recordCount(model).then((n) => live && setCounts((was) => ({ ...was, [table.key]: n })), () => undefined)
+    }
+    return () => {
+      live = false
+    }
+  }, [countKey])
   const [showAway, setShowAway] = useViewChoice<boolean>(view, 'ntdst-views/matrix-away/v1/', (raw) => (typeof raw === 'boolean' ? raw : null), true)
 
   const shownKey = useRef<string | null>(null)
@@ -519,7 +532,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     <DrawerSlot.Provider value={drawerSlot}>
     <SchemaContext.Provider value={served}>
     <div className="nv-app" ref={frame}>
-      <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
+      <Rail signed={signed} tables={tables} counts={counts} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
         onRemoveDashboard={role === 'administrator' ? actions.remove : undefined} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />

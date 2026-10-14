@@ -6,7 +6,7 @@ import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
 import type { Layout } from '../grid/layout'
 import { factsOf, placeOf } from '../ui/facts'
 import type { Shown } from '../ui/Toolbar'
-import { toneColor } from '../ui/tone'
+import { laneTone, toneColor } from '../ui/tone'
 import { isMonth, iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
@@ -33,8 +33,6 @@ const MIN_BLOCK = 20
 // Below two lines' height a block shows its time and name side by side.
 const TWO_LINES = 40
 const THREE_LINES = 58
-// The lanes' colours, in order; the status tones are left to statuses.
-const LANE_TONES = ['sky', 'violet', 'amber', 'teal', 'rose', 'green', 'slate', 'grey']
 const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) || a.from - b.from
@@ -46,8 +44,7 @@ function lanePalette(lanes: Lane[], toned: Column | undefined): ToneOf {
   return (lane, row) => {
     if (toned && row)
       return { '--tone': toneColor(toned.tones?.[String(toned.value(row) ?? '')]) } as CSSProperties
-    const at = Math.max(0, lanes.findIndex((l) => l.id === lane))
-    return { '--tone': `var(--tone-${LANE_TONES[at % LANE_TONES.length]})` } as CSSProperties
+    return { '--tone': laneTone(lanes.findIndex((l) => l.id === lane)) } as CSSProperties
   }
 }
 

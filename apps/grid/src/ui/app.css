@@ -6552,7 +6552,7 @@ table.nv-cal--month .nv-cal__event:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-accent-default);
+  background: var(--lane, var(--color-accent-default));
 }
 
 .nv-tl__count {
@@ -6589,7 +6589,7 @@ table.nv-cal--month .nv-cal__event:hover {
   padding: 0 8px 0 10px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-accent-default) 16%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--lane, var(--color-accent-default)) 16%, var(--color-bg-surface));
   color: var(--color-fg-default);
   font: inherit;
   font-size: 12.5px;
@@ -6669,6 +6669,7 @@ table.nv-cal--month .nv-cal__event:hover {
   color: var(--color-bg-surface);
   font-size: 12px;
   font-weight: 400;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -6711,4 +6712,18 @@ table.nv-cal--month .nv-cal__event:hover {
 
 #root .nv-chips .nv-chip {
   cursor: pointer;
+}
+
+/* A dataset's record count beside its name, as the prototype's rail. */
+.nv-model__count {
+  margin-left: auto;
+  padding-right: 6px;
+  color: var(--color-fg-subtle);
+  font: 11px var(--font-mono);
+}
+
+/* The Groep panel's chosen option, as a list's chosen item: in the accent. */
+#root .nv-filters__option[aria-pressed="true"] {
+  color: var(--color-accent-default);
+  font-weight: 500;
 }

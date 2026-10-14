@@ -5,7 +5,7 @@ import { defaults } from '../grid/layout'
 import type { Model, Row, View } from '../types'
 import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
-vi.mock('../api', () => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
+vi.mock('../api', () => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 const { Matrix } = await import('./Matrix')
 
 const view: View = {

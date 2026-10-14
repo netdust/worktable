@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatWindow, isoWeek, shift, weekOf } from './Window'
 
-const api = vi.hoisted(() => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  schema: vi.fn(), rows: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), records: vi.fn(), awayRows: vi.fn(), savedViews: () => Promise.resolve([]),
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  schema: vi.fn(), rows: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), records: vi.fn(), awayRows: vi.fn(), savedViews: () => Promise.resolve([]),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
   rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn() }))

@@ -8,7 +8,7 @@ import { createStore, type StoreApi } from '../store'
 import type { LinkActions } from './Links'
 import { barOf } from '../../ui/bar'
 
-const remote = vi.hoisted(() => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
+const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 vi.mock('../../api', () => remote)
 
 const day: Model = {

@@ -251,6 +251,11 @@ export async function rowsWhere(source: string, where: Record<string, unknown>, 
   return rowsOf(source, { filter: JSON.stringify(where), limit: String(limit), ...(sort.length > 0 ? { sort: sort.join(',') } : {}) })
 }
 
+/** How many records a source holds, the scope aside: the rail's count. */
+export async function recordCount(source: string): Promise<number> {
+  return (await rowsOf(source, { limit: '1' })).total
+}
+
 /** One record's changes, newest first. */
 export async function recordHistory(source: string, id: number): Promise<HistoryEntry[]> {
   return (await request<{ entries: HistoryEntry[] }>('GET', `/history/${source}`, { filter: JSON.stringify({ id }) })).entries

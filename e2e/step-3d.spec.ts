@@ -291,8 +291,9 @@ test.describe('step 3d', () => {
     await expect(page.getByRole('list', { name: 'Rijen' })).toBeVisible()
     await shot(page, 'calendar-lanes-in-groep')
 
-    // Re-entry: the choice is the view's, and Geen takes it back.
-    list = (await list.isVisible()) ? list : await openGroep(page)
+    // Re-entry: a pick closes the panel; the choice is the view's, and Geen takes it back.
+    await expect(list).toHaveCount(0)
+    list = await openGroep(page)
     await list.getByRole('button', { name: 'Geen' }).click()
     await expect(groupChip(page)).toHaveText('Groep: geen')
     await expect(page.getByRole('list', { name: 'Rijen' })).toHaveCount(0)

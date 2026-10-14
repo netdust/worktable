@@ -72,14 +72,26 @@ function GroupChip({ group }: { group: GroupSlot }) {
   const choose = group.onChange
   return (
     <Panel placement="bottom start" label={t('groupBy')} trigger={<Button className={set}>{chip}</Button>}>
-      <div className="nv-filters__menu" role="group" aria-label={t('groupBy')}>
-        {group.options.map(({ key, label }) => (
-          <button key={key ?? ''} type="button" className="nv-filters__option" aria-pressed={(group.value ?? null) === key} onClick={() => choose(key)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <GroupOptions group={group} choose={choose} />
     </Panel>
+  )
+}
+
+/** One choice: a pick groups and closes the panel; the chosen option is marked. */
+function GroupOptions({ group, choose }: { group: GroupSlot; choose: (key: string | null) => void }) {
+  const state = useContext(OverlayTriggerStateContext)
+  return (
+    <div className="nv-filters__menu" role="group" aria-label={t('groupBy')}>
+      {group.options?.map(({ key, label }) => (
+        <button key={key ?? ''} type="button" className="nv-filters__option" aria-pressed={(group.value ?? null) === key}
+          onClick={() => {
+            choose(key)
+            state?.close()
+          }}>
+          {label}
+        </button>
+      ))}
+    </div>
   )
 }
 
