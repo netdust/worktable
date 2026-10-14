@@ -6752,3 +6752,17 @@ table.nv-cal--month .nv-cal__event:hover {
   height: 100%;
   background: var(--color-success-fg);
 }
+
+/* What still waits in the rows, beside the title line's pill: the option's badge and its count. */
+.nv-toolbar__insight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+
+.nv-toolbar__insight b {
+  font: 600 12px var(--font-mono);
+  color: var(--color-fg-default);
+}

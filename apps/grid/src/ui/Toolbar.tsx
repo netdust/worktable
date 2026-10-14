@@ -4,6 +4,7 @@ import { hint as titled } from './hint'
 import { type Action, MoreMenu } from './MoreMenu'
 import { createElement, type ReactNode } from 'react'
 import { fixedCount, summary, t } from '../i18n'
+import type { Insight } from './insight'
 import type { Column } from '../grid/columns'
 import type { StoreState } from '../grid/store'
 import type { ViewType } from '../types'
@@ -36,6 +37,8 @@ interface Props {
   shown?: Shown | null
   /** The period's name ("Week 42 · 12–18 okt"), which the pill shows in place of the count on every skin. */
   period?: string | null
+  /** What still waits in the rows: the warn option as its badge, and how many. */
+  insight?: Insight | null
   search: ReactNode
   /** A store's state, for the save word; absent while there is no store. */
   saving?: Saving
@@ -76,7 +79,7 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, kind = 'grid', locked, shown, period, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
+export function Toolbar({ title, kind = 'grid', locked, shown, period, insight, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
   const more: Action[] = [
     ...(local?.onPublish ? [{ label: t('publishChange'), run: local.onPublish }] : []),
     ...(local ? [{ label: t('revert'), run: local.onRevert }] : []),
@@ -88,6 +91,7 @@ export function Toolbar({ title, kind = 'grid', locked, shown, period, search, s
         <h1 className="nv-toolbar__title">{title}</h1>
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
         {(period || shown) && <span className="nv-toolbar__summary">{period ?? shown?.label ?? (shown && summary(shown.rows, shown.groups, shown.cut, shown.columns, shown.pictures))}</span>}
+        {insight && <span className="nv-toolbar__insight"><span className="nv-pill nv-pill--warn">{insight.label}</span><b>{insight.count}</b></span>}
       </div>
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}

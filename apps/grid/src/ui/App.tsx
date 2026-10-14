@@ -42,6 +42,7 @@ import { useSavedViews } from './useSavedViews'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
+import { insightOf } from './insight'
 import { periodOf, stepPeriod, todayPeriod, withPeriod } from './period'
 import { hintsOf, stepsPeriod } from './hints'
 import { formatWindow, isMonth, weekOf } from './Window'
@@ -544,6 +545,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           locked={view ? lockOf(view) : null}
           shown={told?.view !== view?.key ? null : (told?.shown ?? null)}
           period={dashboard ? null : (period?.name ?? null)}
+          insight={!dashboard && model && result.status === 'ready' && !matrix ? insightOf(model, result.rows) : null}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}

@@ -84,6 +84,8 @@ export interface Model {
   actions?: ModelAction[]
   /** Each record has a link its person reads their views through. */
   record_link?: true
+  /** The column a write to which is a transition: the record's state. */
+  lifecycle?: string
   /** Files its records carry, by kind; the drawer lists and takes them. */
   attachments?: { kinds: Record<string, string>; max_mb: number; writable?: true }
   fields: Record<string, Field>
