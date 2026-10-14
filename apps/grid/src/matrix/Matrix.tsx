@@ -587,7 +587,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                           <Cell key={column.key} view={view} models={models} cell={grid[at].cells[c]} column={column}
                             away={absentOn(away, view, column, date)} date={date} state={stateOf(r, c, row, column)} />
                         ))}
-                        <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count" title={`${headcount(row)} ${countWord}`}>{have(row)}/{need(row)}</td>
+                        <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count" title={`${headcount(row)} ${countWord}`}>{need(row) > 0 ? `${have(row)}/${need(row)}` : '–'}</td>
                       </tr>
                     )
                   })}
