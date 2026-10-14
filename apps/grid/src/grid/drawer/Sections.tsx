@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect, useState } from 'react'
+import { type CSSProperties, type ReactNode, type Ref, useEffect, useState } from 'react'
 import { recordHistory, rowsWhere } from '../../api'
 import { locale, t } from '../../i18n'
 import type { HistoryEntry, Link, LinkItem, Model, Row, Schema } from '../../types'
@@ -7,9 +7,9 @@ import { initials } from '../../ui/when'
 import { actorOf, dayLabel, type Inbound } from './derive'
 
 /** A section under the fields: an 11px heading with its count and, at the right, its action. */
-export function Section({ title, count, action, children }: { title: string; count?: string; action?: ReactNode; children: ReactNode }) {
+export function Section({ ref, title, count, action, children }: { ref?: Ref<HTMLElement>; title: string; count?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="nv-dw-sec" aria-label={title}>
+    <section ref={ref} className="nv-dw-sec" aria-label={title}>
       <h3 className="nv-dw-sec__head">{title}{count !== undefined && <span className="nv-dw-sec__n">{count}</span>}{action && <span className="nv-dw-sec__r">{action}</span>}</h3>
       {children}
     </section>

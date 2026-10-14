@@ -263,6 +263,24 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const headcount = (row: Row) => everyColumn.filter((column) => counted(cellFor(view, row, column))).length
   const total = rows.reduce((sum, row) => sum + headcount(row), 0)
   const perColumn = columns.map((_, c) => grid.filter(({ cells }) => counted(cells[c])).length)
+  // Bezet: who holds a place on the row, a refused or cancelled one aside, against those plus the open places.
+  const tones = models[join.model]?.fields[join.cell_field]?.tones ?? {}
+  const holds = (cell: MatrixCell | undefined) => cell !== undefined && tones[String(cell.fields[join.cell_field] ?? '')] !== 'bad'
+  const have = (row: Row) => everyColumn.filter((column) => holds(cellFor(view, row, column))).length
+  const need = (row: Row) => have(row) + openSlots(view, row).reduce((n, slot) => n + slot.count, 0)
+  const haveTotal = rows.reduce((sum, row) => sum + have(row), 0)
+  const needTotal = rows.reduce((sum, row) => sum + need(row), 0)
+  // A head's second line: the role its places on screen hold most, where the join declares a role.
+  const roleOf = (column: MatrixColumn): string => {
+    const match = join.open?.match_field
+    if (!match) return ''
+    const seen = new Map<string, number>()
+    for (const row of rows) {
+      const title = cellFor(view, row, column)?.lookups?.[match]?.title
+      if (title) seen.set(title, (seen.get(title) ?? 0) + 1)
+    }
+    return [...seen.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
+  }
   const firstName = columns.findIndex((column) => column.kind === 'name')
   const pick = (id: number) => {
     const next = [...picked, id]
@@ -529,11 +547,11 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 {hasOpen && <th className="nv-th nv-mx__open" scope="col"><span className="nv-th__label">{t('openColumn')}</span></th>}
                 {columns.map((column, c) => (
                   <th key={column.key} className={[`nv-th nv-mx__head`, cellClass(c), open?.column === column.key ? 'nv-mx__cross' : ''].filter(Boolean).join(' ')} scope="col" title={column.title}>
-                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{headName(column)}</span></span>
+                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{headName(column)}</span>{roleOf(column) && <small className="nv-mx__role">{roleOf(column)}</small>}</span>
                   </th>
                 ))}
-                <th className="nv-th nv-end" scope="col" title={countWord}>
-                  <span className="nv-th__label">{markFor(view, join.count)}<span className="nv-sr">{countWord}</span></span>
+                <th className="nv-th nv-end" scope="col" title={t('occupied')}>
+                  <span className="nv-th__label">{t('occupied')}</span>
                 </th>
               </tr>
             </thead>
@@ -563,7 +581,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                           <Cell key={column.key} view={view} models={models} cell={grid[at].cells[c]} column={column}
                             away={absentOn(away, view, column, date)} date={date} state={stateOf(r, c, row, column)} />
                         ))}
-                        <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count">{headcount(row)}</td>
+                        <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count" title={`${headcount(row)} ${countWord}`}>{have(row)}/{need(row)}</td>
                       </tr>
                     )
                   })}
@@ -575,13 +593,13 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 <td className="nv-first">{`${t('total')} · ${rowCount(rows.length)}`}</td>
                 {hasOpen && <td className="nv-mx__open nv-cell__tabular" data-testid="open-count">{openTotal}</td>}
                 {perColumn.map((n, c) => <td key={columns[c].key} className={`nv-mx__count ${cellClass(c)}`.trim()} data-testid="column-count">{n}</td>)}
-                <td className="nv-end" data-testid="row-count">{total}</td>
+                <td className="nv-end" data-testid="row-count" title={`${total} ${countWord}`}>{haveTotal}/{needTotal}</td>
               </tr>
             </tfoot>
           </table>
         </div>
         {openRow && (open?.column === null || openColumn) && (
-          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away}
+          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows}
             store={editable ? store : undefined} onClose={close} />
         )}
       </div>
@@ -603,10 +621,10 @@ function PanelDrawer({ onClose, ...panel }: Parameters<typeof Panel>[0] & { onCl
   const cell = column ? cellFor(view, row, column) : undefined
   const at = column ? columns.indexOf(column) : -1
   const shown: Row = column
-    ? { id: cell?.id ?? -(row.id * 1000000 + at), title: column.title, status: cell?.status ?? '', fields: cell?.fields ?? {} }
+    ? { id: cell?.id ?? -(row.id * 1000000 + at), title: `${column.title} · ${row.title}`, status: cell?.status ?? '', fields: cell?.fields ?? {} }
     : row
   return (
-    <Drawer row={shown} columns={fields} focusOnOpen={false} onClose={onClose} model={column ? undefined : models[view.model]}
+    <Drawer row={shown} columns={fields} focusOnOpen={false} onClose={onClose} model={column ? models[view.join?.model ?? ''] : models[view.model]}
       editor={<Panel key={`${row.id}:${column?.key ?? ''}`} {...panel} />} />
   )
 }

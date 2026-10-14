@@ -91,8 +91,8 @@ describe('the matrix side panel', () => {
     fireEvent.click(at(/Montage/, 'name:lieve'))
 
     const aside = panel()!
-    expect(aside.getAttribute('aria-label')).toBe('Lieve')
-    expect(within(aside).getByText(/Montage/)).toBeTruthy()
+    expect(aside.getAttribute('aria-label')).toBe('Lieve · Montage')
+    expect(within(aside).getAllByText(/Montage/).length).toBeGreaterThan(0)
     expect(within(aside).getByRole('radio', { checked: true }).textContent).toBe('Misschien')
     expect(within(aside).getByLabelText('Notitie')).toBeTruthy()
     expect(document.activeElement).toBe(at(/Montage/, 'name:lieve'))
@@ -315,7 +315,7 @@ describe('the matrix side panel', () => {
 
     realClick(at(/Diner/, 'name:lieve'), { shiftKey: true })
 
-    expect(panel()!.getAttribute('aria-label')).toBe('Sien')
+    expect(panel()!.getAttribute('aria-label')).toBe('Sien · Montage')
     expect(selected()).toEqual(['Montage/record:5', 'Montage/name:lieve', 'Diner/record:5', 'Diner/name:lieve'])
     await act(async () => {
       fireEvent.keyDown(document.activeElement!, { key: 'd', ctrlKey: true })
@@ -339,7 +339,7 @@ describe('the matrix side panel', () => {
       fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
     })
 
-    expect(panel()!.getAttribute('aria-label')).toBe('Lieve')
+    expect(panel()!.getAttribute('aria-label')).toBe('Lieve · Montage')
     expect(checked().textContent).toBe('Misschien')
     expect(document.activeElement).toBe(at(/Montage/, 'name:lieve'))
     await act(async () => {
@@ -347,7 +347,7 @@ describe('the matrix side panel', () => {
     })
     expect(writes.update).toHaveBeenCalledWith('assignment', 12, { status: 'confirmed' })
     expect(checked().textContent).toBe('Bevestigd')
-    expect(panel()!.getAttribute('aria-label')).toBe('Lieve')
+    expect(panel()!.getAttribute('aria-label')).toBe('Lieve · Montage')
   })
 
   it('draws no dialog, list or popover anywhere in the document, with the panel open and a status chosen', async () => {

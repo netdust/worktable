@@ -576,7 +576,7 @@ describe('a matrix view', () => {
     const cell = document.querySelector<HTMLElement>('[data-cell="0-0"]')!
     fireEvent.click(cell)
     fireEvent.keyDown(cell, { key: 'Enter' })
-    const panel = await screen.findByRole('complementary', { name: 'Sien' })
+    const panel = await screen.findByRole('complementary', { name: /^Sien · / })
     expect(panel.parentElement?.classList.contains('nv-drawer-slot')).toBe(true)
     await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
   })
@@ -589,7 +589,7 @@ describe('a matrix view', () => {
     const cell = document.querySelector<HTMLElement>('[data-cell="0-0"]')!
     fireEvent.click(cell)
     fireEvent.keyDown(cell, { key: 'Enter' })
-    const panel = await screen.findByRole('complementary', { name: 'Sien' })
+    const panel = await screen.findByRole('complementary', { name: /^Sien · / })
     await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
   })
 
