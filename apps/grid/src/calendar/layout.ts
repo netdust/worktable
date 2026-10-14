@@ -144,38 +144,45 @@ export function monthWeeks(month: DateWindow): string[][] {
 export interface Block {
   event: Placed
   column: number
+  /** How many columns it takes: its own and the free ones to its right. */
+  span: number
   columns: number
 }
 
 const DAY_START = 8 * 60
 const DAY_END = 20 * 60
 
-// Overlapping events form a cluster; within it, one lane's events sit together, then greedily in the first free column.
+// Overlapping events form a cluster; within it, in start order (the lane deciding a tie), each takes the first free column,
+// then widens into the columns to its right that nothing overlapping it holds, as the prototype packs a day.
 function blocksOf(events: Placed[], laneOrder: (event: Placed) => number): Block[] {
-  const byStart = [...events].sort((a, b) => a.from - b.from)
+  const byStart = [...events].sort((a, b) => a.from - b.from || laneOrder(a) - laneOrder(b))
+  const stopOf = (event: Placed) => Math.max(event.to, event.from + 1)
   const clusters: Placed[][] = []
   let end = -1
   for (const event of byStart) {
-    const stop = Math.max(event.to, event.from + 1)
     const last = clusters[clusters.length - 1]
     if (last && event.from < end) {
       last.push(event)
-      end = Math.max(end, stop)
+      end = Math.max(end, stopOf(event))
     } else {
       clusters.push([event])
-      end = stop
+      end = stopOf(event)
     }
   }
   return clusters.flatMap((cluster) => {
-    const ordered = [...cluster].sort((a, b) => laneOrder(a) - laneOrder(b) || a.from - b.from)
     const ends: number[] = []
-    const placed = ordered.map((event) => {
+    const placed = cluster.map((event) => {
       const free = ends.findIndex((until) => until <= event.from)
       const column = free < 0 ? ends.length : free
-      ends[column] = Math.max(event.to, event.from + 1)
+      ends[column] = stopOf(event)
       return { event, column }
     })
-    return placed.map((block) => ({ ...block, columns: ends.length }))
+    const overlaps = (a: Placed, b: Placed) => a.from < stopOf(b) && b.from < stopOf(a)
+    return placed.map(({ event, column }) => {
+      let span = 1
+      while (column + span < ends.length && !placed.some((other) => other.column === column + span && overlaps(other.event, event))) span++
+      return { event, column, span, columns: ends.length }
+    })
   })
 }
 

@@ -145,7 +145,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
           {days.map((day) => (
             <section key={day} aria-label={dayHead(day)} className="nv-week__day" style={{ height, backgroundSize: `100% ${HOUR_PX}px` }}>
               {day === today && nowAt >= grid.hours.from && nowAt < grid.hours.to && <span className="nv-week__now" style={{ top: ((nowAt - grid.hours.from) / 60) * HOUR_PX }} aria-hidden="true" />}
-              {(grid.timed[day] ?? []).map(({ event, column, columns: across }) => (
+              {(grid.timed[day] ?? []).map(({ event, column, span, columns: across }) => (
                 <Event key={event.row.id} event={event} laneTitle={titleOf(event.lane)} where={blockHeight(event) >= THREE_LINES ? whereOf(event.row) : undefined} onOpen={onOpen}
                   short={blockHeight(event) < TWO_LINES} style={{
                   ...toneOf(event.lane, event.row),
@@ -153,7 +153,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
                   top: `${((event.from - grid.hours.from) / 60) * HOUR_PX}px`,
                   height: `${blockHeight(event)}px`,
                   left: `${(column / across) * 100}%`,
-                  width: `${100 / across}%`,
+                  width: `calc(${(span / across) * 100}% - 2px)`,
                 }} />
               ))}
             </section>
