@@ -168,9 +168,19 @@ test.describe('step 3e: the board drags', () => {
             ).rows[0]?.status,
         )
         .toBe('bevestigd')
-      await card(page, 'Bevestigd', title).focus()
+      // ⌘Z right after the drop, wherever the focus went (a real mouse's drop leaves it on the page), as the toast and the footer say.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
       await page.keyboard.press('ControlOrMeta+z')
       await expect(card(page, 'Optie', title)).toBeVisible()
+      // Every card fits its column.
+      for (const column of ['Optie', 'Bevestigd']) {
+        const edge = await page.getByRole('region', { name: column }).evaluate((el) => el.getBoundingClientRect().right)
+        for (const right of await page
+          .getByRole('grid', { name: column })
+          .locator('.nv-board__card')
+          .evaluateAll((cards) => cards.map((c) => c.getBoundingClientRect().right)))
+          expect(right).toBeLessThanOrEqual(edge)
+      }
 
       // Keyboard: Enter on the drag button lifts it onto the first column that takes it (Tab goes on to the next); Enter drops it.
       await card(page, 'Optie', title)
@@ -180,6 +190,17 @@ test.describe('step 3e: the board drags', () => {
       await page.keyboard.press('Enter')
       await expect(card(page, 'Bevestigd', title)).toBeVisible()
       await expect(card(page, 'Optie', title)).toHaveCount(0)
+
+      // And back to a column on its left: Shift+Tab walks the drop targets the other way, past the card's own place first.
+      await card(page, 'Bevestigd', title)
+        .getByRole('button', { name: `${title} verslepen` })
+        .focus()
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Enter')
+      await expect(card(page, 'Optie', title)).toBeVisible()
+      await expect(card(page, 'Bevestigd', title)).toHaveCount(0)
     } finally {
       await api.delete(`/api/rows/activiteit/${id}`)
     }

@@ -146,14 +146,24 @@ export function Board({ view, model, models, rows, column, layout, onShown, onMo
   useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all }), [rows.length, lanes.length, all])
   const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   const dragging = useRef<string | null>(null)
+  // ⌘Z wherever the focus went: a mouse's drop leaves it on the page, and the toast promises the undo there.
+  const undo = useRef(onUndo)
+  undo.current = onUndo
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (event.defaultPrevented || !undo.current || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      event.preventDefault()
+      undo.current(event.shiftKey)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   return (
     <div className="nv-frame">
       <div className="nv-body">
-        <div className="nv-board" onKeyDown={(event) => {
-          if (!onUndo || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
-          event.preventDefault()
-          onUndo(event.shiftKey)
-        }}>
+        <div className="nv-board">
           {lanes.map((lane) => (
             <BoardColumn key={lane.key} lane={lane} cards={rows.filter((row) => keyOf(row) === lane.key)} tone={toneColor(field?.tones?.[lane.key])}
               columns={shown} none={none} open={open} dragging={onMove ? dragging : null} onOpen={openRow}
