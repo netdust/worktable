@@ -30,6 +30,8 @@ export interface ChipBarProps {
   filters?: ReactNode
   group?: GroupSlot
   period?: PeriodSlot
+  /** The skin's own chips, after the period: a gallery's S M L, a matrix's Afwezigheden. */
+  skin?: ReactNode
   /** "+ Kolom": a column added by hand, where the view takes one. */
   addColumn?: { open: boolean; onToggle: () => void }
   /** A dashboard's quick actions, where the period would sit. */
@@ -99,13 +101,14 @@ function PeriodChips({ period: { period, onPeriod } }: { period: PeriodSlot }) {
 }
 
 /** The one chip row every view shows, in one order: scope, conditions, Filter, Groep, period, + Kolom; the count and Kolommen at the end. A slot shows where the view's data has it. */
-export function ChipBar({ scope = null, filters, group, period, addColumn, actions, count, columns, end }: ChipBarProps) {
+export function ChipBar({ scope = null, filters, group, period, skin, addColumn, actions, count, columns, end }: ChipBarProps) {
   return (
     <div className="nv-bar">
       {scope && <span className="nv-chip nv-chip--set nv-chip--scope"><Tag size={ICON} aria-hidden="true" />{scope}</span>}
       {filters}
       {group && <GroupChip group={group} />}
       {period && <PeriodChips period={period} />}
+      {skin}
       {actions}
       {addColumn && <button type="button" className="nv-chip" aria-expanded={addColumn.open} onClick={addColumn.onToggle}>{t('addColumn')}</button>}
       {(count || columns || end) && (

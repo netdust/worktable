@@ -48,7 +48,9 @@ import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
-import { barOf } from './bar'
+import { barOf, boardColumn } from './bar'
+import { SizeChips } from './SizeChips'
+import { useGallerySize } from '../gallery/size'
 import { ChipBar } from './ChipBar'
 import { Legend } from '../matrix/Legend'
 import { Gallery } from '../gallery/Gallery'
@@ -301,6 +303,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   }
   const windowKey = JSON.stringify(window)
   useEffect(() => setPicking(false), [view?.key])
+  const [size, setSize] = useGallerySize(view)
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
@@ -525,6 +528,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period: period ? { period, onPeriod: setPeriod } : null,
             told: told?.view === view.key ? told.shown : null,
             ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
+            ...(view.type === 'gallery' ? { skin: <SizeChips size={size} onSize={setSize} /> } : {}),
           })} />
         )}
         <div className="nv-work">
@@ -535,14 +539,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
-              lane={layout.group} onTitle={setShown} />
+              lane={layout.group} layout={layout} onTitle={setShown} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} onTitle={setShown} />
-          ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
-            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} onShown={setShown} />
-          ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} onShown={setShown} />
+              lane={layout.group} layout={layout} onTitle={setShown} />
+          ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
+            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown} />
+          ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}

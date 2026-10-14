@@ -3,7 +3,10 @@ import { filesOf, fileUrl } from '../api'
 import { Display } from '../grid/cells'
 import { type Column, columnsFor } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
+import type { Layout } from '../grid/layout'
 import type { Model, Row, View } from '../types'
+import { factsOf } from '../ui/facts'
+import { type Size, SIZE_PX } from './size'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
 import { whenOf } from '../ui/when'
@@ -54,14 +57,19 @@ function Card({ row, file, columns, selected, onOpen }: { row: Row; file?: Files
 }
 
 /** A card per row with its newest image of the gallery's kind, read 200 rows a request; a click opens the row. */
-export function Gallery({ view, model, models, rows, kind, onShown }: {
+export function Gallery({ view, model, models, rows, kind, layout, size = 'M', onShown }: {
   view: View; model: Model; models: Record<string, Model>; rows: Row[]; kind: string
+  /** Which facts a card shows, and in what order (Kolommen). */
+  layout: Layout
+  /** S M L: a card's least width. */
+  size?: Size
   /** What the title line says it shows: the cards and how many have a picture. */
   onShown?: (shown: Shown) => void
 }) {
   const [openRow, drawer, open] = useOpenRow(model, view, models)
   const [files, setFiles] = useState<Files>({})
-  const columns = useMemo(() => columnsFor(model, view, false, models).filter((c) => c.id !== 'title'), [model, view, models])
+  const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
+  const columns = useMemo(() => factsOf(all, layout), [all, layout])
   const ids = rows.map((row) => row.id)
   useEffect(() => {
     let live = true
@@ -73,11 +81,11 @@ export function Gallery({ view, model, models, rows, kind, onShown }: {
     }
   }, [view.model, kind, ids.join(',')])
   const pictures = rows.filter((row) => files[row.id]?.mime.startsWith('image/')).length
-  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, pictures }), [rows.length, pictures])
+  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, pictures, menu: all }), [rows.length, pictures, all])
   return (
     <div className="nv-frame">
       <div className="nv-body">
-        <div className="nv-gallery">
+        <div className="nv-gallery" style={{ '--min': `${SIZE_PX[size]}px` } as CSSProperties}>
           {rows.map((row) => <Card key={row.id} row={row} file={files[row.id]} columns={columns} selected={open?.id === row.id} onOpen={() => openRow(row)} />)}
         </div>
         {drawer}

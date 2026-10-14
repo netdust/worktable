@@ -86,3 +86,35 @@ test.describe('step 3e: one period, used the same way on every skin', () => {
     await expect(bar(page).getByRole('button', { name: 'Vandaag' })).toHaveCount(0)
   })
 })
+
+test.describe('step 3e: Groep chooses on every skin', () => {
+  test.describe.configure({ timeout: 120_000 })
+  const groep = (page: Page) => bar(page).getByRole('button', { name: /^Groep: / })
+
+  test('groep-everywhere @e2e', async ({ page }) => {
+    await page.goto('/')
+    for (const [view, model] of [
+      ['Planning', 'Activiteiten'],
+      ['Per status', 'Activiteiten'],
+      ['Galerij activiteiten', 'Activiteiten'],
+      ['Kalender activiteiten', 'Activiteiten'],
+      ['Tijdlijn tourstops', 'Tourstops'],
+      ['Toewijzingen per activiteit', 'Activiteiten'],
+    ]) {
+      await openView(page, view, model)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
+      await groep(page).click()
+      await expect(page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button').first()).toBeVisible()
+      await page.keyboard.press('Escape')
+    }
+
+    // The board regroups its columns by the option field chosen.
+    await openView(page, 'Per status', 'Activiteiten')
+    await expect(page.getByRole('list', { name: 'Optie' })).toBeVisible()
+    await groep(page).click()
+    await page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button', { name: 'Soort' }).click()
+    await expect(groep(page)).toHaveText('Groep: soort')
+    await expect(page.getByRole('list', { name: 'Voorstelling' })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Optie' })).toHaveCount(0)
+  })
+})

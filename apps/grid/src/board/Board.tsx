@@ -6,7 +6,9 @@ import { Display } from '../grid/cells'
 import { type Column, columnsFor, linksOf } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
-import type { Model, Row, SavedView, View } from '../types'
+import type { Layout } from '../grid/layout'
+import { factsOf } from '../ui/facts'
+import type { Model, Row, View } from '../types'
 
 const NONE = '\u0000'
 const MAX_FACES = 4
@@ -47,29 +49,27 @@ interface Props {
   models: Record<string, Model>
   rows: Row[]
   column: string
+  /** Which facts a card shows, and in what order (Kolommen). */
+  layout: Layout
   /** What the title line says it shows: the cards and the columns. */
   onShown?: (shown: Shown) => void
 }
 
 /** Cards in a column per option of the board's column, in its order, "Geen" last when it holds a card; read-only, a card opens its row. */
-export function Board({ view, model, models, rows, column, onShown }: Props) {
+export function Board({ view, model, models, rows, column, layout, onShown }: Props) {
   const [openRow, drawer, open] = useOpenRow(model, view, models)
   const field = model.fields[column]
   const options = Object.entries(field?.options ?? {})
-  // The card shows the view's columns in its order; a view without an arrangement shows its first three.
-  const shown = useMemo(() => {
-    const all = columnsFor(model, view, false, models).filter((c) => c.id !== 'title' && c.id !== column)
-    const order = (view as Partial<SavedView>).arrangement?.order
-    if (!order) return all.slice(0, 3)
-    return order.flatMap((id) => all.filter((c) => c.id === id))
-  }, [model, view, models, column])
+  const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
+  // The card shows the facts Kolommen leaves, in its order; the column the board sorts by needs no line.
+  const shown = useMemo(() => factsOf(all, layout).filter((c) => c.id !== column), [all, layout, column])
   const keyOf = (row: Row) => {
     const value = row.fields[column]
     return typeof value === 'string' && field?.options && value in field.options ? value : NONE
   }
   const lanes = [...options.map(([key, label]) => ({ key, label })), { key: NONE, label: t('noLane') }]
     .filter((lane) => lane.key !== NONE || rows.some((row) => keyOf(row) === NONE))
-  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length }), [rows.length, lanes.length])
+  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all }), [rows.length, lanes.length, all])
   const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   return (
     <div className="nv-frame">

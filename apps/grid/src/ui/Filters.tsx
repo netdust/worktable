@@ -1,4 +1,4 @@
-import { Calendar, ListFilter, X } from 'lucide-react'
+import { Calendar, Funnel, X } from 'lucide-react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { complete, type Filter, isDate, type Join, joinOf } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
@@ -101,7 +101,7 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
       {fields.length > 0 && (
         <div className="nv-fb-anchor" ref={root}>
           <button type="button" className="nv-chip nv-chip--add" aria-expanded={open} onClick={() => setOpen(!open)}>
-            <ListFilter size={13} aria-hidden="true" />{t('addFilter')}
+            <Funnel size={13} aria-hidden="true" />{t('addFilter')}
             {shown.length > 0 && <span className="nv-chip__count">{shown.length}</span>}
           </button>
           {open && <div className="nv-fb-panel" ref={panel} style={at ?? { visibility: 'hidden' }}><FilterBuilder fields={fields} filters={filters} join={join} onChange={onChange} onJoin={onJoin} /></div>}

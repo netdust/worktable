@@ -1,5 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useRef } from 'react'
 import { type Column, columnsFor } from '../grid/columns'
+import type { Layout } from '../grid/layout'
+import { factsOf, placeOf } from '../ui/facts'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
@@ -50,22 +52,24 @@ const DAY_PX = 44
 const TONE_CLASS = { warn: 'nv-tl__bar--option', bad: 'nv-tl__bar--cancelled' } as const
 
 /** Rows as bars across the window's days, in lanes; read-only, a bar opens its row. */
-export function Timeline({ view, model, models, rows, cal, shown, lane, onTitle }: {
+export function Timeline({ view, model, models, rows, cal, shown, lane, layout, onTitle }: {
   view: View; model: Model; models: Record<string, Model>; rows: Row[]; cal: CalendarDef; shown: DateWindow; lane: string | null
+  /** Which facts a bar shows (Kolommen): its place line is the first that names another record. */
+  layout: Layout
   /** What the title line says it shows: the bars and the lanes. */
   onTitle?: (shown: Shown) => void
 }) {
   const [openRow, drawer, open] = useOpenRow(model, view, models)
   const laid = useMemo(() => bars(rows, cal, shown, lane), [rows, cal, shown.from, shown.to, lane])
   const columns = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
-  // A bar's second line: its place, the first relation that is not the lane; its tone: the first toned option, as optie is hatched.
-  const place: Column | undefined = columns.find((c) => c.kind === 'relation' && c.id !== lane)
+  // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.
+  const place: Column | undefined = useMemo(() => placeOf(factsOf(columns, layout), [lane]), [columns, layout, lane])
   const toned: Column | undefined = columns.find((c) => c.kind === 'select' && c.tones)
   const window = useMemo(() => Array.from({ length: laid.days }, (_, i) => iso(new Date((parse(shown.from) as Date).getTime() + i * 86_400_000 + 43_200_000))), [shown.from, laid.days])
   const today = iso(new Date())
   const pct = (n: number) => `${(n / laid.days) * 100}%`
   const field = lane ? model.fields[lane] : undefined
-  useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false }), [rows.length, laid.lanes.length, lane])
+  useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns }), [rows.length, laid.lanes.length, lane, columns])
   const weekend = (day: string) => [0, 6].includes((parse(day) as Date).getDay())
   const todayAt = window.indexOf(today)
   // A day keeps the prototype's 44px; the sheet scrolls sideways and opens two days before today.

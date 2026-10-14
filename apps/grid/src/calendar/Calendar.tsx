@@ -3,6 +3,8 @@ import { Drawer } from '../grid/Drawer'
 import { type Column, columnsFor } from '../grid/columns'
 import { t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
+import type { Layout } from '../grid/layout'
+import { factsOf, placeOf } from '../ui/facts'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
 import { isMonth, iso, isoWeek, parse } from '../ui/Window'
@@ -18,7 +20,9 @@ interface Props {
   shown: DateWindow
   /** The lane relation, or none. */
   lane: string | null
-  /** The title line says the period. */
+  /** Which facts an event shows (Kolommen): its place line is the first that names another record. */
+  layout: Layout
+  /** What the title line says it shows: the events. */
   onTitle?: (shown: Shown) => void
 }
 
@@ -206,7 +210,7 @@ function Month({ month, weeks, lanes, events, toneOf, onOpen }: {
 }
 
 /** Rows on their days, a week or a month, in lanes; read-only: an event opens its row. */
-export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle }: Props) {
+export function Calendar({ view, model, models, rows, cal, shown, lane, layout, onTitle }: Props) {
   const [open, setOpen] = useState<Row | null>(null)
   const month = isMonth(shown)
   const weeks = useMemo(() => (month ? monthWeeks(shown) : []), [month, shown.from, shown.to])
@@ -216,12 +220,13 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle 
     () => columnsFor(model, { ...view, columns: undefined, lookups: undefined, rollups: undefined }, false, models),
     [model, view, models],
   )
-  // An event's third line: its place, the first relation the calendar cannot lane by.
-  const place = columns.find((c) => c.kind === 'relation' && !cal.lanes.includes(c.id))
+  const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
+  // An event's third line: its place, the first shown fact naming another record the calendar cannot lane by.
+  const place = useMemo(() => placeOf(factsOf(all, layout), cal.lanes), [all, layout, cal.lanes])
   const whereOf = (row: Row) => place?.text(row) ?? ''
   const toned = columns.find((c) => c.kind === 'select' && c.tones)
   const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned), [lanes, lane, toned])
-  useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false }), [rows.length])
+  useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false, menu: all }), [rows.length, all])
   return (
     <div className="nv-frame">
       <div className="nv-body">

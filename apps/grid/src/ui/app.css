@@ -900,18 +900,32 @@
 }
 
 #root .nv-chip__remove {
-  height: 18px;
-  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0 -4px 0 0;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
-  color: var(--color-fg-subtle);
-  font-size: 11px;
+  border-radius: 50%;
+  color: inherit;
+  opacity: 0.7;
   line-height: 1;
 }
 
-.nv-chip__remove:hover {
-  background: var(--color-bg-muted);
-  color: var(--color-fg-default);
+#root .nv-chip__remove:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* The Filter chip's count, as the prototype's bubble. */
+.nv-chip__count {
+  font: 600 11px var(--font-mono);
+  background: var(--color-accent-default);
+  color: var(--color-fg-on-accent);
+  border-radius: 999px;
+  padding: 0 5px;
+  margin-left: 2px;
 }
 
 
@@ -4136,7 +4150,7 @@
   height: 28px;
   padding: 0;
   border: 1px solid var(--color-border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-surface);
   color: var(--color-fg-muted);
   cursor: pointer;
@@ -5555,7 +5569,7 @@ table.nv-cal--month .nv-cal__event:hover {
 .nv-gallery {
   display: grid;
   flex: 1;
-  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--min, 236px), 1fr));
   grid-auto-rows: max-content;
   gap: 14px;
   align-content: start;

@@ -210,6 +210,28 @@ describe('one chip row for every skin', () => {
     expect(rowFor('timeline').texts).toEqual(rowFor('calendar').texts)
   })
 
+  it('makes Groep a chooser on a board, its option fields, and on a gallery, its dates and options and geen', async () => {
+    let chosen: string | null | undefined
+    renderNl(<ChipBar {...barOf({ view: skins.board as never, model: activity, layout: { ...layout, group: null }, onLayout: (next) => { chosen = next.group }, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: soort' }))
+    let dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Soort'])
+    click(within(dialog).getByRole('button', { name: 'Soort' }))
+    expect(chosen).toBe('soort')
+    cleanup()
+    renderNl(<ChipBar {...barOf({ view: skins.gallery as never, model: activity, layout: { ...layout, group: null }, onLayout: (next) => { chosen = next.group }, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: geen' }))
+    dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Geen', 'Plandag', 'Soort'])
+    click(within(dialog).getByRole('button', { name: 'Plandag' }))
+    expect(chosen).toBe('plandag')
+  })
+
+  it('shows Kolommen on every skin that reports its fields, never on a matrix', () => {
+    for (const type of ['grid', 'board', 'gallery', 'calendar', 'timeline'] as const) expect(rowFor(type).found, type).toContain('columns')
+    expect(rowFor('matrix').found).not.toContain('columns')
+  })
+
   it('offers a calendar\'s declared lanes and Geen in the Groep chip', async () => {
     let chosen: string | null | undefined
     renderNl(<ChipBar {...barOf({ view: skins.calendar as never, model: activity, layout, onLayout: (next) => { chosen = next.group }, scope: null, told, period })} />)
