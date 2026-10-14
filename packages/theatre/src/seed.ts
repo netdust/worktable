@@ -500,7 +500,7 @@ export const views: SavedViewSeed[] = [
     skin: 'gallery',
     filters: { plandag: { $period: 'week' } },
     sort: ['plandag', 'start_at'],
-    group_by: null,
+    group_by: 'plandag',
     visible_fields: ['plandag', 'start_at', 'eind_at', 'soort', 'productie_id'],
   },
   {

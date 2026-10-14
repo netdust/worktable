@@ -248,7 +248,7 @@ test.describe('step 3d', () => {
 
       await openWeek(page, 'Galerij activiteiten', 'Activiteiten', 'plandag', WEEK.chips)
       inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 's', 'm', 'l', 'count', 'kolommen'])
-      await expect(groupChip(page)).toHaveText('Groep: geen')
+      await expect(groupChip(page)).toHaveText('Groep: plandag')
 
       await openWeek(page, 'Kalender activiteiten', 'Activiteiten', 'plandag', WEEK.chips)
       inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 'kolommen'])
