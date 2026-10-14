@@ -51,7 +51,8 @@ import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
 import { SchemaContext } from '../grid/drawer/context'
-import { SizeChips } from './SizeChips'
+import { AwayChip, SizeChips } from './SizeChips'
+import { useViewChoice } from './choice'
 import { useGallerySize } from '../gallery/size'
 import { ChipBar } from './ChipBar'
 import { Legend } from '../matrix/Legend'
@@ -324,6 +325,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const windowKey = JSON.stringify(window)
   useEffect(() => setPicking(false), [view?.key])
   const [size, setSize] = useGallerySize(view)
+  const [showAway, setShowAway] = useViewChoice<boolean>(view, 'ntdst-views/matrix-away/v1/', (raw) => (typeof raw === 'boolean' ? raw : null), true)
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
@@ -550,6 +552,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             told: told?.view === view.key ? told.shown : null,
             ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
             ...(view.type === 'gallery' ? { skin: <SizeChips size={size} onSize={setSize} /> } : {}),
+            ...(matrix && view.away ? { skin: <AwayChip on={showAway} onToggle={() => setShowAway(!showAway)} /> } : {}),
           })} />
         )}
         <div className="nv-work">
@@ -572,7 +575,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
-            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
+            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={showAway ? result.away : []}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
               layout={layout} onLayout={setLayout} picking={picking} onPicking={setPicking} onShown={setShown} />
           ) : grid ? (

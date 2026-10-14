@@ -326,3 +326,84 @@ test.describe('step 3e: the drawer as the prototypes draw it', () => {
     }
   })
 })
+
+test.describe('step 3e: the matrix as its prototype', () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+  const WEEK = '2028-10-16'
+
+  test('matrix-cell-drawer @e2e', async ({ page }) => {
+    const api = page.request
+    const json = async (path: string) =>
+      ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
+    const productie = (await json('/api/rows/productie?limit=500')).find((r) => r.titel === 'Nachtwacht')?.id
+    const speler = (await json('/api/rows/rol?limit=500')).find((r) => r.naam === 'Speler')?.id
+    const lotte = (await json('/api/rows/persoon?limit=500')).find((r) => r.voornaam === 'Lotte')?.id
+    const title = 'e2e matrix lade'
+    const made = await api.post('/api/rows/activiteit', {
+      data: {
+        productie_id: productie,
+        soort: 'repetitie',
+        status: 'bevestigd',
+        datum: '2028-10-17',
+        omschrijving: title,
+        start_at: '2028-10-17T10:00',
+        eind_at: '2028-10-17T12:00',
+      },
+    })
+    const id = ((await made.json()) as { id: number }).id
+    try {
+      const placed = await api.post('/api/rows/toewijzing', {
+        data: { activiteit_id: id, persoon_id: lotte, rol_id: speler, state: 'bevestigd' },
+      })
+      expect(placed.status(), await placed.text()).toBe(201)
+      await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', WEEK)
+      // The head: her first name and the role she holds here; the row's Bezet.
+      await expect(page.locator('thead th.nv-mx__head[title="Lotte Verhaegen"] .nv-mx__role')).toHaveText('Speler')
+      const row = page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
+      await expect(row.getByTestId('row-count')).toHaveText('1/1')
+
+      // The cell's drawer: who, in what role and state, on what; who could stand in.
+      await row.locator('td[data-column^="record:"].nv-mx__cell--on').first().click()
+      const drawer = page.getByRole('complementary', { name: `Lotte Verhaegen · ${title}` })
+      await expect(drawer).toBeVisible()
+      const field = (label: string) =>
+        drawer
+          .locator('.nv-drawer__field', { has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) })
+          .locator('dd')
+      await expect(field('Rol')).toHaveText('Speler')
+      await expect(field('Activiteit')).toHaveText(title)
+      await expect(drawer.getByRole('radio', { checked: true })).toHaveText('Bevestigd')
+      const instead = drawer.getByRole('region', { name: 'Wie kan in de plaats' })
+      await expect(instead.getByRole('listitem').first()).toBeVisible()
+      await shot(page, 'matrix-cell-drawer')
+
+      // Kiezen moves the place to the one chosen.
+      const first = (await instead.getByRole('listitem').first().locator('.nv-dw-list__main').textContent()) ?? ''
+      await instead.getByRole('listitem').first().getByRole('button', { name: 'Kiezen' }).click()
+      await expect
+        .poll(async () =>
+          (
+            await json(
+              `/api/rows/toewijzing?limit=50&filter=${encodeURIComponent(JSON.stringify({ activiteit_id: id }))}`,
+            )
+          ).map((r) => r.persoon_id),
+        )
+        .not.toContain(lotte)
+      await expect(page.locator(`thead th.nv-mx__head[title="${first}"]`)).toBeVisible()
+
+      // Afwezigheden: on by default, a toggle.
+      const away = page.locator('.nv-bar').getByRole('button', { name: 'Afwezigheden' })
+      await expect(away).toHaveAttribute('aria-pressed', 'true')
+      await away.click()
+      await expect(away).toHaveAttribute('aria-pressed', 'false')
+      await away.click()
+    } finally {
+      for (const t of await json(
+        `/api/rows/toewijzing?limit=50&filter=${encodeURIComponent(JSON.stringify({ activiteit_id: id }))}`,
+      ))
+        await api.delete(`/api/rows/toewijzing/${t.id}`)
+      await api.delete(`/api/rows/activiteit/${id}`)
+    }
+  })
+})

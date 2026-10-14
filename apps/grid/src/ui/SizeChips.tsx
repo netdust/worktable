@@ -1,3 +1,4 @@
+import { Clock } from 'lucide-react'
 import type { Size } from '../gallery/size'
 import { t } from '../i18n'
 
@@ -12,5 +13,14 @@ export function SizeChips({ size, onSize }: { size: Size; onSize: (size: Size) =
           title={t(`size.${s}`)} aria-label={t(`size.${s}`)} onClick={() => onSize(s)}>{s}</button>
       ))}
     </span>
+  )
+}
+
+/** A matrix's Afwezigheden: the away days drawn over the cells, or left out. */
+export function AwayChip({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className={on ? "nv-chip nv-chip--set" : "nv-chip"} aria-pressed={on} onClick={onToggle}>
+      <Clock size={13} aria-hidden="true" />{t('awayLayer')}
+    </button>
   )
 }

@@ -2418,8 +2418,35 @@
 }
 
 .nv-mx .nv-th {
-  height: 52px;
+  height: 60px;
   vertical-align: bottom;
+}
+
+/* The role a person holds here, under their name, as the prototype's small line. */
+.nv-mx__role {
+  max-width: 100%;
+  margin-top: -3px;
+  overflow: hidden;
+  color: var(--color-fg-subtle);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The matrix's Totaal is a quiet line: the headcounts in mono, no weight. */
+.nv-mx .nv-grid__foot td {
+  font: 12px var(--font-mono);
+  font-weight: 400;
+}
+
+.nv-mx .nv-grid__foot td.nv-first {
+  font-family: var(--font-sans);
+}
+
+.nv-mx .nv-end {
+  font: 12px var(--font-mono);
+  color: var(--color-fg-muted);
+  text-align: right;
 }
 
 .nv-mx .nv-th__label {
@@ -3076,6 +3103,57 @@
 
 .nv-muted {
   color: var(--color-fg-subtle);
+}
+
+/* The matrix's cell panel is the drawer's body: no second margin or rule. */
+.nv-dw-body .nv-drawer__editor:has(> .nv-panel) {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.nv-dw-body .nv-panel {
+  padding: 0;
+}
+
+/* The alert under the title: full bleed, danger or warning, its actions as underlined words. */
+.nv-dw-alert {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  margin: 0 -16px 14px;
+  padding: 10px 16px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  font-size: 12.5px;
+}
+
+.nv-dw-alert--warn {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+
+.nv-dw-alert b {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.nv-dw-alert__acts {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+#root .nv-dw-alert__acts button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 /* Expanded, the drawer takes the work column; Escape or its button gives the room back. */
