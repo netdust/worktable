@@ -98,6 +98,23 @@ describe('the gallery', () => {
   })
 })
 
+describe('the gallery by Groep', () => {
+  it('draws a section per day in order, each with its head and count, and a size from S M L', () => {
+    api.filesOf.mockResolvedValue({})
+    document.documentElement.lang = 'nl-BE'
+    const activity = { ...model, key: 'activiteit', fields: { plandag: { type: 'date', label: 'Plandag', required: false, fact: false } } } as unknown as Model
+    const at = (id: number, title: string, plandag: string): Row => ({ id, title, status: '', fields: { plandag } })
+    const gallery = { ...view, model: 'activiteit' } as View
+    const { container } = render(<Gallery view={gallery} model={activity} models={{}} kind="foto" size="L"
+      rows={[at(1, 'Opbouw', '2026-10-14'), at(2, 'Repetitie', '2026-10-13'), at(3, 'Voorstelling', '2026-10-13')]} layout={{ ...defaults(gallery), group: 'plandag' }} />)
+    const heads = [...container.querySelectorAll('.nv-gallery__head')].map((h) => h.textContent)
+    expect(heads).toEqual(['Dinsdag13 oktober2', 'Woensdag14 oktober1'])
+    expect(within(screen.getByRole('region', { name: 'Dinsdag' })).getAllByRole('button').map((b) => b.querySelector('.nv-gallery__title')?.textContent)).toEqual(['Repetitie', 'Voorstelling'])
+    expect((container.querySelector('.nv-gallery') as HTMLElement).style.getPropertyValue('--min')).toBe('330px')
+    document.documentElement.lang = ''
+  })
+})
+
 describe('the gallery card', () => {
   it('without a picture shows its first letters on its tone, and the title line counts the pictures', async () => {
     api.filesOf.mockReset()

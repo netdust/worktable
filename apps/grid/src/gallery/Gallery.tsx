@@ -4,7 +4,9 @@ import { Display } from '../grid/cells'
 import { type Column, columnsFor } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
 import type { Layout } from '../grid/layout'
-import type { Model, Row, View } from '../types'
+import { dayLabel } from '../grid/group'
+import { t } from '../i18n'
+import type { Field, Model, Row, View } from '../types'
 import { factsOf } from '../ui/facts'
 import { type Size, SIZE_PX } from './size'
 import type { Shown } from '../ui/Toolbar'
@@ -56,6 +58,35 @@ function Card({ row, file, columns, selected, onOpen }: { row: Row; file?: Files
   )
 }
 
+interface Section {
+  key: string
+  /** The head's word: a day's name or an option; null for the one section of an ungrouped gallery. */
+  label: string | null
+  sub?: string
+  rows: Row[]
+}
+
+/** The gallery's sections by Groep: days in order ("Dinsdag", "13 okt"), options as declared, "Geen" last; one unnamed section without a group. */
+export function sectionsOf(rows: Row[], field: Field | undefined, key: string | null): Section[] {
+  if (!key || !field) return [{ key: '', label: null, rows }]
+  const valueOf = (row: Row) => {
+    const value = row.fields[key]
+    return typeof value === 'string' ? (field.type === 'date' || field.type === 'datetime' ? value.slice(0, 10) : value) : ''
+  }
+  const keys = [...new Set(rows.map(valueOf))]
+  const order = field.options ? Object.keys(field.options) : [...keys].sort()
+  const sorted = [...order.filter((k) => keys.includes(k)), ...keys.filter((k) => !order.includes(k) && k !== '').sort(), ...(keys.includes('') ? [''] : [])]
+  return sorted.map((k) => {
+    const day = k !== '' && (field.type === 'date' || field.type === 'datetime') ? dayLabel(k).split(' ') : null
+    return {
+      key: k,
+      label: k === '' ? t('noLane') : day ? day[0] : (field.options?.[k] ?? k),
+      ...(day ? { sub: day.slice(1).join(' ') } : {}),
+      rows: rows.filter((row) => valueOf(row) === k),
+    }
+  })
+}
+
 /** A card per row with its newest image of the gallery's kind, read 200 rows a request; a click opens the row. */
 export function Gallery({ view, model, models, rows, kind, layout, size = 'M', onShown }: {
   view: View; model: Model; models: Record<string, Model>; rows: Row[]; kind: string
@@ -86,7 +117,18 @@ export function Gallery({ view, model, models, rows, kind, layout, size = 'M', o
     <div className="nv-frame">
       <div className="nv-body">
         <div className="nv-gallery" style={{ '--min': `${SIZE_PX[size]}px` } as CSSProperties}>
-          {rows.map((row) => <Card key={row.id} row={row} file={files[row.id]} columns={columns} selected={open?.id === row.id} onOpen={() => openRow(row)} />)}
+          {sectionsOf(rows, layout.group ? model.fields[layout.group] : undefined, layout.group).map((section) => (
+            <section key={section.key} className="nv-gallery__group" aria-label={section.label ?? view.label}>
+              {section.label !== null && (
+                <div className="nv-gallery__head">
+                  <b>{section.label}</b>{section.sub && <span>{section.sub}</span>}<span className="nv-gallery__n">{section.rows.length}</span>
+                </div>
+              )}
+              <div className="nv-gallery__grid">
+                {section.rows.map((row) => <Card key={row.id} row={row} file={files[row.id]} columns={columns} selected={open?.id === row.id} onOpen={() => openRow(row)} />)}
+              </div>
+            </section>
+          ))}
         </div>
         {drawer}
       </div>

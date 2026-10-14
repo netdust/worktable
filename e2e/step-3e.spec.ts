@@ -440,3 +440,43 @@ test.describe('step 3e: the matrix as its prototype', () => {
     }
   })
 })
+
+test.describe('step 3e: the gallery by Groep', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test('gallery-sections @e2e', async ({ page }) => {
+    await page.goto('/')
+    await openView(page, 'Galerij activiteiten', 'Activiteiten')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Galerij activiteiten')
+    await page
+      .locator('.nv-bar')
+      .getByRole('button', { name: /^Groep: / })
+      .click()
+    await page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button', { name: 'Plandag' }).click()
+    await page.keyboard.press('Escape')
+    const heads = page.locator('.nv-gallery__head')
+    await expect(heads.first()).toBeVisible()
+    // Each head says its day and counts its cards.
+    for (const head of await heads.all()) {
+      const n = Number(await head.locator('.nv-gallery__n').textContent())
+      const section = head.locator('xpath=..')
+      await expect(section.locator('.nv-gallery__card')).toHaveCount(n)
+    }
+    // S M L: the cards widen.
+    const width = () =>
+      page
+        .locator('.nv-gallery__card')
+        .first()
+        .evaluate((el) => el.getBoundingClientRect().width)
+    await page.locator('.nv-bar').getByRole('radio', { name: 'Klein' }).click()
+    const small = await width()
+    await page.locator('.nv-bar').getByRole('radio', { name: 'Groot' }).click()
+    await expect.poll(width).toBeGreaterThan(small)
+    await page.locator('.nv-bar').getByRole('radio', { name: 'Middel' }).click()
+    await page
+      .locator('.nv-bar')
+      .getByRole('button', { name: /^Groep: / })
+      .click()
+    await page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button', { name: 'Geen' }).click()
+  })
+})
