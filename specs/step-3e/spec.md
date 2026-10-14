@@ -108,3 +108,34 @@ Ruled by worktable-ac, 2026-10-14:
 | Q20 order | Maand Week on every skin. |
 
 Order: the four held parts (Q1, Q2, Q6, Q11) come last and are built only on Stefan's answer. On a yes, docs/SPEC.md changes first, in its own commit.
+
+## D9: the walk (31 rail views, light and dark, 1600×900) and the rulings made while building
+
+No view throws, and every title line names its period or its summary. These defects were found and fixed:
+- A drawer opened from a board, gallery or timeline listed no files; it now has Bijlagen.
+- Galerij activiteiten opened ungrouped. Its prototype groups by day, so the seed's group is `plandag`.
+- A matrix row with no places read "0/0" in Bezet; it now reads "–".
+- On a dashboard, the drawer split start and end into two lines. The start/end pair now comes from the table's calendar.
+- A board's drawer left out Status, because the board's own column stood for it. The record's state always heads the fields.
+- Kandidaten shows "+ 1 vaste filter" in its title line. This is the `vervangt` filter that keeps it to the open places (Q21).
+
+Rulings (mine, unless noted):
+- **Ruling:** the period's name is `formatWindow`: "Week 42 · 12–18 okt", "oktober 2026", or a day "14 okt". It is never the relative word "deze week", which says no dates. Cost if wrong: one formatter.
+- **Ruling:** where the title line names the period, the chip row's count carries the summary the pill used to carry ("28 rijen · 4 groepen", "· 1 met beeld"). Cost if wrong: the count line only.
+- **Ruling:** the filter builder still lists and edits the period, so "is vandaag" and "ligt tussen" stay reachable; only the chips and the Filter count leave it out. Cost: none known.
+- **Ruling:** which fields the drawer lists. The fields the view shows, plus its date, the Tijd pair and the record's state. With no view, or a view that shows no field, every filled field. The rest folds under "+ n andere velden". Cost if wrong: one rule in `drawer/derive.ts`.
+- **Ruling:** an open place is a link with neither a record nor a name; a free-text name ("Gastmuzikant") holds its place. This applies to the Bezetting cell, the drawer and the card faces.
+- **Ruling:** the grid's staffed column shows Bezetting first (meter, have/need), then the names, which its editing needs.
+- **Ruling:** the timeline's hints follow the calendar's ("Klik om te openen · ←→ … · T vandaag"), since ← → and T are built there too (Q19).
+- **Ruling:** ⌘Z on a board listens on the page, not only in the board, because a mouse drop leaves the focus on the page.
+- Q21 (worktable-ac): kandidaten also lists who could take an assigned place, told apart by `vervangt`. The column is `vervangt`, not `in_plaats_van`, and werklijst's is `onderwerp`, not `context`. "van" and "context" tripped the engine's vocabulary check.
+- Calendar week: Monday 12 Oct packs into four columns, the most that overlap at 10:00. The packing goes by start order, and an event widens into free columns; it cannot pack tighter without overlapping boxes.
+
+Not built, each with what it needs:
+- Bezetting's "+ Toewijzen" in the drawer: an add flow in the drawer; the grid cell's link editor does it today.
+- Gallery "Beelden" thumbnails in the drawer: the files list stands in for them.
+- Werklijst avatars: a declaration of which relation is a person.
+- Timeline "N overlap" insight and its red marks: the overlap is not flagged anywhere; it is part of Q2.
+- Dashboard week tile as one cross-day band: activities don't span days, so per-day stacks show the same thing.
+- Worktable-ac's deferred list: the cell drawer's place in its subline, and ↑↓ in the cell drawer's head.
+- Held for Stefan: Q1 NOTITIES, Q2 conflicts (banner, marks, "N conflicten"), Q6 production colours, Q11 group-head totals.
