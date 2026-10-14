@@ -606,7 +606,7 @@ function PanelDrawer({ onClose, ...panel }: Parameters<typeof Panel>[0] & { onCl
     ? { id: cell?.id ?? -(row.id * 1000000 + at), title: column.title, status: cell?.status ?? '', fields: cell?.fields ?? {} }
     : row
   return (
-    <Drawer row={shown} columns={fields} focusOnOpen={false} onClose={onClose}
+    <Drawer row={shown} columns={fields} focusOnOpen={false} onClose={onClose} model={column ? undefined : models[view.model]}
       editor={<Panel key={`${row.id}:${column?.key ?? ''}`} {...panel} />} />
   )
 }

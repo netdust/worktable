@@ -179,8 +179,8 @@ test.describe('step 3d', () => {
       const main = page.locator('main.nv-main')
       const before = await main.evaluate((el) => el.getBoundingClientRect().width)
       await page
-        .getByRole('list', { name: 'Bevestigd' })
-        .getByRole('button', { name: new RegExp(title) })
+        .getByRole('grid', { name: 'Bevestigd' })
+        .getByRole('row', { name: new RegExp(title) })
         .click()
 
       const drawer = page.getByRole('complementary', { name: title })
@@ -212,8 +212,8 @@ test.describe('step 3d', () => {
       await page.setViewportSize({ width: 820, height: 900 })
       const narrow = await main.evaluate((el) => el.getBoundingClientRect().width)
       await page
-        .getByRole('list', { name: 'Bevestigd' })
-        .getByRole('button', { name: new RegExp(title) })
+        .getByRole('grid', { name: 'Bevestigd' })
+        .getByRole('row', { name: new RegExp(title) })
         .click()
       await expect(drawer).toBeVisible()
       expect(await page.locator('.nv-drawer-slot').evaluate((el) => getComputedStyle(el).position)).toBe('fixed')

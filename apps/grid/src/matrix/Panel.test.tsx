@@ -5,7 +5,7 @@ import { defaults } from '../grid/layout'
 import type { Model, Row, View } from '../types'
 import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
-vi.mock('../api', () => ({ records: vi.fn() }))
+vi.mock('../api', () => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 const { Matrix } = await import('./Matrix')
 
 const view: View = {
@@ -239,7 +239,7 @@ describe('the matrix side panel', () => {
     fireEvent.click(within(screen.getByRole('row', { name: /Diner/ })).getByRole('rowheader'))
 
     expect(within(panel()!).getByText('Productie')).toBeTruthy()
-    expect(within(panel()!).getByText('Zomerfeest')).toBeTruthy()
+    expect(within(panel()!).getAllByText('Zomerfeest').length).toBeGreaterThan(0)
   })
 
   it('leaves out a relation the row carries no title for, rather than calling it empty', () => {

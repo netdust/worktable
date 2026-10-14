@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderNl } from '../../test-setup'
 import type { Row } from '../../types'
 
-const remote = vi.hoisted(() => ({ records: vi.fn() }))
+const remote = vi.hoisted(() => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 vi.mock('../../api', () => remote)
 const { RelationPicker } = await import('./RelationPicker')
 

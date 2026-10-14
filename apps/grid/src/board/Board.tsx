@@ -131,7 +131,7 @@ interface Props {
 
 /** Cards in a column per option of the board's column, in its order, "Geen" last when it holds a card; a card opens its row, and drags to another column. */
 export function Board({ view, model, models, rows, column, layout, onShown, onMove, onCreate, onUndo }: Props) {
-  const [openRow, drawer, open] = useOpenRow(model, view, models)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout)
   const field = model.fields[column]
   const options = Object.entries(field?.options ?? {})
   const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])

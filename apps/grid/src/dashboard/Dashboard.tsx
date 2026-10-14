@@ -93,7 +93,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
           ))}
         </div>
         )}
-        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} />}
+        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} />}
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}

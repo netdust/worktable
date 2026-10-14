@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, View } from './types'
 import { defaults } from './grid/layout'
 
-const api = vi.hoisted(() => ({ filesOf: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`, records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
+const api = vi.hoisted(() => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  filesOf: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`, records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
 vi.mock('./api', () => api)
 const { Board } = await import('./board/Board')
 const { Gallery } = await import('./gallery/Gallery')

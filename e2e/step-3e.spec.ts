@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
 const bar = (page: Page) => page.locator('.nv-bar')
@@ -110,12 +111,12 @@ test.describe('step 3e: Groep chooses on every skin', () => {
 
     // The board regroups its columns by the option field chosen.
     await openView(page, 'Per status', 'Activiteiten')
-    await expect(page.getByRole('list', { name: 'Optie' })).toBeVisible()
+    await expect(page.getByRole('grid', { name: 'Optie' })).toBeVisible()
     await groep(page).click()
     await page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button', { name: 'Soort' }).click()
     await expect(groep(page)).toHaveText('Groep: soort')
-    await expect(page.getByRole('list', { name: 'Voorstelling' })).toBeVisible()
-    await expect(page.getByRole('list', { name: 'Optie' })).toHaveCount(0)
+    await expect(page.getByRole('grid', { name: 'Voorstelling' })).toBeVisible()
+    await expect(page.getByRole('grid', { name: 'Optie' })).toHaveCount(0)
   })
 })
 
@@ -231,6 +232,76 @@ test.describe('step 3e: the board drags', () => {
       expect(found.map((r) => r.status)).toEqual(['geannuleerd'])
     } finally {
       for (const r of found) await api.delete(`/api/rows/activiteit/${r.id}`)
+    }
+  })
+})
+
+test.describe('step 3e: the drawer as the prototypes draw it', () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+  const WEEK = '2028-10-09'
+
+  test('drawer-anatomy @e2e', async ({ page }) => {
+    const api = page.request
+    const productie = (
+      (await (await api.get('/api/rows/productie?limit=500')).json()) as { rows: { id: number; titel: string }[] }
+    ).rows.find((r) => r.titel === 'Nachtwacht')?.id
+    const made: number[] = []
+    for (const [title, start] of [
+      ['e2e lade eerst', '10:00'],
+      ['e2e lade tweede', '14:00'],
+    ]) {
+      const response = await api.post('/api/rows/activiteit', {
+        data: {
+          productie_id: productie,
+          soort: 'repetitie',
+          status: 'bevestigd',
+          datum: '2028-10-10',
+          omschrijving: title,
+          start_at: `2028-10-10T${start}`,
+          eind_at: `2028-10-10T${start === '10:00' ? '12:00' : '16:00'}`,
+        },
+      })
+      expect(response.status(), await response.text()).toBe(201)
+      made.push(((await response.json()) as { id: number }).id)
+    }
+    try {
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
+      const row = page.locator('tbody tr.nv-tr[data-title="e2e lade eerst"]')
+      await row.hover()
+      await row.getByRole('button', { name: 'Openen' }).click()
+      const drawer = page.getByRole('complementary', { name: 'e2e lade eerst' })
+      await expect(drawer).toBeVisible()
+
+      // The head: kind · dataset, the place in the view, the steps.
+      await expect(drawer.locator('.nv-dw-head__kind')).toHaveText(/Repetitie\s*·\s*Activiteiten/)
+      await expect(drawer.locator('.nv-dw-head__pos')).toHaveText('1 van 2')
+      // The title, the space in the subline, the fields with one Tijd and the day in full.
+      await expect(drawer.getByRole('heading', { level: 2 })).toHaveText('e2e lade eerst')
+      await expect(drawer.locator('.nv-dw-sub')).toContainText('Nachtwacht')
+      const field = (label: string) =>
+        drawer
+          .locator('.nv-drawer__field', { has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) })
+          .locator('dd')
+      await expect(field('Tijd')).toHaveText('10:00–12:00')
+      await expect(field('Plandag')).toHaveText('di 10 okt 2028')
+      await expect(drawer.getByRole('button', { name: /^\+ \d+ andere velden$/ })).toBeVisible()
+      // The sections: the people, the history.
+      await expect(drawer.getByRole('region', { name: 'Mensen' })).toBeVisible()
+      await expect(drawer.getByRole('region', { name: 'Geschiedenis' })).toBeVisible()
+      await shot(page, 'drawer-anatomy')
+
+      // ↓ steps to the next row of the view; expand widens over the work and Escape gives it back.
+      await drawer.getByRole('button', { name: 'Volgende' }).click()
+      const second = page.getByRole('complementary', { name: 'e2e lade tweede' })
+      await expect(second.locator('.nv-dw-head__pos')).toHaveText('2 van 2')
+      await second.getByRole('button', { name: 'Volledig openen' }).click()
+      await expect(second).toHaveClass(/nv-drawer--wide/)
+      await page.keyboard.press('Escape')
+      await expect(second).not.toHaveClass(/nv-drawer--wide/)
+      await expect(second).toBeVisible()
+    } finally {
+      for (const id of made) await api.delete(`/api/rows/activiteit/${id}`)
     }
   })
 })

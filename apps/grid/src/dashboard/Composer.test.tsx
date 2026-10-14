@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Model, SavedView } from '../types'
 
-const api = vi.hoisted(() => ({ rows: vi.fn(), update: vi.fn(), create: vi.fn(), records: vi.fn(), createView: vi.fn(), updateView: vi.fn() }))
+const api = vi.hoisted(() => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), create: vi.fn(), records: vi.fn(), createView: vi.fn(), updateView: vi.fn() }))
 vi.mock('../api', () => api)
 const { Dashboard } = await import('./Dashboard')
 

@@ -6,7 +6,7 @@ import type { Filter, Join } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { Filters } from './Filters'
 
-const remote = vi.hoisted(() => ({ records: vi.fn() }))
+const remote = vi.hoisted(() => ({ recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 vi.mock('../api', () => remote)
 
 const fields: FilterField[] = [

@@ -59,7 +59,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   /** What the title line says it shows: the bars and the lanes. */
   onTitle?: (shown: Shown) => void
 }) {
-  const [openRow, drawer, open] = useOpenRow(model, view, models)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout)
   const laid = useMemo(() => bars(rows, cal, shown, lane), [rows, cal, shown.from, shown.to, lane])
   const columns = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.

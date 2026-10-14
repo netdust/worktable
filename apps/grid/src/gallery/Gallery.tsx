@@ -66,7 +66,7 @@ export function Gallery({ view, model, models, rows, kind, layout, size = 'M', o
   /** What the title line says it shows: the cards and how many have a picture. */
   onShown?: (shown: Shown) => void
 }) {
-  const [openRow, drawer, open] = useOpenRow(model, view, models)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout)
   const [files, setFiles] = useState<Files>({})
   const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   const columns = useMemo(() => factsOf(all, layout), [all, layout])

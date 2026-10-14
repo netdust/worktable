@@ -50,6 +50,7 @@ import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
+import { SchemaContext } from '../grid/drawer/context'
 import { SizeChips } from './SizeChips'
 import { useGallerySize } from '../gallery/size'
 import { ChipBar } from './ChipBar'
@@ -514,6 +515,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   return (
     <DrawerSlot.Provider value={drawerSlot}>
+    <SchemaContext.Provider value={served}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
@@ -606,6 +608,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </SchemaContext.Provider>
     </DrawerSlot.Provider>
   )
 }
