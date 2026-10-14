@@ -38,7 +38,8 @@ export function propsOf(columns: Column[], row: Row, cal?: CalendarDef | null, l
   const end = cal?.end && cal.start ? columns.find((c) => c.id === cal.end) : undefined
   // A layout that shows no field at all (a timeline's) says nothing about the drawer.
   const says = layout && columns.some((c) => c.id !== 'title' && c.kind !== 'links' && !layout.hidden.includes(c.id))
-  const kept = (c: Column) => !says || !layout.hidden.includes(c.id) || c.id === dateField || c === start || c === end
+  // The record's state always shows, as the prototypes head their fields with it, even where a board's columns stand for it.
+  const kept = (c: Column) => !says || !layout.hidden.includes(c.id) || c.id === dateField || c === start || c === end || isState(c.tones)
   const props: Prop[] = []
   for (const column of columns) {
     if (column.id === 'title' || column.kind === 'links' || column === end) continue

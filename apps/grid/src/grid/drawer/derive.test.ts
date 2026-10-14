@@ -44,6 +44,12 @@ describe('the drawer derives from the model', () => {
     expect(propsOf(columns, row, cal, none).folded.map((p) => p.column.id)).toEqual(['notities'])
   })
 
+  it('keeps the record\'s state where the view hides it, first', () => {
+    const status = { ...column('status', 'select', 'Optie'), tones: { optie: 'warn' } } as unknown as Column
+    const layout = { ...defaults({ key: 'v', label: 'V', table: 't', model: 'm' }), hidden: ['status'] }
+    expect(propsOf([column('title', 'title'), column('plaats', 'text'), status], row, null, layout).shown.map((p) => p.column.id)).toEqual(['status', 'plaats'])
+  })
+
   it('finds the dated tables that point at a record, not those a link field lists, nor an undated one', () => {
     const schema = {
       models: {

@@ -139,7 +139,8 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
-  const cal = view?.calendar ?? (model ? schema?.views.find((v) => v.model === model.key && v.calendar)?.calendar : undefined)
+  // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
+  const cal = view?.calendar ?? (model ? schema?.tables.find((table) => table.model === model.key && table.calendar)?.calendar : undefined)
   const dateField = view?.date_field ?? schema?.tables.find((table) => table.model === model?.key)?.date_field ?? null
   const { shown, folded } = propsOf(columns, row, cal, layout, dateField)
   const space = schema?.space && model && schema.space.model !== model.key ? columns.find((c) => c.id === schema.space?.field) : undefined
