@@ -11,7 +11,7 @@ import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
-import { complete, type Filter, isDate, joinOf, readConditions, windowOf } from '../grid/conditions'
+import { complete, type Filter, joinOf, readConditions, windowOf } from '../grid/conditions'
 import { type Layout, withFilters } from '../grid/layout'
 import { madeFrom, type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
@@ -42,7 +42,8 @@ import { useSavedViews } from './useSavedViews'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
+import { type Period, periodOf, withPeriod } from './period'
+import { formatWindow, isMonth, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
@@ -52,8 +53,7 @@ import { ChipBar } from './ChipBar'
 import { Legend } from '../matrix/Legend'
 import { Gallery } from '../gallery/Gallery'
 import { Timeline } from '../timeline/Timeline'
-import { timelineWindow } from '../timeline/layout'
-import { calendarWindow, monthWeeks } from '../calendar/layout'
+import { monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -281,34 +281,24 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     storeLayout({ ...withFilters(layout, linked.filter(fits)), join: j === 'or' ? 'or' : undefined })
   }, [settled, view?.key, layout === null])
   const asks = layout ? JSON.stringify([layout.filters, joinOf(layout.filters, layout.join), layout.sort, layout.group]) : ''
-  // The period is the condition on the view's date column: its days, for a matrix, a new row and the export.
-  const dateCondition = layout && view?.date_field ? layout.filters.find((f) => f.field === view.date_field && isDate(f.op) && complete(f)) : undefined
+  // The period is the one condition on the view's date column: the days a skin shows, a new row's day and the export's.
+  const period = useMemo(() => (view && layout ? periodOf(view, layout, new Date()) : null), [view, layout?.filters])
+  const dateCondition = period?.condition ?? undefined
   const conditionDays = useMemo(() => windowOf(dateCondition, new Date()), [JSON.stringify(dateCondition)])
-  // A matrix reads one bounded window: the condition's days, else the current week (none, or over the engine's cap).
   const conditioned = layout ? layout.filters.some((f) => f !== dateCondition && complete(f)) : false
-  const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
-  // A calendar shows the condition's days, else this week; a month reads its whole weeks.
+  const matrixDays = view?.type === 'matrix' && period?.window ? period.window : weekOf(new Date())
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
   const timeline = view?.type === 'timeline' ? view.calendar : undefined
-  const calendarShown = calendarWindow(conditionDays, new Date())
+  const calendarShown = calendar && period?.window ? period.window : weekOf(new Date())
+  // A month reads its whole weeks.
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
-  const timelineShown = timelineWindow(conditionDays, new Date())
+  const timelineShown = timeline && period?.window ? period.window : weekOf(new Date())
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
   // Rows that span days are read by overlap with the window, so one begun before it still shows.
   const readRows = (calendar ?? timeline)?.spans ? spanRows : rows
-  // A calendar's or timeline's days are set by its date condition.
-  const showDays = (next: DateWindow) =>
-    view?.date_field && layout && setLayout(withFilters(layout, [
-      { field: view.date_field, op: 'between', values: [next.from, next.to] },
-      ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
-    ]))
-  // The period chips sit where the view reads days by its dated column: a windowed skin always, another where a period is set.
-  const period = !view?.date_field ? null
-    : calendar ? { shown: calendarShown, onShown: showDays }
-    : timeline ? { shown: timelineShown, onShown: showDays }
-    : view.type === 'matrix' ? { shown: matrixDays, onShown: showDays }
-    : conditionDays?.from && conditionDays.to ? { shown: { from: conditionDays.from, to: conditionDays.to }, onShown: showDays }
-    : null
+  const setPeriod = (next: Filter | null) => {
+    if (period && layout) setLayout(withPeriod(layout, period.field, next))
+  }
   const windowKey = JSON.stringify(window)
   useEffect(() => setPicking(false), [view?.key])
 
@@ -387,7 +377,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
-    ? <Filters fields={named} filters={layout.filters} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
+    ? <Filters fields={named.filter((f) => f.field !== period?.field)} filters={layout.filters.filter((f) => f !== dateCondition)} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withConditions(layout, next, period))}
       onJoin={(join) => setLayout({ ...layout, join: join === 'or' ? 'or' : undefined })} />
     : null
   const exportView = () => {
@@ -513,7 +503,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           title={view?.label ?? title}
           kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
-          shown={matrix || told?.view !== view?.key ? null : (told?.shown ?? null)}
+          shown={told?.view !== view?.key ? null : (told?.shown ?? null)}
+          period={dashboard ? null : (period?.name ?? null)}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
@@ -531,7 +522,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         />
         {!dashboard && view && model && layout && (
           <ChipBar {...barOf({
-            view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period,
+            view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period: period ? { period, onPeriod: setPeriod } : null,
             told: told?.view === view.key ? told.shown : null,
             ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
           })} />
@@ -596,6 +587,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 }
 
 /** A month's whole Monday-first weeks. */
+/** The builder's conditions, with the period it never shows put back. */
+const withConditions = (layout: Layout, next: Filter[], period: Period | null): Layout =>
+  period ? withPeriod(withFilters(layout, next), period.field, period.condition) : withFilters(layout, next)
+
 function monthSpan(month: DateWindow): DateWindow {
   const weeks = monthWeeks(month)
   const last = weeks[weeks.length - 1]

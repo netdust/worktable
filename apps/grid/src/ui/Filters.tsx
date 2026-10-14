@@ -1,9 +1,10 @@
-import { ListFilter, X } from 'lucide-react'
+import { Calendar, ListFilter, X } from 'lucide-react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { complete, type Filter, isDate, type Join, joinOf } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { t } from '../i18n'
 import { FilterBuilder } from './FilterBuilder'
+import { formatWindow } from './Window'
 
 const EDGE = 16
 
@@ -34,7 +35,7 @@ export function said(condition: Filter, field: FilterField | undefined): string 
     case 'eq':
       return `${label} ${t(`op.text.${condition.op}`)} “${condition.values[0]}”`
     case 'between':
-      return `${label} ${t('betweenDays', { from: condition.values[0] ?? '', to: condition.values[1] ?? '' })}`
+      return `${label} ${formatWindow({ from: condition.values[0], to: condition.values[1] })}`
     default:
       return `${label} ${t(`period.${condition.op}`)}`
   }
@@ -87,6 +88,7 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
           <Fragment key={`${condition.field}:${condition.op}`}>
           {joinWord && <span className="nv-chip-join">{t('filterOr').toLocaleLowerCase()}</span>}
           <span className="nv-chip nv-chip--set nv-chip--filter">
+            {isDate(condition.op) && <Calendar size={13} aria-hidden="true" />}
             <ChipText text={said(condition, fieldOf(condition.field))} label={label} />
             <button type="button" className="nv-chip__remove" aria-label={t('removeFilter', { field: label })} title={t('removeFilter', { field: label })}
               onClick={() => onChange(filters.filter((f) => f !== condition))}>

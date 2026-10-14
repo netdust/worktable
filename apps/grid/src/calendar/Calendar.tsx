@@ -5,7 +5,7 @@ import { t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
-import { formatWindow, isMonth, iso, isoWeek, parse } from '../ui/Window'
+import { isMonth, iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
 interface Props {
@@ -221,7 +221,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle 
   const whereOf = (row: Row) => place?.text(row) ?? ''
   const toned = columns.find((c) => c.kind === 'select' && c.tones)
   const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned), [lanes, lane, toned])
-  useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false, label: formatWindow(shown) }), [rows.length, shown.from, shown.to])
+  useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false }), [rows.length])
   return (
     <div className="nv-frame">
       <div className="nv-body">

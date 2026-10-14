@@ -6,6 +6,8 @@ import type { Model } from '../types'
 import type { Column } from '../grid/columns'
 import type { Layout } from '../grid/layout'
 import { barOf } from './bar'
+import type { Filter } from '../grid/conditions'
+import type { Period } from './period'
 import { ChipBar } from './ChipBar'
 
 const column = (id: string, label: string) => ({ id, field: id, label, kind: 'text', editable: true, required: false, align: 'start', width: 120 }) as unknown as Column
@@ -168,7 +170,7 @@ describe('one chip row for every skin', () => {
   }
   const layout: Layout = { ...empty, group: 'productie_id' }
   const told = { rows: 12, groups: null, cut: false, menu: [column('title', 'Omschrijving')] }
-  const period = { shown: { from: '2026-10-12', to: '2026-10-18' }, onShown: () => undefined }
+  const period = { period: { field: 'plandag', condition: null, window: { from: '2026-10-12', to: '2026-10-18' }, kind: 'week', name: 'Week 42 · 12–18 okt', optional: false } as Period, onPeriod: () => undefined }
   /** The row's slots in the order they show, each by what it is. */
   const slots = () => [...document.querySelectorAll('.nv-bar > *, .nv-bar__end > *')].flatMap((el) => {
     const text = el.textContent ?? ''
@@ -218,16 +220,19 @@ describe('one chip row for every skin', () => {
     expect(chosen).toBeNull()
   })
 
-  it('steps the period, opens today, and switches between month and week', () => {
-    const asked: { from: string; to: string }[] = []
-    renderNl(<ChipBar period={{ shown: { from: '2026-10-12', to: '2026-10-18' }, onShown: (next) => asked.push(next) }} />)
+  it('steps the period, opens today, and toggles a lit chip off where the skin shows every date', () => {
+    const asked: (Filter | null)[] = []
+    const week: Period = { field: 'plandag', condition: { field: 'plandag', op: 'week', values: [] }, window: { from: '2026-10-12', to: '2026-10-18' }, kind: 'week', name: 'Week 42 · 12–18 okt', optional: true }
+    renderNl(<ChipBar period={{ period: week, onPeriod: (next) => asked.push(next) }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }))
-    fireEvent.click(screen.getByRole('radio', { name: 'Maand' }))
-    expect(asked).toEqual([{ from: '2026-10-19', to: '2026-10-25' }, { from: '2026-10-01', to: '2026-10-31' }])
-    cleanup()
-    renderNl(<ChipBar period={{ shown: { from: '2026-10-01', to: '2026-10-31' }, onShown: (next) => asked.push(next) }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Vorige periode' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Week' }))
-    expect(asked.slice(2)).toEqual([{ from: '2026-09-01', to: '2026-09-30' }, { from: '2026-09-28', to: '2026-10-04' }])
+    expect(asked).toEqual([{ field: 'plandag', op: 'between', values: ['2026-10-19', '2026-10-25'] }, null])
+    cleanup()
+    const none: Period = { ...week, condition: null, window: null, kind: null, name: null }
+    renderNl(<ChipBar period={{ period: none, onPeriod: (next) => asked.push(next) }} />)
+    expect(screen.getByRole('button', { name: 'Volgende periode' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false'])
+    fireEvent.click(screen.getByRole('button', { name: 'Vandaag' }))
+    expect(asked[2]).toEqual({ field: 'plandag', op: 'week', values: [] })
   })
 })

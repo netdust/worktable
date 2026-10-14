@@ -78,7 +78,7 @@ describe('App and the window', () => {
     shell()
 
     await screen.findByText('Geen rijen in deze periode')
-    expect(screen.getByText('Week 21 · 18–24 mei')).toBeTruthy()
+    expect(document.querySelector('.nv-empty__desc')?.textContent).toBe('Week 21 · 18–24 mei')
     expect(api.rows).toHaveBeenLastCalledWith(planning, {}, null, expect.objectContaining({ filters: [{ field: 'date', op: 'week', values: [] }] }))
     // The period is set on the dated column: its chips sit in the row as on every other view.
     expect(screen.getByRole('button', { name: 'Volgende periode' })).toBeTruthy()

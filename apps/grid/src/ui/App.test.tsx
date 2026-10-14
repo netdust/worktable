@@ -1893,13 +1893,13 @@ describe("a query's views under the model it reads", () => {
 })
 
 describe('App and the period as a filter', () => {
-  it('has no period control in the toolbar or the bar: the period is a condition', async () => {
+  it('shows the period control on a dated view with no period set: nothing lit, the steps off, no date chip (R2)', async () => {
     await shell()
     await screen.findByText('Geen rijen')
 
-    expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /periode/i })).toBeNull()
-    expect(document.querySelector('.nv-chip--period')).toBeNull()
+    expect(screen.getAllByRole('radio').map((r) => [r.textContent, r.getAttribute('aria-checked')])).toEqual([['Maand', 'false'], ['Week', 'false']])
+    expect(screen.getByRole('button', { name: 'Volgende periode' }).hasAttribute('disabled')).toBe(true)
+    expect(document.querySelector('.nv-chip--filter')).toBeNull()
   })
 })
 
