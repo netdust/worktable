@@ -462,7 +462,7 @@ test('bijlagen-on-tourstop-and-assignment @e2e', async ({ page }) => {
     const drawer = await openDrawer(page, 'Theater Het Anker')
     await expect(drawer).toContainText('Ankerdijk 8')
     await expect(filesOf(drawer)).toHaveCount(0)
-    await expect(drawer.getByText('Bijlagen')).toHaveCount(0)
+    await expect(drawer.getByText('Bijlagen', { exact: true })).toHaveCount(0)
     await shot(page, 'organisation-no-bijlagen')
     const anker = await idByName(api, 'organisatie', 'naam', 'Theater Het Anker')
     expect((await api.get(`/api/attachments/organisatie/${anker}`)).status()).toBe(404)

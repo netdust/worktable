@@ -47,7 +47,7 @@ describe('the dashboard\'s chip row', () => {
     api.rows.mockResolvedValue({ rows: [], total: 0 })
     document.documentElement.lang = 'nl-BE'
     show([stat])
-    expect(document.querySelector('.nv-bar__count')?.textContent).toMatch(/^bijgewerkt \d{2}[:.]\d{2}$/)
+    expect(document.querySelector('.nv-bar__updated')?.textContent).toMatch(/^bijgewerkt \d{2}[:.]\d{2}$/)
     document.documentElement.lang = ''
   })
 })

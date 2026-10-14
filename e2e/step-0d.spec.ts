@@ -305,7 +305,8 @@ test('relation-beyond-page', async ({ page }) => {
   const asked: { limit: string | null; offset: number }[] = []
   page.on('request', (req) => {
     const url = new URL(req.url())
-    if (url.pathname === '/api/rows/productie')
+    // The rail's count read (limit 1) is no picker's page.
+    if (url.pathname === '/api/rows/productie' && url.searchParams.get('limit') !== '1')
       asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
   await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')

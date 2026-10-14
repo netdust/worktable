@@ -38,19 +38,21 @@ export function LinksCell({ column, row }: CellProps) {
   const all = items.map((item) => item.title).join(', ')
   const { have, need } = crewOf(items, column.link)
   return (
+    <span className="nv-links">
+    {need > 0 && (
+      <span className="nv-crew" aria-label={t('crewOf', { have, need })}>
+        <span className="nv-crew__meter" aria-hidden="true"><b style={{ width: `${(have / need) * 100}%` }} /></span>
+        {have}/{need}
+      </span>
+    )}
     <span className="nv-names" title={all || undefined}>
-      {need > 0 && (
-        <span className="nv-crew" aria-label={t('crewOf', { have, need })}>
-          <span className="nv-crew__meter" aria-hidden="true"><b style={{ width: `${(have / need) * 100}%` }} /></span>
-          {have}/{need}
-        </span>
-      )}
       {items.map((item, i) => (
         <span key={item.id}>
           {i > 0 && ', '}
           <span className={pillOf(item, column.link)}>{item.title}</span>
         </span>
       ))}
+    </span>
     </span>
   )
 }

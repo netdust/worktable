@@ -51,7 +51,9 @@ test('dagplanning-is-gone @e2e', async ({ page }) => {
     await expect(overzichten.getByRole('treeitem', { name: query, exact: true })).toHaveCount(1)
 
   expect((await rows).status()).toBe(200)
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag deze week'])
+  // The view's period: Week lit, named in the title line, no chip.
+  await expect(page.locator('.nv-bar').getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
   await overzichten.scrollIntoViewIfNeeded()
   await shot(page, 'dagplanning-is-gone')
 })

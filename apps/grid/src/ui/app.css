@@ -6766,3 +6766,20 @@ table.nv-cal--month .nv-cal__event:hover {
   font: 600 12px var(--font-mono);
   color: var(--color-fg-default);
 }
+
+/* The meter and the names on one line: the names cut with their ellipsis, never wrapping under the meter. */
+.nv-links {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nv-links .nv-crew {
+  flex: none;
+}
+
+.nv-links .nv-names {
+  flex: 1;
+  min-width: 0;
+}

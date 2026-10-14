@@ -99,7 +99,14 @@ async function shownIn(page: Page, label: string): Promise<string[]> {
 
 /** The space condition on the rows request `act` makes for a source. */
 async function scopeAsked(page: Page, source: string, act: () => Promise<void>): Promise<unknown> {
-  const asked = page.waitForRequest((req) => new URL(req.url()).pathname === `/api/rows/${source}`)
+  // The rail's count read (limit 1, no filter) is no view's read.
+  const asked = page.waitForRequest((req) => {
+    const url = new URL(req.url())
+    return (
+      url.pathname === `/api/rows/${source}` &&
+      !(url.searchParams.get('limit') === '1' && !url.searchParams.has('filter'))
+    )
+  })
   await act()
   const filter = new URL((await asked).url()).searchParams.get('filter')
   return filter ? JSON.parse(filter).productie_id : undefined

@@ -84,7 +84,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
       <ChipBar actions={actions.map((action) => (
         <button key={action.create} type="button" className="nv-chip" onClick={() => setCreating(action)}><Plus size={14} aria-hidden="true" />{action.label}</button>
       ))} end={!editing && <>
-        <span className="nv-bar__count">{t('updatedAt', { time: read.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}</span>
+        <span className="nv-bar__count nv-bar__updated">{t('updatedAt', { time: read.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}</span>
         <button type="button" className="nv-bar__button nv-dash__edit" onClick={() => setEditing(true)}>{t('edit')}</button>
       </>} />
       <div className="nv-body">

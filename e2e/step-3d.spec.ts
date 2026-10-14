@@ -93,7 +93,7 @@ async function slotsOf(page: Page): Promise<string[]> {
       else if (el.getAttribute('aria-label') === 'Volgende periode') said.push('next')
       else if (el.matches('[role="radio"]')) said.push(text.toLowerCase())
       else if (el.matches('button') && text === '+ Kolom') said.push('kolom')
-      else if (el.matches('.nv-bar__count')) said.push('count')
+      else if (el.matches('.nv-bar__count:not(.nv-bar__updated)')) said.push('count')
       else if (el.getAttribute('aria-label') === 'Kolommen') said.push('kolommen')
     }
     return said.filter((s, i) => s !== said[i - 1])
@@ -623,9 +623,10 @@ test.describe('step 3d', () => {
     await expect(summary(page)).toBeVisible()
     const told = await summary(page).textContent()
 
-    // A dashboard opened after the calendar shows none.
+    // A dashboard opened after the calendar says its own: this week, not the calendar's window.
     await openDashboard(page)
-    await expect(summary(page)).toHaveCount(0)
+    await expect(summary(page)).toHaveText(/week \d+$/)
+    await expect(summary(page)).not.toHaveText(told ?? '')
     await shot(page, 'summary-per-view')
 
     // Re-entry: back on the calendar it tells its own again; a board after it tells the board's.
