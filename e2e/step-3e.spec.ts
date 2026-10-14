@@ -276,9 +276,8 @@ test.describe('step 3e: the board drags', () => {
 
   // Found driving board-column-plus: on a week that does not hold today, the dialog's Datum starts on today, so the card
   // made from the column lands outside the board it was made from and the column still reads "Geen activiteiten". The calendar's quick create starts on
-  // the window's first day (step 3d); App.tsx passes that window to QuickCreate on a calendar only.
+  // the window's first day (step 3d); every skin now passes the period it shows.
   test('board-column-plus-in-window @e2e', async ({ page }) => {
-    test.fail(true, 'defect: the board passes no window to QuickCreate, Datum starts on today')
     const api = page.request
     await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
     // This week holds no activity of its own: the column reads "Geen activiteiten".

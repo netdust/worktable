@@ -638,7 +638,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
       {quick && model && (
         <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
-          window={calendar ? calendarShown : null} preset={quick} onClose={() => setQuick(null)} onCreated={() => { setQuick(null); reloadView() }} />
+          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreated={() => { setQuick(null); reloadView() }} />
       )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
