@@ -2009,7 +2009,7 @@ describe('the to-many editor', () => {
     expect(links.add).not.toHaveBeenCalled()
     expect(links.remove).not.toHaveBeenCalled()
     expect(api.update).not.toHaveBeenCalled()
-    expect(cell('Lunch', 'people').textContent).toBe('Jan')
+    expect(cell('Lunch', 'people').textContent).toBe('1/1Jan')
   })
 })
 

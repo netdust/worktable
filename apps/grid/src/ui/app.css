@@ -6727,3 +6727,28 @@ table.nv-cal--month .nv-cal__event:hover {
   color: var(--color-accent-default);
   font-weight: 500;
 }
+
+/* A staffed list's have/need ahead of its names, as the prototype's Bezetting: a short meter, the count in mono. */
+.nv-crew {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  color: var(--color-fg-muted);
+  font: 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-crew__meter {
+  width: 42px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-bg-muted);
+}
+
+.nv-crew__meter b {
+  display: block;
+  height: 100%;
+  background: var(--color-success-fg);
+}

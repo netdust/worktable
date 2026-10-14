@@ -3,6 +3,7 @@ import { type CSSProperties, useEffect, useMemo, useRef } from 'react'
 import { type DropItem, isTextDropItem } from 'react-aria'
 import { Button, DropIndicator, GridList, GridListItem, useDragAndDrop } from 'react-aria-components'
 import { Display } from '../grid/cells'
+import { isOpen } from '../grid/cells/Links'
 import { type Column, columnsFor, linksOf } from '../grid/columns'
 import type { Layout } from '../grid/layout'
 import { useOpenRow } from '../grid/useOpenRow'
@@ -27,8 +28,8 @@ function Card({ row, columns }: { row: Row; columns: Column[] }) {
   const facts = columns.filter((c) => c !== kind && c !== people && !dates.includes(c) && c.text(row) !== '' && c.text(row) !== row.title)
   const when = whenOf(row, dates)
   const links = people ? linksOf(row, people.field ?? people.id) : []
-  const faces = links.filter((f) => f.target !== null && f.title.trim() !== '')
-  const open = links.filter((f) => f.target === null).length
+  const faces = links.filter((f) => !isOpen(f))
+  const open = links.filter(isOpen).length
   return (
     <div className="nv-board__card">
       {kind && kind.text(row) && <span className="nv-board__kind"><Display column={kind} row={row} onToggle={noToggle} /></span>}
@@ -43,7 +44,7 @@ function Card({ row, columns }: { row: Row; columns: Column[] }) {
       {(faces.length > 0 || open > 0) && (
         <span className="nv-board__faces" aria-label={faces.map((f) => f.title).join(', ')}>
           {faces.slice(0, MAX_FACES).map((f) => (
-            <span key={f.id} className="nv-avatar nv-avatar--sm nv-avatar--hue" style={{ '--h': hueOf(f.target as number) } as CSSProperties} title={f.title} aria-hidden="true">{initials(f.title)}</span>
+            <span key={f.id} className="nv-avatar nv-avatar--sm nv-avatar--hue" style={{ '--h': hueOf(f.target ?? f.id) } as CSSProperties} title={f.title} aria-hidden="true">{initials(f.title)}</span>
           ))}
           {open > 0 && <span className="nv-avatar nv-avatar--sm nv-avatar--open" title={t('openPlace')} aria-hidden="true">+</span>}
           {faces.length > MAX_FACES && <span className="nv-board__more" aria-hidden="true">+{faces.length - MAX_FACES}</span>}

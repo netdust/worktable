@@ -4,6 +4,7 @@ import { locale, t } from '../../i18n'
 import type { HistoryEntry, Link, LinkItem, Model, Row, Schema } from '../../types'
 import { hueOf, toneColor } from '../../ui/tone'
 import { initials } from '../../ui/when'
+import { crewOf, isOpen } from '../cells/Links'
 import { actorOf, dayLabel, type Inbound } from './derive'
 
 /** A section under the fields: an 11px heading with its count and, at the right, its action. */
@@ -38,19 +39,18 @@ export function LinkSection({ label, link, items, schema, id }: { label: string;
       live = false
     }
   }, [link.dataset, link.key, id, role])
-  const counted = (item: LinkItem) => item.target !== null && link.state?.tones[item.state ?? ''] !== 'bad'
-  const have = items.filter(counted).length
-  const open = items.filter((item) => item.target === null)
-  const people = items.filter((item) => item.target !== null)
+  const { have, need } = crewOf(items, link)
+  const open = items.filter(isOpen)
+  const people = items.filter((item) => !isOpen(item))
   return (
-    <Section title={label} count={`${have}/${have + open.length}`}>
+    <Section title={label} count={`${have}/${need}`}>
       {items.length === 0 ? <p className="nv-dw-none">{t('noneOf', { label: label.toLocaleLowerCase(locale()) })}</p> : (
         <ul className="nv-dw-list">
           {[...people, ...open].map((item) => (
             <li key={item.id}>
-              <Face id={item.target} name={item.title} />
-              <span className="nv-dw-list__main">{item.target === null ? t('openPlace') : item.title}{roles[item.id] && <small>{roles[item.id]}</small>}</span>
-              {item.target !== null && item.state && link.state && (
+              <Face id={isOpen(item) ? null : (item.target ?? item.id)} name={item.title} />
+              <span className="nv-dw-list__main">{isOpen(item) ? t('openPlace') : item.title}{roles[item.id] && <small>{roles[item.id]}</small>}</span>
+              {!isOpen(item) && item.state && link.state && (
                 <span className="nv-pill" style={{ '--tone': toneColor(link.state.tones[item.state]) } as CSSProperties}>{link.state.options[item.state] ?? item.state}</span>
               )}
             </li>

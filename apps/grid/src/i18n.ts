@@ -283,6 +283,7 @@ const strings = {
   kindGallery: 'Galerij',
   month: 'Maand',
   cardSize: 'Kaartgrootte',
+  crewOf: '{have} van {need} plaatsen bezet',
   recordsIn: '{n} records',
   awayLayer: 'Afwezigheden',
   'size.S': 'Klein',
