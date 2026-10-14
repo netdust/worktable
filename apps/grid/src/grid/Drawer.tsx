@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Link2, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type CSSProperties, type ReactNode, useContext, useEffect, useId, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
@@ -45,6 +45,11 @@ interface Props {
   layout?: Layout | null
   /** The view's rows in their order: "3 van 12", and ↑ ↓ to the row before or after. */
   nav?: { ids: number[]; onStep: (id: number) => void }
+  /** A record drawn from elsewhere (a matrix cell): its own subline, alert, field lines and sections, in the drawer's places. */
+  sub?: ReactNode
+  alert?: ReactNode
+  lines?: ReactNode
+  sections?: ReactNode
 }
 
 /** `version` moves when the files changed elsewhere, such as by an undo: the list reads again. */
@@ -102,6 +107,16 @@ function Value({ prop, row }: { prop: Prop; row: Row }) {
   return <Display column={prop.column} row={row} onToggle={noToggle} />
 }
 
+/** One field line: its icon and label, its value; the drawer's and a matrix cell's alike. */
+export function Line({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
+  return (
+    <div className="nv-drawer__field">
+      <dt><Icon className="nv-drawer__icon" size={14} aria-hidden="true" />{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  )
+}
+
 function Props({ props, row }: { props: Prop[]; row: Row }) {
   return (
     <dl className="nv-drawer__fields">
@@ -119,7 +134,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav }: Props) {
+export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
   const cal = view?.calendar ?? (model ? schema?.views.find((v) => v.model === model.key && v.calendar)?.calendar : undefined)
@@ -134,11 +149,13 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
       head={<Head row={row} model={model} nav={nav} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
-      {sub.length > 0 && (
+      {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
         <p className="nv-dw-sub">
           {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
         </p>
       )}
+      {alert}
+      {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
         ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
@@ -148,6 +165,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
         return <LinkSection key={c.id} label={c.label} link={link} items={linksOf(row, c.field ?? c.id)} schema={schema} id={row.id} />
       })}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
+      {sections}
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}

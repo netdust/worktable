@@ -3118,8 +3118,7 @@
 /* The alert under the title: full bleed, danger or warning, its actions as underlined words. */
 .nv-dw-alert {
   display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 8px;
+  gap: 2px;
   margin: 0 -16px 14px;
   padding: 10px 16px;
   background: var(--color-danger-bg);
@@ -3132,16 +3131,82 @@
   color: var(--color-warning-fg);
 }
 
-.nv-dw-alert b {
-  display: block;
-  margin-bottom: 2px;
+#root .nv-dw-alert__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
   font-weight: 600;
+}
+
+#root .nv-dw-alert__text {
+  margin: 0 0 0 23px;
 }
 
 .nv-dw-alert__acts {
   display: flex;
   gap: 12px;
+  margin: 4px 0 0 23px;
+}
+
+/* A matrix cell's status: its toned badge; pressed, the choices open under it. */
+#root .nv-dw-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--tone);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.nv-drawer__field dd:has(> .nv-dw-status) {
+  flex-wrap: wrap;
+}
+
+.nv-dw-status + .nv-panel__field,
+.nv-dw-status + .nv-choices {
+  flex-basis: 100%;
   margin-top: 6px;
+}
+
+#root .nv-dw-note {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.nv-dw-dot {
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: var(--tone);
+}
+
+.nv-dw-rows__main {
+  display: grid;
+}
+
+.nv-dw-rows__main small {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-drawer__field dd .nv-avatar--sm {
+  margin-right: 6px;
+  box-shadow: none;
 }
 
 #root .nv-dw-alert__acts button {

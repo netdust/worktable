@@ -391,7 +391,7 @@ describe('the matrix, edited from the keyboard', () => {
     expect(document.activeElement).toBe(at(/Montage/, 'record:5'))
     const panel = screen.getByRole('complementary', { name: 'Sien · Montage' })
     expect(panel.closest('.nv-body')?.querySelector('.nv-scroll')).not.toBeNull()
-    expect(within(panel).getByRole('radio', { checked: true }).textContent).toBe('Bevestigd')
+    expect(panel.querySelector('.nv-dw-status')?.textContent).toBe('✓ Bevestigd')
   })
 
   it('moves with the arrows and Tab, across the day sections', async () => {

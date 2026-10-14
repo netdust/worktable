@@ -63,12 +63,26 @@ function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: 
   const utils = render(<Live store={store} />)
   const at = (title: RegExp, key: string) => screen.getByRole('row', { name: title }).querySelector<HTMLElement>(`[data-column="${key}"]`)!
   const panel = () => screen.queryByRole('complementary')
-  const group = () => within(panel()!).getByRole('radiogroup', { name: 'Status' })
+  // The status is a badge until pressed; then its choices open in place.
+  const group = () => {
+    const status = panel()!.querySelector<HTMLButtonElement>('.nv-dw-status[aria-expanded="false"]')
+    if (status) fireEvent.click(status)
+    return within(panel()!).getByRole('radiogroup', { name: 'Status' })
+  }
   const checked = () => within(group()).getByRole('radio', { checked: true })
-  const choose = (name: string) => act(async () => {
-    fireEvent.click(within(group()).getByRole('radio', { name }))
-  })
-  return { ...utils, writes, store, at, panel, group, checked, choose }
+  const choose = (name: string) => {
+    const choices = group()
+    return act(async () => {
+      fireEvent.click(within(choices).getByRole('radio', { name }))
+    })
+  }
+  // The note is a line until pressed; then its field.
+  const noteField = () => {
+    const line = panel()!.querySelector<HTMLButtonElement>('.nv-dw-note')
+    if (line) fireEvent.click(line)
+    return within(panel()!).getByLabelText('Notitie')
+  }
+  return { ...utils, writes, store, at, panel, group, checked, choose, noteField }
 }
 
 /** A click as a browser sends it: mousedown, then focus unless the mousedown was prevented, then click. */
@@ -84,6 +98,40 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('the cell drawer is the record drawer', () => {
+  beforeEach(() => {
+    document.documentElement.lang = 'nl-BE'
+  })
+  afterEach(() => {
+    document.documentElement.lang = ''
+  })
+
+  it('reads alert, fields, the rest of the day, who could stand in, and the history last, on the drawer\'s own edge', async () => {
+    const { panel, at } = setup()
+    fireEvent.click(at(/Montage/, 'record:5'))
+    const aside = panel()!
+    await within(aside).findByRole('region', { name: 'Geschiedenis' })
+    expect(aside.querySelector('.nv-drawer__editor')).toBeNull()
+    const order = [...aside.querySelectorAll('.nv-dw-alert, .nv-drawer__fields, .nv-dw-sec')].map((el) =>
+      el.classList.contains('nv-dw-alert') ? 'alert' : el.classList.contains('nv-drawer__fields') ? 'fields' : (el.getAttribute('aria-label') ?? ''))
+    expect(order[0]).toBe('alert')
+    expect(order[1]).toBe('fields')
+    expect(order.at(-1)).toBe('Geschiedenis')
+    expect(order.findIndex((label) => label.startsWith('Ook op'))).toBeLessThan(order.indexOf('Geschiedenis'))
+  })
+
+  it('heads its alert with the icon and the title on one line, says the reason as a sentence, and offers its actions as words', () => {
+    const { panel, at } = setup()
+    fireEvent.click(at(/Montage/, 'record:5'))
+    const alert = within(panel()!).getByRole('alert')
+    const head = alert.querySelector('.nv-dw-alert__head')!
+    expect(head.querySelector('svg')).not.toBeNull()
+    expect(head.textContent).toBe('Afwezig en toegewezen')
+    expect(alert.querySelector('.nv-dw-alert__text')?.textContent).toBe('Sien is afwezig op ma 18 mei: Examen.')
+    expect([...alert.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Toch laten staan'])
+  })
+})
+
 describe('the matrix side panel', () => {
   it('shows a clicked cell in the panel and leaves focus on the cell, so typing still goes to it', async () => {
     const { at, panel, writes } = setup()
@@ -93,8 +141,8 @@ describe('the matrix side panel', () => {
     const aside = panel()!
     expect(aside.getAttribute('aria-label')).toBe('Lieve · Montage')
     expect(within(aside).getAllByText(/Montage/).length).toBeGreaterThan(0)
-    expect(within(aside).getByRole('radio', { checked: true }).textContent).toBe('Misschien')
-    expect(within(aside).getByLabelText('Notitie')).toBeTruthy()
+    expect(aside.querySelector('.nv-dw-status')?.textContent).toBe('? Misschien')
+    expect(aside.querySelector('.nv-dw-note')?.textContent).toBe('komt later')
     expect(document.activeElement).toBe(at(/Montage/, 'name:lieve'))
 
     await act(async () => {
@@ -184,9 +232,9 @@ describe('the matrix side panel', () => {
   })
 
   it('saves the note on leaving the field, sending the note alone', async () => {
-    const { at, panel, store, writes } = setup()
+    const { at, store, writes, noteField } = setup()
     fireEvent.click(at(/Montage/, 'name:lieve'))
-    const note = within(panel()!).getByLabelText('Notitie')
+    const note = noteField()
 
     fireEvent.change(note, { target: { value: 'komt om 10u' } })
     await act(async () => {
@@ -201,7 +249,7 @@ describe('the matrix side panel', () => {
     const { at, panel, choose, writes } = setup()
     fireEvent.click(at(/Montage/, 'record:5'))
 
-    expect(within(panel()!).getByText('Afwezig: Examen')).toBeTruthy()
+    expect(within(panel()!).getByText(/is afwezig op .*: Examen\.$/)).toBeTruthy()
     expect(within(panel()!).getByText('Afwezig en toegewezen')).toBeTruthy()
     await choose('Misschien')
 
@@ -213,7 +261,7 @@ describe('the matrix side panel', () => {
 
     fireEvent.click(at(/Leeg ook/, 'record:5'))
 
-    expect(within(panel()!).getByText('Afwezig: Examen')).toBeTruthy()
+    expect(within(panel()!).getByText(/is afwezig op .*: Examen\.$/)).toBeTruthy()
     expect(within(panel()!).queryByText('Afwezig en toegewezen')).toBeNull()
   })
 
@@ -275,23 +323,23 @@ describe('the matrix side panel', () => {
 
   it('keeps a 10,000-character note inside its scrolling field', () => {
     const long = 'a'.repeat(10_000)
-    const { at, panel } = setup({ rows: week(long) })
+    const { at, noteField } = setup({ rows: week(long) })
 
     fireEvent.click(at(/Montage/, 'name:lieve'))
 
-    const note = within(panel()!).getByLabelText('Notitie') as HTMLTextAreaElement
+    const note = noteField() as HTMLTextAreaElement
     expect(note.tagName).toBe('TEXTAREA')
     expect(note.value).toHaveLength(10_000)
-    expect(note.closest('.nv-panel')).not.toBeNull()
+    expect(note.closest('.nv-drawer__field')).not.toBeNull()
   })
 
   it('renders a markup note and away reason as characters', () => {
-    const { at, panel, container } = setup({ rows: week(evil), awayRows: away(evil) })
+    const { at, panel, container, noteField } = setup({ rows: week(evil), awayRows: away(evil) })
 
     fireEvent.click(at(/Montage/, 'name:lieve'))
-    expect((within(panel()!).getByLabelText('Notitie') as HTMLTextAreaElement).value).toBe(evil)
+    expect((noteField() as HTMLTextAreaElement).value).toBe(evil)
     fireEvent.click(at(/Montage/, 'record:5'))
-    expect(within(panel()!).getByText(`Afwezig: ${evil}`)).toBeTruthy()
+    expect(within(panel()!).getByText((text) => text.endsWith(`: ${evil}.`))).toBeTruthy()
 
     expect(container.querySelector('img')).toBeNull()
   })
@@ -302,7 +350,7 @@ describe('the matrix side panel', () => {
     fireEvent.click(at(/Diner/, 'record:7'))
 
     const aside = panel()!
-    expect(within(aside).getByRole('radio', { checked: true }).textContent).toBe('Afgezegd')
+    expect(aside.querySelector('.nv-dw-status')?.textContent).toBe('✕ Afgezegd')
     const others = [...aside.querySelectorAll('.nv-panel__others li')].map((li) => li.textContent)
     expect(others).toEqual(['Misschien — tweede'])
   })

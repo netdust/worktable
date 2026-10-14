@@ -352,11 +352,23 @@ test.describe('step 3e: the matrix as its prototype', () => {
       },
     })
     const id = ((await made.json()) as { id: number }).id
+    let awayId = 0
     try {
       const placed = await api.post('/api/rows/toewijzing', {
         data: { activiteit_id: id, persoon_id: lotte, rol_id: speler, state: 'bevestigd' },
       })
       expect(placed.status(), await placed.text()).toBe(201)
+      const absent = await api.post('/api/rows/beschikbaarheid', {
+        data: {
+          persoon_id: lotte,
+          soort: 'afwezig',
+          start_at: '2028-10-17T00:00',
+          eind_at: '2028-10-17T23:59',
+          reden: 'e2e studiedag',
+        },
+      })
+      expect(absent.status(), await absent.text()).toBe(201)
+      awayId = ((await absent.json()) as { id: number }).id
       await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', WEEK)
       // The head: her first name and the role she holds here; the row's Bezet.
       await expect(page.locator('thead th.nv-mx__head[title="Lotte Verhaegen"] .nv-mx__role')).toHaveText('Speler')
@@ -364,22 +376,42 @@ test.describe('step 3e: the matrix as its prototype', () => {
       await expect(row.getByTestId('row-count')).toHaveText('1/1')
 
       // The cell's drawer: who, in what role and state, on what; who could stand in.
-      await row.locator('td[data-column^="record:"].nv-mx__cell--on').first().click()
+      await row.locator(`td[data-column="record:${lotte}"]`).click()
       const drawer = page.getByRole('complementary', { name: `Lotte Verhaegen · ${title}` })
       await expect(drawer).toBeVisible()
       const field = (label: string) =>
         drawer
           .locator('.nv-drawer__field', { has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) })
           .locator('dd')
+      // The alert: a band with the icon and its title on one line, the reason as a sentence, its actions as words.
+      const alert = drawer.getByRole('alert')
+      const head = alert.locator('.nv-dw-alert__head')
+      await expect(head).toHaveText('Afwezig en toegewezen')
+      const [icon, words] = await head.evaluate((el) =>
+        [el.querySelector('svg') as SVGElement, el].map((n) => {
+          const r = n.getBoundingClientRect()
+          return r.top + r.height / 2
+        }),
+      )
+      expect(Math.abs(icon - words)).toBeLessThan(3)
+      await expect(alert.locator('.nv-dw-alert__text')).toHaveText(
+        'Lotte Verhaegen is afwezig op di 17 okt: e2e studiedag.',
+      )
+      for (const action of await alert.locator('.nv-dw-alert__acts button').all())
+        await expect(action).toHaveCSS('border-top-style', 'none')
       await expect(field('Rol')).toHaveText('Speler')
       await expect(field('Activiteit')).toHaveText(title)
-      await expect(drawer.getByRole('radio', { checked: true })).toHaveText('Bevestigd')
+      await expect(drawer.locator('.nv-dw-status')).toHaveText('✓ Bevestigd')
       const instead = drawer.getByRole('region', { name: 'Wie kan in de plaats' })
       await expect(instead.getByRole('listitem').first()).toBeVisible()
       await shot(page, 'matrix-cell-drawer')
 
       // Kiezen moves the place to the one chosen.
-      const first = (await instead.getByRole('listitem').first().locator('.nv-dw-list__main').textContent()) ?? ''
+      const first = await instead
+        .getByRole('listitem')
+        .first()
+        .locator('.nv-dw-list__main')
+        .evaluate((el) => el.firstChild?.textContent ?? '')
       await instead.getByRole('listitem').first().getByRole('button', { name: 'Kiezen' }).click()
       await expect
         .poll(async () =>
@@ -399,6 +431,7 @@ test.describe('step 3e: the matrix as its prototype', () => {
       await expect(away).toHaveAttribute('aria-pressed', 'false')
       await away.click()
     } finally {
+      if (awayId) await api.delete(`/api/rows/beschikbaarheid/${awayId}`)
       for (const t of await json(
         `/api/rows/toewijzing?limit=50&filter=${encodeURIComponent(JSON.stringify({ activiteit_id: id }))}`,
       ))

@@ -1,13 +1,19 @@
-import { AlertTriangle } from 'lucide-react'
-import { type KeyboardEvent, type Ref, useEffect, useId, useRef, useState } from 'react'
+import { AlertTriangle, CalendarDays, CircleDot, StickyNote, Tag, User } from 'lucide-react'
+import { type CSSProperties, type KeyboardEvent, type Ref, useContext, useEffect, useId, useRef, useState } from 'react'
 import { TextArea, TextField } from 'react-aria-components'
 import { optionsFrom } from '../api'
 import { Section } from '../grid/drawer/Sections'
-import { dayLabel } from '../grid/group'
-import { t } from '../i18n'
+import type { Column } from '../grid/columns'
+import { Drawer, Line } from '../grid/Drawer'
+import { SchemaContext } from '../grid/drawer/context'
+import { dayLabel, kindOf } from '../grid/drawer/derive'
+import { locale, t } from '../i18n'
+import { placeOf } from '../ui/facts'
+import { hueOf, toneColor } from '../ui/tone'
+import { initials, whenOf } from '../ui/when'
 import type { MatrixCell, MatrixColumn, Model, Row, View } from '../types'
 import { absentOn } from './away'
-import { cellsFor } from './columns'
+import { cellsFor, markFor } from './columns'
 import type { MatrixStore } from './store'
 
 export interface PanelProps {
@@ -22,6 +28,8 @@ export interface PanelProps {
   store?: MatrixStore
   /** The window's rows: the rest of a person's day. */
   rows?: Row[]
+  /** Moves when the matrix hands the keyboard over: the status opens for it. */
+  asking?: number
 }
 
 function text(value: unknown): string {
@@ -30,7 +38,7 @@ function text(value: unknown): string {
 
 /** The side panel's editor: one cell's status and note, or who is on a row. */
 export function Panel(props: PanelProps) {
-  return props.column ? <CellPanel {...props} column={props.column} /> : <RowPanel {...props} />
+  return <RowPanel {...props} />
 }
 
 function useWords(view: View, models: Record<string, Model>) {
@@ -47,88 +55,149 @@ function sameDay(view: View, rows: Row[], row: Row, column: MatrixColumn): { row
     .flatMap((other) => cellsFor(view, other, column).slice(0, 1).map((cell) => ({ row: other, cell })))
 }
 
-/** As the matrix prototype's cell drawer: the alert, who, in what role and state, on what; the rest of their day; who could stand in. */
-function CellPanel({ view, models, row, column, away, store, rows = [] }: PanelProps & { column: MatrixColumn }) {
-  const join = view.join!
-  const { options, status, word } = useWords(view, models)
-  const [cell, ...others] = cellsFor(view, row, column)
-  const date = text(row.fields[view.date_field ?? ''])
-  const absent = absentOn(away, view, column, date)
-  const [kept, setKept] = useState(false)
-  const current = cell ? status(cell) : ''
-  const note = cell && join.note_field ? text(cell.fields[join.note_field]) : ''
-  const noteOf = (c: MatrixCell) => (join.note_field ? text(c.fields[join.note_field]).trim() : '')
-  const [draft, setDraft] = useState(note)
-  useEffect(() => setDraft(note), [note])
-  const role = join.open && cell ? (cell.lookups?.[join.open.match_field]?.title ?? '') : ''
-  const day = sameDay(view, rows, row, column)
-  const reason = absent && view.away ? text(absent.fields[view.away.label_field]) : ''
-  const instead = useRef<HTMLElement>(null)
+const shortDay = (date: string) => dayLabel(date, locale()).replace(/ \d{4}$/, '')
 
-  const choices = [{ value: '', label: t('none') }, ...Object.entries(options).map(([value, label]) => ({ value, label }))]
-
+/** The cell's subline, as the prototype's: its day and hours in mono, then the activity's place. */
+function CellSub({ row, fields, date }: { row: Row; fields: Column[]; date: string }) {
+  const space = useContext(SchemaContext)?.space?.field ?? null
+  const { from, to } = whenOf(row, fields.filter((c) => c.kind === 'datetime'))
+  // Its place: the first relation that is not the space every row of the view shares.
+  const place = placeOf(fields, [space])?.text(row)
   return (
-    <div className="nv-panel">
-      <p className="nv-panel__where">{[row.title, date && dayLabel(date)].filter(Boolean).join(' · ')}</p>
-      {absent && !kept && (
-        <div className={cell ? 'nv-dw-alert' : 'nv-dw-alert nv-dw-alert--warn'} role="alert">
-          <AlertTriangle size={15} aria-hidden="true" />
-          <div>
-            <b>{cell ? t('awayWarning') : t('awayReason', { reason })}</b>
-            {cell && reason && <span>{t('awayReason', { reason })}</span>}
-            {cell && (
-              <span className="nv-dw-alert__acts">
-                <button type="button" onClick={() => instead.current?.scrollIntoView({ block: 'nearest' })}>{t('chooseOther')}</button>
-                <button type="button" onClick={() => setKept(true)}>{t('keepIt')}</button>
-              </span>
-            )}
-          </div>
-        </div>
+    <>
+      <span className="nv-mono">{[date && shortDay(date), from && `${from}${to ? `–${to}` : ''}`].filter(Boolean).join(' ')}</span>
+      {place && <span>{place}</span>}
+    </>
+  )
+}
+
+/** Absent on the day: a band with the icon and its title on one line, the reason as a sentence, and its actions as words. */
+function CellAlert({ name, date, reason, assigned, onOther }: { name: string; date: string; reason: string; assigned: boolean; onOther: () => void }) {
+  const [kept, setKept] = useState(false)
+  if (kept) return null
+  return (
+    <div className={assigned ? 'nv-dw-alert' : 'nv-dw-alert nv-dw-alert--warn'} role="alert">
+      <p className="nv-dw-alert__head"><AlertTriangle size={15} aria-hidden="true" />{assigned ? t('awayWarning') : t('away')}</p>
+      <p className="nv-dw-alert__text">{t('awaySentence', { name, day: shortDay(date), reason })}</p>
+      {assigned && (
+        <span className="nv-dw-alert__acts">
+          <button type="button" onClick={onOther}>{t('chooseOther')}</button>
+          <button type="button" onClick={() => setKept(true)}>{t('keepIt')}</button>
+        </span>
       )}
-      <dl className="nv-drawer__fields">
-        <div className="nv-drawer__field"><dt>{t('person')}</dt><dd>{column.title}</dd></div>
-        {join.open && <div className="nv-drawer__field"><dt>{t('role')}</dt><dd>{role || t('empty')}</dd></div>}
-        <div className="nv-drawer__field nv-panel__status">
-          <dt>{t('statusLabel')}</dt>
-          <dd><Choices label={t('statusLabel')} options={choices} value={current} disabled={!store}
-            onPick={(value) => void store?.set(row.id, column, value === '' ? null : value)} /></dd>
-        </div>
-        <div className="nv-drawer__field"><dt>{t('onActivity')}</dt><dd>{row.title}</dd></div>
-        {join.note_field && (
-          <div className="nv-drawer__field">
-            <dt>{t('noteLabel')}</dt>
-            <dd>
-              <TextField className="nv-field" aria-label={t('noteLabel')} value={draft} isDisabled={!store || !cell} onChange={setDraft}
-                onBlur={() => {
-                  if (draft !== note) void store?.setNote(row.id, column, draft)
-                }}>
-                <TextArea className="nv-textarea nv-panel__note" rows={2} placeholder={t('noNote')} />
-              </TextField>
-            </dd>
-          </div>
-        )}
-      </dl>
-      {others.length > 0 && (
-        <Section title={t('sharedCell')} count={String(others.length)}>
-          <ul className="nv-panel__others">
-            {others.map((other) => <li key={other.id}>{[word(other), noteOf(other)].filter(Boolean).join(' — ')}</li>)}
-          </ul>
-        </Section>
-      )}
-      <Section title={t('alsoOn', { day: date ? dayLabel(date) : '' })} count={String(day.length)}>
-        {day.length === 0 ? <p className="nv-dw-none">{t('nothingElse')}</p> : (
-          <ul className="nv-dw-rows">
-            {day.map(({ row: other, cell: c }) => <li key={other.id}><span className="nv-mono">{text(other.fields[view.date_field ?? '']).slice(11, 16) || '—'}</span><span>{other.title}<small> · {word(c)}</small></span></li>)}
-          </ul>
-        )}
-      </Section>
-      {cell && <Instead ref={instead} view={view} models={models} row={row} column={column} cell={cell} store={store} />}
     </div>
   )
 }
 
+/** The status as the prototype's badge; pressed, the choices open in place, nothing floating. */
+function StatusLine({ view, models, cell, store, row, column, asking = 0 }: { view: View; models: Record<string, Model>; cell: MatrixCell | undefined; store?: MatrixStore; row: Row; column: MatrixColumn; asking?: number }) {
+  const join = view.join!
+  const { options, status } = useWords(view, models)
+  const tones = models[join.model]?.fields[join.cell_field]?.tones ?? {}
+  const [open, setOpen] = useState(asking > 0 && store !== undefined)
+  // Asked again while shown: open in this same render, so the matrix finds a choice to focus.
+  const [seen, setSeen] = useState(asking)
+  if (asking !== seen) {
+    setSeen(asking)
+    if (store) setOpen(true)
+  }
+  const current = cell ? status(cell) : ''
+  const choices = [{ value: '', label: t('none') }, ...Object.entries(options).map(([value, label]) => ({ value, label }))]
+  return (
+    <Line icon={CircleDot} label={t('statusLabel')}>
+      <button type="button" className="nv-dw-status" aria-expanded={open} disabled={!store} style={{ '--tone': toneColor(tones[current]) } as CSSProperties}
+        onClick={() => setOpen(!open)}>
+        {cell ? <>{markFor(view, current)} {options[current] ?? current}</> : t('notAssigned')}
+      </button>
+      {open && <Choices label={t('statusLabel')} options={choices} value={current} disabled={!store}
+        onPick={(value) => {
+          setOpen(false)
+          void store?.set(row.id, column, value === '' ? null : value)
+        }} />}
+    </Line>
+  )
+}
+
+/** The note as a line: "Geen notitie" until pressed, then the field; it saves on leaving. */
+function NoteLine({ note, disabled, onSave }: { note: string; disabled: boolean; onSave: (note: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(note)
+  useEffect(() => setDraft(note), [note])
+  return (
+    <Line icon={StickyNote} label={t('noteLabel')}>
+      {editing ? (
+        <TextField className="nv-field" aria-label={t('noteLabel')} value={draft} isDisabled={disabled} onChange={setDraft} autoFocus
+          onBlur={() => {
+            setEditing(false)
+            if (draft !== note) onSave(draft)
+          }}>
+          <TextArea className="nv-textarea nv-panel__note" rows={2} />
+        </TextField>
+      ) : (
+        <button type="button" className="nv-dw-note" disabled={disabled} onClick={() => setEditing(true)}>{note || <span className="nv-muted">{t('noNote')}</span>}</button>
+      )}
+    </Line>
+  )
+}
+
+/** A matrix cell read as the record drawer reads a record: the alert, who, in what role and state, on what; the rest of their day; who could stand in; its history. */
+export function CellDrawer({ view, models, row, column, columns, away, store, rows = [], fields, asking, onClose }: PanelProps & { column: MatrixColumn; fields: Column[]; onClose: () => void }) {
+  const join = view.join!
+  const { word } = useWords(view, models)
+  const [cell, ...others] = cellsFor(view, row, column)
+  const at = columns.indexOf(column)
+  const date = text(row.fields[view.date_field ?? ''])
+  const absent = absentOn(away, view, column, date)
+  const note = cell && join.note_field ? text(cell.fields[join.note_field]) : ''
+  const noteOf = (c: MatrixCell) => (join.note_field ? text(c.fields[join.note_field]).trim() : '')
+  const role = join.open && cell ? (cell.lookups?.[join.open.match_field]?.title ?? '') : ''
+  const activity = models[view.model]
+  const kind = activity ? kindOf(activity) : null
+  const day = sameDay(view, rows, row, column)
+  const start = fields.find((c) => c.kind === 'datetime')
+  const instead = useRef<HTMLElement>(null)
+  const shown: Row = { id: cell?.id ?? -(row.id * 1000000 + at), title: `${column.title} · ${row.title}`, status: cell?.status ?? '', fields: cell?.fields ?? {} }
+  return (
+    <Drawer row={shown} columns={[]} focusOnOpen={false} onClose={onClose} model={models[join.model]}
+      sub={<CellSub row={row} fields={fields} date={date} />}
+      alert={absent && <CellAlert name={column.title} date={date} reason={view.away ? text(absent.fields[view.away.label_field]) : ''} assigned={cell !== undefined}
+        onOther={() => instead.current?.scrollIntoView({ block: 'nearest' })} />}
+      lines={<>
+        <Line icon={User} label={t('person')}><span className="nv-avatar nv-avatar--sm" aria-hidden="true">{initials(column.title)}</span>{column.title}</Line>
+        {join.open && <Line icon={Tag} label={t('role')}>{role || t('empty')}</Line>}
+        <StatusLine view={view} models={models} cell={cell} store={store} row={row} column={column} asking={asking} />
+        <Line icon={CalendarDays} label={t('onActivity')}>
+          {kind && <i className="nv-dw-dot" style={{ '--tone': toneColor(activity?.fields[kind]?.tones?.[text(row.fields[kind])]) } as CSSProperties} aria-hidden="true" />}{row.title}
+        </Line>
+        {join.note_field && <NoteLine note={note} disabled={!store || !cell} onSave={(next) => void store?.setNote(row.id, column, next)} />}
+      </>}
+      sections={<>
+        {others.length > 0 && (
+          <Section title={t('sharedCell')} count={String(others.length)}>
+            <ul className="nv-panel__others">
+              {others.map((other) => <li key={other.id}>{[word(other), noteOf(other)].filter(Boolean).join(' — ')}</li>)}
+            </ul>
+          </Section>
+        )}
+        <Section title={t('alsoOn', { day: date ? dayLabel(date, locale()).replace(/ \d{4}$/, '') : '' })} count={String(day.length)}>
+          {day.length === 0 ? <p className="nv-dw-none">{t('nothingElse')}</p> : (
+            <ul className="nv-dw-rows">
+              {day.map(({ row: other, cell: c }) => (
+                <li key={other.id}>
+                  <span className="nv-mono">{(start ? text(start.value(other)) : '').slice(11, 16) || '—'}</span>
+                  <span className="nv-dw-rows__main">{other.title}<small>{word(c)}</small></span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+        {cell && <Instead ref={instead} view={view} models={models} row={row} column={column} cell={cell} store={store} date={date} />}
+      </>} />
+  )
+}
+
 /** Who could take this place instead, from the person column's own candidates; Kiezen moves the place to them. */
-function Instead({ ref, view, models, row, column, cell, store }: { ref: Ref<HTMLElement>; view: View; models: Record<string, Model>; row: Row; column: MatrixColumn; cell: MatrixCell; store?: MatrixStore }) {
+function Instead({ ref, view, models, row, column, cell, store, date }: { ref: Ref<HTMLElement>; view: View; models: Record<string, Model>; row: Row; column: MatrixColumn; cell: MatrixCell; store?: MatrixStore; date: string }) {
   const join = view.join!
   const from = models[join.model]?.fields[join.column_field]?.options_from
   const [people, setPeople] = useState<Row[] | null>(null)
@@ -153,7 +222,8 @@ function Instead({ ref, view, models, row, column, cell, store }: { ref: Ref<HTM
         <ul className="nv-dw-list">
           {(people ?? []).map((person) => (
             <li key={person.id}>
-              <span className="nv-dw-list__main">{person.title}</span>
+              <span className="nv-avatar nv-avatar--hue" style={{ '--h': hueOf(person.id) } as CSSProperties} aria-hidden="true">{initials(person.title)}</span>
+              <span className="nv-dw-list__main">{person.title}{date && <small>{t('freeOn', { day: shortDay(date) })}</small>}</span>
               {store && <button type="button" className="nv-button nv-button--secondary nv-button--sm" onClick={() => void choose(person)}>{t('choose')}</button>}
             </li>
           ))}
