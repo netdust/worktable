@@ -1,6 +1,6 @@
 import { errorText, inUse, t, undoText } from '../i18n'
 import type { ApiError, Lookup, Row, Saved } from '../types'
-import { createHistory, type Entry, type History } from '../ui/history'
+import { createHistory, type Entry, type History, pendingStep } from '../ui/history'
 
 export type SaveState = 'saved' | 'saving' | 'error'
 
@@ -13,6 +13,8 @@ export interface Change {
   lookup?: Lookup | null
   /** An inherited lookup: a value paints as the row's own, an empty one as inherited again. */
   inherits?: boolean
+  /** More fields written in the same PATCH, painted and reverted with `field`. */
+  with?: Record<string, unknown>
 }
 
 export interface CellError {
@@ -52,6 +54,11 @@ export interface Store {
   getState: () => StoreState
   subscribe: (listener: () => void) => () => void
   apply: (change: Change) => Promise<void>
+  /**
+   * Writes that one undo takes back together: all painted at once, all but the last sent together, then the last.
+   * A refusal among the others cancels the last; a refused last leaves the others written. Answers whether the last landed.
+   */
+  applyStep: (changes: Change[]) => Promise<boolean>
   undo: () => Promise<void>
   redo: () => Promise<void>
   /** The row as the server now holds it, painted over what this store had. */
@@ -65,6 +72,13 @@ export interface Store {
   /** A step made outside the rows, such as a file added in the drawer, into the undo history. */
   push: (entry: Entry) => void
   dismiss: (id: number, field: string) => void
+}
+
+/** A change painted and not yet answered: `row` as it was before the paint, `mine` its ticket. */
+interface Painted {
+  change: Change
+  row: Row
+  mine: number
 }
 
 interface Options {
@@ -82,6 +96,8 @@ export const DRAFT = -1
 const UNDOING = -2
 
 const noUndo = () => Promise.reject({ code: 'not_undoable', message: 'no undo here' } satisfies ApiError)
+/** A step's last write once a write before it was refused: never sent, reverted without a notice of its own. */
+const CANCELLED = Symbol('cancelled')
 
 export function cellKey(id: number, field: string): string {
   return `${id}:${field}`
@@ -97,8 +113,13 @@ function write(row: Row, field: string, value: unknown, lookup?: Lookup | null):
   return lookup === undefined ? written : { ...written, lookups: { ...row.lookups, [field]: lookup } }
 }
 
+function valuesOf(change: Change): Record<string, unknown> {
+  return { [change.field]: change.value, ...change.with }
+}
+
 function painted(row: Row, change: Change): Row {
-  const written = write(row, change.field, change.value, change.lookup)
+  const beside = Object.entries(change.with ?? {}).reduce((r, [field, value]) => write(r, field, value), row)
+  const written = write(beside, change.field, change.value, change.lookup)
   if (!change.inherits) return written
   const others = (row.inherited ?? []).filter((key) => key !== change.field)
   return { ...written, inherited: empty(change.value) ? [...others, change.field] : others }
@@ -160,10 +181,14 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     return state.error ? 'error' : 'saved'
   }
 
-  /** One write in flight per record: two connections could otherwise land an undo before the write it undoes. */
-  function queued(change: Change, row: Row): Promise<Saved> {
+  /**
+   * One write in flight per record: two connections could otherwise land an undo before the write it undoes.
+   * A write held by `ready` takes its place in the queue now and is sent once `ready` says so.
+   */
+  function queued(change: Change, row: Row, ready?: Promise<boolean>): Promise<Saved> {
+    const start = () => (ready ? ready.then((go) => (go ? send(change, row) : Promise.reject(CANCELLED))) : send(change, row))
     const previous = queues.get(change.id)
-    const next = previous ? previous.catch(() => undefined).then(() => send(change, row)) : send(change, row)
+    const next = previous ? previous.catch(() => undefined).then(start) : start()
     queues.set(change.id, next)
     const done = () => {
       if (queues.get(change.id) === next) queues.delete(change.id)
@@ -173,7 +198,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
   }
 
   function send(change: Change, row: Row): Promise<Saved> {
-    const data = { [change.field]: change.value }
+    const data = valuesOf(change)
     if (change.id !== DRAFT) return api.update(model, change.id, data, row)
     const { title, ...fields } = { ...row.fields, title: row.title, ...data }
     return api.create(model, { ...fields, title })
@@ -181,20 +206,28 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
 
   /** The batch the server recorded it under once it took it; undefined when it refused. */
   async function commit(change: Change): Promise<string | null | undefined> {
+    const shown = paint(change)
+    return shown ? land(shown) : undefined
+  }
+
+  function paint(change: Change): Painted | undefined {
     const row = state.rows.find((r) => r.id === change.id)
     if (!row || removed.has(change.id)) return undefined
-    const key = cellKey(change.id, change.field)
     // A draft carries one refusal at a time: each retry clears the last.
     const errors = change.id === DRAFT ? withoutDraftErrors() : { ...state.errors }
-    delete errors[key]
+    delete errors[cellKey(change.id, change.field)]
 
     const mine = ++ticket
     latest.set(change.id, mine)
     track(change.id, 1)
     set({ rows: patch(change.id, (r) => painted(r, change)), errors, error: null, save: 'saving' })
+    return { change, row, mine }
+  }
 
+  async function land({ change, row, mine }: Painted, ready?: Promise<boolean>): Promise<string | null | undefined> {
+    const key = cellKey(change.id, change.field)
     try {
-      const { row: saved, batch } = await queued(change, row)
+      const { row: saved, batch } = await queued(change, row, ready)
       confirmed.set(saved.id, saved)
       track(change.id, -1)
       // Answers come in order; one with a later write still queued would repaint over that write's paint.
@@ -206,6 +239,11 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       return batch
     } catch (error) {
       track(change.id, -1)
+      if (error === CANCELLED) {
+        set({ rows: patch(change.id, (r) => reverted(r, change, row)) })
+        set({ save: settle() })
+        return undefined
+      }
       const raised = toError(change, error)
       if (change.id === DRAFT) {
         // The draft keeps what was typed and asks for what the writer may be missing.
@@ -217,18 +255,22 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
         set({ save: settle() })
         return undefined
       }
-      const server = confirmed.get(change.id)
-      const revert = (r: Row) => {
-        if (!same(read(r, change.field), change.value)) return r
-        const reverted = write(r, change.field, server ? read(server, change.field) : read(row, change.field), server?.lookups?.[change.field])
-        return change.inherits ? { ...reverted, inherited: (server ?? row).inherited } : reverted
-      }
-      set({ rows: patch(change.id, revert), errors: { ...state.errors, [key]: raised }, error: raised })
+      set({ rows: patch(change.id, (r) => reverted(r, change, row)), errors: { ...state.errors, [key]: raised }, error: raised })
       // The state moved on meanwhile: show what it holds now, never the value this tab still had.
       if (raised.code === 'transition_lost') await reread(change.id)
       set({ save: settle() })
       return undefined
     }
+  }
+
+  /** Back to what the server last confirmed, each field a later write has not painted over since. */
+  function reverted(r: Row, change: Change, before: Row): Row {
+    if (!same(read(r, change.field), change.value)) return r
+    const server = confirmed.get(change.id)
+    const back = (row: Row, [field, value]: [string, unknown]) =>
+      same(read(row, field), value) ? write(row, field, read(server ?? before, field), server?.lookups?.[field]) : row
+    const written = Object.entries(valuesOf(change)).reduce(back, r)
+    return change.inherits ? { ...written, inherited: (server ?? before).inherited } : written
   }
 
   function replace(row: Row): void {
@@ -297,7 +339,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
         else set({ rows: patch(DRAFT, () => painted), needs })
         return
       }
-      if (same(read(row, change.field), change.value)) return
+      if (Object.entries(valuesOf(change)).every(([field, value]) => same(read(row, field), value))) return
       // In the history at paint, so an undo pressed before the server answers waits for this change's batch.
       let answered: (batch: string | null) => void = () => undefined
       const entry: Entry = { batch: new Promise((resolve) => (answered = resolve)), model, id: change.id }
@@ -305,6 +347,29 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       const batch = await commit(change)
       answered(batch ?? null)
       if (!batch) history.drop(entry)
+    },
+    async applyStep(changes) {
+      const last = changes.at(-1)
+      const dropped = last && paint(last)
+      if (!dropped) return false
+      const others = changes.slice(0, -1).map(paint)
+      // In the history at paint, like apply's, and pending until every write answered.
+      const pending = pendingStep(changes.length)
+      const refresh = async () => {
+        await Promise.all(changes.map((change) => reread(change.id)))
+      }
+      const entry: Entry = { batch: pending.batch, before: pending.before, model, id: dropped.change.id, refresh }
+      history.push(entry)
+      let release: (go: boolean) => void = () => undefined
+      // Queued on its record now, so a later write there waits for it; sent once the others answered.
+      const lastly = land(dropped, new Promise((resolve) => (release = resolve)))
+      const answers = await Promise.all(others.map((shown) => (shown ? land(shown) : undefined)))
+      release(!answers.includes(undefined))
+      const batch = await lastly
+      const landed = [...answers, batch].filter((made) => typeof made === 'string')
+      pending.settle(landed)
+      if (landed.length === 0) history.drop(entry)
+      return batch !== undefined
     },
     undo: () => travel(history.undo, false),
     redo: () => travel(history.redo, true),

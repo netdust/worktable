@@ -4,10 +4,28 @@ import type { ApiError } from '../types'
 export interface Entry {
   /** Pending until the write answers; null once it was refused or changed nothing. */
   batch: Promise<string | null>
+  /** A step of several writes: the batches made before `batch`, in the order made; a null one is skipped. */
+  before?: Promise<string | null>[]
   model: string
   id: number | null
   /** Repaints what the step changed beside the rows, such as a record's files. */
-  refresh?: () => void
+  refresh?: () => void | Promise<void>
+}
+
+/** A step's batches before its writes answer: `settle` gives the last that landed to `batch`, the ones before it to `before`. */
+export function pendingStep(count: number): { batch: Promise<string | null>; before: Promise<string | null>[]; settle: (landed: string[]) => void } {
+  let answered: (batch: string | null) => void = () => undefined
+  const batch = new Promise<string | null>((resolve) => (answered = resolve))
+  const answers: ((batch: string | null) => void)[] = []
+  const before = Array.from({ length: count - 1 }, () => new Promise<string | null>((resolve) => answers.push(resolve)))
+  return {
+    batch,
+    before,
+    settle(landed) {
+      answers.forEach((answer, i) => answer(i < landed.length - 1 ? landed[i] : null))
+      answered(landed.at(-1) ?? null)
+    },
+  }
 }
 
 export interface History {
@@ -40,16 +58,26 @@ export function createHistory(send: (batch: string) => Promise<string>): History
     for (const stack of [undos, redos]) if (stack.includes(entry)) stack.splice(stack.indexOf(entry), 1)
   }
 
+  /** The step's own batch first, then the ones before it last-first; answers the undo batches in the order made. */
+  async function undoAll(batch: string, before: Promise<string | null>[]): Promise<string[]> {
+    const undone = [await send(batch)]
+    for (const earlier of before.toReversed()) {
+      const made = await earlier
+      if (made !== null) undone.push(await send(made))
+    }
+    return undone
+  }
+
   /** The entry crosses at the press, so the next press sees it there; a refusal walks it back or drops it. */
   async function step(from: Entry[], to: Entry[]): Promise<Entry | null> {
     const entry = from.pop()
     if (!entry) return null
-    let answered: (batch: string | null) => void = () => undefined
-    const back: Entry = { ...entry, batch: new Promise((resolve) => (answered = resolve)) }
+    const pending = pendingStep(1 + (entry.before?.length ?? 0))
+    const back: Entry = { ...entry, batch: pending.batch, before: pending.before }
     to.push(back)
     changed()
     const refused = (keep: boolean) => {
-      answered(null)
+      pending.settle([])
       without(back)
       if (keep) from.push(entry)
       changed()
@@ -61,7 +89,7 @@ export function createHistory(send: (batch: string) => Promise<string>): History
       return null
     }
     try {
-      answered(await send(batch))
+      pending.settle(await undoAll(batch, entry.before ?? []))
       return entry
     } catch (error) {
       refused(KEPT.has(String((error as Partial<ApiError> | null)?.code)))
