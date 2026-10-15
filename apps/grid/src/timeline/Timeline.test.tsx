@@ -74,3 +74,30 @@ describe("the timeline's lanes", () => {
     expect(api.records).not.toHaveBeenCalled()
   })
 })
+
+describe('the timeline overlap', () => {
+  const clash = (cancelled = false): Row[] => [
+    { ...stop(1, 'Brugge', [1, 'De Kersentuin']), status: '' },
+    { ...stop(2, 'Gent', [1, 'De Kersentuin']), fields: { start_datum: '2026-10-14', eind_datum: '2026-10-16', productie_id: 1, stand: cancelled ? 'afgelast' : 'vast' } },
+  ]
+  const withStand = { ...speelreeks, fields: { ...speelreeks.fields, stand: { type: 'select', label: 'Stand', required: false, options: { vast: 'Vast', afgelast: 'Afgelast' }, tones: { afgelast: 'bad' } } } } as unknown as Model
+  const draw = (rows: Row[], onTitle = vi.fn()) => {
+    render(<Timeline view={view} model={withStand} models={{ speelreeks: withStand, productie: productie() }} rows={rows} cal={CAL} shown={{ from: '2026-10-12', to: '2026-10-18' }} lane="productie_id" layout={defaults(view)} onTitle={onTitle} />)
+    return onTitle
+  }
+
+  it('marks both bars of a lane that share a day, names the other, and says one overlap', () => {
+    const onTitle = draw(clash())
+
+    expect(screen.getAllByTitle(/^Overlapt met /)).toHaveLength(2)
+    expect(screen.getByTitle('Overlapt met Gent')).toBeTruthy()
+    expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 1 }))
+  })
+
+  it('leaves a cancelled bar out: no marks, no count', () => {
+    const onTitle = draw(clash(true))
+
+    expect(screen.queryAllByTitle(/^Overlapt met /)).toHaveLength(0)
+    expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 0 }))
+  })
+})

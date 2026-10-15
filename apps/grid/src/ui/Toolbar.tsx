@@ -27,6 +27,8 @@ export interface Shown {
   label?: string
   /** How many of the shown rows a flag query flags, its name, and its key to open it by. */
   flagged?: { count: number; label: string; source: string }
+  /** A timeline's pairs of bars of one lane that overlap in time. */
+  overlaps?: number
 }
 
 interface Props {
@@ -101,6 +103,7 @@ export function Toolbar({ title, kind = 'grid', locked, shown, period, insight, 
         {flagged && flagged.count > 0 && (
           <button type="button" className="nv-toolbar__flagged" onClick={() => onFlagged?.(flagged.source)}><b>{flagged.count}</b> {flagged.label}</button>
         )}
+        {!!shown?.overlaps && <span className="nv-toolbar__overlaps"><b>{shown.overlaps}</b> {t('overlap')}</span>}
       </div>
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}

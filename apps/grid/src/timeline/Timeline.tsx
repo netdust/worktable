@@ -5,7 +5,7 @@ import type { Layout } from '../grid/layout'
 import { factsOf, placeOf } from '../ui/facts'
 import { FlagMark } from '../ui/Flag'
 import { laneTone } from '../ui/tone'
-import { flaggedOf, useFlags } from '../ui/useFlags'
+import { type Flag, flaggedOf, useFlags } from '../ui/useFlags'
 import { useTones } from '../ui/useTones'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
@@ -13,6 +13,7 @@ import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
 import type { Shown } from '../ui/Toolbar'
 import { iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, bars } from './layout'
+import { overlapsOf, pairsOf } from './overlap'
 
 const MONTH = (date: Date) => new Intl.DateTimeFormat(locale(), { month: 'short' }).format(date).replace(/\./g, '')
 const LETTER = (date: Date) => new Intl.DateTimeFormat(locale(), { weekday: 'narrow' }).format(date).toLocaleLowerCase(locale())
@@ -51,6 +52,10 @@ function packed(lane: Bar[]): { bar: Bar; row: number }[] {
 }
 
 
+/** The mark of a bar that shares a day with others: a warning naming them. */
+const overlapFlag = (others: Row[] = []): Flag[] =>
+  others.length > 0 ? [{ text: t('overlapsWith', { others: others.map((r) => r.title).join(', ') }), tone: 'warn', label: t('overlap'), marks: {} }] : []
+
 /** A day's width on the scale, as the prototype's week zoom. */
 const DAY_PX = 44
 
@@ -72,6 +77,13 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.
   const place: Column | undefined = useMemo(() => placeOf(factsOf(columns, layout), [lane]), [columns, layout, lane])
   const toned: Column | undefined = columns.find((c) => c.kind === 'select' && c.tones)
+  // Bars of one lane sharing a day, a cancelled (bad-toned) one left out.
+  const clashes = useMemo(() => {
+    const at = new Map(laid.lanes.flatMap((l) => l.bars).map((bar) => [bar.row.id, bar]))
+    const first = (r: Row) => at.get(r.id)?.start ?? 0
+    return overlapsOf([...at.values()].map((bar) => bar.row), (r) => String(lane ? r.fields[lane] ?? '' : ''), first, (r) => first(r) + (at.get(r.id)?.length ?? 1) - 1, (r) => toned?.tones?.[String(toned.value(r) ?? '')] === 'bad')
+  }, [laid, lane, toned])
+  const overlaps = pairsOf(clashes)
   const window = useMemo(() => Array.from({ length: laid.days }, (_, i) => iso(new Date((parse(shown.from) as Date).getTime() + i * 86_400_000 + 43_200_000))), [shown.from, laid.days])
   const today = iso(new Date())
   const pct = (n: number) => `${(n / laid.days) * 100}%`
@@ -79,7 +91,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   const tones = useTones(models, field?.relation?.model)
   // Lanes wait for their records' tones on a first open: drawn in the palette, they would crossfade to them.
   const ready = tones !== undefined
-  useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns, flagged }), [rows.length, laid.lanes.length, lane, columns, flagged?.count])
+  useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns, flagged, overlaps }), [rows.length, laid.lanes.length, lane, columns, flagged?.count, overlaps])
   const weekend = (day: string) => [0, 6].includes((parse(day) as Date).getDay())
   const todayAt = window.indexOf(today)
   // A day keeps the prototype's 44px; the sheet scrolls sideways and opens two days before today.
@@ -141,7 +153,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
                           className={['nv-tl__bar', tone && tone in TONE_CLASS ? TONE_CLASS[tone as keyof typeof TONE_CLASS] : '', open?.id === bar.row.id ? 'nv-tl__bar--open' : '', narrow ? 'nv-tl__bar--narrow' : ''].filter(Boolean).join(' ')}
                           style={{ left: `calc(${pct(bar.start)} + 2px)`, width: `calc(${pct(bar.length)} - 4px)`, top: 9 + row * 48 }}
                           onClick={() => openRow(bar.row)}>
-                          <strong><FlagMark flags={flags?.marksOf(model.key, bar.row.id) ?? []} bare />{bar.row.title}</strong>
+                          <strong><FlagMark flags={flags?.marksOf(model.key, bar.row.id) ?? []} bare /><FlagMark flags={overlapFlag(clashes.get(bar.row.id))} bare />{bar.row.title}</strong>
                           <span className="nv-tl__line2"><span className="nv-tl__span">{spanOf(first, last)}</span>{where && !narrow && <span className="nv-tl__where">{where}</span>}</span>
                         </button>
                       )

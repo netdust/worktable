@@ -301,6 +301,8 @@ const strings = {
   today: 'Vandaag',
   lane: 'Rijen',
   noLane: 'Geen',
+  overlap: 'overlap',
+  overlapsWith: 'Overlapt met {others}',
   untitled: 'Zonder titel',
   allOf: 'alle {n}',
   noHistory: 'Nog geen wijzigingen.',

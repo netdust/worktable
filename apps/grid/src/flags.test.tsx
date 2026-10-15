@@ -111,9 +111,9 @@ describe('a flag on a timeline bar and a calendar event', () => {
     inSchema({ reeks }, <Timeline view={view} model={reeks} models={{ reeks }} rows={[tour(3, 'Brugge'), tour(4, 'Gent')]} cal={cal}
       shown={{ from: '2030-01-07', to: '2030-01-13' }} lane={null} layout={defaults(view)} onTitle={onTitle} />)
 
-    const bar = screen.getByRole('button', { name: /Brugge/ })
+    const bar = screen.getByRole('button', { name: /Brugge\d/ })
     expect((await within(bar).findByRole('img', { name: `Conflict: ${TEXT}` })).classList.contains('nv-flag')).toBe(true)
-    expect(within(screen.getByRole('button', { name: /Gent/ })).queryByRole('img')).toBeNull()
+    expect(within(screen.getByRole('button', { name: /Gent\d/ })).queryByRole('img', { name: /^Conflict/ })).toBeNull()
     expect(flagRead().map((call) => call[1])).toEqual([{ from: '2030-01-07', to: '2030-01-13' }])
     await waitFor(() => expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ flagged: SHOWN })))
   })

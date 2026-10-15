@@ -35,6 +35,18 @@
   cursor: pointer;
 }
 
+#root .nv-toolbar__overlaps {
+  flex: none;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#root .nv-toolbar__overlaps b {
+  color: var(--color-warning-fg);
+  font-weight: 600;
+}
+
 #root .nv-toolbar__flagged:hover {
   text-decoration: underline;
   text-underline-offset: 2px;

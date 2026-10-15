@@ -502,7 +502,7 @@ test.describe('step 3d', () => {
       await expect(page.locator('.nv-tl__corner .nv-tl__count')).toHaveCount(0)
       // Packed by overlap: the two that overlap on two rows, the third back on the first.
       const top = (name: string) =>
-        page.getByRole('button', { name: new RegExp(name) }).evaluate((el) => (el as HTMLElement).style.top)
+        page.locator(`.nv-tl__bar[data-tip^="${name}"]`).evaluate((el) => (el as HTMLElement).style.top)
       expect(await top('e2e pak een')).toBe('9px')
       expect(await top('e2e pak twee')).toBe('57px')
       expect(await top('e2e pak drie')).toBe('9px')

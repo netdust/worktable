@@ -25,6 +25,7 @@ const WEEK = {
   tone: '2033-06-06',
   conflict: '2034-09-04',
   ignore: '2034-09-11',
+  overlap: '2028-11-06',
 }
 const MANUAL = ['position']
 const SORTED = ['plandag', 'start_at']
@@ -959,6 +960,44 @@ test.describe('step 3f: conflicten flags what it names', () => {
       await expect(again.getByRole('alert').locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
     } finally {
       await booking.remove()
+    }
+  })
+})
+
+test.describe('step 3f: the timeline marks bars of a lane that overlap', () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('timeline-overlap @e2e', async ({ page }) => {
+    const api = page.request
+    const productie = await nachtwacht(api)
+    const stops: number[] = []
+    const insight = page.locator('.nv-toolbar__overlaps')
+    const marks = page.locator('.nv-tl__bar [title^="Overlapt met"]')
+    try {
+      for (const [at, naam] of ['e2e overlap een', 'e2e overlap twee'].entries()) {
+        const start_datum = plusDays(WEEK.overlap, at)
+        const data = { productie_id: productie, naam, start_datum, eind_datum: plusDays(start_datum, 2), status: 'bevestigd' }
+        stops.push(await posted(api, '/api/rows/speelreeks', data))
+      }
+      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.overlap)
+      await expect(marks).toHaveCount(2)
+      await expect(page.locator('.nv-tl__bar', { hasText: 'e2e overlap een' }).locator('[title^="Overlapt met"]')).toHaveAttribute(
+        'title',
+        'Overlapt met e2e overlap twee',
+      )
+      await expect(insight).toHaveText('1 overlap')
+      await shot(page, 'timeline-overlap')
+
+      // Cancelled, a bar neither overlaps nor is overlapped: both marks and the count go after a reload.
+      const cancelled = await api.patch(`/api/rows/speelreeks/${stops[1]}`, { data: { status: 'geannuleerd' } })
+      expect(cancelled.status(), await cancelled.text()).toBe(200)
+      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.overlap)
+      await expect(page.locator('.nv-tl__bar--cancelled')).toHaveCount(1)
+      await expect(marks).toHaveCount(0)
+      await expect(insight).toHaveCount(0)
+    } finally {
+      for (const id of stops) await api.delete(`/api/rows/speelreeks/${id}`)
     }
   })
 })

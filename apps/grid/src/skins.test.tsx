@@ -185,7 +185,7 @@ describe('the timeline', () => {
     expect(lanes).toHaveLength(1)
     expect(within(lanes[0]).getByRole('rowheader').textContent).toBe('3')
     const top = (name: RegExp) => within(lanes[0]).getByRole('button', { name }).style.top
-    expect(top(/Brugge/)).not.toBe(top(/Gent/))
-    expect(top(/Lier/)).toBe(top(/Brugge/))
+    expect(top(/Brugge\d/)).not.toBe(top(/Gent\d/))
+    expect(top(/Lier\d/)).toBe(top(/Brugge\d/))
   })
 })

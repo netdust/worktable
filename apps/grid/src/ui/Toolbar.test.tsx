@@ -192,3 +192,16 @@ describe("the title line's flags", () => {
     expect(screen.queryByRole('button', { name: /Meldingen/ })).toBeNull()
   })
 })
+
+describe('the toolbar overlap insight', () => {
+  it('says how many pairs of bars overlap, as plain text', () => {
+    render(<Toolbar {...base} shown={{ rows: 5, groups: null, cut: false, overlaps: 2 }} />)
+    expect(screen.getByText('overlap').closest('.nv-toolbar__overlaps')?.textContent).toBe('2 overlap')
+    expect(screen.queryByRole('button', { name: /overlap/ })).toBeNull()
+  })
+
+  it('says nothing without overlap', () => {
+    render(<Toolbar {...base} shown={{ rows: 5, groups: null, cut: false, overlaps: 0 }} />)
+    expect(document.querySelector('.nv-toolbar__overlaps')).toBeNull()
+  })
+})
