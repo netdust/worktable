@@ -39,6 +39,7 @@ import { useFilterNames } from './useFilterNames'
 import { offersForOwners, Share } from './Share'
 import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
+import { usePageUndo } from './usePageUndo'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
@@ -398,23 +399,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
-  // ⌘Z and ⇧⌘Z on the page, for every skin: the toast promises the undo wherever the focus went (a drop, a drawer's button
-  // that unmounted). A cell that handled the key first has prevented it; a field keeps its own.
-  const undoing = useRef(saves)
-  undoing.current = saves
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
-      if (target?.closest('input, textarea, [contenteditable="true"]')) return
-      const now = undoing.current
-      if (!now) return
-      event.preventDefault()
-      void (event.shiftKey ? now.redo() : now.undo())
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  usePageUndo(saves)
   const fields = useMemo(
     () => (model && loaded ? filterFields(model, loaded, view?.filters).filter((f) => f.field !== spaceField) : []),
     [model, loaded, view?.filters, spaceField],
