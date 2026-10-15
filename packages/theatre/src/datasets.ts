@@ -12,6 +12,7 @@ export const KANDIDATEN: OptionsFrom = {
 export const dagFacts: GroupFact[] = [
   { kind: 'first', column: 'start_at', where: { soort: 'voorstelling' }, label: 'voorstelling' },
   { kind: 'empty', column: 'start_at', label: 'zonder tijd' },
+  { kind: 'filled', link: 'mensen', label: 'bezetting' },
 ]
 
 export const soorten = {

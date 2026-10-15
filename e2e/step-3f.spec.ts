@@ -21,6 +21,7 @@ const WEEK = {
   keyboard: '2032-03-22',
   refused: '2032-03-29',
   notes: '2032-05-03',
+  filled: '2029-04-09',
 }
 const MANUAL = ['position']
 const SORTED = ['plandag', 'start_at']
@@ -674,6 +675,45 @@ test.describe('step 3f: a long text is its own block in the drawer', () => {
       const again = await drawerOf()
       await expect(again.getByRole('region', { name: 'Notities' }).locator('.nv-dw-long')).toHaveText(note)
     } finally {
+      await made.remove()
+    }
+  })
+})
+
+test.describe('step 3f: a group says how many places are filled', () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('group-filled @e2e', async ({ page }) => {
+    const api = page.request
+    const made = activities(api)
+    const places: number[] = []
+    const placed = async (activiteit: number, values: Values) =>
+      places.push(await posted(api, '/api/rows/toewijzing', { activiteit_id: activiteit, ...values }))
+    try {
+      const persons = ((await (await api.get('/api/rows/persoon?limit=500')).json()) as { rows: { id: number }[] }).rows
+      expect(persons.length).toBeGreaterThanOrEqual(2)
+      const roles = ((await (await api.get('/api/rows/rol?limit=500')).json()) as { rows: { id: number }[] }).rows
+      const [one, two] = [
+        await made.add('e2e bezet een', WEEK.filled, 'bevestigd'),
+        await made.add('e2e bezet twee', WEEK.filled, 'bevestigd'),
+      ]
+      await made.add('e2e bezet drie', plusDays(WEEK.filled, 1), 'bevestigd')
+      // Day one: three places filled of five; the next day has none, so it says nothing.
+      await placed(one, { persoon_id: persons[0].id })
+      await placed(one, { persoon_id: persons[1].id })
+      await placed(one, { rol_id: roles[0].id })
+      await placed(two, { persoon_id: persons[0].id })
+      await placed(two, { rol_id: roles[0].id })
+
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK.filled)
+      const bands = page.locator('tbody tr.nv-group')
+      await expect(bands).toHaveCount(2)
+      await expect(bands.first().locator('.nv-group__fact', { hasText: 'bezetting' })).toHaveText('bezetting 3/5')
+      await expect(bands.nth(1).locator('.nv-group__fact', { hasText: 'bezetting' })).toHaveCount(0)
+      await shot(page, 'group-filled')
+    } finally {
+      for (const id of places) await api.delete(`/api/rows/toewijzing/${id}`)
       await made.remove()
     }
   })

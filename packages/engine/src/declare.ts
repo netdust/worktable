@@ -63,6 +63,8 @@ export type GroupFact =
   | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
   | { kind: 'count'; where?: Record<string, unknown>; label: string }
   | { kind: 'empty'; column: string; label: string }
+  /** "label have/need" over the group's rows: the link's items with a target, and all its items. */
+  | { kind: 'filled'; link: string; label: string }
 
 export type TitleDecl = string | { via: string; else: string }
 

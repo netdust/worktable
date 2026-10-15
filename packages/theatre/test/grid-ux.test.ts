@@ -23,6 +23,7 @@ async function schemaAs(role: 'owner' | 'editor'): Promise<Schema> {
 const FACTS = [
   { kind: 'first', column: 'start_at', where: { soort: 'voorstelling' }, label: 'voorstelling' },
   { kind: 'empty', column: 'start_at', label: 'zonder tijd' },
+  { kind: 'filled', link: 'mensen', label: 'bezetting' },
 ]
 
 describe('theatre declares its space, sections, facts and inherited venue', () => {
@@ -88,7 +89,7 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     ])
   })
 
-  test('activiteit carries the two facts, and the venue inherited through its tourstop', async () => {
+  test('activiteit carries the three facts, and the venue inherited through its tourstop', async () => {
     const body = await schemaAs('editor')
     expect(body.sources.activiteit.group_facts).toEqual(FACTS)
     expect(body.sources.activiteit.lookups.locatie).toMatchObject({ inherited: true, from: 'Tourstop' })

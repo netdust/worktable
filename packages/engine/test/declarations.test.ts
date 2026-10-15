@@ -113,6 +113,15 @@ describe('validateDomain refuses a bad space, section or fact', () => {
     const empty = { kind: 'empty', column: 'ghost', label: 'g' } as const
     expect(refused(withQuery('job_room', { group_facts: [empty] }))).toEqual(['job_room', 'ghost'])
   })
+
+  test('a filled fact names a link of its source', () => {
+    const plainTaak = (facts: DatasetDecl['group_facts']): Domain => ({
+      ...plain,
+      datasets: plain.datasets.map((d) => (d.name === 'taak' ? { ...d, group_facts: facts } : d)),
+    })
+    expect(() => validateDomain(plainTaak([{ kind: 'filled', link: 'koppels', label: 'bezet' }]))).not.toThrow()
+    expect(refused(plainTaak([{ kind: 'filled', link: 'ghost', label: 'bezet' }]))).toEqual(['taak', 'ghost'])
+  })
 })
 
 async function schemaOf(domain: Domain, role: 'owner' | 'editor', owner = 'member'): Promise<Schema> {

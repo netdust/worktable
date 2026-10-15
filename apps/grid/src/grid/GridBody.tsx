@@ -90,6 +90,7 @@ function GridCell({ row, column, cell, keys, error, actions }: {
 
 function FactText({ fact }: { fact: Fact }) {
   if (fact.kind === 'first') return <span className="nv-group__fact"><i className={fact.tone ? `nv-tone--${fact.tone}` : undefined} aria-hidden="true">●</i> {fact.label} <span className="nv-group__num">{fact.value}</span></span>
+  if (fact.kind === 'filled') return <span className="nv-group__fact">{fact.label} <span className="nv-group__num">{fact.value}</span></span>
   return <span className="nv-group__fact"><span className="nv-group__num">{fact.value}</span> {fact.label}</span>
 }
 

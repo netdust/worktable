@@ -592,6 +592,11 @@ function checkPosition(dataset: DatasetDecl): void {
 
 function checkFacts(source: DatasetDecl | QueryDecl): void {
   for (const fact of source.group_facts ?? []) {
+    if (fact.kind === 'filled') {
+      if (!Object.hasOwn(source.links ?? {}, fact.link))
+        throw new DomainError(source.name, fact.link, `fact link "${fact.link}" is not a link of "${source.name}"`)
+      continue
+    }
     if (fact.kind !== 'count') checkColumn(source, 'fact column', fact.column)
     const where = fact.kind === 'empty' ? undefined : fact.where
     for (const column of Object.keys(where ?? {})) checkColumn(source, 'fact where', column)
