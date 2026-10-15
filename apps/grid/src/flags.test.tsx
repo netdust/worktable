@@ -17,6 +17,7 @@ const { Timeline } = await import('./timeline/Timeline')
 const { Calendar } = await import('./calendar/Calendar')
 const { Matrix } = await import('./matrix/Matrix')
 const { WeekTile } = await import('./dashboard/WeekTile')
+const { Dashboard } = await import('./dashboard/Dashboard')
 const { Grid } = await import('./grid/Grid')
 const { createStore } = await import('./grid/store')
 
@@ -76,6 +77,21 @@ describe('a flag on a board', () => {
 
     fireEvent.click(card('Repetitie'))
     expect(within(screen.getByRole('complementary', { name: 'Repetitie' })).getByRole('alert').textContent).toContain(TEXT)
+  })
+
+  it('reads its flags again once its rows change, and a flag that ended leaves its card and the count', async () => {
+    const onShown = vi.fn()
+    const shown = (cards: Row[]) => <SchemaContext.Provider value={schema({ activiteit })}>
+      <Board view={view} model={activiteit} models={{ activiteit }} rows={cards} column="status" layout={defaults(view)} onShown={onShown} />
+    </SchemaContext.Provider>
+    const { rerender } = render(shown(rows))
+    await waitFor(() => expect(card('Repetitie').querySelector('.nv-flag')).not.toBeNull())
+
+    api.rows.mockImplementation(async () => ({ rows: [], total: 0 }))
+    rerender(shown([{ ...rows[0], fields: { ...rows[0].fields, status: 'bevestigd' } }, rows[1]]))
+    await waitFor(() => expect(flagRead()).toHaveLength(2))
+    await waitFor(() => expect(card('Repetitie').querySelector('.nv-flag')).toBeNull())
+    await waitFor(() => expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ flagged: { ...SHOWN, count: 0 } })))
   })
 
   it('reads no flags and marks nothing outside a schema that declares a flag query', () => {
@@ -158,6 +174,27 @@ describe("a flag on the dashboard's week", () => {
     expect(await within(event).findByRole('img', { name: `Conflict: ${TEXT}` })).toBeTruthy()
     expect(within(screen.getByRole('button', { name: /Opbouw/ })).queryByRole('img')).toBeNull()
     expect(flagRead().map((call) => call[1])).toEqual([week])
+  })
+})
+
+describe("a flag in the dashboard's drawer", () => {
+  it('opens a flagged bar of the week strip on its band, with Negeren', async () => {
+    const week = weekOf(new Date())
+    const strip = {
+      key: '3', id: 3, label: 'Deze week', model: 'activiteit', table: 'activiteit', type: 'calendar', date_field: 'plandag',
+      calendar: { day: 'plandag', start: null, end: null, lanes: [] }, arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] },
+      shared: true, owner: { id: -1, name: '' }, mine: false, editable: false,
+    } as unknown as SavedView
+    const dashboard = { ...strip, key: '9', id: 9, label: 'Overzicht', model: '', type: 'dashboard', layout: { sections: [{ label: 'Week', tiles: [{ kind: 'week', view: 3 }] }], actions: [] } } as unknown as SavedView
+    api.rows.mockImplementation(async (read: View) => ({ rows: read.model === 'meldingen' ? [flagged] : [act(7, 'Repetitie', week.from)], total: 1 }))
+    inSchema({ activiteit }, <Dashboard dashboard={dashboard} views={[strip]} models={{ activiteit }} tables={[]} scope={null} role="editor" onOpenView={() => undefined} onSaved={() => undefined} />)
+
+    const bar = await screen.findByRole('button', { name: /Repetitie/ })
+    await within(bar).findByRole('img', { name: `Conflict: ${TEXT}` })
+    fireEvent.click(bar)
+    const band = within(screen.getByRole('complementary', { name: 'Repetitie' })).getByRole('alert')
+    expect(band.querySelector('.nv-dw-alert__text')?.textContent).toBe(TEXT)
+    expect(within(band).getAllByRole('button').map((b) => b.textContent)).toEqual(['Negeren'])
   })
 })
 

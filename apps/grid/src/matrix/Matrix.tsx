@@ -238,7 +238,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const kept = useRef<number[]>([])
   const keptNames = useRef<MatrixColumn[]>([])
   const rows = useMemo(() => filterRows(windowRows, query), [windowRows, query])
-  const flags = useFlags(useContext(SchemaContext), null, windowOfRows(windowRows, view.date_field), view.model)
+  const flags = useFlags(useContext(SchemaContext), null, windowOfRows(windowRows, view.date_field), view.model, windowRows)
   const flagged = flaggedOf(flags, view.model, rows)
   // A cell is its join record: the flags on that record.
   const marksOf = (cell: MatrixCell | undefined) => (cell && flags ? flags.marksOf(view.join!.model, cell.id) : [])

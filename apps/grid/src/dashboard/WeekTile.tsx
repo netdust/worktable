@@ -6,7 +6,7 @@ import { SchemaContext } from '../grid/drawer/context'
 import type { Model, Row, SavedView, Scope } from '../types'
 import { FlagMark } from '../ui/Flag'
 import { toneColor } from '../ui/tone'
-import { useFlags } from '../ui/useFlags'
+import { type Flags, useFlags } from '../ui/useFlags'
 import { formatWindow, iso, parse, weekOf } from '../ui/Window'
 import { layoutOf } from '../ui/views'
 import { scopeFor } from './tiles'
@@ -22,7 +22,7 @@ const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60) % 24).padSt
 
 /** This week of a calendar view in seven days, today marked; an event opens its row. */
 export function WeekTile({ view, model, scope, version, onOpen, onOpenRow }: {
-  view: SavedView; model?: Model; scope: Scope | null; version: number; onOpen: () => void; onOpenRow: (row: Row) => void
+  view: SavedView; model?: Model; scope: Scope | null; version: number; onOpen: () => void; onOpenRow: (row: Row, flags: Flags | null) => void
 }) {
   const week = weekOf(new Date())
   const [found, setFound] = useState<Row[]>([])
@@ -33,7 +33,7 @@ export function WeekTile({ view, model, scope, version, onOpen, onOpenRow }: {
       live = false
     }
   }, [view.key, scope?.id, version, week.from])
-  const flags = useFlags(useContext(SchemaContext), scope, week, view.model)
+  const flags = useFlags(useContext(SchemaContext), scope, week, view.model, version)
   const today = iso(new Date())
   const { days, events } = view.calendar ? placeEvents(found, view.calendar, week, null) : { days: [], events: [] }
   // A bar takes the tone of its row's first toned option, as the calendar does without a lane.
@@ -56,7 +56,7 @@ export function WeekTile({ view, model, scope, version, onOpen, onOpenRow }: {
               className={`nv-week-tile__day${day === today ? ' nv-week-tile__day--today' : ''}`}>
               <span className="nv-week-tile__head"><span className="nv-week-tile__dn">{weekday(date)}</span><span className="nv-week-tile__num">{date.getDate()}</span></span>
               {events.filter((e) => e.day === day).map((e) => (
-                <button key={e.row.id} type="button" className="nv-week-tile__bar" style={toneOf(e.row)} title={e.row.title} onClick={() => onOpenRow(e.row)}>
+                <button key={e.row.id} type="button" className="nv-week-tile__bar" style={toneOf(e.row)} title={e.row.title} onClick={() => onOpenRow(e.row, flags)}>
                   <FlagMark flags={flags?.marksOf(view.model, e.row.id) ?? []} bare />
                   {!e.allDay && <span className="nv-week-tile__time">{hhmm(e.from)}</span>}
                   <span className="nv-week-tile__title">{e.row.title}</span>

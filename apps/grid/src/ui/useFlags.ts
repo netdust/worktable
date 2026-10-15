@@ -48,9 +48,10 @@ function indexOf(found: Flag[], table: TableDef): Flags {
 /**
  * The flags the schema's flag query raises over a skin's window, read through the rows route in the caller's own scope,
  * so a caller who cannot read the query has none. Null without a flag query that marks the skin's dataset, without a
- * window, while the first read is pending, and once a read is refused.
+ * window, while the first read is pending, and once a read is refused. `version` is what the skin holds that moves
+ * after a landed write, such as its rows: a moved one reads again, so a flag ends when its rows change.
  */
-export function useFlags(schema: Pick<Schema, 'tables' | 'models'> | null, scope: Scope | null, window: Partial<DateWindow> | null, dataset: string): Flags | null {
+export function useFlags(schema: Pick<Schema, 'tables' | 'models'> | null, scope: Scope | null, window: Partial<DateWindow> | null, dataset: string, version?: unknown): Flags | null {
   const table = schema?.tables.find((t) => t.flags && Object.hasOwn(t.flags.marks, dataset))
   const asked = table && window ? { ...(table.date_field ? window : {}) } : null
   const scoped = table?.space === 'scoped' ? scope : null
@@ -67,8 +68,8 @@ export function useFlags(schema: Pick<Schema, 'tables' | 'models'> | null, scope
     return () => {
       live = false
     }
-  }, [key])
-  // A new window keeps the last flags until its own read lands: they mark ids, so a row of another window stays unmarked.
+  }, [key, version])
+  // A new window or version keeps the last flags until its own read lands: they mark ids, so a row of another window stays unmarked.
   const rows = key === null ? null : (read?.rows ?? null)
   return useMemo(() => (table && schema && rows ? indexOf(rows.map((row) => flagOf(row, table, schema)), table) : null), [rows, table, schema])
 }

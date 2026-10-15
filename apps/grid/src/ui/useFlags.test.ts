@@ -61,6 +61,23 @@ describe('the flags of a flag query', () => {
     expect(api.rows.mock.calls[0].slice(1, 3)).toEqual([{}, null])
   })
 
+  it("reads again when the skin's version moves, keeping the last flags until that read lands", async () => {
+    const held = { rows: [row(1, 'Dubbel geboekt.', { job_id: 7, level: 'high' })], total: 1 }
+    let answer: (found: { rows: Row[]; total: number }) => void = () => undefined
+    api.rows.mockResolvedValueOnce(held).mockReturnValueOnce(new Promise((done) => { answer = done }))
+    const { result, rerender } = renderHook(({ version }) => useFlags(schema(), null, week, 'job', version), { initialProps: { version: 1 } })
+    await waitFor(() => expect(result.current?.marksOf('job', 7)).toHaveLength(1))
+
+    rerender({ version: 1 })
+    expect(api.rows).toHaveBeenCalledTimes(1)
+    rerender({ version: 2 })
+    await waitFor(() => expect(api.rows).toHaveBeenCalledTimes(2))
+    expect(result.current?.marksOf('job', 7)).toHaveLength(1)
+    answer({ rows: [row(2, 'Afwezig.', { job_id: 8, level: 'low' })], total: 1 })
+    await waitFor(() => expect(result.current?.marksOf('job', 7)).toEqual([]))
+    expect(result.current?.marksOf('job', 8).map((f) => f.text)).toEqual(['Afwezig.'])
+  })
+
   it('is null and reads nothing without a flag query that marks the dataset, or without a window', () => {
     expect(renderHook(() => useFlags(schema([jobs]), null, week, 'job')).result.current).toBeNull()
     expect(renderHook(() => useFlags(schema(), null, week, 'team')).result.current).toBeNull()

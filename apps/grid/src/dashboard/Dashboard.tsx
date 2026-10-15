@@ -5,6 +5,7 @@ import { Drawer } from '../grid/Drawer'
 import { locale, t } from '../i18n'
 import type { Account, Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
 import { ChipBar } from '../ui/ChipBar'
+import type { Flags } from '../ui/useFlags'
 import { Composer } from './Composer'
 import { ProgressTile } from './ProgressTile'
 import { QuickCreate } from './QuickCreate'
@@ -43,7 +44,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
   }, [])
-  const [opened, setOpened] = useState<{ row: Row; view: SavedView } | null>(null)
+  const [opened, setOpened] = useState<{ row: Row; view: SavedView; flags?: Flags | null } | null>(null)
   const [creating, setCreating] = useState<{ create: string; label: string } | null>(null)
   const drawerColumns = useMemo(() => {
     const model = opened ? models[opened.view.model] : undefined
@@ -68,7 +69,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
       const view = viewOf(tile.view) as SavedView
       return (
         <WeekTile key={at} view={view} model={models[view.model]} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
-          onOpenRow={(row) => setOpened({ row, view })} />
+          onOpenRow={(row, flags) => setOpened({ row, view, flags })} />
       )
     }
     const done = viewOf(tile.done) as SavedView
@@ -101,7 +102,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
           ))}
         </div>
         )}
-        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} />}
+        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags} />}
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}

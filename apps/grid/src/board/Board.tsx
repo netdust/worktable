@@ -53,7 +53,7 @@ function lanesOf(rows: Row[], column: string, field: Field | undefined, manual: 
 
 /** Cards in a column per option of the board's column; a card opens its row, and drags to its place in any column. */
 export function Board({ view, model, models, rows, column, layout, onShown, onDrop, onLayout, onCreate }: Props) {
-  const flags = useFlags(useContext(SchemaContext), null, windowOfRows(rows, view.date_field), model.key)
+  const flags = useFlags(useContext(SchemaContext), null, windowOfRows(rows, view.date_field), model.key, rows)
   const marks = (row: Row) => flags?.marksOf(model.key, row.id) ?? []
   const flagged = flaggedOf(flags, model.key, rows)
   const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags)

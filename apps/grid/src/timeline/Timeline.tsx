@@ -64,7 +64,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   /** What the title line says it shows: the bars and the lanes. */
   onTitle?: (shown: Shown) => void
 }) {
-  const flags = useFlags(useContext(SchemaContext), null, shown, model.key)
+  const flags = useFlags(useContext(SchemaContext), null, shown, model.key, rows)
   const flagged = flaggedOf(flags, model.key, rows)
   const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags)
   const laid = useMemo(() => bars(rows, cal, shown, lane), [rows, cal, shown.from, shown.to, lane])

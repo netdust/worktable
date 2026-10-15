@@ -905,6 +905,19 @@ test.describe('step 3f: conflicten flags what it names', () => {
       await flagged.click()
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conflicten')
       await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
+
+      // A flag ends when its rows change: one activity cancelled on the board takes both marks and the count, no reload.
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.conflict)
+      await expect(card(page, one).locator('.nv-flag')).toHaveText('Conflict')
+      await card(page, one).focus()
+      await page.keyboard.press('Space')
+      await expect(said(page)).toHaveText(/^e2e dubbel een opgepakt in Bevestigd/)
+      await page.keyboard.press('ArrowRight')
+      await expect(said(page)).toHaveText(/^e2e dubbel een boven Geannuleerd/)
+      await page.keyboard.press('Space')
+      await expect.poll(async () => (await stored(api, one)).status).toBe('geannuleerd')
+      await expect(page.locator('.nv-board__list .nv-flag')).toHaveCount(0)
+      await expect(flagged).toHaveCount(0)
     } finally {
       await booking.remove()
     }

@@ -124,7 +124,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
 
   const shownRows = total(groups)
   const shownGroups = by ? groups.length : null
-  const flags = useFlags(useContext(SchemaContext), scope, windowOfRows(state.rows, view.date_field), model.key)
+  const flags = useFlags(useContext(SchemaContext), scope, windowOfRows(state.rows, view.date_field), model.key, state.rows)
   const flagged = flaggedOf(flags, model.key, shown)
   useEffect(() => {
     onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns, flagged })

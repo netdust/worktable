@@ -220,7 +220,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
   const weeks = useMemo(() => (month ? monthWeeks(shown) : []), [month, shown.from, shown.to])
   const window = month && weeks.length > 0 ? { from: weeks[0][0], to: weeks[weeks.length - 1][6] } : shown
   const { days, events, lanes } = useMemo(() => placeEvents(rows, cal, window, lane), [rows, cal, window.from, window.to, lane])
-  const flags = useFlags(useContext(SchemaContext), null, window, model.key)
+  const flags = useFlags(useContext(SchemaContext), null, window, model.key, rows)
   const flagged = flaggedOf(flags, model.key, rows)
   const marks = (row: Row) => flags?.marksOf(model.key, row.id) ?? []
   const columns = useMemo(
