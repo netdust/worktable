@@ -156,14 +156,35 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
   let refused = false
   let touched = false
   let offers: string[] = []
+  // Inside `together`: the sets wait for one notification at its end.
+  let holding = false
+  let held = false
 
   function withoutDraftErrors(): Record<string, CellError> {
     return Object.fromEntries(Object.entries(state.errors).filter(([, error]) => error.id !== DRAFT))
   }
 
-  function set(next: Partial<StoreState>): void {
+  /** `quiet`: a step's answer, told to the listeners only when the step settles. */
+  function set(next: Partial<StoreState>, quiet = false): void {
     state = { ...state, ...next, canUndo: history.canUndo(), canRedo: history.canRedo() }
+    if (holding) held = true
+    else if (!quiet) notify()
+  }
+
+  function notify(): void {
     listeners.forEach((listener) => listener())
+  }
+
+  /** Runs `work`, telling the listeners once for every set it made. */
+  function together<T>(work: () => T): T {
+    holding = true
+    held = false
+    try {
+      return work()
+    } finally {
+      holding = false
+      if (held) notify()
+    }
   }
 
   function patch(id: number, update: (row: Row) => Row): Row[] {
@@ -176,9 +197,9 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     else pending.set(id, count)
   }
 
-  function settle(): SaveState {
+  function settle(error = state.error): SaveState {
     if (pending.size > 0) return 'saving'
-    return state.error ? 'error' : 'saved'
+    return error ? 'error' : 'saved'
   }
 
   /**
@@ -224,7 +245,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     return { change, row, mine }
   }
 
-  async function land({ change, row, mine }: Painted, ready?: Promise<boolean>): Promise<string | null | undefined> {
+  /** `quiet`: an answer within a step, which tells the listeners once it settles. */
+  async function land({ change, row, mine }: Painted, ready?: Promise<boolean>, quiet = false): Promise<string | null | undefined> {
     const key = cellKey(change.id, change.field)
     try {
       const { row: saved, batch } = await queued(change, row, ready)
@@ -233,15 +255,13 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       // Answers come in order; one with a later write still queued would repaint over that write's paint.
       if (change.id === DRAFT) {
         refused = false
-        set({ rows: patch(DRAFT, () => saved), needs: [], errors: withoutDraftErrors() })
-      } else if (latest.get(change.id) === mine) set({ rows: patch(change.id, () => saved) })
-      set({ save: settle() })
+        set({ rows: patch(DRAFT, () => saved), needs: [], errors: withoutDraftErrors(), save: settle() }, quiet)
+      } else set({ rows: latest.get(change.id) === mine ? patch(change.id, () => saved) : state.rows, save: settle() }, quiet)
       return batch
     } catch (error) {
       track(change.id, -1)
       if (error === CANCELLED) {
-        set({ rows: patch(change.id, (r) => reverted(r, change, row)) })
-        set({ save: settle() })
+        set({ rows: patch(change.id, (r) => reverted(r, change, row)), save: settle() }, quiet)
         return undefined
       }
       const raised = toError(change, error)
@@ -251,14 +271,15 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
         const draft = state.rows.find((r) => r.id === DRAFT)
         const again = empty(change.value) ? [change.field] : []
         const needs = draft ? [...again, ...offers.filter((field) => field !== change.field && empty(read(draft, field)))] : again
-        set({ errors: { ...state.errors, [key]: raised }, error: raised, needs })
-        set({ save: settle() })
+        set({ errors: { ...state.errors, [key]: raised }, error: raised, needs, save: settle(raised) }, quiet)
         return undefined
       }
-      set({ rows: patch(change.id, (r) => reverted(r, change, row)), errors: { ...state.errors, [key]: raised }, error: raised })
+      set({ rows: patch(change.id, (r) => reverted(r, change, row)), errors: { ...state.errors, [key]: raised }, error: raised, save: settle(raised) }, quiet)
       // The state moved on meanwhile: show what it holds now, never the value this tab still had.
-      if (raised.code === 'transition_lost') await reread(change.id)
-      set({ save: settle() })
+      if (raised.code === 'transition_lost') {
+        await reread(change.id)
+        set({ save: settle() }, quiet)
+      }
       return undefined
     }
   }
@@ -352,23 +373,32 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       if (!batch) history.drop(entry)
     },
     async applyStep(changes) {
-      const last = changes.at(-1)
-      const dropped = last && paint(last)
-      if (!dropped) return false
-      const others = changes.slice(0, -1).map(paint)
-      // In the history at paint, like apply's, and pending until every write answered.
-      const pending = pendingStep(changes.length)
-      const entry: Entry = { batch: pending.batch, before: pending.before, model, id: dropped.change.id, ids: changes.map((change) => change.id) }
-      history.push(entry)
+      // The listeners hear of a step twice: its paint, and once every write answered or the refusal snapped the card back.
+      const painted = together(() => {
+        const last = changes.at(-1)
+        const dropped = last && paint(last)
+        if (!dropped) return null
+        const others = changes.slice(0, -1).map(paint)
+        // In the history at paint, like apply's, and pending until every write answered.
+        const pending = pendingStep(changes.length)
+        const entry: Entry = { batch: pending.batch, before: pending.before, model, id: dropped.change.id, ids: changes.map((change) => change.id) }
+        history.push(entry)
+        return { dropped, others, pending, entry }
+      })
+      if (!painted) return false
+      const { dropped, others, pending, entry } = painted
       let release: (go: boolean) => void = () => undefined
       // Queued on its record now, so a later write there waits for it; sent once the others answered.
-      const lastly = land(dropped, new Promise((resolve) => (release = resolve)))
-      const answers = await Promise.all(others.map((shown) => (shown ? land(shown) : undefined)))
+      const lastly = land(dropped, new Promise((resolve) => (release = resolve)), true)
+      const answers = await Promise.all(others.map((shown) => (shown ? land(shown, undefined, true) : undefined)))
       release(!answers.includes(undefined))
       const batch = await lastly
       const landed = [...answers, batch].filter((made) => typeof made === 'string')
-      pending.settle(landed)
-      if (landed.length === 0) history.drop(entry)
+      together(() => {
+        pending.settle(landed)
+        if (landed.length === 0) history.drop(entry)
+        set({ save: settle() })
+      })
       return batch !== undefined
     },
     undo: () => travel(history.undo, false),

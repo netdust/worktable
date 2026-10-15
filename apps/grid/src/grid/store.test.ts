@@ -803,6 +803,64 @@ describe('a second field in one write, and a step of several writes', () => {
     expect(store.getState().error).toBeNull()
   })
 
+  it('tells its listeners twice for a step of many writes: once for the paint, once when every write answered', async () => {
+    const { api, store, positions } = stepping()
+    const answers = [deferred<Saved>(), deferred<Saved>(), deferred<Saved>()]
+    for (const answer of answers) api.update.mockReturnValueOnce(answer.promise)
+    const told = vi.fn()
+    store.subscribe(told)
+
+    const step = store.applyStep(three)
+    expect(told).toHaveBeenCalledTimes(1)
+    expect(positions()).toEqual(['V', 'k', 'u'])
+
+    answers[0].resolve(taken(101, { position: 'V' }, 'b1'))
+    answers[1].resolve(taken(102, { position: 'k' }, 'b2'))
+    await vi.waitFor(() => expect(api.update).toHaveBeenCalledTimes(3))
+    answers[2].resolve(taken(103, { position: 'u' }, 'b3'))
+    expect(await step).toBe(true)
+
+    expect(told).toHaveBeenCalledTimes(2)
+    expect(store.getState()).toMatchObject({ save: 'saved', canUndo: true })
+  })
+
+  it('a refused step tells its listeners once more, with the card back and the ranks written kept', async () => {
+    const { api, store, positions } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => {
+      if (id === 103) throw { code: 'refused', message: 'Nee.' }
+      return taken(id, data, `b${id}`)
+    })
+    const told = vi.fn()
+    store.subscribe(told)
+
+    expect(await store.applyStep(three)).toBe(false)
+
+    expect(told).toHaveBeenCalledTimes(2)
+    expect(positions()).toEqual(['V', 'k', null])
+    expect(store.getState()).toMatchObject({ save: 'error', error: { code: 'refused' } })
+  })
+
+  it('an edit elsewhere during a step tells its listeners at once, with what the step has answered so far', async () => {
+    const { api, store, row } = stepping()
+    const answers = [deferred<Saved>(), deferred<Saved>(), deferred<Saved>()]
+    for (const answer of answers) api.update.mockReturnValueOnce(answer.promise)
+    const step = store.applyStep(three)
+    answers[0].resolve(taken(101, { position: 'V', state: 'served' }, 'b1'))
+    await vi.waitFor(() => expect(row(101).fields.state).toBe('served'))
+    const seen: unknown[] = []
+    store.subscribe(() => seen.push(store.getState().rows.find((r) => r.id === 101)?.fields.state))
+
+    api.update.mockResolvedValueOnce(taken(104, { state: 'b' }, 'b-other'))
+    const edit = store.apply({ id: 104, field: 'state', value: 'b' })
+
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen[0]).toBe('served')
+    answers[1].resolve(taken(102, { position: 'k' }, 'b2'))
+    await vi.waitFor(() => expect(api.update).toHaveBeenCalledTimes(4))
+    answers[2].resolve(taken(103, { position: 'u' }, 'b3'))
+    await Promise.all([step, edit])
+  })
+
   it('two steps on one record queue: the second sends after the first, which waits for its own ranks', async () => {
     const { api, store, row, sent } = stepping()
     const held = deferred<Saved>()
