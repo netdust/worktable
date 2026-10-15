@@ -509,6 +509,8 @@ test('planning-details @e2e', async ({ page }) => {
   const lunch = named(page, 'Lunch').first()
   await expect(lunch.locator('td').nth(1)).toHaveText('13:00–14:00')
   await expect(lunch.locator('.nv-time__end')).toHaveText('–14:00')
+  const clipped = await page.locator('tbody tr.nv-tr td:nth-child(2)').evaluateAll((cells) => cells.filter((td) => td.scrollWidth > td.clientWidth).length)
+  expect(clipped, 'no Tijd cell cuts its day and time').toBe(0)
   await expect(named(page, 'Overnachting').first().locator('.nv-blank')).toHaveText('zonder tijd')
 
   // R10.3: Maaltijd in its colour, status pills toned.
