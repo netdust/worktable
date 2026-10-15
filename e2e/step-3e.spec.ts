@@ -592,8 +592,8 @@ test.describe('step 3e: the gallery by Groep', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test('gallery-sections @e2e', async ({ page }) => {
-    await page.goto('/')
-    await openView(page, 'Galerij activiteiten', 'Activiteiten')
+    // The seed's week: the sections need rows, and the seed's activities are fixed in that week.
+    await openWeek(page, 'Galerij activiteiten', 'Activiteiten', 'plandag', '2026-10-12')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Galerij activiteiten')
     await page
       .locator('.nv-bar')

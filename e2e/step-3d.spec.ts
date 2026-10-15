@@ -14,6 +14,7 @@ const WEEK = {
 }
 // A month no other flow uses, for the timeline's packed lane.
 const MONTH = { from: '2028-08-01', to: '2028-08-31' }
+const SEED_WEEK = '2026-10-12'
 
 type Api = APIRequestContext
 type Values = Record<string, unknown>
@@ -132,8 +133,8 @@ test.describe('step 3d', () => {
     const cell = () => page.locator('.nv-grid:not(.nv-mx) tbody .nv-td').first()
     const lineWidth = () => cell().evaluate((el) => getComputedStyle(el).borderRightWidth)
     try {
-      await page.goto('/')
-      await openView(page, 'Planning', 'Activiteiten')
+      // The seed's week: the looks need rows, and the seed's activities are fixed in that week.
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
       await expect(cell()).toBeVisible()
       // Folded by default: the card's rows are not on the page, yet its looks already apply.
       await expect(page.getByRole('button', { name: 'Bijstellen' })).toHaveAttribute('aria-expanded', 'false')
@@ -518,6 +519,9 @@ test.describe('step 3d', () => {
   })
 
   test('timeline-scroll-holds @e2e', async ({ page }) => {
+    // Mid-month: the sheet scrolls to today only from its fourth day on, so the 1st to the 3rd would prove nothing.
+    const now = new Date()
+    await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), 15, 12))
     await page.goto('/')
     await openView(page, 'Tijdlijn tourstops', 'Tourstops')
     const sheet = page.locator('.nv-tl')
