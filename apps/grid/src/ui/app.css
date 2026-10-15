@@ -3224,9 +3224,8 @@
   cursor: text;
 }
 
-/* A long text's block, as the prototype's note; its editor's anchor covers it, so the textarea opens under it. */
+/* A long text's block, as the prototype's note. */
 #root .nv-dw-long {
-  position: relative;
   box-sizing: border-box;
   display: block;
   width: 100%;
@@ -3247,6 +3246,14 @@
 
 #root button.nv-dw-long {
   cursor: text;
+}
+
+/* Pressed, the block's field takes its place with its text where it stood. */
+#root .nv-dw-long__area {
+  padding: 7px 9px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .nv-dw-dot {

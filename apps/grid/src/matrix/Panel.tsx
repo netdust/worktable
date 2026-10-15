@@ -1,11 +1,11 @@
 import { AlertTriangle, CalendarDays, CircleDot, StickyNote, Tag, User } from 'lucide-react'
 import { type CSSProperties, type KeyboardEvent, type Ref, useContext, useEffect, useId, useRef, useState } from 'react'
-import { TextArea, TextField } from 'react-aria-components'
 import { optionsFrom } from '../api'
 import { Section } from '../grid/drawer/Sections'
 import type { Column } from '../grid/columns'
 import { Drawer, Line } from '../grid/Drawer'
 import { SchemaContext } from '../grid/drawer/context'
+import { Note } from '../grid/drawer/Note'
 import { dayLabel, kindOf } from '../grid/drawer/derive'
 import { locale, t } from '../i18n'
 import { placeOf } from '../ui/facts'
@@ -120,24 +120,12 @@ function StatusLine({ view, models, cell, store, row, column, asking = 0 }: { vi
   )
 }
 
-/** The note as a line: "Geen notitie" until pressed, then the field; it saves on leaving. */
+/** The note as a line: "Geen notitie" until pressed, then its field, as the record drawer edits a long text. */
 function NoteLine({ note, disabled, onSave }: { note: string; disabled: boolean; onSave: (note: string) => void }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(note)
-  useEffect(() => setDraft(note), [note])
   return (
     <Line icon={StickyNote} label={t('noteLabel')}>
-      {editing ? (
-        <TextField className="nv-field" aria-label={t('noteLabel')} value={draft} isDisabled={disabled} onChange={setDraft} autoFocus
-          onBlur={() => {
-            setEditing(false)
-            if (draft !== note) onSave(draft)
-          }}>
-          <TextArea className="nv-textarea nv-panel__note" rows={2} />
-        </TextField>
-      ) : (
-        <button type="button" className="nv-dw-note" disabled={disabled} onClick={() => setEditing(true)}>{note || <span className="nv-muted">{t('noNote')}</span>}</button>
-      )}
+      <Note text={note} label={t('noteLabel')} empty={<span className="nv-muted">{t('noNote')}</span>} className="nv-dw-note" area="nv-textarea"
+        rows={2} disabled={disabled} onSave={onSave} />
     </Line>
   )
 }

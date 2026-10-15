@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, ModelAction, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
@@ -198,33 +198,40 @@ describe('a long text in the drawer', () => {
     expect(block().querySelector('.nv-dw-long')?.textContent).toBe('—')
   })
 
-  it('asks for a first text where it is empty, and writes what is typed on Cmd+Enter', () => {
+  it('asks for a first text where it is empty, opens its field in its place, and writes on Cmd+Enter, not on Enter', async () => {
     const onWrite = vi.fn()
     render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
 
     fireEvent.click(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }))
-    expect(document.activeElement).toBe(area())
+    expect(block().contains(area())).toBe(true)
+    // A click without a pointer is a virtual one: React Aria focuses the field a frame later.
+    await waitFor(() => expect(document.activeElement).toBe(area()))
     fireEvent.change(area()!, { target: { value: 'Parkeren op de laadkade' } })
+    fireEvent.keyDown(area()!, { key: 'Enter' })
+    expect(onWrite).not.toHaveBeenCalled()
     fireEvent.keyDown(area()!, { key: 'Enter', metaKey: true })
 
     expect(onWrite).toHaveBeenCalledTimes(1)
     expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Parkeren op de laadkade')
     expect(area()).toBeNull()
+    expect(document.activeElement).toBe(within(block()).getByRole('button'))
   })
 
-  it('writes on leaving for elsewhere, and nothing when the text is as it was', () => {
+  it('writes on leaving for elsewhere, and nothing when the text is as it was', async () => {
     const onWrite = vi.fn()
     render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
     const outside = document.body.appendChild(document.createElement('button'))
 
     fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
     expect(area()?.value).toBe('Twee veggie')
+    await waitFor(() => expect(document.activeElement).toBe(area()))
     act(() => outside.focus())
     expect(onWrite).not.toHaveBeenCalled()
     expect(area()).toBeNull()
 
     fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
     fireEvent.change(area()!, { target: { value: 'Drie veggie' } })
+    await waitFor(() => expect(document.activeElement).toBe(area()))
     act(() => outside.focus())
     expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Drie veggie')
     outside.remove()
@@ -243,6 +250,7 @@ describe('a long text in the drawer', () => {
     expect(onWrite).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
     expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Twee veggie')
+    expect(document.activeElement).toBe(within(block()).getByRole('button'))
   })
 })
 

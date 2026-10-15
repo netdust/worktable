@@ -649,16 +649,26 @@ test.describe('step 3f: a long text is its own block in the drawer', () => {
       await drawer.getByRole('button', { name: /^\+ \d+ andere velden$/ }).click()
       await expect(drawer.locator('.nv-drawer__field dt', { hasText: /^Notities$/ })).toHaveCount(0)
 
-      // Empty, it asks; pressed, the sheet's long text editor opens on it; Ctrl+Enter writes.
+      // Empty, it asks; pressed, its field opens in its place; Ctrl+Enter writes.
       await block.getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }).click()
-      const area = page.getByRole('textbox', { name: 'Notities' })
+      const area = block.getByRole('textbox', { name: 'Notities' })
       await expect(area).toBeFocused()
       await area.fill(note)
+      await shot(page, 'notities-editing')
       await page.keyboard.press('Control+Enter')
       await expect(area).toBeHidden()
       await expect(block.locator('.nv-dw-long')).toHaveText(note)
       await expect.poll(() => notitiesOf(id)).toBe(note)
       await shot(page, 'notities-block')
+
+      // Escape leaves the text as it was and the drawer open.
+      await block.getByRole('button').click()
+      await area.fill('weg')
+      await page.keyboard.press('Escape')
+      await expect(area).toBeHidden()
+      await expect(drawer).toBeVisible()
+      await expect(block.locator('.nv-dw-long')).toHaveText(note)
+      expect(await notitiesOf(id)).toBe(note)
 
       // After a reload the drawer reads it back.
       const again = await drawerOf()

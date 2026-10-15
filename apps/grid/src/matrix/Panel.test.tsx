@@ -265,6 +265,23 @@ describe('the matrix side panel', () => {
     expect(writes.update).toHaveBeenCalledWith('assignment', 12, { note: 'komt om 10u' })
   })
 
+  it('edits the note as the record drawer edits a long text: Escape keeps it and the panel, Cmd+Enter saves', async () => {
+    const { at, panel, store, noteField } = setup()
+    fireEvent.click(at(/Montage/, 'name:lieve'))
+
+    fireEvent.change(noteField(), { target: { value: 'weg' } })
+    fireEvent.keyDown(noteField(), { key: 'Escape' })
+    expect(panel()).not.toBeNull()
+    expect(panel()!.querySelector('.nv-dw-note')?.textContent).toBe('komt later')
+    expect(store.setNote).not.toHaveBeenCalled()
+
+    fireEvent.change(noteField(), { target: { value: 'komt om 10u' } })
+    await act(async () => {
+      fireEvent.keyDown(noteField(), { key: 'Enter', ctrlKey: true })
+    })
+    expect(store.setNote).toHaveBeenCalledExactlyOnceWith(1, expect.objectContaining({ key: 'name:lieve' }), 'komt om 10u')
+  })
+
   it('shows the away reason and the warning on an away day, and still sends the write', async () => {
     const { at, panel, choose, writes } = setup()
     fireEvent.click(at(/Montage/, 'record:5'))
