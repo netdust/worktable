@@ -27,7 +27,7 @@ Follow the build steps in the spec. A step is done when its acceptance gate pass
 - Custom fields live in each dataset's custom JSON column, declared in the Field table. Never create a table for them.
 - Datasets are code. Admins create fields, views, templates and publications, never datasets.
 - Names in the domain are Dutch as in the spec (Activiteit, Toewijzing, Beschikbaarheid). Names in the engine are English and generic (Field, SavedView, Revision, Publication, Attachment).
-- Copy from Folio: the filter AST compiler, the shape of its views and fields tables, magic-link sessions, and its board drag and rank, less the slot line it draws on a sorted board's cross-column drop (docs/SPEC.md). Copy from ntdst-baseline only the TypeScript and React of its views app (services/views/app), never PHP. Nothing else.
+- Copy from Folio: the filter AST compiler, the shape of its views and fields tables, magic-link sessions, and its board drag and rank, less the slot line it draws on a sorted board's cross-column drop and its skipping of unranked neighbours (docs/SPEC.md). Copy from ntdst-baseline only the TypeScript and React of its views app (services/views/app), never PHP. Nothing else.
 - No client data in this repo. Fixtures are invented.
 - docs/SPEC.md is the spec of record. Changing scope means editing it first.
 - Gates run in this repo's own browser e2e harness, not Laika's.
