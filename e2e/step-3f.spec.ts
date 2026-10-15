@@ -977,15 +977,20 @@ test.describe('step 3f: the timeline marks bars of a lane that overlap', () => {
     try {
       for (const [at, naam] of ['e2e overlap een', 'e2e overlap twee'].entries()) {
         const start_datum = plusDays(WEEK.overlap, at)
-        const data = { productie_id: productie, naam, start_datum, eind_datum: plusDays(start_datum, 2), status: 'bevestigd' }
+        const data = {
+          productie_id: productie,
+          naam,
+          start_datum,
+          eind_datum: plusDays(start_datum, 2),
+          status: 'bevestigd',
+        }
         stops.push(await posted(api, '/api/rows/speelreeks', data))
       }
       await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.overlap)
       await expect(marks).toHaveCount(2)
-      await expect(page.locator('.nv-tl__bar', { hasText: 'e2e overlap een' }).locator('[title^="Overlapt met"]')).toHaveAttribute(
-        'title',
-        'Overlapt met e2e overlap twee',
-      )
+      await expect(
+        page.locator('.nv-tl__bar', { hasText: 'e2e overlap een' }).locator('[title^="Overlapt met"]'),
+      ).toHaveAttribute('title', 'Overlapt met e2e overlap twee')
       await expect(insight).toHaveText('1 overlap')
       await shot(page, 'timeline-overlap')
 
