@@ -1,6 +1,6 @@
 import { errorText, inUse, t, undoText } from '../i18n'
 import type { ApiError, Lookup, Row, Saved } from '../types'
-import { createHistory, type Entry, type History, pendingStep } from '../ui/history'
+import { createHistory, type Entry, type History, pendingStep, type Refusal } from '../ui/history'
 
 export type SaveState = 'saved' | 'saving' | 'error'
 
@@ -283,12 +283,14 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     if (found) replace(found)
   }
 
-  /** Repaints the undone step's row as the server now has it; a step on another view's rows, or an action, reloads; a step with its own refresh runs it. */
+  /** Repaints the undone step's rows as the server now has them; a step on another view's rows, or an action, reloads; a step with its own refresh runs it. */
   async function repaint(entry: Entry): Promise<void> {
     if (entry.refresh) return entry.refresh()
-    const found = entry.model === model && entry.id !== null && api.read ? await api.read(model, entry.id).catch(() => null) : null
-    if (found) replace(found)
-    else reload()
+    const ids = entry.ids ?? (entry.id === null ? [] : [entry.id])
+    const read = api.read
+    const found = entry.model === model && ids.length > 0 && read ? await Promise.all(ids.map((id) => read(model, id).catch(() => null))) : [null]
+    for (const row of found) if (row) replace(row)
+    if (found.includes(null)) reload()
   }
 
   async function travel(step: () => Promise<Entry | null>, forward: boolean): Promise<void> {
@@ -298,11 +300,12 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       const entry = await step()
       if (entry) await repaint(entry)
     } catch (error) {
-      const refused = (error ?? {}) as Partial<ApiError>
+      const refused = (error ?? {}) as Refusal
       const code = String(refused.code ?? 'unknown')
       // A redo is an undo of the undo; the server refuses it after a batch that minted tokens.
       const message = forward && code === 'not_undoable' ? t('redoSkipped') : undoText(refused)
       set({ error: { id: 0, field: '', code, message } })
+      if (refused.undone) await repaint(refused.undone)
     }
     track(UNDOING, -1)
     set({ save: settle() })
@@ -355,10 +358,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       const others = changes.slice(0, -1).map(paint)
       // In the history at paint, like apply's, and pending until every write answered.
       const pending = pendingStep(changes.length)
-      const refresh = async () => {
-        await Promise.all(changes.map((change) => reread(change.id)))
-      }
-      const entry: Entry = { batch: pending.batch, before: pending.before, model, id: dropped.change.id, refresh }
+      const entry: Entry = { batch: pending.batch, before: pending.before, model, id: dropped.change.id, ids: changes.map((change) => change.id) }
       history.push(entry)
       let release: (go: boolean) => void = () => undefined
       // Queued on its record now, so a later write there waits for it; sent once the others answered.

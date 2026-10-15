@@ -90,6 +90,24 @@ describe('the undo history', () => {
     expect([history.canUndo(), history.canRedo()]).toEqual([true, false])
   })
 
+  it('a step undone part-way keeps what went through as its redo, and a retry undoes only the rest', async () => {
+    const send = vi.fn<(batch: string) => Promise<string>>(async (batch) => `u-${batch}`)
+      .mockResolvedValueOnce('u-b3').mockRejectedValueOnce({ code: 'unknown', message: 'Failed to fetch' })
+    const history = createHistory(send)
+    const entry: Entry = { ...step('b3'), before: [Promise.resolve('b1'), Promise.resolve('b2')] }
+    history.push(entry)
+
+    await expect(history.undo()).rejects.toMatchObject({ code: 'unknown', undone: expect.objectContaining({ model: 'speelreeks', id: 1 }) })
+    expect([history.canUndo(), history.canRedo()]).toEqual([true, true])
+    await history.undo()
+    expect(send.mock.calls).toEqual([['b3'], ['b2'], ['b2'], ['b1']])
+    await history.redo()
+    await history.redo()
+
+    expect(send.mock.calls.slice(4)).toEqual([['u-b1'], ['u-b2'], ['u-b3']])
+    expect([history.canUndo(), history.canRedo()]).toEqual([true, false])
+  })
+
   it("forgets a deleted row's steps, and tells its listeners", () => {
     const history = createHistory(() => Promise.resolve('u'))
     const listener = vi.fn()

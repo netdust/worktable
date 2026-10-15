@@ -772,6 +772,37 @@ describe('a second field in one write, and a step of several writes', () => {
     expect(api.undo.mock.calls).toEqual([['b102']])
   })
 
+  it("an undo of a step from the store that replaced the step's own repaints every written row there", async () => {
+    const { api, store, history, reload } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => taken(id, data, `b${id}`))
+    await store.applyStep(three)
+
+    const next = createStore({ model: 'activity', rows: store.getState().rows, api, history, reload })
+    await next.undo()
+
+    expect(api.undo.mock.calls).toEqual([['b103'], ['b102'], ['b101']])
+    expect([101, 102, 103].map((id) => next.getState().rows.find((r) => r.id === id)?.fields.position)).toEqual([null, null, null])
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('an undo of a step refused part-way repaints its rows, keeps the redo of what went through, and a retry undoes only the rest', async () => {
+    const { api, store, positions } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => taken(id, data, `b${id}`))
+    await store.applyStep(three)
+    api.undo.mockResolvedValueOnce('u-b103').mockRejectedValueOnce({ code: 'unknown', message: 'Failed to fetch' })
+    const held: Record<number, string | null> = { 101: 'V', 102: 'k', 103: null }
+    api.read.mockImplementation(async (_m, id) => taken(id, { position: held[id] }, '').row)
+
+    await store.undo()
+
+    expect(api.read.mock.calls.map(([, id]) => id).toSorted()).toEqual([101, 102, 103])
+    expect(positions()).toEqual(['V', 'k', null])
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: true, error: { code: 'unknown' } })
+    await store.undo()
+    expect(api.undo.mock.calls).toEqual([['b103'], ['b102'], ['b102'], ['b101']])
+    expect(store.getState().error).toBeNull()
+  })
+
   it('two steps on one record queue: the second sends after the first, which waits for its own ranks', async () => {
     const { api, store, row, sent } = stepping()
     const held = deferred<Saved>()
