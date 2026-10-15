@@ -191,14 +191,14 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dashboard · samenstellen, teamdashboard, verwijderen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "composer-team-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | ea74984 2026-10-14 |
 | POST/PATCH /api/views dashboard shared · editor | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "editor-cannot-share-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | ea74984 2026-10-14 |
 | GET /api/views · owner, geen dashboard | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "owner-no-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | ea74984 2026-10-14 |
-| Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | ea74984 2026-10-14 |
+| Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | ffb52ec 2026-10-15 |
 | GET /api/attachments/activiteit?ids · 200 en 201 | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "gallery-batch-boundary @e2e"` | e2e/step-3c.spec.ts | step-3c | ea74984 2026-10-14 |
 | GET /api/views | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/views asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
 | Grid shell · landing | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "the landing page shows the sign-in @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
 | GET /api/attachments/activiteit?ids | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/attachments/activiteit batch asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
 | Grid shell · skin link | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "a skin view link lands on the sign-in page @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 6562271 2026-10-13 |
 | Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | ea74984 2026-10-14 |
-| Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | ea74984 2026-10-14 |
+| Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | ffb52ec 2026-10-15 |
 | Chiprij · elke weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "one-chip-row @e2e"` | e2e/step-3d.spec.ts | step-3d | ea74984 2026-10-14 |
 | Kalender · Groep (rijen) | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "calendar-lanes-in-groep @e2e"` | e2e/step-3d.spec.ts | step-3d | ea74984 2026-10-14 |
 | Planning · periode stappen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "grid-period-steps @e2e"` | e2e/step-3d.spec.ts | step-3d | ea74984 2026-10-14 |
@@ -220,17 +220,25 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Tijdlijn · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Tijdlijn tourstops @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Matrix · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Toewijzingen per activiteit @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Chiprij · geen periode zonder datum | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "a view whose table has no date shows no period control @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
-| Groep · elke weergave, bord hergroepeert | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "groep-everywhere @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
-| Bord · slepen, muis en toetsen, ⌘Z | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-drag @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
-| Bord · geweigerde drop (test.fixme tot step 3f) | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-drag-refused @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
+| Groep · elke weergave, bord hergroepeert | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "groep-everywhere @e2e"` | e2e/step-3e.spec.ts | step-3e | ffb52ec 2026-10-15 |
+| Bord · slepen, muis en toetsen, ⌘Z | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-drag @e2e"` | e2e/step-3e.spec.ts | step-3e | ffb52ec 2026-10-15 |
 | Bord · + in kolom | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-column-plus @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
-| Bord · + in kolom, week zonder vandaag (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-column-plus-in-window @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
+| Bord · + in kolom, week zonder vandaag | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-column-plus-in-window @e2e"` | e2e/step-3e.spec.ts | step-3e | ffb52ec 2026-10-15 |
 | Lade · kop, N van M, velden, toetsen, breed | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "drawer-anatomy @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Matrix · cellade, Kiezen, ⌘Z, Afwezigheden | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "matrix-cell-drawer @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Galerij · secties, S M L | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "gallery-sections @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Dashboard · titelpil, bijgewerkt | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "dashboard-title-pill @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Rail · aantallen | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "rail-counts @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
-| Titelregel · inzicht Optie | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "title-line-insight @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
+| Titelregel · inzicht Optie | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "title-line-insight @e2e"` | e2e/step-3e.spec.ts | step-3e | ffb52ec 2026-10-15 |
+| Bord · drop tussen kaart 2 en 3, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drop-between @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · volgorde in een kolom, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-reorder @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · ongerangschikte kolom, kaart 1 naar plaats 3 | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-reorder-fresh @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · gesorteerd naar handmatig, gewijzigd, terugzetten | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-to-manual @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · gesorteerd, andere kolom: tint, plaats op datum | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-cross-column @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · plek steeds verder in een volle kolom | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-slot-steady @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · één ⌘Z, pagina en lade | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-undo-both @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · toetsen: spatie, pijlen, Escape | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-keyboard @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · geweigerde drop, volle kolom, muis en toetsen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag-refused @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Grid shell · lade-link met voorwaarde | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "a drawer link with a condition lands on the sign-in page @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | GET /api/rows/kandidaten | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "/api/rows/kandidaten asks for a session @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | GET /api/rows/werklijst | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "/api/rows/werklijst asks for a session @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |

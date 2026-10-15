@@ -1,5 +1,6 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { cardIn } from './board'
 import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
@@ -338,13 +339,11 @@ test.describe('step 3c', () => {
 
       await page.goto('/')
       await openView(page, 'Bord toewijzingen', 'Toewijzingen')
-      await expect(page.getByRole('grid', { name: 'Voorlopig' }).getByRole('row', { name: /Huid Proef/ })).toBeVisible()
+      await expect(cardIn(page, 'Voorlopig', 'Huid Proef')).toBeVisible()
       await shot(page, 'board')
 
       await openWeek(page, 'e2e Bord activiteiten', 'Activiteiten', 'plandag', day)
-      await expect(
-        page.getByRole('grid', { name: 'Bevestigd' }).getByRole('row', { name: /e2e huid activiteit/ }),
-      ).toBeVisible()
+      await expect(cardIn(page, 'Bevestigd', 'e2e huid activiteit')).toBeVisible()
       await shot(page, 'board-activiteiten')
 
       await openWeek(page, 'e2e Kalender tourstops', 'Tourstops', 'start_datum', day)

@@ -1,4 +1,5 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
+import { cardIn } from './board'
 import { openLooks } from './editor'
 import { shot } from './shots'
 import { modelNode, openView, openWeek } from './tree'
@@ -179,10 +180,7 @@ test.describe('step 3d', () => {
       await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.drawer)
       const main = page.locator('main.nv-main')
       const before = await main.evaluate((el) => el.getBoundingClientRect().width)
-      await page
-        .getByRole('grid', { name: 'Bevestigd' })
-        .getByRole('row', { name: new RegExp(title) })
-        .click()
+      await cardIn(page, 'Bevestigd', title).click()
 
       const drawer = page.getByRole('complementary', { name: title })
       await expect(drawer).toBeVisible()
@@ -212,10 +210,7 @@ test.describe('step 3d', () => {
       // Boundary: narrow, the slot overlays the work rather than narrowing it.
       await page.setViewportSize({ width: 820, height: 900 })
       const narrow = await main.evaluate((el) => el.getBoundingClientRect().width)
-      await page
-        .getByRole('grid', { name: 'Bevestigd' })
-        .getByRole('row', { name: new RegExp(title) })
-        .click()
+      await cardIn(page, 'Bevestigd', title).click()
       await expect(drawer).toBeVisible()
       expect(await page.locator('.nv-drawer-slot').evaluate((el) => getComputedStyle(el).position)).toBe('fixed')
       expect(await main.evaluate((el) => el.getBoundingClientRect().width)).toBe(narrow)
