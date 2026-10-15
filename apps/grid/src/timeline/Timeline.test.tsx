@@ -53,6 +53,20 @@ describe("the timeline's lanes", () => {
     expect(api.records).toHaveBeenCalledWith('productie', '')
   })
 
+  it('wait for their records\' tones on a first open: no lane is drawn in the palette and repainted', async () => {
+    let answer: (found: { rows: Row[]; total: number }) => void = () => undefined
+    api.records.mockReturnValue(new Promise((done) => { answer = done }))
+    const fresh = { ...productie('kleur'), key: 'reeks_productie' } as Model
+    const model = { ...speelreeks, fields: { ...speelreeks.fields, productie_id: { ...speelreeks.fields.productie_id, relation: { model: 'reeks_productie', multiple: false } } } } as Model
+    render(<Timeline view={view} model={model} models={{ speelreeks: model, reeks_productie: fresh }} rows={stops} cal={CAL} shown={{ from: '2026-10-12', to: '2026-10-18' }} lane="productie_id" layout={defaults(view)} />)
+
+    expect(document.querySelectorAll('.nv-tl__lane')).toHaveLength(0)
+    expect(screen.getByRole('table', { name: 'Tijdlijn' })).toBeTruthy()
+    answer({ rows: kleuren, total: 3 })
+    await waitFor(() => expect(laneOf('De Kersentuin')).toBe('var(--tone-violet)'))
+    expect(laneOf('Nachtwacht')).toBe('var(--tone-sky)')
+  })
+
   it('take the palette by order where the related dataset has no tone, and read nothing for it', () => {
     shown({ speelreeks, productie: productie() })
 

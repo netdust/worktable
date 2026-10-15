@@ -72,6 +72,8 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   const pct = (n: number) => `${(n / laid.days) * 100}%`
   const field = lane ? model.fields[lane] : undefined
   const tones = useTones(models, field?.relation?.model)
+  // Lanes wait for their records' tones on a first open: drawn in the palette, they would crossfade to them.
+  const ready = tones !== undefined
   useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns }), [rows.length, laid.lanes.length, lane, columns])
   const weekend = (day: string) => [0, 6].includes((parse(day) as Date).getDay())
   const todayAt = window.indexOf(today)
@@ -89,7 +91,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   useEffect(() => {
     if (frame.current && todayAt > 2) frame.current.scrollLeft = (todayAt - 2) * DAY_PX
   }, [shown.from, todayAt])
-  useEffect(pin, [shown.from, todayAt, rows])
+  useEffect(pin, [shown.from, todayAt, rows, ready])
   return (
     <div className="nv-frame">
       <div className="nv-body">
@@ -113,7 +115,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
             </div>
           </div>
           <div className="nv-tl__body">
-            {laid.lanes.map((l) => {
+            {ready && laid.lanes.map((l) => {
               const placed = packed(l.bars)
               const height = Math.max(1, ...placed.map((p) => p.row + 1))
               return (

@@ -84,6 +84,23 @@ describe('the calendar', () => {
     expect(api.records).toHaveBeenCalledWith('persoon', '')
   })
 
+  it("waits for the lane records' tones on a first open: no event or legend is drawn in the palette and repainted", async () => {
+    const groep = {
+      key: 'groep', label: 'Groepen', title_label: 'Naam', title_readonly: false, tone: 'kleur',
+      fields: { kleur: { label: 'Kleur', type: 'select', options: { teal: 'Groenblauw' }, tones: { teal: 'teal' } } },
+    } as unknown as Model
+    const laned = { ...model, fields: { ...model.fields, persoon_id: { label: 'Persoon', type: 'relation', relation: { model: 'groep' } } } } as unknown as Model
+    let answer: (found: { rows: Row[]; total: number }) => void = () => undefined
+    vi.mocked(api.records).mockReturnValue(new Promise((done) => { answer = done }))
+    shown({ model: laned, models: { persoon_dag: laned, groep } })
+
+    expect(screen.queryByRole('list', { name: 'Rijen' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /repetitie Gent/ })).toBeNull()
+    answer({ rows: [{ id: 1, title: 'Lotte', status: '', fields: { kleur: 'teal' } }], total: 1 })
+    const block = await screen.findByRole('button', { name: /repetitie Gent/ })
+    expect(block.style.getPropertyValue('--tone')).toBe('var(--tone-teal)')
+  })
+
   it('without a lane, events take the tone of their option and no legend shows', () => {
     const toned = { ...model, fields: { ...model.fields, soort: { label: 'Soort', type: 'select', options: { repetitie: 'Repetitie', reis: 'Reis' }, tones: { repetitie: 'violet', reis: 'sky' } } } } as unknown as Model
     const of = (r: Row, soort: string): Row => ({ ...r, fields: { ...r.fields, soort } })

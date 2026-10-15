@@ -9,9 +9,10 @@ const known = new Map<string, Keys>()
 
 /**
  * Each record's tone by id, from its dataset's tone column, read once in the caller's own scope.
- * Null when the dataset declares no tone, the caller cannot read it, or the read is refused.
+ * Null when the dataset declares no tone, the caller cannot read it, or the read is refused;
+ * undefined while the first read is pending, so a skin draws its lanes once, in their own colours.
  */
-export function useTones(models: Record<string, Model>, dataset: string | undefined): Map<number, Tone> | null {
+export function useTones(models: Record<string, Model>, dataset: string | undefined): Map<number, Tone> | null | undefined {
   const column = dataset ? models[dataset]?.tone : undefined
   const tones = dataset && column ? models[dataset]?.fields[column]?.tones : undefined
   const [read, setRead] = useState<{ dataset: string; keys: Keys | null } | null>(null)
@@ -33,7 +34,8 @@ export function useTones(models: Record<string, Model>, dataset: string | undefi
   }, [dataset, column])
   const keys = !dataset ? undefined : read?.dataset === dataset ? read.keys : known.get(dataset)
   return useMemo(() => {
+    if (keys === undefined && dataset && column && tones) return undefined
     if (!keys || !tones) return null
     return new Map([...keys].flatMap(([id, key]): [number, Tone][] => (tones[key] ? [[id, tones[key]]] : [])))
-  }, [keys, tones])
+  }, [keys, tones, dataset, column])
 }

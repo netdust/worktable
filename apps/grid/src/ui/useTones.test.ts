@@ -19,10 +19,20 @@ describe("a dataset's tones", () => {
     api.records.mockResolvedValue({ rows: [row(1, 'violet'), row(2, 'sky'), row(3, null)], total: 3 })
     const { result } = renderHook(() => useTones({ team: team('colour') }, 'team'))
 
-    await waitFor(() => expect(result.current).not.toBeNull())
+    await waitFor(() => expect(result.current).toBeInstanceOf(Map))
     expect([...(result.current ?? [])]).toEqual([[1, 'violet'], [2, 'sky']])
     expect(api.records).toHaveBeenCalledTimes(1)
     expect(api.records).toHaveBeenCalledWith('team', '')
+  })
+
+  it('is undefined while its first read is pending, so a skin can wait for the colours instead of repainting', async () => {
+    let answer: (found: { rows: Row[]; total: number }) => void = () => undefined
+    api.records.mockReturnValue(new Promise((done) => { answer = done }))
+    const { result } = renderHook(() => useTones({ fresh: { ...team('colour'), key: 'fresh' } }, 'fresh'))
+
+    expect(result.current).toBeUndefined()
+    answer({ rows: [row(1, 'sky')], total: 1 })
+    await waitFor(() => expect(result.current?.get(1)).toBe('sky'))
   })
 
   it('opened again shows what it read last at once, and reads again', async () => {
@@ -42,7 +52,7 @@ describe("a dataset's tones", () => {
     const models = { team: team('colour') }
     api.records.mockResolvedValueOnce({ rows: [row(1, 'violet')], total: 1 })
     const first = renderHook(() => useTones(models, 'team'))
-    await waitFor(() => expect(first.result.current).not.toBeNull())
+    await waitFor(() => expect(first.result.current).toBeInstanceOf(Map))
     first.unmount()
 
     api.records.mockRejectedValueOnce({ code: 'not_found', message: 'unknown source' })

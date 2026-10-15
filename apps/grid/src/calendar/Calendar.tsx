@@ -41,7 +41,7 @@ const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) ||
 type ToneOf = (lane: number | null, row?: Row) => CSSProperties
 
 /** Laned, an event takes its lane's colour, the lane record's own tone where it has one; unlaned, the tone of its first toned option, as the prototype tints by soort. */
-function lanePalette(lanes: Lane[], toned: Column | undefined, tones: Map<number, Tone> | null): ToneOf {
+function lanePalette(lanes: Lane[], toned: Column | undefined, tones: Map<number, Tone> | null | undefined): ToneOf {
   return (lane, row) => {
     if (toned && row)
       return { '--tone': toneColor(toned.tones?.[String(toned.value(row) ?? '')]) } as CSSProperties
@@ -229,12 +229,15 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
   return (
     <div className="nv-frame">
       <div className="nv-body">
+        {/* Laned events wait for their records' tones on a first open: drawn in the palette, they would crossfade to them. */}
+        {tones !== undefined && (
         <div className={`nv-cal__body${month ? ' nv-cal__body--month' : ''}`}>
           {lane && <Legend lanes={lanes} toneOf={toneOf} />}
           {month && cal.spans && <SpanMonth month={shown} weeks={weeks} lanes={lanes} events={events} cal={cal} toneOf={toneOf} onOpen={setOpen} />}
           {month && !cal.spans && <Month month={shown} weeks={weeks} lanes={lanes} events={events} toneOf={toneOf} onOpen={setOpen} />}
           {!month && <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} spans={cal.spans ? cal : null} toneOf={toneOf} whereOf={whereOf} onOpen={setOpen} />}
         </div>
+        )}
         {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout}
           nav={{ ids: rows.map((r) => r.id), onStep: (id) => setOpen(rows.find((r) => r.id === id) ?? null) }} />}
       </div>

@@ -772,11 +772,29 @@ test.describe("step 3f: a production's kleur colours its lane", () => {
         }
         stops.push(await posted(api, '/api/rows/speelreeks', data))
       }
+      // Every colour each lane is drawn in, from the page's first paint: a first open draws the tones, never the palette first.
+      await page.addInitScript(() => {
+        const seen: Record<string, string[]> = {}
+        Object.assign(window, { seenLanes: seen })
+        new MutationObserver(() => {
+          for (const el of document.querySelectorAll<HTMLElement>('.nv-tl__lane')) {
+            const drawn = (seen[el.getAttribute('aria-label') ?? ''] ??= [])
+            const lane = el.style.getPropertyValue('--lane')
+            if (drawn.at(-1) !== lane) drawn.push(lane)
+          }
+        }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['style'] })
+      })
       await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.tone)
       await page.mouse.move(0, 0)
       await expect(page.locator('.nv-tl__bar--option')).toHaveCount(1)
       for (const p of seeded) {
         await expect.poll(() => laneOf(p.titel)).toBe(`var(--tone-${p.kleur})`)
+        expect(
+          await page.evaluate(
+            (titel) => (window as unknown as { seenLanes: Record<string, string[]> }).seenLanes[titel],
+            p.titel,
+          ),
+        ).toEqual([`var(--tone-${p.kleur})`])
         await expect.poll(() => painted(p.titel, p.kleur as string)).toEqual({ dot: true, bar: true })
       }
       // A flat bar and the hatched one each follow their own lane's tone, not one colour for all.
