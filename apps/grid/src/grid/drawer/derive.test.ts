@@ -44,6 +44,13 @@ describe('the drawer derives from the model', () => {
     expect(propsOf(columns, row, cal, none).folded.map((p) => p.column.id)).toEqual(['notities'])
   })
 
+  it('leaves a long text out of the fields, shown or folded: it is its own block', () => {
+    const columns = [column('title', 'title'), column('plaats', 'text'), column('notities', 'longtext'), column('leeg', 'longtext', '')]
+    const { shown, folded } = propsOf(columns, row, null, null)
+    expect(shown.map((p) => p.column.id)).toEqual(['plaats'])
+    expect(folded).toEqual([])
+  })
+
   it('keeps the record\'s state where the view hides it, first', () => {
     const status = { ...column('status', 'select', 'Optie'), tones: { optie: 'warn' } } as unknown as Column
     const layout = { ...defaults({ key: 'v', label: 'V', table: 't', model: 'm' }), hidden: ['status'] }

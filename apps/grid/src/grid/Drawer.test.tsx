@@ -96,12 +96,12 @@ describe('the drawer', () => {
 
     expect(within(drawer).getByRole('heading', { name: 'Lunch bistrot' })).toBeTruthy()
     expect(within(drawer).getByText('Twee veggie')).toBeTruthy()
-    // The filled fields show; the empty ones fold under one quiet line that unfolds them.
+    // The filled fields show; the empty ones fold under one quiet line that unfolds them. The long text is a block of its own.
     const filled = container.querySelectorAll('.nv-drawer__field').length
     const fold = within(drawer).getByRole('button', { name: /^\+ \d+ andere velden$/ })
     fireEvent.click(fold)
-    expect(container.querySelectorAll('.nv-drawer__field').length).toBe(columns.length - 1)
-    expect(filled).toBeLessThan(columns.length - 1)
+    expect(container.querySelectorAll('.nv-drawer__field').length).toBe(columns.length - 2)
+    expect(filled).toBeLessThan(columns.length - 2)
     expect(container.querySelector('.nv-drawer__editor')).toBeNull()
   })
 
@@ -167,6 +167,82 @@ describe('the drawer', () => {
 
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('a long text in the drawer', () => {
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const model = { ...activity, fields: { ...activity.fields, people } } as Model
+  const every = columnsFor(model, { ...planning, columns: undefined }, false)
+  const noted = (notes: string): Row => ({ id: 1, title: 'Lunch bistrot', status: 'publish', fields: { date: '2026-05-18', notes, people: [] } })
+  const block = () => screen.getByRole('region', { name: 'Notities' })
+  const area = () => screen.queryByRole('textbox', { name: 'Notities' }) as HTMLTextAreaElement | null
+
+  it('shows the text as its own section after the people, titled by its label, and as no field line', () => {
+    const { container } = render(<Drawer row={noted('Zaal open om 19:30.\nParkeren op de laadkade.')} columns={every} model={model} onClose={() => undefined} />)
+    const sections = [...container.querySelectorAll('section.nv-dw-sec')].map((s) => s.getAttribute('aria-label'))
+
+    expect(sections.indexOf('Notities')).toBe(sections.indexOf('Mensen') + 1)
+    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Zaal open om 19:30.\nParkeren op de laadkade.')
+    fireEvent.click(screen.getByRole('button', { name: /^\+ \d+ andere velden$/ }))
+    expect([...container.querySelectorAll('.nv-drawer__field dt')].map((dt) => dt.textContent)).not.toContain('Notities')
+  })
+
+  it('reads only without a way to write, or on a readonly field: no button, and an empty one says so', () => {
+    const readonly = { ...model, fields: { ...model.fields, notes: { ...model.fields.notes, readonly: true } } } as Model
+    const { rerender } = render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} />)
+    expect(within(block()).queryByRole('button')).toBeNull()
+    rerender(<Drawer row={noted('Twee veggie')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
+    expect(within(block()).queryByRole('button')).toBeNull()
+    rerender(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} />)
+    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('—')
+  })
+
+  it('asks for a first text where it is empty, and writes what is typed on Cmd+Enter', () => {
+    const onWrite = vi.fn()
+    render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }))
+    expect(document.activeElement).toBe(area())
+    fireEvent.change(area()!, { target: { value: 'Parkeren op de laadkade' } })
+    fireEvent.keyDown(area()!, { key: 'Enter', metaKey: true })
+
+    expect(onWrite).toHaveBeenCalledTimes(1)
+    expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Parkeren op de laadkade')
+    expect(area()).toBeNull()
+  })
+
+  it('writes on leaving for elsewhere, and nothing when the text is as it was', () => {
+    const onWrite = vi.fn()
+    render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
+    const outside = document.body.appendChild(document.createElement('button'))
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
+    expect(area()?.value).toBe('Twee veggie')
+    act(() => outside.focus())
+    expect(onWrite).not.toHaveBeenCalled()
+    expect(area()).toBeNull()
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
+    fireEvent.change(area()!, { target: { value: 'Drie veggie' } })
+    act(() => outside.focus())
+    expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Drie veggie')
+    outside.remove()
+  })
+
+  it('Escape leaves the edit without a write, and the drawer stays open', () => {
+    const onWrite = vi.fn()
+    const onClose = vi.fn()
+    render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={onClose} onWrite={onWrite} />)
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
+    fireEvent.change(area()!, { target: { value: 'weg' } })
+    fireEvent.keyDown(area()!, { key: 'Escape' })
+
+    expect(area()).toBeNull()
+    expect(onWrite).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Twee veggie')
   })
 })
 

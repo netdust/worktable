@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Page, test } from '@playwright/tes
 import { state, THEATRE } from './auth'
 import { card, glide, lane, lift, orders, said } from './board'
 import { shot } from './shots'
-import { openView } from './tree'
+import { openView, openWeek } from './tree'
 
 type Api = APIRequestContext
 type Values = Record<string, unknown>
@@ -20,6 +20,7 @@ const WEEK = {
   undo: '2032-03-15',
   keyboard: '2032-03-22',
   refused: '2032-03-29',
+  notes: '2032-05-03',
 }
 const MANUAL = ['position']
 const SORTED = ['plandag', 'start_at']
@@ -608,6 +609,61 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await back()
     } finally {
       for (const id of toewijzingen) await api.delete(`/api/rows/toewijzing/${id}`)
+      await made.remove()
+    }
+  })
+})
+
+test.describe('step 3f: a long text is its own block in the drawer', () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('notities-block @e2e', async ({ page }) => {
+    const api = page.request
+    const made = activities(api)
+    const note = 'Zaal open om 19:30.\nParkeren op de laadkade tot 18:00.'
+    const notitiesOf = async (id: number) => {
+      const response = await api.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)
+      return ((await response.json()) as { rows: { notities: string | null }[] }).rows[0]?.notities
+    }
+    /** The Planning sheet on the flow's week, the activity's drawer open from its row. */
+    const drawerOf = async () => {
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK.notes)
+      const row = page.locator('tbody tr.nv-tr[data-title="e2e notities"]')
+      await row.hover()
+      await row.getByRole('button', { name: 'Openen' }).click()
+      const drawer = page.getByRole('complementary', { name: 'e2e notities' })
+      await expect(drawer).toBeVisible()
+      return drawer
+    }
+    try {
+      const id = await made.add('e2e notities', WEEK.notes, 'bevestigd')
+      const drawer = await drawerOf()
+      const block = drawer.getByRole('region', { name: 'Notities' })
+
+      // Its own section right after the people, and no field line of that name, folded or not.
+      const sections = await drawer
+        .locator('section.nv-dw-sec')
+        .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+      expect(sections.indexOf('Notities')).toBe(sections.indexOf('Mensen') + 1)
+      await drawer.getByRole('button', { name: /^\+ \d+ andere velden$/ }).click()
+      await expect(drawer.locator('.nv-drawer__field dt', { hasText: /^Notities$/ })).toHaveCount(0)
+
+      // Empty, it asks; pressed, the sheet's long text editor opens on it; Ctrl+Enter writes.
+      await block.getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }).click()
+      const area = page.getByRole('textbox', { name: 'Notities' })
+      await expect(area).toBeFocused()
+      await area.fill(note)
+      await page.keyboard.press('Control+Enter')
+      await expect(area).toBeHidden()
+      await expect(block.locator('.nv-dw-long')).toHaveText(note)
+      await expect.poll(() => notitiesOf(id)).toBe(note)
+      await shot(page, 'notities-block')
+
+      // After a reload the drawer reads it back.
+      const again = await drawerOf()
+      await expect(again.getByRole('region', { name: 'Notities' }).locator('.nv-dw-long')).toHaveText(note)
+    } finally {
       await made.remove()
     }
   })

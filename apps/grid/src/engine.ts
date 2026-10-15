@@ -20,6 +20,8 @@ export interface EngineColumn {
   hidden?: true
   options_from?: OptionsFrom
   badge?: Tone
+  /** A text edited as long text, its own block in the drawer. */
+  long?: true
 }
 
 /** A dataset's lookup: the related row's field, typed as that field; an inherited one is the row's own when set. */
@@ -149,7 +151,7 @@ function asTarget(column: EngineColumn, sources: Sources): EngineColumn {
 
 function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources): Field {
   const column = asTarget(declared, sources)
-  const type: FieldType = column.relation ? 'relation' : column.options ? 'select' : TYPES[column.type]
+  const type: FieldType = column.relation ? 'relation' : column.options ? 'select' : column.long ? 'textarea' : TYPES[column.type]
   return {
     type,
     label: column.label,

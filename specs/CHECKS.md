@@ -239,6 +239,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Bord · één ⌘Z, pagina en lade | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-undo-both @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · toetsen: spatie, pijlen, Escape | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-keyboard @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · geweigerde drop, volle kolom, muis en toetsen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag-refused @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Lade · notities als eigen blok, schrijven, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "notities-block @e2e"` | e2e/step-3f.spec.ts | step-3f | a660b59 2026-10-15 |
 | Grid shell · lade-link met voorwaarde | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "a drawer link with a condition lands on the sign-in page @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | GET /api/rows/kandidaten | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "/api/rows/kandidaten asks for a session @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | GET /api/rows/werklijst | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "/api/rows/werklijst asks for a session @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |

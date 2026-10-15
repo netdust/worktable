@@ -54,6 +54,8 @@ export interface ColumnDecl {
   options_from?: OptionsFrom
   /** An integer the grid shows as a tinted count above 0, and not at all at 0. */
   badge?: Tone
+  /** A text the grid edits as long text and the record drawer shows as its own block; never with options or a relation. */
+  long?: true
 }
 
 /** A fact the grid computes from a group's rows. */

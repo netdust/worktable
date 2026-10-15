@@ -9,7 +9,7 @@ import { toneColor } from '../ui/tone'
 import { whenOf } from '../ui/when'
 import { SchemaContext } from './drawer/context'
 import { dayLabel, inboundOf, kindOf, type Prop, propsOf } from './drawer/derive'
-import { HistorySection, InboundSection, LinkSection } from './drawer/Sections'
+import { HistorySection, InboundSection, LinkSection, LongSection, type WriteField } from './drawer/Sections'
 import type { Layout } from './layout'
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
@@ -28,6 +28,8 @@ interface Props {
   onClose: () => void
   /** What edits the record, under its fields. */
   editor?: ReactNode
+  /** Writes a long text edited in its block; without it, the drawer reads only. */
+  onWrite?: WriteField
   /** The model's declared actions, each a button with a picker per input. */
   actions?: ModelAction[]
   onAction?: RunAction
@@ -143,7 +145,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
@@ -153,6 +155,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
   const space = schema?.space && model && schema.space.model !== model.key ? columns.find((c) => c.id === schema.space?.field) : undefined
   const sub = [space, columns.find((c) => c.kind === 'relation' && c !== space && c.text(row) !== '')].filter((c): c is Column => Boolean(c) && (c as Column).text(row) !== '')
   const links = columns.filter((c) => c.kind === 'links' && model?.fields[c.field ?? c.id]?.link)
+  const longs = columns.filter((c) => c.kind === 'longtext')
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
@@ -174,6 +177,7 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
         const link = model?.fields[c.field ?? c.id]?.link as Link
         return <LinkSection key={c.id} label={c.label} link={link} items={linksOf(row, c.field ?? c.id)} schema={schema} id={row.id} />
       })}
+      {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
       {sections}
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}

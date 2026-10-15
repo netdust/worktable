@@ -3224,6 +3224,31 @@
   cursor: text;
 }
 
+/* A long text's block, as the prototype's note; its editor's anchor covers it, so the textarea opens under it. */
+#root .nv-dw-long {
+  position: relative;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: calc(1.5em + 16px);
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#root button.nv-dw-long {
+  cursor: text;
+}
+
 .nv-dw-dot {
   width: 8px;
   height: 8px;

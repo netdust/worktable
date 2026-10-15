@@ -198,6 +198,24 @@ describe('the tone palette', () => {
   })
 })
 
+describe('a long text', () => {
+  const withNote = (note: ColumnDecl) => withDataset('job', { columns: { ...dataset('job').columns, note } })
+
+  test('long on an integer, an options or a relation column is refused', () => {
+    expect(refused(withNote({ type: 'integer', label: 'Note', nullable: true, long: true }))).toEqual(['job', 'note'])
+    expect(refused(withNote({ type: 'text', label: 'Note', options: { a: 'A' }, long: true }))).toEqual(['job', 'note'])
+    expect(refused(withNote({ type: 'text', label: 'Note', relation: 'team', long: true }))).toEqual(['job', 'note'])
+  })
+
+  test('long on a text column validates and /schema serves it', async () => {
+    const domain = withNote({ type: 'text', label: 'Note', nullable: true, long: true })
+    expect(() => validateDomain(domain)).not.toThrow()
+    const columns = (await schemaOf(domain, 'editor')).sources.job.columns
+    expect(columns.note.long).toBe(true)
+    expect(columns.name.long).toBeUndefined()
+  })
+})
+
 describe('a declared default icon', () => {
   test('an icon outside the generic set is refused, on a dataset or a query', () => {
     expect(refused(withDataset('job', { icon: 'rocket' as Icon }))).toEqual(['job', 'rocket'])

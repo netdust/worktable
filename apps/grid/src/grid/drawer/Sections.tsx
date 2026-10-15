@@ -1,10 +1,12 @@
-import { type CSSProperties, type ReactNode, type Ref, useEffect, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, type ReactNode, type Ref, useEffect, useRef, useState } from 'react'
 import { recordHistory, rowsWhere } from '../../api'
 import { locale, t } from '../../i18n'
 import type { HistoryEntry, Link, LinkItem, Model, Row, Schema } from '../../types'
 import { hueOf, toneColor } from '../../ui/tone'
 import { initials } from '../../ui/when'
 import { crewOf, isOpen } from '../cells/Links'
+import { LongTextEditor } from '../cells/Text'
+import type { Column } from '../columns'
 import { actorOf, dayLabel, type Inbound } from './derive'
 
 /** A section under the fields: an 11px heading with its count and, at the right, its action. */
@@ -14,6 +16,58 @@ export function Section({ ref, title, count, action, children }: { ref?: Ref<HTM
       <h3 className="nv-dw-sec__head">{title}{count !== undefined && <span className="nv-dw-sec__n">{count}</span>}{action && <span className="nv-dw-sec__r">{action}</span>}</h3>
       {children}
     </section>
+  )
+}
+
+/** Writes a field the drawer edits, on the row it showed. */
+export type WriteField = (row: Row, column: Column, value: unknown) => void
+
+const noPick = () => undefined
+
+/** A long text as the prototype's Notities: a paragraph; pressed, the sheet's long text editor opens on it and writes on Cmd+Enter, Tab or leaving. */
+export function LongSection({ column, row, onWrite }: { column: Column; row: Row; onWrite?: WriteField }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  // The editor may report leaving as it closes after a commit: only the first end writes.
+  const editing = useRef(false)
+  const refocus = useRef(false)
+  const text = column.text(row)
+  if (!onWrite) return <Section title={column.label}><p className="nv-dw-long">{text || t('empty')}</p></Section>
+
+  const start = () => {
+    editing.current = true
+    setDraft(column.edit(row))
+  }
+  const end = (value: string | null, back: boolean) => {
+    if (!editing.current) return
+    editing.current = false
+    refocus.current = back
+    setDraft(null)
+    if (value !== null && value !== column.edit(row)) onWrite(row, column, column.parse(value))
+  }
+  // Escape is the drawer's too: here it only ends the edit.
+  const escape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return
+    event.stopPropagation()
+    end(null, true)
+  }
+  const focused = (el: HTMLButtonElement | null) => {
+    if (!el || !refocus.current) return
+    refocus.current = false
+    el.focus()
+  }
+  return (
+    <Section title={column.label}>
+      {draft === null ? (
+        <button ref={focused} type="button" className="nv-dw-long" onClick={start}>
+          {text || t('notesEmpty', { label: column.label.toLocaleLowerCase(locale()) })}
+        </button>
+      ) : (
+        <div className="nv-dw-long" onKeyDown={escape}>
+          <LongTextEditor column={column} row={row} editing={{ draft, mode: 'edit' }} onDraft={setDraft} onPick={noPick}
+            onCommit={(value) => end(value, true)} onLeave={() => end(draft, false)} onCancel={() => end(null, true)} onClose={() => end(null, false)} />
+        </div>
+      )}
+    </Section>
   )
 }
 

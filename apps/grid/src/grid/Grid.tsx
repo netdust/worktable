@@ -345,7 +345,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
-          onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined}
+          onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined} onWrite={writable ? apply : undefined}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>
       )}

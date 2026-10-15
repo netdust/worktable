@@ -118,6 +118,7 @@ const strings = {
   hintCompose: 'Bewerken past het dashboard van het team aan',
   noTime: 'zonder tijd',
   noneOf: 'Geen {label}',
+  notesEmpty: 'Nog geen {label}. Klik om er een toe te voegen.',
   dragRole: 'versleepbare kaart',
   dragInstructions: 'Druk op spatie om de kaart op te pakken. Verplaats haar met de pijltjes: omhoog en omlaag in de kolom, links en rechts naar een andere kolom. Spatie zet haar neer, Escape annuleert.',
   dragLifted: '{title} opgepakt in {label}, plaats {place} van {count}.',

@@ -73,6 +73,14 @@ function checkTones(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+function checkLong(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.long && (decl.type !== 'text' || decl.options || decl.relation)) {
+      throw new DomainError(source.name, column, `${column} is long but is not a plain text column`)
+    }
+  }
+}
+
 // The calendar reads the rows route's date window, so its day is the source's date.
 function checkCalendar(source: DatasetDecl | QueryDecl): void {
   const cal = source.calendar
@@ -602,6 +610,7 @@ export function validateDomain(domain: Domain): void {
     checkOwnerVisible(source)
     checkHidden(source)
     checkTones(source)
+    checkLong(source)
     checkCalendar(source)
     checkBoard(source)
     checkIcon(source)

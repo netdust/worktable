@@ -31,7 +31,7 @@ export interface Prop {
 
 /**
  * The drawer's fields: those the view shows (all, where no view says), its date and its start and end as one "Tijd",
- * never the title or a list of linked rows, which are its own sections. The rest is listed as folded.
+ * never the title, a list of linked rows or a long text, which are its own sections. The rest is listed as folded.
  */
 export function propsOf(columns: Column[], row: Row, cal?: CalendarDef | null, layout?: Layout | null, dateField?: string | null): { shown: Prop[]; folded: Prop[] } {
   const start = cal?.start ? columns.find((c) => c.id === cal.start) : undefined
@@ -42,7 +42,7 @@ export function propsOf(columns: Column[], row: Row, cal?: CalendarDef | null, l
   const kept = (c: Column) => !says || !layout.hidden.includes(c.id) || c.id === dateField || c === start || c === end || isState(c.tones)
   const props: Prop[] = []
   for (const column of columns) {
-    if (column.id === 'title' || column.kind === 'links' || column === end) continue
+    if (column.id === 'title' || column.kind === 'links' || column.kind === 'longtext' || column === end) continue
     const prop: Prop = column === start ? { column, span: { start, end: end ?? null }, empty: column.text(row) === '' } : { column, empty: column.text(row) === '' }
     props.push(prop)
   }

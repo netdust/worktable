@@ -132,7 +132,7 @@ export const activiteit = defineDataset({
     },
     verrekening_default: { type: 'text', label: 'Verrekening', nullable: true },
     bron: { type: 'text', label: 'Bron', default: 'plan', options: { plan: 'Plan', registratie: 'Registratie' } },
-    notities: { type: 'text', label: 'Notities', nullable: true },
+    notities: { type: 'text', label: 'Notities', nullable: true, long: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
   lookups: {

@@ -162,6 +162,17 @@ describe('toSchema', () => {
     expect(toSchema(engine).models.productie.fields).toEqual({})
   })
 
+  it('maps a long text column to a textarea, a plain one stays text', () => {
+    const activiteit = engine.sources.activiteit
+    const notities = { type: 'text', label: 'Notities', nullable: true, long: true } as const
+    const plaats = { type: 'text', label: 'Plaats', nullable: true } as const
+    const long: EngineSchema = { sources: { ...engine.sources, activiteit: { ...activiteit, columns: { ...activiteit.columns, notities, plaats } } } }
+    const fields = toSchema(long).models.activiteit.fields
+
+    expect(fields.notities.type).toBe('textarea')
+    expect(fields.plaats.type).toBe('text')
+  })
+
   it('names the title column after its label and leaves it out of the fields', () => {
     const model = toSchema(engine).models.activiteit
 

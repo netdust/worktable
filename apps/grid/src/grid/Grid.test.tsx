@@ -1008,6 +1008,20 @@ describe('the drawer', () => {
   }
   const deletable: Model = { ...activity, deletable: true }
 
+  it('writes the long text edited in its block as the sheet writes a cell, and paints it at once', async () => {
+    renderGrid()
+    api.update.mockReturnValue(new Promise(() => undefined))
+    const notes = within(within(openDrawer('Montage')).getByRole('region', { name: 'Notities' }))
+
+    fireEvent.click(notes.getByRole('button'))
+    const area = screen.getByRole('textbox', { name: 'Notities' })
+    fireEvent.change(area, { target: { value: 'Laadkade tot 18:00' } })
+    await act(async () => fireEvent.keyDown(area, { key: 'Enter', metaKey: true }))
+
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 102, { notes: 'Laadkade tot 18:00' }, expect.objectContaining({ id: 102 }))
+    expect(notes.getByRole('button').textContent).toBe('Laadkade tot 18:00')
+  })
+
   const attaching: Model = { ...activity, attachments: { kinds: { rider: 'Rider' }, max_mb: 20, writable: true } }
   const rider = { id: 7, kind: 'rider', name: 'rider.pdf', mime: 'application/pdf', size: 48_000, own: true, created_at: '2026-10-01 09:00:00' }
 
