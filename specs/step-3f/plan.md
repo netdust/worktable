@@ -278,6 +278,10 @@ A manual board orders each column's cards with `byRank`, so the painted ranks sh
 
 Landed before the plan's tasks as 043a5bc (ruled by the orchestrator, 2026-10-15): four flows no longer lean on the seed's fixed dates or the day of the month.
 
+### Carried to later features
+
+- Workspace re-renders on every grid-store notification (≈26 ms per render in dev, 66 renders on a 30-card drop before coalescing): UI-architecture feature.
+
 ---
 
 ## Close
