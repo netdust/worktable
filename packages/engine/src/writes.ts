@@ -788,9 +788,10 @@ function planUndo(store: Store, record: Touched, actor: Actor): Planned {
   for (const [field, { new: value }] of record.fields) {
     if (asJson(dataset, field, row[field] ?? null) !== value) throw changedSince(dataset, id, field)
   }
-  // A create revises only the columns it filled, so any other column filled since is a later change.
+  // A create revises only the columns it filled, never a rank, so any other column or a rank filled since is a later change.
   if (created) {
-    const filled = Object.keys(dataset.columns).find((key) => !record.fields.has(key) && (row[key] ?? null) !== null)
+    const columns = [...Object.keys(dataset.columns), POSITION]
+    const filled = columns.find((key) => !record.fields.has(key) && (row[key] ?? null) !== null)
     if (filled) throw changedSince(dataset, id, filled)
   }
   return { ...record, target, scope }

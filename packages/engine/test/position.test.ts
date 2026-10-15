@@ -149,7 +149,8 @@ describe('writing position', () => {
   const rankOf = (id: number) =>
     (sqlite.query('SELECT position FROM note WHERE id = ?').get(id) as { position: unknown }).position
 
-  test('with another column, in one batch, and one undo restores both', async () => {
+  test('with another column, in one batch, and one undo restores both, the rank to the one before', async () => {
+    await patch(editor, 1, { position: 'U' })
     const res = await patch(editor, 1, { kind: 'lang', position: 'V' })
     expect(res.status).toBe(200)
     expect(res.body.position).toBe('V')
@@ -159,7 +160,19 @@ describe('writing position', () => {
     expect(fields).toEqual([{ field: 'kind' }, { field: 'position' }])
 
     expect((await editor('POST', `/api/batches/${batch}/undo`, { body: '{}' })).status).toBe(200)
-    expect(sqlite.query('SELECT kind, position FROM note WHERE id = 1').get()).toEqual({ kind: 'kort', position: null })
+    expect(sqlite.query('SELECT kind, position FROM note WHERE id = 1').get()).toEqual({ kind: 'kort', position: 'U' })
+  })
+
+  test('a create another account has ranked since is not undone: 409 changed_since, and nothing changes', async () => {
+    const made = await editor('POST', '/api/rows/note', body({ project_id: 1, tekst: 'nieuw' }))
+    const other = send(app, await signIn(app, 'editor'))
+    expect((await patch(other, made.body.id, { position: 'V' })).status).toBe(200)
+    await denied(
+      () => editor('POST', `/api/batches/${made.body.revision.batch_id}/undo`, { body: '{}' }),
+      409,
+      'changed_since',
+    )
+    expect(rankOf(made.body.id)).toBe('V')
   })
 
   test.each([
