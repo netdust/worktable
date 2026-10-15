@@ -301,6 +301,7 @@ const strings = {
   madeIt: 'maakte het aan',
   setTo: 'zette {field} op {value}',
   changedIt: 'wijzigde het',
+  moved: 'verplaatst',
   moreFields: '+ {n} andere velden',
   fewerFields: 'Minder velden',
   expand: 'Volledig openen',

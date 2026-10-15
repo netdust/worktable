@@ -106,6 +106,7 @@ export function HistoryPanel({ load, onUndo, onUndone, onRefused, onClose, field
 }
 
 function Item({ entry, named, fields, also, busy, onUndo }: { entry: HistoryEntry; named: boolean; fields: Record<string, Field>; also: string | null; busy: boolean; onUndo: (batch: string) => void }) {
+  const values = entry.changes.filter((change) => !change.moved)
   return (
     <li className={named ? 'nv-history__entry' : 'nv-history__entry nv-history__entry--same'}>
       {named ? <strong className="nv-history__record">{entry.record.title || t('empty')}</strong> : <span className="nv-sr-only">{entry.record.title}</span>}
@@ -121,9 +122,9 @@ function Item({ entry, named, fields, also, busy, onUndo }: { entry: HistoryEntr
         </div>
         <div>
           {entry.created && <p className="nv-history__created">{t('historyCreated')}</p>}
-          {entry.changes.length > 0 && (
+          {values.length > 0 && (
             <dl className="nv-history__changes">
-              {entry.changes.map((change) => (
+              {values.map((change) => (
                 <div key={change.field} className="nv-history__change">
                   <dt>{change.label}</dt>
                   <dd>
@@ -134,6 +135,7 @@ function Item({ entry, named, fields, also, busy, onUndo }: { entry: HistoryEntr
               ))}
             </dl>
           )}
+          {values.length < entry.changes.length && <p className="nv-history__created">{t('moved')}</p>}
           {entry.undoable && also && <p className="nv-history__also">{also}</p>}
         </div>
       </div>

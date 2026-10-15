@@ -70,6 +70,18 @@ describe('the history panel', () => {
     expect((await within(panel()).findByRole('listitem')).textContent).toContain('aangemaakt')
   })
 
+  it('says a move as "verplaatst", without a rank or an arrow, beside the other changes of its batch', async () => {
+    const moved = { field: 'position', label: 'Position', moved: true as const }
+    shown([entry({ batch: 'b2', changes: [moved] }), entry({ batch: 'b1', changes: [entry({}).changes[0]!, moved] })])
+
+    await within(panel()).findAllByRole('listitem')
+    expect(items()[0]!.textContent).toContain('verplaatst')
+    expect(items()[0]!.textContent).not.toContain('→')
+    expect(items()[0]!.textContent).not.toContain('Position')
+    expect(items()[1]!.textContent).toContain('optie → bevestigd')
+    expect(items()[1]!.textContent).toContain('verplaatst')
+  })
+
   it('says whose change it was: jij, systeem, planning, onbekend, the email or bevestigd door <naam>', async () => {
     shown([
       entry({ batch: 'a', by: 'self' }),

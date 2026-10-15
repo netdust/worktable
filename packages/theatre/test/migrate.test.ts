@@ -78,8 +78,11 @@ test('a step-1 theatre database migrates to step 2 keeping every row, revision a
     saved_view: ['for_owners', 'layout'],
     account: ['kind', 'name', 'token_hash'],
   }
+  // Every domain dataset gains the engine's rank, unranked.
+  const ranked = new Set(theatre.datasets.map((d) => d.name))
   for (const n of names) {
-    const dropped = added[n] ?? []
+    const dropped = [...(added[n] ?? []), ...(ranked.has(n) ? ['position'] : [])]
+    if (ranked.has(n)) expect(rows(n).every((r) => r.position === null)).toBe(true)
     const stripped = rows(n).map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !dropped.includes(k))))
     expect(stripped).toEqual(before[n] as Record<string, unknown>[])
   }

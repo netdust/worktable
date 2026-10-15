@@ -1,4 +1,10 @@
 import type { DatasetDecl, QueryDecl } from './declare'
+import { reservedNames } from './engine-tables'
+
+/** The engine's rank column: on every domain dataset table, never on an engine table or a query. */
+export const POSITION = 'position'
+
+export const hasPosition = (d: DatasetDecl): boolean => !reservedNames.has(d.name)
 
 const SQL_TYPE = {
   text: 'TEXT',
@@ -48,6 +54,7 @@ export function columnSpecs(d: DatasetDecl): ColumnSpec[] {
     spec('created_at', 'TEXT', true, STAMP),
     spec('updated_at', 'TEXT', true, STAMP),
     spec('deleted_at', 'TEXT', false, null),
+    ...(hasPosition(d) ? [spec(POSITION, 'TEXT', false, null)] : []),
   ]
 }
 

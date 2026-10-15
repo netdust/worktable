@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, type SQL, 
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
+import { POSITION } from './ddl'
 import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import { INHERITED, lookupColumn, lookupOf, lookupSelect, lookupsFor, lookupValue } from './lookups'
@@ -70,7 +71,13 @@ function orderOf(source: Source, table: SQLiteTable, params: RowsParams, scope: 
   const keys = [...(params.group ? [{ column: params.group, desc: false }] : []), ...params.sort]
   const sortValue = (key: string) =>
     source.kind === 'dataset' && lookupOf(source, key) ? lookupValue(source, key) : columnOf(table, key)
-  return [...keys.map((k) => (k.desc ? desc : asc)(sortValue(k.column))), asc(columnOf(table, 'id'))]
+  const order = ({ column, desc: down }: RowsParams['sort'][number]): SQL[] => {
+    const value = sortValue(column)
+    // Unranked rows last in either direction, so the request's other keys order them.
+    const unranked = column === POSITION ? [asc(isNull(value))] : []
+    return [...unranked, (down ? desc : asc)(value)]
+  }
+  return [...keys.flatMap(order), asc(columnOf(table, 'id'))]
 }
 
 function parseCustom(value: unknown): Record<string, unknown> {
@@ -126,9 +133,10 @@ export function withLookups(db: BunSQLiteDatabase, domain: Domain, source: Sourc
       return [name, titlesOf(db, domain, relation, ids)]
     }),
   )
+  const served = [...Object.keys(source.columns), ...(source.kind === 'dataset' ? [POSITION] : []), ...looked]
   return raws.map((raw) => {
     const row: Raw = { id: raw.id }
-    for (const name of [...Object.keys(source.columns), ...looked]) row[name] = raw[name]
+    for (const name of served) row[name] = raw[name]
     const lookups: EngineRow['lookups'] = {}
     for (const [name] of relations) {
       const id = raw[name]

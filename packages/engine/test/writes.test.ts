@@ -317,6 +317,7 @@ describe('writes', () => {
         start_at: null,
         title: 'hallo',
         extra: null,
+        position: null,
         custom: {},
         lookups: { project_id: { id: 1, title: 'Alfa' } },
         revision: {

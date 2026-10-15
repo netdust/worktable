@@ -1,4 +1,5 @@
 import { inScope, readable, scopeOf, visibleSource } from './access'
+import { POSITION } from './ddl'
 import type { Actor, DatasetDecl } from './declare'
 import { ApiError, MAX_LIMIT, parseRowsParams } from './params'
 import type { Source } from './registry'
@@ -20,7 +21,11 @@ export interface HistoryEntry {
   batch_kind: string | null
   created: boolean
   record: { id: number; title: string }
-  changes: { field: string; label: string; old: unknown; new: unknown }[]
+  /** A move of the record's rank says only that it moved, never the rank. */
+  changes: (
+    | { field: string; label: string; old: unknown; new: unknown }
+    | { field: string; label: string; moved: true }
+  )[]
 }
 
 // A dataset field as the source shows it: under the source's own column name and label.
@@ -28,6 +33,7 @@ interface Shown {
   field: string
   label: string
   relation?: string
+  moved?: true
 }
 
 interface Records {
@@ -66,7 +72,8 @@ function recordsOf(store: Store, source: Source, actor: Actor): Records | null {
       name,
       { field: name, label: c.label, relation: c.relation },
     ])
-    return { dataset: source, shown: new Map(shown) }
+    const rank: [string, Shown] = [POSITION, { field: POSITION, label: 'Position', moved: true }]
+    return { dataset: source, shown: new Map([...shown, rank]) }
   }
   const dataset = store.domain.datasets.find((d) => d.name === source.creates)
   if (!dataset || !readable(actor, dataset)) return null
@@ -182,7 +189,8 @@ function changesOf(store: Store, revisions: Raw[], shown: Map<string, Shown>, ca
     fields.set(r.field as string, { old: first ? first.old : parsed(r.old), new: parsed(r.new) })
   }
   return [...fields].map(([name, values]) => {
-    const { field, label, relation } = shown.get(name) as Shown
+    const { field, label, relation, moved } = shown.get(name) as Shown
+    if (moved) return { field, label, moved }
     return {
       field,
       label,

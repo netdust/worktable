@@ -389,7 +389,8 @@ export interface HistoryEntry {
   batch_kind: string | null
   created: boolean
   record: { id: number; title: string }
-  changes: { field: string; label: string; old: unknown; new: unknown }[]
+  /** A move of the record's rank is `moved`, without its old and new rank. */
+  changes: { field: string; label: string; old?: unknown; new?: unknown; moved?: true }[]
 }
 
 /** A write's answer: the row, and the batch an undo names it by; none when nothing changed. */

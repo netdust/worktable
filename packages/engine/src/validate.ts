@@ -1,4 +1,5 @@
 import { ROLES } from './auth-tables'
+import { POSITION } from './ddl'
 import {
   type ActionInput,
   type ColumnDecl,
@@ -574,6 +575,13 @@ function checkSections(domain: Domain): void {
   }
 }
 
+// Every dataset row carries the engine's rank, as it carries its id.
+function checkPosition(dataset: DatasetDecl): void {
+  const names = [dataset.columns, dataset.lookups ?? {}, dataset.links ?? {}].flatMap((named) => Object.keys(named))
+  if (names.includes(POSITION))
+    throw new DomainError(dataset.name, POSITION, `"${POSITION}" is the engine's rank on every row`)
+}
+
 function checkFacts(source: DatasetDecl | QueryDecl): void {
   for (const fact of source.group_facts ?? []) {
     if (fact.kind !== 'count') checkColumn(source, 'fact column', fact.column)
@@ -618,6 +626,7 @@ export function validateDomain(domain: Domain): void {
     if (Object.hasOwn(dataset.columns, 'expect')) {
       throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
     }
+    checkPosition(dataset)
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkLifecycle(dataset)

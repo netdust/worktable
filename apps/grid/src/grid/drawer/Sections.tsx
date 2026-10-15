@@ -121,7 +121,7 @@ export function HistorySection({ model, id }: { model: Model; id: number }) {
               <li key={entry.batch}>
                 <span className="nv-avatar nv-avatar--sm" aria-hidden="true">{initials(who)}</span>
                 <span>
-                  <b>{who}</b> {entry.created ? t('madeIt') : change ? t('setTo', { field: change.label.toLocaleLowerCase(locale()), value: said(change.new, change.field, model) }) : t('changedIt')}
+                  <b>{who}</b> {entry.created ? t('madeIt') : change?.moved ? t('moved') : change ? t('setTo', { field: change.label.toLocaleLowerCase(locale()), value: said(change.new, change.field, model) }) : t('changedIt')}
                   <span className="nv-dw-hist__t"> · {when(entry.at)}</span>
                 </span>
               </li>
