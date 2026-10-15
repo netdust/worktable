@@ -509,8 +509,6 @@ test('planning-details @e2e', async ({ page }) => {
   const lunch = named(page, 'Lunch').first()
   await expect(lunch.locator('td').nth(1)).toHaveText('13:00–14:00')
   await expect(lunch.locator('.nv-time__end')).toHaveText('–14:00')
-  const clipped = await page.locator('tbody tr.nv-tr td:nth-child(2)').evaluateAll((cells) => cells.filter((td) => td.scrollWidth > td.clientWidth).length)
-  expect(clipped, 'no Tijd cell cuts its day and time').toBe(0)
   await expect(named(page, 'Overnachting').first().locator('.nv-blank')).toHaveText('zonder tijd')
 
   // R10.3: Maaltijd in its colour, status pills toned.
@@ -544,6 +542,28 @@ test('planning-details @e2e', async ({ page }) => {
   const tree = (await page.getByRole('tree', { name: 'Views' }).boundingBox())?.height ?? 0
   expect(foot).toBeLessThan(120)
   expect(tree).toBeGreaterThan(480)
+
+  // A night activity past the day line starts on the next day: its Tijd cell shows the date as well and must not cut it.
+  const night = 'Nachtrit e2e details'
+  const day = plusDays(DETAILS_WEEK, 1)
+  const late = plusDays(DETAILS_WEEK, 2)
+  const id = await idOf(page.request, 'activiteit', {
+    productie_id: await idByName(page.request, 'productie', 'titel', 'Nachtwacht'),
+    soort: 'repetitie',
+    datum: day,
+    start_at: `${late}T00:30`,
+    eind_at: `${late}T02:00`,
+    omschrijving: night,
+  })
+  try {
+    await page.reload()
+    const cell = named(page, night).first().locator('td').nth(1)
+    await expect(cell).toContainText('00:30–02:00')
+    await expect(cell).toContainText('/')
+    expect(await cell.evaluate((td) => td.scrollWidth <= td.clientWidth), 'the Tijd cell holds its day and time').toBe(true)
+  } finally {
+    await page.request.delete(`/api/rows/activiteit/${id}`)
+  }
 })
 
 // The shake-out's edges: the flows above on their denied actor, re-entry, concurrency and boundary.
