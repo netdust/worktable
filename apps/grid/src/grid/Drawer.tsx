@@ -1,12 +1,19 @@
-import { X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { type ChangeEvent, type ReactNode, useEffect, useId, useState } from 'react'
+import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
-import { errorText, fileSize, type StringKey, t } from '../i18n'
-import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, Row } from '../types'
+import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
+import type { Account, ActionInput, ApiError, Link, Model, ModelAction, OptionsFrom, Row, View } from '../types'
+import { iconNamed } from '../ui/icons'
+import { toneColor } from '../ui/tone'
+import { whenOf } from '../ui/when'
+import { SchemaContext } from './drawer/context'
+import { dayLabel, inboundOf, kindOf, type Prop, propsOf } from './drawer/derive'
+import { HistorySection, InboundSection, LinkSection } from './drawer/Sections'
+import type { Layout } from './layout'
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
-import type { Column } from './columns'
+import { type Column, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
 import { RelationPicker } from './cells/RelationPicker'
@@ -32,6 +39,18 @@ interface Props {
   attachments?: Attachable
   /** An upload or delete into the undo history. */
   onBatch?: (batch: string) => void
+  /** The row's model: its kind, its relations, the rows that point at it. */
+  model?: Model
+  /** The view it opened from, and that view's layout: which fields it lists. */
+  view?: View
+  layout?: Layout | null
+  /** The view's rows in their order: "3 van 12", and ↑ ↓ to the row before or after. */
+  nav?: { ids: number[]; onStep: (id: number) => void }
+  /** A record drawn from elsewhere (a matrix cell): its own subline, alert, field lines and sections, in the drawer's places. */
+  sub?: ReactNode
+  alert?: ReactNode
+  lines?: ReactNode
+  sections?: ReactNode
 }
 
 /** `version` moves when the files changed elsewhere, such as by an undo: the list reads again. */
@@ -45,25 +64,124 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
 /** The drawer reads; a checkbox's toggle is the sheet's. */
 const noToggle = () => undefined
 
-/** One record read whole, beside the sheet — not a modal: the grid stays live. */
-export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined }: Props) {
+/** The row before or after in the view, where there is one. */
+function stepIn(nav: Props['nav'], row: Row, by: 1 | -1): void {
+  const at = nav ? nav.ids.indexOf(row.id) : -1
+  const next = nav?.ids[at + by]
+  if (nav && at >= 0 && next !== undefined) nav.onStep(next)
+}
+
+/** ↑ ↓ and j k anywhere in the head line step through the view's rows. */
+const headKey = (nav: Props['nav'], row: Row) => (event: KeyboardEvent<HTMLElement>) => {
+  const by = event.key === 'ArrowUp' || event.key === 'k' ? -1 : event.key === 'ArrowDown' || event.key === 'j' ? 1 : 0
+  if (!by || !nav) return
+  event.preventDefault()
+  stepIn(nav, row, by)
+}
+
+/** The head line: what kind of record this is · its dataset; where it is in the view; the steps to its neighbours. */
+function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; icon?: LucideIcon }) {
+  const kind = model ? kindOf(model) : null
+  const value = kind ? String(row.fields[kind] ?? '') : ''
+  const option = kind && model?.fields[kind]?.options?.[value]
+  const at = nav ? nav.ids.indexOf(row.id) : -1
+  const step = (by: 1 | -1) => stepIn(nav, row, by)
   return (
-    <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen}>
-      {columns.length > 0 && <dl className="nv-drawer__fields">
-        {columns.filter((column) => column.id !== 'title').map((column) => {
-          const Icon = ICON[column.kind]
-          return (
-          <div key={column.id} className="nv-drawer__field">
-            <dt><Icon className="nv-drawer__icon" size={14} aria-hidden="true" />{column.label}</dt>
-            <dd>{column.text(row) ? <Display column={column} row={row} onToggle={noToggle} /> : t('empty')}</dd>
+    <div className="nv-dw-head">
+      <span className="nv-dw-head__kind">
+        {!option && Icon && <Icon size={13} aria-hidden="true" />}
+        {option && <span className="nv-dot" style={{ '--tone': toneColor(model?.fields[kind as string]?.tones?.[value]) } as CSSProperties}>{option}</span>}
+        {option && model && ' · '}
+        {model?.label}
+      </span>
+      {nav && <span className="nv-dw-head__pos">{at >= 0 ? t('position', { n: at + 1, m: nav.ids.length }) : '–'}</span>}
+      {nav && (
+        <>
+          <Button className="nv-drawer__tool" aria-label={t('previous')} isDisabled={at <= 0} onPress={() => step(-1)}><ChevronUp size={15} aria-hidden="true" /></Button>
+          <Button className="nv-drawer__tool" aria-label={t('next')} isDisabled={at < 0 || at >= nav.ids.length - 1} onPress={() => step(1)}><ChevronDown size={15} aria-hidden="true" /></Button>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** A field's value as the drawer writes it: a day in mono, a start and end as one span, an inherited value with its source. */
+function Value({ prop, row }: { prop: Prop; row: Row }) {
+  if (prop.span) {
+    const { from, to } = whenOf(row, [prop.span.start, ...(prop.span.end ? [prop.span.end] : [])])
+    return from ? <span className="nv-time">{from}{to && <span className="nv-time__end">–{to}</span>}</span> : <span className="nv-muted">{t('noTime')}</span>
+  }
+  const value = String(prop.column.value(row) ?? '')
+  if (prop.column.kind === 'date' && !prop.column.via?.(row)) return <span className="nv-mono">{dayLabel(value, locale())}</span>
+  return <Display column={prop.column} row={row} onToggle={noToggle} />
+}
+
+/** One field line: its icon and label, its value; the drawer's and a matrix cell's alike. */
+export function Line({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
+  return (
+    <div className="nv-drawer__field">
+      <dt><Icon className="nv-drawer__icon" size={14} aria-hidden="true" />{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  )
+}
+
+function Props({ props, row }: { props: Prop[]; row: Row }) {
+  return (
+    <dl className="nv-drawer__fields">
+      {props.map((prop) => {
+        const Icon = ICON[prop.span ? 'time' : prop.column.kind]
+        return (
+          <div key={prop.column.id} className="nv-drawer__field">
+            <dt><Icon className="nv-drawer__icon" size={14} aria-hidden="true" />{prop.span ? t('time') : prop.column.label}</dt>
+            <dd>{prop.empty ? t('empty') : <Value prop={prop} row={row} />}</dd>
           </div>
-          )
-        })}
-      </dl>}
+        )
+      })}
+    </dl>
+  )
+}
+
+/** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
+export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
+  const schema = useContext(SchemaContext)
+  const [more, setMore] = useState(false)
+  // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
+  const cal = view?.calendar ?? (model ? schema?.tables.find((table) => table.model === model.key && table.calendar)?.calendar : undefined)
+  const dateField = view?.date_field ?? schema?.tables.find((table) => table.model === model?.key)?.date_field ?? null
+  const { shown, folded } = propsOf(columns, row, cal, layout, dateField)
+  const space = schema?.space && model && schema.space.model !== model.key ? columns.find((c) => c.id === schema.space?.field) : undefined
+  const sub = [space, columns.find((c) => c.kind === 'relation' && c !== space && c.text(row) !== '')].filter((c): c is Column => Boolean(c) && (c as Column).text(row) !== '')
+  const links = columns.filter((c) => c.kind === 'links' && model?.fields[c.field ?? c.id]?.link)
+  const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
+  return (
+    <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
+      head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
+      <div className="nv-dw-body">
+      <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
+      {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
+        <p className="nv-dw-sub">
+          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
+        </p>
+      )}
+      {alert}
+      {lines && <dl className="nv-drawer__fields">{lines}</dl>}
+      {shown.length > 0 && <Props props={shown} row={row} />}
+      {folded.length > 0 && (more
+        ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
+        : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
+      {links.map((c) => {
+        const link = model?.fields[c.field ?? c.id]?.link as Link
+        return <LinkSection key={c.id} label={c.label} link={link} items={linksOf(row, c.field ?? c.id)} schema={schema} id={row.id} />
+      })}
+      {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
+      {sections}
+      {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
       {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
+      </div>
     </SidePanel>
   )
 }

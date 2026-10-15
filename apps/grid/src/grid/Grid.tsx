@@ -340,9 +340,10 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
             <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
-        {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)}
+        {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
           attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
-        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} recordLink={open.id === DRAFT ? undefined : recordLink}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout}
+          nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
           onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}

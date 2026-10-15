@@ -69,7 +69,6 @@ const groupChip = (page: Page) =>
   bar(page)
     .locator('.nv-chip')
     .filter({ hasText: /^Groep: / })
-const conditionChips = (page: Page) => bar(page).locator('.nv-chip--filter')
 
 /** The chip row's slots in the order the page draws them, each by a short name. */
 async function slotsOf(page: Page): Promise<string[]> {
@@ -94,7 +93,7 @@ async function slotsOf(page: Page): Promise<string[]> {
       else if (el.getAttribute('aria-label') === 'Volgende periode') said.push('next')
       else if (el.matches('[role="radio"]')) said.push(text.toLowerCase())
       else if (el.matches('button') && text === '+ Kolom') said.push('kolom')
-      else if (el.matches('.nv-bar__count')) said.push('count')
+      else if (el.matches('.nv-bar__count:not(.nv-bar__updated)')) said.push('count')
       else if (el.getAttribute('aria-label') === 'Kolommen') said.push('kolommen')
     }
     return said.filter((s, i) => s !== said[i - 1])
@@ -180,8 +179,8 @@ test.describe('step 3d', () => {
       const main = page.locator('main.nv-main')
       const before = await main.evaluate((el) => el.getBoundingClientRect().width)
       await page
-        .getByRole('list', { name: 'Bevestigd' })
-        .getByRole('button', { name: new RegExp(title) })
+        .getByRole('grid', { name: 'Bevestigd' })
+        .getByRole('row', { name: new RegExp(title) })
         .click()
 
       const drawer = page.getByRole('complementary', { name: title })
@@ -213,8 +212,8 @@ test.describe('step 3d', () => {
       await page.setViewportSize({ width: 820, height: 900 })
       const narrow = await main.evaluate((el) => el.getBoundingClientRect().width)
       await page
-        .getByRole('list', { name: 'Bevestigd' })
-        .getByRole('button', { name: new RegExp(title) })
+        .getByRole('grid', { name: 'Bevestigd' })
+        .getByRole('row', { name: new RegExp(title) })
         .click()
       await expect(drawer).toBeVisible()
       expect(await page.locator('.nv-drawer-slot').evaluate((el) => getComputedStyle(el).position)).toBe('fixed')
@@ -235,43 +234,34 @@ test.describe('step 3d', () => {
     const api = page.request
     const id = await activity(api, 'e2e een rij chips', plusDays(WEEK.chips, 1))
     try {
+      // Step 3e: the period is no chip, the same chips on every dated view, Groep chooses everywhere, Kolommen wherever records show.
+      const PERIOD = ['vandaag', 'prev', 'next', 'maand', 'week']
       await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK.chips)
-      inOrder(await slotsOf(page), [
-        'condition',
-        'filter',
-        'groep',
-        'vandaag',
-        'prev',
-        'next',
-        'maand',
-        'week',
-        'count',
-        'kolommen',
-      ])
+      inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 'count', 'kolommen'])
+      expect(await slotsOf(page)).not.toContain('condition')
       await shot(page, 'one-chip-row')
 
       await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.chips)
-      inOrder(await slotsOf(page), ['condition', 'filter', 'groep', 'vandaag', 'prev', 'next', 'count'])
+      inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 'count', 'kolommen'])
       await expect(groupChip(page)).toHaveText('Groep: status')
-      // The board's Groep names its option column and offers no choice.
-      expect(await groupChip(page).evaluate((el) => el.tagName)).toBe('SPAN')
-      expect(await slotsOf(page)).not.toContain('kolommen')
+      expect(await groupChip(page).evaluate((el) => el.tagName)).toBe('BUTTON')
 
       await openWeek(page, 'Galerij activiteiten', 'Activiteiten', 'plandag', WEEK.chips)
-      inOrder(await slotsOf(page), ['condition', 'filter', 'groep', 'vandaag', 'count'])
-      await expect(groupChip(page)).toHaveText('Groep: geen')
-
-      await openWeek(page, 'Kalender activiteiten', 'Activiteiten', 'plandag', WEEK.chips)
-      inOrder(await slotsOf(page), ['filter', 'groep', 'vandaag', 'prev', 'next', 'maand', 'week'])
-
-      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.chips)
-      inOrder(await slotsOf(page), ['filter', 'groep', 'vandaag', 'prev', 'next', 'maand', 'week'])
-
-      await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', WEEK.chips)
-      inOrder(await slotsOf(page), ['condition', 'filter', 'groep', 'vandaag', 'prev', 'next', 'kolom'])
+      inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 's', 'm', 'l', 'count', 'kolommen'])
       await expect(groupChip(page)).toHaveText('Groep: plandag')
 
-      // A view without a period on a dated column: no period chips, the rest in place.
+      await openWeek(page, 'Kalender activiteiten', 'Activiteiten', 'plandag', WEEK.chips)
+      inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 'kolommen'])
+
+      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.chips)
+      inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 'kolommen'])
+
+      await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', WEEK.chips)
+      inOrder(await slotsOf(page), ['filter', 'groep', ...PERIOD, 'kolom'])
+      expect(await slotsOf(page)).not.toContain('kolommen')
+      await expect(groupChip(page)).toHaveText('Groep: plandag')
+
+      // A table with no date: no period chips, the rest in place.
       await openView(page, 'Producties')
       const plain = await slotsOf(page)
       inOrder(plain, ['filter', 'groep', 'count', 'kolommen'])
@@ -301,8 +291,9 @@ test.describe('step 3d', () => {
     await expect(page.getByRole('list', { name: 'Rijen' })).toBeVisible()
     await shot(page, 'calendar-lanes-in-groep')
 
-    // Re-entry: the choice is the view's, and Geen takes it back.
-    list = (await list.isVisible()) ? list : await openGroep(page)
+    // Re-entry: a pick closes the panel; the choice is the view's, and Geen takes it back.
+    await expect(list).toHaveCount(0)
+    list = await openGroep(page)
     await list.getByRole('button', { name: 'Geen' }).click()
     await expect(groupChip(page)).toHaveText('Groep: geen')
     await expect(page.getByRole('list', { name: 'Rijen' })).toHaveCount(0)
@@ -324,31 +315,31 @@ test.describe('step 3d', () => {
       await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK.period)
       const period = page.getByRole('radiogroup', { name: 'Periode' })
       await expect(period.getByRole('radio', { name: 'Week' })).toBeChecked()
-      await expect(conditionChips(page)).toHaveText([/2028-09-04.*2028-09-10/])
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText(/· 4–10 sep$/)
       await expect(row).toHaveCount(0)
 
       await bar(page).getByRole('button', { name: 'Volgende periode' }).click()
-      await expect(conditionChips(page)).toHaveText([/2028-09-11.*2028-09-17/])
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText(/· 11–17 sep$/)
       await expect(row).toHaveCount(1)
       await shot(page, 'grid-period-steps')
 
       await bar(page).getByRole('button', { name: 'Vorige periode' }).click()
       await bar(page).getByRole('button', { name: 'Vorige periode' }).click()
-      await expect(conditionChips(page)).toHaveText([/2028-08-28.*2028-09-03/])
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText(/· 28 aug–3 sep$/)
 
       // Boundary: the week across a month's end names the month of its Thursday; a month steps by months.
       await period.getByRole('radio', { name: 'Maand' }).click()
       await expect(period.getByRole('radio', { name: 'Maand' })).toBeChecked()
-      await expect(conditionChips(page)).toHaveText([/2028-08-01.*2028-08-31/])
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText('augustus 2028')
       await bar(page).getByRole('button', { name: 'Volgende periode' }).click()
-      await expect(conditionChips(page)).toHaveText([/2028-09-01.*2028-09-30/])
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText('september 2028')
       await expect(row).toHaveCount(1)
       await period.getByRole('radio', { name: 'Week' }).click()
-      await expect(conditionChips(page)).toHaveText([/2028-08-28.*2028-09-03/])
+      await expect(page.locator('.nv-toolbar__summary')).toHaveText(/· 28 aug–3 sep$/)
 
       // Vandaag lands on this week.
       await bar(page).getByRole('button', { name: 'Vandaag' }).click()
-      await expect(conditionChips(page)).not.toHaveText([/2028-/])
+      await expect(page.locator('.nv-toolbar__summary')).not.toHaveText(/· 28 aug–3 sep$/)
       await expect(period.getByRole('radio', { name: 'Week' })).toBeChecked()
     } finally {
       await removeActivity(api, id)
@@ -618,8 +609,8 @@ test.describe('step 3d', () => {
       await expect(card('Zonnewende').locator('.nv-gallery__mark')).toHaveText('Zo')
       await expect(page.getByRole('img', { name: 'e2e met foto' })).toBeVisible()
       await expect(card('e2e met foto').locator('.nv-gallery__mark')).toHaveCount(0)
-      // The title line counts the pictures.
-      await expect(summary(page)).toContainText('1 met beeld')
+      // The count counts the pictures; the title line names the period.
+      await expect(bar(page).locator('.nv-bar__count')).toContainText('1 met beeld')
       await shot(page, 'gallery-placeholder')
     } finally {
       for (const id of [two, one, pictured]) await removeActivity(api, id)
@@ -632,16 +623,18 @@ test.describe('step 3d', () => {
     await expect(summary(page)).toBeVisible()
     const told = await summary(page).textContent()
 
-    // A dashboard opened after the calendar shows none.
+    // A dashboard opened after the calendar says its own: this week, not the calendar's window.
     await openDashboard(page)
-    await expect(summary(page)).toHaveCount(0)
+    await expect(summary(page)).toHaveText(/week \d+$/)
+    await expect(summary(page)).not.toHaveText(told ?? '')
     await shot(page, 'summary-per-view')
 
     // Re-entry: back on the calendar it tells its own again; a board after it tells the board's.
     await openView(page, 'Kalender activiteiten', 'Activiteiten')
     await expect(summary(page)).toHaveText(told ?? '')
+    // The title line names the period on both; the board's count says its columns.
     await openView(page, 'Per status', 'Activiteiten')
-    await expect(summary(page)).not.toHaveText(told ?? '')
-    await expect(summary(page)).toContainText(/rij/)
+    await expect(summary(page)).toHaveText(/^Week \d+ · /)
+    await expect(bar(page).locator('.nv-bar__count')).toContainText(/rij.* · \d+ kolommen/)
   })
 })

@@ -152,11 +152,11 @@ describe('the step 3 seeds', () => {
       .query('SELECT activiteit_id, persoon_id, rol_id, aantal, state FROM toewijzing WHERE id > 6')
       .all()
     expect(rows).toEqual([
-      { activiteit_id: 13, persoon_id: 1, rol_id: null, aantal: 1, state: 'voorlopig' },
-      { activiteit_id: 16, persoon_id: 3, rol_id: null, aantal: 1, state: 'bevestigd' },
-      { activiteit_id: 15, persoon_id: 4, rol_id: null, aantal: 1, state: 'voorlopig' },
+      { activiteit_id: 13, persoon_id: 1, rol_id: 1, aantal: 1, state: 'voorlopig' },
+      { activiteit_id: 16, persoon_id: 3, rol_id: 2, aantal: 1, state: 'bevestigd' },
+      { activiteit_id: 15, persoon_id: 4, rol_id: 1, aantal: 1, state: 'voorlopig' },
       { activiteit_id: 15, persoon_id: null, rol_id: 1, aantal: 1, state: 'open' },
-      { activiteit_id: 26, persoon_id: 1, rol_id: null, aantal: 1, state: 'voorlopig' },
+      { activiteit_id: 26, persoon_id: 1, rol_id: 1, aantal: 1, state: 'voorlopig' },
     ])
   })
 

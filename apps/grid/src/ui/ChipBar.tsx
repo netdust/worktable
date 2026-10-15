@@ -5,9 +5,9 @@ import { Button, Checkbox, CheckboxGroup, Dialog, DialogTrigger, OverlayTriggerS
 import type { Column } from '../grid/columns'
 import { hide, type Layout, orderOf, reorder, show } from '../grid/layout'
 import { rowCount, t } from '../i18n'
-import type { DateWindow } from '../types'
+import type { Filter } from '../grid/conditions'
 import { hint } from './hint'
-import { isMonth, monthOf, shift, shiftMonth, weekOf, days, parse } from './Window'
+import { type Period, pressMonth, pressWeek, stepPeriod, todayPeriod } from './period'
 
 /** What a view groups on: the field's label, or none; with options the chip opens a list to choose from. */
 export interface GroupSlot {
@@ -17,10 +17,10 @@ export interface GroupSlot {
   onChange?: (key: string | null) => void
 }
 
-/** The view's period on its dated column: the days it shows, and how to set them. */
+/** The view's period on its dated column, and how to set it: a condition, or none for every date. */
 export interface PeriodSlot {
-  shown: DateWindow
-  onShown: (next: DateWindow) => void
+  period: Period
+  onPeriod: (next: Filter | null) => void
 }
 
 export interface ChipBarProps {
@@ -30,11 +30,13 @@ export interface ChipBarProps {
   filters?: ReactNode
   group?: GroupSlot
   period?: PeriodSlot
+  /** The skin's own chips, after the period: a gallery's S M L, a matrix's Afwezigheden. */
+  skin?: ReactNode
   /** "+ Kolom": a column added by hand, where the view takes one. */
   addColumn?: { open: boolean; onToggle: () => void }
   /** A dashboard's quick actions, where the period would sit. */
   actions?: ReactNode
-  count?: { rows: number; cut: boolean }
+  count?: { rows: number; cut: boolean; text?: string }
   /** Kolommen: show, hide and move the view's columns. */
   columns?: { list: Column[]; layout: Layout; onLayout: (layout: Layout) => void }
   /** What closes the row on a page that is no view of rows: a dashboard's Bewerken. */
@@ -70,51 +72,60 @@ function GroupChip({ group }: { group: GroupSlot }) {
   const choose = group.onChange
   return (
     <Panel placement="bottom start" label={t('groupBy')} trigger={<Button className={set}>{chip}</Button>}>
-      <div className="nv-filters__menu" role="group" aria-label={t('groupBy')}>
-        {group.options.map(({ key, label }) => (
-          <button key={key ?? ''} type="button" className="nv-filters__option" aria-pressed={(group.value ?? null) === key} onClick={() => choose(key)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <GroupOptions group={group} choose={choose} />
     </Panel>
   )
 }
 
-/** Vandaag, the steps and Maand/Week: a month steps by months, anything else by its own length. */
-function PeriodChips({ period }: { period: PeriodSlot }) {
-  const { shown, onShown } = period
-  const month = isMonth(shown)
-  const from = parse(shown.from) ?? new Date()
-  const step = (by: number) => onShown(month ? shiftMonth(shown, by) : shift(shown, by * days(shown)))
-  // A week's Thursday names its month; a month's first day names its first week.
-  const toMonth = () => onShown(monthOf(new Date(from.getFullYear(), from.getMonth(), from.getDate() + 3)))
+/** One choice: a pick groups and closes the panel; the chosen option is marked. */
+function GroupOptions({ group, choose }: { group: GroupSlot; choose: (key: string | null) => void }) {
+  const state = useContext(OverlayTriggerStateContext)
+  return (
+    <div className="nv-filters__menu" role="group" aria-label={t('groupBy')}>
+      {group.options?.map(({ key, label }) => (
+        <button key={key ?? ''} type="button" className="nv-filters__option" aria-pressed={(group.value ?? null) === key}
+          onClick={() => {
+            choose(key)
+            state?.close()
+          }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Vandaag, the steps and Maand Week: the same on every skin; a lit chip pressed again clears where the skin can show every date. */
+function PeriodChips({ period: { period, onPeriod } }: { period: PeriodSlot }) {
+  const today = new Date()
+  const set = (next: Filter | null) => next !== period.condition && onPeriod(next)
   return (
     <>
-      <button type="button" className="nv-chip" onClick={() => onShown(month ? monthOf(new Date()) : weekOf(new Date()))}>{t('today')}</button>
-      <button type="button" className="nv-chip nv-chip--icon" aria-label={t('previousPeriod')} onClick={() => step(-1)}><ChevronLeft size={14} aria-hidden="true" /></button>
-      <button type="button" className="nv-chip nv-chip--icon" aria-label={t('nextPeriod')} onClick={() => step(1)}><ChevronRight size={14} aria-hidden="true" /></button>
+      <button type="button" className="nv-chip" onClick={() => set(todayPeriod(period))}>{t('today')}</button>
+      <button type="button" className="nv-chip nv-chip--icon" aria-label={t('previousPeriod')} title={t('previousPeriod')} disabled={!period.window} onClick={() => set(stepPeriod(period, -1))}><ChevronLeft size={14} aria-hidden="true" /></button>
+      <button type="button" className="nv-chip nv-chip--icon" aria-label={t('nextPeriod')} title={t('nextPeriod')} disabled={!period.window} onClick={() => set(stepPeriod(period, 1))}><ChevronRight size={14} aria-hidden="true" /></button>
       <span className="nv-chips" role="radiogroup" aria-label={t('period')}>
-        <button type="button" role="radio" aria-checked={month} className="nv-chip" data-selected={month || undefined} onClick={() => !month && toMonth()}>{t('month')}</button>
-        <button type="button" role="radio" aria-checked={!month} className="nv-chip" data-selected={!month || undefined} onClick={() => month && onShown(weekOf(from))}>{t('week')}</button>
+        <button type="button" role="radio" aria-checked={period.kind === 'month'} className="nv-chip" data-selected={period.kind === 'month' || undefined} onClick={() => set(pressMonth(period, today))}>{t('month')}</button>
+        <button type="button" role="radio" aria-checked={period.kind === 'week'} className="nv-chip" data-selected={period.kind === 'week' || undefined} onClick={() => set(pressWeek(period, today))}>{t('week')}</button>
       </span>
     </>
   )
 }
 
 /** The one chip row every view shows, in one order: scope, conditions, Filter, Groep, period, + Kolom; the count and Kolommen at the end. A slot shows where the view's data has it. */
-export function ChipBar({ scope = null, filters, group, period, addColumn, actions, count, columns, end }: ChipBarProps) {
+export function ChipBar({ scope = null, filters, group, period, skin, addColumn, actions, count, columns, end }: ChipBarProps) {
   return (
     <div className="nv-bar">
       {scope && <span className="nv-chip nv-chip--set nv-chip--scope"><Tag size={ICON} aria-hidden="true" />{scope}</span>}
       {filters}
       {group && <GroupChip group={group} />}
       {period && <PeriodChips period={period} />}
+      {skin}
       {actions}
       {addColumn && <button type="button" className="nv-chip" aria-expanded={addColumn.open} onClick={addColumn.onToggle}>{t('addColumn')}</button>}
       {(count || columns || end) && (
         <span className="nv-bar__end">
-          {count && <span className="nv-bar__count">{rowCount(count.rows, count.cut)}</span>}
+          {count && <span className="nv-bar__count">{count.text ?? rowCount(count.rows, count.cut)}</span>}
           {columns && (
             <Panel placement="bottom end" label={t('columns')} trigger={
               <Button ref={hint(t('columns'))} className="nv-bar__icon" aria-label={t('columns')}><Columns3 size={ICON + 1} aria-hidden="true" /></Button>

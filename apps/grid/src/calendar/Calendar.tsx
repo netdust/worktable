@@ -3,9 +3,11 @@ import { Drawer } from '../grid/Drawer'
 import { type Column, columnsFor } from '../grid/columns'
 import { t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
+import type { Layout } from '../grid/layout'
+import { factsOf, placeOf } from '../ui/facts'
 import type { Shown } from '../ui/Toolbar'
-import { toneColor } from '../ui/tone'
-import { formatWindow, isMonth, iso, isoWeek, parse } from '../ui/Window'
+import { laneTone, toneColor } from '../ui/tone'
+import { isMonth, iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
 interface Props {
@@ -18,7 +20,9 @@ interface Props {
   shown: DateWindow
   /** The lane relation, or none. */
   lane: string | null
-  /** The title line says the period. */
+  /** Which facts an event shows (Kolommen): its place line is the first that names another record. */
+  layout: Layout
+  /** What the title line says it shows: the events. */
   onTitle?: (shown: Shown) => void
 }
 
@@ -29,8 +33,6 @@ const MIN_BLOCK = 20
 // Below two lines' height a block shows its time and name side by side.
 const TWO_LINES = 40
 const THREE_LINES = 58
-// The lanes' colours, in order; the status tones are left to statuses.
-const LANE_TONES = ['sky', 'violet', 'amber', 'teal', 'rose', 'green', 'slate', 'grey']
 const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) || a.from - b.from
@@ -42,8 +44,7 @@ function lanePalette(lanes: Lane[], toned: Column | undefined): ToneOf {
   return (lane, row) => {
     if (toned && row)
       return { '--tone': toneColor(toned.tones?.[String(toned.value(row) ?? '')]) } as CSSProperties
-    const at = Math.max(0, lanes.findIndex((l) => l.id === lane))
-    return { '--tone': `var(--tone-${LANE_TONES[at % LANE_TONES.length]})` } as CSSProperties
+    return { '--tone': laneTone(lanes.findIndex((l) => l.id === lane)) } as CSSProperties
   }
 }
 
@@ -141,7 +142,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
           {days.map((day) => (
             <section key={day} aria-label={dayHead(day)} className="nv-week__day" style={{ height, backgroundSize: `100% ${HOUR_PX}px` }}>
               {day === today && nowAt >= grid.hours.from && nowAt < grid.hours.to && <span className="nv-week__now" style={{ top: ((nowAt - grid.hours.from) / 60) * HOUR_PX }} aria-hidden="true" />}
-              {(grid.timed[day] ?? []).map(({ event, column, columns: across }) => (
+              {(grid.timed[day] ?? []).map(({ event, column, span, columns: across }) => (
                 <Event key={event.row.id} event={event} laneTitle={titleOf(event.lane)} where={blockHeight(event) >= THREE_LINES ? whereOf(event.row) : undefined} onOpen={onOpen}
                   short={blockHeight(event) < TWO_LINES} style={{
                   ...toneOf(event.lane, event.row),
@@ -149,7 +150,7 @@ function Week({ days, lanes, events, timed, spans, toneOf, whereOf, onOpen }: {
                   top: `${((event.from - grid.hours.from) / 60) * HOUR_PX}px`,
                   height: `${blockHeight(event)}px`,
                   left: `${(column / across) * 100}%`,
-                  width: `${100 / across}%`,
+                  width: `calc(${(span / across) * 100}% - 2px)`,
                 }} />
               ))}
             </section>
@@ -206,7 +207,7 @@ function Month({ month, weeks, lanes, events, toneOf, onOpen }: {
 }
 
 /** Rows on their days, a week or a month, in lanes; read-only: an event opens its row. */
-export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle }: Props) {
+export function Calendar({ view, model, models, rows, cal, shown, lane, layout, onTitle }: Props) {
   const [open, setOpen] = useState<Row | null>(null)
   const month = isMonth(shown)
   const weeks = useMemo(() => (month ? monthWeeks(shown) : []), [month, shown.from, shown.to])
@@ -216,12 +217,13 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle 
     () => columnsFor(model, { ...view, columns: undefined, lookups: undefined, rollups: undefined }, false, models),
     [model, view, models],
   )
-  // An event's third line: its place, the first relation the calendar cannot lane by.
-  const place = columns.find((c) => c.kind === 'relation' && !cal.lanes.includes(c.id))
+  const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
+  // An event's third line: its place, the first shown fact naming another record the calendar cannot lane by.
+  const place = useMemo(() => placeOf(factsOf(all, layout), cal.lanes), [all, layout, cal.lanes])
   const whereOf = (row: Row) => place?.text(row) ?? ''
   const toned = columns.find((c) => c.kind === 'select' && c.tones)
   const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned), [lanes, lane, toned])
-  useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false, label: formatWindow(shown) }), [rows.length, shown.from, shown.to])
+  useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false, menu: all }), [rows.length, all])
   return (
     <div className="nv-frame">
       <div className="nv-body">
@@ -231,7 +233,8 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, onTitle 
           {month && !cal.spans && <Month month={shown} weeks={weeks} lanes={lanes} events={events} toneOf={toneOf} onOpen={setOpen} />}
           {!month && <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} spans={cal.spans ? cal : null} toneOf={toneOf} whereOf={whereOf} onOpen={setOpen} />}
         </div>
-        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} />}
+        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout}
+          nav={{ ids: rows.map((r) => r.id), onStep: (id) => setOpen(rows.find((r) => r.id === id) ?? null) }} />}
       </div>
     </div>
   )

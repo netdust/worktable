@@ -152,18 +152,19 @@ const personen = [
 ]
 
 // Never on activiteit 1: the Activiteit writer tests delete it.
+// A place outside activiteit 4 names its role, as a planner fills it; activiteit 4's places stay roleless, its fill tests count on that.
 const toewijzingen = [
   { activiteit_id: 4, persoon_id: 1, state: 'bevestigd' },
   { activiteit_id: 4, persoon_id: 2, state: 'uitgenodigd' },
   { activiteit_id: 4, naam: 'Gastmuzikant', state: 'bevestigd', notitie: 'Brengt eigen instrument' },
-  { activiteit_id: 2, persoon_id: 1, state: 'bevestigd' },
-  { activiteit_id: 13, persoon_id: 4, state: 'uitgenodigd' },
-  { activiteit_id: 8, persoon_id: 3, state: 'bevestigd' },
-  { activiteit_id: 13, persoon_id: 1, state: 'voorlopig' },
-  { activiteit_id: 16, persoon_id: 3, state: 'bevestigd' },
-  { activiteit_id: 15, persoon_id: 4, state: 'voorlopig' },
+  { activiteit_id: 2, persoon_id: 1, rol_id: SPELER, state: 'bevestigd' },
+  { activiteit_id: 13, persoon_id: 4, rol_id: SPELER, state: 'uitgenodigd' },
+  { activiteit_id: 8, persoon_id: 3, rol_id: LICHTTECHNICUS, state: 'bevestigd' },
+  { activiteit_id: 13, persoon_id: 1, rol_id: SPELER, state: 'voorlopig' },
+  { activiteit_id: 16, persoon_id: 3, rol_id: LICHTTECHNICUS, state: 'bevestigd' },
+  { activiteit_id: 15, persoon_id: 4, rol_id: SPELER, state: 'voorlopig' },
   { activiteit_id: 15, rol_id: SPELER, aantal: 1, state: 'open' },
-  { activiteit_id: 26, persoon_id: 1, state: 'voorlopig' },
+  { activiteit_id: 26, persoon_id: 1, rol_id: SPELER, state: 'voorlopig' },
 ]
 
 const beschikbaarheden = [
@@ -456,7 +457,8 @@ export const views: SavedViewSeed[] = [
     source_type: 'query',
     source: 'kandidaten',
     skin: 'table',
-    filters: {},
+    // The open places only: kandidaten also holds who could stand in for an assigned one.
+    filters: { vervangt: { $eq: null } },
     sort: ['toewijzing_id', 'rang'],
     group_by: null,
     visible_fields: ['toewijzing_id', 'rang', 'naam', 'rol_id', 'voorkeur', 'activiteit_id'],
@@ -498,7 +500,7 @@ export const views: SavedViewSeed[] = [
     skin: 'gallery',
     filters: { plandag: { $period: 'week' } },
     sort: ['plandag', 'start_at'],
-    group_by: null,
+    group_by: 'plandag',
     visible_fields: ['plandag', 'start_at', 'eind_at', 'soort', 'productie_id'],
   },
   {
@@ -604,7 +606,7 @@ export const views: SavedViewSeed[] = [
               kind: 'list',
               view: 'Werklijst',
               rows: 8,
-              columns: ['soort', 'deadline'],
+              columns: ['soort', 'onderwerp', 'deadline'],
               set: { column: 'status', value: 'gedaan', label: 'Gedaan' },
             },
           ],

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, SavedView } from '../types'
 
-const api = vi.hoisted(() => ({ rows: vi.fn(), update: vi.fn(), records: vi.fn() }))
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), records: vi.fn() }))
 vi.mock('../api', () => api)
 const { Dashboard } = await import('./Dashboard')
 
@@ -41,6 +41,16 @@ beforeEach(() => {
   api.update.mockReset()
 })
 afterEach(cleanup)
+
+describe('the dashboard\'s chip row', () => {
+  it('says when its tiles were read, as the prototype\'s "bijgewerkt hh:mm"', () => {
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+    document.documentElement.lang = 'nl-BE'
+    show([stat])
+    expect(document.querySelector('.nv-bar__updated')?.textContent).toMatch(/^bijgewerkt \d{2}[:.]\d{2}$/)
+    document.documentElement.lang = ''
+  })
+})
 
 describe('a stat tile', () => {
   it('shows its count red above 0, and its title opens the view', async () => {

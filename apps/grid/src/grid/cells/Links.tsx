@@ -24,10 +24,27 @@ function pillOf(item: LinkItem, link: Link | undefined): string {
 }
 
 /** The names on one line, each in its state's colour; what does not fit ends in an ellipsis, and the title holds them all. */
+/** An open place: a link with neither a record nor a name. A free-text name holds its place. */
+export const isOpen = (item: LinkItem): boolean => item.target === null && item.title.trim() === ''
+
+/** Who holds a place, a refused or cancelled one aside, and the places in all: have/need, as the prototype's Bezetting. */
+export function crewOf(items: LinkItem[], link?: Link): { have: number; need: number } {
+  const have = items.filter((item) => !isOpen(item) && link?.state?.tones[item.state ?? ''] !== 'bad').length
+  return { have, need: have + items.filter(isOpen).length }
+}
+
 export function LinksCell({ column, row }: CellProps) {
   const items = linksOf(row, column.field ?? column.id)
   const all = items.map((item) => item.title).join(', ')
+  const { have, need } = crewOf(items, column.link)
   return (
+    <span className="nv-links">
+    {need > 0 && (
+      <span className="nv-crew" aria-label={t('crewOf', { have, need })}>
+        <span className="nv-crew__meter" aria-hidden="true"><b style={{ width: `${(have / need) * 100}%` }} /></span>
+        {have}/{need}
+      </span>
+    )}
     <span className="nv-names" title={all || undefined}>
       {items.map((item, i) => (
         <span key={item.id}>
@@ -35,6 +52,7 @@ export function LinksCell({ column, row }: CellProps) {
           <span className={pillOf(item, column.link)}>{item.title}</span>
         </span>
       ))}
+    </span>
     </span>
   )
 }

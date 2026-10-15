@@ -41,11 +41,13 @@ interface Props {
   signed?: Signed
   /** The dashboards the reader can open, in landing order; the tree's first group. */
   dashboards?: View[]
+  /** How many records each dataset table holds, by its key: the count beside its name. */
+  counts?: Record<string, number>
   /** An administrator's delete of a dashboard it may edit; absent for anyone else. */
   onRemoveDashboard?: (view: SavedView) => void
 }
 
-export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed, dashboards = [], onRemoveDashboard }: Props) {
+export function Rail({ tables, sections, active, onSelect, onTable = (table) => table.views[0] && onSelect(table.views[0].key), space, onNewView, actions, modelActions, signed, dashboards = [], onRemoveDashboard, counts = {} }: Props) {
   const current = tableOf(tables, active)
   const [open, setOpen] = useOpenModels(current?.key)
   const fold = (table: Table) => setOpen(table.key, !open.has(table.key))
@@ -81,7 +83,7 @@ export function Rail({ tables, sections, active, onSelect, onTable = (table) => 
             {section.label && <p className="nv-tree__label" aria-hidden="true">{section.label}</p>}
             {section.tables.map((table) => (
               <ModelNode key={table.key} table={table} open={open.has(table.key)} onOpen={() => openModel(table)} onFold={() => fold(table)}
-                onNew={onNewView && ((type) => onNewView(table, type))} actions={modelActions} holdsActive={table === current}>
+                onNew={onNewView && ((type) => onNewView(table, type))} actions={modelActions} holdsActive={table === current} count={counts[table.key]}>
                 <ViewList table={table} active={active} onSelect={onSelect} actions={actions} />
               </ModelNode>
             ))}
@@ -104,6 +106,8 @@ interface NodeProps {
   holdsActive: boolean
   /** Its views, shown while it is open. */
   children: ReactNode
+  /** Its records, where it is a dataset. */
+  count?: number
 }
 
 /** The kinds `+` offers: those the model can be, then the ones still to come. */
@@ -124,7 +128,7 @@ function kinds(table: Table, onNew: (type: ViewType) => void): Action[] {
  * A model and, while open, its views. The treeitem is named by its label alone. Its row carries
  * the open and fold handlers; the views sit beside the row, so a click on one never reaches them.
  */
-function ModelNode({ table, open, onOpen, onFold, onNew, actions, holdsActive, children }: NodeProps) {
+function ModelNode({ table, open, onOpen, onFold, onNew, actions, holdsActive, children, count }: NodeProps) {
   const label = useId()
   const [hot, setHot] = useState(false)
   const [renaming, setRenaming] = useState(false)
@@ -154,6 +158,7 @@ function ModelNode({ table, open, onOpen, onFold, onNew, actions, holdsActive, c
         {renaming
           ? <RenameField value={table.label} label={t('modelName', { model: table.label })} max={MAX_LABEL} onDone={renamed} />
           : <button type="button" className="nv-model__name" id={label} onClick={onOpen}>{table.label}</button>}
+        {!renaming && count !== undefined && !hot && <span className="nv-model__count" aria-label={t('recordsIn', { n: count })}>{count}</span>}
         {!renaming && (
           <span className="nv-model__tools">
             <MoreMenu label={t('moreFor', { model: table.label })} menu={t('moreFor', { model: table.label })} placement="bottom-start" actions={more} />

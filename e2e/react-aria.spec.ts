@@ -628,9 +628,10 @@ test('edit-long-text @e2e', async ({ page }) => {
     }
     const field = page.getByRole('textbox', { name: 'Notitie' })
 
-    // Enter on the cell opens its panel; Enter in the note is a newline; leaving writes it once.
+    // Enter on the cell opens its panel; the note line opens its field; Enter in it is a newline; leaving writes it once.
     await (await spot()).click()
     await (await spot()).press('Enter')
+    await page.locator('.nv-drawer .nv-dw-note').click()
     await expect(field).toBeVisible()
     await field.click()
     await page.keyboard.type('eerste regel')
@@ -644,7 +645,10 @@ test('edit-long-text @e2e', async ({ page }) => {
     expect(patches[0]).toEqual({ notitie: note })
     expect((await stored(api, 'toewijzing', join)).notitie).toBe(note)
 
-    // Focus in and out without a change writes nothing.
+    // Focus in and out without a change writes nothing; left, the note reads as its line again.
+    const line = page.locator('.nv-drawer .nv-dw-note')
+    await expect(line).toHaveText(note)
+    await line.click()
     await field.click()
     await page.keyboard.press('Tab')
     await settle(page)
@@ -656,7 +660,7 @@ test('edit-long-text @e2e', async ({ page }) => {
     await expect(named(page, title)).toHaveCount(1)
     await (await spot()).click()
     await (await spot()).press('Enter')
-    await expect(field).toHaveValue(note)
+    await expect(line).toHaveText(note)
   } finally {
     await removeActivity(api, id)
   }

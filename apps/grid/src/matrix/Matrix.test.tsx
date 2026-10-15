@@ -6,7 +6,7 @@ import { defaults } from '../grid/layout'
 import type { Model, Row, View } from '../types'
 import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
-const api = vi.hoisted(() => ({ records: vi.fn(), optionsFrom: vi.fn() }))
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn(), optionsFrom: vi.fn() }))
 vi.mock('../api', () => api)
 const { Legend } = await import('./Legend')
 const { Matrix } = await import('./Matrix')
@@ -177,14 +177,17 @@ describe('the matrix', () => {
     expect(within(row).getAllByRole('gridcell').every((cell) => !/[✓?✕·]/.test(cell.textContent ?? ''))).toBe(true)
   })
 
-  it('counts the confirmed per row, per column and in total', () => {
+  it('counts the confirmed per column and in total, and says Bezet as have/need per row', () => {
     render(<WithBar {...props} />)
 
-    expect(within(screen.getByRole('row', { name: /Montage/ })).getByTestId('row-count').textContent).toBe('1')
-    expect(within(screen.getByRole('row', { name: /Repetitie/ })).getByTestId('row-count').textContent).toBe('2')
+    const montage = within(screen.getByRole('row', { name: /Montage/ })).getByTestId('row-count')
+    expect(montage.textContent).toBe('2/2')
+    expect(montage.getAttribute('title')).toBe('1 Bevestigd')
+    expect(within(screen.getByRole('row', { name: /Repetitie/ })).getByTestId('row-count').getAttribute('title')).toBe('2 Bevestigd')
     const foot = screen.getByTestId('total')
     expect(within(foot).getAllByTestId('column-count').map((c) => c.textContent)).toEqual(['1', '1', '1'])
-    expect(within(foot).getByTestId('row-count').textContent).toBe('3')
+    expect(within(foot).getByTestId('row-count').getAttribute('title')).toBe('3 Bevestigd')
+    expect(within(foot).getByTestId('row-count').textContent).toMatch(/^\d+\/\d+$/)
   })
 
   it('shows the declared mark, and a dot with the note when there is one', () => {
@@ -295,11 +298,12 @@ describe('the matrix arrangement', () => {
 
     fireEvent.click(strip(container, 'record:5'))
 
-    expect(headers()).toEqual(['Activiteit', 'Sien', 'Lieve', '✓Bevestigd'])
+    expect(headers()).toEqual(['Activiteit', 'Sien', 'Lieve', 'Bezet'])
     expect(container.querySelectorAll('td[data-column="record:5"]')).toHaveLength(0)
     expect(counts()).toEqual(['1', '1'])
-    expect(within(screen.getByRole('row', { name: /Repetitie/ })).getByTestId('row-count').textContent).toBe('2')
-    expect(within(screen.getByTestId('total')).getByTestId('row-count').textContent).toBe('3')
+    // Hiding is an arrangement: the row's and the total's counts keep the hidden column.
+    expect(within(screen.getByRole('row', { name: /Repetitie/ })).getByTestId('row-count').getAttribute('title')).toBe('2 Bevestigd')
+    expect(within(screen.getByTestId('total')).getByTestId('row-count').getAttribute('title')).toBe('3 Bevestigd')
     expect(strip(container, 'record:5').textContent).toBe('Tonen')
 
     fireEvent.click(strip(container, 'record:5'))
@@ -385,9 +389,9 @@ describe('the matrix, edited from the keyboard', () => {
     fireEvent.click(at(/Montage/, 'record:5'))
 
     expect(document.activeElement).toBe(at(/Montage/, 'record:5'))
-    const panel = screen.getByRole('complementary', { name: 'Sien' })
+    const panel = screen.getByRole('complementary', { name: 'Sien · Montage' })
     expect(panel.closest('.nv-body')?.querySelector('.nv-scroll')).not.toBeNull()
-    expect(within(panel).getByRole('radio', { checked: true }).textContent).toBe('Bevestigd')
+    expect(panel.querySelector('.nv-dw-status')?.textContent).toBe('✓ Bevestigd')
   })
 
   it('moves with the arrows and Tab, across the day sections', async () => {

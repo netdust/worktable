@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Model, ModelAction, Row } from '../types'
+import type { Model, ModelAction, Row, Schema } from '../types'
+import { SchemaContext } from './drawer/context'
 
-const remote = vi.hoisted(() => ({
+const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
   records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(),
   attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`,
 }))
@@ -16,6 +17,78 @@ const columns = columnsFor(activity, { ...planning, columns: undefined }, false)
 
 afterEach(cleanup)
 
+describe('the drawer as the prototypes draw it', () => {
+  const model = { ...activity, fields: { ...activity.fields } } as Model
+  const rows = [row(1, 'Lunch bistrot'), row(2, 'Montage'), row(3, 'Diner')]
+
+  it('heads with its dataset, its place in the view, and steps with the buttons and with j and k', () => {
+    const onStep = vi.fn()
+    render(<Drawer row={rows[0]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep }} onClose={() => undefined} />)
+    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
+    expect(drawer.querySelector('.nv-dw-head__kind')?.textContent).toContain(model.label)
+    expect(drawer.querySelector('.nv-dw-head__pos')?.textContent).toBe('1 van 3')
+    expect(within(drawer).getByRole('button', { name: 'Vorige' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Volgende' }))
+    expect(onStep).toHaveBeenLastCalledWith(2)
+    fireEvent.keyDown(within(drawer).getByRole('button', { name: 'Volgende' }), { key: 'j' })
+    expect(onStep).toHaveBeenLastCalledWith(2)
+    onStep.mockClear()
+    fireEvent.keyDown(within(drawer).getByRole('button', { name: 'Volgende' }), { key: 'k' })
+    expect(onStep).not.toHaveBeenCalled()
+  })
+
+  it('puts the dataset\'s rail icon before its name where the record has no kind', () => {
+    const bare = { ...model, fields: {} } as Model
+    const schema = { models: { [bare.key]: bare }, tables: [{ key: bare.key, label: bare.label, model: bare.key, icon: 'users' }], views: [] } as unknown as Schema
+    render(<SchemaContext.Provider value={schema}><Drawer row={rows[0]} columns={columns} model={bare} onClose={() => undefined} /></SchemaContext.Provider>)
+    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('.nv-dw-head__kind')!
+    expect(head.querySelector('svg.lucide-users')).not.toBeNull()
+    expect(head.textContent).toBe(bare.label)
+  })
+
+  it('steps with j and k from anywhere in its head, the close button the grid focuses too', () => {
+    const onStep = vi.fn()
+    render(<Drawer row={rows[1]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep }} onClose={() => undefined} />)
+    const close = within(screen.getByRole('complementary', { name: 'Montage' })).getByRole('button', { name: 'Sluiten' })
+    fireEvent.keyDown(close, { key: 'j' })
+    expect(onStep).toHaveBeenLastCalledWith(3)
+    fireEvent.keyDown(close, { key: 'ArrowUp' })
+    expect(onStep).toHaveBeenLastCalledWith(1)
+  })
+
+  it('says "–" and steps nowhere once its row left the view, and shows no position without one', () => {
+    const { rerender } = render(<Drawer row={row(9, 'Weg')} columns={columns} model={model} nav={{ ids: [1, 2], onStep: vi.fn() }} onClose={() => undefined} />)
+    const drawer = screen.getByRole('complementary', { name: 'Weg' })
+    expect(drawer.querySelector('.nv-dw-head__pos')?.textContent).toBe('–')
+    expect(within(drawer).getByRole('button', { name: 'Volgende' }).hasAttribute('disabled')).toBe(true)
+    rerender(<Drawer row={row(9, 'Weg')} columns={columns} model={model} onClose={() => undefined} />)
+    expect(screen.getByRole('complementary', { name: 'Weg' }).querySelector('.nv-dw-head__pos')).toBeNull()
+  })
+
+  it('reads a record\'s history, and none of a query\'s row, which the engine keeps none of', async () => {
+    remote.recordHistory.mockResolvedValueOnce([{ batch: 'b1', at: '2026-10-12T16:20:00Z', by: 'account', actor: 'noor@lantaarn.test', undoable: false, others: 0, batch_kind: null, created: false, record: { id: 1, title: 'Lunch bistrot' }, changes: [{ field: 'notes', label: 'Notities', old: '', new: 'Twee veggie' }] }])
+    const { rerender } = render(<Drawer row={rows[0]} columns={columns} model={model} onClose={() => undefined} />)
+    const history = await screen.findByRole('region', { name: 'Geschiedenis' })
+    expect(history.textContent).toContain('noor zette notities op Twee veggie')
+    expect(remote.recordHistory).toHaveBeenLastCalledWith(model.key, 1)
+    rerender(<Drawer row={rows[0]} columns={columns} model={{ ...model, query: true }} onClose={() => undefined} />)
+    expect(screen.queryByRole('region', { name: 'Geschiedenis' })).toBeNull()
+  })
+
+  it('widens over the work and comes back with Escape, before Escape closes it', () => {
+    const onClose = vi.fn()
+    render(<Drawer row={rows[0]} columns={columns} model={model} onClose={onClose} />)
+    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Volledig openen' }))
+    expect(drawer.classList.contains('nv-drawer--wide')).toBe(true)
+    fireEvent.keyDown(drawer, { key: 'Escape' })
+    expect(drawer.classList.contains('nv-drawer--wide')).toBe(false)
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.keyDown(drawer, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
+  })
+})
+
 describe('the drawer', () => {
   it('reads a record whole without an editor, as the grid has it', () => {
     const { container } = render(<Drawer row={row(1, 'Lunch bistrot')} columns={columns} onClose={() => undefined} />)
@@ -23,7 +96,12 @@ describe('the drawer', () => {
 
     expect(within(drawer).getByRole('heading', { name: 'Lunch bistrot' })).toBeTruthy()
     expect(within(drawer).getByText('Twee veggie')).toBeTruthy()
+    // The filled fields show; the empty ones fold under one quiet line that unfolds them.
+    const filled = container.querySelectorAll('.nv-drawer__field').length
+    const fold = within(drawer).getByRole('button', { name: /^\+ \d+ andere velden$/ })
+    fireEvent.click(fold)
     expect(container.querySelectorAll('.nv-drawer__field').length).toBe(columns.length - 1)
+    expect(filled).toBeLessThan(columns.length - 1)
     expect(container.querySelector('.nv-drawer__editor')).toBeNull()
   })
 

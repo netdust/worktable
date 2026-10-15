@@ -20,6 +20,7 @@
 }
 
 .nv-app {
+  position: relative;
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
@@ -900,18 +901,32 @@
 }
 
 #root .nv-chip__remove {
-  height: 18px;
-  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0 -4px 0 0;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
-  color: var(--color-fg-subtle);
-  font-size: 11px;
+  border-radius: 50%;
+  color: inherit;
+  opacity: 0.7;
   line-height: 1;
 }
 
-.nv-chip__remove:hover {
-  background: var(--color-bg-muted);
-  color: var(--color-fg-default);
+#root .nv-chip__remove:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* The Filter chip's count, as the prototype's bubble. */
+.nv-chip__count {
+  font: 600 11px var(--font-mono);
+  background: var(--color-accent-default);
+  color: var(--color-fg-on-accent);
+  border-radius: 999px;
+  padding: 0 5px;
+  margin-left: 2px;
 }
 
 
@@ -2403,8 +2418,35 @@
 }
 
 .nv-mx .nv-th {
-  height: 52px;
+  height: 60px;
   vertical-align: bottom;
+}
+
+/* The role a person holds here, under their name, as the prototype's small line. */
+.nv-mx__role {
+  max-width: 100%;
+  margin-top: -3px;
+  overflow: hidden;
+  color: var(--color-fg-subtle);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The matrix's Totaal is a quiet line: the headcounts in mono, no weight. */
+.nv-mx .nv-grid__foot td {
+  font: 12px var(--font-mono);
+  font-weight: 400;
+}
+
+.nv-mx .nv-grid__foot td.nv-first {
+  font-family: var(--font-sans);
+}
+
+.nv-mx .nv-end {
+  font: 12px var(--font-mono);
+  color: var(--color-fg-muted);
+  text-align: right;
 }
 
 .nv-mx .nv-th__label {
@@ -2790,9 +2832,9 @@
   top: 0;
   z-index: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 14px 12px 12px 16px;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px 10px 16px;
   border-bottom: 1px solid var(--color-border-subtle);
   background: var(--color-bg-surface);
 }
@@ -2830,8 +2872,405 @@
 }
 
 .nv-drawer__fields {
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+/* The prototypes' drawer: a head line, the title, its relations, the fields, then sections. */
+.nv-dw-head {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-dw-head__kind {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nv-dw-head__pos {
+  font: 11px var(--font-mono);
+}
+
+#root .nv-drawer__tool {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-drawer__tool[data-hovered] {
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+#root .nv-drawer__tool[data-disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nv-dw-body {
+  padding: 16px 16px 24px;
+}
+
+#root .nv-dw-title {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.nv-dw-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0 0 14px;
+  color: var(--color-fg-muted);
+  font-size: 12.5px;
+}
+
+.nv-dw-sub > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.nv-dw-sub__space i {
+  width: 6px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--color-accent-default);
+}
+
+#root .nv-dw-more {
+  display: block;
+  margin: -8px 0 14px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#root .nv-dw-more:hover {
+  color: var(--color-fg-default);
+}
+
+.nv-dw-sec {
+  margin: 4px 0 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+#root .nv-dw-sec__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nv-dw-sec__n {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font: 11px var(--font-mono);
+  letter-spacing: 0;
+}
+
+.nv-dw-sec__r {
+  margin-left: auto;
+  color: var(--color-accent-default);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.nv-dw-sec__r a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nv-dw-none {
   margin: 0;
-  padding: 12px 16px 18px;
+  color: var(--color-fg-subtle);
+  font-size: 12.5px;
+}
+
+.nv-dw-list,
+.nv-dw-rows,
+.nv-dw-hist {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nv-dw-list {
+  gap: 2px;
+}
+
+.nv-dw-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.nv-dw-list li:hover {
+  background: var(--color-bg-hover);
+}
+
+.nv-dw-list__main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.nv-dw-list__main small {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-dw-rows {
+  gap: 4px;
+  font-size: 13px;
+}
+
+.nv-dw-rows li {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+}
+
+.nv-dw-hist {
+  gap: 8px;
+  color: var(--color-fg-muted);
+  font-size: 12.5px;
+}
+
+.nv-dw-hist li {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 8px;
+}
+
+.nv-dw-hist b {
+  color: var(--color-fg-default);
+  font-weight: 500;
+}
+
+.nv-dw-hist__t {
+  color: var(--color-fg-subtle);
+  font-size: 11.5px;
+}
+
+.nv-mono {
+  font: 12.5px var(--font-mono);
+}
+
+.nv-muted {
+  color: var(--color-fg-subtle);
+}
+
+/* The matrix's cell panel is the drawer's body: no second margin or rule. */
+.nv-dw-body .nv-drawer__editor:has(> .nv-panel) {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.nv-dw-body .nv-panel {
+  padding: 0;
+}
+
+/* The alert under the title: full bleed, danger or warning, its actions as underlined words. */
+.nv-dw-alert {
+  display: grid;
+  gap: 2px;
+  margin: 0 -16px 14px;
+  padding: 10px 16px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  font-size: 12.5px;
+}
+
+.nv-dw-alert--warn {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+
+#root .nv-dw-alert__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+#root .nv-dw-alert__text {
+  margin: 0 0 0 23px;
+}
+
+.nv-dw-alert__acts {
+  display: flex;
+  gap: 12px;
+  margin: 4px 0 0 23px;
+}
+
+/* A matrix cell's status: its toned badge; pressed, the choices open under it. */
+#root .nv-dw-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--tone);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.nv-drawer__field dd:has(> .nv-dw-status) {
+  flex-wrap: wrap;
+}
+
+/* Open, the line keeps its label beside the badge, the list falls under it. */
+.nv-drawer__field:has(.nv-dw-status[aria-expanded="true"]) {
+  align-items: start;
+}
+
+.nv-drawer__field:has(.nv-dw-status[aria-expanded="true"]) dt {
+  min-height: 32px;
+}
+
+/* The choices as the record drawer's option menu: one quiet list, the chosen one marked. */
+.nv-choices--list {
+  display: grid;
+  gap: 1px;
+  padding: 4px 0 0;
+}
+
+#root .nv-choices--list .nv-choices__option {
+  justify-content: flex-start;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-default);
+  font-size: 13px;
+  text-align: left;
+}
+
+#root .nv-choices--list .nv-choices__option:hover,
+#root .nv-choices--list .nv-choices__option:focus-visible {
+  background: var(--color-bg-hover);
+}
+
+#root .nv-choices--list .nv-choices__option[aria-checked="true"] {
+  color: var(--color-accent-default);
+  font-weight: 500;
+}
+
+.nv-dw-status + .nv-panel__field,
+.nv-dw-status + .nv-choices {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+
+#root .nv-dw-note {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.nv-dw-dot {
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: var(--tone);
+}
+
+.nv-dw-rows__main {
+  display: grid;
+}
+
+.nv-dw-rows__main small {
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-drawer__field dd .nv-avatar--sm {
+  margin-right: 6px;
+  box-shadow: none;
+}
+
+#root .nv-dw-alert__acts button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Expanded, the drawer takes the work column; Escape or its button gives the room back. */
+.nv-drawer-slot:has(.nv-drawer--wide) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 268px;
+  z-index: 20;
+}
+
+.nv-drawer-slot .nv-drawer--wide {
+  flex: 1;
+  width: auto;
 }
 
 .nv-drawer__field {
@@ -3058,6 +3497,20 @@
 
 .nv-drawer__editor {
   padding: 0 16px 16px;
+}
+
+/* Inside the prototype's body, the old blocks sit as its sections: the body already gives the margins. */
+.nv-dw-body .nv-files {
+  margin: 4px 0 16px;
+}
+
+.nv-dw-body .nv-action {
+  padding: 12px 0;
+}
+
+.nv-dw-body .nv-drawer__editor {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* A record's delete is there when needed, never the loudest thing in the drawer. */
@@ -4136,7 +4589,7 @@
   height: 28px;
   padding: 0;
   border: 1px solid var(--color-border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-surface);
   color: var(--color-fg-muted);
   cursor: pointer;
@@ -5406,27 +5859,119 @@ table.nv-cal--month .nv-cal__event:hover {
   display: flex;
   flex: 0 0 300px;
   flex-direction: column;
-  margin: 0;
-  padding: 0 0 10px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   background: var(--color-bg-column);
-  list-style: none;
+  transition: background-color 0.12s;
 }
 
-.nv-board__column > li:not(.nv-board__head) {
-  padding: 0 10px;
+.nv-board__column:has(.nv-board__list[data-drop-target]) {
+  background: color-mix(in srgb, var(--color-accent-subtle) 60%, var(--color-bg-column));
 }
 
-.nv-board__column > li + li:not(.nv-board__head) {
-  margin-top: 8px;
+.nv-board__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-content: start;
+  min-height: 48px;
+  padding: 0 10px 10px;
+  outline: none;
+}
+
+.nv-board__item {
+  position: relative;
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: grab;
+}
+
+.nv-board__item[data-focus-visible] {
+  box-shadow: 0 0 0 2px var(--color-accent-default);
+}
+
+.nv-board__item[data-dragging] {
+  opacity: 0.35;
+}
+
+.nv-board__item--open .nv-board__card {
+  background: var(--color-bg-selected) !important;
+}
+
+/* The drop slot, as the prototype's: the target column's option in the accent, a card's height. */
+.nv-board__slot {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent-default) 12%, transparent);
+  color: var(--color-accent-default);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.nv-board__slot:not([data-drop-target]) {
+  display: none;
+}
+
+#root .nv-board__card--lifted {
+  width: 278px;
+  transform: rotate(2deg);
+  box-shadow: var(--shadow-pop);
+  font-weight: 600;
+  cursor: grabbing;
+}
+
+/* The keyboard's way to lift a card: out of sight until it has the focus. */
+#root .nv-board__grip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  opacity: 0;
+  cursor: grab;
+}
+
+#root .nv-board__grip[data-focus-visible] {
+  opacity: 1;
+  outline: 2px solid var(--color-accent-default);
+}
+
+#root .nv-board__new {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm, 4px);
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+#root .nv-board__new:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
 }
 
 .nv-board__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 10px 8px 12px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: inherit;
 }
 
 .nv-board__name {
@@ -5454,7 +5999,8 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 .nv-board__empty {
-  padding: 22px 12px !important;
+  display: block;
+  padding: 22px 12px;
   color: var(--color-fg-subtle);
   font-size: 12.5px;
   text-align: center;
@@ -5463,6 +6009,7 @@ table.nv-cal--month .nv-cal__event:hover {
 #root .nv-board__card {
   display: grid;
   gap: 5px;
+  box-sizing: border-box;
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--color-border-default);
@@ -5545,6 +6092,17 @@ table.nv-cal--month .nv-cal__event:hover {
   margin-left: -2px;
 }
 
+.nv-avatar--hue {
+  background: color-mix(in srgb, var(--h) 16%, var(--color-bg-surface));
+  color: color-mix(in srgb, var(--h) 78%, var(--color-fg-default));
+}
+
+.nv-avatar--open {
+  border: 1px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-fg-subtle);
+}
+
 .nv-board__more {
   margin-left: 6px;
   color: var(--color-fg-subtle);
@@ -5553,16 +6111,53 @@ table.nv-cal--month .nv-cal__event:hover {
 
 /* The gallery: a card per row with its picture, as the prototype's tiles. */
 .nv-gallery {
-  display: grid;
   flex: 1;
-  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
-  grid-auto-rows: max-content;
-  gap: 14px;
-  align-content: start;
   min-width: 0;
   overflow: auto;
-  padding: 16px 18px 28px;
+  padding: 6px 18px 28px;
   background: var(--color-bg-canvas);
+}
+
+.nv-gallery__group {
+  margin-top: 14px;
+}
+
+/* A section's head stays in sight while its cards scroll under it, as the prototype's. */
+.nv-gallery__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 2px 10px;
+  background: var(--color-bg-canvas);
+}
+
+.nv-gallery__head b {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nv-gallery__head span {
+  color: var(--color-fg-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+#root .nv-gallery__n {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-bg-muted);
+  color: var(--color-fg-muted);
+  font: 11px var(--font-mono);
+}
+
+.nv-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--min, 236px), 1fr));
+  grid-auto-rows: max-content;
+  gap: 14px;
 }
 
 .nv-gallery__card {
@@ -5957,7 +6552,7 @@ table.nv-cal--month .nv-cal__event:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-accent-default);
+  background: var(--lane, var(--color-accent-default));
 }
 
 .nv-tl__count {
@@ -5994,7 +6589,7 @@ table.nv-cal--month .nv-cal__event:hover {
   padding: 0 8px 0 10px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-accent-default) 16%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--lane, var(--color-accent-default)) 16%, var(--color-bg-surface));
   color: var(--color-fg-default);
   font: inherit;
   font-size: 12.5px;
@@ -6074,6 +6669,7 @@ table.nv-cal--month .nv-cal__event:hover {
   color: var(--color-bg-surface);
   font-size: 12px;
   font-weight: 400;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -6116,4 +6712,74 @@ table.nv-cal--month .nv-cal__event:hover {
 
 #root .nv-chips .nv-chip {
   cursor: pointer;
+}
+
+/* A dataset's record count beside its name, as the prototype's rail. */
+.nv-model__count {
+  margin-left: auto;
+  padding-right: 6px;
+  color: var(--color-fg-subtle);
+  font: 11px var(--font-mono);
+}
+
+/* The Groep panel's chosen option, as a list's chosen item: in the accent. */
+#root .nv-filters__option[aria-pressed="true"] {
+  color: var(--color-accent-default);
+  font-weight: 500;
+}
+
+/* A staffed list's have/need ahead of its names, as the prototype's Bezetting: a short meter, the count in mono. */
+.nv-crew {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  color: var(--color-fg-muted);
+  font: 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.nv-crew__meter {
+  width: 42px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-bg-muted);
+}
+
+.nv-crew__meter b {
+  display: block;
+  height: 100%;
+  background: var(--color-success-fg);
+}
+
+/* What still waits in the rows, beside the title line's pill: the option's badge and its count. */
+.nv-toolbar__insight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+
+.nv-toolbar__insight b {
+  font: 600 12px var(--font-mono);
+  color: var(--color-fg-default);
+}
+
+/* The meter and the names on one line: the names cut with their ellipsis, never wrapping under the meter. */
+.nv-links {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nv-links .nv-crew {
+  flex: none;
+}
+
+.nv-links .nv-names {
+  flex: 1;
+  min-width: 0;
 }

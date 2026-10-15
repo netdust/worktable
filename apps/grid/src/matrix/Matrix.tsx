@@ -17,7 +17,7 @@ import { absentOn } from './away'
 import { ColumnPicker } from './ColumnPicker'
 import { buildColumns, cellFor, loadPicked, markFor, OPEN, type OpenSlot, openSlots, savePicked, visibleColumns } from './columns'
 import { actionForKey, cycle } from './keys'
-import { Panel } from './Panel'
+import { CellDrawer, Panel } from './Panel'
 import { EmptyState } from '../ui/EmptyState'
 import type { MatrixStore } from './store'
 
@@ -250,6 +250,9 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const [open, setOpen] = useState<Open | null>(null)
   const [filling, setFilling] = useState<number | null>(null)
   const toPanel = useRef(false)
+  // Each hand-off to a cell's drawer asks that cell's drawer to open its status, so the keyboard lands on a choice; a plain click asks nothing.
+  const [asking, setAsking] = useState<{ key: string; n: number } | null>(null)
+  const ask = (key: string) => setAsking((was) => ({ key, n: (was?.n ?? 0) + 1 }))
   const clickedAt = useRef(0)
   const bodyRef = useRef<HTMLDivElement>(null)
   const tableRef = useRef<HTMLTableElement>(null)
@@ -263,6 +266,24 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const headcount = (row: Row) => everyColumn.filter((column) => counted(cellFor(view, row, column))).length
   const total = rows.reduce((sum, row) => sum + headcount(row), 0)
   const perColumn = columns.map((_, c) => grid.filter(({ cells }) => counted(cells[c])).length)
+  // Bezet: who holds a place on the row, a refused or cancelled one aside, against those plus the open places.
+  const tones = models[join.model]?.fields[join.cell_field]?.tones ?? {}
+  const holds = (cell: MatrixCell | undefined) => cell !== undefined && tones[String(cell.fields[join.cell_field] ?? '')] !== 'bad'
+  const have = (row: Row) => everyColumn.filter((column) => holds(cellFor(view, row, column))).length
+  const need = (row: Row) => have(row) + openSlots(view, row).reduce((n, slot) => n + slot.count, 0)
+  const haveTotal = rows.reduce((sum, row) => sum + have(row), 0)
+  const needTotal = rows.reduce((sum, row) => sum + need(row), 0)
+  // A head's second line: the role its places on screen hold most, where the join declares a role.
+  const roleOf = (column: MatrixColumn): string => {
+    const match = join.open?.match_field
+    if (!match) return ''
+    const seen = new Map<string, number>()
+    for (const row of rows) {
+      const title = cellFor(view, row, column)?.lookups?.[match]?.title
+      if (title) seen.set(title, (seen.get(title) ?? 0) + 1)
+    }
+    return [...seen.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
+  }
   const firstName = columns.findIndex((column) => column.kind === 'name')
   const pick = (id: number) => {
     const next = [...picked, id]
@@ -324,7 +345,9 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   useEffect(() => {
     if (toPanel.current) {
       toPanel.current = false
-      const drawer = bodyRef.current?.querySelector('.nv-drawer') ?? document.querySelector('.nv-drawer-slot .nv-panel')?.closest('.nv-drawer')
+      const drawer = bodyRef.current?.querySelector('.nv-drawer')
+        ?? document.querySelector('.nv-drawer-slot .nv-dw-status, .nv-drawer-slot .nv-panel')?.closest('.nv-drawer')
+      // A cell's status is open by now, its checked choice taking the keyboard; a row label's drawer takes it on its head.
       return void (drawer?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]') ?? drawer?.querySelector<HTMLElement>('.nv-drawer__head button'))?.focus()
     }
     if (!moved.current || !here) return
@@ -346,6 +369,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
     event.stopPropagation()
     if (event.type === 'click' && open?.column) {
       toPanel.current = true
+      ask(`${open.row}:${open.column}`)
       setOpen({ ...open })
     }
   }
@@ -353,6 +377,8 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   /** Enter and double-click hand the keyboard to the panel; a click leaves it on the cell. */
   function show(row: number, column: MatrixColumn, focus: boolean): void {
     toPanel.current = focus
+    if (focus) ask(`${row}:${column.key}`)
+    else setAsking(null)
     setOpen({ row, column: column.key })
   }
 
@@ -529,11 +555,11 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 {hasOpen && <th className="nv-th nv-mx__open" scope="col"><span className="nv-th__label">{t('openColumn')}</span></th>}
                 {columns.map((column, c) => (
                   <th key={column.key} className={[`nv-th nv-mx__head`, cellClass(c), open?.column === column.key ? 'nv-mx__cross' : ''].filter(Boolean).join(' ')} scope="col" title={column.title}>
-                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{headName(column)}</span></span>
+                    <span className="nv-mx__who"><span className="nv-avatar nv-avatar--sm" data-initials={initials(column.title)} aria-hidden="true" /><span className="nv-th__label">{headName(column)}</span>{roleOf(column) && <small className="nv-mx__role">{roleOf(column)}</small>}</span>
                   </th>
                 ))}
-                <th className="nv-th nv-end" scope="col" title={countWord}>
-                  <span className="nv-th__label">{markFor(view, join.count)}<span className="nv-sr">{countWord}</span></span>
+                <th className="nv-th nv-end" scope="col" title={t('occupied')}>
+                  <span className="nv-th__label">{t('occupied')}</span>
                 </th>
               </tr>
             </thead>
@@ -563,7 +589,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                           <Cell key={column.key} view={view} models={models} cell={grid[at].cells[c]} column={column}
                             away={absentOn(away, view, column, date)} date={date} state={stateOf(r, c, row, column)} />
                         ))}
-                        <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count">{headcount(row)}</td>
+                        <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count" title={`${headcount(row)} ${countWord}`}>{need(row) > 0 ? `${have(row)}/${need(row)}` : '–'}</td>
                       </tr>
                     )
                   })}
@@ -575,13 +601,18 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                 <td className="nv-first">{`${t('total')} · ${rowCount(rows.length)}`}</td>
                 {hasOpen && <td className="nv-mx__open nv-cell__tabular" data-testid="open-count">{openTotal}</td>}
                 {perColumn.map((n, c) => <td key={columns[c].key} className={`nv-mx__count ${cellClass(c)}`.trim()} data-testid="column-count">{n}</td>)}
-                <td className="nv-end" data-testid="row-count">{total}</td>
+                <td className="nv-end" data-testid="row-count" title={`${total} ${countWord}`}>{haveTotal}/{needTotal}</td>
               </tr>
             </tfoot>
           </table>
         </div>
         {openRow && (open?.column === null || openColumn) && (
-          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away}
+          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows}
+            asking={asking && openColumn && asking.key === `${openRow.id}:${openColumn.key}` ? asking.n : 0}
+            onReturn={() => {
+              const at = open?.column ? indexOf({ row: open.row, column: open.column }) : null
+              if (at) tableRef.current?.querySelector<HTMLElement>(`[data-cell="${at.r}-${at.c}"]`)?.focus()
+            }}
             store={editable ? store : undefined} onClose={close} />
         )}
       </div>
@@ -590,23 +621,19 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   )
 }
 
-/** The grid's drawer with the panel in its editor slot: a cell's join record, or the row read whole. */
+/** A cell's drawer, or a row label's: the row read whole with who is on it in its editor slot. */
 function PanelDrawer({ onClose, ...panel }: Parameters<typeof Panel>[0] & { onClose: () => void }) {
-  const { view, models, row, column, columns } = panel
+  const { view, models, row, column } = panel
   const fields = useMemo(() => {
     const model = models[view.model]
-    if (!model || column) return []
+    if (!model) return []
     // A row carries its table's lookups; a relation without one has no title and would read as empty.
     return columnsFor(model, { ...view, columns: undefined, lookups: undefined, rollups: undefined }, false, models)
       .filter((field) => field.kind !== 'relation' || row.lookups?.[field.id] !== undefined)
-  }, [models, view, column, row])
-  const cell = column ? cellFor(view, row, column) : undefined
-  const at = column ? columns.indexOf(column) : -1
-  const shown: Row = column
-    ? { id: cell?.id ?? -(row.id * 1000000 + at), title: column.title, status: cell?.status ?? '', fields: cell?.fields ?? {} }
-    : row
+  }, [models, view, row])
+  if (column) return <CellDrawer key={`${row.id}:${column.key}`} {...panel} column={column} fields={fields} onClose={onClose} />
   return (
-    <Drawer row={shown} columns={fields} focusOnOpen={false} onClose={onClose}
-      editor={<Panel key={`${row.id}:${column?.key ?? ''}`} {...panel} />} />
+    <Drawer row={row} columns={fields} focusOnOpen={false} onClose={onClose} model={models[view.model]}
+      editor={<Panel key={row.id} {...panel} />} />
   )
 }

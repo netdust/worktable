@@ -136,7 +136,7 @@ test('locatie-own-and-back @e2e', async ({ page }) => {
   expect(held.locatie_id ?? null).toBeNull()
 })
 
-test('period-is-a-filter @e2e', async ({ page }) => {
+test('period-is-the-period @e2e', async ({ page }) => {
   const api = page.request
   const productie = await idByName(api, 'productie', 'titel', 'Nachtwacht')
   const [near, far] = ['periode in december', 'periode in februari']
@@ -153,13 +153,20 @@ test('period-is-a-filter @e2e', async ({ page }) => {
     await page.goto('/')
     await openView(page, 'Planning', 'Activiteiten')
     const bar = page.locator('.nv-bar')
-    await expect(bar.locator('.nv-chip--filter')).toHaveText(['Plandag deze week'])
+    // The view's period is its date column's one condition: lit in the period chips, named in the title line, never a chip.
+    const week = bar.getByRole('radiogroup', { name: 'Periode' }).getByRole('radio', { name: 'Week' })
+    await expect(week).toHaveAttribute('aria-checked', 'true')
+    await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · /)
+    await expect(bar.locator('.nv-chip--filter')).toHaveCount(0)
     await shot(page, 'period-is-a-filter')
 
-    await bar.getByRole('button', { name: 'Filter Plandag wissen' }).click()
+    // The lit Week pressed again shows every date.
+    await week.click()
+    await expect(week).toHaveAttribute('aria-checked', 'false')
     await expect(named(page, near)).toHaveCount(1)
     await expect(named(page, far)).toHaveCount(1)
 
+    // Set in the builder, a date condition on the period's column is the period: named in the title line, not a chip.
     await bar.getByRole('button', { name: /^Filter\s*\d*$/ }).click()
     await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
     const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
@@ -168,7 +175,8 @@ test('period-is-a-filter @e2e', async ({ page }) => {
     await fillDate(row.getByRole('group', { name: 'Van', exact: true }), WEEK)
     await fillDate(row.getByRole('group', { name: 'Tot', exact: true }), '2026-12-27')
     await page.keyboard.press('Escape')
-    await expect(bar.locator('.nv-chip--filter')).toHaveText(['Plandag tussen 2026-12-21 en 2026-12-27'])
+    await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · 21–27 dec$/)
+    await expect(bar.locator('.nv-chip--filter')).toHaveCount(0)
     await expect(named(page, near)).toHaveCount(1)
     await expect(named(page, far)).toHaveCount(0)
   } finally {

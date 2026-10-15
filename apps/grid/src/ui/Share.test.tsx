@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model } from '../types'
 
-const remote = vi.hoisted(() => ({ setForOwners: vi.fn() }))
+const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  setForOwners: vi.fn() }))
 vi.mock('../api', () => remote)
 const { offersForOwners, Share } = await import('./Share')
 

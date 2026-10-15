@@ -246,6 +246,21 @@ export async function optionsFrom(from: OptionsFrom, record: Record<string, unkn
 }
 
 /** A model's records for a picker: titles holding `search`, every record without one. The engine has no search: the titles are narrowed here. */
+/** A source's rows whose columns equal `where`, in `sort` order, at most `limit`; the total counts them all. */
+export async function rowsWhere(source: string, where: Record<string, unknown>, sort: string[] = [], limit = 5): Promise<RowsResponse> {
+  return rowsOf(source, { filter: JSON.stringify(where), limit: String(limit), ...(sort.length > 0 ? { sort: sort.join(',') } : {}) })
+}
+
+/** How many records a source holds, the scope aside: the rail's count. */
+export async function recordCount(source: string): Promise<number> {
+  return (await rowsOf(source, { limit: '1' })).total
+}
+
+/** One record's changes, newest first. */
+export async function recordHistory(source: string, id: number): Promise<HistoryEntry[]> {
+  return (await request<{ entries: HistoryEntry[] }>('GET', `/history/${source}`, { filter: JSON.stringify({ id }) })).entries
+}
+
 export async function records(model: string, search: string): Promise<RowsResponse> {
   const all = await everyRow(model)
   const wanted = search.toLocaleLowerCase()

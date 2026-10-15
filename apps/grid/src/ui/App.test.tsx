@@ -4,7 +4,7 @@ import { setStrings } from '../i18n'
 import type { SavedView, Schema } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 
-const api = vi.hoisted(() => ({
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(), onNotices: vi.fn(),
@@ -576,7 +576,7 @@ describe('a matrix view', () => {
     const cell = document.querySelector<HTMLElement>('[data-cell="0-0"]')!
     fireEvent.click(cell)
     fireEvent.keyDown(cell, { key: 'Enter' })
-    const panel = await screen.findByRole('complementary', { name: 'Sien' })
+    const panel = await screen.findByRole('complementary', { name: /^Sien · / })
     expect(panel.parentElement?.classList.contains('nv-drawer-slot')).toBe(true)
     await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
   })
@@ -589,7 +589,7 @@ describe('a matrix view', () => {
     const cell = document.querySelector<HTMLElement>('[data-cell="0-0"]')!
     fireEvent.click(cell)
     fireEvent.keyDown(cell, { key: 'Enter' })
-    const panel = await screen.findByRole('complementary', { name: 'Sien' })
+    const panel = await screen.findByRole('complementary', { name: /^Sien · / })
     await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true))
   })
 
@@ -1893,13 +1893,13 @@ describe("a query's views under the model it reads", () => {
 })
 
 describe('App and the period as a filter', () => {
-  it('has no period control in the toolbar or the bar: the period is a condition', async () => {
+  it('shows the period control on a dated view with no period set: nothing lit, the steps off, no date chip (R2)', async () => {
     await shell()
     await screen.findByText('Geen rijen')
 
-    expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /periode/i })).toBeNull()
-    expect(document.querySelector('.nv-chip--period')).toBeNull()
+    expect(screen.getAllByRole('radio').map((r) => [r.textContent, r.getAttribute('aria-checked')])).toEqual([['Maand', 'false'], ['Week', 'false']])
+    expect(screen.getByRole('button', { name: 'Volgende periode' }).hasAttribute('disabled')).toBe(true)
+    expect(document.querySelector('.nv-chip--filter')).toBeNull()
   })
 })
 
@@ -1988,6 +1988,18 @@ describe('a link that carries conditions', () => {
     fireEvent.click(within(within(second as HTMLElement).getByRole('listbox', { name: 'Verbinding' })).getByRole('option', { name: 'Of' }))
 
     await waitFor(() => expect(api.rows.mock.calls.at(-1)?.[3]).toMatchObject({ join: 'or' }))
+  })
+
+  it('lands a link followed while the app is open, as a drawer\'s "alle n" does, without a reload', async () => {
+    api.schema.mockResolvedValue({ ...served, models: { ...served.models, activity: { ...served.models.activity, fields: declared } } })
+    await shell()
+    await waitFor(() => expect(api.rows).toHaveBeenCalled())
+    act(() => {
+      window.location.hash = link('planning', optie)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    await waitFor(() => expect(lastFilters()).toEqual(optie))
+    await waitFor(() => expect(params().get('f')).toBeNull())
   })
 
   it('offers Publiceren on a saved view to an administrator only', async () => {
@@ -2129,8 +2141,86 @@ describe('the add button on a calendar', () => {
   })
 })
 
+describe('the title line\'s insight', () => {
+  const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { optie: 'Optie', vast: 'Vast' }, tones: { optie: 'warn', vast: 'ok' } }
+  const schema = {
+    models: { activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { status } } },
+    tables: [{ key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['grid'] }],
+    views: [{ key: 'lijst', label: 'Lijst', table: 'activiteit', model: 'activiteit' }],
+    writable: { activiteit: true },
+  } as unknown as Schema
+  const row = { id: 1, title: 'Montage', status: 'publish', fields: { status: 'optie' } }
+
+  it('counts the rows as the sheet now holds them: an edit takes the badge with it', async () => {
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockResolvedValue({ rows: [row], total: 1 })
+    api.update.mockResolvedValue({ row: { ...row, fields: { status: null } }, batch: 'b1' })
+    window.location.hash = 'view=lijst'
+    render(<App />)
+    await waitFor(() => expect(document.querySelector('.nv-toolbar__insight')?.textContent).toBe('Optie1'))
+    const cell = await screen.findByRole('gridcell', { name: /Optie/ })
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Delete' })
+    await waitFor(() => expect(api.update).toHaveBeenCalled())
+    await waitFor(() => expect(document.querySelector('.nv-toolbar__insight')).toBeNull())
+    window.location.hash = ''
+  })
+})
+
+describe('the footer and the period keys', () => {
+  const cal = { day: 'plandag', start: null, end: null, lanes: [] }
+  const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+  const schema = {
+    models: { activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { plandag } } },
+    tables: [{ key: 'activiteit', label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid', 'calendar'] }],
+    views: [
+      { key: 'kalender', label: 'Kalender', table: 'activiteit', model: 'activiteit', type: 'calendar', calendar: cal, date_field: 'plandag' },
+      { key: 'lijst', label: 'Lijst', table: 'activiteit', model: 'activiteit', date_field: 'plandag' },
+    ],
+    writable: { activiteit: true },
+  } as unknown as Schema
+  const pill = () => document.querySelector('.nv-toolbar__summary')?.textContent
+  const foot = () => [...document.querySelectorAll('.nv-foot > span')].map((span) => span.textContent)
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+  })
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('writes a calendar\'s hints, and steps its period with the arrows and comes back with T', async () => {
+    window.location.hash = 'view=kalender'
+    render(<App />)
+    await screen.findByRole('heading', { level: 1, name: 'Kalender' })
+    await waitFor(() => expect(pill()).toMatch(/^Week \d+/))
+    expect(foot()).toEqual(['Klik om te openen', '←→ vorige of volgende periode', 'T vandaag'])
+    const now = pill()
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' })
+    await waitFor(() => expect(pill()).not.toBe(now))
+    fireEvent.keyDown(document.body, { key: 't' })
+    await waitFor(() => expect(pill()).toBe(now))
+    // In a field the arrows stay the field's.
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Zoeken' }), { key: 'ArrowRight' })
+    expect(pill()).toBe(now)
+  })
+
+  it('leaves a grid\'s arrows to its cursor and writes the grid\'s hints', async () => {
+    window.location.hash = 'view=lijst'
+    render(<App />)
+    await screen.findByRole('heading', { level: 1, name: 'Lijst' })
+    expect(foot()).toEqual(['↑↓←→ bewegen', '↵ bewerken', '⌘Z ongedaan maken'])
+    const before = api.rows.mock.calls.length
+    fireEvent.keyDown(document.body, { key: 't' })
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' })
+    expect(api.rows.mock.calls.length).toBe(before)
+    expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false'])
+  })
+})
+
 describe('the title line\'s summary', () => {
-  it('drops the calendar\'s window from the title line when a dashboard opens', async () => {
+  it('drops the calendar\'s window from the title line when a dashboard opens, for the dashboard\'s week', async () => {
     const overzicht = {
       key: '9', id: 9, label: 'Overzicht', table: 'planning', table_label: 'Planning', model: 'activity', type: 'dashboard', starting: false,
       arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] }, layout: { sections: [] },
@@ -2144,6 +2234,7 @@ describe('the title line\'s summary', () => {
     await waitFor(() => expect(document.querySelector('.nv-toolbar__summary')?.textContent).toMatch(/^Week \d+/))
     fireEvent.click(within(rail()).getAllByRole('button', { name: 'Overzicht' })[0])
     await screen.findByRole('heading', { level: 1, name: 'Overzicht' })
-    expect(document.querySelector('.nv-toolbar__summary')).toBeNull()
+    // The dashboard says its own: this week, not the calendar's window.
+    expect(document.querySelector('.nv-toolbar__summary')?.textContent).toMatch(/^week \d+$/)
   })
 })

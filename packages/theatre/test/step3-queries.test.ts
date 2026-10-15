@@ -227,6 +227,43 @@ describe('conflicten', () => {
   })
 })
 
+describe('werklijst onderwerp', () => {
+  test('a line not linked to a record says its production beside its title', async () => {
+    await create('activiteit', {
+      productie_id: 1,
+      soort: 'repetitie',
+      status: 'optie',
+      datum: localDay(1),
+      omschrijving: 'werklijst context',
+    })
+    const titles = Object.fromEntries((await rows('productie')).map((p) => [p.id, p.titel]))
+    const lines = (await rows('werklijst')).filter((r) => r.soort !== 'taak')
+    expect(lines.map((r) => r.titel)).toContain('Nog in optie: werklijst context')
+    for (const line of lines) expect(line.onderwerp).toBe(titles[line.productie_id as number])
+  })
+})
+
+describe('kandidaten for an assigned place', () => {
+  const placeOf = (activiteit: number, persoon: number) =>
+    (
+      sqlite.query('SELECT id FROM toewijzing WHERE activiteit_id = ? AND persoon_id = ?').get(activiteit, persoon) as {
+        id: number
+      }
+    ).id
+
+  test('for an assigned place: the same role, not who holds it, not who is on the activity already', async () => {
+    const names = (await rows('kandidaten', { toewijzing_id: placeOf(13, SAM) }, 'rang')).map((r) => r.persoon_id)
+    expect(names).toContain(BRAM)
+    expect(names).not.toContain(SAM)
+    expect(names).not.toContain(LOTTE)
+    expect((await rows('kandidaten', { toewijzing_id: placeOf(13, SAM) })).every((r) => r.vervangt === SAM)).toBe(true)
+  })
+
+  test('none where nobody else has the role', async () => {
+    expect(await rows('kandidaten', { toewijzing_id: placeOf(16, NOOR) })).toEqual([])
+  })
+})
+
 describe('kandidaten', () => {
   const namesFor = async (slot: number) =>
     (await rows('kandidaten', { toewijzing_id: slot }, 'rang')).map((r) => r.naam)

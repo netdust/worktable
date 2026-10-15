@@ -194,6 +194,7 @@ export const kandidaten = defineQuery({
     rol_id: { type: 'integer', label: 'Rol', relation: 'rol' },
     voorkeur: { type: 'boolean', label: 'Voorkeur' },
     rang: { type: 'integer', label: 'Rang' },
+    vervangt: { type: 'integer', label: 'Vervangt', nullable: true, relation: 'persoon' },
   },
 })
 
@@ -214,6 +215,7 @@ export const werklijst = defineQuery({
     },
     persoon_id: { type: 'integer', label: 'Persoon', nullable: true, relation: 'persoon' },
     titel: { type: 'text', label: 'Titel' },
+    onderwerp: { type: 'text', label: 'Onderwerp', nullable: true },
     deadline: { type: 'date', label: 'Deadline', nullable: true },
     taak_id: { type: 'integer', label: 'Taak', nullable: true, relation: 'taak' },
     status: {

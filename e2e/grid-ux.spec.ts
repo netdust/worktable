@@ -99,7 +99,14 @@ async function shownIn(page: Page, label: string): Promise<string[]> {
 
 /** The space condition on the rows request `act` makes for a source. */
 async function scopeAsked(page: Page, source: string, act: () => Promise<void>): Promise<unknown> {
-  const asked = page.waitForRequest((req) => new URL(req.url()).pathname === `/api/rows/${source}`)
+  // The rail's count read (limit 1, no filter) is no view's read.
+  const asked = page.waitForRequest((req) => {
+    const url = new URL(req.url())
+    return (
+      url.pathname === `/api/rows/${source}` &&
+      !(url.searchParams.get('limit') === '1' && !url.searchParams.has('filter'))
+    )
+  })
   await act()
   const filter = new URL((await asked).url()).searchParams.get('filter')
   return filter ? JSON.parse(filter).productie_id : undefined
@@ -372,7 +379,8 @@ test('band-facts @e2e', async ({ page }) => {
     await expect(band.locator('.nv-group__count')).toHaveText('7')
     await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
   }
-  await expect(page.getByText('28 rijen · 4 groepen')).toBeVisible()
+  await expect(page.locator('.nv-bar__count')).toHaveText('28 rijen · 4 groepen')
+  await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · /)
   await shot(page, 'band-facts')
 })
 
@@ -481,8 +489,9 @@ test('planning-details @e2e', async ({ page }) => {
   await switchTo(page, 'Alle producties', 'Nachtwacht')
   await expect(gridRows(page)).toHaveCount(28)
 
-  // The period is a condition: its chip in the bar.
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Plandag tussen 2027-03-22 en 2027-03-28'])
+  // The period is named in the title line, never a chip.
+  await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · 22–28 mrt$/)
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
   await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '19px')
 
   // R10.4 and R10.2, in step 3d's order: #, Tijd, Omschrijving, Soort, Locatie, Status, Tourstop, Mensen; a time range with its end muted.
@@ -708,7 +717,7 @@ test.describe
       await openWeek(page, 'Planning', 'Activiteiten', 'plandag', CUT_WEEK)
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
-      await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
+      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
       await expect(bands(page).nth(1).locator('.nv-group__count')).toHaveText(`${MAX_READ - 2}+`)
       await expect(facts(bands(page).first())).toHaveText(['2 zonder tijd'])
@@ -721,8 +730,8 @@ test.describe
       await openWeek(page, 'Planning', 'Activiteiten', 'plandag', CUT_WEEK)
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
-      await expect(page.locator('.nv-toolbar__summary')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
-      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen`)
+      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
+      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
       await expect(page.locator('tfoot td.nv-first')).toHaveText(`Totaal · ${MAX_READ}+ rijen`)
     })
   })

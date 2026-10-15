@@ -200,6 +200,12 @@ describe('toSchema', () => {
 
     expect(schema.models.activiteit.attachments).toEqual({ kinds: { rider: 'Rider' }, max_mb: 20, writable: true })
   })
+
+  it('carries a dataset\'s lifecycle column onto its model, and none where it declares none', () => {
+    const schema = toSchema({ sources: { ...engine.sources, activiteit: { ...engine.sources.activiteit, lifecycle: { column: 'status' } } } })
+    expect(schema.models.activiteit.lifecycle).toBe('status')
+    expect(toSchema(engine).models.activiteit.lifecycle).toBeUndefined()
+  })
 })
 
 describe('writes', () => {

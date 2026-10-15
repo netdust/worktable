@@ -1,9 +1,10 @@
-import { ListFilter, X } from 'lucide-react'
+import { Calendar, Funnel, X } from 'lucide-react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { complete, type Filter, isDate, type Join, joinOf } from '../grid/conditions'
 import type { FilterField } from '../grid/filter'
 import { t } from '../i18n'
 import { FilterBuilder } from './FilterBuilder'
+import { formatWindow } from './Window'
 
 const EDGE = 16
 
@@ -15,6 +16,8 @@ interface Props {
   onJoin: (join: Join) => void
   /** Fields whose related names are still being read: their chips wait, never showing an id. */
   waiting?: string[]
+  /** The view's period: the builder edits it, but it is never a chip, as the period chips and the title line show it. */
+  period?: Filter
 }
 
 /** A condition in words: "Status is Optie of Bevestigd", "Plandag deze week". */
@@ -34,7 +37,7 @@ export function said(condition: Filter, field: FilterField | undefined): string 
     case 'eq':
       return `${label} ${t(`op.text.${condition.op}`)} “${condition.values[0]}”`
     case 'between':
-      return `${label} ${t('betweenDays', { from: condition.values[0] ?? '', to: condition.values[1] ?? '' })}`
+      return `${label} ${formatWindow({ from: condition.values[0], to: condition.values[1] })}`
     default:
       return `${label} ${t(`period.${condition.op}`)}`
   }
@@ -47,9 +50,9 @@ function ChipText({ text, label }: { text: string; label: string }) {
 }
 
 /** The conditions as chips, each with its ×, and the Filter button that opens the builder. */
-export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] }: Props) {
+export function Filters({ fields, filters, join, onChange, onJoin, waiting = [], period }: Props) {
   const fieldOf = (name: string) => fields.find((f) => f.field === name)
-  const shown = filters.filter(complete)
+  const shown = filters.filter((f) => complete(f) && f !== period)
   // Periods first: they always narrow. The rest are joined, and with "of" each after the first says so.
   const chips = [...shown.filter((c) => isDate(c.op)), ...shown.filter((c) => !isDate(c.op))].filter((c) => !waiting.includes(c.field))
   const any = joinOf(filters, join) === 'or'
@@ -87,6 +90,7 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
           <Fragment key={`${condition.field}:${condition.op}`}>
           {joinWord && <span className="nv-chip-join">{t('filterOr').toLocaleLowerCase()}</span>}
           <span className="nv-chip nv-chip--set nv-chip--filter">
+            {isDate(condition.op) && <Calendar size={13} aria-hidden="true" />}
             <ChipText text={said(condition, fieldOf(condition.field))} label={label} />
             <button type="button" className="nv-chip__remove" aria-label={t('removeFilter', { field: label })} title={t('removeFilter', { field: label })}
               onClick={() => onChange(filters.filter((f) => f !== condition))}>
@@ -99,7 +103,7 @@ export function Filters({ fields, filters, join, onChange, onJoin, waiting = [] 
       {fields.length > 0 && (
         <div className="nv-fb-anchor" ref={root}>
           <button type="button" className="nv-chip nv-chip--add" aria-expanded={open} onClick={() => setOpen(!open)}>
-            <ListFilter size={13} aria-hidden="true" />{t('addFilter')}
+            <Funnel size={13} aria-hidden="true" />{t('addFilter')}
             {shown.length > 0 && <span className="nv-chip__count">{shown.length}</span>}
           </button>
           {open && <div className="nv-fb-panel" ref={panel} style={at ?? { visibility: 'hidden' }}><FilterBuilder fields={fields} filters={filters} join={join} onChange={onChange} onJoin={onJoin} /></div>}

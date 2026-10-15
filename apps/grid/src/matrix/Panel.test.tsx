@@ -5,7 +5,7 @@ import { defaults } from '../grid/layout'
 import type { Model, Row, View } from '../types'
 import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
-vi.mock('../api', () => ({ records: vi.fn() }))
+vi.mock('../api', () => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 const { Matrix } = await import('./Matrix')
 
 const view: View = {
@@ -47,7 +47,7 @@ const week = (note = 'komt later'): Row[] => [
 ]
 const away = (reason = 'Examen'): Row[] => [{ id: 90, title: 'x', status: 'publish', fields: { person: [5], from: '2026-05-18', to: '2026-05-18', reason } }]
 
-function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: Row[] } = {}) {
+function setup({ rows = week(), awayRows = away(), models: given = models }: { rows?: Row[]; awayRows?: Row[]; models?: Record<string, Model> } = {}) {
   let next = 500
   const writes = { create: vi.fn<MatrixApi['create']>(), update: vi.fn<MatrixApi['update']>(), remove: vi.fn<MatrixApi['remove']>(), undoBatch: vi.fn<MatrixApi['undoBatch']>(), runAction: vi.fn<MatrixApi['runAction']>() }
   writes.create.mockImplementation(async (_m, data) => ({ row: { id: ++next, title: 'j', status: 'publish', fields: { name: '', note: '', person: [], ...data } }, batch: null }))
@@ -58,17 +58,31 @@ function setup({ rows = week(), awayRows = away() }: { rows?: Row[]; awayRows?: 
   vi.spyOn(store, 'setNote')
   function Live({ store }: { store: MatrixStore }) {
     const state = useSyncExternalStore(store.subscribe, store.getState)
-    return <Matrix view={view} models={models} rows={state.rows} away={awayRows} titles={titles} layout={defaults(view)} onLayout={() => undefined} emptyTitle="Geen rijen" store={store} writable />
+    return <Matrix view={view} models={given} rows={state.rows} away={awayRows} titles={titles} layout={defaults(view)} onLayout={() => undefined} emptyTitle="Geen rijen" store={store} writable />
   }
   const utils = render(<Live store={store} />)
   const at = (title: RegExp, key: string) => screen.getByRole('row', { name: title }).querySelector<HTMLElement>(`[data-column="${key}"]`)!
   const panel = () => screen.queryByRole('complementary')
-  const group = () => within(panel()!).getByRole('radiogroup', { name: 'Status' })
+  // The status is a badge until pressed; then its choices open in place.
+  const group = () => {
+    const status = panel()!.querySelector<HTMLButtonElement>('.nv-dw-status[aria-expanded="false"]')
+    if (status) fireEvent.click(status)
+    return within(panel()!).getByRole('radiogroup', { name: 'Status' })
+  }
   const checked = () => within(group()).getByRole('radio', { checked: true })
-  const choose = (name: string) => act(async () => {
-    fireEvent.click(within(group()).getByRole('radio', { name }))
-  })
-  return { ...utils, writes, store, at, panel, group, checked, choose }
+  const choose = (name: string) => {
+    const choices = group()
+    return act(async () => {
+      fireEvent.click(within(choices).getByRole('radio', { name }))
+    })
+  }
+  // The note is a line until pressed; then its field.
+  const noteField = () => {
+    const line = panel()!.querySelector<HTMLButtonElement>('.nv-dw-note')
+    if (line) fireEvent.click(line)
+    return within(panel()!).getByLabelText('Notitie')
+  }
+  return { ...utils, writes, store, at, panel, group, checked, choose, noteField }
 }
 
 /** A click as a browser sends it: mousedown, then focus unless the mousedown was prevented, then click. */
@@ -84,6 +98,60 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('the cell drawer is the record drawer', () => {
+  beforeEach(() => {
+    document.documentElement.lang = 'nl-BE'
+  })
+  afterEach(() => {
+    document.documentElement.lang = ''
+  })
+
+  it('reads alert, fields, the rest of the day, who could stand in, and the history last, on the drawer\'s own edge', async () => {
+    const { panel, at } = setup()
+    fireEvent.click(at(/Montage/, 'record:5'))
+    const aside = panel()!
+    await within(aside).findByRole('region', { name: 'Geschiedenis' })
+    expect(aside.querySelector('.nv-drawer__editor')).toBeNull()
+    const order = [...aside.querySelectorAll('.nv-dw-alert, .nv-drawer__fields, .nv-dw-sec')].map((el) =>
+      el.classList.contains('nv-dw-alert') ? 'alert' : el.classList.contains('nv-drawer__fields') ? 'fields' : (el.getAttribute('aria-label') ?? ''))
+    expect(order[0]).toBe('alert')
+    expect(order[1]).toBe('fields')
+    expect(order.at(-1)).toBe('Geschiedenis')
+    expect(order.findIndex((label) => label.startsWith('Ook op'))).toBeLessThan(order.indexOf('Geschiedenis'))
+  })
+
+  it('names its lines by the join\'s own field labels, no word of its own', () => {
+    const named = { ...models, assignment: { ...models.assignment, fields: { ...models.assignment.fields,
+      person: { type: 'relation', label: 'Medewerker', required: false, fact: false, relation: { model: 'people', multiple: false } },
+      activity: { type: 'relation', label: 'Klus', required: true, fact: false, relation: { model: 'activity', multiple: false } } } } } as Record<string, Model>
+    const { panel, at } = setup({ models: named })
+    fireEvent.click(at(/Montage/, 'record:5'))
+    const labels = [...panel()!.querySelectorAll('.nv-drawer__field dt')].map((dt) => dt.textContent)
+    expect(labels).toEqual(['Medewerker', 'Status', 'Klus', 'Notitie'])
+  })
+
+  it('opens the status for the hand-off only: a plain click on another cell afterwards shows the badge closed', () => {
+    const { panel, at } = setup()
+    fireEvent.click(at(/Montage/, 'record:5'))
+    fireEvent.keyDown(at(/Montage/, 'record:5'), { key: 'Enter' })
+    expect(within(panel()!).queryByRole('radiogroup', { name: 'Status' })).not.toBeNull()
+    fireEvent.click(at(/Diner/, 'record:7'))
+    expect(within(panel()!).queryByRole('radiogroup', { name: 'Status' })).toBeNull()
+    expect(panel()!.querySelector('.nv-dw-status')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('heads its alert with the icon and the title on one line, says the reason as a sentence, and offers its actions as words', () => {
+    const { panel, at } = setup()
+    fireEvent.click(at(/Montage/, 'record:5'))
+    const alert = within(panel()!).getByRole('alert')
+    const head = alert.querySelector('.nv-dw-alert__head')!
+    expect(head.querySelector('svg')).not.toBeNull()
+    expect(head.textContent).toBe('Afwezig en toegewezen')
+    expect(alert.querySelector('.nv-dw-alert__text')?.textContent).toBe('Sien is afwezig op ma 18 mei: Examen.')
+    expect([...alert.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Toch laten staan'])
+  })
+})
+
 describe('the matrix side panel', () => {
   it('shows a clicked cell in the panel and leaves focus on the cell, so typing still goes to it', async () => {
     const { at, panel, writes } = setup()
@@ -91,10 +159,10 @@ describe('the matrix side panel', () => {
     fireEvent.click(at(/Montage/, 'name:lieve'))
 
     const aside = panel()!
-    expect(aside.getAttribute('aria-label')).toBe('Lieve')
-    expect(within(aside).getByText(/Montage/)).toBeTruthy()
-    expect(within(aside).getByRole('radio', { checked: true }).textContent).toBe('Misschien')
-    expect(within(aside).getByLabelText('Notitie')).toBeTruthy()
+    expect(aside.getAttribute('aria-label')).toBe('Lieve · Montage')
+    expect(within(aside).getAllByText(/Montage/).length).toBeGreaterThan(0)
+    expect(aside.querySelector('.nv-dw-status')?.textContent).toBe('? Misschien')
+    expect(aside.querySelector('.nv-dw-note')?.textContent).toBe('komt later')
     expect(document.activeElement).toBe(at(/Montage/, 'name:lieve'))
 
     await act(async () => {
@@ -184,9 +252,9 @@ describe('the matrix side panel', () => {
   })
 
   it('saves the note on leaving the field, sending the note alone', async () => {
-    const { at, panel, store, writes } = setup()
+    const { at, store, writes, noteField } = setup()
     fireEvent.click(at(/Montage/, 'name:lieve'))
-    const note = within(panel()!).getByLabelText('Notitie')
+    const note = noteField()
 
     fireEvent.change(note, { target: { value: 'komt om 10u' } })
     await act(async () => {
@@ -201,7 +269,7 @@ describe('the matrix side panel', () => {
     const { at, panel, choose, writes } = setup()
     fireEvent.click(at(/Montage/, 'record:5'))
 
-    expect(within(panel()!).getByText('Afwezig: Examen')).toBeTruthy()
+    expect(within(panel()!).getByText(/is afwezig op .*: Examen\.$/)).toBeTruthy()
     expect(within(panel()!).getByText('Afwezig en toegewezen')).toBeTruthy()
     await choose('Misschien')
 
@@ -213,7 +281,7 @@ describe('the matrix side panel', () => {
 
     fireEvent.click(at(/Leeg ook/, 'record:5'))
 
-    expect(within(panel()!).getByText('Afwezig: Examen')).toBeTruthy()
+    expect(within(panel()!).getByText(/is afwezig op .*: Examen\.$/)).toBeTruthy()
     expect(within(panel()!).queryByText('Afwezig en toegewezen')).toBeNull()
   })
 
@@ -239,7 +307,7 @@ describe('the matrix side panel', () => {
     fireEvent.click(within(screen.getByRole('row', { name: /Diner/ })).getByRole('rowheader'))
 
     expect(within(panel()!).getByText('Productie')).toBeTruthy()
-    expect(within(panel()!).getByText('Zomerfeest')).toBeTruthy()
+    expect(within(panel()!).getAllByText('Zomerfeest').length).toBeGreaterThan(0)
   })
 
   it('leaves out a relation the row carries no title for, rather than calling it empty', () => {
@@ -275,23 +343,23 @@ describe('the matrix side panel', () => {
 
   it('keeps a 10,000-character note inside its scrolling field', () => {
     const long = 'a'.repeat(10_000)
-    const { at, panel } = setup({ rows: week(long) })
+    const { at, noteField } = setup({ rows: week(long) })
 
     fireEvent.click(at(/Montage/, 'name:lieve'))
 
-    const note = within(panel()!).getByLabelText('Notitie') as HTMLTextAreaElement
+    const note = noteField() as HTMLTextAreaElement
     expect(note.tagName).toBe('TEXTAREA')
     expect(note.value).toHaveLength(10_000)
-    expect(note.closest('.nv-panel')).not.toBeNull()
+    expect(note.closest('.nv-drawer__field')).not.toBeNull()
   })
 
   it('renders a markup note and away reason as characters', () => {
-    const { at, panel, container } = setup({ rows: week(evil), awayRows: away(evil) })
+    const { at, panel, container, noteField } = setup({ rows: week(evil), awayRows: away(evil) })
 
     fireEvent.click(at(/Montage/, 'name:lieve'))
-    expect((within(panel()!).getByLabelText('Notitie') as HTMLTextAreaElement).value).toBe(evil)
+    expect((noteField() as HTMLTextAreaElement).value).toBe(evil)
     fireEvent.click(at(/Montage/, 'record:5'))
-    expect(within(panel()!).getByText(`Afwezig: ${evil}`)).toBeTruthy()
+    expect(within(panel()!).getByText((text) => text.endsWith(`: ${evil}.`))).toBeTruthy()
 
     expect(container.querySelector('img')).toBeNull()
   })
@@ -302,7 +370,7 @@ describe('the matrix side panel', () => {
     fireEvent.click(at(/Diner/, 'record:7'))
 
     const aside = panel()!
-    expect(within(aside).getByRole('radio', { checked: true }).textContent).toBe('Afgezegd')
+    expect(aside.querySelector('.nv-dw-status')?.textContent).toBe('✕ Afgezegd')
     const others = [...aside.querySelectorAll('.nv-panel__others li')].map((li) => li.textContent)
     expect(others).toEqual(['Misschien — tweede'])
   })
@@ -315,7 +383,7 @@ describe('the matrix side panel', () => {
 
     realClick(at(/Diner/, 'name:lieve'), { shiftKey: true })
 
-    expect(panel()!.getAttribute('aria-label')).toBe('Sien')
+    expect(panel()!.getAttribute('aria-label')).toBe('Sien · Montage')
     expect(selected()).toEqual(['Montage/record:5', 'Montage/name:lieve', 'Diner/record:5', 'Diner/name:lieve'])
     await act(async () => {
       fireEvent.keyDown(document.activeElement!, { key: 'd', ctrlKey: true })
@@ -339,7 +407,7 @@ describe('the matrix side panel', () => {
       fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
     })
 
-    expect(panel()!.getAttribute('aria-label')).toBe('Lieve')
+    expect(panel()!.getAttribute('aria-label')).toBe('Lieve · Montage')
     expect(checked().textContent).toBe('Misschien')
     expect(document.activeElement).toBe(at(/Montage/, 'name:lieve'))
     await act(async () => {
@@ -347,7 +415,7 @@ describe('the matrix side panel', () => {
     })
     expect(writes.update).toHaveBeenCalledWith('assignment', 12, { status: 'confirmed' })
     expect(checked().textContent).toBe('Bevestigd')
-    expect(panel()!.getAttribute('aria-label')).toBe('Lieve')
+    expect(panel()!.getAttribute('aria-label')).toBe('Lieve · Montage')
   })
 
   it('draws no dialog, list or popover anywhere in the document, with the panel open and a status chosen', async () => {

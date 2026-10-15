@@ -94,12 +94,7 @@ test('filter-builder @e2e', async ({ page }) => {
     await page.keyboard.press('Escape')
 
     const chips = page.locator('.nv-bar .nv-chip--filter')
-    await expect(chips).toHaveText([
-      'Plandag tussen 2031-03-03 en 2031-03-09',
-      'Status is Bevestigd',
-      'Soort is Repetitie of Opbouw',
-      'Omschrijving bevat “zaal”',
-    ])
+    await expect(chips).toHaveText(['Status is Bevestigd', 'Soort is Repetitie of Opbouw', 'Omschrijving bevat “zaal”'])
     await expect(named(page, titles[0] as string)).toHaveCount(1)
     await expect(named(page, titles[1] as string)).toHaveCount(1)
     await expect(named(page, titles[2] as string)).toHaveCount(0)
@@ -108,11 +103,7 @@ test('filter-builder @e2e', async ({ page }) => {
     await page.locator('.nv-bar').getByRole('button', { name: 'Filter Soort wissen' }).click()
     await expect(named(page, titles[2] as string)).toHaveCount(1)
     await page.reload()
-    await expect(chips).toHaveText([
-      'Plandag tussen 2031-03-03 en 2031-03-09',
-      'Status is Bevestigd',
-      'Omschrijving bevat “zaal”',
-    ])
+    await expect(chips).toHaveText(['Status is Bevestigd', 'Omschrijving bevat “zaal”'])
     await expect(named(page, titles[2] as string)).toHaveCount(1)
     await expect(named(page, titles[3] as string)).toHaveCount(0)
   } finally {
@@ -137,10 +128,8 @@ test('filter-link @e2e', async ({ page, browser }) => {
     const fresh = await other.newPage()
     await fresh.goto(address)
     await expect(fresh.getByRole('heading', { level: 1 })).toHaveText('Planning')
-    await expect(fresh.locator('.nv-bar .nv-chip--filter')).toHaveText([
-      'Plandag tussen 2026-10-12 en 2026-10-18',
-      'Soort is Repetitie',
-    ])
+    await expect(fresh.locator('.nv-bar .nv-chip--filter')).toHaveText(['Soort is Repetitie'])
+    await expect(fresh.locator('.nv-toolbar__summary')).toHaveText('Week 42 · 12–18 okt')
     await shot(fresh, 'filter-link')
     await expect.poll(() => new URLSearchParams(new URL(fresh.url()).hash.slice(1)).get('f')).toBeNull()
     await fresh.waitForTimeout(800)
@@ -366,8 +355,9 @@ test('link-to-a-view-not-yours @e2e', async ({ page, browser }) => {
     await page.goto('/')
     await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible()
     const before = (await views(page)).filter((v) => v.mine)
+    // Opened cold, as from a mail: a same-page hash change lands while the app is open, and a reload would lose its note.
+    await page.goto('about:blank')
     await page.goto(`/${link.hash}`)
-    await page.reload()
     await expect(
       page.getByText(/^De gedeelde weergave is er niet voor jou; je ziet .+ zonder de filters van de link\.$/),
     ).toBeVisible()
@@ -512,15 +502,18 @@ test('published-view-stays-put @e2e', async ({ browser }) => {
     expect(published.status(), await published.text()).toBe(200)
     await page.reload()
     await openView(page, copy, 'Voorstellingen')
-    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Datum deze week'])
+    // The view's period: its lit Week, named in the title line, never a chip.
+    const week = page
+      .locator('.nv-bar')
+      .getByRole('radiogroup', { name: 'Periode' })
+      .getByRole('radio', { name: 'Week' })
+    await expect(week).toHaveAttribute('aria-checked', 'true')
+    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
 
     const stored = () => views(page).then((all) => all.find((v) => v.id === id) as Stored & { filters: unknown })
     const before = (await stored()).filters
-    await page
-      .locator('.nv-bar')
-      .getByRole('button', { name: /^Filter Datum .*wissen$/ })
-      .click()
-    await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
+    await week.click()
+    await expect(week).toHaveAttribute('aria-checked', 'false')
     await page.waitForTimeout(800)
     expect((await stored()).filters).toEqual(before)
     await page.getByRole('button', { name: 'More actions', exact: true }).click()

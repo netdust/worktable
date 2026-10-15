@@ -6,6 +6,8 @@ import type { Model } from '../types'
 import type { Column } from '../grid/columns'
 import type { Layout } from '../grid/layout'
 import { barOf } from './bar'
+import type { Filter } from '../grid/conditions'
+import type { Period } from './period'
 import { ChipBar } from './ChipBar'
 
 const column = (id: string, label: string) => ({ id, field: id, label, kind: 'text', editable: true, required: false, align: 'start', width: 120 }) as unknown as Column
@@ -168,7 +170,7 @@ describe('one chip row for every skin', () => {
   }
   const layout: Layout = { ...empty, group: 'productie_id' }
   const told = { rows: 12, groups: null, cut: false, menu: [column('title', 'Omschrijving')] }
-  const period = { shown: { from: '2026-10-12', to: '2026-10-18' }, onShown: () => undefined }
+  const period = { period: { field: 'plandag', condition: null, window: { from: '2026-10-12', to: '2026-10-18' }, kind: 'week', name: 'Week 42 · 12–18 okt', optional: false } as Period, onPeriod: () => undefined }
   /** The row's slots in the order they show, each by what it is. */
   const slots = () => [...document.querySelectorAll('.nv-bar > *, .nv-bar__end > *')].flatMap((el) => {
     const text = el.textContent ?? ''
@@ -208,6 +210,41 @@ describe('one chip row for every skin', () => {
     expect(rowFor('timeline').texts).toEqual(rowFor('calendar').texts)
   })
 
+  it('makes Groep a chooser on a board, its option fields, and on a gallery, its dates and options and geen', async () => {
+    let chosen: string | null | undefined
+    renderNl(<ChipBar {...barOf({ view: skins.board as never, model: activity, layout: { ...layout, group: null }, onLayout: (next) => { chosen = next.group }, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: soort' }))
+    let dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Soort'])
+    click(within(dialog).getByRole('button', { name: 'Soort' }))
+    expect(chosen).toBe('soort')
+    cleanup()
+    renderNl(<ChipBar {...barOf({ view: skins.gallery as never, model: activity, layout: { ...layout, group: null }, onLayout: (next) => { chosen = next.group }, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: geen' }))
+    dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Geen', 'Plandag', 'Soort'])
+    click(within(dialog).getByRole('button', { name: 'Plandag' }))
+    expect(chosen).toBe('plandag')
+  })
+
+  it('closes the Groep panel on a pick, a single choice, the chosen option marked as pressed', async () => {
+    let layoutNow = { ...layout, group: null as string | null }
+    const { rerender } = renderNl(<ChipBar {...barOf({ view: skins.board as never, model: activity, layout: layoutNow, onLayout: (next) => { layoutNow = next }, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: /^Groep: / }))
+    const dialog = await screen.findByRole('dialog', { name: 'Groeperen' })
+    click(within(dialog).getByRole('button', { name: 'Soort' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Groeperen' })).toBeNull())
+    rerender(<ChipBar {...barOf({ view: skins.board as never, model: activity, layout: layoutNow, onLayout: () => undefined, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: soort' }))
+    const again = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(again).getByRole('button', { name: 'Soort' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('shows Kolommen on every skin that reports its fields, never on a matrix', () => {
+    for (const type of ['grid', 'board', 'gallery', 'calendar', 'timeline'] as const) expect(rowFor(type).found, type).toContain('columns')
+    expect(rowFor('matrix').found).not.toContain('columns')
+  })
+
   it('offers a calendar\'s declared lanes and Geen in the Groep chip', async () => {
     let chosen: string | null | undefined
     renderNl(<ChipBar {...barOf({ view: skins.calendar as never, model: activity, layout, onLayout: (next) => { chosen = next.group }, scope: null, told, period })} />)
@@ -218,16 +255,19 @@ describe('one chip row for every skin', () => {
     expect(chosen).toBeNull()
   })
 
-  it('steps the period, opens today, and switches between month and week', () => {
-    const asked: { from: string; to: string }[] = []
-    renderNl(<ChipBar period={{ shown: { from: '2026-10-12', to: '2026-10-18' }, onShown: (next) => asked.push(next) }} />)
+  it('steps the period, opens today, and toggles a lit chip off where the skin shows every date', () => {
+    const asked: (Filter | null)[] = []
+    const week: Period = { field: 'plandag', condition: { field: 'plandag', op: 'week', values: [] }, window: { from: '2026-10-12', to: '2026-10-18' }, kind: 'week', name: 'Week 42 · 12–18 okt', optional: true }
+    renderNl(<ChipBar period={{ period: week, onPeriod: (next) => asked.push(next) }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Volgende periode' }))
-    fireEvent.click(screen.getByRole('radio', { name: 'Maand' }))
-    expect(asked).toEqual([{ from: '2026-10-19', to: '2026-10-25' }, { from: '2026-10-01', to: '2026-10-31' }])
-    cleanup()
-    renderNl(<ChipBar period={{ shown: { from: '2026-10-01', to: '2026-10-31' }, onShown: (next) => asked.push(next) }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Vorige periode' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Week' }))
-    expect(asked.slice(2)).toEqual([{ from: '2026-09-01', to: '2026-09-30' }, { from: '2026-09-28', to: '2026-10-04' }])
+    expect(asked).toEqual([{ field: 'plandag', op: 'between', values: ['2026-10-19', '2026-10-25'] }, null])
+    cleanup()
+    const none: Period = { ...week, condition: null, window: null, kind: null, name: null }
+    renderNl(<ChipBar period={{ period: none, onPeriod: (next) => asked.push(next) }} />)
+    expect(screen.getByRole('button', { name: 'Volgende periode' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false'])
+    fireEvent.click(screen.getByRole('button', { name: 'Vandaag' }))
+    expect(asked[2]).toEqual({ field: 'plandag', op: 'week', values: [] })
   })
 })

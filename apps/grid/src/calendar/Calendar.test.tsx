@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CalendarDef, Model, Row, View } from '../types'
+import { defaults } from '../grid/layout'
 
-vi.mock('../api', () => ({ records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
+vi.mock('../api', () => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
 const { Calendar, HOUR_PX } = await import('./Calendar')
 
 const CAL: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'] }
@@ -31,7 +32,7 @@ afterEach(cleanup)
 
 const shown = (over: Partial<Parameters<typeof Calendar>[0]> = {}) => {
   render(<Calendar view={view} model={model} models={{ persoon_dag: model }} rows={rows} cal={CAL} shown={{ from: '2026-10-12', to: '2026-10-18' }}
-    lane="persoon_id" {...over} />)
+    lane="persoon_id" layout={defaults(view)} {...over} />)
 }
 
 describe('the calendar', () => {
@@ -130,7 +131,7 @@ describe('a spanning row', () => {
   const stop = (id: number, title: string, from: string, to: string): Row => ({ id, title, status: '', fields: { start_datum: from, eind_datum: to } })
   const spanning = (shownDays: { from: string; to: string }, list: Row[]) =>
     render(<Calendar view={{ ...view, calendar: SPANS } as View} model={model} models={{ persoon_dag: model }} rows={list} cal={SPANS}
-      shown={shownDays} lane={null} />)
+      shown={shownDays} lane={null} layout={defaults(view)} />)
 
   it('is one bar across its days in the week, not a chip per day', () => {
     spanning({ from: '2026-10-12', to: '2026-10-18' }, [stop(1, 'Brugge', '2026-10-12', '2026-10-15')])

@@ -282,15 +282,9 @@ test('in-filter-applies', async ({ page }) => {
   }
   expect(new Set(await statuses())).toEqual(new Set(['Optie', 'Bevestigd']))
 
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText([
-    'Plandag tussen 2026-10-12 en 2026-10-18',
-    'Status is Optie of Bevestigd',
-  ])
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Status is Optie of Bevestigd'])
   await addCondition(page, 'Status', 'Optie')
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText([
-    'Plandag tussen 2026-10-12 en 2026-10-18',
-    'Status is Optie',
-  ])
+  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveText(['Status is Optie'])
   await expect(row(page, 'vergadering Gent')).toHaveCount(0)
   await expect(row(page, 'overnachting Brugge')).toBeVisible()
   expect(new Set(await statuses())).toEqual(new Set(['Optie']))
@@ -311,7 +305,8 @@ test('relation-beyond-page', async ({ page }) => {
   const asked: { limit: string | null; offset: number }[] = []
   page.on('request', (req) => {
     const url = new URL(req.url())
-    if (url.pathname === '/api/rows/productie')
+    // The rail's count read (limit 1) is no picker's page.
+    if (url.pathname === '/api/rows/productie' && url.searchParams.get('limit') !== '1')
       asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
   })
   await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')

@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -11,7 +11,7 @@ import { Grid, type OnScreen } from '../grid/Grid'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
-import { complete, type Filter, isDate, joinOf, readConditions, windowOf } from '../grid/conditions'
+import { complete, type Filter, joinOf, readConditions, windowOf } from '../grid/conditions'
 import { type Layout, withFilters } from '../grid/layout'
 import { madeFrom, type NewRow, newRow } from '../grid/newRow'
 import { useMatrixStore } from '../matrix/hooks'
@@ -42,18 +42,24 @@ import { useSavedViews } from './useSavedViews'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
-import { days, formatWindow, isMonth, MATRIX_DAYS, weekOf } from './Window'
+import { insightOf } from './insight'
+import { periodOf, stepPeriod, todayPeriod, withPeriod } from './period'
+import { hintsOf, stepsPeriod } from './hints'
+import { formatWindow, isMonth, isoWeek, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
-import { barOf } from './bar'
+import { barOf, boardColumn } from './bar'
+import { SchemaContext } from '../grid/drawer/context'
+import { AwayChip, SizeChips } from './SizeChips'
+import { useViewChoice } from './choice'
+import { useGallerySize } from '../gallery/size'
 import { ChipBar } from './ChipBar'
 import { Legend } from '../matrix/Legend'
 import { Gallery } from '../gallery/Gallery'
 import { Timeline } from '../timeline/Timeline'
-import { timelineWindow } from '../timeline/layout'
-import { calendarWindow, monthWeeks } from '../calendar/layout'
+import { monthWeeks } from '../calendar/layout'
 
 type Rows = { status: 'loading' } | { status: 'ready'; rows: Row[]; total: number; away: Row[]; titles: Map<number, string> } | { status: 'error'; error: ApiError }
 
@@ -206,7 +212,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [displays, setDisplays] = useState<Record<string, Display>>({})
   const reloadView = () => setReloads((n) => n + 1)
   const [drawerSlot, setDrawerSlot] = useState<HTMLElement | null>(null)
-  const [quick, setQuick] = useState(false)
+  // The quick create, open with the values a board column's + presets.
+  const [quick, setQuick] = useState<Record<string, unknown> | null>(null)
   // "+ Kolom" on a matrix: the chip row holds the button, the matrix the picker.
   const [picking, setPicking] = useState(false)
   useFillViewport(frame)
@@ -263,6 +270,20 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // A link's conditions land once, on the view it names, in place of the view's own: the colleague sees what the sender saw.
   // It is a local change: only the person's own next change saves. A condition the view's model cannot hold is dropped.
   const landing = useRef({ view: readHash('view'), f: readHash('f'), j: readHash('j') })
+  // A link followed while the app is open (a drawer's "alle n") lands the same way, without a reload.
+  const [landings, setLandings] = useState(0)
+  useEffect(() => {
+    const follow = () => {
+      const [linked, f] = [readHash('view'), readHash('f')]
+      if (!linked || f === null) return
+      landing.current = { view: linked, f, j: readHash('j') }
+      setActiveKey(linked)
+      setLandings((n) => n + 1)
+    }
+    // The page's window: inside this component `window` names the days a view reads.
+    globalThis.addEventListener('hashchange', follow)
+    return () => globalThis.removeEventListener('hashchange', follow)
+  }, [])
   useEffect(() => {
     const { view: linkedKey, f, j } = landing.current
     if (!settled || f === null || !view || !layout) return
@@ -279,38 +300,60 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     const offered = filterFields(model, [])
     const fits = (c: Filter) => offered.some((field) => field.field === c.field && OPERATORS[field.kind].includes(c.op))
     storeLayout({ ...withFilters(layout, linked.filter(fits)), join: j === 'or' ? 'or' : undefined })
-  }, [settled, view?.key, layout === null])
+  }, [settled, view?.key, layout === null, landings])
   const asks = layout ? JSON.stringify([layout.filters, joinOf(layout.filters, layout.join), layout.sort, layout.group]) : ''
-  // The period is the condition on the view's date column: its days, for a matrix, a new row and the export.
-  const dateCondition = layout && view?.date_field ? layout.filters.find((f) => f.field === view.date_field && isDate(f.op) && complete(f)) : undefined
+  // The period is the one condition on the view's date column: the days a skin shows, a new row's day and the export's.
+  const period = useMemo(() => (view && layout ? periodOf(view, layout, new Date()) : null), [view, layout?.filters])
+  const dateCondition = period?.condition ?? undefined
   const conditionDays = useMemo(() => windowOf(dateCondition, new Date()), [JSON.stringify(dateCondition)])
-  // A matrix reads one bounded window: the condition's days, else the current week (none, or over the engine's cap).
   const conditioned = layout ? layout.filters.some((f) => f !== dateCondition && complete(f)) : false
-  const matrixDays = conditionDays && days(conditionDays) <= MATRIX_DAYS ? conditionDays : weekOf(new Date())
-  // A calendar shows the condition's days, else this week; a month reads its whole weeks.
+  const matrixDays = view?.type === 'matrix' && period?.window ? period.window : weekOf(new Date())
   const calendar = view?.type === 'calendar' ? view.calendar : undefined
   const timeline = view?.type === 'timeline' ? view.calendar : undefined
-  const calendarShown = calendarWindow(conditionDays, new Date())
+  const calendarShown = calendar && period?.window ? period.window : weekOf(new Date())
+  // A month reads its whole weeks.
   const calendarDays = isMonth(calendarShown) ? monthSpan(calendarShown) : calendarShown
-  const timelineShown = timelineWindow(conditionDays, new Date())
+  const timelineShown = timeline && period?.window ? period.window : weekOf(new Date())
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
   // Rows that span days are read by overlap with the window, so one begun before it still shows.
   const readRows = (calendar ?? timeline)?.spans ? spanRows : rows
-  // A calendar's or timeline's days are set by its date condition.
-  const showDays = (next: DateWindow) =>
-    view?.date_field && layout && setLayout(withFilters(layout, [
-      { field: view.date_field, op: 'between', values: [next.from, next.to] },
-      ...layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))),
-    ]))
-  // The period chips sit where the view reads days by its dated column: a windowed skin always, another where a period is set.
-  const period = !view?.date_field ? null
-    : calendar ? { shown: calendarShown, onShown: showDays }
-    : timeline ? { shown: timelineShown, onShown: showDays }
-    : view.type === 'matrix' ? { shown: matrixDays, onShown: showDays }
-    : conditionDays?.from && conditionDays.to ? { shown: { from: conditionDays.from, to: conditionDays.to }, onShown: showDays }
-    : null
+  const setPeriod = (next: Filter | null) => {
+    if (period && layout) setLayout(withPeriod(layout, period.field, next))
+  }
+  // A calendar's and a timeline's ←→ step the period and T comes back to today, as the prototype; a grid's and a matrix's arrows move the cursor.
+  const stepping = useRef({ period, setPeriod })
+  stepping.current = { period, setPeriod }
+  const keyed = view?.type === 'calendar' || view?.type === 'timeline'
+  useEffect(() => {
+    if (!keyed) return
+    const onKey = (event: KeyboardEvent) => {
+      const { period: p, setPeriod: set } = stepping.current
+      if (!p || event.metaKey || event.ctrlKey || event.altKey || !stepsPeriod(event.target)) return
+      const next = event.key === 'ArrowLeft' ? stepPeriod(p, -1) : event.key === 'ArrowRight' ? stepPeriod(p, 1) : event.key.toLowerCase() === 't' ? todayPeriod(p) : undefined
+      if (next === undefined) return
+      event.preventDefault()
+      set(next)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [keyed])
   const windowKey = JSON.stringify(window)
   useEffect(() => setPicking(false), [view?.key])
+  const [size, setSize] = useGallerySize(view)
+  // Each dataset's records, beside its name in the rail: one count read per table, as the page loads.
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const countKey = tables.filter((table) => !table.query).map((table) => table.key).join(',')
+  useEffect(() => {
+    let live = true
+    for (const table of tables.filter((each) => !each.query)) {
+      const model = table.views[0]?.model
+      if (model) recordCount(model).then((n) => live && setCounts((was) => ({ ...was, [table.key]: n })), () => undefined)
+    }
+    return () => {
+      live = false
+    }
+  }, [countKey])
+  const [showAway, setShowAway] = useViewChoice<boolean>(view, 'ntdst-views/matrix-away/v1/', (raw) => (typeof raw === 'boolean' ? raw : null), true)
 
   const shownKey = useRef<string | null>(null)
   useEffect(() => {
@@ -354,6 +397,23 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
+  // ⌘Z and ⇧⌘Z on the page, for every skin: the toast promises the undo wherever the focus went (a drop, a drawer's button
+  // that unmounted). A cell that handled the key first has prevented it; a field keeps its own.
+  const undoing = useRef(saves)
+  undoing.current = saves
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      const now = undoing.current
+      if (!now) return
+      event.preventDefault()
+      void (event.shiftKey ? now.redo() : now.undo())
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   const fields = useMemo(
     () => (model && loaded ? filterFields(model, loaded, view?.filters).filter((f) => f.field !== spaceField) : []),
     [model, loaded, view?.filters, spaceField],
@@ -385,9 +445,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       (error: ApiError) => notify({ message: errorText(error.code, error.message) }),
     )
 
+  // A dashboard's title line: the space it reads and this week, as the prototype's.
+  const spaceName = space.status === 'ready' && served?.space ? (space.selected?.title ?? t('allSpace', { label: (served.models[served.space.model]?.label ?? '').toLocaleLowerCase() })) : null
+  const dashboardSum = spaceName ? t('dashboardSum', { space: spaceName, week: isoWeek(new Date()) }) : t('dashboardSum', { space: '', week: isoWeek(new Date()) }).replace(/^ · /, '')
+  // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
+  const shownRows = store ? state.rows : result.status === 'ready' ? result.rows : null
+  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? insightOf(model, shownRows) : null), [dashboard, model, shownRows, matrix])
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
-    ? <Filters fields={named} filters={layout.filters} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
+    ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
       onJoin={(join) => setLayout({ ...layout, join: join === 'or' ? 'or' : undefined })} />
     : null
   const exportView = () => {
@@ -502,8 +568,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   return (
     <DrawerSlot.Provider value={drawerSlot}>
+    <SchemaContext.Provider value={served}>
     <div className="nv-app" ref={frame}>
-      <Rail signed={signed} tables={tables} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
+      <Rail signed={signed} tables={tables} counts={counts} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
         onRemoveDashboard={role === 'administrator' ? actions.remove : undefined} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
@@ -513,12 +580,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           title={view?.label ?? title}
           kind={view?.type ?? 'grid'}
           locked={view ? lockOf(view) : null}
-          shown={matrix || told?.view !== view?.key ? null : (told?.shown ?? null)}
+          shown={told?.view !== view?.key ? null : (told?.shown ?? null)}
+          period={dashboard ? dashboardSum : (period?.name ?? null)}
+          insight={insight}
           search={<Search query={query} onQuery={setQuery} tables={tables} onJump={setActiveKey} />}
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={quickAdd ? () => setQuick(true) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
+          onAdd={quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -531,9 +600,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         />
         {!dashboard && view && model && layout && (
           <ChipBar {...barOf({
-            view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period,
+            view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period: period ? { period, onPeriod: setPeriod } : null,
             told: told?.view === view.key ? told.shown : null,
             ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
+            ...(view.type === 'gallery' ? { skin: <SizeChips size={size} onSize={setSize} /> } : {}),
+            ...(matrix && view.away ? { skin: <AwayChip on={showAway} onToggle={() => setShowAway(!showAway)} /> } : {}),
           })} />
         )}
         <div className="nv-work">
@@ -544,16 +615,18 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
             <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
-              lane={layout.group} onTitle={setShown} />
+              lane={layout.group} layout={layout} onTitle={setShown} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
             <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} onTitle={setShown} />
-          ) : view?.type === 'board' && view.board && model && result.status === 'ready' ? (
-            <Board key={view.key} view={view} model={model} models={models} rows={result.rows} column={view.board.column} onShown={setShown} />
-          ) : view?.type === 'gallery' && view.gallery && model && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} onShown={setShown} />
+              lane={layout.group} layout={layout} onTitle={setShown} />
+          ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
+            <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
+              onMove={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (id, field, value) => void store.apply({ id, field, value }) : undefined}
+              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} />
+          ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
+            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
-            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={result.away}
+            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={showAway ? result.away : []}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
               layout={layout} onLayout={setLayout} picking={picking} onPicking={setPicking} onShown={setShown} />
           ) : grid ? (
@@ -571,9 +644,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         )}
         </div>
         <footer className="nv-foot" aria-label={t('hints')}>
-          <span>↑↓←→ {t('hintMove')}</span>
-          <span>↵ {t('hintEdit')}</span>
-          <span>⌘Z {t('hintUndo')}</span>
+          {hintsOf(dashboard ? 'dashboard' : (view?.type ?? 'grid')).map((hint) => <span key={hint}>{hint}</span>)}
           {matrix && view && <Legend view={view} models={models} />}
         </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>
@@ -583,7 +654,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
       {quick && model && (
         <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
-          window={calendar ? calendarShown : null} onClose={() => setQuick(false)} onCreated={() => { setQuick(false); reloadView() }} />
+          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreated={() => { setQuick(null); reloadView() }} />
       )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
@@ -591,6 +662,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </SchemaContext.Provider>
     </DrawerSlot.Provider>
   )
 }

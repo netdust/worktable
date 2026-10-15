@@ -8,7 +8,7 @@ import { createStore, type StoreApi } from '../store'
 import type { LinkActions } from './Links'
 import { barOf } from '../../ui/bar'
 
-const remote = vi.hoisted(() => ({ records: vi.fn() }))
+const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
 vi.mock('../../api', () => remote)
 
 const day: Model = {
@@ -71,6 +71,8 @@ describe('a links cell', () => {
   it("shows the names as text on one line, each in its state's colour, the free-text one muted; all of them in its title", () => {
     renderGrid()
     const names = cell().querySelector('.nv-names') as HTMLElement
+    // have/need ahead of the names, as the prototype's Bezetting; a free-text name holds its place.
+    expect(cell().querySelector('.nv-crew')?.textContent).toBe('3/3')
     expect(names.textContent).toBe('Lotte, Jan, Gastmuzikant')
     const name = (text: string) => within(names).getByText(text)
     expect(name('Lotte').className).toContain('nv-pill--ok')

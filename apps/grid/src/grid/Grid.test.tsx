@@ -13,7 +13,7 @@ import { barOf } from '../ui/bar'
 import { ChipBar } from '../ui/ChipBar'
 import type { Shown } from '../ui/Toolbar'
 
-const remote = vi.hoisted(() => ({ schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
+const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
   rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), history: vi.fn(),
@@ -1315,7 +1315,7 @@ async function addCondition(field: string, value: string) {
     expect(within(toolbar()).getByRole('heading', { level: 1, name: 'Planning' })).toBeTruthy()
     expect(screen.queryByRole('group', { name: 'Periode' })).toBeNull()
     expect(within(toolbar()).queryByRole('button', { name: 'Filter' })).toBeNull()
-    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Filter', 'Groep: datum', 'Kolommen'])
+    expect(within(bar()).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Filter', 'Groep: datum', 'Vandaag', 'Vorige periode', 'Volgende periode', 'Kolommen'])
     expect(within(toolbar()).getByRole('searchbox', { name: 'Zoeken' })).toBeTruthy()
     expect(within(toolbar()).getByRole('button', { name: 'Nieuw Activiteit' })).toBeTruthy()
     expect(within(toolbar()).queryByRole('button', { name: /Theme|Undo|Redo/ })).toBeNull()
@@ -2009,7 +2009,7 @@ describe('the to-many editor', () => {
     expect(links.add).not.toHaveBeenCalled()
     expect(links.remove).not.toHaveBeenCalled()
     expect(api.update).not.toHaveBeenCalled()
-    expect(cell('Lunch', 'people').textContent).toBe('Jan')
+    expect(cell('Lunch', 'people').textContent).toBe('1/1Jan')
   })
 })
 

@@ -98,15 +98,32 @@ describe('weekGrid', () => {
     expect(weekGrid(early, WEEK_DAYS, []).hours.from).toBe(360)
   })
 
-  it('sets overlapping events side by side, grouped by lane', () => {
+  it('sets overlapping events side by side in start order, the lane deciding a tie', () => {
     const lanes = [{ id: 1, title: 'Bram' }, { id: 2, title: 'Noor' }]
     const rows = [
       row(1, { plandag: '2026-10-12', start_at: '2026-10-12T10:00', eind_at: '2026-10-12T12:00', persoon_id: 2 }, { id: 2, title: 'Noor' }),
       row(2, { plandag: '2026-10-12', start_at: '2026-10-12T11:00', eind_at: '2026-10-12T13:00', persoon_id: 1 }, { id: 1, title: 'Bram' }),
       row(3, { plandag: '2026-10-12', start_at: '2026-10-12T15:00', eind_at: '2026-10-12T16:00', persoon_id: 2 }, { id: 2, title: 'Noor' }),
+      row(4, { plandag: '2026-10-12', start_at: '2026-10-12T15:00', eind_at: '2026-10-12T16:00', persoon_id: 1 }, { id: 1, title: 'Bram' }),
     ]
     const blocks = weekGrid(placedOf(rows), WEEK_DAYS, lanes).timed['2026-10-12'] ?? []
-    expect(blocks.map((b) => [b.event.row.id, b.column, b.columns])).toEqual([[2, 0, 2], [1, 1, 2], [3, 0, 1]])
+    expect(blocks.map((b) => [b.event.row.id, b.column, b.columns])).toEqual([[1, 0, 2], [2, 1, 2], [4, 0, 2], [3, 1, 2]])
+  })
+
+  it('packs a busy Monday into as few columns as overlap, and widens an event into free columns beside it', () => {
+    const day = (id: number, from: string, to: string, lane: number) =>
+      row(id, { plandag: '2026-10-12', start_at: `2026-10-12T${from}`, eind_at: `2026-10-12T${to}`, persoon_id: lane }, { id: lane, title: String(lane) })
+    const lanes = [{ id: 1, title: '1' }, { id: 2, title: '2' }, { id: 3, title: '3' }]
+    // Lane-first would put the late lanes' events in columns of their own: five slivers on Monday 12 Oct.
+    const rows = [day(1, '08:00', '12:00', 3), day(2, '09:00', '13:00', 2), day(3, '10:00', '17:00', 1), day(4, '10:00', '11:00', 3), day(5, '13:00', '15:00', 1), day(6, '14:00', '18:00', 2), day(7, '11:30', '12:30', 1)]
+    const blocks = weekGrid(placedOf(rows), WEEK_DAYS, lanes).timed['2026-10-12'] ?? []
+    expect(Math.max(...blocks.map((b) => b.columns))).toBe(4)
+    const of = (id: number) => blocks.find((b) => b.event.row.id === id)!
+    // 11:30–12:30 takes the column 10:00–11:00 left free.
+    expect(of(7).column).toBe(3)
+    // An event with free columns to its right widens into them: 11:00–12:00 after two that ended at 11:00.
+    const wide = weekGrid(placedOf([day(1, '10:00', '12:00', 1), day(2, '10:00', '11:00', 2), day(3, '10:00', '11:00', 3), day(4, '11:00', '12:00', 2)]), WEEK_DAYS, lanes).timed['2026-10-12'] ?? []
+    expect(wide.map((b) => [b.event.row.id, b.column, b.span, b.columns])).toEqual([[1, 0, 1, 3], [2, 1, 1, 3], [3, 2, 1, 3], [4, 1, 2, 3]])
   })
 })
 

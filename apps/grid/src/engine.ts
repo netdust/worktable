@@ -204,6 +204,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
+    ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
