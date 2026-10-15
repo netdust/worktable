@@ -7,7 +7,7 @@ import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
-import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, LinkDecl, OptionsFrom } from './declare'
+import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, FlagsDecl, LinkDecl, OptionsFrom } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
 import { lookupColumn, lookupsFor, targetOf } from './lookups'
@@ -143,6 +143,16 @@ function createsOf(domain: Domain, source: Source, actor: Actor): { creates?: st
 function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string } {
   const target = source.kind === 'query' && source.of ? sourceOf(domain, source.of) : null
   return target && readable(actor, target) ? { of: target.name } : {}
+}
+
+// A flag names a dataset only to a caller who can read it, as `of` and `creates` do (threat 5).
+function flagsOf(domain: Domain, source: Source, actor: Actor): { flags?: FlagsDecl } {
+  if (source.kind !== 'query' || !source.flags) return {}
+  const marks = Object.entries(source.flags.marks).filter(([name]) => {
+    const target = sourceOf(domain, name)
+    return target !== null && readable(actor, target)
+  })
+  return marks.length > 0 ? { flags: { marks: Object.fromEntries(marks), tone: source.flags.tone } } : {}
 }
 
 function servedLink({ label, item, dataset, key, target, state }: LinkDecl, linked: DatasetDecl) {
@@ -295,6 +305,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             columns: servedColumns(domain, s, actor),
             ...createsOf(domain, s, actor),
             ...ofOf(domain, s, actor),
+            ...flagsOf(domain, s, actor),
             ...servedLinks(domain, s, actor),
             ...servedLookups(domain, s, actor),
             ...(s.kind === 'dataset' ? servedAttachments(s, actor) : {}),

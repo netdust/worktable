@@ -24,7 +24,7 @@ plek AS MATERIALIZED (
 ),
 tw AS (
   SELECT t.id, t.persoon_id, t.state, t.created_at, p.weergavenaam AS naam, act.id AS activiteit_id,
-    act.productie_id, act.plandag, act.wat, act.locatie_id, act.getimed, act.logistiek, act.van, act.tot
+    act.productie_id, act.speelreeks_id, act.plandag, act.wat, act.locatie_id, act.getimed, act.logistiek, act.van, act.tot
   FROM toewijzing t
   JOIN act ON act.id = t.activiteit_id
   JOIN persoon p ON p.id = t.persoon_id AND p.deleted_at IS NULL
@@ -34,7 +34,7 @@ alle AS (
   SELECT 1 AS code, x.id AS x, y.id AS y, 'overlap' AS type,
     CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END AS ernst,
     x.persoon_id, x.id AS toewijzing_id, y.id AS ander_toewijzing_id, x.activiteit_id, y.activiteit_id AS ander_activiteit_id,
-    x.locatie_id, x.productie_id, x.plandag,
+    x.locatie_id, x.productie_id, x.speelreeks_id, x.plandag,
     x.naam || ' staat dubbel ingepland: ' || x.wat || ' en ' || y.wat || '.' AS omschrijving
   FROM tw x
   JOIN tw y ON y.persoon_id = x.persoon_id AND y.plandag = x.plandag AND y.id > x.id
@@ -46,7 +46,7 @@ alle AS (
   SELECT 7, y.id, x.id, 'overlap',
     CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
     y.persoon_id, y.id, x.id, y.activiteit_id, x.activiteit_id,
-    y.locatie_id, y.productie_id, y.plandag,
+    y.locatie_id, y.productie_id, y.speelreeks_id, y.plandag,
     y.naam || ' staat dubbel ingepland: ' || y.wat || ' en ' || x.wat || '.'
   FROM tw x
   JOIN tw y ON y.persoon_id = x.persoon_id AND y.plandag = x.plandag AND y.id > x.id
@@ -56,7 +56,7 @@ alle AS (
   UNION ALL
   SELECT CASE b.soort WHEN 'afwezig' THEN 2 ELSE 3 END, x.id, b.id, b.soort,
     CASE b.soort WHEN 'afwezig' THEN 'conflict' ELSE 'waarschuwing' END,
-    x.persoon_id, x.id, NULL, x.activiteit_id, NULL, x.locatie_id, x.productie_id, x.plandag,
+    x.persoon_id, x.id, NULL, x.activiteit_id, NULL, x.locatie_id, x.productie_id, x.speelreeks_id, x.plandag,
     x.naam || CASE b.soort WHEN 'afwezig' THEN ' is afwezig tijdens ' ELSE ' is misschien niet beschikbaar tijdens ' END
       || x.wat || COALESCE(' (' || b.reden || ')', '') || '.'
   FROM tw x
@@ -64,7 +64,8 @@ alle AS (
     AND ((datetime(b.start_at) < x.tot AND x.van < datetime(b.eind_at)) OR datetime(b.start_at) = x.van)
 
   UNION ALL
-  SELECT 4, t.id, 0, 'open_slot', 'conflict', NULL, t.id, NULL, act.id, NULL, act.locatie_id, act.productie_id, act.plandag,
+  SELECT 4, t.id, 0, 'open_slot', 'conflict', NULL, t.id, NULL, act.id, NULL, act.locatie_id, act.productie_id,
+    act.speelreeks_id, act.plandag,
     'Open plaats' || COALESCE(' voor ' || r.naam, '') || ' bij ' || act.wat || '.'
   FROM toewijzing t
   JOIN act ON act.id = t.activiteit_id
@@ -75,7 +76,7 @@ alle AS (
 
   UNION ALL
   SELECT 5, x.id, 0, 'onbevestigd', 'conflict', x.persoon_id, x.id, NULL, x.activiteit_id, NULL, x.locatie_id,
-    x.productie_id, x.plandag, x.naam || ' heeft nog niet geantwoord op ' || x.wat || '.'
+    x.productie_id, x.speelreeks_id, x.plandag, x.naam || ' heeft nog niet geantwoord op ' || x.wat || '.'
   FROM tw x
   CROSS JOIN eigen
   WHERE x.state = 'uitgenodigd'
@@ -87,7 +88,7 @@ alle AS (
   UNION ALL
   SELECT 6, x.id, y.id, 'locatie_dubbel',
     CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
-    NULL, NULL, NULL, x.id, y.id, x.locatie_id, x.productie_id, x.plandag,
+    NULL, NULL, NULL, x.id, y.id, x.locatie_id, x.productie_id, x.speelreeks_id, x.plandag,
     COALESCE(o.naam, 'Een locatie') || ' is dubbel geboekt: ' || x.wat || ' en ' || y.wat || '.'
   FROM plek x
   JOIN plek y ON y.locatie_id = x.locatie_id AND y.id > x.id
@@ -100,7 +101,7 @@ alle AS (
   UNION ALL
   SELECT 8, y.id, x.id, 'locatie_dubbel',
     CASE WHEN x.getimed AND y.getimed THEN 'conflict' ELSE 'waarschuwing' END,
-    NULL, NULL, NULL, y.id, x.id, y.locatie_id, y.productie_id, y.plandag,
+    NULL, NULL, NULL, y.id, x.id, y.locatie_id, y.productie_id, y.speelreeks_id, y.plandag,
     COALESCE(o.naam, 'Een locatie') || ' is dubbel geboekt: ' || y.wat || ' en ' || x.wat || '.'
   FROM plek x
   JOIN plek y ON y.locatie_id = x.locatie_id AND y.id > x.id
@@ -109,5 +110,5 @@ alle AS (
     AND CASE WHEN x.getimed AND y.getimed THEN (x.van < y.tot AND y.van < x.tot) OR x.van = y.van ELSE x.plandag = y.plandag END
 )
 SELECT code * 1000000000000 + x * 1000000 + y AS id, type, ernst, persoon_id, toewijzing_id, ander_toewijzing_id,
-  activiteit_id, ander_activiteit_id, locatie_id, productie_id, plandag, omschrijving
+  activiteit_id, ander_activiteit_id, locatie_id, productie_id, speelreeks_id, plandag, omschrijving
 FROM alle

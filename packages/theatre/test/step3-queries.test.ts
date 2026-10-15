@@ -111,6 +111,39 @@ describe('conflicten', () => {
     expect(all.every((c) => Number.isSafeInteger(c.id))).toBe(true)
   })
 
+  test("each row carries its activity's tourstop, which it flags beside the activity and the toewijzing", async () => {
+    const DAY = '2026-11-10'
+    const p = await newPerson()
+    const BRUGGE = 1
+    const a = await activity({ datum: DAY, start_at: `${DAY}T10:00`, eind_at: `${DAY}T14:00` })
+    const b = await create('activiteit', {
+      productie_id: 2,
+      speelreeks_id: BRUGGE,
+      soort: 'repetitie',
+      status: 'bevestigd',
+      datum: DAY,
+      start_at: `${DAY}T12:00`,
+      eind_at: `${DAY}T16:00`,
+    })
+    const ta = await assign(a, p, 'bevestigd')
+    const tb = await assign(b, p, 'bevestigd')
+    const pair = (await conflictsOf(p)).map((c) => [c.activiteit_id, c.toewijzing_id, c.speelreeks_id, c.ernst])
+    expect(pair.sort()).toEqual([
+      [a, ta, null, 'conflict'],
+      [b, tb, BRUGGE, 'conflict'],
+    ])
+
+    const tourstopOf = new Map((await rows('activiteit')).map((r) => [r.id, r.speelreeks_id ?? null]))
+    for (const c of await rows('conflicten'))
+      expect([c.id, c.speelreeks_id]).toEqual([c.id, tourstopOf.get(c.activiteit_id)])
+
+    const schema = await admin('GET', '/api/schema')
+    expect((schema.body.sources as Record<string, Body>).conflicten.flags).toEqual({
+      marks: { activiteit: 'activiteit_id', toewijzing: 'toewijzing_id', speelreeks: 'speelreeks_id' },
+      tone: 'ernst',
+    })
+  })
+
   test('a fresh invitation in the revision log is not yet onbevestigd, an old one is', async () => {
     sqlite.run('UPDATE toewijzing SET created_at = ? WHERE id = 7', [daysAgoIso(30)])
     await patch('toewijzing', 7, { state: 'uitgenodigd' })
@@ -407,6 +440,8 @@ test('owners read none of them', async () => {
   expect(schema.status).toBe(200)
   const sources = Object.keys(schema.body.sources as Body)
   for (const source of QUERIES) expect(sources).not.toContain(source)
+  // Without conflicten an owner reads no flags, and no source names one to it (threat 5).
+  expect(Object.values(schema.body.sources as Record<string, Body>).filter((s) => s.flags)).toEqual([])
 })
 
 // Seeding inserts views without the views route's checks; each one must also save through it.

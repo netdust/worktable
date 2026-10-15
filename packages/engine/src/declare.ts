@@ -193,6 +193,13 @@ export interface QueryDecl {
   /** The dataset this query reads: the grid lists its views under that dataset. */
   of?: string
   links?: Record<string, LinkDecl>
+  /** Each row flags the records its marks point at (dataset → integer column of ids), with its title and its tone column's tone. */
+  flags?: FlagsDecl
+}
+
+export interface FlagsDecl {
+  marks: Record<string, string>
+  tone: string
 }
 
 /** A tile names a view: by name in a seed, by id once stored. */

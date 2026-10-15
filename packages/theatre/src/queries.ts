@@ -83,6 +83,10 @@ export const conflicten = defineQuery({
   date: 'plandag',
   scoped: 'productie_id',
   sql: sqlOf('conflicten'),
+  flags: {
+    marks: { activiteit: 'activiteit_id', toewijzing: 'toewijzing_id', speelreeks: 'speelreeks_id' },
+    tone: 'ernst',
+  },
   columns: {
     id: { type: 'integer', label: 'Id' },
     type: {
@@ -110,6 +114,7 @@ export const conflicten = defineQuery({
     ander_activiteit_id: { type: 'integer', label: 'Andere activiteit', nullable: true, relation: 'activiteit' },
     locatie_id: { type: 'integer', label: 'Locatie', nullable: true, relation: 'organisatie' },
     productie_id: { type: 'integer', label: 'Productie', relation: 'productie' },
+    speelreeks_id: { type: 'integer', label: 'Tourstop', nullable: true, relation: 'speelreeks' },
     plandag: { type: 'date', label: 'Plandag' },
     omschrijving: { type: 'text', label: 'Omschrijving' },
   },

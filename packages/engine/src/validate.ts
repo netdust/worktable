@@ -161,6 +161,22 @@ function checkOf(domain: Domain, query: QueryDecl): void {
   }
 }
 
+// A flag marks records by id, so each mark is a dataset and an integer column; its tone reads every row's option.
+function checkFlags(domain: Domain, query: QueryDecl): void {
+  const flags = query.flags
+  if (!flags) return
+  const at = (bad: string, message: string) => new DomainError(query.name, bad, `flags ${message}`)
+  if (Object.keys(flags.marks).length === 0) throw at('marks', 'marks must name at least one dataset')
+  for (const [dataset, column] of Object.entries(flags.marks)) {
+    if (!domain.datasets.some((d) => d.name === dataset)) throw at(dataset, `mark "${dataset}" is not a dataset`)
+    if (query.columns[column]?.type !== 'integer') throw at(column, `mark column "${column}" is not an integer column`)
+  }
+  const tone = query.columns[flags.tone]
+  if (!tone?.options || !Object.keys(tone.options).every((key) => tone.tones?.[key])) {
+    throw at(flags.tone, `tone "${flags.tone}" is not an options column with a tone for every option`)
+  }
+}
+
 function checkOwners(source: DatasetDecl | QueryDecl): void {
   const column = source.owners?.owner
   if (column === undefined || column === 'id' || source.columns[column]?.relation) return
@@ -669,6 +685,7 @@ export function validateDomain(domain: Domain): void {
   for (const query of domain.queries) {
     checkCreates(domain, query)
     checkOf(domain, query)
+    checkFlags(domain, query)
     for (const [column, decl] of Object.entries(query.columns)) {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }
