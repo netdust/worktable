@@ -560,7 +560,9 @@ test('planning-details @e2e', async ({ page }) => {
     const cell = named(page, night).first().locator('td').nth(1)
     await expect(cell).toContainText('00:30–02:00')
     await expect(cell).toContainText('/')
-    expect(await cell.evaluate((td) => td.scrollWidth <= td.clientWidth), 'the Tijd cell holds its day and time').toBe(true)
+    expect(await cell.evaluate((td) => td.scrollWidth <= td.clientWidth), 'the Tijd cell holds its day and time').toBe(
+      true,
+    )
   } finally {
     await page.request.delete(`/api/rows/activiteit/${id}`)
   }
