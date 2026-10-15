@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Row } from '../types'
-import { type Drop, dropOf } from './drop'
+import { type Drop, dropOf, writeDrop } from './drop'
 import { byRank } from './rank'
 
 const card = (id: number, position: string | null = null): Row => ({ id, title: `${id}`, status: '', fields: { position } })
@@ -67,5 +67,26 @@ describe('dropOf', () => {
     expect(dropOf({ manual: false, from: 0, index: 2, cards: column, value: 'todo' })).toMatchObject({ kind: 'place', manual: false })
     expect(dropOf({ manual: true, from: 2, index: 2, cards: column, value: 'todo' })).toEqual({ kind: 'none' })
     expect(dropOf({ manual: false, from: 1, index: 1, cards: column, value: 'todo' })).toEqual({ kind: 'none' })
+  })
+})
+
+describe('writeDrop', () => {
+  const store = () => ({ apply: vi.fn(() => Promise.resolve()), applyStep: vi.fn(() => Promise.resolve(true)) })
+
+  it('writes a place as one step: the ranks, then the card, with its column in the same write when it changes', async () => {
+    const within = store()
+    await writeDrop(within, 'status', { kind: 'place', ranks: [{ id: 2, position: 'V' }], position: 'k', manual: true }, 1)
+    expect(within.applyStep).toHaveBeenCalledWith([{ id: 2, field: 'position', value: 'V' }, { id: 1, field: 'position', value: 'k' }])
+
+    const across = store()
+    await writeDrop(across, 'status', { kind: 'place', ranks: [], position: 'V', value: 'done', manual: true }, 1)
+    expect(across.applyStep).toHaveBeenCalledWith([{ id: 1, field: 'status', value: 'done', with: { position: 'V' } }])
+  })
+
+  it('writes a regroup as one edit of the column', async () => {
+    const regroup = store()
+    expect(await writeDrop(regroup, 'status', { kind: 'regroup', value: null }, 1)).toBe(true)
+    expect(regroup.apply).toHaveBeenCalledWith({ id: 1, field: 'status', value: null })
+    expect(regroup.applyStep).not.toHaveBeenCalled()
   })
 })

@@ -24,11 +24,11 @@ afterEach(cleanup)
 describe('the board', () => {
   it('puts cards in the column of their option, in option order, with Geen last; a card opens its row', () => {
     render(<Board view={view} layout={defaults(view)} model={model} models={{ toewijzing: model }} rows={[row(1, 'Lotte', 'bevestigd'), row(2, 'Bram', 'open'), row(3, 'Naam', null)]} column="state" />)
-    const columns = screen.getAllByRole('grid').map((list) => list.getAttribute('aria-label'))
+    const columns = screen.getAllByRole('region').map((list) => list.getAttribute('aria-label'))
     expect(columns).toEqual(['Open', 'Voorlopig', 'Bevestigd', 'Geen'])
-    expect(within(screen.getByRole('grid', { name: 'Bevestigd' })).getByRole('row', { name: /Lotte/ })).toBeTruthy()
-    expect(within(screen.getByRole('grid', { name: 'Geen' })).getByRole('row', { name: /Naam/ })).toBeTruthy()
-    fireEvent.click(screen.getByRole('row', { name: /Bram/ }))
+    expect(within(screen.getByRole('region', { name: 'Bevestigd' })).getByRole('button', { name: /Lotte/ })).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Geen' })).getByRole('button', { name: /Naam/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Bram/ }))
     expect(screen.getByRole('complementary', { name: 'Bram' })).toBeTruthy()
   })
 })
@@ -51,13 +51,13 @@ describe('a board card', () => {
     const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'bevestigd', soort: 'voorstelling', productie_id: [2], plandag: '2026-10-13', start_at: '2026-10-13 20:00', eind_at: '2026-10-13 21:15', plaats: 'Theater Het Anker' } }
     document.documentElement.lang = 'nl'
     render(<Board view={board} layout={defaults(board)} model={activity} models={{ activiteit: activity }} rows={[show]} column="status" />)
-    const card = within(screen.getByRole('grid', { name: 'Bevestigd' })).getByRole('row', { name: /Voorstelling Brugge/ })
+    const card = within(screen.getByRole('region', { name: 'Bevestigd' })).getByRole('button', { name: /Voorstelling Brugge/ })
     expect(card.textContent).toContain('Voorstelling')
     expect(card.textContent).toContain('di 13 okt')
     expect(card.querySelector('.nv-time')?.textContent).toBe('20:00–21:15')
     expect(card.textContent).toContain('Theater Het Anker')
     expect(card.textContent).not.toContain('Productie')
-    expect(screen.queryByRole('grid', { name: 'Geen' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Geen' })).toBeNull()
     document.documentElement.lang = ''
   })
 })
@@ -75,7 +75,7 @@ describe('Kolommen on a card skin', () => {
     const board = { ...view, model: 'activiteit', table: 'activiteit', board: { column: 'status' } } as unknown as View
     const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'optie', plaats: 'Het Anker', bron: 'Plan' } }
     const onShown = vi.fn()
-    const card = () => screen.getByRole('row', { name: /Voorstelling Brugge/ })
+    const card = () => screen.getByRole('button', { name: /Voorstelling Brugge/ })
     const { rerender } = render(<Board view={board} layout={{ ...defaults(board), order: ['title', 'bron', 'plaats'] }} model={activity} models={{}} rows={[show]} column="status" onShown={onShown} />)
     expect([...card().querySelectorAll('.nv-board__fact')].map((f) => f.textContent)).toEqual(['Plan', 'Het Anker'])
     rerender(<Board view={board} layout={{ ...defaults(board), hidden: ['bron'] }} model={activity} models={{}} rows={[show]} column="status" onShown={onShown} />)

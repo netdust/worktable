@@ -48,6 +48,7 @@ import { hintsOf, stepsPeriod } from './hints'
 import { formatWindow, isMonth, isoWeek, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
+import { writeDrop } from '../board/drop'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
@@ -621,7 +622,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               lane={layout.group} layout={layout} onTitle={setShown} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
-              onMove={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (id, field, value) => void store.apply({ id, field, value }) : undefined}
+              onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
               onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />

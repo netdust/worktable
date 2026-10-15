@@ -1,3 +1,4 @@
+import type { Store } from '../grid/store'
 import type { Row } from '../types'
 import { rankBetween, rankOf } from './rank'
 
@@ -41,4 +42,11 @@ export function dropOf({ manual, from, index, cards, value }: Input): Drop {
     }
   }
   return { kind: 'place', ranks, position: rankBetween(lo, hi), ...(from === null ? { value } : {}), manual }
+}
+
+/** A drop through the store: a place's ranks and then the card's own write, one step that one undo takes back; a regroup, one edit. */
+export function writeDrop(store: Pick<Store, 'apply' | 'applyStep'>, field: string, drop: Exclude<Drop, { kind: 'none' }>, id: number): Promise<boolean> {
+  if (drop.kind === 'regroup') return store.apply({ id, field, value: drop.value }).then(() => true)
+  const own = drop.value === undefined ? { id, field: 'position', value: drop.position } : { id, field, value: drop.value, with: { position: drop.position } }
+  return store.applyStep([...drop.ranks.map((rank) => ({ id: rank.id, field: 'position', value: rank.position })), own])
 }
