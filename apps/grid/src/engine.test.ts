@@ -173,6 +173,16 @@ describe('toSchema', () => {
     expect(fields.plaats.type).toBe('text')
   })
 
+  it("carries a dataset's tone to its model", () => {
+    const productie = engine.sources.productie
+    const kleur = { type: 'text', label: 'Kleur', nullable: true, options: { violet: 'Paars' }, tones: { violet: 'violet' } } as const
+    const toned: EngineSchema = { sources: { ...engine.sources, productie: { ...productie, tone: 'kleur', columns: { ...productie.columns, kleur } } } }
+    const { models } = toSchema(toned)
+
+    expect(models.productie.tone).toBe('kleur')
+    expect(models.activiteit.tone).toBeUndefined()
+  })
+
   it('names the title column after its label and leaves it out of the fields', () => {
     const model = toSchema(engine).models.activiteit
 

@@ -2960,7 +2960,7 @@
   width: 6px;
   height: 14px;
   border-radius: 2px;
-  background: var(--color-accent-default);
+  background: var(--c, var(--color-accent-default));
 }
 
 #root .nv-dw-more {
@@ -6390,16 +6390,16 @@ table.nv-cal--month .nv-cal__event:hover {
 
 #root .nv-tl__bar:hover {
   z-index: 3;
-  background: color-mix(in srgb, var(--color-accent-default) 24%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--lane, var(--color-accent-default)) 24%, var(--color-bg-surface));
 }
 
 #root .nv-tl__bar--open,
 #root .nv-tl__bar--open:hover {
-  background: color-mix(in srgb, var(--color-accent-default) 32%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--lane, var(--color-accent-default)) 32%, var(--color-bg-surface));
 }
 
 #root .nv-tl__bar--option {
-  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent-default) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--color-accent-default) 20%, var(--color-bg-surface)) 5px 10px);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--lane, var(--color-accent-default)) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--lane, var(--color-accent-default)) 20%, var(--color-bg-surface)) 5px 10px);
 }
 
 #root .nv-tl__bar--cancelled {

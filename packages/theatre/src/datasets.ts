@@ -45,6 +45,20 @@ const statussen = {
   tones: { optie: 'warn', bevestigd: 'ok', geannuleerd: 'bad' },
 } as const
 
+// A production's colour, each option the palette tone it is named for.
+const kleuren = {
+  options: {
+    rose: 'Roze',
+    violet: 'Paars',
+    amber: 'Amber',
+    sky: 'Blauw',
+    teal: 'Groenblauw',
+    green: 'Groen',
+    slate: 'Leisteen',
+  },
+  tones: { rose: 'rose', violet: 'violet', amber: 'amber', sky: 'sky', teal: 'teal', green: 'green', slate: 'slate' },
+} as const
+
 const bijlagen = {
   kinds: { rider: 'Rider', zaalblad: 'Zaalblad', bonnetje: 'Bonnetje', foto: 'Foto', document: 'Document' },
 }
@@ -85,10 +99,12 @@ export const productie = defineDataset({
   new_label: 'Nieuwe productie',
   icon: 'tag',
   title: 'titel',
+  tone: 'kleur',
   custom: true,
   columns: {
     titel: { type: 'text', label: 'Titel' },
     seizoen: { type: 'text', label: 'Seizoen', nullable: true },
+    kleur: { type: 'text', label: 'Kleur', nullable: true, ...kleuren },
     status: {
       type: 'text',
       label: 'Status',

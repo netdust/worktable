@@ -6,6 +6,7 @@ import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
 import type { Account, ActionInput, ApiError, Link, Model, ModelAction, OptionsFrom, Row, View } from '../types'
 import { iconNamed } from '../ui/icons'
 import { toneColor } from '../ui/tone'
+import { useTones } from '../ui/useTones'
 import { whenOf } from '../ui/when'
 import { SchemaContext } from './drawer/context'
 import { dayLabel, inboundOf, kindOf, type Prop, propsOf } from './drawer/derive'
@@ -13,7 +14,7 @@ import { HistorySection, InboundSection, LinkSection, LongSection, type WriteFie
 import type { Layout } from './layout'
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
-import { type Column, linksOf } from './columns'
+import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
 import { RelationPicker } from './cells/RelationPicker'
@@ -154,6 +155,8 @@ export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], o
   const { shown, folded } = propsOf(columns, row, cal, layout, dateField)
   const space = schema?.space && model && schema.space.model !== model.key ? columns.find((c) => c.id === schema.space?.field) : undefined
   const sub = [space, columns.find((c) => c.kind === 'relation' && c !== space && c.text(row) !== '')].filter((c): c is Column => Boolean(c) && (c as Column).text(row) !== '')
+  const tones = useTones(schema?.models ?? {}, space && !ownSub ? schema?.space?.model : undefined)
+  const spaceTone = space && tones?.get(Number(firstId(space.value(row))))
   const links = columns.filter((c) => c.kind === 'links' && model?.fields[c.field ?? c.id]?.link)
   const longs = columns.filter((c) => c.kind === 'longtext')
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
@@ -164,7 +167,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], o
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
       {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
         <p className="nv-dw-sub">
-          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
+          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
         </p>
       )}
       {alert}

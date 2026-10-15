@@ -22,6 +22,7 @@ const WEEK = {
   refused: '2032-03-29',
   notes: '2032-05-03',
   filled: '2029-04-09',
+  tone: '2033-06-06',
 }
 const MANUAL = ['position']
 const SORTED = ['plandag', 'start_at']
@@ -715,6 +716,94 @@ test.describe('step 3f: a group says how many places are filled', () => {
     } finally {
       for (const id of places) await api.delete(`/api/rows/toewijzing/${id}`)
       await made.remove()
+    }
+  })
+})
+
+test.describe("step 3f: a production's kleur colours its lane", () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('production-tone @e2e', async ({ page }) => {
+    type Productie = { id: number; titel: string; kleur: string | null }
+    const api = page.request
+    const all = ((await (await api.get('/api/rows/productie?limit=500')).json()) as { rows: Productie[] }).rows
+    const seeded = ['De Kersentuin', 'Nachtwacht', 'Zomerstorm'].map(
+      (titel) => all.find((p) => p.titel === titel) as Productie,
+    )
+    expect(seeded.map((p) => p.kleur)).toEqual(['rose', 'sky', 'green'])
+    const changed = seeded[1]
+    const stops: number[] = []
+    const kleur = (id: number, value: string | null) =>
+      api.patch(`/api/rows/productie/${id}`, { data: { kleur: value } })
+    const lane = (titel: string) => page.getByRole('row', { name: titel, exact: true })
+    const laneOf = (titel: string) => lane(titel).evaluate((el) => (el as HTMLElement).style.getPropertyValue('--lane'))
+    // The lane's dot and its bar as painted, against a dot and a bar of that tone drawn outside any lane. Colours crossfade, so it is polled.
+    const painted = (titel: string, tone: string) =>
+      lane(titel).evaluate((el, tone) => {
+        const bar = el.querySelector('.nv-tl__bar') as HTMLElement
+        const dot = el.querySelector('.nv-tl__head strong') as HTMLElement
+        const probe = document.createElement('div')
+        probe.style.setProperty('--lane', `var(--tone-${tone})`)
+        probe.innerHTML = `<span class="nv-tl__head"><strong></strong></span><button class="${bar.className}"></button>`
+        el.closest('.nv-tl')?.append(probe)
+        const paint = (a: Element, b: Element, at?: string) =>
+          ['backgroundColor', 'backgroundImage'].every(
+            (key) =>
+              getComputedStyle(a, at)[key as 'backgroundColor'] === getComputedStyle(b, at)[key as 'backgroundColor'],
+          )
+        const same = {
+          dot: paint(dot, probe.querySelector('strong') as Element, '::before'),
+          bar: paint(bar, probe.querySelector('button') as Element),
+        }
+        probe.remove()
+        return same
+      }, tone)
+    try {
+      for (const [at, p] of seeded.entries()) {
+        const start_datum = plusDays(WEEK.tone, at)
+        // The middle one an option: its bar is hatched in its production's colour, the others a flat tint of it.
+        const data = {
+          productie_id: p.id,
+          naam: `e2e kleur ${at + 1}`,
+          start_datum,
+          eind_datum: plusDays(start_datum, 2),
+          status: at === 1 ? 'optie' : 'bevestigd',
+        }
+        stops.push(await posted(api, '/api/rows/speelreeks', data))
+      }
+      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.tone)
+      await page.mouse.move(0, 0)
+      await expect(page.locator('.nv-tl__bar--option')).toHaveCount(1)
+      for (const p of seeded) {
+        await expect.poll(() => laneOf(p.titel)).toBe(`var(--tone-${p.kleur})`)
+        await expect.poll(() => painted(p.titel, p.kleur as string)).toEqual({ dot: true, bar: true })
+      }
+      // A flat bar and the hatched one each follow their own lane's tone, not one colour for all.
+      expect((await painted('De Kersentuin', 'sky')).bar).toBe(false)
+      expect((await painted('Nachtwacht', 'rose')).bar).toBe(false)
+      await shot(page, 'production-tone')
+
+      // The bar's drawer names its production in the subline, beside a bar of its kleur.
+      await page.getByRole('button', { name: /e2e kleur 1/ }).click()
+      const space = page.getByRole('complementary', { name: 'e2e kleur 1' }).locator('.nv-dw-sub__space')
+      await expect(space).toHaveText('De Kersentuin')
+      await expect
+        .poll(() => space.locator('i').evaluate((el) => (el as HTMLElement).style.getPropertyValue('--c')))
+        .toBe('var(--tone-rose)')
+      await page.keyboard.press('Escape')
+
+      // Another kleur on the production: after a reload its lane follows, the others keep theirs.
+      const patched = await kleur(changed.id, 'violet')
+      expect(patched.status(), await patched.text()).toBe(200)
+      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.tone)
+      await page.mouse.move(0, 0)
+      await expect.poll(() => laneOf(changed.titel)).toBe('var(--tone-violet)')
+      await expect.poll(() => painted(changed.titel, 'violet')).toEqual({ dot: true, bar: true })
+      expect(await laneOf('De Kersentuin')).toBe('var(--tone-rose)')
+    } finally {
+      await kleur(changed.id, changed.kleur)
+      for (const id of stops) await api.delete(`/api/rows/speelreeks/${id}`)
     }
   })
 })

@@ -71,6 +71,8 @@ export interface EngineSource {
   /** The words of the button that adds a row, while the dataset keeps its declared name. */
   new_label?: string
   group_facts?: GroupFact[]
+  /** A dataset's options column whose tone is each record's colour. */
+  tone?: string
   columns: Record<string, EngineColumn>
   lookups?: Record<string, EngineLookup>
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
@@ -207,6 +209,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
+    ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),

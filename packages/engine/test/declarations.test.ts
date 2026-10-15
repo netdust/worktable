@@ -207,6 +207,28 @@ describe('the tone palette', () => {
   })
 })
 
+describe("a dataset's tone", () => {
+  const withKind = (over: Partial<ColumnDecl>, tone = 'kind') =>
+    withDataset('job', {
+      tone,
+      columns: { ...dataset('job').columns, kind: { ...dataset('job').columns.kind, ...over } },
+    })
+
+  test('a tone naming an unknown column, a column without tones, or one leaving an option untoned is refused', () => {
+    expect(refused(withKind({}, 'ghost'))).toEqual(['job', 'ghost'])
+    expect(refused(withKind({}))).toEqual(['job', 'kind'])
+    expect(refused(withKind({ tones: { main: 'sky' } }))).toEqual(['job', 'kind'])
+  })
+
+  test('a tone on an options column toning every option validates, and /schema serves it on the dataset', async () => {
+    const domain = withKind({ tones: { main: 'sky', side: 'rose' } })
+    expect(() => validateDomain(domain)).not.toThrow()
+    const sources = (await schemaOf(domain, 'editor')).sources
+    expect(sources.job.tone).toBe('kind')
+    expect(sources.room.tone).toBeUndefined()
+  })
+})
+
 describe('a long text', () => {
   const withNote = (note: ColumnDecl) => withDataset('job', { columns: { ...dataset('job').columns, note } })
 

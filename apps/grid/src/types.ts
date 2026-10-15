@@ -86,6 +86,8 @@ export interface Model {
   record_link?: true
   /** The column a write to which is a transition: the record's state. */
   lifecycle?: string
+  /** The options column whose tone colours each record as a lane and on the rows that point at it. */
+  tone?: string
   /** Files its records carry, by kind; the drawer lists and takes them. */
   attachments?: { kinds: Record<string, string>; max_mb: number; writable?: true }
   fields: Record<string, Field>

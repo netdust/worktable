@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, View } from './types'
 import { defaults } from './grid/layout'
@@ -59,6 +59,30 @@ describe('a board card', () => {
     expect(card.textContent).not.toContain('Productie')
     expect(screen.queryByRole('region', { name: 'Geen' })).toBeNull()
     document.documentElement.lang = ''
+  })
+
+  it("the line of a relation to a toned dataset carries that record's tone; a plain line none", async () => {
+    const activity = {
+      key: 'activiteit', label: 'Activiteiten', title_label: 'Omschrijving', title_readonly: false,
+      fields: {
+        status: { type: 'select', label: 'Status', required: true, fact: false, options: { bevestigd: 'Bevestigd' } },
+        productie_id: { type: 'relation', label: 'Productie', required: true, fact: false, relation: { model: 'productie', multiple: false } },
+        plaats: { type: 'text', label: 'Plaats', required: false, fact: false },
+      },
+    } as unknown as Model
+    const productie = {
+      key: 'productie', label: 'Producties', title_label: 'Titel', title_readonly: false, tone: 'kleur',
+      fields: { kleur: { type: 'select', label: 'Kleur', required: false, fact: false, options: { rose: 'Roze' }, tones: { rose: 'rose' } } },
+    } as unknown as Model
+    api.records.mockResolvedValue({ rows: [{ id: 2, title: 'De Kersentuin', status: '', fields: { kleur: 'rose' } }], total: 1 })
+    const board = { ...view, model: 'activiteit', table: 'activiteit', board: { column: 'status' } } as unknown as View
+    const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'bevestigd', productie_id: [2], plaats: 'Het Anker' }, lookups: { productie_id: { id: 2, title: 'De Kersentuin', status: '', fields: {} } } }
+    render(<Board view={board} layout={defaults(board)} model={activity} models={{ activiteit: activity, productie }} rows={[show]} column="status" />)
+    const card = screen.getByRole('button', { name: /Voorstelling Brugge/ })
+    const line = (text: string) => [...card.querySelectorAll<HTMLElement>('.nv-board__fact')].find((f) => f.textContent === text) as HTMLElement
+    await waitFor(() => expect(line('De Kersentuin').querySelector('i')?.style.getPropertyValue('--c')).toBe('var(--tone-rose)'))
+    expect(line('Het Anker').querySelector('i')).toBeNull()
+    expect(api.records).toHaveBeenCalledWith('productie', '')
   })
 })
 

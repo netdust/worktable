@@ -2,11 +2,12 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { Drawer } from '../grid/Drawer'
 import { type Column, columnsFor } from '../grid/columns'
 import { t } from '../i18n'
-import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
+import type { CalendarDef, DateWindow, Model, Row, Tone, View } from '../types'
 import type { Layout } from '../grid/layout'
 import { factsOf, placeOf } from '../ui/facts'
 import type { Shown } from '../ui/Toolbar'
 import { laneTone, toneColor } from '../ui/tone'
+import { useTones } from '../ui/useTones'
 import { isMonth, iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
@@ -39,12 +40,12 @@ const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) ||
 
 type ToneOf = (lane: number | null, row?: Row) => CSSProperties
 
-/** Laned, an event takes its lane's colour; unlaned, the tone of its first toned option, as the prototype tints by soort. */
-function lanePalette(lanes: Lane[], toned: Column | undefined): ToneOf {
+/** Laned, an event takes its lane's colour, the lane record's own tone where it has one; unlaned, the tone of its first toned option, as the prototype tints by soort. */
+function lanePalette(lanes: Lane[], toned: Column | undefined, tones: Map<number, Tone> | null): ToneOf {
   return (lane, row) => {
     if (toned && row)
       return { '--tone': toneColor(toned.tones?.[String(toned.value(row) ?? '')]) } as CSSProperties
-    return { '--tone': laneTone(lanes.findIndex((l) => l.id === lane)) } as CSSProperties
+    return { '--tone': laneTone(lanes.findIndex((l) => l.id === lane), lane === null ? undefined : tones?.get(lane)) } as CSSProperties
   }
 }
 
@@ -222,7 +223,8 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
   const place = useMemo(() => placeOf(factsOf(all, layout), cal.lanes), [all, layout, cal.lanes])
   const whereOf = (row: Row) => place?.text(row) ?? ''
   const toned = columns.find((c) => c.kind === 'select' && c.tones)
-  const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned), [lanes, lane, toned])
+  const tones = useTones(models, lane ? model.fields[lane]?.relation?.model : undefined)
+  const toneOf = useMemo(() => lanePalette(lanes, lane ? undefined : toned, tones), [lanes, lane, toned, tones])
   useEffect(() => onTitle?.({ rows: rows.length, groups: null, cut: false, menu: all }), [rows.length, all])
   return (
     <div className="nv-frame">

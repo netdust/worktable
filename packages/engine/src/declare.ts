@@ -160,6 +160,8 @@ export interface DatasetDecl {
   /** The relation column that points at the domain's space. */
   scoped?: string
   group_facts?: GroupFact[]
+  /** An options column toning every option: a record's colour as a lane and on the rows that point at it. */
+  tone?: string
   /** The icon the grid shows until an administrator picks one. */
   icon?: Icon
   /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */

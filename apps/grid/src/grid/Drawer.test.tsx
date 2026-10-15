@@ -87,6 +87,22 @@ describe('the drawer as the prototypes draw it', () => {
     fireEvent.keyDown(drawer, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
+
+  it("the subline's space bar takes the space record's tone", async () => {
+    const team = {
+      key: 'team', label: 'Teams', title_label: 'Naam', title_readonly: false, tone: 'colour',
+      fields: { colour: { type: 'select', label: 'Kleur', required: false, options: { violet: 'Paars' }, tones: { violet: 'violet' } } },
+    } as unknown as Model
+    const job = { ...model, key: 'job', fields: { team_id: { type: 'relation', label: 'Team', required: true, relation: { model: 'team', multiple: false } } } } as unknown as Model
+    const schema = { models: { job, team }, tables: [], views: [], space: { model: 'team', field: 'team_id' } } as unknown as Schema
+    const record: Row = { id: 8, title: 'Opbouw', status: '', fields: { team_id: 4 }, lookups: { team_id: { id: 4, title: 'Blauw team', status: '', fields: {} } } }
+    remote.records.mockResolvedValue({ rows: [{ id: 4, title: 'Blauw team', status: '', fields: { colour: 'violet' } }], total: 1 })
+    render(<SchemaContext.Provider value={schema}><Drawer row={record} columns={columnsFor(job, { ...planning, columns: undefined }, false)} model={job} onClose={() => undefined} /></SchemaContext.Provider>)
+    const bar = () => screen.getByRole('complementary', { name: 'Opbouw' }).querySelector('.nv-dw-sub__space i') as HTMLElement
+    await waitFor(() => expect(bar().style.getPropertyValue('--c')).toBe('var(--tone-violet)'))
+    expect(bar().parentElement?.textContent).toBe('Blauw team')
+    expect(remote.records).toHaveBeenCalledWith('team', '')
+  })
 })
 
 describe('the drawer', () => {

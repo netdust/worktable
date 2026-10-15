@@ -1,0 +1,62 @@
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defaults } from '../grid/layout'
+import type { CalendarDef, Model, Row, View } from '../types'
+
+const api = vi.hoisted(() => ({ records: vi.fn(), recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })) }))
+vi.mock('../api', () => api)
+const { Timeline } = await import('./Timeline')
+
+const CAL: CalendarDef = { day: 'start_datum', start: null, end: 'eind_datum', lanes: ['productie_id'], spans: true }
+const productie = (tone?: string) => ({
+  key: 'productie', label: 'Producties', title_label: 'Titel', title_readonly: false, ...(tone ? { tone } : {}),
+  fields: { kleur: { type: 'select', label: 'Kleur', required: false, options: { violet: 'Paars', sky: 'Blauw' }, tones: { violet: 'violet', sky: 'sky' } } },
+}) as unknown as Model
+const speelreeks = {
+  key: 'speelreeks', label: 'Tourstops', title_label: 'Naam', title_readonly: false,
+  fields: {
+    productie_id: { type: 'relation', label: 'Productie', required: true, relation: { model: 'productie', multiple: false } },
+    start_datum: { type: 'date', label: 'Start', required: true },
+    eind_datum: { type: 'date', label: 'Einde', required: true },
+  },
+} as unknown as Model
+const view = { key: '9', label: 'Tijdlijn', table: 'speelreeks', model: 'speelreeks', type: 'timeline', calendar: CAL } as unknown as View
+const stop = (id: number, title: string, of: [number, string]): Row => ({
+  id, title, status: '',
+  fields: { start_datum: '2026-10-13', eind_datum: '2026-10-15', productie_id: of[0] },
+  lookups: { productie_id: { id: of[0], title: of[1], status: '', fields: {} } },
+})
+const stops = [stop(1, 'Brugge', [1, 'De Kersentuin']), stop(2, 'Lier', [2, 'Nachtwacht']), stop(3, 'Oostende', [3, 'Zomerstorm'])]
+const kleuren: Row[] = [
+  { id: 1, title: 'De Kersentuin', status: '', fields: { kleur: 'violet' } },
+  { id: 2, title: 'Nachtwacht', status: '', fields: { kleur: 'sky' } },
+  { id: 3, title: 'Zomerstorm', status: '', fields: { kleur: null } },
+]
+
+const shown = (models: Record<string, Model>) =>
+  render(<Timeline view={view} model={speelreeks} models={models} rows={stops} cal={CAL} shown={{ from: '2026-10-12', to: '2026-10-18' }} lane="productie_id" layout={defaults(view)} />)
+const laneOf = (name: string) => screen.getByRole('row', { name }).style.getPropertyValue('--lane')
+
+afterEach(() => {
+  cleanup()
+  vi.resetAllMocks()
+})
+
+describe("the timeline's lanes", () => {
+  it("take their record's tone where its dataset has one: a production with kleur violet is violet; one without, the palette by its place", async () => {
+    api.records.mockResolvedValue({ rows: kleuren, total: 3 })
+    shown({ speelreeks, productie: productie('kleur') })
+
+    await waitFor(() => expect(laneOf('De Kersentuin')).toBe('var(--tone-violet)'))
+    expect(laneOf('Nachtwacht')).toBe('var(--tone-sky)')
+    expect(laneOf('Zomerstorm')).toBe('var(--tone-amber)')
+    expect(api.records).toHaveBeenCalledWith('productie', '')
+  })
+
+  it('take the palette by order where the related dataset has no tone, and read nothing for it', () => {
+    shown({ speelreeks, productie: productie() })
+
+    expect(['De Kersentuin', 'Nachtwacht', 'Zomerstorm'].map(laneOf)).toEqual(['var(--tone-sky)', 'var(--tone-violet)', 'var(--tone-amber)'])
+    expect(api.records).not.toHaveBeenCalled()
+  })
+})

@@ -306,6 +306,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             actions: servedActions(domain, s.name, actor),
             ...(space ? { space: s.scoped ? 'scoped' : 'global' } : {}),
             ...(s.group_facts ? { group_facts: s.group_facts } : {}),
+            ...(s.kind === 'dataset' && s.tone ? { tone: s.tone } : {}),
           },
         ]),
     )

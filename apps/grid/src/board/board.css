@@ -170,6 +170,15 @@
   white-space: nowrap;
 }
 
+/* A line naming a toned record carries its tone, as the prototype's production tag (.prod-tag i). */
+.nv-board__fact > .nv-board__tone {
+  flex: none;
+  width: 6px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--c);
+}
+
 .nv-board__faces {
   display: flex;
   align-items: center;

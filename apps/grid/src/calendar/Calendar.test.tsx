@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CalendarDef, Model, Row, View } from '../types'
 import { defaults } from '../grid/layout'
 
 vi.mock('../api', () => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
 const { Calendar, HOUR_PX } = await import('./Calendar')
+const api = await import('../api')
 
 const CAL: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'] }
 const model: Model = {
@@ -66,6 +67,21 @@ describe('the calendar', () => {
     expect(tone(/repetitie Gent/)).not.toBe(tone(/vergadering Antwerpen/))
     const lotte = within(legend).getByText('Lotte Verhaegen').closest('li') as HTMLElement
     expect(lotte.style.getPropertyValue('--tone')).toBe(tone(/repetitie Gent/))
+  })
+
+  it("lanes by a relation to a toned dataset take each record's tone, in the events and the legend; a record without one, the palette", async () => {
+    const persoon = {
+      key: 'persoon', label: 'Personen', title_label: 'Naam', title_readonly: false, tone: 'kleur',
+      fields: { kleur: { label: 'Kleur', type: 'select', options: { teal: 'Groenblauw' }, tones: { teal: 'teal' } } },
+    } as unknown as Model
+    vi.mocked(api.records).mockResolvedValue({ rows: [{ id: 1, title: 'Lotte', status: '', fields: { kleur: 'teal' } }, { id: 3, title: 'Noor', status: '', fields: { kleur: null } }], total: 2 })
+    shown({ models: { persoon_dag: model, persoon } })
+    const tone = (name: RegExp) => screen.getByRole('button', { name }).style.getPropertyValue('--tone')
+    await waitFor(() => expect(tone(/repetitie Gent/)).toBe('var(--tone-teal)'))
+    const legend = screen.getByRole('list', { name: 'Rijen' })
+    expect((within(legend).getByText('Lotte Verhaegen').closest('li') as HTMLElement).style.getPropertyValue('--tone')).toBe('var(--tone-teal)')
+    expect(tone(/vergadering Antwerpen/)).toBe('var(--tone-violet)')
+    expect(api.records).toHaveBeenCalledWith('persoon', '')
   })
 
   it('without a lane, events take the tone of their option and no legend shows', () => {

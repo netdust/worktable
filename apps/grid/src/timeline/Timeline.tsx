@@ -3,6 +3,7 @@ import { type Column, columnsFor } from '../grid/columns'
 import type { Layout } from '../grid/layout'
 import { factsOf, placeOf } from '../ui/facts'
 import { laneTone } from '../ui/tone'
+import { useTones } from '../ui/useTones'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
@@ -70,6 +71,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   const today = iso(new Date())
   const pct = (n: number) => `${(n / laid.days) * 100}%`
   const field = lane ? model.fields[lane] : undefined
+  const tones = useTones(models, field?.relation?.model)
   useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns }), [rows.length, laid.lanes.length, lane, columns])
   const weekend = (day: string) => [0, 6].includes((parse(day) as Date).getDay())
   const todayAt = window.indexOf(today)
@@ -116,7 +118,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
               const height = Math.max(1, ...placed.map((p) => p.row + 1))
               return (
                 <div key={l.id ?? 'none'} role="row" aria-label={lane ? l.title || t('noLane') : view.label} className="nv-tl__lane"
-                  style={lane ? ({ '--lane': laneTone(laid.lanes.indexOf(l)) } as CSSProperties) : undefined}>
+                  style={lane ? ({ '--lane': laneTone(laid.lanes.indexOf(l), l.id === null ? undefined : tones?.get(l.id)) } as CSSProperties) : undefined}>
                   <span role="rowheader" className="nv-tl__head">{lane && <strong>{l.title || t('noLane')}</strong>}<span className="nv-tl__count">{l.bars.length}</span></span>
                   <div role="cell" className="nv-tl__track" style={{ height: height * 48 + 16, '--day': pct(1) } as CSSProperties}>
                     {window.map((day, i) => weekend(day) && <span key={day} className="nv-tl__weekend" style={{ left: pct(i), width: pct(1) }} />)}

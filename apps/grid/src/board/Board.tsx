@@ -9,8 +9,9 @@ import type { Field, Model, Row, View } from '../types'
 import { factsOf } from '../ui/facts'
 import { toneColor } from '../ui/tone'
 import type { Shown } from '../ui/Toolbar'
+import { useTones } from '../ui/useTones'
 import './board.css'
-import { CardFace } from './Card'
+import { CardFace, type TonedLine } from './Card'
 import { Column } from './Column'
 import type { Drop } from './drop'
 import { byRank } from './rank'
@@ -55,6 +56,10 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
   const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   // The card shows the facts Kolommen leaves, in its order; the column the board sorts by needs no line.
   const shown = useMemo(() => factsOf(all, layout).filter((c) => c.id !== column), [all, layout, column])
+  // The first line naming a record of a toned dataset carries that record's tone, as the prototype's production tag.
+  const line = shown.find((c) => c.kind === 'relation' && models[c.relation?.model ?? '']?.tone)
+  const tones = useTones(models, line?.relation?.model)
+  const toned: TonedLine | undefined = useMemo(() => (line && tones ? { column: line.id, tones } : undefined), [line, tones])
   const manual = layout.sort[0]?.id === 'position'
   const lanes = useMemo(() => lanesOf(rows, column, field, manual), [rows, column, field, manual])
   const drag = useBoardDrag({ lanes, manual, layout, onDrop, onLayout })
@@ -66,13 +71,13 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
         <div className="nv-board" ref={drag.root}>
           <DndContext {...drag.context}>
             {drag.shown.map((lane) => (
-              <Column key={lane.key} lane={lane} tone={toneColor(field?.tones?.[lane.key])} columns={shown} none={none} open={open} drags={onDrop !== undefined}
+              <Column key={lane.key} lane={lane} tone={toneColor(field?.tones?.[lane.key])} columns={shown} toned={toned} none={none} open={open} drags={onDrop !== undefined}
                 look={drag.lookOf(lane.key)} onOpen={openRow} onCreate={onCreate ? () => onCreate(lane.value === null ? {} : { [column]: lane.value }) : undefined} />
             ))}
             {/* In #root, where the theme's tokens live; fixed above every column. */}
             {createPortal(
               <DragOverlay dropAnimation={null}>
-                {drag.lifted && <div className="nv-board__card nv-board__card--lifted"><CardFace row={drag.lifted} columns={shown} /></div>}
+                {drag.lifted && <div className="nv-board__card nv-board__card--lifted"><CardFace row={drag.lifted} columns={shown} toned={toned} /></div>}
               </DragOverlay>,
               document.getElementById('root') ?? document.body,
             )}

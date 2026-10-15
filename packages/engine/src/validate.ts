@@ -73,6 +73,19 @@ function checkTones(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+function checkTone(dataset: DatasetDecl): void {
+  const column = dataset.tone
+  if (column === undefined) return
+  const decl = dataset.columns[column]
+  if (!decl?.options || !Object.keys(decl.options).every((key) => decl.tones?.[key])) {
+    throw new DomainError(
+      dataset.name,
+      column,
+      `tone "${column}" is not an options column with a tone for every option`,
+    )
+  }
+}
+
 function checkLong(source: DatasetDecl | QueryDecl): void {
   for (const [column, decl] of Object.entries(source.columns)) {
     if (decl.long && (decl.type !== 'text' || decl.options || decl.relation)) {
@@ -643,6 +656,7 @@ export function validateDomain(domain: Domain): void {
     checkPosition(dataset)
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
+    checkTone(dataset)
     checkLifecycle(dataset)
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
