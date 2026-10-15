@@ -1,7 +1,8 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core'
-import { useEffect, useMemo } from 'react'
+import { useContext, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { columnsFor } from '../grid/columns'
+import { SchemaContext } from '../grid/drawer/context'
 import type { Layout } from '../grid/layout'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
@@ -9,6 +10,7 @@ import type { Field, Model, Row, View } from '../types'
 import { factsOf } from '../ui/facts'
 import { toneColor } from '../ui/tone'
 import type { Shown } from '../ui/Toolbar'
+import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { useTones } from '../ui/useTones'
 import './board.css'
 import { CardFace, type TonedLine } from './Card'
@@ -51,7 +53,10 @@ function lanesOf(rows: Row[], column: string, field: Field | undefined, manual: 
 
 /** Cards in a column per option of the board's column; a card opens its row, and drags to its place in any column. */
 export function Board({ view, model, models, rows, column, layout, onShown, onDrop, onLayout, onCreate }: Props) {
-  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout)
+  const flags = useFlags(useContext(SchemaContext), null, windowOfRows(rows, view.date_field), model.key)
+  const marks = (row: Row) => flags?.marksOf(model.key, row.id) ?? []
+  const flagged = flaggedOf(flags, model.key, rows)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags)
   const field = model.fields[column]
   const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   // The card shows the facts Kolommen leaves, in its order; the column the board sorts by needs no line.
@@ -63,7 +68,7 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
   const manual = layout.sort[0]?.id === 'position'
   const lanes = useMemo(() => lanesOf(rows, column, field, manual), [rows, column, field, manual])
   const drag = useBoardDrag({ lanes, manual, layout, onDrop, onLayout })
-  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all }), [rows.length, lanes.length, all])
+  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all, flagged }), [rows.length, lanes.length, all, flagged?.count])
   const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   return (
     <div className="nv-frame">
@@ -71,13 +76,13 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
         <div className="nv-board" ref={drag.root}>
           <DndContext {...drag.context}>
             {drag.shown.map((lane) => (
-              <Column key={lane.key} lane={lane} tone={toneColor(field?.tones?.[lane.key])} columns={shown} toned={toned} none={none} open={open} drags={onDrop !== undefined}
+              <Column key={lane.key} lane={lane} tone={toneColor(field?.tones?.[lane.key])} columns={shown} toned={toned} marks={marks} none={none} open={open} drags={onDrop !== undefined}
                 look={drag.lookOf(lane.key)} onOpen={openRow} onCreate={onCreate ? () => onCreate(lane.value === null ? {} : { [column]: lane.value }) : undefined} />
             ))}
             {/* In #root, where the theme's tokens live; fixed above every column. */}
             {createPortal(
               <DragOverlay dropAnimation={null}>
-                {drag.lifted && <div className="nv-board__card nv-board__card--lifted"><CardFace row={drag.lifted} columns={shown} toned={toned} /></div>}
+                {drag.lifted && <div className="nv-board__card nv-board__card--lifted"><CardFace row={drag.lifted} columns={shown} toned={toned} flags={marks(drag.lifted)} /></div>}
               </DragOverlay>,
               document.getElementById('root') ?? document.body,
             )}

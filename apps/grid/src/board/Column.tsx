@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 import type { Column as Fact } from '../grid/columns'
 import { t } from '../i18n'
 import type { Row } from '../types'
+import type { Flag } from '../ui/useFlags'
 import { Card, type Look, type TonedLine } from './Card'
 import { type BoardLane, laneId } from './useBoardDrag'
 
@@ -16,15 +17,15 @@ export interface ColumnLook {
 }
 
 /** One column: its head with the count and +, and its cards in the board's order, sortable where the board writes. */
-export function Column({ lane, tone, columns, toned, none, open, drags, look, onOpen, onCreate }: {
-  lane: BoardLane; tone: string; columns: Fact[]; toned?: TonedLine; none: string; open: Row | null; drags: boolean; look: ColumnLook | null
+export function Column({ lane, tone, columns, toned, marks, none, open, drags, look, onOpen, onCreate }: {
+  lane: BoardLane; tone: string; columns: Fact[]; toned?: TonedLine; marks?: (row: Row) => Flag[]; none: string; open: Row | null; drags: boolean; look: ColumnLook | null
   onOpen: (row: Row) => void
   onCreate?: () => void
 }) {
   const { setNodeRef } = useDroppable({ id: laneId(lane.key), data: { lane: lane.key } })
   const slot = look?.slot ?? null
   const cards = lane.cards.map((row) => (
-    <Card key={`${row.id}:${lane.key}`} row={row} columns={columns} toned={toned} lane={lane.key} drags={drags} open={open?.id === row.id}
+    <Card key={`${row.id}:${lane.key}`} row={row} columns={columns} toned={toned} flags={marks?.(row)} lane={lane.key} drags={drags} open={open?.id === row.id}
       look={look?.dragged?.id === row.id ? look.dragged.look : null} onOpen={onOpen} />
   ))
   if (slot) cards.splice(slot.index, 0, <div key="slot" className="nv-board__slot" style={{ height: slot.height }} aria-hidden="true">{lane.label}</div>)

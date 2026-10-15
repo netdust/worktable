@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { type ClipboardEvent, type KeyboardEvent, type RefObject, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ClipboardEvent, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
@@ -12,6 +12,9 @@ import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
 import { type BodyActions, GridBody } from './GridBody'
 import { EmptyState } from '../ui/EmptyState'
+import type { Shown } from '../ui/Toolbar'
+import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
+import { SchemaContext } from './drawer/context'
 import { GridFoot } from './GridFoot'
 import { GridHeader, NUMBER_WIDTH } from './GridHeader'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
@@ -43,7 +46,7 @@ export interface GridProps {
   snapshot?: RefObject<(() => OnScreen) | null>
   /** Told what is on screen, for the title line's summary. */
   /** What the title line and the chip row say: the rows, the groups, and the columns Kolommen offers. */
-  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[] } | null) => void
+  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[]; flagged?: Shown['flagged'] } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
@@ -121,9 +124,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
 
   const shownRows = total(groups)
   const shownGroups = by ? groups.length : null
+  const flags = useFlags(useContext(SchemaContext), scope, windowOfRows(state.rows, view.date_field), model.key)
+  const flagged = flaggedOf(flags, model.key, shown)
   useEffect(() => {
-    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns })
-  }, [shownRows, shownGroups, cut, columns])
+    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns, flagged })
+  }, [shownRows, shownGroups, cut, columns, flagged?.count])
   useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)
@@ -342,7 +347,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
           attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
-        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
           onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined} onWrite={writable ? apply : undefined}

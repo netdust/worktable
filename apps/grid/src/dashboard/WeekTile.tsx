@@ -1,9 +1,12 @@
 import { CalendarDays } from 'lucide-react'
-import { type CSSProperties, useEffect, useState } from 'react'
+import { type CSSProperties, useContext, useEffect, useState } from 'react'
 import { rows as readRows } from '../api'
 import { placeEvents } from '../calendar/layout'
+import { SchemaContext } from '../grid/drawer/context'
 import type { Model, Row, SavedView, Scope } from '../types'
+import { FlagMark } from '../ui/Flag'
 import { toneColor } from '../ui/tone'
+import { useFlags } from '../ui/useFlags'
 import { formatWindow, iso, parse, weekOf } from '../ui/Window'
 import { layoutOf } from '../ui/views'
 import { scopeFor } from './tiles'
@@ -30,6 +33,7 @@ export function WeekTile({ view, model, scope, version, onOpen, onOpenRow }: {
       live = false
     }
   }, [view.key, scope?.id, version, week.from])
+  const flags = useFlags(useContext(SchemaContext), scope, week, view.model)
   const today = iso(new Date())
   const { days, events } = view.calendar ? placeEvents(found, view.calendar, week, null) : { days: [], events: [] }
   // A bar takes the tone of its row's first toned option, as the calendar does without a lane.
@@ -53,6 +57,7 @@ export function WeekTile({ view, model, scope, version, onOpen, onOpenRow }: {
               <span className="nv-week-tile__head"><span className="nv-week-tile__dn">{weekday(date)}</span><span className="nv-week-tile__num">{date.getDate()}</span></span>
               {events.filter((e) => e.day === day).map((e) => (
                 <button key={e.row.id} type="button" className="nv-week-tile__bar" style={toneOf(e.row)} title={e.row.title} onClick={() => onOpenRow(e.row)}>
+                  <FlagMark flags={flags?.marksOf(view.model, e.row.id) ?? []} bare />
                   {!e.allDay && <span className="nv-week-tile__time">{hhmm(e.from)}</span>}
                   <span className="nv-week-tile__title">{e.row.title}</span>
                 </button>

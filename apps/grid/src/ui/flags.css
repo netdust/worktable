@@ -1,0 +1,69 @@
+/* A flag query's marks and its count in the title line, as the prototypes' .alert-badge and .insight. */
+.nv-flag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 5px;
+  border-radius: 999px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nv-flag--warn {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+
+/* Without its word, on a bar or an event: the icon alone. */
+.nv-flag--icon {
+  padding: 1px 3px;
+}
+
+#root .nv-toolbar__flagged {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#root .nv-toolbar__flagged:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+#root .nv-toolbar__flagged b {
+  color: var(--color-danger-fg);
+  font-weight: 600;
+}
+
+/* A flagged person in the drawer's people: the flag's text in its colour in place of their role, as the prototype's li.bad. */
+.nv-dw-list__flagged .nv-dw-list__main small {
+  color: var(--color-danger-fg);
+}
+
+.nv-dw-list__flagged--warn .nv-dw-list__main small {
+  color: var(--color-warning-fg);
+}
+
+/* A timed event's flag sits in its corner, the icon alone, as the prototype's .ev .bad. */
+.nv-week__day .nv-cal__event .nv-flag {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  padding: 0;
+  background: none;
+}
+
+.nv-tl__bar strong .nv-flag {
+  margin-right: 5px;
+  vertical-align: -2px;
+}

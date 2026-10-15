@@ -1,8 +1,11 @@
-import { type CSSProperties, useEffect, useMemo, useRef } from 'react'
+import { type CSSProperties, useContext, useEffect, useMemo, useRef } from 'react'
 import { type Column, columnsFor } from '../grid/columns'
+import { SchemaContext } from '../grid/drawer/context'
 import type { Layout } from '../grid/layout'
 import { factsOf, placeOf } from '../ui/facts'
+import { FlagMark } from '../ui/Flag'
 import { laneTone } from '../ui/tone'
+import { flaggedOf, useFlags } from '../ui/useFlags'
 import { useTones } from '../ui/useTones'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
@@ -61,7 +64,9 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   /** What the title line says it shows: the bars and the lanes. */
   onTitle?: (shown: Shown) => void
 }) {
-  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout)
+  const flags = useFlags(useContext(SchemaContext), null, shown, model.key)
+  const flagged = flaggedOf(flags, model.key, rows)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags)
   const laid = useMemo(() => bars(rows, cal, shown, lane), [rows, cal, shown.from, shown.to, lane])
   const columns = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.
@@ -74,7 +79,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   const tones = useTones(models, field?.relation?.model)
   // Lanes wait for their records' tones on a first open: drawn in the palette, they would crossfade to them.
   const ready = tones !== undefined
-  useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns }), [rows.length, laid.lanes.length, lane, columns])
+  useEffect(() => onTitle?.({ rows: rows.length, groups: lane ? laid.lanes.length : null, cut: false, menu: columns, flagged }), [rows.length, laid.lanes.length, lane, columns, flagged?.count])
   const weekend = (day: string) => [0, 6].includes((parse(day) as Date).getDay())
   const todayAt = window.indexOf(today)
   // A day keeps the prototype's 44px; the sheet scrolls sideways and opens two days before today.
@@ -136,7 +141,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
                           className={['nv-tl__bar', tone && tone in TONE_CLASS ? TONE_CLASS[tone as keyof typeof TONE_CLASS] : '', open?.id === bar.row.id ? 'nv-tl__bar--open' : '', narrow ? 'nv-tl__bar--narrow' : ''].filter(Boolean).join(' ')}
                           style={{ left: `calc(${pct(bar.start)} + 2px)`, width: `calc(${pct(bar.length)} - 4px)`, top: 9 + row * 48 }}
                           onClick={() => openRow(bar.row)}>
-                          <strong>{bar.row.title}</strong>
+                          <strong><FlagMark flags={flags?.marksOf(model.key, bar.row.id) ?? []} bare />{bar.row.title}</strong>
                           <span className="nv-tl__line2"><span className="nv-tl__span">{spanOf(first, last)}</span>{where && !narrow && <span className="nv-tl__where">{where}</span>}</span>
                         </button>
                       )

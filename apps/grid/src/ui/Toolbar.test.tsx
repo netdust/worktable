@@ -173,3 +173,22 @@ describe("the heading's icon", () => {
     expect(container.querySelector('.nv-toolbar__glyph svg')?.getAttribute('class')).toContain(icon)
   })
 })
+
+describe("the title line's flags", () => {
+  const flagged = { rows: 5, groups: null, cut: false, flagged: { count: 2, label: 'Meldingen', source: 'meldingen' } }
+
+  it("says how many of the view's rows are flagged, with the flag query's name, as a button that opens that query", () => {
+    const onFlagged = vi.fn()
+    render(<Toolbar {...base} shown={flagged} onFlagged={onFlagged} />)
+
+    const button = screen.getByRole('button', { name: '2 Meldingen' })
+    fireEvent.click(button)
+    expect(onFlagged).toHaveBeenCalledWith('meldingen')
+  })
+
+  it('says nothing while no row is flagged', () => {
+    render(<Toolbar {...base} shown={{ ...flagged, flagged: { ...flagged.flagged, count: 0 } }} onFlagged={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: /Meldingen/ })).toBeNull()
+  })
+})

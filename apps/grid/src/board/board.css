@@ -226,3 +226,14 @@ body.nv-dragging,
 body.nv-dragging * {
   cursor: grabbing !important;
 }
+
+/* The card's top line: its kind, and a flag at the right, as the prototype's .card-top. */
+.nv-board__kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nv-board__kind .nv-flag {
+  margin-left: auto;
+}

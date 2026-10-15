@@ -8,6 +8,8 @@ import { iconNamed } from '../ui/icons'
 import { toneColor } from '../ui/tone'
 import { useTones } from '../ui/useTones'
 import { whenOf } from '../ui/when'
+import type { Flags } from '../ui/useFlags'
+import { Alert } from './drawer/Alert'
 import { SchemaContext } from './drawer/context'
 import { dayLabel, inboundOf, kindOf, type Prop, propsOf } from './drawer/derive'
 import { HistorySection, InboundSection, LinkSection, LongSection, type WriteField } from './drawer/Sections'
@@ -49,6 +51,8 @@ interface Props {
   layout?: Layout | null
   /** The view's rows in their order: "3 van 12", and ↑ ↓ to the row before or after. */
   nav?: { ids: number[]; onStep: (id: number) => void }
+  /** The flags the view's skin read: the record's own show as bands, its people's on their names. */
+  flags?: Flags | null
   /** A record drawn from elsewhere (a matrix cell): its own subline, alert, field lines and sections, in the drawer's places. */
   sub?: ReactNode
   alert?: ReactNode
@@ -146,7 +150,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
@@ -160,6 +164,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], o
   const links = columns.filter((c) => c.kind === 'links' && model?.fields[c.field ?? c.id]?.link)
   const longs = columns.filter((c) => c.kind === 'longtext')
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
+  const raised = model && flags && row.id > 0 ? flags.marksOf(model.key, row.id) : []
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
       head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
@@ -170,7 +175,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], o
           {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
         </p>
       )}
-      {alert}
+      {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${at}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} dismiss={t('dismiss')} />)}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
@@ -178,7 +183,8 @@ export function Drawer({ row, columns, onClose, editor, onWrite, actions = [], o
         : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
       {links.map((c) => {
         const link = model?.fields[c.field ?? c.id]?.link as Link
-        return <LinkSection key={c.id} label={c.label} link={link} items={linksOf(row, c.field ?? c.id)} schema={schema} id={row.id} />
+        return <LinkSection key={c.id} label={c.label} link={link} items={linksOf(row, c.field ?? c.id)} schema={schema} id={row.id}
+          flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} />
       })}
       {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}

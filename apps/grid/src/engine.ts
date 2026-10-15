@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -68,6 +68,8 @@ export interface EngineSource {
   creates?: string
   /** The dataset a query reads; served only to a caller who can read it. */
   of?: string
+  /** What a query's rows flag: a mark per dataset the caller reads, by the column holding its ids, and the column toning each flag. */
+  flags?: FlagsDef
   /** The words of the button that adds a row, while the dataset keeps its declared name. */
   new_label?: string
   group_facts?: GroupFact[]
@@ -270,6 +272,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.of ? { of: source.of } : {}),
+    ...(source.flags ? { flags: source.flags } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: typesOf(source),

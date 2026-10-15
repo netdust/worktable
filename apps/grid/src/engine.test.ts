@@ -133,6 +133,14 @@ describe('toSchema: a query over a dataset', () => {
   it('carries no `of` where the engine serves none', () => {
     expect(toSchema(engine).tables.map((t) => t.of)).toEqual([undefined, undefined, undefined])
   })
+
+  it("carries a query's flags onto its table, and none where the engine serves none", () => {
+    const flags = { marks: { activiteit: 'id' }, tone: 'status' }
+    const flagged: EngineSchema = { sources: { ...engine.sources, productie_dag: { ...engine.sources.productie_dag, flags } } }
+
+    expect(toSchema(flagged).tables.find((t) => t.key === 'productie_dag')?.flags).toEqual(flags)
+    expect(toSchema(engine).tables.map((t) => t.flags)).toEqual([undefined, undefined, undefined])
+  })
 })
 
 describe('toSchema', () => {

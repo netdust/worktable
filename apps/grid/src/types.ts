@@ -129,6 +129,12 @@ export interface CalendarDef {
   spans?: true
 }
 
+/** A query's flags: per dataset the column holding the flagged ids, and the options column that tones each flag. */
+export interface FlagsDef {
+  marks: Record<string, string>
+  tone: string
+}
+
 /** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
 export interface TableDef {
   key: string
@@ -150,6 +156,8 @@ export interface TableDef {
   query?: boolean
   /** The dataset a query reads: its views sit under that table in the rail. */
   of?: string
+  /** A query whose rows flag records of the datasets it marks. */
+  flags?: FlagsDef
   /** An administrator's pick from the engine's icon set; absent, the tree shows the kind's icon. */
   icon?: string
   /** What a group's band says of its rows, computed by the grid. */

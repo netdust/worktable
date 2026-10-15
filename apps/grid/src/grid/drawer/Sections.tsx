@@ -2,7 +2,9 @@ import { type CSSProperties, type ReactNode, type Ref, useEffect, useState } fro
 import { recordHistory, rowsWhere } from '../../api'
 import { locale, t } from '../../i18n'
 import type { HistoryEntry, Link, LinkItem, Model, Row, Schema } from '../../types'
+import { FlagMark } from '../../ui/Flag'
 import { hueOf, toneColor } from '../../ui/tone'
+import type { Flag } from '../../ui/useFlags'
 import { initials } from '../../ui/when'
 import { crewOf, isOpen } from '../cells/Links'
 import type { Column } from '../columns'
@@ -41,7 +43,11 @@ const Face = ({ id, name }: { id: number | null; name: string }) =>
     : <span className="nv-avatar nv-avatar--hue" style={{ '--h': hueOf(id) } as CSSProperties} aria-hidden="true">{initials(name)}</span>
 
 /** A links field as the prototype's Bezetting: who, in what role, in what state; the open places last; have/need in the head. */
-export function LinkSection({ label, link, items, schema, id }: { label: string; link: Link; items: LinkItem[]; schema: Schema | null; id: number }) {
+export function LinkSection({ label, link, items, schema, id, flagsOf }: {
+  label: string; link: Link; items: LinkItem[]; schema: Schema | null; id: number
+  /** The flags on one link row: a flagged person shows the flag in place of their role and state. */
+  flagsOf?: (id: number) => Flag[]
+}) {
   const [roles, setRoles] = useState<Record<number, string>>({})
   const other = schema?.models[link.dataset]
   // The link row's first relation that is neither its record nor its target: a toewijzing's role.
@@ -64,15 +70,19 @@ export function LinkSection({ label, link, items, schema, id }: { label: string;
     <Section title={label} count={`${have}/${need}`}>
       {items.length === 0 ? <p className="nv-dw-none">{t('noneOf', { label: label.toLocaleLowerCase(locale()) })}</p> : (
         <ul className="nv-dw-list">
-          {[...people, ...open].map((item) => (
-            <li key={item.id}>
-              <Face id={isOpen(item) ? null : (item.target ?? item.id)} name={item.title} />
-              <span className="nv-dw-list__main">{isOpen(item) ? t('openPlace') : item.title}{roles[item.id] && <small>{roles[item.id]}</small>}</span>
-              {!isOpen(item) && item.state && link.state && (
-                <span className="nv-pill" style={{ '--tone': toneColor(link.state.tones[item.state]) } as CSSProperties}>{link.state.options[item.state] ?? item.state}</span>
-              )}
-            </li>
-          ))}
+          {[...people, ...open].map((item) => {
+            const flags = flagsOf?.(item.id) ?? []
+            const said = flags[0]?.text ?? roles[item.id]
+            return (
+              <li key={item.id} className={flags.length === 0 ? undefined : flags.some((flag) => flag.tone === 'bad') ? 'nv-dw-list__flagged' : 'nv-dw-list__flagged nv-dw-list__flagged--warn'}>
+                <Face id={isOpen(item) ? null : (item.target ?? item.id)} name={item.title} />
+                <span className="nv-dw-list__main">{isOpen(item) ? t('openPlace') : item.title}{said && <small>{said}</small>}</span>
+                {flags.length > 0 ? <FlagMark flags={flags} /> : !isOpen(item) && item.state && link.state && (
+                  <span className="nv-pill" style={{ '--tone': toneColor(link.state.tones[item.state]) } as CSSProperties}>{link.state.options[item.state] ?? item.state}</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </Section>

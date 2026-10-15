@@ -1,6 +1,7 @@
-import { AlertTriangle, CalendarDays, CircleDot, StickyNote, Tag, User } from 'lucide-react'
+import { CalendarDays, CircleDot, StickyNote, Tag, User } from 'lucide-react'
 import { type CSSProperties, type KeyboardEvent, type Ref, useContext, useEffect, useId, useRef, useState } from 'react'
 import { optionsFrom } from '../api'
+import { Alert } from '../grid/drawer/Alert'
 import { Section } from '../grid/drawer/Sections'
 import type { Column } from '../grid/columns'
 import { Drawer, Line } from '../grid/Drawer'
@@ -73,21 +74,11 @@ function CellSub({ row, fields, date }: { row: Row; fields: Column[]; date: stri
   )
 }
 
-/** Absent on the day: a band with the icon and its title on one line, the reason as a sentence, and its actions as words. */
+/** Absent on the day: the band names the reason; assigned anyway, it offers someone else or to keep them. */
 function CellAlert({ name, date, reason, assigned, onOther }: { name: string; date: string; reason: string; assigned: boolean; onOther: () => void }) {
-  const [kept, setKept] = useState(false)
-  if (kept) return null
   return (
-    <div className={assigned ? 'nv-dw-alert' : 'nv-dw-alert nv-dw-alert--warn'} role="alert">
-      <p className="nv-dw-alert__head"><AlertTriangle size={15} aria-hidden="true" />{assigned ? t('awayWarning') : t('away')}</p>
-      <p className="nv-dw-alert__text">{t('awaySentence', { name, day: shortDay(date), reason })}</p>
-      {assigned && (
-        <span className="nv-dw-alert__acts">
-          <button type="button" onClick={onOther}>{t('chooseOther')}</button>
-          <button type="button" onClick={() => setKept(true)}>{t('keepIt')}</button>
-        </span>
-      )}
-    </div>
+    <Alert title={assigned ? t('awayWarning') : t('away')} text={t('awaySentence', { name, day: shortDay(date), reason })} warn={!assigned}
+      actions={assigned ? [{ label: t('chooseOther'), run: onOther }] : []} dismiss={assigned ? t('keepIt') : undefined} />
   )
 }
 

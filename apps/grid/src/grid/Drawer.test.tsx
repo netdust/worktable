@@ -10,6 +10,7 @@ const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)),
 vi.mock('../api', () => remote)
 const { Drawer, linkedDataset } = await import('./Drawer')
 import { columnsFor } from './columns'
+import type { Flag, Flags } from '../ui/useFlags'
 import { activity, planning } from './calais.test.data'
 
 const row = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', notes: 'Twee veggie' } })
@@ -267,6 +268,57 @@ describe('a long text in the drawer', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Twee veggie')
     expect(document.activeElement).toBe(within(block()).getByRole('button'))
+  })
+})
+
+describe('a flag in the drawer', () => {
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const model = { ...activity, fields: { ...activity.fields, people } } as Model
+  const every = columnsFor(model, { ...planning, columns: undefined }, false)
+  const crew = [{ id: 11, target: 5, title: 'Sien Peeters', state: null }, { id: 12, target: 6, title: 'Lieve Claes', state: null }]
+  const staffed = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', people: crew } })
+  const flag = (text: string, marks: Record<string, number>): Flag => ({ text, tone: 'bad', label: 'Melding', marks })
+  const raised = [flag('Sien staat dubbel ingepland.', { activity: 1, assignment: 11 }), flag('Montage overlapt.', { activity: 2 })]
+  const flags: Flags = {
+    marksOf: (dataset, id) => raised.filter((f) => f.marks[dataset] === id),
+    count: () => 0,
+    source: 'meldingen',
+    label: 'Meldingen',
+  }
+  const band = () => screen.queryByRole('alert')
+
+  it("shows the record's flag as a band under its title with Negeren only, which hides it in the open drawer and stores nothing", () => {
+    const { unmount } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()?.querySelector('.nv-dw-alert__head')?.textContent).toBe('Melding')
+    expect(band()?.querySelector('.nv-dw-alert__text')?.textContent).toBe('Sien staat dubbel ingepland.')
+    expect([...band()!.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Negeren'])
+    expect(screen.queryByRole('button', { name: 'Iemand anders kiezen' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Negeren' }))
+    expect(band()).toBeNull()
+    unmount()
+
+    render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()).not.toBeNull()
+  })
+
+  it("shows another record's own band once the drawer steps to it, and none on a record without a flag", () => {
+    const { rerender } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Negeren' }))
+    rerender(<Drawer row={staffed(2, 'Montage')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()?.querySelector('.nv-dw-alert__text')?.textContent).toBe('Montage overlapt.')
+    rerender(<Drawer row={staffed(3, 'Diner')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()).toBeNull()
+  })
+
+  it('marks a flagged person in its people with the flag, its text in place of their role', () => {
+    render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    const [sien, lieve] = within(screen.getByRole('region', { name: 'Mensen' })).getAllByRole('listitem')
+    const mark = sien.querySelector('.nv-flag')
+    expect(mark?.textContent).toBe('Melding')
+    expect(mark?.getAttribute('title')).toBe('Sien staat dubbel ingepland.')
+    expect(sien.querySelector('small')?.textContent).toBe('Sien staat dubbel ingepland.')
+    expect(lieve.querySelector('.nv-flag')).toBeNull()
   })
 })
 

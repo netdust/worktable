@@ -23,6 +23,8 @@ const WEEK = {
   notes: '2032-05-03',
   filled: '2029-04-09',
   tone: '2033-06-06',
+  conflict: '2034-09-04',
+  ignore: '2034-09-11',
 }
 const MANUAL = ['position']
 const SORTED = ['plandag', 'start_at']
@@ -778,7 +780,9 @@ test.describe("step 3f: a production's kleur colours its lane", () => {
         Object.assign(window, { seenLanes: seen })
         new MutationObserver(() => {
           for (const el of document.querySelectorAll<HTMLElement>('.nv-tl__lane')) {
-            const drawn = (seen[el.getAttribute('aria-label') ?? ''] ??= [])
+            const name = el.getAttribute('aria-label') ?? ''
+            seen[name] ??= []
+            const drawn = seen[name]
             const lane = el.style.getPropertyValue('--lane')
             if (drawn.at(-1) !== lane) drawn.push(lane)
           }
@@ -822,6 +826,126 @@ test.describe("step 3f: a production's kleur colours its lane", () => {
     } finally {
       await kleur(changed.id, changed.kleur)
       for (const id of stops) await api.delete(`/api/rows/speelreeks/${id}`)
+    }
+  })
+})
+
+/**
+ * One invented person confirmed on two timed, overlapping activities of two productions on a day: conflicten lists the
+ * pair from both sides (codes 1 and 7), each a conflict that flags its own activity and toewijzing. Removed after the flow.
+ */
+function doubleBooking(api: Api) {
+  const made = { person: 0, activities: [] as number[], places: [] as number[] }
+  return {
+    made,
+    async add(day: string, title: string): Promise<number[]> {
+      const producties = (
+        (await (await api.get('/api/rows/productie?limit=500')).json()) as { rows: { id: number; titel: string }[] }
+      ).rows
+      const of = (titel: string) => producties.find((p) => p.titel === titel)?.id as number
+      made.person = await posted(api, '/api/rows/persoon', { voornaam: 'Ezra', achternaam: 'Dubbelboek' })
+      const planned = [
+        [of('Nachtwacht'), `${title} een`, '10:00', '14:00'],
+        [of('De Kersentuin'), `${title} twee`, '12:00', '16:00'],
+      ] as const
+      for (const [productie_id, omschrijving, start, end] of planned) {
+        const data = { productie_id, soort: 'repetitie', status: 'bevestigd', omschrijving, datum: day }
+        const id = await posted(api, '/api/rows/activiteit', {
+          ...data,
+          start_at: `${day}T${start}`,
+          eind_at: `${day}T${end}`,
+        })
+        made.activities.push(id)
+        made.places.push(
+          await posted(api, '/api/rows/toewijzing', { activiteit_id: id, persoon_id: made.person, state: 'bevestigd' }),
+        )
+      }
+      return made.activities
+    },
+    async remove() {
+      for (const id of made.places) await api.delete(`/api/rows/toewijzing/${id}`)
+      for (const id of made.activities) await api.delete(`/api/rows/activiteit/${id}`)
+      if (made.person) await api.delete(`/api/rows/persoon/${made.person}`)
+    },
+  }
+}
+
+const DOUBLE = /Ezra Dubbelboek staat dubbel ingepland/
+
+test.describe('step 3f: conflicten flags what it names', () => {
+  test.describe.configure({ timeout: 120_000 })
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('conflict-marks-and-insight @e2e', async ({ page }) => {
+    const api = page.request
+    const booking = doubleBooking(api)
+    try {
+      const [one, two] = await booking.add(WEEK.conflict, 'e2e dubbel')
+      const listed = await api.get(
+        `/api/rows/conflicten?filter=${encodeURIComponent(JSON.stringify({ persoon_id: booking.made.person }))}`,
+      )
+      const rows = ((await listed.json()) as { rows: { activiteit_id: number; ernst: string }[] }).rows
+      expect(rows.map((r) => [r.activiteit_id, r.ernst]).sort()).toEqual([
+        [one, 'conflict'],
+        [two, 'conflict'],
+      ])
+
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.conflict)
+      for (const id of [one, two]) {
+        const mark = card(page, id).locator('.nv-flag')
+        await expect(mark).toHaveText('Conflict')
+        await expect(mark).toHaveAttribute('title', DOUBLE)
+      }
+      const flagged = page.locator('.nv-toolbar').getByRole('button', { name: '2 Conflicten', exact: true })
+      await expect(flagged).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
+      await shot(page, 'conflict-marks')
+
+      // The count opens the flag query's own view, in the same space.
+      await flagged.click()
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conflicten')
+      await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
+    } finally {
+      await booking.remove()
+    }
+  })
+
+  test('conflict-band-negeren @e2e', async ({ page }) => {
+    const api = page.request
+    const booking = doubleBooking(api)
+    try {
+      const [one] = await booking.add(WEEK.ignore, 'e2e negeren')
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.ignore)
+      await expect(card(page, one).locator('.nv-flag')).toHaveText('Conflict')
+
+      const opened = async () => {
+        await card(page, one).click()
+        const drawer = page.getByRole('complementary', { name: 'e2e negeren een' })
+        await expect(drawer).toBeVisible()
+        return drawer
+      }
+      const drawer = await opened()
+      const band = drawer.getByRole('alert')
+      await expect(band.locator('.nv-dw-alert__head')).toHaveText('Conflict')
+      await expect(band.locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
+      await expect(band.getByRole('button')).toHaveText(['Negeren'])
+      // The person in Mensen carries the flag, its text in place of their role.
+      const person = drawer
+        .getByRole('region', { name: 'Mensen' })
+        .getByRole('listitem')
+        .filter({ hasText: 'Ezra Dubbelboek' })
+      await expect(person.locator('.nv-flag')).toHaveText('Conflict')
+      await shot(page, 'conflict-band')
+
+      // Negeren hides the band in the open drawer and stores nothing: opened again, it is back.
+      await band.getByRole('button', { name: 'Negeren' }).click()
+      await expect(drawer.getByRole('alert')).toHaveCount(0)
+      await drawer.getByRole('button', { name: 'Sluiten' }).click()
+      await expect(drawer).toBeHidden()
+      const again = await opened()
+      await expect(again.getByRole('alert').locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
+    } finally {
+      await booking.remove()
     }
   })
 })

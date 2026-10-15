@@ -6,7 +6,9 @@ import { isOpen } from '../grid/cells/Links'
 import { type Column, firstId, linksOf } from '../grid/columns'
 import { t } from '../i18n'
 import type { Row, Tone } from '../types'
+import { FlagMark } from '../ui/Flag'
 import { hueOf, toneColor } from '../ui/tone'
+import type { Flag } from '../ui/useFlags'
 import { initials, whenOf } from '../ui/when'
 
 const MAX_FACES = 4
@@ -22,7 +24,7 @@ export type Look = 'slot' | 'ghost'
 export type TonedLine = { column: string; tones: Map<number, Tone> }
 
 /** The prototype's card: its kind, title, day and hours, its facts (an inherited one in italics), and its people with the open places. */
-export function CardFace({ row, columns, toned }: { row: Row; columns: Column[]; toned?: TonedLine }) {
+export function CardFace({ row, columns, toned, flags = [] }: { row: Row; columns: Column[]; toned?: TonedLine; flags?: Flag[] }) {
   const kind = columns.find((c) => c.kind === 'select')
   const dates = columns.filter((c) => c.kind === 'date' || c.kind === 'datetime')
   const people = columns.find((c) => c.kind === 'links')
@@ -33,7 +35,9 @@ export function CardFace({ row, columns, toned }: { row: Row; columns: Column[];
   const open = links.filter(isOpen).length
   return (
     <>
-      {kind && kind.text(row) && <span className="nv-board__kind"><Display column={kind} row={row} onToggle={noToggle} /></span>}
+      {((kind && kind.text(row)) || flags.length > 0) && (
+        <span className="nv-board__kind">{kind && kind.text(row) && <Display column={kind} row={row} onToggle={noToggle} />}<FlagMark flags={flags} /></span>
+      )}
       <b className="nv-board__title">{row.title}</b>
       {(when.day || when.from || dates.length > 0) && (
         <span className="nv-board__when">
@@ -64,8 +68,8 @@ export function CardFace({ row, columns, toned }: { row: Row; columns: Column[];
 }
 
 /** A card in its column: it opens its row on a click or Enter, and where the board writes, Space or the pointer lifts it. */
-export function Card({ row, columns, toned, lane, drags, open, look, onOpen }: {
-  row: Row; columns: Column[]; toned?: TonedLine; lane: string; drags: boolean; open: boolean; look: Look | null
+export function Card({ row, columns, toned, flags, lane, drags, open, look, onOpen }: {
+  row: Row; columns: Column[]; toned?: TonedLine; flags?: Flag[]; lane: string; drags: boolean; open: boolean; look: Look | null
   onOpen: (row: Row) => void
 }) {
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
@@ -84,7 +88,7 @@ export function Card({ row, columns, toned, lane, drags, open, look, onOpen }: {
         if (event.key === 'Enter' && !isDragging) onOpen(row)
         else listeners?.onKeyDown?.(event)
       }}>
-      <CardFace row={row} columns={columns} toned={toned} />
+      <CardFace row={row} columns={columns} toned={toned} flags={flags} />
     </div>
   )
 }

@@ -583,6 +583,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           viewNote={viewNote}
           fixed={Object.keys(view?.fixed ?? {}).length}
           onHistory={view && !dashboard ? () => setHistoryOpen((open) => !open) : undefined}
+          onFlagged={(source) => {
+            const flagging = tables.find((table) => table.key === source)
+            if (flagging) openTable(flagging)
+          }}
         />
         {!dashboard && view && model && layout && (
           <ChipBar {...barOf({
