@@ -25,7 +25,7 @@
 - Domain rules stay in theatre: `kleur`, the conflicten columns, `bezetting`, `notities`.
 - `position` charset `[0-9A-Za-z]`, at most 255 characters. Manual order is `[{ id: 'position', desc: false }, …the previous keys without position]`, nulls last (docs/SPEC.md, 5e1b4ee); a layout already sorting on `position` is manual and is not prepended again (params.ts:96-100 refuses a key named twice).
 - Keyboard drag: KeyboardSensor with the board's own coordinates getter; Space lifts and drops, ↑↓ within a column, ←→ to the neighbour column at the same index, Escape cancels, Enter opens the card; announcements in Dutch through i18n (ruling Q2).
-- No growth in `Workspace` (`ui/App.tsx`) or in `app.css`'s shared sections. One recorded exception: Task 9 wires the Toolbar's `onFlagged(source)` to Workspace's existing `openTable` (a prop, no state; ruling 2026-10-15); the UI-architecture feature after 3f takes it from there. New state lives in its view's hook; the board's CSS moves to `board/board.css`, and the react-aria drag rules are deleted in the same change (memory ui-code-has-a-place).
+- No growth in `Workspace` (`ui/App.tsx`) or in `app.css`'s shared sections. Two recorded exceptions: Task 9 wires the Toolbar's `onFlagged(source)` to Workspace's existing `openTable` (a prop, no state; ruling 2026-10-15); the review's fix pass gives Workspace one writer factory, `places`, built once from App's store and notify and passed beside `onDrop` to the skins' record drawers (a line plus props, no state; App.tsx stays at or under 694 lines; ruling 2026-10-16). The UI-architecture feature after 3f takes both from there. New state lives in its view's hook; the board's CSS moves to `board/board.css`, and the react-aria drag rules are deleted in the same change (memory ui-code-has-a-place).
 - Stefan's rules: no coloured rounded borders, one toolbar the same on every skin, no cockpit density, side panels only. Looks are copied from `design/*-prototype.html`.
 - Strings are Dutch, in `i18n.ts`, generic (no theatre word in `apps/grid`).
 - Commit by path, never `git add -A`; the untracked `*.url` files are never added.
@@ -304,6 +304,10 @@ Out: "Open plek invullen" and "+ Toewijzen" (the rest of an editable Mensen sect
 ### Carried to later features
 
 - Workspace re-renders on every grid-store notification (≈26 ms per render in dev, 66 renders on a 30-card drop before coalescing): UI-architecture feature.
+- Skins get store writes as separate props through Workspace (onDrop, places): fold them into one per-view write object. UI-architecture feature.
+- A 255-character rank refuses drops next to it; reachable by an API PATCH or about 1530 moves to one slot; recovery is a PATCH of null; fix: rebalance the neighbours evenly when rankBetween would pass the cap, inside the step. (Security review L1, deferred by the orchestrator 2026-10-16; the rank is not a field the UI shows, so only an API caller makes one deliberately.)
+- Before cutover: measure on the Laika import — the views with no date (Toewijzingen) read the whole of conflicten, unwindowed and capped at 5000 rows, after every landed write.
+- Stefan's call: bezetting counts place rows, not `aantal` (an open Speler ×2 place counts as one need), as the Mensen meter (crewOf) does.
 
 ---
 
