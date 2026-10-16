@@ -11,6 +11,7 @@ import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
 import { createStore, type StoreApi } from './store'
 import { barOf } from '../ui/bar'
+import { createHistory } from '../ui/history'
 import { ChipBar } from '../ui/ChipBar'
 import type { Shown } from '../ui/Toolbar'
 
@@ -1073,7 +1074,7 @@ describe('the drawer', () => {
     remote.attachmentsOf.mockReset()
   })
 
-  it('"Iemand anders kiezen" writes the flagged place once in its own dataset; one Ctrl+Z puts the first person back and the band returns', async () => {
+  describe('"Iemand anders kiezen"', () => {
     const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
     const link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }
     const staffed = { ...activity, fields: { ...activity.fields, people: { type: 'links', label: 'Mensen', required: false, fact: false, link } } } as Model
@@ -1088,46 +1089,89 @@ describe('the drawer', () => {
       views: [], writable: { activity: true, assignment: true },
     } as unknown as Schema
     const holding = (target: number, title: string): Row => ({ ...calais[1], fields: { ...calais[1].fields, people: [{ id: 11, target, title, state: null }] } })
-    let clashing = true
-    remote.rows.mockImplementation(() => Promise.resolve(clashing
-      ? { rows: [{ id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 102, assignment_id: 11, weight: 'clash' } }], total: 1 }
-      : { rows: [], total: 0 }))
-    remote.optionsFrom.mockResolvedValue([{ id: 7, title: 'Noor Janssens', status: '', fields: {} }])
-    remote.update.mockImplementationOnce(() => {
-      clashing = false
-      return Promise.resolve({ row: { id: 11, title: '', status: '', fields: { person_id: 7 } }, batch: 'b-place' })
+    const sien = () => holding(5, 'Sien Peeters')
+    const noor = () => holding(7, 'Noor Janssens')
+
+    afterEach(() => {
+      for (const mock of [remote.rows, remote.optionsFrom, remote.update, remote.rowOf]) mock.mockReset()
     })
-    remote.rowOf.mockResolvedValueOnce(holding(7, 'Noor Janssens')).mockResolvedValueOnce(holding(5, 'Sien Peeters'))
-    const undo = vi.fn<NonNullable<StoreApi['undo']>>(() => {
-      clashing = true
-      return Promise.resolve('u-place')
+
+    /** The sheet as the app holds it: a store per loaded window, the tab's history shared; a reload reads the window again into a new store. */
+    function renderSheet() {
+      let clashing = true
+      remote.rows.mockImplementation(() => Promise.resolve(clashing
+        ? { rows: [{ id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 102, assignment_id: 11, weight: 'clash' } }], total: 1 }
+        : { rows: [], total: 0 }))
+      remote.optionsFrom.mockResolvedValue([{ id: 7, title: 'Noor Janssens', status: '', fields: {} }])
+      remote.update.mockImplementationOnce(() => {
+        clashing = false
+        return Promise.resolve({ row: { id: 11, title: '', status: '', fields: { person_id: 7 } }, batch: 'b-place' })
+      })
+      remote.rowOf.mockResolvedValueOnce(noor())
+      const undo = vi.fn((_batch: string) => {
+        clashing = true
+        return Promise.resolve('u-place')
+      })
+      const history = createHistory(undo)
+      const reload = vi.fn(() => show([sien()]))
+      const sheet = (rows: Row[]) => {
+        const store = createStore({ model: 'activity', rows, api: { update: vi.fn(), create: vi.fn(), read: vi.fn() }, history, reload })
+        return (
+          <SchemaContext.Provider value={served}>
+            <Grid model={staffed} view={planning} store={store} writable layout={defaults(planning)} onLayout={() => undefined} query="" emptyTitle="" models={served.models} />
+          </SchemaContext.Provider>
+        )
+      }
+      const { rerender } = renderNl(sheet([sien()]))
+      function show(rows: Row[]) {
+        rerender(sheet(rows))
+      }
+      const drawer = openDrawer('Montage')
+      const mensen = () => within(within(drawer).getByRole('region', { name: 'Mensen' })).getByRole('listitem')
+      const pick = async () => {
+        fireEvent.click(await within(drawer).findByRole('button', { name: 'Iemand anders kiezen' }))
+        const option = await screen.findByRole('option', { name: 'Noor Janssens' })
+        await act(async () => fireEvent.click(option))
+      }
+      const undoOnPage = async () => {
+        fireEvent.click(cell('Montage', 'place'))
+        await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
+      }
+      return { drawer, mensen, pick, undoOnPage, show, undo, reload }
+    }
+
+    it('writes the flagged place once in its own dataset; one Ctrl+Z reads the view again: the first person back and the band with them', async () => {
+      const { drawer, mensen, pick, undoOnPage, undo, reload } = renderSheet()
+      await pick()
+
+      expect(remote.update).toHaveBeenCalledExactlyOnceWith('assignment', 11, { person_id: [7] })
+      expect(remote.rowOf).toHaveBeenCalledExactlyOnceWith('activity', 102)
+      await waitFor(() => expect(within(drawer).queryByRole('alert')).toBeNull())
+      expect(mensen().textContent).toContain('Noor Janssens')
+
+      await undoOnPage()
+      expect(undo).toHaveBeenCalledExactlyOnceWith('b-place')
+      expect(reload).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(mensen().textContent).toContain('Sien Peeters'))
+      expect(await within(drawer).findByRole('alert')).toBeTruthy()
+      expect(remote.update).toHaveBeenCalledTimes(1)
     })
-    const store = createStore({ model: 'activity', rows: [holding(5, 'Sien Peeters')], api: { update: vi.fn(), create: vi.fn(), read: vi.fn(), undo } })
-    renderNl(
-      <SchemaContext.Provider value={served}>
-        <Grid model={staffed} view={planning} store={store} writable layout={defaults(planning)} onLayout={() => undefined} query="" emptyTitle="" models={served.models} />
-      </SchemaContext.Provider>,
-    )
-    const drawer = openDrawer('Montage')
-    const mensen = () => within(within(drawer).getByRole('region', { name: 'Mensen' })).getByRole('listitem')
 
-    fireEvent.click(await within(drawer).findByRole('button', { name: 'Iemand anders kiezen' }))
-    const noor = await screen.findByRole('option', { name: 'Noor Janssens' })
-    await act(async () => fireEvent.click(noor))
+    it('undoes into the store on screen after the view read its window again, never the one that made the step', async () => {
+      const { drawer, mensen, pick, undoOnPage, show, undo, reload } = renderSheet()
+      await pick()
+      await waitFor(() => expect(within(drawer).queryByRole('alert')).toBeNull())
 
-    expect(remote.update).toHaveBeenCalledExactlyOnceWith('assignment', 11, { person_id: [7] })
-    expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
-    await waitFor(() => expect(within(drawer).queryByRole('alert')).toBeNull())
-    expect(mensen().textContent).toContain('Noor Janssens')
+      // A week stepped away and back: a new store with the rows as the server has them, the same tab history.
+      show([noor()])
+      expect(mensen().textContent).toContain('Noor Janssens')
 
-    fireEvent.click(cell('Montage', 'place'))
-    await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
-
-    expect(undo).toHaveBeenCalledExactlyOnceWith('b-place')
-    await waitFor(() => expect(mensen().textContent).toContain('Sien Peeters'))
-    expect(await within(drawer).findByRole('alert')).toBeTruthy()
-    expect(remote.update).toHaveBeenCalledTimes(1)
-    for (const mock of [remote.rows, remote.optionsFrom, remote.update, remote.rowOf]) mock.mockReset()
+      await undoOnPage()
+      expect(undo).toHaveBeenCalledExactlyOnceWith('b-place')
+      expect(reload).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(mensen().textContent).toContain('Sien Peeters'))
+      expect(await within(drawer).findByRole('alert')).toBeTruthy()
+    })
   })
 
   it('offers Verwijderen only for a deletable model', () => {
