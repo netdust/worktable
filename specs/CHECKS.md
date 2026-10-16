@@ -238,7 +238,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Bord · plek steeds verder in een volle kolom | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-slot-steady @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · één ⌘Z, pagina en lade | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-undo-both @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · toetsen: spatie, pijlen, Escape | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-keyboard @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
-| Bord · geweigerde drop, volle kolom, muis en toetsen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag-refused @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · geweigerde drop, volle kolom, muis en toetsen; op een handmatig bord laat ze geen ongedaan-stap: één ⌘Z neemt de bewerking ervoor terug | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag-refused @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Lade · notities als eigen blok, schrijven, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "notities-block @e2e"` | e2e/step-3f.spec.ts | step-3f | a660b59 2026-10-15 |
 | Planning · dagkop toont bezetting have/need | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "group-filled @e2e"` | e2e/step-3f.spec.ts | step-3f | 7a5a060 2026-10-15 |
 | Tijdlijn tourstops · baan en balk in de kleur van de productie, volgt na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "production-tone @e2e"` | e2e/step-3f.spec.ts | step-3f | 2f71775 2026-10-15 |

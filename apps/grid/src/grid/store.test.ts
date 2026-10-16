@@ -730,19 +730,21 @@ describe('a second field in one write, and a step of several writes', () => {
     expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true, save: 'saved' })
   })
 
-  it('a refused last write is reverted, the ranks written stay, and one undo undoes those', async () => {
+  it('a refused last write is reverted and the ranks written stay, with no undo step: the next undo is the edit before the drop', async () => {
     const { api, store, positions } = stepping()
     api.update.mockImplementation(async (_m, id, data) => {
       if (id === 103) throw { code: 'refused', message: 'Nee.' }
-      return taken(id, data, `b${id}`)
+      return taken(id, data, id === 104 ? 'b-edit' : `b${id}`)
     })
+    await store.apply({ id: 104, field: 'state', value: 'b' })
 
     expect(await store.applyStep(three)).toBe(false)
 
     expect(positions()).toEqual(['V', 'k', null])
     expect(Object.keys(store.getState().errors)).toEqual(['103:position'])
     await store.undo()
-    expect(api.undo.mock.calls).toEqual([['b102'], ['b101']])
+    expect(api.undo.mock.calls).toEqual([['b-edit']])
+    expect(store.getState().canUndo).toBe(false)
   })
 
   it('a refusal of the first write, as every rank write of an owner is, reverts all three and sends no third', async () => {
@@ -756,7 +758,7 @@ describe('a second field in one write, and a step of several writes', () => {
     expect(store.getState()).toMatchObject({ canUndo: false, save: 'error' })
   })
 
-  it('a refused first write cancels the last; a rank sent beside it that landed stays, and one undo undoes it', async () => {
+  it('a refused first write cancels the last; a rank sent beside it that landed stays, and the drop leaves no undo step', async () => {
     const { api, store, positions, sent } = stepping()
     api.update.mockImplementation(async (_m, id, data) => {
       if (id === 101) throw { code: 'refused', message: 'Nee.' }
@@ -768,8 +770,9 @@ describe('a second field in one write, and a step of several writes', () => {
     expect(sent()).toEqual([101, 102])
     expect(positions()).toEqual([null, 'k', null])
     expect(Object.keys(store.getState().errors)).toEqual(['101:position'])
+    expect(store.getState().canUndo).toBe(false)
     await store.undo()
-    expect(api.undo.mock.calls).toEqual([['b102']])
+    expect(api.undo).not.toHaveBeenCalled()
   })
 
   it("an undo of a step from the store that replaced the step's own repaints every written row there", async () => {

@@ -555,8 +555,9 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
     const made = activities(api)
     const toewijzingen: number[] = []
     let activiteit = 0
-    const place = async (naam: string, state: string) => {
-      const id = await posted(api, '/api/rows/toewijzing', { activiteit_id: activiteit, naam, state })
+    let view = 0
+    const place = async (naam: string, state: string, on = activiteit) => {
+      const id = await posted(api, '/api/rows/toewijzing', { activiteit_id: on, naam, state })
       toewijzingen.push(id)
       return id
     }
@@ -614,7 +615,67 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await page.keyboard.press('Space')
       expect((await refused).status()).toBe(422)
       await back()
+
+      // On a manual board the refused drop first ranks the card above its slot: that leaves no undo step either,
+      // so the one ⌘Z after the refusal undoes the edit made before it.
+      await test.step('a manual board: one ⌘Z after a refusal undoes the edit before it', async () => {
+        const handmatig = await made.add('e2e weiger handmatig', plusDays(WEEK.refused, 2), 'bevestigd')
+        const above = await place('e2e h geweigerd', 'geweigerd', handmatig)
+        const held = await place('e2e h bevestigd', 'bevestigd', handmatig)
+        const earlier = await place('e2e h voorlopig', 'voorlopig', handmatig)
+        view = await posted(api, '/api/views', {
+          name: 'e2e Bord weigeren',
+          source: 'toewijzing',
+          skin: 'board',
+          filters: { activiteit_id: handmatig },
+          sort: MANUAL,
+          group_by: null,
+          visible_fields: ['rol_id'],
+        })
+        const stateOf = async (one: number) =>
+          (
+            (await (
+              await api.get(`/api/rows/toewijzing?filter=${encodeURIComponent(JSON.stringify({ id: one }))}`)
+            ).json()) as { rows: { state: string; position: string | null }[] }
+          ).rows[0]
+        await page.goto('/')
+        await open(page, 'e2e Bord weigeren', held, 'Toewijzingen')
+        const press = async (key: string, words: RegExp) => {
+          await page.keyboard.press(key)
+          await expect(said(page)).toHaveText(words)
+        }
+
+        // The edit before: Voorlopig to the top of Bevestigd.
+        await card(page, earlier).focus()
+        await press('Space', /^e2e h voorlopig opgepakt in Voorlopig/)
+        await press('ArrowRight', /^e2e h voorlopig boven Uitgenodigd/)
+        await press('ArrowRight', /^e2e h voorlopig boven Bevestigd, plaats 1 van 2\.$/)
+        await press('Space', /^e2e h voorlopig neergezet in Bevestigd/)
+        await expect.poll(async () => (await stateOf(earlier))?.state).toBe('bevestigd')
+
+        // Refused below the card in Geweigerd: that card is ranked first, then the dropped card's own write is refused.
+        await lane(page, 'Geweigerd').evaluate((el) => el.scrollIntoView({ block: 'nearest', inline: 'center' }))
+        const refused = page.waitForResponse(
+          (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/toewijzing/${held}`,
+        )
+        await card(page, held).focus()
+        await press('Space', /^e2e h bevestigd opgepakt in Bevestigd, plaats 2 van 2\.$/)
+        await press('ArrowRight', /^e2e h bevestigd boven Geweigerd, plaats 2 van 2\.$/)
+        await page.keyboard.press('Space')
+        expect((await refused).status()).toBe(422)
+        await expect(page.getByText(/statuswijziging is niet toegestaan/).first()).toBeVisible()
+        await expect(lane(page, 'Bevestigd').locator(`[data-card="${held}"]`)).toBeVisible()
+        await expect.poll(async () => (await stateOf(above))?.position).not.toBeNull()
+
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+        await page.keyboard.press('ControlOrMeta+z')
+        await expect.poll(async () => (await stateOf(earlier))?.state).toBe('voorlopig')
+        await expect(lane(page, 'Voorlopig').locator(`[data-card="${earlier}"]`)).toBeVisible()
+        expect((await stateOf(held))?.state).toBe('bevestigd')
+        expect((await stateOf(above))?.position).not.toBeNull()
+      })
     } finally {
+      if (view) await api.delete(`/api/views/${view}`)
       for (const id of toewijzingen) await api.delete(`/api/rows/toewijzing/${id}`)
       await made.remove()
     }

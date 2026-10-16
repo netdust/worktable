@@ -56,7 +56,7 @@ export interface Store {
   apply: (change: Change) => Promise<void>
   /**
    * Writes that one undo takes back together: all painted at once, all but the last sent together, then the last.
-   * A refusal among the others cancels the last; a refused last leaves the others written. Answers whether the last landed.
+   * A refusal among the others cancels the last; a refused last leaves the others written and no undo step. Answers whether the last landed.
    */
   applyStep: (changes: Change[]) => Promise<boolean>
   undo: () => Promise<void>
@@ -396,7 +396,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       const landed = [...answers, batch].filter((made) => typeof made === 'string')
       together(() => {
         pending.settle(landed)
-        if (landed.length === 0) history.drop(entry)
+        // A refused drop leaves no undo step: the ranks it wrote match the order already shown.
+        if (batch === undefined || landed.length === 0) history.drop(entry)
         set({ save: settle() })
       })
       return batch !== undefined
