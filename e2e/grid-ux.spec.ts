@@ -350,7 +350,7 @@ test('fold-day-band @e2e', async ({ page }) => {
   await expect(gridRows(page)).toHaveCount(21)
   await expect(gridRows(page).first().locator('td').first()).toHaveText('1')
   await expect(first.locator('.nv-group__count')).toHaveText('7')
-  await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/2'])
   await expect(bands(page).nth(1)).toHaveAttribute('aria-expanded', 'true')
   await shot(page, 'fold-day-band')
 
@@ -377,7 +377,7 @@ test('band-facts @e2e', async ({ page }) => {
   await expect(bands(page)).toHaveCount(4)
   for (const band of await bands(page).all()) {
     await expect(band.locator('.nv-group__count')).toHaveText('7')
-    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/2'])
   }
   await expect(page.locator('.nv-bar__count')).toHaveText('28 rijen · 4 groepen')
   await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · /)
@@ -438,7 +438,7 @@ test('inherited-venue @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1200 })
   await bands(page).nth(2).click()
   await expect(bands(page).nth(2)).toHaveAttribute('aria-expanded', 'false')
-  await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/2'])
   await shot(page, 'planning')
 })
 
