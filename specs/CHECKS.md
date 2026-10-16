@@ -42,6 +42,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Model menu · editor | e2e | `bunx playwright test e2e/model-menu.spec.ts --grep "name-and-icon-are-for-administrators @e2e"` | e2e/model-menu.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Title line | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-reads-in-full @e2e"` | e2e/title-line.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Title line | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-at-1280 @e2e"` | e2e/title-line.spec.ts | grid-ux | 1e3309c 2026-10-16 |
+| Title line · met een open lade op 1280 leest de naam heel en blijft de periode staan | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-with-a-drawer-open"` | e2e/title-line.spec.ts | fix/title-line-at-1280 | 072eb10 2026-10-16 |
 | Dagplanning · day bands | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "fold-day-band @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Dagplanning · day bands | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "band-facts @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
@@ -238,6 +239,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Bord · gesorteerd naar handmatig met oude rangen in twee kolommen: alleen de gesleepte kaart beweegt, na herladen; één ⌘Z zet de rangen terug | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-to-manual-stale-ranks @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
 | Bord · gesorteerd, andere kolom: tint, plaats op datum | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-cross-column @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
 | Bord · plek steeds verder in een volle kolom | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-slot-steady @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
+| Bord · een vaste kolomkop dekt de kaarten die eronder scrollen, licht en donker | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-heads-cover-scrolled-cards"` | e2e/step-3f.spec.ts | fix/board-sticky-heads | 6b1ba81 2026-10-16 |
 | Bord · één ⌘Z, pagina en lade | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-undo-both @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
 | Bord · toetsen: spatie, pijlen, Escape | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-keyboard @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
 | Bord · geweigerde drop, volle kolom, muis en toetsen; op een handmatig bord laat ze geen ongedaan-stap: één ⌘Z neemt de bewerking ervoor terug | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag-refused @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |

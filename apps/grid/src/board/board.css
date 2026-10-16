@@ -1,11 +1,12 @@
 /* The board: a column per option, cards that open their row and drag to their place (design/board-prototype.html). */
 .nv-board {
+  --board-pad-top: 14px;
   display: flex;
   flex: 1;
   gap: 12px;
   min-width: 0;
   overflow: auto;
-  padding: 14px 18px 28px;
+  padding: var(--board-pad-top) 18px 28px;
   align-items: flex-start;
 }
 
@@ -52,9 +53,10 @@
   color: var(--color-fg-default);
 }
 
+/* A stuck head reaches over the board's top padding, so no card scrolls into view above it. */
 .nv-board__head {
   position: sticky;
-  top: 0;
+  top: calc(-1 * var(--board-pad-top));
   z-index: 2;
   display: flex;
   align-items: center;
