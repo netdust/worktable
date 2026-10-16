@@ -19,6 +19,7 @@ Verbatim: "1 completion, 2 remove, 3 collapse, 4 yes".
 
 No test goes on the audit's word alone. One claim in 20 was refuted and 7 in 20 needed an assertion moved.
 - **Unit and integration tiers**: run `bun run mutation -- <module>` before and after the removal, for each module the removed test exercises. If the score drops or a mutant now survives, the test, or its assertion, stays or moves instead. Where no mutation module covers the code, break the behaviour by hand: the covering test must go red.
+  - The baseline in specs/mutation/ ran while other projects' gates loaded the box, so it may count load flakes as kills. When a removal decision hinges on a module, rerun that module's baseline with the box quiet first.
 - **E2E**: break the behaviour by hand, run the covering test(s), and see them go red before the old test goes. Record the break and the red run in the commit message.
 - Move the assertions first, each RED→GREEN at its new seam. Then delete.
 - **Chains**: a behaviour pinned at two tiers never loses both sides. The report's Reconciled section lists the known chains.
