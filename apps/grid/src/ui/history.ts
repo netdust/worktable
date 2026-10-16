@@ -4,10 +4,45 @@ import type { ApiError } from '../types'
 export interface Entry {
   /** Pending until the write answers; null once it was refused or changed nothing. */
   batch: Promise<string | null>
+  /** A step of several writes: the batches made before `batch`, in the order made; a null one is skipped. */
+  before?: Promise<string | null>[]
   model: string
   id: number | null
+  /** A step of several writes: every row it wrote, repainted after its undo by the view on screen. */
+  ids?: number[]
   /** Repaints what the step changed beside the rows, such as a record's files. */
   refresh?: () => void
+}
+
+/** The server's refusal of an undo; `undone` when a step went part-way: what went through, now the redo, to repaint. */
+export type Refusal = Partial<ApiError> & { undone?: Entry }
+
+/** A step's batches before its writes answer: `settle` gives the last that landed to `batch`, the ones before it to `before`. */
+export function pendingStep(count: number): { batch: Promise<string | null>; before: Promise<string | null>[]; settle: (landed: string[]) => void } {
+  let answered: (batch: string | null) => void = () => undefined
+  const batch = new Promise<string | null>((resolve) => (answered = resolve))
+  const answers: ((batch: string | null) => void)[] = []
+  const before = Array.from({ length: count - 1 }, () => new Promise<string | null>((resolve) => answers.push(resolve)))
+  return {
+    batch,
+    before,
+    settle(landed) {
+      answers.forEach((answer, i) => answer(i < landed.length - 1 ? landed[i] : null))
+      answered(landed.at(-1) ?? null)
+    },
+  }
+}
+
+/** The batches made before the step's own, last first: the order they are undone in. */
+async function earlier(entry: Entry): Promise<string[]> {
+  const made = await Promise.all(entry.before ?? [])
+  return made.filter((batch) => batch !== null).toReversed()
+}
+
+/** What a step undone part-way still holds, `todo` in the order it is undone, as a step of its own. */
+function remainder(entry: Entry, todo: string[]): Entry {
+  const [batch, ...before] = todo
+  return { ...entry, batch: Promise.resolve(batch), before: before.toReversed().map((made) => Promise.resolve(made)) }
 }
 
 export interface History {
@@ -21,7 +56,7 @@ export interface History {
   drop: (entry: Entry) => void
   /** Every step made on this row: it is gone. */
   forget: (model: string, id: number) => void
-  /** Resolves the entry undone or redone, null when there was none; rejects with the server's refusal. */
+  /** Resolves the entry undone or redone, null when there was none; rejects with the server's refusal, a `Refusal`. */
   undo: () => Promise<Entry | null>
   redo: () => Promise<Entry | null>
 }
@@ -44,29 +79,29 @@ export function createHistory(send: (batch: string) => Promise<string>): History
   async function step(from: Entry[], to: Entry[]): Promise<Entry | null> {
     const entry = from.pop()
     if (!entry) return null
-    let answered: (batch: string | null) => void = () => undefined
-    const back: Entry = { ...entry, batch: new Promise((resolve) => (answered = resolve)) }
+    const pending = pendingStep(1 + (entry.before?.length ?? 0))
+    const back: Entry = { ...entry, batch: pending.batch, before: pending.before }
     to.push(back)
     changed()
-    const refused = (keep: boolean) => {
-      answered(null)
-      without(back)
-      if (keep) from.push(entry)
-      changed()
-    }
     const batch = await entry.batch
     // Its write was refused or changed nothing: there is nothing to undo.
-    if (batch === null) {
-      refused(false)
-      return null
+    const todo = batch === null ? [] : [batch, ...(await earlier(entry))]
+    const undone: string[] = []
+    const answered = () => {
+      pending.settle(undone)
+      if (undone.length === 0) without(back)
+      changed()
     }
     try {
-      answered(await send(batch))
-      return entry
+      for (const next of todo) undone.push(await send(next))
     } catch (error) {
-      refused(KEPT.has(String((error as Partial<ApiError> | null)?.code)))
-      throw error
+      // Part-way through a step, what went through is the redo, and the rest is what a retry undoes.
+      if (KEPT.has(String((error as Partial<ApiError> | null)?.code))) from.push(undone.length > 0 ? remainder(entry, todo.slice(undone.length)) : entry)
+      answered()
+      throw undone.length > 0 ? ({ ...(error as ApiError), undone: back } satisfies Refusal) : error
     }
+    answered()
+    return undone.length > 0 ? entry : null
   }
 
   return {

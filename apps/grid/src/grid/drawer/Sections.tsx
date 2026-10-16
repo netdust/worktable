@@ -1,11 +1,15 @@
-import { type CSSProperties, type ReactNode, type Ref, useEffect, useState } from 'react'
-import { recordHistory, rowsWhere } from '../../api'
+import { type ReactNode, type Ref, useEffect, useImperativeHandle, useState } from 'react'
+import { optionsFrom, recordHistory, rowsWhere } from '../../api'
 import { locale, t } from '../../i18n'
 import type { HistoryEntry, Link, LinkItem, Model, Row, Schema } from '../../types'
-import { hueOf, toneColor } from '../../ui/tone'
+import type { Flag } from '../../ui/useFlags'
 import { initials } from '../../ui/when'
 import { crewOf, isOpen } from '../cells/Links'
+import type { Column } from '../columns'
 import { actorOf, dayLabel, type Inbound } from './derive'
+import { Note } from './Note'
+import { type Choosing, PlaceRow } from './PlaceRow'
+import './long.css'
 
 /** A section under the fields: an 11px heading with its count and, at the right, its action. */
 export function Section({ ref, title, count, action, children }: { ref?: Ref<HTMLElement>; title: string; count?: string; action?: ReactNode; children: ReactNode }) {
@@ -17,43 +21,84 @@ export function Section({ ref, title, count, action, children }: { ref?: Ref<HTM
   )
 }
 
-const Face = ({ id, name }: { id: number | null; name: string }) =>
-  id === null
-    ? <span className="nv-avatar nv-avatar--open" aria-hidden="true">+</span>
-    : <span className="nv-avatar nv-avatar--hue" style={{ '--h': hueOf(id) } as CSSProperties} aria-hidden="true">{initials(name)}</span>
+/** Writes a field the drawer edits, on the row it showed. */
+export type WriteField = (row: Row, column: Column, value: unknown) => void
 
-/** A links field as the prototype's Bezetting: who, in what role, in what state; the open places last; have/need in the head. */
-export function LinkSection({ label, link, items, schema, id }: { label: string; link: Link; items: LinkItem[]; schema: Schema | null; id: number }) {
-  const [roles, setRoles] = useState<Record<number, string>>({})
-  const other = schema?.models[link.dataset]
-  // The link row's first relation that is neither its record nor its target: a toewijzing's role.
-  const role = other && Object.entries(other.fields).find(([key, f]) => f.type === 'relation' && key !== link.key && key !== link.target)?.[0]
+/** A long text as the prototype's Notities: a paragraph; pressed, its field in its place, as the matrix cell edits its note. Read only and empty, no block. */
+export function LongSection({ column, row, onWrite }: { column: Column; row: Row; onWrite?: WriteField }) {
+  const text = column.edit(row)
+  if (!onWrite && !text) return null
+  return (
+    <Section title={column.label}>
+      {onWrite
+        ? <Note text={text} label={column.label} empty={t('notesEmpty', { label: column.label.toLocaleLowerCase(locale()) })} className="nv-dw-long"
+            area="nv-textarea nv-dw-long__area" rows={4} onSave={(value) => onWrite(row, column, column.parse(value))} />
+        : <p className="nv-dw-long">{text}</p>}
+    </Section>
+  )
+}
+
+/** Puts another record on one place of a link: an edit of that link row, one undo step. */
+export type WriteLink = (link: Link, place: number, target: number) => Promise<void>
+
+/** What the drawer's band asks of a link section: the picker open on one of its places. */
+export interface Chooser {
+  choose: (place: number) => void
+}
+
+/** The link's own rows on this record, by id; read again once a place changed hands, so a choice asks about it as it now is. */
+function usePlaces(link: Link, id: number, items: LinkItem[], reads: boolean): Map<number, Row> {
+  const [places, setPlaces] = useState<Map<number, Row>>(() => new Map())
+  const held = items.map((item) => `${item.id}:${item.target}`).join()
   useEffect(() => {
-    if (!role) return
+    if (!reads) return
     let live = true
     rowsWhere(link.dataset, { [link.key]: id }, [], 200).then(
-      ({ rows }) => live && setRoles(Object.fromEntries(rows.map((r: Row) => [r.id, r.lookups?.[role]?.title ?? '']))),
+      ({ rows }) => live && setPlaces(new Map(rows.map((r: Row) => [r.id, r]))),
       () => undefined,
     )
     return () => {
       live = false
     }
-  }, [link.dataset, link.key, id, role])
+  }, [link.dataset, link.key, id, reads, held])
+  return places
+}
+
+/** A links field as the prototype's Bezetting: who, in what role, in what state; the open places last; have/need in the head. */
+export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLink }: {
+  ref?: Ref<Chooser>
+  label: string; link: Link; items: LinkItem[]; schema: Schema | null; id: number
+  /** The flags on one link row: a flagged person shows the flag in place of their role and state. */
+  flagsOf?: (id: number) => Flag[]
+  /** Writes who holds a place; without it, or where the target column offers no candidates, no place is chosen again. */
+  onLink?: WriteLink
+}) {
+  const [choosing, setChoosing] = useState<number | null>(null)
+  useImperativeHandle(ref, () => ({ choose: setChoosing }), [])
+  const other = schema?.models[link.dataset]
+  // The link row's first relation that is neither its record nor its target: the role the place is held in.
+  const role = other && Object.entries(other.fields).find(([key, f]) => f.type === 'relation' && key !== link.key && key !== link.target)?.[0]
+  const target = other?.fields[link.target]
+  const from = onLink ? target?.options_from : undefined
+  const places = usePlaces(link, id, items, Boolean(role || from))
+  const choosingOf = (item: LinkItem): Choosing | undefined => from && onLink && choosing === item.id ? {
+    label: target?.label ?? label,
+    candidates: () => optionsFrom(from, { ...places.get(item.id)?.fields, id: item.id }),
+    onPick: (record) => {
+      setChoosing(null)
+      void onLink(link, item.id, record.id)
+    },
+    onCancel: () => setChoosing(null),
+  } : undefined
   const { have, need } = crewOf(items, link)
-  const open = items.filter(isOpen)
-  const people = items.filter((item) => !isOpen(item))
+  const ordered = [...items.filter((item) => !isOpen(item)), ...items.filter(isOpen)]
   return (
     <Section title={label} count={`${have}/${need}`}>
       {items.length === 0 ? <p className="nv-dw-none">{t('noneOf', { label: label.toLocaleLowerCase(locale()) })}</p> : (
         <ul className="nv-dw-list">
-          {[...people, ...open].map((item) => (
-            <li key={item.id}>
-              <Face id={isOpen(item) ? null : (item.target ?? item.id)} name={item.title} />
-              <span className="nv-dw-list__main">{isOpen(item) ? t('openPlace') : item.title}{roles[item.id] && <small>{roles[item.id]}</small>}</span>
-              {!isOpen(item) && item.state && link.state && (
-                <span className="nv-pill" style={{ '--tone': toneColor(link.state.tones[item.state]) } as CSSProperties}>{link.state.options[item.state] ?? item.state}</span>
-              )}
-            </li>
+          {ordered.map((item) => (
+            <PlaceRow key={item.id} item={item} link={link} role={role ? places.get(item.id)?.lookups?.[role]?.title : undefined}
+              flags={flagsOf?.(item.id) ?? []} choosing={choosingOf(item)} />
           ))}
         </ul>
       )}
@@ -121,7 +166,7 @@ export function HistorySection({ model, id }: { model: Model; id: number }) {
               <li key={entry.batch}>
                 <span className="nv-avatar nv-avatar--sm" aria-hidden="true">{initials(who)}</span>
                 <span>
-                  <b>{who}</b> {entry.created ? t('madeIt') : change ? t('setTo', { field: change.label.toLocaleLowerCase(locale()), value: said(change.new, change.field, model) }) : t('changedIt')}
+                  <b>{who}</b> {entry.created ? t('madeIt') : change?.moved ? t('moved') : change ? t('setTo', { field: change.label.toLocaleLowerCase(locale()), value: said(change.new, change.field, model) }) : t('changedIt')}
                   <span className="nv-dw-hist__t"> · {when(entry.at)}</span>
                 </span>
               </li>

@@ -213,6 +213,7 @@ describe('rows', () => {
       start_at: '2026-10-12T09:00',
       day: '2026-10-12',
       afgerond: false,
+      position: null,
       title: 'een',
       custom: { colour: 'rood', labels: ['a', 'b'] },
       lookups: { project_id: { id: 1, title: 'Alfa' } },

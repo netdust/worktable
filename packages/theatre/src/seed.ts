@@ -27,9 +27,9 @@ const OWN = 1
 const VENUE_OF: Record<string, number> = { Gent: 2, Brugge: 3, Antwerpen: 4 }
 
 const producties = [
-  { titel: 'De Kersentuin', seizoen: '2026-2027', status: 'actief', organisatie_id: OWN },
-  { titel: 'Nachtwacht', seizoen: '2026-2027', status: 'ontwikkeling', organisatie_id: OWN },
-  { titel: 'Zomerstorm', seizoen: '2025-2026', status: 'archief', organisatie_id: OWN },
+  { titel: 'De Kersentuin', seizoen: '2026-2027', status: 'actief', organisatie_id: OWN, kleur: 'rose' },
+  { titel: 'Nachtwacht', seizoen: '2026-2027', status: 'ontwikkeling', organisatie_id: OWN, kleur: 'sky' },
+  { titel: 'Zomerstorm', seizoen: '2025-2026', status: 'archief', organisatie_id: OWN, kleur: 'green' },
 ]
 
 const DAY = 86_400_000
@@ -340,7 +340,7 @@ export const views: SavedViewSeed[] = [
     filters: {},
     sort: ['titel'],
     group_by: null,
-    visible_fields: ['titel', 'seizoen', 'status', 'organisatie_id'],
+    visible_fields: ['titel', 'seizoen', 'status', 'kleur', 'organisatie_id'],
   },
   {
     name: 'Tourstops',

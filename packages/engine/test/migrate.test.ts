@@ -67,10 +67,10 @@ const fresh = (d = domain()) => {
 const names = (rows: unknown) => (rows as { name: string }[]).map((r) => r.name)
 
 describe('migrate', () => {
-  test('creates each dataset table with id, custom, created_at, updated_at, deleted_at and its declared columns', () => {
+  test('creates each dataset table with id, custom, created_at, updated_at, deleted_at, position and its declared columns', () => {
     const sqlite = fresh()
     const columns = (t: string) => names(sqlite.query(`PRAGMA table_info(${t})`).all())
-    expect(columns('klant')).toEqual(['id', 'name', 'custom', 'created_at', 'updated_at', 'deleted_at'])
+    expect(columns('klant')).toEqual(['id', 'name', 'custom', 'created_at', 'updated_at', 'deleted_at', 'position'])
     expect(columns('bestelling')).toEqual([
       'id',
       'description',
@@ -79,6 +79,7 @@ describe('migrate', () => {
       'created_at',
       'updated_at',
       'deleted_at',
+      'position',
     ])
   })
 

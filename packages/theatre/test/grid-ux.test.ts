@@ -23,6 +23,7 @@ async function schemaAs(role: 'owner' | 'editor'): Promise<Schema> {
 const FACTS = [
   { kind: 'first', column: 'start_at', where: { soort: 'voorstelling' }, label: 'voorstelling' },
   { kind: 'empty', column: 'start_at', label: 'zonder tijd' },
+  { kind: 'filled', link: 'mensen', label: 'bezetting' },
 ]
 
 describe('theatre declares its space, sections, facts and inherited venue', () => {
@@ -88,7 +89,7 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
     ])
   })
 
-  test('activiteit carries the two facts, and the venue inherited through its tourstop', async () => {
+  test('activiteit carries the three facts, and the venue inherited through its tourstop', async () => {
     const body = await schemaAs('editor')
     expect(body.sources.activiteit.group_facts).toEqual(FACTS)
     expect(body.sources.activiteit.lookups.locatie).toMatchObject({ inherited: true, from: 'Tourstop' })
@@ -151,6 +152,22 @@ describe('theatre declares the details: icons, colours, an end time and create-f
   test('soort carries a colour per option on activiteit', async () => {
     const { sources } = await schemaAs('editor')
     expect(sources.activiteit.columns.soort.tones).toEqual(SOORT_TONES)
+  })
+
+  test("productie's kleur is its tone, each option toned as it is named, each seeded production the prototype's", async () => {
+    const { sources } = await schemaAs('editor')
+    expect(sources.productie.tone).toBe('kleur')
+    const { options, tones } = sources.productie.columns.kleur
+    expect(Object.keys(options)).toEqual(['rose', 'violet', 'amber', 'sky', 'teal', 'green', 'slate'])
+    expect(tones).toEqual(Object.fromEntries(Object.keys(options).map((key) => [key, key])))
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, theatre)
+    seedDomain(sqlite, theatre)
+    expect(sqlite.query('SELECT titel, kleur FROM productie ORDER BY id').all()).toEqual([
+      { titel: 'De Kersentuin', kleur: 'rose' },
+      { titel: 'Nachtwacht', kleur: 'sky' },
+      { titel: 'Zomerstorm', kleur: 'green' },
+    ])
   })
 
   test('speelreeks status is coloured like activiteit status', async () => {

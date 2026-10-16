@@ -6,6 +6,7 @@ import {
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core'
+import { hasPosition, POSITION } from './ddl'
 import type { ColumnDecl, DatasetDecl, QueryDecl } from './declare'
 
 function columnOf(name: string, c: ColumnDecl): SQLiteColumnBuilderBase {
@@ -30,5 +31,6 @@ export function tableOf(decl: DatasetDecl | QueryDecl): SQLiteTable {
     created_at: text('created_at').notNull(),
     updated_at: text('updated_at').notNull(),
     deleted_at: text('deleted_at'),
+    ...(hasPosition(decl) ? { [POSITION]: text(POSITION) } : {}),
   })
 }

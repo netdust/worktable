@@ -2960,7 +2960,7 @@
   width: 6px;
   height: 14px;
   border-radius: 2px;
-  background: var(--color-accent-default);
+  background: var(--c, var(--color-accent-default));
 }
 
 #root .nv-dw-more {
@@ -5844,243 +5844,7 @@ table.nv-cal--month .nv-cal__event:hover {
   margin-left: auto;
 }
 
-/* The board: a column per option, cards that open their row (design/board-prototype.html). */
-.nv-board {
-  display: flex;
-  flex: 1;
-  gap: 12px;
-  min-width: 0;
-  overflow: auto;
-  padding: 14px 18px 28px;
-  align-items: flex-start;
-}
-
-.nv-board__column {
-  display: flex;
-  flex: 0 0 300px;
-  flex-direction: column;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-column);
-  transition: background-color 0.12s;
-}
-
-.nv-board__column:has(.nv-board__list[data-drop-target]) {
-  background: color-mix(in srgb, var(--color-accent-subtle) 60%, var(--color-bg-column));
-}
-
-.nv-board__list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  align-content: start;
-  min-height: 48px;
-  padding: 0 10px 10px;
-  outline: none;
-}
-
-.nv-board__item {
-  position: relative;
-  border-radius: var(--radius-md);
-  outline: none;
-  cursor: grab;
-}
-
-.nv-board__item[data-focus-visible] {
-  box-shadow: 0 0 0 2px var(--color-accent-default);
-}
-
-.nv-board__item[data-dragging] {
-  opacity: 0.35;
-}
-
-.nv-board__item--open .nv-board__card {
-  background: var(--color-bg-selected) !important;
-}
-
-/* The drop slot, as the prototype's: the target column's option in the accent, a card's height. */
-.nv-board__slot {
-  display: grid;
-  place-items: center;
-  height: 64px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-accent-default) 12%, transparent);
-  color: var(--color-accent-default);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-
-.nv-board__slot:not([data-drop-target]) {
-  display: none;
-}
-
-#root .nv-board__card--lifted {
-  width: 278px;
-  transform: rotate(2deg);
-  box-shadow: var(--shadow-pop);
-  font-weight: 600;
-  cursor: grabbing;
-}
-
-/* The keyboard's way to lift a card: out of sight until it has the focus. */
-#root .nv-board__grip {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm, 4px);
-  background: var(--color-bg-muted);
-  color: var(--color-fg-muted);
-  opacity: 0;
-  cursor: grab;
-}
-
-#root .nv-board__grip[data-focus-visible] {
-  opacity: 1;
-  outline: 2px solid var(--color-accent-default);
-}
-
-#root .nv-board__new {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm, 4px);
-  background: none;
-  color: var(--color-fg-subtle);
-  cursor: pointer;
-}
-
-#root .nv-board__new:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-fg-default);
-}
-
-.nv-board__head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 10px 8px 12px;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: inherit;
-}
-
-.nv-board__name {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.nv-board__name::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--tone);
-}
-
-.nv-board__count {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--color-bg-muted);
-  color: var(--color-fg-muted);
-  font: 11px var(--font-mono);
-}
-
-.nv-board__empty {
-  display: block;
-  padding: 22px 12px;
-  color: var(--color-fg-subtle);
-  font-size: 12.5px;
-  text-align: center;
-}
-
-#root .nv-board__card {
-  display: grid;
-  gap: 5px;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-card);
-  color: var(--color-fg-default);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-#root .nv-board__card:hover {
-  border-color: var(--color-border-strong);
-}
-
-#root .nv-board__card--open {
-  background: var(--color-bg-selected);
-}
-
-.nv-board__kind {
-  font-size: 12px;
-  color: var(--color-fg-muted);
-}
-
-.nv-board__kind .nv-dot,
-.nv-board__kind .nv-pill {
-  font-size: 12px;
-}
-
-.nv-board__title {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.nv-board__when,
-.nv-board__fact {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--color-fg-muted);
-  font-size: 12.5px;
-}
-
-.nv-board__day,
-.nv-board__when .nv-time {
-  font: 12.5px var(--font-mono);
-}
-
-.nv-board__day {
-  color: var(--color-fg-default);
-}
-
-.nv-board__untimed {
-  color: var(--color-fg-subtle);
-}
-
-.nv-board__fact > * {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nv-board__faces {
-  display: flex;
-  align-items: center;
-  padding-top: 3px;
-}
-
+/* The small and hued avatars that the board's cards, the matrix and the drawer share. */
 .nv-avatar--sm {
   width: 22px;
   height: 22px;
@@ -6101,12 +5865,6 @@ table.nv-cal--month .nv-cal__event:hover {
   border: 1px dashed var(--color-border-strong);
   background: transparent;
   color: var(--color-fg-subtle);
-}
-
-.nv-board__more {
-  margin-left: 6px;
-  color: var(--color-fg-subtle);
-  font-size: 11px;
 }
 
 /* The gallery: a card per row with its picture, as the prototype's tiles. */
@@ -6600,16 +6358,16 @@ table.nv-cal--month .nv-cal__event:hover {
 
 #root .nv-tl__bar:hover {
   z-index: 3;
-  background: color-mix(in srgb, var(--color-accent-default) 24%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--lane, var(--color-accent-default)) 24%, var(--color-bg-surface));
 }
 
 #root .nv-tl__bar--open,
 #root .nv-tl__bar--open:hover {
-  background: color-mix(in srgb, var(--color-accent-default) 32%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--lane, var(--color-accent-default)) 32%, var(--color-bg-surface));
 }
 
 #root .nv-tl__bar--option {
-  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent-default) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--color-accent-default) 20%, var(--color-bg-surface)) 5px 10px);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--lane, var(--color-accent-default)) 7%, var(--color-bg-surface)) 0 5px, color-mix(in srgb, var(--lane, var(--color-accent-default)) 20%, var(--color-bg-surface)) 5px 10px);
 }
 
 #root .nv-tl__bar--cancelled {

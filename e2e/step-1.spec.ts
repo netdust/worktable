@@ -5,8 +5,10 @@ import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
 // Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
-const APPLY_WEEK = '2026-11-02'
 const UNDO_WEEK = '2026-11-16'
+const LOCATIE_WEEK = '2026-12-07'
+// The tourstop made in the grid starts today and spans at most 31 days, so this week moves with today.
+const APPLY_WEEK = mondayAhead(14, [UNDO_WEEK, LOCATIE_WEEK])
 const SJABLOON = 'speeldag op locatie (met plaatsen)'
 const VENUE = 'Zaal De Spiegel'
 const TWICE =
@@ -105,6 +107,17 @@ async function typeInto(target: Locator, value: string) {
 
 const named = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
 const gridRows = (page: Page) => page.locator('tbody tr.nv-tr')
+
+/** This week's Monday plus `days`, a week later while it is one of `taken`; local, as the grid's days are. */
+function mondayAhead(days: number, taken: string[]): string {
+  const at = new Date()
+  at.setHours(12, 0, 0, 0)
+  at.setDate(at.getDate() - ((at.getDay() + 6) % 7) + days)
+  const iso = () =>
+    `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
+  while (taken.includes(iso())) at.setDate(at.getDate() + 7)
+  return iso()
+}
 
 const plusDays = (iso: string, days: number) => {
   const at = new Date(`${iso}T12:00:00Z`)
@@ -453,7 +466,7 @@ test('sjablonen-read-only @e2e', async ({ page }) => {
 })
 
 test('planning-locatie-via-tourstop @e2e', async ({ page }) => {
-  const week = '2026-12-07'
+  const week = LOCATIE_WEEK
   const api = page.request
   const reeks = await speelreeks(api, 'Speelreeks e2e bron', week, week)
   const productie_id = await productieId(api, 'Nachtwacht')

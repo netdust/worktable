@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { FilterInput } from './filter-compile'
-import { lookupOf } from './lookups'
+import { lookupOf, sortable } from './lookups'
 import type { Source } from './registry'
 
 export class ApiError extends Error {
@@ -111,7 +111,7 @@ function parseSort(raw: string | undefined, source: Source): RowsParams['sort'] 
   return keys.map((key) => {
     const desc = key.startsWith('-')
     const column = desc ? key.slice(1) : key
-    if (!hasColumn(source, column)) throw new ApiError(400, 'bad_sort', `cannot sort on "${column}"`)
+    if (!sortable(source, column)) throw new ApiError(400, 'bad_sort', `cannot sort on "${column}"`)
     return { column, desc }
   })
 }

@@ -1,4 +1,5 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
+import { cardIn } from './board'
 import { openLooks } from './editor'
 import { shot } from './shots'
 import { modelNode, openView, openWeek } from './tree'
@@ -14,6 +15,7 @@ const WEEK = {
 }
 // A month no other flow uses, for the timeline's packed lane.
 const MONTH = { from: '2028-08-01', to: '2028-08-31' }
+const SEED_WEEK = '2026-10-12'
 
 type Api = APIRequestContext
 type Values = Record<string, unknown>
@@ -132,8 +134,8 @@ test.describe('step 3d', () => {
     const cell = () => page.locator('.nv-grid:not(.nv-mx) tbody .nv-td').first()
     const lineWidth = () => cell().evaluate((el) => getComputedStyle(el).borderRightWidth)
     try {
-      await page.goto('/')
-      await openView(page, 'Planning', 'Activiteiten')
+      // The seed's week: the looks need rows, and the seed's activities are fixed in that week.
+      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', SEED_WEEK)
       await expect(cell()).toBeVisible()
       // Folded by default: the card's rows are not on the page, yet its looks already apply.
       await expect(page.getByRole('button', { name: 'Bijstellen' })).toHaveAttribute('aria-expanded', 'false')
@@ -178,10 +180,7 @@ test.describe('step 3d', () => {
       await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.drawer)
       const main = page.locator('main.nv-main')
       const before = await main.evaluate((el) => el.getBoundingClientRect().width)
-      await page
-        .getByRole('grid', { name: 'Bevestigd' })
-        .getByRole('row', { name: new RegExp(title) })
-        .click()
+      await cardIn(page, 'Bevestigd', title).click()
 
       const drawer = page.getByRole('complementary', { name: title })
       await expect(drawer).toBeVisible()
@@ -211,10 +210,7 @@ test.describe('step 3d', () => {
       // Boundary: narrow, the slot overlays the work rather than narrowing it.
       await page.setViewportSize({ width: 820, height: 900 })
       const narrow = await main.evaluate((el) => el.getBoundingClientRect().width)
-      await page
-        .getByRole('grid', { name: 'Bevestigd' })
-        .getByRole('row', { name: new RegExp(title) })
-        .click()
+      await cardIn(page, 'Bevestigd', title).click()
       await expect(drawer).toBeVisible()
       expect(await page.locator('.nv-drawer-slot').evaluate((el) => getComputedStyle(el).position)).toBe('fixed')
       expect(await main.evaluate((el) => el.getBoundingClientRect().width)).toBe(narrow)
@@ -506,7 +502,7 @@ test.describe('step 3d', () => {
       await expect(page.locator('.nv-tl__corner .nv-tl__count')).toHaveCount(0)
       // Packed by overlap: the two that overlap on two rows, the third back on the first.
       const top = (name: string) =>
-        page.getByRole('button', { name: new RegExp(name) }).evaluate((el) => (el as HTMLElement).style.top)
+        page.locator(`.nv-tl__bar[data-tip^="${name}"]`).evaluate((el) => (el as HTMLElement).style.top)
       expect(await top('e2e pak een')).toBe('9px')
       expect(await top('e2e pak twee')).toBe('57px')
       expect(await top('e2e pak drie')).toBe('9px')
@@ -518,6 +514,9 @@ test.describe('step 3d', () => {
   })
 
   test('timeline-scroll-holds @e2e', async ({ page }) => {
+    // Mid-month: the sheet scrolls to today only from its fourth day on, so the 1st to the 3rd would prove nothing.
+    const now = new Date()
+    await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), 15, 12))
     await page.goto('/')
     await openView(page, 'Tijdlijn tourstops', 'Tourstops')
     const sheet = page.locator('.nv-tl')

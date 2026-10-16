@@ -51,9 +51,15 @@ async function stored(api: Api, dataset: string, id: number): Promise<Values | u
   return row
 }
 
-async function activity(api: Api, omschrijving: string, day: string, start = '20:00'): Promise<number> {
+async function activity(
+  api: Api,
+  omschrijving: string,
+  day: string,
+  start = '20:00',
+  productie = 'Nachtwacht',
+): Promise<number> {
   return idOf(api, 'activiteit', {
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
+    productie_id: await idByName(api, 'productie', 'titel', productie),
     soort: 'voorstelling',
     status: 'optie',
     omschrijving,
@@ -905,6 +911,8 @@ test.describe('step 2', () => {
         state: 'bevestigd',
         rol_id: await rolId(api, 'Speler'),
       })
+      // Lotte's access ends 30 days after De Kersentuin's last day; the seed's last one is fixed in 2026.
+      const later = await activity(api, 'e2e Kersentuin later', plusDays(WEEK.decline, 3), '20:00', 'De Kersentuin')
       await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
       const outsider = await stranger(browser)
       try {
@@ -961,6 +969,7 @@ test.describe('step 2', () => {
       } finally {
         await outsider.close()
         await removeActivity(api, other)
+        await removeActivity(api, later)
       }
     })
 

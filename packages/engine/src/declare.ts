@@ -54,6 +54,8 @@ export interface ColumnDecl {
   options_from?: OptionsFrom
   /** An integer the grid shows as a tinted count above 0, and not at all at 0. */
   badge?: Tone
+  /** A text the grid edits as long text and the record drawer shows as its own block; never with options or a relation. */
+  long?: true
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -61,6 +63,8 @@ export type GroupFact =
   | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
   | { kind: 'count'; where?: Record<string, unknown>; label: string }
   | { kind: 'empty'; column: string; label: string }
+  /** "label have/need" over the group's rows: the link's items with a target, and all its items. */
+  | { kind: 'filled'; link: string; label: string }
 
 export type TitleDecl = string | { via: string; else: string }
 
@@ -156,6 +160,8 @@ export interface DatasetDecl {
   /** The relation column that points at the domain's space. */
   scoped?: string
   group_facts?: GroupFact[]
+  /** An options column toning every option: a record's colour as a lane and on the rows that point at it. */
+  tone?: string
   /** The icon the grid shows until an administrator picks one. */
   icon?: Icon
   /** The grid's words for its button that adds a row, whole; served while an administrator has not renamed the dataset. */
@@ -187,6 +193,13 @@ export interface QueryDecl {
   /** The dataset this query reads: the grid lists its views under that dataset. */
   of?: string
   links?: Record<string, LinkDecl>
+  /** Each row flags the records its marks point at (dataset → integer column of ids), with its title and its tone column's tone. */
+  flags?: FlagsDecl
+}
+
+export interface FlagsDecl {
+  marks: Record<string, string>
+  tone: string
 }
 
 /** A tile names a view: by name in a seed, by id once stored. */

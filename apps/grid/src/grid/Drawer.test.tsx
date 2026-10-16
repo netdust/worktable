@@ -1,15 +1,17 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, ModelAction, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
-  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(),
+  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), optionsFrom: vi.fn(),
   attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`,
 }))
 vi.mock('../api', () => remote)
 const { Drawer, linkedDataset } = await import('./Drawer')
 import { columnsFor } from './columns'
+import type { Flag, Flags } from '../ui/useFlags'
+import type { WriteLink } from './drawer/Sections'
 import { activity, planning } from './calais.test.data'
 
 const row = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', notes: 'Twee veggie' } })
@@ -87,6 +89,22 @@ describe('the drawer as the prototypes draw it', () => {
     fireEvent.keyDown(drawer, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
+
+  it("the subline's space bar takes the space record's tone", async () => {
+    const team = {
+      key: 'team', label: 'Teams', title_label: 'Naam', title_readonly: false, tone: 'colour',
+      fields: { colour: { type: 'select', label: 'Kleur', required: false, options: { violet: 'Paars' }, tones: { violet: 'violet' } } },
+    } as unknown as Model
+    const job = { ...model, key: 'job', fields: { team_id: { type: 'relation', label: 'Team', required: true, relation: { model: 'team', multiple: false } } } } as unknown as Model
+    const schema = { models: { job, team }, tables: [], views: [], space: { model: 'team', field: 'team_id' } } as unknown as Schema
+    const record: Row = { id: 8, title: 'Opbouw', status: '', fields: { team_id: 4 }, lookups: { team_id: { id: 4, title: 'Blauw team', status: '', fields: {} } } }
+    remote.records.mockResolvedValue({ rows: [{ id: 4, title: 'Blauw team', status: '', fields: { colour: 'violet' } }], total: 1 })
+    render(<SchemaContext.Provider value={schema}><Drawer row={record} columns={columnsFor(job, { ...planning, columns: undefined }, false)} model={job} onClose={() => undefined} /></SchemaContext.Provider>)
+    const bar = () => screen.getByRole('complementary', { name: 'Opbouw' }).querySelector('.nv-dw-sub__space i') as HTMLElement
+    await waitFor(() => expect(bar().style.getPropertyValue('--c')).toBe('var(--tone-violet)'))
+    expect(bar().parentElement?.textContent).toBe('Blauw team')
+    expect(remote.records).toHaveBeenCalledWith('team', '')
+  })
 })
 
 describe('the drawer', () => {
@@ -96,12 +114,12 @@ describe('the drawer', () => {
 
     expect(within(drawer).getByRole('heading', { name: 'Lunch bistrot' })).toBeTruthy()
     expect(within(drawer).getByText('Twee veggie')).toBeTruthy()
-    // The filled fields show; the empty ones fold under one quiet line that unfolds them.
+    // The filled fields show; the empty ones fold under one quiet line that unfolds them. The long text is a block of its own.
     const filled = container.querySelectorAll('.nv-drawer__field').length
     const fold = within(drawer).getByRole('button', { name: /^\+ \d+ andere velden$/ })
     fireEvent.click(fold)
-    expect(container.querySelectorAll('.nv-drawer__field').length).toBe(columns.length - 1)
-    expect(filled).toBeLessThan(columns.length - 1)
+    expect(container.querySelectorAll('.nv-drawer__field').length).toBe(columns.length - 2)
+    expect(filled).toBeLessThan(columns.length - 2)
     expect(container.querySelector('.nv-drawer__editor')).toBeNull()
   })
 
@@ -167,6 +185,233 @@ describe('the drawer', () => {
 
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('a long text in the drawer', () => {
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const model = { ...activity, fields: { ...activity.fields, people } } as Model
+  const every = columnsFor(model, { ...planning, columns: undefined }, false)
+  const noted = (notes: string): Row => ({ id: 1, title: 'Lunch bistrot', status: 'publish', fields: { date: '2026-05-18', notes, people: [] } })
+  const block = () => screen.getByRole('region', { name: 'Notities' })
+  const area = () => screen.queryByRole('textbox', { name: 'Notities' }) as HTMLTextAreaElement | null
+
+  it('shows the text as its own section after the people, titled by its label, and as no field line', () => {
+    const { container } = render(<Drawer row={noted('Zaal open om 19:30.\nParkeren op de laadkade.')} columns={every} model={model} onClose={() => undefined} />)
+    const sections = [...container.querySelectorAll('section.nv-dw-sec')].map((s) => s.getAttribute('aria-label'))
+
+    expect(sections.indexOf('Notities')).toBe(sections.indexOf('Mensen') + 1)
+    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Zaal open om 19:30.\nParkeren op de laadkade.')
+    fireEvent.click(screen.getByRole('button', { name: /^\+ \d+ andere velden$/ }))
+    expect([...container.querySelectorAll('.nv-drawer__field dt')].map((dt) => dt.textContent)).not.toContain('Notities')
+  })
+
+  it('reads only without a way to write, or on a readonly field: no button, and no block at all while it is empty', () => {
+    const readonly = { ...model, fields: { ...model.fields, notes: { ...model.fields.notes, readonly: true } } } as Model
+    const { rerender } = render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} />)
+    expect(within(block()).queryByRole('button')).toBeNull()
+    rerender(<Drawer row={noted('Twee veggie')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
+    expect(within(block()).queryByRole('button')).toBeNull()
+    rerender(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} />)
+    expect(screen.queryByRole('region', { name: 'Notities' })).toBeNull()
+    rerender(<Drawer row={noted('')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
+    expect(screen.queryByRole('region', { name: 'Notities' })).toBeNull()
+  })
+
+  it('keeps an empty block where it can be written, so a first note can be added', () => {
+    render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={vi.fn()} />)
+    expect(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' })).toBeTruthy()
+  })
+
+  it('asks for a first text where it is empty, opens its field in its place, and writes on Cmd+Enter, not on Enter', async () => {
+    const onWrite = vi.fn()
+    render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }))
+    expect(block().contains(area())).toBe(true)
+    // A click without a pointer is a virtual one: React Aria focuses the field a frame later.
+    await waitFor(() => expect(document.activeElement).toBe(area()))
+    fireEvent.change(area()!, { target: { value: 'Parkeren op de laadkade' } })
+    fireEvent.keyDown(area()!, { key: 'Enter' })
+    expect(onWrite).not.toHaveBeenCalled()
+    fireEvent.keyDown(area()!, { key: 'Enter', metaKey: true })
+
+    expect(onWrite).toHaveBeenCalledTimes(1)
+    expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Parkeren op de laadkade')
+    expect(area()).toBeNull()
+    expect(document.activeElement).toBe(within(block()).getByRole('button'))
+  })
+
+  it('writes on leaving for elsewhere, and nothing when the text is as it was', async () => {
+    const onWrite = vi.fn()
+    render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
+    const outside = document.body.appendChild(document.createElement('button'))
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
+    expect(area()?.value).toBe('Twee veggie')
+    await waitFor(() => expect(document.activeElement).toBe(area()))
+    act(() => outside.focus())
+    expect(onWrite).not.toHaveBeenCalled()
+    expect(area()).toBeNull()
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
+    fireEvent.change(area()!, { target: { value: 'Drie veggie' } })
+    await waitFor(() => expect(document.activeElement).toBe(area()))
+    act(() => outside.focus())
+    expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Drie veggie')
+    outside.remove()
+  })
+
+  it('Escape leaves the edit without a write, and the drawer stays open', () => {
+    const onWrite = vi.fn()
+    const onClose = vi.fn()
+    render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={onClose} onWrite={onWrite} />)
+
+    fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
+    fireEvent.change(area()!, { target: { value: 'weg' } })
+    fireEvent.keyDown(area()!, { key: 'Escape' })
+
+    expect(area()).toBeNull()
+    expect(onWrite).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Twee veggie')
+    expect(document.activeElement).toBe(within(block()).getByRole('button'))
+  })
+})
+
+describe('a flag in the drawer', () => {
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const model = { ...activity, fields: { ...activity.fields, people } } as Model
+  const every = columnsFor(model, { ...planning, columns: undefined }, false)
+  const crew = [{ id: 11, target: 5, title: 'Sien Peeters', state: null }, { id: 12, target: 6, title: 'Lieve Claes', state: null }]
+  const staffed = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', people: crew } })
+  const flag = (text: string, marks: Record<string, number>): Flag => ({ text, tone: 'bad', label: 'Melding', marks })
+  const raised = [flag('Sien staat dubbel ingepland.', { activity: 1, assignment: 11 }), flag('Montage overlapt.', { activity: 2 })]
+  const flags: Flags = {
+    marksOf: (dataset, id) => raised.filter((f) => f.marks[dataset] === id),
+    count: () => 0,
+    source: 'meldingen',
+    label: 'Meldingen',
+  }
+  const band = () => screen.queryByRole('alert')
+
+  it("shows the record's flag as a band under its title with Negeren only, which hides it in the open drawer and stores nothing", () => {
+    const { unmount } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()?.querySelector('.nv-dw-alert__head')?.textContent).toBe('Melding')
+    expect(band()?.querySelector('.nv-dw-alert__text')?.textContent).toBe('Sien staat dubbel ingepland.')
+    expect([...band()!.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Negeren'])
+    expect(screen.queryByRole('button', { name: 'Iemand anders kiezen' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Negeren' }))
+    expect(band()).toBeNull()
+    unmount()
+
+    render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()).not.toBeNull()
+  })
+
+  it("moves the focus to the drawer's close button once Negeren took the band away, so Escape still closes the drawer", () => {
+    const onClose = vi.fn()
+    render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={onClose} />)
+    const negeren = screen.getByRole('button', { name: 'Negeren' })
+    negeren.focus()
+    fireEvent.click(negeren)
+
+    const sluiten = screen.getByRole('button', { name: 'Sluiten' })
+    expect(document.activeElement).toBe(sluiten)
+    fireEvent.keyDown(sluiten, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps hiding the flag Negeren hid after a re-read that lists the flags in another order', () => {
+    const two = [flag('Sien staat dubbel ingepland.', { activity: 1, assignment: 11 }), flag('Lieve is afwezig.', { activity: 1, assignment: 12 })]
+    const read = (list: Flag[]): Flags => ({ ...flags, marksOf: (dataset, id) => list.filter((f) => f.marks[dataset] === id) })
+    const texts = () => screen.queryAllByRole('alert').map((a) => a.querySelector('.nv-dw-alert__text')?.textContent)
+    const { rerender } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={read(two)} onClose={() => undefined} />)
+    fireEvent.click(within(screen.getAllByRole('alert')[0]).getByRole('button', { name: 'Negeren' }))
+    expect(texts()).toEqual(['Lieve is afwezig.'])
+
+    rerender(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={read(two.toReversed())} onClose={() => undefined} />)
+    expect(texts()).toEqual(['Lieve is afwezig.'])
+  })
+
+  it("shows another record's own band once the drawer steps to it, and none on a record without a flag", () => {
+    const { rerender } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Negeren' }))
+    rerender(<Drawer row={staffed(2, 'Montage')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()?.querySelector('.nv-dw-alert__text')?.textContent).toBe('Montage overlapt.')
+    rerender(<Drawer row={staffed(3, 'Diner')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    expect(band()).toBeNull()
+  })
+
+  it('marks a flagged person in its people with the flag, its text in place of their role', () => {
+    render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
+    const [sien, lieve] = within(screen.getByRole('region', { name: 'Mensen' })).getAllByRole('listitem')
+    const mark = sien.querySelector('.nv-flag')
+    expect(mark?.textContent).toBe('Melding')
+    expect(mark?.getAttribute('title')).toBe('Sien staat dubbel ingepland.')
+    expect(sien.querySelector('small')?.textContent).toBe('Sien staat dubbel ingepland.')
+    expect(lieve.querySelector('.nv-flag')).toBeNull()
+  })
+
+  describe('"Iemand anders kiezen"', () => {
+    const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
+    const person = { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false } }
+    const assignment = (target: object) => ({ key: 'assignment', label: 'Plaatsen', title_label: 'Titel', title_readonly: true, fields: { person_id: { ...person, ...target } } }) as unknown as Model
+    const schemaOf = (writable = true, target: object = { options_from: from }) =>
+      ({ models: { [model.key]: model, assignment: assignment(target) }, tables: [], views: [], writable: { assignment: writable } }) as unknown as Schema
+    const open = (schema: Schema, onLink?: WriteLink, record = staffed(1, 'Lunch bistrot')) =>
+      render(<SchemaContext.Provider value={schema}><Drawer row={record} columns={every} model={model} flags={flags} onLink={onLink} onClose={() => undefined} /></SchemaContext.Provider>)
+    const acts = () => [...band()!.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)
+    const mensen = () => within(screen.getByRole('region', { name: 'Mensen' }))
+
+    it('stands beside Negeren where the flag marks a place of a link whose target column offers candidates', () => {
+      open(schemaOf(), vi.fn())
+      expect(acts()).toEqual(['Iemand anders kiezen', 'Negeren'])
+    })
+
+    it.each([
+      ['a flag on the record only', () => open(schemaOf(), vi.fn(), staffed(2, 'Montage'))],
+      ['a link dataset the caller cannot write', () => open(schemaOf(false), vi.fn())],
+      ['a target column without candidates', () => open(schemaOf(true, {}), vi.fn())],
+      ['a readonly target column', () => open(schemaOf(true, { options_from: from, readonly: true }), vi.fn())],
+      ['a drawer that cannot write', () => open(schemaOf())],
+    ])('is absent on %s: Negeren alone', (_case, arrange) => {
+      arrange()
+      expect(acts()).toEqual(['Negeren'])
+    })
+
+    it("opens the picker in place on the marked person, listing the place's candidates; a pick writes that place once", async () => {
+      remote.optionsFrom.mockResolvedValueOnce([{ id: 7, title: 'Noor Janssens', status: '', fields: {} }])
+      const onLink = vi.fn<WriteLink>().mockResolvedValue(undefined)
+      open(schemaOf(), onLink)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Iemand anders kiezen' }))
+      // An open combobox hides the rest of the page from a screen reader: the rows are read as elements.
+      const [sien, lieve] = screen.getByRole('region', { name: 'Mensen' }).querySelectorAll('li')
+      expect(within(sien).getByRole('combobox', { name: 'Persoon' })).toBeTruthy()
+      expect(sien.querySelector('.nv-flag')?.textContent).toBe('Melding')
+      expect(lieve.textContent).toContain('Lieve Claes')
+      expect(lieve.querySelector('[role="combobox"]')).toBeNull()
+
+      const noor = await screen.findByRole('option', { name: 'Noor Janssens' })
+      expect(remote.optionsFrom).toHaveBeenCalledExactlyOnceWith(from, expect.objectContaining({ id: 11 }))
+      await act(async () => fireEvent.click(noor))
+      expect(onLink).toHaveBeenCalledExactlyOnceWith(people.link, 11, 7)
+      expect(screen.queryByRole('combobox')).toBeNull()
+    })
+
+    it('Escape leaves the picker and writes nothing', () => {
+      remote.optionsFrom.mockResolvedValueOnce([])
+      const onLink = vi.fn<WriteLink>()
+      open(schemaOf(), onLink)
+      fireEvent.click(screen.getByRole('button', { name: 'Iemand anders kiezen' }))
+      fireEvent.keyDown(mensen().getByRole('combobox', { name: 'Persoon' }), { key: 'Escape' })
+
+      expect(screen.queryByRole('combobox')).toBeNull()
+      expect(mensen().getAllByRole('listitem')[0].textContent).toContain('Sien Peeters')
+      expect(onLink).not.toHaveBeenCalled()
+    })
   })
 })
 

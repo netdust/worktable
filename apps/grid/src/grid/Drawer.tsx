@@ -1,19 +1,22 @@
 import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useState } from 'react'
+import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
-import type { Account, ActionInput, ApiError, Link, Model, ModelAction, OptionsFrom, Row, View } from '../types'
+import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, Row, View } from '../types'
 import { iconNamed } from '../ui/icons'
 import { toneColor } from '../ui/tone'
+import { useTones } from '../ui/useTones'
 import { whenOf } from '../ui/when'
+import type { Flag, Flags } from '../ui/useFlags'
+import { Alert, type AlertAction } from './drawer/Alert'
 import { SchemaContext } from './drawer/context'
-import { dayLabel, inboundOf, kindOf, type Prop, propsOf } from './drawer/derive'
-import { HistorySection, InboundSection, LinkSection } from './drawer/Sections'
+import { choosableOf, dayLabel, inboundOf, kindOf, linkedOf, type Prop, propsOf } from './drawer/derive'
+import { type Chooser, HistorySection, InboundSection, LinkSection, LongSection, type WriteField, type WriteLink } from './drawer/Sections'
 import type { Layout } from './layout'
 import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
-import { type Column, linksOf } from './columns'
+import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
 import { RelationPicker } from './cells/RelationPicker'
@@ -28,6 +31,10 @@ interface Props {
   onClose: () => void
   /** What edits the record, under its fields. */
   editor?: ReactNode
+  /** Writes a long text edited in its block; without it, the drawer reads only. */
+  onWrite?: WriteField
+  /** Writes who holds a place of one of the record's links, in the link's own dataset; without it no place is chosen again. */
+  onLink?: WriteLink
   /** The model's declared actions, each a button with a picker per input. */
   actions?: ModelAction[]
   onAction?: RunAction
@@ -46,6 +53,8 @@ interface Props {
   layout?: Layout | null
   /** The view's rows in their order: "3 van 12", and ↑ ↓ to the row before or after. */
   nav?: { ids: number[]; onStep: (id: number) => void }
+  /** The flags the view's skin read: the record's own show as bands, its people's on their names. */
+  flags?: Flags | null
   /** A record drawn from elsewhere (a matrix cell): its own subline, alert, field lines and sections, in the drawer's places. */
   sub?: ReactNode
   alert?: ReactNode
@@ -59,6 +68,17 @@ export type Attachable = NonNullable<Model['attachments']> & { dataset: string; 
 /** The dataset an administrator copies a record's link of, on one that declares record_link. */
 export function linkedDataset(role: Account['role'], model: Model): string | undefined {
   return role === 'administrator' && model.record_link ? model.key : undefined
+}
+
+/** Each band's key: its flag's text and marks, so Negeren keeps hiding that flag when a re-read lists the flags in another order. */
+function bandKeys(flags: Flag[]): string[] {
+  const seen = new Map<string, number>()
+  return flags.map((flag) => {
+    const key = `${flag.text}|${Object.entries(flag.marks).sort().join()}`
+    const n = seen.get(key) ?? 0
+    seen.set(key, n + 1)
+    return `${key}|${n}`
+  })
 }
 
 /** The drawer reads; a checkbox's toggle is the sheet's. */
@@ -143,7 +163,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
@@ -152,8 +172,19 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
   const { shown, folded } = propsOf(columns, row, cal, layout, dateField)
   const space = schema?.space && model && schema.space.model !== model.key ? columns.find((c) => c.id === schema.space?.field) : undefined
   const sub = [space, columns.find((c) => c.kind === 'relation' && c !== space && c.text(row) !== '')].filter((c): c is Column => Boolean(c) && (c as Column).text(row) !== '')
-  const links = columns.filter((c) => c.kind === 'links' && model?.fields[c.field ?? c.id]?.link)
+  const tones = useTones(schema?.models ?? {}, space && !ownSub ? schema?.space?.model : undefined)
+  const spaceTone = space && tones?.get(Number(firstId(space.value(row))))
+  const links = linkedOf(columns, model)
+  const longs = columns.filter((c) => c.kind === 'longtext')
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
+  const raised = model && flags && row.id > 0 ? flags.marksOf(model.key, row.id) : []
+  const bands = bandKeys(raised)
+  // The band asks the link section to choose for the place its flag marks: the choosing is the section's.
+  const choosers = useRef<Record<string, Chooser | null>>({})
+  const chooseOther = (flag: Flag): AlertAction[] => {
+    const at = onLink ? choosableOf(flag, row, links, schema) : null
+    return at ? [{ label: t('chooseOther'), run: () => choosers.current[at.key]?.choose(at.place) }] : []
+  }
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
       head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
@@ -161,19 +192,20 @@ export function Drawer({ row, columns, onClose, editor, actions = [], onAction, 
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
       {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
         <p className="nv-dw-sub">
-          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
+          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
         </p>
       )}
-      {alert}
+      {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
         ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
         : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
-      {links.map((c) => {
-        const link = model?.fields[c.field ?? c.id]?.link as Link
-        return <LinkSection key={c.id} label={c.label} link={link} items={linksOf(row, c.field ?? c.id)} schema={schema} id={row.id} />
-      })}
+      {links.map(({ key, link, column }) => (
+        <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
+          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} />
+      ))}
+      {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
       {sections}
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}

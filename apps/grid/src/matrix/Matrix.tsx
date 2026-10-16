@@ -1,6 +1,7 @@
-import { type ClipboardEvent, type CSSProperties, Fragment, type KeyboardEvent, type MouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ClipboardEvent, type CSSProperties, Fragment, type KeyboardEvent, type MouseEvent, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Column, columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
+import { SchemaContext } from '../grid/drawer/context'
 import { filterRows } from '../grid/filter'
 import { hide, type Layout, show as unhide } from '../grid/layout'
 import type { CellError } from '../grid/store'
@@ -11,6 +12,7 @@ import type { MatrixCell, MatrixColumn, Model, OptionsFrom, Row, Tone, View } fr
 import { Spinner } from '../ui/Spinner'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
+import { type Flag, type Flags, flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { iso } from '../ui/Window'
 import { initials, whenOf } from '../ui/when'
 import { absentOn } from './away'
@@ -120,14 +122,14 @@ function keepFocusOnShift(event: MouseEvent<HTMLTableCellElement>): void {
   if (event.shiftKey) event.preventDefault()
 }
 
-/** A cell's look: its status tinted by its tone, a refused one quiet, away hatched, away and still on the row red. */
-function toneClass(cell: MatrixCell | undefined, tone: Tone | undefined, away: Row | undefined): string {
-  const look = !cell ? '' : tone === 'bad' ? 'nv-mx__cell--no' : away ? 'nv-mx__cell--bad' : tone ? 'nv-mx__cell--on' : ''
+/** A cell's look: its status tinted by its tone, a refused one quiet, away hatched, away or flagged and still on the row red. */
+function toneClass(cell: MatrixCell | undefined, tone: Tone | undefined, away: Row | undefined, flagged: boolean): string {
+  const look = !cell ? '' : tone === 'bad' ? 'nv-mx__cell--no' : away || flagged ? 'nv-mx__cell--bad' : tone ? 'nv-mx__cell--on' : ''
   return [away ? 'nv-mx__away' : '', look].filter(Boolean).join(' ')
 }
 
-function Cell({ view, models, cell, column, away, date, state }: {
-  view: View; models: Record<string, Model>; cell: MatrixCell | undefined; column: MatrixColumn; away: Row | undefined; date: string; state: CellState
+function Cell({ view, models, cell, column, away, flags, date, state }: {
+  view: View; models: Record<string, Model>; cell: MatrixCell | undefined; column: MatrixColumn; away: Row | undefined; flags: Flag[]; date: string; state: CellState
 }) {
   const join = view.join!
   const status = cell ? text(cell.fields[join.cell_field]) : ''
@@ -141,17 +143,19 @@ function Cell({ view, models, cell, column, away, date, state }: {
     note !== '' && `${t('noteLabel')}: ${note}`,
     away && t('awayReason', { reason }),
     away && cell && t('awayWarning'),
+    ...flags.map((flag) => flag.text),
   ].filter(Boolean).join('. ')
+  const flagged = cell !== undefined && flags.some((flag) => flag.tone === 'bad')
 
   return (
     <td role="gridcell" aria-label={label} data-column={column.key} data-date={date} data-cell={state.spot}
-      className={['nv-td', 'nv-mx__cell', state.split ? 'nv-mx__split' : '', toneClass(cell, tone, away), state.selected ? 'nv-mx__selected' : '', state.open ? 'nv-mx__open-cell' : '', state.active ? 'nv-td--active' : '', state.error ? 'nv-td--error' : ''].filter(Boolean).join(' ')}
+      className={['nv-td', 'nv-mx__cell', state.split ? 'nv-mx__split' : '', toneClass(cell, tone, away, flagged), state.selected ? 'nv-mx__selected' : '', state.open ? 'nv-mx__open-cell' : '', state.active ? 'nv-td--active' : '', state.error ? 'nv-td--error' : ''].filter(Boolean).join(' ')}
       style={cell && tone ? ({ '--c': toneColor(tone) } as CSSProperties) : undefined}
       tabIndex={state.focusable ? 0 : -1} aria-selected={state.selected} aria-invalid={state.error ? true : undefined}
       onMouseDown={keepFocusOnShift} onClick={(event) => state.onClick(event.shiftKey)} onDoubleClick={state.onOpen} onFocus={state.onFocus}>
       {cell && <span className="nv-mx__mark" data-counted={status === join.count}>{markFor(view, status)}</span>}
       {!cell && away && <span className="nv-mx__reason" aria-hidden="true">{reason}</span>}
-      {cell && away && <span className="nv-mx__warn" aria-hidden="true">⚠</span>}
+      {cell && (away || flags.length > 0) && <span className="nv-mx__warn" aria-hidden="true" title={flags.map((flag) => flag.text).join('\n') || undefined}>⚠</span>}
       {note !== '' && <span className="nv-mx__dot" aria-hidden="true" />}
       {state.error && <span className="nv-td__error" role="alert">{state.error.message}</span>}
     </td>
@@ -234,7 +238,11 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
   const kept = useRef<number[]>([])
   const keptNames = useRef<MatrixColumn[]>([])
   const rows = useMemo(() => filterRows(windowRows, query), [windowRows, query])
-  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false }), [rows.length])
+  const flags = useFlags(useContext(SchemaContext), null, windowOfRows(windowRows, view.date_field), view.model, windowRows)
+  const flagged = flaggedOf(flags, view.model, rows)
+  // A cell is its join record: the flags on that record.
+  const marksOf = (cell: MatrixCell | undefined) => (cell && flags ? flags.marksOf(view.join!.model, cell.id) : [])
+  useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, flagged }), [rows.length, flagged?.count])
   const everyColumn = useMemo(() => {
     const built = buildColumns(view, windowRows, titles, [...picked, ...kept.current], keptNames.current)
     kept.current = built.flatMap((column) => (column.id ? [column.id] : []))
@@ -587,7 +595,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
                         {hasOpen && <OpenCell row={row.id} slots={openSlots(view, row)} error={store?.cellError(row.id, OPEN) ?? null} onFill={editable ? () => setFilling(row.id) : undefined} />}
                         {columns.map((column, c) => (
                           <Cell key={column.key} view={view} models={models} cell={grid[at].cells[c]} column={column}
-                            away={absentOn(away, view, column, date)} date={date} state={stateOf(r, c, row, column)} />
+                            away={absentOn(away, view, column, date)} flags={marksOf(grid[at].cells[c])} date={date} state={stateOf(r, c, row, column)} />
                         ))}
                         <td role="gridcell" className="nv-td nv-end nv-cell__tabular" data-testid="row-count" title={`${headcount(row)} ${countWord}`}>{need(row) > 0 ? `${have(row)}/${need(row)}` : '–'}</td>
                       </tr>
@@ -607,7 +615,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
           </table>
         </div>
         {openRow && (open?.column === null || openColumn) && (
-          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows}
+          <PanelDrawer view={view} models={models} row={openRow} column={openColumn ?? null} columns={columns} away={away} rows={rows} flags={flags}
             asking={asking && openColumn && asking.key === `${openRow.id}:${openColumn.key}` ? asking.n : 0}
             onReturn={() => {
               const at = open?.column ? indexOf({ row: open.row, column: open.column }) : null
@@ -622,7 +630,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
 }
 
 /** A cell's drawer, or a row label's: the row read whole with who is on it in its editor slot. */
-function PanelDrawer({ onClose, ...panel }: Parameters<typeof Panel>[0] & { onClose: () => void }) {
+function PanelDrawer({ onClose, flags, ...panel }: Parameters<typeof Panel>[0] & { onClose: () => void; flags: Flags | null }) {
   const { view, models, row, column } = panel
   const fields = useMemo(() => {
     const model = models[view.model]
@@ -633,7 +641,7 @@ function PanelDrawer({ onClose, ...panel }: Parameters<typeof Panel>[0] & { onCl
   }, [models, view, row])
   if (column) return <CellDrawer key={`${row.id}:${column.key}`} {...panel} column={column} fields={fields} onClose={onClose} />
   return (
-    <Drawer row={row} columns={fields} focusOnOpen={false} onClose={onClose} model={models[view.model]}
+    <Drawer row={row} columns={fields} focusOnOpen={false} onClose={onClose} model={models[view.model]} flags={flags}
       editor={<Panel key={row.id} {...panel} />} />
   )
 }

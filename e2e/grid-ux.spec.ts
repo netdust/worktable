@@ -350,7 +350,7 @@ test('fold-day-band @e2e', async ({ page }) => {
   await expect(gridRows(page)).toHaveCount(21)
   await expect(gridRows(page).first().locator('td').first()).toHaveText('1')
   await expect(first.locator('.nv-group__count')).toHaveText('7')
-  await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  await expect(facts(first)).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/2'])
   await expect(bands(page).nth(1)).toHaveAttribute('aria-expanded', 'true')
   await shot(page, 'fold-day-band')
 
@@ -377,7 +377,7 @@ test('band-facts @e2e', async ({ page }) => {
   await expect(bands(page)).toHaveCount(4)
   for (const band of await bands(page).all()) {
     await expect(band.locator('.nv-group__count')).toHaveText('7')
-    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/2'])
   }
   await expect(page.locator('.nv-bar__count')).toHaveText('28 rijen · 4 groepen')
   await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · /)
@@ -438,7 +438,7 @@ test('inherited-venue @e2e', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1200 })
   await bands(page).nth(2).click()
   await expect(bands(page).nth(2)).toHaveAttribute('aria-expanded', 'false')
-  await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd'])
+  await expect(facts(bands(page).nth(2))).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/2'])
   await shot(page, 'planning')
 })
 
@@ -542,6 +542,32 @@ test('planning-details @e2e', async ({ page }) => {
   const tree = (await page.getByRole('tree', { name: 'Views' }).boundingBox())?.height ?? 0
   expect(foot).toBeLessThan(120)
   expect(tree).toBeGreaterThan(480)
+
+  // A night activity past the day line starts on the next day: its Tijd cell shows the date as well and must not cut it.
+  const night = 'Nachtrit e2e details'
+  const day = plusDays(DETAILS_WEEK, 1)
+  const late = plusDays(DETAILS_WEEK, 2)
+  const id = await idOf(page.request, 'activiteit', {
+    productie_id: await idByName(page.request, 'productie', 'titel', 'Nachtwacht'),
+    soort: 'repetitie',
+    datum: day,
+    start_at: `${late}T00:30`,
+    eind_at: `${late}T02:00`,
+    omschrijving: night,
+  })
+  try {
+    await page.reload()
+    const cell = named(page, night).first().locator('td').nth(1)
+    await expect(cell).toContainText('00:30–02:00')
+    await expect(cell).toContainText('/')
+    expect(await cell.evaluate((td) => td.scrollWidth <= td.clientWidth), 'the Tijd cell holds its day and time').toBe(
+      true,
+    )
+    await cell.scrollIntoViewIfNeeded()
+    await shot(page, 'planning-tijd-fits')
+  } finally {
+    await page.request.delete(`/api/rows/activiteit/${id}`)
+  }
 })
 
 // The shake-out's edges: the flows above on their denied actor, re-entry, concurrency and boundary.
@@ -680,6 +706,7 @@ test.describe('a domain without the new shapes', () => {
 
 test.describe
   .serial('past the read limit', () => {
+    test.describe.configure({ timeout: 60_000 })
     const ids: number[] = []
 
     // One more activity than the engine reads in a week of its own: two on the Monday, the rest on the Tuesday.

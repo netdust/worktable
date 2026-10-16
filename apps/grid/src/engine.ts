@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -20,6 +20,8 @@ export interface EngineColumn {
   hidden?: true
   options_from?: OptionsFrom
   badge?: Tone
+  /** A text edited as long text, its own block in the drawer. */
+  long?: true
 }
 
 /** A dataset's lookup: the related row's field, typed as that field; an inherited one is the row's own when set. */
@@ -66,9 +68,13 @@ export interface EngineSource {
   creates?: string
   /** The dataset a query reads; served only to a caller who can read it. */
   of?: string
+  /** What a query's rows flag: a mark per dataset the caller reads, by the column holding its ids, and the column toning each flag. */
+  flags?: FlagsDef
   /** The words of the button that adds a row, while the dataset keeps its declared name. */
   new_label?: string
   group_facts?: GroupFact[]
+  /** A dataset's options column whose tone is each record's colour. */
+  tone?: string
   columns: Record<string, EngineColumn>
   lookups?: Record<string, EngineLookup>
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
@@ -149,7 +155,7 @@ function asTarget(column: EngineColumn, sources: Sources): EngineColumn {
 
 function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources): Field {
   const column = asTarget(declared, sources)
-  const type: FieldType = column.relation ? 'relation' : column.options ? 'select' : TYPES[column.type]
+  const type: FieldType = column.relation ? 'relation' : column.options ? 'select' : column.long ? 'textarea' : TYPES[column.type]
   return {
     type,
     label: column.label,
@@ -205,6 +211,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
+    ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
       ...Object.fromEntries(fields.map(([key, column]) => [key, fieldOf(column, source, sources)])),
@@ -265,6 +272,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.of ? { of: source.of } : {}),
+    ...(source.flags ? { flags: source.flags } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: typesOf(source),

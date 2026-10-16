@@ -113,6 +113,15 @@ describe('validateDomain refuses a bad space, section or fact', () => {
     const empty = { kind: 'empty', column: 'ghost', label: 'g' } as const
     expect(refused(withQuery('job_room', { group_facts: [empty] }))).toEqual(['job_room', 'ghost'])
   })
+
+  test('a filled fact names a link of its source', () => {
+    const plainTaak = (facts: DatasetDecl['group_facts']): Domain => ({
+      ...plain,
+      datasets: plain.datasets.map((d) => (d.name === 'taak' ? { ...d, group_facts: facts } : d)),
+    })
+    expect(() => validateDomain(plainTaak([{ kind: 'filled', link: 'koppels', label: 'bezet' }]))).not.toThrow()
+    expect(refused(plainTaak([{ kind: 'filled', link: 'ghost', label: 'bezet' }]))).toEqual(['taak', 'ghost'])
+  })
 })
 
 async function schemaOf(domain: Domain, role: 'owner' | 'editor', owner = 'member'): Promise<Schema> {
@@ -195,6 +204,46 @@ describe('the tone palette', () => {
 
   test('a tone outside the palette is refused', () => {
     expect(refused(withTone('purple'))).toEqual(['job', 'purple'])
+  })
+})
+
+describe("a dataset's tone", () => {
+  const withKind = (over: Partial<ColumnDecl>, tone = 'kind') =>
+    withDataset('job', {
+      tone,
+      columns: { ...dataset('job').columns, kind: { ...dataset('job').columns.kind, ...over } },
+    })
+
+  test('a tone naming an unknown column, a column without tones, or one leaving an option untoned is refused', () => {
+    expect(refused(withKind({}, 'ghost'))).toEqual(['job', 'ghost'])
+    expect(refused(withKind({}))).toEqual(['job', 'kind'])
+    expect(refused(withKind({ tones: { main: 'sky' } }))).toEqual(['job', 'kind'])
+  })
+
+  test('a tone on an options column toning every option validates, and /schema serves it on the dataset', async () => {
+    const domain = withKind({ tones: { main: 'sky', side: 'rose' } })
+    expect(() => validateDomain(domain)).not.toThrow()
+    const sources = (await schemaOf(domain, 'editor')).sources
+    expect(sources.job.tone).toBe('kind')
+    expect(sources.room.tone).toBeUndefined()
+  })
+})
+
+describe('a long text', () => {
+  const withNote = (note: ColumnDecl) => withDataset('job', { columns: { ...dataset('job').columns, note } })
+
+  test('long on an integer, an options or a relation column is refused', () => {
+    expect(refused(withNote({ type: 'integer', label: 'Note', nullable: true, long: true }))).toEqual(['job', 'note'])
+    expect(refused(withNote({ type: 'text', label: 'Note', options: { a: 'A' }, long: true }))).toEqual(['job', 'note'])
+    expect(refused(withNote({ type: 'text', label: 'Note', relation: 'team', long: true }))).toEqual(['job', 'note'])
+  })
+
+  test('long on a text column validates and /schema serves it', async () => {
+    const domain = withNote({ type: 'text', label: 'Note', nullable: true, long: true })
+    expect(() => validateDomain(domain)).not.toThrow()
+    const columns = (await schemaOf(domain, 'editor')).sources.job.columns
+    expect(columns.note.long).toBe(true)
+    expect(columns.name.long).toBeUndefined()
   })
 })
 
@@ -335,6 +384,69 @@ describe('of on a query', () => {
     expect(body.sources.per_project.of).toBeUndefined()
     expect((await schemaOf(plainWith({ of: 'plat' }), 'editor', 'project')).sources.per_project.of).toBe('plat')
     expect((await schemaOf(plainWith({ of: 'taak' }), 'owner', 'project')).sources.per_project.of).toBe('taak')
+  })
+})
+
+describe('flags on a query', () => {
+  // job_room flags jobs and rooms, toned by where its room comes from.
+  const flags = { marks: { job: 'id', room: 'room_id' }, tone: 'room_from' }
+  const flagged = (over: Partial<NonNullable<QueryDecl['flags']>> = {}, tones?: Record<string, string>) => {
+    const columns = query('job_room').columns
+    const room_from = { ...columns.room_from, tones: tones ?? { own: 'warn', team: 'bad' } } as ColumnDecl
+    return withQuery('job_room', { flags: { ...flags, ...over }, columns: { ...columns, room_from } })
+  }
+
+  test('a mark to an unknown dataset or a query, to a text or an undeclared column, or a tone without tones is refused', () => {
+    expect(refused(flagged({ marks: { ghost: 'id' } }))).toEqual(['job_room', 'ghost'])
+    expect(refused(flagged({ marks: { job_room: 'id' } }))).toEqual(['job_room', 'job_room'])
+    expect(refused(flagged({ marks: { job: 'name' } }))).toEqual(['job_room', 'name'])
+    expect(refused(flagged({ marks: { job: 'missing' } }))).toEqual(['job_room', 'missing'])
+    expect(refused(flagged({ marks: {} }))).toEqual(['job_room', 'marks'])
+    expect(refused(flagged({ tone: 'name' }))).toEqual(['job_room', 'name'])
+    expect(refused(flagged({}, { own: 'warn' }))).toEqual(['job_room', 'room_from'])
+  })
+
+  test('/schema serves the flags of a query', async () => {
+    const domain = flagged()
+    expect(() => validateDomain(domain)).not.toThrow()
+    const sources = (await schemaOf(domain, 'editor')).sources
+    expect(sources.job_room.flags).toEqual(flags)
+    expect(sources.job.flags).toBeUndefined()
+  })
+
+  // per_project flags taak, which an owner reads, and plat, which no owner reads (threat 5).
+  const plainFlagged = (marks: Record<string, string>): Domain => ({
+    ...plain,
+    queries: plain.queries.map((q) =>
+      q.name === 'per_project'
+        ? {
+            ...q,
+            sql: q.sql.replace('COUNT(*) AS aantal', "COUNT(*) AS aantal, NULL AS plat_id, 'high' AS level"),
+            columns: {
+              ...q.columns,
+              plat_id: { type: 'integer', label: 'Plat', nullable: true },
+              level: { type: 'text', label: 'Level', options: { high: 'High' }, tones: { high: 'bad' } },
+            },
+            flags: { marks, tone: 'level' },
+          }
+        : q,
+    ),
+  })
+
+  test('/schema names a mark only to a caller who can read its dataset, and no flags when none is left', async () => {
+    const both = plainFlagged({ taak: 'id', plat: 'plat_id' })
+    expect(() => validateDomain(both)).not.toThrow()
+    expect((await schemaOf(both, 'editor', 'project')).sources.per_project.flags).toEqual({
+      marks: { taak: 'id', plat: 'plat_id' },
+      tone: 'level',
+    })
+    expect((await schemaOf(both, 'owner', 'project')).sources.per_project.flags).toEqual({
+      marks: { taak: 'id' },
+      tone: 'level',
+    })
+    const unread = await schemaOf(plainFlagged({ plat: 'plat_id' }), 'owner', 'project')
+    expect(unread.sources.per_project).toBeDefined()
+    expect(unread.sources.per_project.flags).toBeUndefined()
   })
 })
 

@@ -1,4 +1,5 @@
 import { ROLES } from './auth-tables'
+import { POSITION } from './ddl'
 import {
   type ActionInput,
   type ColumnDecl,
@@ -72,6 +73,27 @@ function checkTones(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+function checkTone(dataset: DatasetDecl): void {
+  const column = dataset.tone
+  if (column === undefined) return
+  const decl = dataset.columns[column]
+  if (!decl?.options || !Object.keys(decl.options).every((key) => decl.tones?.[key])) {
+    throw new DomainError(
+      dataset.name,
+      column,
+      `tone "${column}" is not an options column with a tone for every option`,
+    )
+  }
+}
+
+function checkLong(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.long && (decl.type !== 'text' || decl.options || decl.relation)) {
+      throw new DomainError(source.name, column, `${column} is long but is not a plain text column`)
+    }
+  }
+}
+
 // The calendar reads the rows route's date window, so its day is the source's date.
 function checkCalendar(source: DatasetDecl | QueryDecl): void {
   const cal = source.calendar
@@ -136,6 +158,22 @@ function checkOf(domain: Domain, query: QueryDecl): void {
   const dataset = query.of
   if (dataset !== undefined && !domain.datasets.some((d) => d.name === dataset)) {
     throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
+  }
+}
+
+// A flag marks records by id, so each mark is a dataset and an integer column; its tone reads every row's option.
+function checkFlags(domain: Domain, query: QueryDecl): void {
+  const flags = query.flags
+  if (!flags) return
+  const at = (bad: string, message: string) => new DomainError(query.name, bad, `flags ${message}`)
+  if (Object.keys(flags.marks).length === 0) throw at('marks', 'marks must name at least one dataset')
+  for (const [dataset, column] of Object.entries(flags.marks)) {
+    if (!domain.datasets.some((d) => d.name === dataset)) throw at(dataset, `mark "${dataset}" is not a dataset`)
+    if (query.columns[column]?.type !== 'integer') throw at(column, `mark column "${column}" is not an integer column`)
+  }
+  const tone = query.columns[flags.tone]
+  if (!tone?.options || !Object.keys(tone.options).every((key) => tone.tones?.[key])) {
+    throw at(flags.tone, `tone "${flags.tone}" is not an options column with a tone for every option`)
   }
 }
 
@@ -574,8 +612,20 @@ function checkSections(domain: Domain): void {
   }
 }
 
+// Every dataset row carries the engine's rank, as it carries its id.
+function checkPosition(dataset: DatasetDecl): void {
+  const names = [dataset.columns, dataset.lookups ?? {}, dataset.links ?? {}].flatMap((named) => Object.keys(named))
+  if (names.includes(POSITION))
+    throw new DomainError(dataset.name, POSITION, `"${POSITION}" is the engine's rank on every row`)
+}
+
 function checkFacts(source: DatasetDecl | QueryDecl): void {
   for (const fact of source.group_facts ?? []) {
+    if (fact.kind === 'filled') {
+      if (!Object.hasOwn(source.links ?? {}, fact.link))
+        throw new DomainError(source.name, fact.link, `fact link "${fact.link}" is not a link of "${source.name}"`)
+      continue
+    }
     if (fact.kind !== 'count') checkColumn(source, 'fact column', fact.column)
     const where = fact.kind === 'empty' ? undefined : fact.where
     for (const column of Object.keys(where ?? {})) checkColumn(source, 'fact where', column)
@@ -594,6 +644,7 @@ export function validateDomain(domain: Domain): void {
     checkOwnerVisible(source)
     checkHidden(source)
     checkTones(source)
+    checkLong(source)
     checkCalendar(source)
     checkBoard(source)
     checkIcon(source)
@@ -618,8 +669,10 @@ export function validateDomain(domain: Domain): void {
     if (Object.hasOwn(dataset.columns, 'expect')) {
       throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
     }
+    checkPosition(dataset)
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
+    checkTone(dataset)
     checkLifecycle(dataset)
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
@@ -632,6 +685,7 @@ export function validateDomain(domain: Domain): void {
   for (const query of domain.queries) {
     checkCreates(domain, query)
     checkOf(domain, query)
+    checkFlags(domain, query)
     for (const [column, decl] of Object.entries(query.columns)) {
       if (decl.writes) checkWrites(domain, query, column, decl.writes)
     }

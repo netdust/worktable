@@ -642,3 +642,257 @@ describe('writes through the engine', () => {
     expect(store.getState().rows[0]).toMatchObject({ id: 40, fields: { status: 'optie' } })
   })
 })
+
+describe('a second field in one write, and a step of several writes', () => {
+  const ranked: Row[] = calais.map((r) => ({ ...r, fields: { ...r.fields, state: 'a', position: null } }))
+  const base = (id: number) => ranked.find((r) => r.id === id)!
+  const taken = (id: number, data: Record<string, unknown>, batch: string) => ok({ ...base(id), fields: { ...base(id).fields, ...data } }, batch)
+  const three = [
+    { id: 101, field: 'position', value: 'V' },
+    { id: 102, field: 'position', value: 'k' },
+    { id: 103, field: 'position', value: 'u' },
+  ]
+
+  function stepping() {
+    const context = setup(ranked)
+    const positions = () => [101, 102, 103].map((id) => context.row(id).fields.position)
+    const sent = () => context.api.update.mock.calls.map(([, id]) => id)
+    context.api.undo.mockImplementation(async (batch) => `u-${batch}`)
+    context.api.read.mockImplementation(async (_m, id) => base(id))
+    return { ...context, positions, sent }
+  }
+
+  it('sends the second field in the same PATCH, paints both, and one undo reverts both', async () => {
+    const { api, store, row } = stepping()
+    const answer = deferred<Saved>()
+    api.update.mockReturnValueOnce(answer.promise)
+
+    const done = store.apply({ id: 103, field: 'state', value: 'b', with: { position: 'V' } })
+
+    expect(row(103).fields).toMatchObject({ state: 'b', position: 'V' })
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('activity', 103, { state: 'b', position: 'V' }, expect.objectContaining({ id: 103 }))
+    answer.resolve(taken(103, { state: 'b', position: 'V' }, 'b-both'))
+    await done
+    await store.undo()
+
+    expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-both')
+    expect(row(103).fields).toMatchObject({ state: 'a', position: null })
+  })
+
+  it('a refusal reverts both fields and raises the error', async () => {
+    const { api, store, row } = stepping()
+    const answer = deferred<Saved>()
+    api.update.mockReturnValueOnce(answer.promise)
+
+    const done = store.apply({ id: 103, field: 'state', value: 'b', with: { position: 'V' } })
+    expect(row(103).fields).toMatchObject({ state: 'b', position: 'V' })
+    answer.reject({ code: 'refused', message: 'Nee.' })
+    await done
+
+    expect(row(103).fields).toMatchObject({ state: 'a', position: null })
+    expect(store.getState().errors['103:state']).toMatchObject({ code: 'refused', message: 'Nee.' })
+    expect(store.getState()).toMatchObject({ canUndo: false, save: 'error' })
+  })
+
+  it('writes a new rank as a change of position', async () => {
+    const { api, store, row } = stepping()
+    api.update.mockResolvedValueOnce(taken(103, { position: 'V' }, 'b-rank'))
+
+    await store.apply({ id: 103, field: 'position', value: 'V' })
+
+    expect(api.update).toHaveBeenCalledWith('activity', 103, { position: 'V' }, expect.objectContaining({ id: 103 }))
+    expect(row(103).fields.position).toBe('V')
+    expect(store.getState().canUndo).toBe(true)
+  })
+
+  it('paints every write of a step before any answer, sends the last once the others answered, and one undo undoes them all', async () => {
+    const { api, store, positions, sent } = stepping()
+    const answers = [deferred<Saved>(), deferred<Saved>(), deferred<Saved>()]
+    for (const answer of answers) api.update.mockReturnValueOnce(answer.promise)
+
+    const step = store.applyStep(three)
+
+    expect(positions()).toEqual(['V', 'k', 'u'])
+    expect(sent()).toEqual([101, 102])
+    expect(store.getState()).toMatchObject({ canUndo: true, save: 'saving' })
+    answers[0].resolve(taken(101, { position: 'V' }, 'b1'))
+    answers[1].resolve(taken(102, { position: 'k' }, 'b2'))
+    await vi.waitFor(() => expect(sent()).toEqual([101, 102, 103]))
+    expect(api.update).toHaveBeenLastCalledWith('activity', 103, { position: 'u' }, expect.objectContaining({ id: 103 }))
+    answers[2].resolve(taken(103, { position: 'u' }, 'b3'))
+    expect(await step).toBe(true)
+
+    await store.undo()
+
+    expect(api.undo.mock.calls).toEqual([['b3'], ['b2'], ['b1']])
+    expect(api.read.mock.calls.map(([, id]) => id).toSorted()).toEqual([101, 102, 103])
+    expect(positions()).toEqual([null, null, null])
+    expect(store.getState()).toMatchObject({ canUndo: false, canRedo: true, save: 'saved' })
+  })
+
+  it('a refused last write is reverted and the ranks written stay, with no undo step: the next undo is the edit before the drop', async () => {
+    const { api, store, positions } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => {
+      if (id === 103) throw { code: 'refused', message: 'Nee.' }
+      return taken(id, data, id === 104 ? 'b-edit' : `b${id}`)
+    })
+    await store.apply({ id: 104, field: 'state', value: 'b' })
+
+    expect(await store.applyStep(three)).toBe(false)
+
+    expect(positions()).toEqual(['V', 'k', null])
+    expect(Object.keys(store.getState().errors)).toEqual(['103:position'])
+    await store.undo()
+    expect(api.undo.mock.calls).toEqual([['b-edit']])
+    expect(store.getState().canUndo).toBe(false)
+  })
+
+  it('refuses a step whose changes name one record twice, before it paints or sends anything', async () => {
+    const { api, store, positions } = stepping()
+
+    await expect(store.applyStep([three[0], { ...three[1], id: 101 }])).rejects.toThrow('A step names record 101 twice')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(positions()).toEqual([null, null, null])
+    expect(store.getState().canUndo).toBe(false)
+  })
+
+  it('a refusal of the first write, as every rank write of an owner is, reverts all three and sends no third', async () => {
+    const { api, store, positions, sent } = stepping()
+    api.update.mockRejectedValue({ code: 'forbidden', message: 'Nee.' })
+
+    expect(await store.applyStep(three)).toBe(false)
+
+    expect(sent()).toEqual([101, 102])
+    expect(positions()).toEqual([null, null, null])
+    expect(store.getState()).toMatchObject({ canUndo: false, save: 'error' })
+  })
+
+  it('a refused first write cancels the last; a rank sent beside it that landed stays, and the drop leaves no undo step', async () => {
+    const { api, store, positions, sent } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => {
+      if (id === 101) throw { code: 'refused', message: 'Nee.' }
+      return taken(id, data, `b${id}`)
+    })
+
+    expect(await store.applyStep(three)).toBe(false)
+
+    expect(sent()).toEqual([101, 102])
+    expect(positions()).toEqual([null, 'k', null])
+    expect(Object.keys(store.getState().errors)).toEqual(['101:position'])
+    expect(store.getState().canUndo).toBe(false)
+    await store.undo()
+    expect(api.undo).not.toHaveBeenCalled()
+  })
+
+  it("an undo of a step from the store that replaced the step's own repaints every written row there", async () => {
+    const { api, store, history, reload } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => taken(id, data, `b${id}`))
+    await store.applyStep(three)
+
+    const next = createStore({ model: 'activity', rows: store.getState().rows, api, history, reload })
+    await next.undo()
+
+    expect(api.undo.mock.calls).toEqual([['b103'], ['b102'], ['b101']])
+    expect([101, 102, 103].map((id) => next.getState().rows.find((r) => r.id === id)?.fields.position)).toEqual([null, null, null])
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('an undo of a step refused part-way repaints its rows, keeps the redo of what went through, and a retry undoes only the rest', async () => {
+    const { api, store, positions } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => taken(id, data, `b${id}`))
+    await store.applyStep(three)
+    api.undo.mockResolvedValueOnce('u-b103').mockRejectedValueOnce({ code: 'unknown', message: 'Failed to fetch' })
+    const held: Record<number, string | null> = { 101: 'V', 102: 'k', 103: null }
+    api.read.mockImplementation(async (_m, id) => taken(id, { position: held[id] }, '').row)
+
+    await store.undo()
+
+    expect(api.read.mock.calls.map(([, id]) => id).toSorted()).toEqual([101, 102, 103])
+    expect(positions()).toEqual(['V', 'k', null])
+    expect(store.getState()).toMatchObject({ canUndo: true, canRedo: true, error: { code: 'unknown' } })
+    await store.undo()
+    expect(api.undo.mock.calls).toEqual([['b103'], ['b102'], ['b102'], ['b101']])
+    expect(store.getState().error).toBeNull()
+  })
+
+  it('tells its listeners twice for a step of many writes: once for the paint, once when every write answered', async () => {
+    const { api, store, positions } = stepping()
+    const answers = [deferred<Saved>(), deferred<Saved>(), deferred<Saved>()]
+    for (const answer of answers) api.update.mockReturnValueOnce(answer.promise)
+    const told = vi.fn()
+    store.subscribe(told)
+
+    const step = store.applyStep(three)
+    expect(told).toHaveBeenCalledTimes(1)
+    expect(positions()).toEqual(['V', 'k', 'u'])
+
+    answers[0].resolve(taken(101, { position: 'V' }, 'b1'))
+    answers[1].resolve(taken(102, { position: 'k' }, 'b2'))
+    await vi.waitFor(() => expect(api.update).toHaveBeenCalledTimes(3))
+    answers[2].resolve(taken(103, { position: 'u' }, 'b3'))
+    expect(await step).toBe(true)
+
+    expect(told).toHaveBeenCalledTimes(2)
+    expect(store.getState()).toMatchObject({ save: 'saved', canUndo: true })
+  })
+
+  it('a refused step tells its listeners once more, with the card back and the ranks written kept', async () => {
+    const { api, store, positions } = stepping()
+    api.update.mockImplementation(async (_m, id, data) => {
+      if (id === 103) throw { code: 'refused', message: 'Nee.' }
+      return taken(id, data, `b${id}`)
+    })
+    const told = vi.fn()
+    store.subscribe(told)
+
+    expect(await store.applyStep(three)).toBe(false)
+
+    expect(told).toHaveBeenCalledTimes(2)
+    expect(positions()).toEqual(['V', 'k', null])
+    expect(store.getState()).toMatchObject({ save: 'error', error: { code: 'refused' } })
+  })
+
+  it('an edit elsewhere during a step tells its listeners at once, with what the step has answered so far', async () => {
+    const { api, store, row } = stepping()
+    const answers = [deferred<Saved>(), deferred<Saved>(), deferred<Saved>()]
+    for (const answer of answers) api.update.mockReturnValueOnce(answer.promise)
+    const step = store.applyStep(three)
+    answers[0].resolve(taken(101, { position: 'V', state: 'served' }, 'b1'))
+    await vi.waitFor(() => expect(row(101).fields.state).toBe('served'))
+    const seen: unknown[] = []
+    store.subscribe(() => seen.push(store.getState().rows.find((r) => r.id === 101)?.fields.state))
+
+    api.update.mockResolvedValueOnce(taken(104, { state: 'b' }, 'b-other'))
+    const edit = store.apply({ id: 104, field: 'state', value: 'b' })
+
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen[0]).toBe('served')
+    answers[1].resolve(taken(102, { position: 'k' }, 'b2'))
+    await vi.waitFor(() => expect(api.update).toHaveBeenCalledTimes(4))
+    answers[2].resolve(taken(103, { position: 'u' }, 'b3'))
+    await Promise.all([step, edit])
+  })
+
+  it('two steps on one record queue: the second sends after the first, which waits for its own ranks', async () => {
+    const { api, store, row, sent } = stepping()
+    const held = deferred<Saved>()
+    let made = 0
+    api.update.mockReturnValueOnce(held.promise).mockImplementation(async (_m, id, data) => taken(id, data, `b${++made}`))
+
+    const first = store.applyStep([{ id: 101, field: 'position', value: 'V' }, { id: 103, field: 'position', value: 'u' }])
+    const second = store.applyStep([{ id: 103, field: 'position', value: 'w' }])
+    await Promise.resolve()
+    expect(sent()).toEqual([101])
+    expect(row(103).fields.position).toBe('w')
+
+    held.resolve(taken(101, { position: 'V' }, 'b-rank'))
+    expect(await Promise.all([first, second])).toEqual([true, true])
+
+    expect(api.update.mock.calls.map(([, id, data]) => [id, data])).toEqual([[101, { position: 'V' }], [103, { position: 'u' }], [103, { position: 'w' }]])
+    expect(row(103).fields.position).toBe('w')
+    await store.undo()
+    await store.undo()
+    expect(api.undo.mock.calls).toEqual([['b2'], ['b1'], ['b-rank']])
+  })
+})

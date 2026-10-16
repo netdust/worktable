@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, View } from './types'
 import { defaults } from './grid/layout'
@@ -24,11 +24,11 @@ afterEach(cleanup)
 describe('the board', () => {
   it('puts cards in the column of their option, in option order, with Geen last; a card opens its row', () => {
     render(<Board view={view} layout={defaults(view)} model={model} models={{ toewijzing: model }} rows={[row(1, 'Lotte', 'bevestigd'), row(2, 'Bram', 'open'), row(3, 'Naam', null)]} column="state" />)
-    const columns = screen.getAllByRole('grid').map((list) => list.getAttribute('aria-label'))
+    const columns = screen.getAllByRole('region').map((list) => list.getAttribute('aria-label'))
     expect(columns).toEqual(['Open', 'Voorlopig', 'Bevestigd', 'Geen'])
-    expect(within(screen.getByRole('grid', { name: 'Bevestigd' })).getByRole('row', { name: /Lotte/ })).toBeTruthy()
-    expect(within(screen.getByRole('grid', { name: 'Geen' })).getByRole('row', { name: /Naam/ })).toBeTruthy()
-    fireEvent.click(screen.getByRole('row', { name: /Bram/ }))
+    expect(within(screen.getByRole('region', { name: 'Bevestigd' })).getByRole('button', { name: /Lotte/ })).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Geen' })).getByRole('button', { name: /Naam/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Bram/ }))
     expect(screen.getByRole('complementary', { name: 'Bram' })).toBeTruthy()
   })
 })
@@ -51,14 +51,38 @@ describe('a board card', () => {
     const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'bevestigd', soort: 'voorstelling', productie_id: [2], plandag: '2026-10-13', start_at: '2026-10-13 20:00', eind_at: '2026-10-13 21:15', plaats: 'Theater Het Anker' } }
     document.documentElement.lang = 'nl'
     render(<Board view={board} layout={defaults(board)} model={activity} models={{ activiteit: activity }} rows={[show]} column="status" />)
-    const card = within(screen.getByRole('grid', { name: 'Bevestigd' })).getByRole('row', { name: /Voorstelling Brugge/ })
+    const card = within(screen.getByRole('region', { name: 'Bevestigd' })).getByRole('button', { name: /Voorstelling Brugge/ })
     expect(card.textContent).toContain('Voorstelling')
     expect(card.textContent).toContain('di 13 okt')
     expect(card.querySelector('.nv-time')?.textContent).toBe('20:00–21:15')
     expect(card.textContent).toContain('Theater Het Anker')
     expect(card.textContent).not.toContain('Productie')
-    expect(screen.queryByRole('grid', { name: 'Geen' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Geen' })).toBeNull()
     document.documentElement.lang = ''
+  })
+
+  it("the line of a relation to a toned dataset carries that record's tone; a plain line none", async () => {
+    const activity = {
+      key: 'activiteit', label: 'Activiteiten', title_label: 'Omschrijving', title_readonly: false,
+      fields: {
+        status: { type: 'select', label: 'Status', required: true, fact: false, options: { bevestigd: 'Bevestigd' } },
+        productie_id: { type: 'relation', label: 'Productie', required: true, fact: false, relation: { model: 'productie', multiple: false } },
+        plaats: { type: 'text', label: 'Plaats', required: false, fact: false },
+      },
+    } as unknown as Model
+    const productie = {
+      key: 'productie', label: 'Producties', title_label: 'Titel', title_readonly: false, tone: 'kleur',
+      fields: { kleur: { type: 'select', label: 'Kleur', required: false, fact: false, options: { rose: 'Roze' }, tones: { rose: 'rose' } } },
+    } as unknown as Model
+    api.records.mockResolvedValue({ rows: [{ id: 2, title: 'De Kersentuin', status: '', fields: { kleur: 'rose' } }], total: 1 })
+    const board = { ...view, model: 'activiteit', table: 'activiteit', board: { column: 'status' } } as unknown as View
+    const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'bevestigd', productie_id: [2], plaats: 'Het Anker' }, lookups: { productie_id: { id: 2, title: 'De Kersentuin', status: '', fields: {} } } }
+    render(<Board view={board} layout={defaults(board)} model={activity} models={{ activiteit: activity, productie }} rows={[show]} column="status" />)
+    const card = screen.getByRole('button', { name: /Voorstelling Brugge/ })
+    const line = (text: string) => [...card.querySelectorAll<HTMLElement>('.nv-board__fact')].find((f) => f.textContent === text) as HTMLElement
+    await waitFor(() => expect(line('De Kersentuin').querySelector('i')?.style.getPropertyValue('--c')).toBe('var(--tone-rose)'))
+    expect(line('Het Anker').querySelector('i')).toBeNull()
+    expect(api.records).toHaveBeenCalledWith('productie', '')
   })
 })
 
@@ -75,7 +99,7 @@ describe('Kolommen on a card skin', () => {
     const board = { ...view, model: 'activiteit', table: 'activiteit', board: { column: 'status' } } as unknown as View
     const show = { id: 7, title: 'Voorstelling Brugge', status: '', fields: { status: 'optie', plaats: 'Het Anker', bron: 'Plan' } }
     const onShown = vi.fn()
-    const card = () => screen.getByRole('row', { name: /Voorstelling Brugge/ })
+    const card = () => screen.getByRole('button', { name: /Voorstelling Brugge/ })
     const { rerender } = render(<Board view={board} layout={{ ...defaults(board), order: ['title', 'bron', 'plaats'] }} model={activity} models={{}} rows={[show]} column="status" onShown={onShown} />)
     expect([...card().querySelectorAll('.nv-board__fact')].map((f) => f.textContent)).toEqual(['Plan', 'Het Anker'])
     rerender(<Board view={board} layout={{ ...defaults(board), hidden: ['bron'] }} model={activity} models={{}} rows={[show]} column="status" onShown={onShown} />)
@@ -131,6 +155,34 @@ describe('the gallery card', () => {
   })
 })
 
+describe("the gallery card's relation line", () => {
+  it("carries the tone of a record of a toned dataset, as the board card's line does; a plain dataset's none", async () => {
+    api.filesOf.mockReset()
+    api.filesOf.mockResolvedValue({})
+    api.records.mockResolvedValue({ rows: [{ id: 2, title: 'De Kersentuin', status: '', fields: { kleur: 'rose' } }], total: 1 })
+    const relation = (model: string) => ({ type: 'relation', label: 'Van', required: false, fact: false, relation: { model, multiple: false } })
+    const activity = { ...model, key: 'activiteit', fields: { productie_id: relation('productie'), rol_id: relation('rol') } } as unknown as Model
+    const productie = {
+      key: 'productie', label: 'Producties', title_label: 'Titel', title_readonly: false, tone: 'kleur',
+      fields: { kleur: { type: 'select', label: 'Kleur', required: false, fact: false, options: { rose: 'Roze' }, tones: { rose: 'rose' } } },
+    } as unknown as Model
+    const rol = { key: 'rol', label: 'Rollen', title_label: 'Naam', title_readonly: false, fields: {} } as unknown as Model
+    const of = (id: number, title: string, fields: Record<string, unknown>, lookups: Row['lookups']): Row => ({ id, title, status: '', fields, lookups })
+    const rows = [
+      of(1, 'Voorstelling Brugge', { productie_id: [2] }, { productie_id: { id: 2, title: 'De Kersentuin', status: '', fields: {} } }),
+      of(2, 'Opbouw', { rol_id: [5] }, { rol_id: { id: 5, title: 'Techniek', status: '', fields: {} } }),
+    ]
+    render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{ activiteit: activity, productie, rol }} rows={rows} kind="foto" layout={defaults(view)} />)
+    const line = (title: RegExp) => screen.getByRole('button', { name: title }).querySelector('.nv-gallery__of') as HTMLElement
+
+    await waitFor(() => expect(line(/Voorstelling Brugge/).querySelector('i')?.style.getPropertyValue('--c')).toBe('var(--tone-rose)'))
+    expect(line(/Voorstelling Brugge/).textContent).toBe('De Kersentuin')
+    expect(line(/Opbouw/).textContent).toBe('Techniek')
+    expect(line(/Opbouw/).querySelector('i')).toBeNull()
+    expect(api.records).toHaveBeenCalledWith('productie', '')
+  })
+})
+
 describe('the gallery past 200 rows', () => {
   it('reads every row’s image, 200 ids a read', async () => {
     api.filesOf.mockReset()
@@ -161,7 +213,7 @@ describe('the timeline', () => {
     expect(lanes).toHaveLength(1)
     expect(within(lanes[0]).getByRole('rowheader').textContent).toBe('3')
     const top = (name: RegExp) => within(lanes[0]).getByRole('button', { name }).style.top
-    expect(top(/Brugge/)).not.toBe(top(/Gent/))
-    expect(top(/Lier/)).toBe(top(/Brugge/))
+    expect(top(/Brugge\d/)).not.toBe(top(/Gent\d/))
+    expect(top(/Lier\d/)).toBe(top(/Brugge\d/))
   })
 })

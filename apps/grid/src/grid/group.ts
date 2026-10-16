@@ -1,6 +1,8 @@
 import { locale, t } from '../i18n'
 import type { GroupFact, Row, Tone } from '../types'
 import type { Column } from './columns'
+import { crewOf } from './cells/Links'
+import { linksOf } from './columns'
 import { DRAFT } from './store'
 
 /** A fact as its band says it: `value` is "…" where the read limit may have cut the group short. */
@@ -67,7 +69,17 @@ function shown(row: Row, key: string, band: Band, by: Column): string {
   return column ? column.text(row) : value
 }
 
+function crewValue(rows: Row[], link: string, band: Band): string {
+  const column = band.columns.find((c) => (c.field ?? c.id) === link && c.link)
+  const sum = rows.reduce((acc, row) => {
+    const { have, need } = crewOf(linksOf(row, link), column?.link)
+    return { have: acc.have + have, need: acc.need + need }
+  }, { have: 0, need: 0 })
+  return sum.need === 0 ? '' : `${sum.have}/${sum.need}`
+}
+
 function valueOf(fact: GroupFact, rows: Row[], band: Band, by: Column): string {
+  if (fact.kind === 'filled') return crewValue(rows, fact.link, band)
   if (fact.kind === 'count') return String(rows.filter((row) => matches(row, fact.where)).length)
   if (fact.kind === 'empty') return String(rows.filter((row) => empty(raw(row, fact.column))).length)
   const first = earliest(rows.filter((row) => matches(row, fact.where)), fact.column)

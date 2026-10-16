@@ -7,7 +7,7 @@ import { layoutOf } from './dashboard'
 import type { Actor, DashboardLayout, Domain, SavedViewSeed } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
-import { hasColumn, hasField } from './lookups'
+import { hasColumn, hasField, sortable } from './lookups'
 import { ApiError, keysProblem, parseRowsParams } from './params'
 import { checkLimits } from './rate-limit'
 import { type Source, sourceOf } from './registry'
@@ -178,7 +178,7 @@ function sourcedFields(domain: Domain, v: Record<string, unknown>): Sourced {
     source: source.name,
     skin,
     filters: filtersOf(domain, source, v.filters),
-    sort: columnsOf(source, 'sort', v.sort, (key) => key.replace(/^-/, '')),
+    sort: columnsOf(source, 'sort', v.sort, (key) => key.replace(/^-/, ''), sortable),
     group_by: groupOf(source, skin, v.group_by),
     visible_fields: columnsOf(source, 'visible_fields', v.visible_fields, undefined, hasField, fieldCount(source)),
     layout: null,

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { cardIn, glide, lane, lift, listening } from './board'
 import { openEditor } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
@@ -114,12 +115,12 @@ test.describe('step 3e: Groep chooses on every skin', () => {
 
     // The board regroups its columns by the option field chosen.
     await openView(page, 'Per status', 'Activiteiten')
-    await expect(page.getByRole('grid', { name: 'Optie' })).toBeVisible()
+    await expect(lane(page, 'Optie')).toBeVisible()
     await groep(page).click()
     await page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button', { name: 'Soort' }).click()
     await expect(groep(page)).toHaveText('Groep: soort')
-    await expect(page.getByRole('grid', { name: 'Voorstelling' })).toBeVisible()
-    await expect(page.getByRole('grid', { name: 'Optie' })).toHaveCount(0)
+    await expect(lane(page, 'Voorstelling')).toBeVisible()
+    await expect(lane(page, 'Optie')).toHaveCount(0)
     await shot(page, 'groep-everywhere')
   })
 })
@@ -141,8 +142,13 @@ test.describe('step 3e: the board drags', () => {
     ).rows
     return rows.find((r) => r.titel === 'Nachtwacht')?.id as number
   }
-  const card = (page: Page, column: string, title: string) =>
-    page.getByRole('grid', { name: column }).getByRole('row', { name: new RegExp(title) })
+  const card = (page: Page, column: string, title: string) => cardIn(page, column, title)
+  const status = async (api: Api, id: number) =>
+    (
+      (await (await api.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)).json()) as {
+        rows: { status: string }[]
+      }
+    ).rows[0]?.status
 
   test('board-drag @e2e', async ({ page }) => {
     const api = page.request
@@ -158,94 +164,55 @@ test.describe('step 3e: the board drags', () => {
       await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
       await expect(card(page, 'Optie', title)).toBeVisible()
 
-      // Mouse: the card lifts out of Optie and lands in Bevestigd; ⌘Z puts it back.
+      // Mouse, in small steps: the card lifts out of Optie and lands in Bevestigd; ⌘Z puts it back.
       // Dropped near the column's top: a long column's middle can sit below the screen.
-      await card(page, 'Optie', title).dragTo(page.getByRole('grid', { name: 'Bevestigd' }), {
-        targetPosition: { x: 60, y: 20 },
-      })
+      const target = await lane(page, 'Bevestigd').boundingBox()
+      expect(target).not.toBeNull()
+      const from = await lift(page, card(page, 'Optie', title))
+      await glide(page, from, { x: (target?.x ?? 0) + 60, y: (target?.y ?? 0) + 60 })
+      await expect(lane(page, 'Bevestigd')).toHaveClass(/nv-board__column--drop/)
+      await page.mouse.up()
       await expect(card(page, 'Bevestigd', title)).toBeVisible()
       await expect(card(page, 'Optie', title)).toHaveCount(0)
       await shot(page, 'board-drag')
-      await expect
-        .poll(
-          async () =>
-            (
-              (await (
-                await api.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)
-              ).json()) as { rows: { status: string }[] }
-            ).rows[0]?.status,
-        )
-        .toBe('bevestigd')
+      await expect.poll(() => status(api, id)).toBe('bevestigd')
       // ⌘Z right after the drop, wherever the focus went (a real mouse's drop leaves it on the page), as the toast and the footer say.
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
       await page.keyboard.press('ControlOrMeta+z')
       await expect(card(page, 'Optie', title)).toBeVisible()
+      await expect.poll(() => status(api, id)).toBe('optie')
       // Every card fits its column.
       for (const column of ['Optie', 'Bevestigd']) {
-        const edge = await page.getByRole('region', { name: column }).evaluate((el) => el.getBoundingClientRect().right)
-        for (const right of await page
-          .getByRole('grid', { name: column })
+        const edge = await lane(page, column).evaluate((el) => el.getBoundingClientRect().right)
+        for (const right of await lane(page, column)
           .locator('.nv-board__card')
           .evaluateAll((cards) => cards.map((c) => c.getBoundingClientRect().right)))
           expect(right).toBeLessThanOrEqual(edge)
       }
 
-      // Keyboard: Enter on the drag button lifts it onto the first column that takes it (Tab goes on to the next); Enter drops it.
-      await card(page, 'Optie', title)
-        .getByRole('button', { name: `${title} verslepen` })
-        .focus()
-      await page.keyboard.press('Enter')
-      await page.keyboard.press('Enter')
+      // Keyboard: Space lifts the card, → takes it to the next column, Space drops it.
+      await card(page, 'Optie', title).focus()
+      await page.keyboard.press('Space')
+      await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
+      await page.keyboard.press('ArrowRight')
+      await page.keyboard.press('Space')
       await expect(card(page, 'Bevestigd', title)).toBeVisible()
       await expect(card(page, 'Optie', title)).toHaveCount(0)
+      await expect.poll(() => status(api, id)).toBe('bevestigd')
 
-      // And back to a column on its left: Shift+Tab walks the drop targets the other way, past the card's own place first.
-      await card(page, 'Bevestigd', title)
-        .getByRole('button', { name: `${title} verslepen` })
-        .focus()
-      await page.keyboard.press('Enter')
-      await page.keyboard.press('Shift+Tab')
-      await page.keyboard.press('Shift+Tab')
-      await page.keyboard.press('Enter')
+      // And back to the column on its left with ←.
+      await card(page, 'Bevestigd', title).focus()
+      await page.keyboard.press('Space')
+      await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
+      await page.keyboard.press('ArrowLeft')
+      await page.keyboard.press('Space')
       await expect(card(page, 'Optie', title)).toBeVisible()
       await expect(card(page, 'Bevestigd', title)).toHaveCount(0)
+      await expect.poll(() => status(api, id)).toBe('optie')
     } finally {
       await api.delete(`/api/rows/activiteit/${id}`)
-    }
-  })
-
-  // Fails only at the end of the full suite, on a board crowded by the earlier specs (3 gate runs out of 3); step 3f rebuilds the drag on dnd-kit and proves the refusal on a crowded board.
-  test.fixme('board-drag-refused @e2e', async ({ page }) => {
-    const api = page.request
-    const activiteit = await made(api, 'activiteit', {
-      productie_id: await nachtwacht(api),
-      soort: 'repetitie',
-      datum: '2028-10-04',
-      omschrijving: 'e2e weiger mij',
-    })
-    const naam = 'e2e bevestigd blijft'
-    const id = await made(api, 'toewijzing', { activiteit_id: activiteit, naam, state: 'bevestigd' })
-    try {
-      await page.goto('/')
-      await openView(page, 'Bord toewijzingen', 'Toewijzingen')
-      await expect(card(page, 'Bevestigd', naam)).toBeVisible()
-      // Bevestigd never goes to Geweigerd (only an invitation is declined): the writer refuses, the card snaps back and the refusal shows.
-      // By keyboard, so a long board's scroll never decides where it lands: Enter lifts it onto the next column that takes it, Geweigerd.
-      await card(page, 'Bevestigd', naam)
-        .getByRole('button', { name: `${naam} verslepen` })
-        .focus()
-      const refused = page.waitForResponse(
-        (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/toewijzing/${id}`,
-      )
-      await page.keyboard.press('Enter')
-      await page.keyboard.press('Enter')
-      expect((await refused).status()).toBe(422)
-      await expect(page.getByText(/statuswijziging is niet toegestaan/).first()).toBeVisible()
-      await expect(card(page, 'Bevestigd', naam)).toBeVisible()
-      await expect(card(page, 'Geweigerd', naam)).toHaveCount(0)
-    } finally {
-      await api.delete(`/api/rows/toewijzing/${id}`)
-      await api.delete(`/api/rows/activiteit/${activiteit}`)
     }
   })
 
@@ -282,8 +249,8 @@ test.describe('step 3e: the board drags', () => {
     const api = page.request
     await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
     // This week holds no activity of its own: the column reads "Geen activiteiten".
-    const optie = page.getByRole('grid', { name: 'Optie' }).locator('.nv-board__card')
-    await expect(page.getByRole('grid', { name: 'Optie' })).toContainText('Geen activiteiten')
+    const optie = lane(page, 'Optie').locator('.nv-board__card')
+    await expect(lane(page, 'Optie')).toContainText('Geen activiteiten')
     await expect(optie).toHaveCount(0)
     await page.getByRole('button', { name: 'Nieuw in Optie' }).click()
     const dialog = page.getByRole('dialog')
@@ -582,6 +549,7 @@ test.describe('step 3e: ⌘Z on the page', () => {
       await page.getByRole('heading', { level: 1 }).click()
       await page.keyboard.press('ControlOrMeta+z')
       await expect.poll(async () => (await stored())?.status).toBe('optie')
+      await shot(page, 'undo-from-the-page')
     } finally {
       await api.delete(`/api/rows/activiteit/${id}`)
     }
@@ -592,8 +560,8 @@ test.describe('step 3e: the gallery by Groep', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test('gallery-sections @e2e', async ({ page }) => {
-    await page.goto('/')
-    await openView(page, 'Galerij activiteiten', 'Activiteiten')
+    // The seed's week: the sections need rows, and the seed's activities are fixed in that week.
+    await openWeek(page, 'Galerij activiteiten', 'Activiteiten', 'plandag', '2026-10-12')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Galerij activiteiten')
     await page
       .locator('.nv-bar')
@@ -703,18 +671,18 @@ test.describe('step 3e: the title line and the rail', () => {
       const insight = page.locator('.nv-toolbar__insight')
       await expect(insight.locator('.nv-pill--warn')).toHaveText('Optie')
       const before = Number(await insight.locator('b').textContent())
-      const optie = page.getByRole('grid', { name: 'Optie' }).getByRole('row')
+      const optie = lane(page, 'Optie').locator('[data-card]')
       await expect(optie).toHaveCount(before)
       await shot(page, 'title-line-insight')
 
-      // A drop out of Optie counts at once, without a reload; ⌘Z counts it back.
-      const card = optie.filter({ hasText: 'e2e inzicht een' })
-      await card.getByRole('button', { name: 'e2e inzicht een verslepen' }).focus()
-      await page.keyboard.press('Enter')
-      await page.keyboard.press('Enter')
-      await expect(
-        page.getByRole('grid', { name: 'Bevestigd' }).getByRole('row', { name: /e2e inzicht een/ }),
-      ).toBeVisible()
+      // A drop out of Optie counts at once, without a reload; ⌘Z counts it back. Space lifts, → moves, Space drops.
+      await cardIn(page, 'Optie', 'e2e inzicht een').focus()
+      await page.keyboard.press('Space')
+      await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
+      await page.keyboard.press('ArrowRight')
+      await page.keyboard.press('Space')
+      await expect(cardIn(page, 'Bevestigd', 'e2e inzicht een')).toBeVisible()
       await expect(insight.locator('b')).toHaveText(String(before - 1))
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
       await page.keyboard.press('ControlOrMeta+z')

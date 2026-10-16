@@ -39,6 +39,7 @@ import { useFilterNames } from './useFilterNames'
 import { offersForOwners, Share } from './Share'
 import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
+import { usePageUndo } from './usePageUndo'
 import { DrawerSlot } from './SidePanel'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
@@ -48,6 +49,8 @@ import { hintsOf, stepsPeriod } from './hints'
 import { formatWindow, isMonth, isoWeek, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
+import { writeDrop } from '../board/drop'
+import { placeWriter } from '../grid/drawer/place'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
@@ -397,23 +400,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
-  // ⌘Z and ⇧⌘Z on the page, for every skin: the toast promises the undo wherever the focus went (a drop, a drawer's button
-  // that unmounted). A cell that handled the key first has prevented it; a field keeps its own.
-  const undoing = useRef(saves)
-  undoing.current = saves
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (event.defaultPrevented || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
-      if (target?.closest('input, textarea, [contenteditable="true"]')) return
-      const now = undoing.current
-      if (!now) return
-      event.preventDefault()
-      void (event.shiftKey ? now.redo() : now.undo())
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  usePageUndo(saves)
   const fields = useMemo(
     () => (model && loaded ? filterFields(model, loaded, view?.filters).filter((f) => f.field !== spaceField) : []),
     [model, loaded, view?.filters, spaceField],
@@ -518,6 +505,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       }, refused(row))
     },
   }
+  const places = store ? (of: string, id: number) => placeWriter(store, of, id, (message) => notify({ message })) : undefined
   const changeDisplay = (table: Table, data: { label?: string; icon?: string }) => {
     setDisplay(table.key, data).then(
       (shown) => setDisplays((was) => ({ ...was, [table.key]: shown })),
@@ -597,6 +585,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           viewNote={viewNote}
           fixed={Object.keys(view?.fixed ?? {}).length}
           onHistory={view && !dashboard ? () => setHistoryOpen((open) => !open) : undefined}
+          onFlagged={(source) => {
+            const flagging = tables.find((table) => table.key === source)
+            if (flagging) openTable(flagging)
+          }}
         />
         {!dashboard && view && model && layout && (
           <ChipBar {...barOf({
@@ -614,15 +606,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onSaved={(saved) => savedViews().then((list) => { load(list); setActiveKey(saved.key) }, () => undefined)}
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
-            <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
-              lane={layout.group} layout={layout} onTitle={setShown} />
+            <Calendar key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} cal={calendar} shown={calendarShown}
+              lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
-            <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} layout={layout} onTitle={setShown} />
+            <Timeline key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} cal={timeline} shown={timelineShown}
+              lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
-              onMove={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (id, field, value) => void store.apply({ id, field, value }) : undefined}
-              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} />
+              onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
+              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (

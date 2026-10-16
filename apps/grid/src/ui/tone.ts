@@ -13,5 +13,5 @@ export const hueOf = (id: number) => HUES[Math.abs(id) % HUES.length]
 // The lanes' colours, in order; the status tones are left to statuses.
 const LANE_TONES = ['sky', 'violet', 'amber', 'teal', 'rose', 'green', 'slate', 'grey']
 
-/** A lane's colour by its place: the calendar's and the timeline's lanes alike, until a record names its own. */
-export const laneTone = (at: number) => `var(--tone-${LANE_TONES[Math.max(0, at) % LANE_TONES.length]})`
+/** A lane's colour: its record's own tone, else by its place; the calendar's and the timeline's lanes alike. */
+export const laneTone = (at: number, own?: Tone) => (own ? toneColor(own) : `var(--tone-${LANE_TONES[Math.max(0, at) % LANE_TONES.length]})`)

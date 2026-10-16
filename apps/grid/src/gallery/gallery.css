@@ -1,0 +1,10 @@
+/* The relation line's tone, as the board card's: the record's colour before its name (Q6, card lines). */
+.nv-gallery__tone {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -3px;
+  background: var(--c);
+}

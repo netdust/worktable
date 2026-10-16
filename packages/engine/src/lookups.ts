@@ -1,5 +1,6 @@
 import { type SQL, sql } from 'drizzle-orm'
 import type { Scope } from './access'
+import { POSITION } from './ddl'
 import type { ColumnDecl, DatasetDecl, Domain, LookupDecl } from './declare'
 import { ApiError } from './params'
 import { type Source, sourceOf } from './registry'
@@ -11,6 +12,9 @@ export function lookupOf(source: Source, key: string): LookupDecl | undefined {
 
 export const hasColumn = (source: Source, key: string): boolean =>
   Object.hasOwn(source.columns, key) || (source.kind === 'dataset' && key === 'id') || !!lookupOf(source, key)
+// The engine's rank sorts a dataset's rows, and is never filtered or grouped on.
+export const sortable = (source: Source, key: string): boolean =>
+  hasColumn(source, key) || (source.kind === 'dataset' && key === POSITION)
 // A link is shown like a column, never sorted or grouped on.
 export const hasField = (source: Source, key: string): boolean =>
   hasColumn(source, key) || Object.hasOwn(source.links ?? {}, key)

@@ -6,6 +6,7 @@ import type { Context } from 'hono'
 import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
 import { mintActionToken, ownerSubject, revokeMintedBy } from './action-token'
 import { undoAttachments } from './attachments'
+import { POSITION } from './ddl'
 import type {
   Actor,
   ColumnDecl,
@@ -95,7 +96,9 @@ export async function bodyOf(c: Context): Promise<Values> {
 }
 
 export function cutBody(dataset: DatasetDecl, body: Values): Values {
-  return Object.fromEntries(Object.entries(body).filter(([key]) => isEditable(columnOf(dataset, key))))
+  return Object.fromEntries(
+    Object.entries(body).filter(([key]) => key === POSITION || isEditable(columnOf(dataset, key))),
+  )
 }
 
 const isEditable = (column: ColumnDecl | undefined): boolean => column !== undefined && !column.readonly
@@ -118,9 +121,16 @@ function fits(type: ColumnDecl['type'], value: unknown): boolean {
   return typeof value === 'string'
 }
 
+// Base 62 and never ending in 0: no rank sorts between "V" and "V0" (threat 3).
+const RANK = /^[0-9A-Za-z]{0,254}[1-9A-Za-z]$/
+
+const isRank = (value: unknown): boolean => value === null || (typeof value === 'string' && RANK.test(value))
+
 // Before the writer, nulls wait: a domain writer refuses a missing value first, in its own words.
 export function checkValues(dataset: DatasetDecl, values: Values, nulls = true): void {
   for (const [key, value] of Object.entries(values)) {
+    if (key === POSITION && isRank(value)) continue
+    if (key === POSITION) throw badValue(key, 'must be 1 to 255 of 0-9A-Za-z, not ending in 0')
     const column = columnOf(dataset, key)
     if (!column) throw badValue(key, 'is not a declared column')
     if (nulls && value === null && !column.nullable) throw badValue(key, 'may not be null')
@@ -174,7 +184,9 @@ function decode(column: ColumnDecl, raw: string | number | null): unknown {
 
 export function encodeAll(dataset: DatasetDecl, values: Values): Stored {
   const declared = Object.entries(dataset.columns).filter(([key]) => Object.hasOwn(values, key))
-  return Object.fromEntries(declared.map(([key, column]) => [key, encode(column, values[key])]))
+  const stored: Stored = Object.fromEntries(declared.map(([key, column]) => [key, encode(column, values[key])]))
+  if (Object.hasOwn(values, POSITION)) stored[POSITION] = values[POSITION] as string | null
+  return stored
 }
 
 function decodeAll(dataset: DatasetDecl, raw: Stored): Values {
@@ -543,6 +555,14 @@ function retireOnNewAddress(store: Store, dataset: DatasetDecl, id: number, chan
   retireDelivered(store.sqlite, dataset, liveRow(store.sqlite, dataset.name, id) as Stored, actor)
 }
 
+// The rank is the engine's: a create starts unranked, an owner never writes it (threat 1), and no writer sees it.
+function rankOf(op: WriteOp, actor: Actor, given: Values): { rank: Values; rest: Values } {
+  const { [POSITION]: value, ...rest } = given
+  if (op === 'create' || !Object.hasOwn(given, POSITION)) return { rank: {}, rest }
+  if (actor.role === 'owner') forbid(`An owner may not write "${POSITION}"`)
+  return { rank: { [POSITION]: value }, rest }
+}
+
 export function valuesOf(
   store: Store,
   target: Writable,
@@ -552,16 +572,18 @@ export function valuesOf(
   scope: Scope,
 ): Values {
   const { dataset, writer } = target
-  const given = cutBody(dataset, ownBody(dataset, body))
+  const { rank, rest: given } = rankOf(op, ctx.actor, cutBody(dataset, ownBody(dataset, body)))
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
-  checkValues(dataset, cut, false)
+  checkValues(dataset, { ...cut, ...rank }, false)
   const mode = ctx.lifecycle ?? { kind: 'write' }
   checkTransition(dataset, ctx.current, cut, ctx.actor, mode)
+  // A rank alone still reaches the writer, with an empty change, so a row it refuses is refused the move (threat 7).
   const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
   checkOwner(scope, returned ?? {})
   // Forced again on what is stored: a writer may return a fresh object without the owner column.
-  const values = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
+  const written = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
+  const values = { ...written, ...rank }
   checkTransition(dataset, ctx.current, values, ctx.actor, mode)
   checkLinkAddress(dataset, ctx.current, values, ctx.actor)
   checkValues(dataset, values)
@@ -766,9 +788,10 @@ function planUndo(store: Store, record: Touched, actor: Actor): Planned {
   for (const [field, { new: value }] of record.fields) {
     if (asJson(dataset, field, row[field] ?? null) !== value) throw changedSince(dataset, id, field)
   }
-  // A create revises only the columns it filled, so any other column filled since is a later change.
+  // A create revises only the columns it filled, never a rank, so any other column or a rank filled since is a later change.
   if (created) {
-    const filled = Object.keys(dataset.columns).find((key) => !record.fields.has(key) && (row[key] ?? null) !== null)
+    const columns = [...Object.keys(dataset.columns), POSITION]
+    const filled = columns.find((key) => !record.fields.has(key) && (row[key] ?? null) !== null)
     if (filled) throw changedSince(dataset, id, filled)
   }
   return { ...record, target, scope }

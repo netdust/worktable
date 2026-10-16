@@ -9,7 +9,7 @@ export function hintsOf(skin: ViewType): string[] {
     case 'matrix':
       return [`↑↓←→ ${t('hintMove')}`, `↵ ${t('hintAssign')}`, undo]
     case 'board':
-      return [t('hintDrag'), `↵ ${t('hintOpen')}`, undo]
+      return [t('hintDrag'), t('hintLift'), `↑↓←→ ${t('hintMove')}`, `Esc ${t('hintCancel')}`, `↵ ${t('hintOpen')}`, undo]
     case 'calendar':
     case 'timeline':
       return [t('hintClick'), ...period]

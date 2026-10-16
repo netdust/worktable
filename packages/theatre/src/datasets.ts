@@ -12,6 +12,7 @@ export const KANDIDATEN: OptionsFrom = {
 export const dagFacts: GroupFact[] = [
   { kind: 'first', column: 'start_at', where: { soort: 'voorstelling' }, label: 'voorstelling' },
   { kind: 'empty', column: 'start_at', label: 'zonder tijd' },
+  { kind: 'filled', link: 'mensen', label: 'bezetting' },
 ]
 
 export const soorten = {
@@ -42,6 +43,20 @@ export const soorten = {
 const statussen = {
   options: { optie: 'Optie', bevestigd: 'Bevestigd', geannuleerd: 'Geannuleerd' },
   tones: { optie: 'warn', bevestigd: 'ok', geannuleerd: 'bad' },
+} as const
+
+// A production's colour, each option the palette tone it is named for.
+const kleuren = {
+  options: {
+    rose: 'Roze',
+    violet: 'Paars',
+    amber: 'Amber',
+    sky: 'Blauw',
+    teal: 'Groenblauw',
+    green: 'Groen',
+    slate: 'Leisteen',
+  },
+  tones: { rose: 'rose', violet: 'violet', amber: 'amber', sky: 'sky', teal: 'teal', green: 'green', slate: 'slate' },
 } as const
 
 const bijlagen = {
@@ -84,10 +99,12 @@ export const productie = defineDataset({
   new_label: 'Nieuwe productie',
   icon: 'tag',
   title: 'titel',
+  tone: 'kleur',
   custom: true,
   columns: {
     titel: { type: 'text', label: 'Titel' },
     seizoen: { type: 'text', label: 'Seizoen', nullable: true },
+    kleur: { type: 'text', label: 'Kleur', nullable: true, ...kleuren },
     status: {
       type: 'text',
       label: 'Status',
@@ -132,7 +149,7 @@ export const activiteit = defineDataset({
     },
     verrekening_default: { type: 'text', label: 'Verrekening', nullable: true },
     bron: { type: 'text', label: 'Bron', default: 'plan', options: { plan: 'Plan', registratie: 'Registratie' } },
-    notities: { type: 'text', label: 'Notities', nullable: true },
+    notities: { type: 'text', label: 'Notities', nullable: true, long: true },
     legacy_post_id: { type: 'integer', label: 'Legacy post', nullable: true, readonly: true },
   },
   lookups: {

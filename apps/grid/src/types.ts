@@ -86,6 +86,8 @@ export interface Model {
   record_link?: true
   /** The column a write to which is a transition: the record's state. */
   lifecycle?: string
+  /** The options column whose tone colours each record as a lane and on the rows that point at it. */
+  tone?: string
   /** Files its records carry, by kind; the drawer lists and takes them. */
   attachments?: { kinds: Record<string, string>; max_mb: number; writable?: true }
   fields: Record<string, Field>
@@ -127,6 +129,12 @@ export interface CalendarDef {
   spans?: true
 }
 
+/** A query's flags: per dataset the column holding the flagged ids, and the options column that tones each flag. */
+export interface FlagsDef {
+  marks: Record<string, string>
+  tone: string
+}
+
 /** A declared table (V19): one model, what its rows carry, and the view types it can be shown as. */
 export interface TableDef {
   key: string
@@ -148,6 +156,8 @@ export interface TableDef {
   query?: boolean
   /** The dataset a query reads: its views sit under that table in the rail. */
   of?: string
+  /** A query whose rows flag records of the datasets it marks. */
+  flags?: FlagsDef
   /** An administrator's pick from the engine's icon set; absent, the tree shows the kind's icon. */
   icon?: string
   /** What a group's band says of its rows, computed by the grid. */
@@ -302,6 +312,8 @@ export type GroupFact =
   | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
   | { kind: 'count'; where?: Record<string, unknown>; label: string }
   | { kind: 'empty'; column: string; label: string }
+  /** "label have/need" over the group's rows: the link's items with a target, and all its items. */
+  | { kind: 'filled'; link: string; label: string }
 
 export interface Space {
   field: string
@@ -389,7 +401,8 @@ export interface HistoryEntry {
   batch_kind: string | null
   created: boolean
   record: { id: number; title: string }
-  changes: { field: string; label: string; old: unknown; new: unknown }[]
+  /** A move of the record's rank is `moved`, without its old and new rank. */
+  changes: { field: string; label: string; old?: unknown; new?: unknown; moved?: true }[]
 }
 
 /** A write's answer: the row, and the batch an undo names it by; none when nothing changed. */

@@ -9,6 +9,7 @@ import type { Column } from '../grid/columns'
 import type { StoreState } from '../grid/store'
 import type { ViewType } from '../types'
 import { VIEW_ICONS } from './NewViewDialog'
+import './flags.css'
 
 export interface Shown {
   rows: number
@@ -24,6 +25,10 @@ export interface Shown {
   menu?: Column[]
   /** Said in place of the counts: a calendar's period. */
   label?: string
+  /** How many of the shown rows a flag query flags, its name, and its key to open it by. */
+  flagged?: { count: number; label: string; source: string }
+  /** A timeline's pairs of bars of one lane that overlap in time. */
+  overlaps?: number
 }
 
 interface Props {
@@ -59,6 +64,8 @@ interface Props {
   fixed?: number
   /** Opens the view's history; absent while there is no view. */
   onHistory?: () => void
+  /** Opens the flag query's view, by its key. */
+  onFlagged?: (source: string) => void
 }
 
 export interface Local {
@@ -79,7 +86,8 @@ function SaveState({ state }: { state: Saving }) {
   )
 }
 
-export function Toolbar({ title, kind = 'grid', locked, shown, period, insight, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory }: Props) {
+export function Toolbar({ title, kind = 'grid', locked, shown, period, insight, search, saving, addLabel, addBlocked, onAdd, share, exportNote, local, viewNote, fixed = 0, onHistory, onFlagged }: Props) {
+  const flagged = shown?.flagged
   const more: Action[] = [
     ...(local?.onPublish ? [{ label: t('publishChange'), run: local.onPublish }] : []),
     ...(local ? [{ label: t('revert'), run: local.onRevert }] : []),
@@ -92,6 +100,10 @@ export function Toolbar({ title, kind = 'grid', locked, shown, period, insight, 
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
         {(period || shown) && <span className="nv-toolbar__summary">{period ?? shown?.label ?? (shown && summary(shown.rows, shown.groups, shown.cut, shown.columns, shown.pictures))}</span>}
         {insight && <span className="nv-toolbar__insight"><span className="nv-pill nv-pill--warn">{insight.label}</span><b>{insight.count}</b></span>}
+        {flagged && flagged.count > 0 && (
+          <button type="button" className="nv-toolbar__flagged" onClick={() => onFlagged?.(flagged.source)}><b>{flagged.count}</b> {flagged.label}</button>
+        )}
+        {!!shown?.overlaps && <span className="nv-toolbar__overlaps"><b>{shown.overlaps}</b> {t('overlap')}</span>}
       </div>
       {viewNote && <span className="nv-toolbar__note" role="alert">{viewNote}</span>}
       {fixed > 0 && <span className="nv-toolbar__note">{fixedCount(fixed)}</span>}

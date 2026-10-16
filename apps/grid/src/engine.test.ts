@@ -133,6 +133,14 @@ describe('toSchema: a query over a dataset', () => {
   it('carries no `of` where the engine serves none', () => {
     expect(toSchema(engine).tables.map((t) => t.of)).toEqual([undefined, undefined, undefined])
   })
+
+  it("carries a query's flags onto its table, and none where the engine serves none", () => {
+    const flags = { marks: { activiteit: 'id' }, tone: 'status' }
+    const flagged: EngineSchema = { sources: { ...engine.sources, productie_dag: { ...engine.sources.productie_dag, flags } } }
+
+    expect(toSchema(flagged).tables.find((t) => t.key === 'productie_dag')?.flags).toEqual(flags)
+    expect(toSchema(engine).tables.map((t) => t.flags)).toEqual([undefined, undefined, undefined])
+  })
 })
 
 describe('toSchema', () => {
@@ -160,6 +168,27 @@ describe('toSchema', () => {
     expect(fields.productie_id).toMatchObject({ type: 'relation', relation: { model: 'productie', multiple: false } })
     expect(toSchema(engine).models.productie_dag.fields.activiteiten.type).toBe('int')
     expect(toSchema(engine).models.productie.fields).toEqual({})
+  })
+
+  it('maps a long text column to a textarea, a plain one stays text', () => {
+    const activiteit = engine.sources.activiteit
+    const notities = { type: 'text', label: 'Notities', nullable: true, long: true } as const
+    const plaats = { type: 'text', label: 'Plaats', nullable: true } as const
+    const long: EngineSchema = { sources: { ...engine.sources, activiteit: { ...activiteit, columns: { ...activiteit.columns, notities, plaats } } } }
+    const fields = toSchema(long).models.activiteit.fields
+
+    expect(fields.notities.type).toBe('textarea')
+    expect(fields.plaats.type).toBe('text')
+  })
+
+  it("carries a dataset's tone to its model", () => {
+    const productie = engine.sources.productie
+    const kleur = { type: 'text', label: 'Kleur', nullable: true, options: { violet: 'Paars' }, tones: { violet: 'violet' } } as const
+    const toned: EngineSchema = { sources: { ...engine.sources, productie: { ...productie, tone: 'kleur', columns: { ...productie.columns, kleur } } } }
+    const { models } = toSchema(toned)
+
+    expect(models.productie.tone).toBe('kleur')
+    expect(models.activiteit.tone).toBeUndefined()
   })
 
   it('names the title column after its label and leaves it out of the fields', () => {

@@ -149,6 +149,19 @@ describe('the facts a band declares', () => {
     expect(show.facts[0].value).not.toBe('20:00')
   })
 
+  it('sums the places of the rows to have/need and hides a group with none', () => {
+    const crew = (id: number, items: [number | null, string][]): Row => ({
+      ...at(id, 'show', null),
+      fields: { ...at(id, 'show', null).fields, mensen: items.map(([target, title], i) => ({ id: i, target, title, state: null })) },
+    })
+    const filled: GroupFact[] = [{ kind: 'filled', link: 'mensen', label: 'bezetting' }]
+    const valuesOf = (rows: Row[]) => groupRows(rows, plandag, { facts: filled, columns: cols, cut: null }).map((g) => g.facts)
+
+    expect(valuesOf([crew(1, [[1, 'An'], [2, 'Bo'], [null, '']]), crew(2, [[3, 'Cy'], [null, '']])]))
+      .toEqual([[{ kind: 'filled', label: 'bezetting', value: '3/5' }]])
+    expect(valuesOf([crew(3, []), at(4, 'show', null)])).toEqual([[]])
+  })
+
   it('shows … for each fact of the group the read limit may have cut short', () => {
     const loaded = [at(1, 'show', '2026-10-13T20:00'), at(2, 'build', '2026-10-14T08:00', '2026-10-14')]
     const cut = cutAt(loaded, 9)
