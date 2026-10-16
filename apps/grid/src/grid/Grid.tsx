@@ -15,6 +15,7 @@ import { EmptyState } from '../ui/EmptyState'
 import type { Shown } from '../ui/Toolbar'
 import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { SchemaContext } from './drawer/context'
+import { placeWriter } from './drawer/place'
 import { GridFoot } from './GridFoot'
 import { GridHeader, NUMBER_WIDTH } from './GridHeader'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
@@ -351,6 +352,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
           onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined} onWrite={writable ? apply : undefined}
+          onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>
       )}

@@ -1,10 +1,12 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { createRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HistoryEntry, Model } from '../../types'
+import type { HistoryEntry, Link, LinkItem, Model, Row, Schema } from '../../types'
+import type { Chooser } from './Sections'
 
-const remote = vi.hoisted(() => ({ recordHistory: vi.fn(), rowsWhere: vi.fn() }))
+const remote = vi.hoisted(() => ({ recordHistory: vi.fn(), rowsWhere: vi.fn(), optionsFrom: vi.fn(), records: vi.fn() }))
 vi.mock('../../api', () => remote)
-const { HistorySection } = await import('./Sections')
+const { HistorySection, LinkSection } = await import('./Sections')
 
 afterEach(cleanup)
 
@@ -39,5 +41,34 @@ describe('the drawer’s Geschiedenis', () => {
     render(<HistorySection model={model} id={1} />)
 
     expect((await screen.findByRole('region', { name: 'Geschiedenis' })).textContent).toContain('noor zette status op Klaar')
+  })
+})
+
+describe('a link section', () => {
+  const link: Link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }
+  const from = { source: 'candidates', match: { assignment_id: 'id', role_id: 'role_id' }, value: 'person_id' }
+  const relation = (model: string, more: object = {}) => ({ type: 'relation', label: model, required: false, fact: true, relation: { model, multiple: false }, ...more })
+  const schema = {
+    models: { assignment: { key: 'assignment', label: 'Plaatsen', fields: { activity_id: relation('activity'), person_id: relation('person', { label: 'Persoon', options_from: from }), role_id: relation('role') } } },
+    tables: [], views: [], writable: { assignment: true },
+  } as unknown as Schema
+  const place = (person: number): Row => ({ id: 11, title: '', status: '', fields: { activity_id: 1, person_id: person, role_id: 3 }, lookups: { role_id: { id: 3, title: 'Techniek', status: '', fields: {} } } })
+  const held = (target: number, title: string): LinkItem[] => [{ id: 11, target, title, state: null }]
+
+  it('re-reads its places once its items change, and asks for the candidates of the place as it reads now', async () => {
+    remote.rowsWhere.mockResolvedValueOnce({ rows: [place(5)], total: 1 }).mockResolvedValueOnce({ rows: [place(7)], total: 1 })
+    remote.optionsFrom.mockResolvedValue([])
+    const chooser = createRef<Chooser>()
+    const section = (items: LinkItem[]) => <LinkSection ref={chooser} label="Mensen" link={link} items={items} schema={schema} id={1} onLink={vi.fn()} />
+    const { rerender } = render(section(held(5, 'Sien Peeters')))
+    expect(await screen.findByText('Techniek')).toBeTruthy()
+
+    rerender(section(held(7, 'Noor Janssens')))
+    await waitFor(() => expect(remote.rowsWhere).toHaveBeenCalledTimes(2))
+    await act(async () => chooser.current?.choose(11))
+
+    const row = screen.getByRole('region', { name: 'Mensen' }).querySelector('li') as HTMLElement
+    expect(within(row).getByRole('combobox', { name: 'Persoon' })).toBeTruthy()
+    await waitFor(() => expect(remote.optionsFrom).toHaveBeenCalledExactlyOnceWith(from, { activity_id: 1, person_id: 7, role_id: 3, id: 11 }))
   })
 })

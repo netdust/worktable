@@ -1,0 +1,11 @@
+/* A place whose holder is chosen again: the search stands in place of the name, its list under it, no panel around it. */
+.nv-dw-list .nv-pop.nv-picker {
+  position: static;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}

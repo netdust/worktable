@@ -1,6 +1,8 @@
 import type { Layout } from '../layout'
-import type { CalendarDef, Model, Row, Schema } from '../../types'
-import type { Column } from '../columns'
+import type { CalendarDef, Link, Model, Row, Schema } from '../../types'
+import type { Flag } from '../../ui/useFlags'
+import { isOpen } from '../cells/Links'
+import { type Column, linksOf } from '../columns'
 
 const STATE_TONES = ['ok', 'warn', 'bad']
 
@@ -70,4 +72,29 @@ export function inboundOf(schema: Pick<Schema, 'models' | 'tables'>, model: stri
       .filter(([, f]) => f.type === 'relation' && f.relation?.model === model)
       .map(([field]) => ({ model: table.model, table: table.key, field, label: table.label, date: table.date_field as string }))
   })
+}
+
+/** A links field of the record: the key its rows are under, and its link. */
+export type Linked = { key: string; link: Link }
+
+/** The record's links fields, each with its column: the drawer's people sections. */
+export function linkedOf(columns: Column[], model?: Model): (Linked & { column: Column })[] {
+  return columns.flatMap((column) => {
+    const link = column.kind === 'links' ? model?.fields[column.field ?? column.id]?.link : undefined
+    return link ? [{ key: column.field ?? column.id, link, column }] : []
+  })
+}
+
+/**
+ * The place among the record's links a flag marks, where its holder may be chosen again: a held place whose target
+ * column offers candidates, on a link dataset the caller writes.
+ */
+export function choosableOf(flag: Flag, row: Row, links: Linked[], schema: Pick<Schema, 'models' | 'writable'> | null): Linked & { place: number } | null {
+  for (const { key, link } of links) {
+    const place = flag.marks[link.dataset]
+    const target = schema?.models[link.dataset]?.fields[link.target]
+    if (place === undefined || !target?.options_from || target.readonly || schema?.writable[link.dataset] !== true) continue
+    if (linksOf(row, key).some((item) => item.id === place && !isOpen(item))) return { key, link, place }
+  }
+  return null
 }

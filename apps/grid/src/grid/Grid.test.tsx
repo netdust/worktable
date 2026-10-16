@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
@@ -6,6 +6,7 @@ import { renderNl, typeKeys } from '../test-setup'
 import type { LinkItem, Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import type { LinkActions } from './cells/Links'
+import { SchemaContext } from './drawer/context'
 import { Grid } from './Grid'
 import { defaults, type Layout } from './layout'
 import { createStore, type StoreApi } from './store'
@@ -16,7 +17,7 @@ import type { Shown } from '../ui/Toolbar'
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
   prefs: () => Promise.resolve({ order: {}, last: {} }), savePrefs: () => Promise.resolve(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), history: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), history: vi.fn(), optionsFrom: vi.fn(),
   attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}` }))
 vi.mock('../api', () => remote)
 const { App } = await import('../ui/App')
@@ -1070,6 +1071,63 @@ describe('the drawer', () => {
     expect(api.undo).toHaveBeenCalledExactlyOnceWith('b-del')
     expect(await files.findByRole('link', { name: 'rider.pdf' })).toBeTruthy()
     remote.attachmentsOf.mockReset()
+  })
+
+  it('"Iemand anders kiezen" writes the flagged place once in its own dataset; one Ctrl+Z puts the first person back and the band returns', async () => {
+    const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
+    const link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }
+    const staffed = { ...activity, fields: { ...activity.fields, people: { type: 'links', label: 'Mensen', required: false, fact: false, link } } } as Model
+    const int = { type: 'int', label: 'Id', required: false, fact: true }
+    const served = {
+      models: {
+        activity: staffed,
+        assignment: { key: 'assignment', label: 'Plaatsen', fields: { person_id: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false }, options_from: from } } },
+        clashes: { key: 'clashes', label: 'Botsingen', fields: { activity_id: int, assignment_id: int, weight: { type: 'select', label: 'Ernst', required: true, fact: true, options: { clash: 'Botsing' }, tones: { clash: 'bad' } } } },
+      },
+      tables: [{ key: 'clashes', label: 'Botsingen', model: 'clashes', flags: { marks: { activity: 'activity_id', assignment: 'assignment_id' }, tone: 'weight' } }],
+      views: [], writable: { activity: true, assignment: true },
+    } as unknown as Schema
+    const holding = (target: number, title: string): Row => ({ ...calais[1], fields: { ...calais[1].fields, people: [{ id: 11, target, title, state: null }] } })
+    let clashing = true
+    remote.rows.mockImplementation(() => Promise.resolve(clashing
+      ? { rows: [{ id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 102, assignment_id: 11, weight: 'clash' } }], total: 1 }
+      : { rows: [], total: 0 }))
+    remote.optionsFrom.mockResolvedValue([{ id: 7, title: 'Noor Janssens', status: '', fields: {} }])
+    remote.update.mockImplementationOnce(() => {
+      clashing = false
+      return Promise.resolve({ row: { id: 11, title: '', status: '', fields: { person_id: 7 } }, batch: 'b-place' })
+    })
+    remote.rowOf.mockResolvedValueOnce(holding(7, 'Noor Janssens')).mockResolvedValueOnce(holding(5, 'Sien Peeters'))
+    const undo = vi.fn<NonNullable<StoreApi['undo']>>(() => {
+      clashing = true
+      return Promise.resolve('u-place')
+    })
+    const store = createStore({ model: 'activity', rows: [holding(5, 'Sien Peeters')], api: { update: vi.fn(), create: vi.fn(), read: vi.fn(), undo } })
+    renderNl(
+      <SchemaContext.Provider value={served}>
+        <Grid model={staffed} view={planning} store={store} writable layout={defaults(planning)} onLayout={() => undefined} query="" emptyTitle="" models={served.models} />
+      </SchemaContext.Provider>,
+    )
+    const drawer = openDrawer('Montage')
+    const mensen = () => within(within(drawer).getByRole('region', { name: 'Mensen' })).getByRole('listitem')
+
+    fireEvent.click(await within(drawer).findByRole('button', { name: 'Iemand anders kiezen' }))
+    const noor = await screen.findByRole('option', { name: 'Noor Janssens' })
+    await act(async () => fireEvent.click(noor))
+
+    expect(remote.update).toHaveBeenCalledExactlyOnceWith('assignment', 11, { person_id: [7] })
+    expect(remote.rowOf).toHaveBeenLastCalledWith('activity', 102)
+    await waitFor(() => expect(within(drawer).queryByRole('alert')).toBeNull())
+    expect(mensen().textContent).toContain('Noor Janssens')
+
+    fireEvent.click(cell('Montage', 'place'))
+    await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
+
+    expect(undo).toHaveBeenCalledExactlyOnceWith('b-place')
+    await waitFor(() => expect(mensen().textContent).toContain('Sien Peeters'))
+    expect(await within(drawer).findByRole('alert')).toBeTruthy()
+    expect(remote.update).toHaveBeenCalledTimes(1)
+    for (const mock of [remote.rows, remote.optionsFrom, remote.update, remote.rowOf]) mock.mockReset()
   })
 
   it('offers Verwijderen only for a deletable model', () => {

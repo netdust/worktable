@@ -4,13 +4,14 @@ import type { Model, ModelAction, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
-  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(),
+  records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), optionsFrom: vi.fn(),
   attachmentsOf: vi.fn(), uploadAttachment: vi.fn(), removeAttachment: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`,
 }))
 vi.mock('../api', () => remote)
 const { Drawer, linkedDataset } = await import('./Drawer')
 import { columnsFor } from './columns'
 import type { Flag, Flags } from '../ui/useFlags'
+import type { WriteLink } from './drawer/Sections'
 import { activity, planning } from './calais.test.data'
 
 const row = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', notes: 'Twee veggie' } })
@@ -319,6 +320,66 @@ describe('a flag in the drawer', () => {
     expect(mark?.getAttribute('title')).toBe('Sien staat dubbel ingepland.')
     expect(sien.querySelector('small')?.textContent).toBe('Sien staat dubbel ingepland.')
     expect(lieve.querySelector('.nv-flag')).toBeNull()
+  })
+
+  describe('"Iemand anders kiezen"', () => {
+    const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
+    const person = { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false } }
+    const assignment = (target: object) => ({ key: 'assignment', label: 'Plaatsen', title_label: 'Titel', title_readonly: true, fields: { person_id: { ...person, ...target } } }) as unknown as Model
+    const schemaOf = (writable = true, target: object = { options_from: from }) =>
+      ({ models: { [model.key]: model, assignment: assignment(target) }, tables: [], views: [], writable: { assignment: writable } }) as unknown as Schema
+    const open = (schema: Schema, onLink?: WriteLink, record = staffed(1, 'Lunch bistrot')) =>
+      render(<SchemaContext.Provider value={schema}><Drawer row={record} columns={every} model={model} flags={flags} onLink={onLink} onClose={() => undefined} /></SchemaContext.Provider>)
+    const acts = () => [...band()!.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)
+    const mensen = () => within(screen.getByRole('region', { name: 'Mensen' }))
+
+    it('stands beside Negeren where the flag marks a place of a link whose target column offers candidates', () => {
+      open(schemaOf(), vi.fn())
+      expect(acts()).toEqual(['Iemand anders kiezen', 'Negeren'])
+    })
+
+    it.each([
+      ['a flag on the record only', () => open(schemaOf(), vi.fn(), staffed(2, 'Montage'))],
+      ['a link dataset the caller cannot write', () => open(schemaOf(false), vi.fn())],
+      ['a target column without candidates', () => open(schemaOf(true, {}), vi.fn())],
+      ['a readonly target column', () => open(schemaOf(true, { options_from: from, readonly: true }), vi.fn())],
+      ['a drawer that cannot write', () => open(schemaOf())],
+    ])('is absent on %s: Negeren alone', (_case, arrange) => {
+      arrange()
+      expect(acts()).toEqual(['Negeren'])
+    })
+
+    it("opens the picker in place on the marked person, listing the place's candidates; a pick writes that place once", async () => {
+      remote.optionsFrom.mockResolvedValueOnce([{ id: 7, title: 'Noor Janssens', status: '', fields: {} }])
+      const onLink = vi.fn<WriteLink>().mockResolvedValue(undefined)
+      open(schemaOf(), onLink)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Iemand anders kiezen' }))
+      // An open combobox hides the rest of the page from a screen reader: the rows are read as elements.
+      const [sien, lieve] = screen.getByRole('region', { name: 'Mensen' }).querySelectorAll('li')
+      expect(within(sien).getByRole('combobox', { name: 'Persoon' })).toBeTruthy()
+      expect(sien.querySelector('.nv-flag')?.textContent).toBe('Melding')
+      expect(lieve.textContent).toContain('Lieve Claes')
+      expect(lieve.querySelector('[role="combobox"]')).toBeNull()
+
+      const noor = await screen.findByRole('option', { name: 'Noor Janssens' })
+      expect(remote.optionsFrom).toHaveBeenCalledExactlyOnceWith(from, expect.objectContaining({ id: 11 }))
+      await act(async () => fireEvent.click(noor))
+      expect(onLink).toHaveBeenCalledExactlyOnceWith(people.link, 11, 7)
+      expect(screen.queryByRole('combobox')).toBeNull()
+    })
+
+    it('Escape leaves the picker and writes nothing', () => {
+      remote.optionsFrom.mockResolvedValueOnce([])
+      const onLink = vi.fn<WriteLink>()
+      open(schemaOf(), onLink)
+      fireEvent.click(screen.getByRole('button', { name: 'Iemand anders kiezen' }))
+      fireEvent.keyDown(mensen().getByRole('combobox', { name: 'Persoon' }), { key: 'Escape' })
+
+      expect(screen.queryByRole('combobox')).toBeNull()
+      expect(mensen().getAllByRole('listitem')[0].textContent).toContain('Sien Peeters')
+      expect(onLink).not.toHaveBeenCalled()
+    })
   })
 })
 
