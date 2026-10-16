@@ -175,3 +175,11 @@ Bite check: the review's fixed paths, and the test that goes red if each breaks:
     shows the text, with no button and no textbox. The editable Planning drawer keeps its empty block (row 11).
   - The gallery card's relation line takes its record's tone (198fc23): `skins.test.tsx` only. Observed live on Galerij
     activiteiten: the productie line carries `var(--tone-sky)` for Nachtwacht and `var(--tone-rose)` for De Kersentuin.
+
+## Final gate
+
+Run alone after the shake-out, on d18e841, with the keyboard-lift wait added after run 5 (test-only): `bun run gate` exit 0. Results: packages 2009/0, grid Vitest 1332/1332, e2e 290 passed, 0 failed, 0 skipped (36.3 min). The registry's rows are restamped `d18e841 2026-10-16`.
+- Run 5, on 80b5255, failed 3 of 290; all three passed alone.
+  - board-drag-refused was a race in the test: dnd-kit attaches its key listener a tick after the lift. Fixed in d18e841.
+  - apply-template and stale-state-409 measured equal on main and head when run alone (head/main 0.94 and 1.01). In run 5 every step ran about 3× slower while another project's 10-worker e2e ran on the box. 3f's added reads are about 0.2 s per test.
+
