@@ -51,8 +51,8 @@ const WIDTH: Record<CellKind, number> = {
   bool: 80, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
 }
 
-/** "wo 14/10 00:30–02:00" scrolls 184px in a 12px-padded cell; 184 + 24 leaves it whole. */
-const RANGE_WIDTH = 208
+/** "wo 14/10 00:30–02:00" scrolls 184px in a 12px-padded cell; 184 + 24 leaves it whole, and 8 more spare a wider font's glyphs. */
+const RANGE_WIDTH = 216
 
 /** Room for a value and its "via" tag side by side. */
 const INHERITED_WIDTH = 240

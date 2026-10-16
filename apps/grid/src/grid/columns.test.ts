@@ -199,8 +199,8 @@ describe('inDays', () => {
     expect(column.text(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: null }))).toBe('13:00')
   })
 
-  it('gives the Tijd column room for a date, a start and an end: 184px of text plus 24px padding', () => {
-    expect(from(['day', 'from']).width).toBeGreaterThanOrEqual(184 + 24)
+  it('gives the Tijd column room for a date, a start and an end: 184px of text, 24px padding and 8px of slack', () => {
+    expect(from(['day', 'from']).width).toBeGreaterThanOrEqual(184 + 24 + 8)
     expect(from(['from', 'until']).width).toBe(columnsFor(plan, { key: 'p', label: 'p', table: 'plan', model: 'plan', columns: ['from'] }).find((c) => c.id === 'from')?.width)
   })
 
