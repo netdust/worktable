@@ -235,6 +235,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Bord · volgorde in een kolom, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-reorder @e2e"` | e2e/step-3f.spec.ts | step-3f | d18e841 2026-10-16 |
 | Bord · ongerangschikte kolom, kaart 1 naar plaats 3 | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-reorder-fresh @e2e"` | e2e/step-3f.spec.ts | step-3f | d18e841 2026-10-16 |
 | Bord · gesorteerd naar handmatig, gewijzigd, terugzetten | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-to-manual @e2e"` | e2e/step-3f.spec.ts | step-3f | d18e841 2026-10-16 |
+| Bord · gesorteerd naar handmatig met oude rangen in twee kolommen: alleen de gesleepte kaart beweegt, na herladen; één ⌘Z zet de rangen terug | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-to-manual-stale-ranks @e2e"` | e2e/step-3f.spec.ts | step-3f | fff05f7 2026-10-16 |
 | Bord · gesorteerd, andere kolom: tint, plaats op datum | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-cross-column @e2e"` | e2e/step-3f.spec.ts | step-3f | d18e841 2026-10-16 |
 | Bord · plek steeds verder in een volle kolom | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-slot-steady @e2e"` | e2e/step-3f.spec.ts | step-3f | d18e841 2026-10-16 |
 | Bord · één ⌘Z, pagina en lade | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-undo-both @e2e"` | e2e/step-3f.spec.ts | step-3f | d18e841 2026-10-16 |
