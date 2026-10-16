@@ -206,14 +206,21 @@ describe('a long text in the drawer', () => {
     expect([...container.querySelectorAll('.nv-drawer__field dt')].map((dt) => dt.textContent)).not.toContain('Notities')
   })
 
-  it('reads only without a way to write, or on a readonly field: no button, and an empty one says so', () => {
+  it('reads only without a way to write, or on a readonly field: no button, and no block at all while it is empty', () => {
     const readonly = { ...model, fields: { ...model.fields, notes: { ...model.fields.notes, readonly: true } } } as Model
     const { rerender } = render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} />)
     expect(within(block()).queryByRole('button')).toBeNull()
     rerender(<Drawer row={noted('Twee veggie')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
     expect(within(block()).queryByRole('button')).toBeNull()
     rerender(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} />)
-    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('—')
+    expect(screen.queryByRole('region', { name: 'Notities' })).toBeNull()
+    rerender(<Drawer row={noted('')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
+    expect(screen.queryByRole('region', { name: 'Notities' })).toBeNull()
+  })
+
+  it('keeps an empty block where it can be written, so a first note can be added', () => {
+    render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={vi.fn()} />)
+    expect(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' })).toBeTruthy()
   })
 
   it('asks for a first text where it is empty, opens its field in its place, and writes on Cmd+Enter, not on Enter', async () => {

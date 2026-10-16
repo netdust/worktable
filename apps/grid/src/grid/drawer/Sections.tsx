@@ -24,15 +24,16 @@ export function Section({ ref, title, count, action, children }: { ref?: Ref<HTM
 /** Writes a field the drawer edits, on the row it showed. */
 export type WriteField = (row: Row, column: Column, value: unknown) => void
 
-/** A long text as the prototype's Notities: a paragraph; pressed, its field in its place, as the matrix cell edits its note. */
+/** A long text as the prototype's Notities: a paragraph; pressed, its field in its place, as the matrix cell edits its note. Read only and empty, no block. */
 export function LongSection({ column, row, onWrite }: { column: Column; row: Row; onWrite?: WriteField }) {
   const text = column.edit(row)
+  if (!onWrite && !text) return null
   return (
     <Section title={column.label}>
       {onWrite
         ? <Note text={text} label={column.label} empty={t('notesEmpty', { label: column.label.toLocaleLowerCase(locale()) })} className="nv-dw-long"
             area="nv-textarea nv-dw-long__area" rows={4} onSave={(value) => onWrite(row, column, column.parse(value))} />
-        : <p className="nv-dw-long">{text || t('empty')}</p>}
+        : <p className="nv-dw-long">{text}</p>}
     </Section>
   )
 }
