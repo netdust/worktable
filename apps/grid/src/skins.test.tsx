@@ -155,6 +155,34 @@ describe('the gallery card', () => {
   })
 })
 
+describe("the gallery card's relation line", () => {
+  it("carries the tone of a record of a toned dataset, as the board card's line does; a plain dataset's none", async () => {
+    api.filesOf.mockReset()
+    api.filesOf.mockResolvedValue({})
+    api.records.mockResolvedValue({ rows: [{ id: 2, title: 'De Kersentuin', status: '', fields: { kleur: 'rose' } }], total: 1 })
+    const relation = (model: string) => ({ type: 'relation', label: 'Van', required: false, fact: false, relation: { model, multiple: false } })
+    const activity = { ...model, key: 'activiteit', fields: { productie_id: relation('productie'), rol_id: relation('rol') } } as unknown as Model
+    const productie = {
+      key: 'productie', label: 'Producties', title_label: 'Titel', title_readonly: false, tone: 'kleur',
+      fields: { kleur: { type: 'select', label: 'Kleur', required: false, fact: false, options: { rose: 'Roze' }, tones: { rose: 'rose' } } },
+    } as unknown as Model
+    const rol = { key: 'rol', label: 'Rollen', title_label: 'Naam', title_readonly: false, fields: {} } as unknown as Model
+    const of = (id: number, title: string, fields: Record<string, unknown>, lookups: Row['lookups']): Row => ({ id, title, status: '', fields, lookups })
+    const rows = [
+      of(1, 'Voorstelling Brugge', { productie_id: [2] }, { productie_id: { id: 2, title: 'De Kersentuin', status: '', fields: {} } }),
+      of(2, 'Opbouw', { rol_id: [5] }, { rol_id: { id: 5, title: 'Techniek', status: '', fields: {} } }),
+    ]
+    render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{ activiteit: activity, productie, rol }} rows={rows} kind="foto" layout={defaults(view)} />)
+    const line = (title: RegExp) => screen.getByRole('button', { name: title }).querySelector('.nv-gallery__of') as HTMLElement
+
+    await waitFor(() => expect(line(/Voorstelling Brugge/).querySelector('i')?.style.getPropertyValue('--c')).toBe('var(--tone-rose)'))
+    expect(line(/Voorstelling Brugge/).textContent).toBe('De Kersentuin')
+    expect(line(/Opbouw/).textContent).toBe('Techniek')
+    expect(line(/Opbouw/).querySelector('i')).toBeNull()
+    expect(api.records).toHaveBeenCalledWith('productie', '')
+  })
+})
+
 describe('the gallery past 200 rows', () => {
   it('reads every row’s image, 200 ids a read', async () => {
     api.filesOf.mockReset()

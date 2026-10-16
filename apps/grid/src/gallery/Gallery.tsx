@@ -1,17 +1,19 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { filesOf, fileUrl } from '../api'
 import { Display } from '../grid/cells'
-import { type Column, columnsFor } from '../grid/columns'
+import { type Column, columnsFor, firstId } from '../grid/columns'
 import { useOpenRow } from '../grid/useOpenRow'
 import type { Layout } from '../grid/layout'
 import { dayLabel } from '../grid/group'
 import { t } from '../i18n'
-import type { Field, Model, Row, View } from '../types'
+import type { Field, Model, Row, Tone, View } from '../types'
 import { factsOf } from '../ui/facts'
 import { type Size, SIZE_PX } from './size'
 import type { Shown } from '../ui/Toolbar'
 import { toneColor } from '../ui/tone'
+import { useTones } from '../ui/useTones'
 import { whenOf } from '../ui/when'
+import './gallery.css'
 
 type Files = Record<number, { id: number; mime: string; name: string }>
 
@@ -28,10 +30,14 @@ function mark(title: string): string {
   return words.length > 1 ? (words[0][0] + words[1][0]).toLocaleUpperCase() : words[0].slice(0, 2)
 }
 
-function Card({ row, file, columns, selected, onOpen }: { row: Row; file?: Files[number]; columns: Column[]; selected: boolean; onOpen: () => void }) {
+/** The card line naming a record of a toned dataset, and each such record's tone. */
+type Toned = { column: string; tones: Map<number, Tone> }
+
+function Card({ row, file, columns, toned, selected, onOpen }: { row: Row; file?: Files[number]; columns: Column[]; toned?: Toned; selected: boolean; onOpen: () => void }) {
   const kind = columns.find((c) => c.kind === 'select' && c.tones)
   const when = whenOf(row, columns.filter((c) => c.kind === 'date' || c.kind === 'datetime'))
   const of = columns.find((c) => c.kind === 'relation' && c.text(row) !== '')
+  const ofTone = of && of.id === toned?.column ? toned.tones.get(Number(firstId(of.value(row)))) : undefined
   const tone = { '--s': toneColor(kind?.tones?.[String(kind.value(row) ?? '')]) } as CSSProperties
   return (
     <button type="button" className={selected ? 'nv-gallery__card nv-gallery__card--open' : 'nv-gallery__card'} aria-current={selected || undefined} onClick={onOpen}>
@@ -50,7 +56,7 @@ function Card({ row, file, columns, selected, onOpen }: { row: Row; file?: Files
         {(kind?.text(row) || of) && (
           <span className="nv-gallery__line">
             {kind?.text(row) && <Display column={kind} row={row} onToggle={noToggle} />}
-            {of && <span className="nv-gallery__of">{of.text(row)}</span>}
+            {of && <span className="nv-gallery__of">{ofTone && <i className="nv-gallery__tone" style={{ '--c': toneColor(ofTone) } as CSSProperties} aria-hidden="true" />}{of.text(row)}</span>}
           </span>
         )}
       </span>
@@ -101,6 +107,10 @@ export function Gallery({ view, model, models, rows, kind, layout, size = 'M', o
   const [files, setFiles] = useState<Files>({})
   const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   const columns = useMemo(() => factsOf(all, layout), [all, layout])
+  // The first line naming a record of a toned dataset carries that record's tone, as the board card's does.
+  const line = columns.find((c) => c.kind === 'relation' && models[c.relation?.model ?? '']?.tone)
+  const tones = useTones(models, line?.relation?.model)
+  const toned = useMemo(() => (line && tones ? { column: line.id, tones } : undefined), [line, tones])
   const ids = rows.map((row) => row.id)
   useEffect(() => {
     let live = true
@@ -125,7 +135,7 @@ export function Gallery({ view, model, models, rows, kind, layout, size = 'M', o
                 </div>
               )}
               <div className="nv-gallery__grid">
-                {section.rows.map((row) => <Card key={row.id} row={row} file={files[row.id]} columns={columns} selected={open?.id === row.id} onOpen={() => openRow(row)} />)}
+                {section.rows.map((row) => <Card key={row.id} row={row} file={files[row.id]} columns={columns} toned={toned} selected={open?.id === row.id} onOpen={() => openRow(row)} />)}
               </div>
             </section>
           ))}
