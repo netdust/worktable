@@ -190,6 +190,21 @@ describe('the public route', () => {
     expect(JSON.stringify(res.body)).not.toContain('owner_id')
   })
 
+  test('an administrator who adds the owner column to a published view still never serves it', async () => {
+    const id = insertView('per_project', ['name'])
+    const { token } = (await share(id)).body
+    // Sharing refuses a visible owner column; a later PATCH is not re-checked, so the public read must strip it.
+    const patched = await admin('PATCH', `/api/views/${id}`, { body: json({ visible_fields: ['name', 'project_id'] }) })
+    expect(patched.status).toBe(200)
+    expect(patched.body.visible_fields).toEqual(['name', 'project_id'])
+    const res = await read(token)
+    expect(res.status).toBe(200)
+    expect(res.body.columns.map((c: { key: string }) => c.key)).toEqual(['name'])
+    expect(res.body.rows.length).toBeGreaterThan(0)
+    for (const row of res.body.rows) expect(Object.keys(row)).toEqual(['name'])
+    expect(JSON.stringify(res.body)).not.toContain('project_id')
+  })
+
   test('no id unless listed; id when listed', async () => {
     const { token } = (await share(insertView('per_project', ['name']))).body
     expect(Object.keys((await read(token)).body.rows[0])).toEqual(['name'])
