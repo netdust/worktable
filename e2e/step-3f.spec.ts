@@ -15,6 +15,7 @@ const WEEK = {
   reorder: '2032-02-09',
   fresh: '2032-02-16',
   toManual: '2032-02-23',
+  stale: '2032-04-05',
   cross: '2032-03-01',
   steady: '2032-03-08',
   undo: '2032-03-15',
@@ -87,6 +88,14 @@ const boardOf = (api: Api, name: string, monday: string, sort: string[], more: V
     visible_fields: ['soort', 'plandag', 'start_at'],
     ...more,
   })
+
+/** Writes ranks as another manual view of the dataset left them. */
+async function rank(api: Api, ranks: Record<number, string | null>) {
+  for (const [id, position] of Object.entries(ranks)) {
+    const response = await api.patch(`/api/rows/activiteit/${id}`, { data: { position } })
+    expect(response.status(), await response.text()).toBe(200)
+  }
+}
 
 async function stored(api: Api, id: number): Promise<Stored> {
   const response = await api.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)
@@ -346,6 +355,77 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await expect.poll(() => orders(page)).toEqual(first)
       await expect(changedMark(page)).toHaveCount(0)
       expect(await storedSort(page, view)).toBeNull()
+    } finally {
+      if (view) await admin.request.delete(`/api/views/${view}`)
+      await admin.close()
+      await made.remove()
+    }
+  })
+
+  test('board-sorted-to-manual-stale-ranks @e2e', async ({ page, browser }) => {
+    const api = page.request
+    const made = activities(api)
+    const admin = await browser.newContext({ baseURL: THEATRE.app, storageState: state('admin') })
+    let view = 0
+    try {
+      // Latest day first: the ids run against the dates the board sorts on.
+      const optie: number[] = []
+      for (const n of [3, 2, 1, 0]) optie.push(await made.add(`e2e oud ${n}`, plusDays(WEEK.stale, n), 'optie'))
+      const bevestigd: number[] = []
+      for (const n of [2, 1, 0])
+        bevestigd.push(await made.add(`e2e oud bevestigd ${n}`, plusDays(WEEK.stale, n), 'bevestigd'))
+      const [o1, o2, o3, o4] = optie.toReversed() as [number, number, number, number]
+      const [b1, b2, b3] = bevestigd.toReversed() as [number, number, number]
+      // Ranks another manual view left: in Optie the third runs against the second, in Bevestigd the last follows an unranked card.
+      const seeded: Record<number, string | null> = {
+        [o1]: 'C',
+        [o2]: 'a',
+        [o3]: 'I',
+        [o4]: null,
+        [b1]: 'V',
+        [b2]: null,
+        [b3]: 't',
+      }
+      await rank(api, seeded)
+      const ranks = async () =>
+        Object.fromEntries(
+          await Promise.all(Object.keys(seeded).map(async (id) => [id, (await stored(api, Number(id))).position])),
+        )
+      view = await boardOf(admin.request, 'e2e Bord gesorteerd oud', WEEK.stale, SORTED, { shared: true })
+      await page.goto('/')
+      await open(page, 'e2e Bord gesorteerd oud', o4)
+      const first = await orders(page)
+      expect(first).toEqual({ Optie: [o1, o2, o3, o4], Bevestigd: [b1, b2, b3], Geannuleerd: [] })
+      const manual = moved(first, o4, 'Optie', 0)
+
+      // The last card to the top: the board turns manual, and only that card moves, in either column.
+      await holdOnto(page, o4, o1)
+      await expect(said(page)).toHaveText(/boven Optie, plaats 1 van 4/)
+      await page.mouse.up()
+      await expect.poll(() => orders(page)).toEqual(manual)
+      await expect(changedMark(page)).toBeVisible()
+      await expect.poll(async () => (await stored(api, o4)).position).not.toBeNull()
+      expect(await ranks()).toMatchObject({ [o1]: 'C', [o2]: 'a', [o3]: null, [b1]: 'V', [b2]: null, [b3]: null })
+
+      // One ⌘Z: the stale ranks are back with the dropped card's.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect.poll(ranks).toEqual(seeded)
+
+      // Reverted to its dates, the board holds the stale ranks again: the same drop moves only that card, after a reload too.
+      await changedMark(page).click()
+      await page.getByRole('menuitem', { name: 'Terugzetten' }).click()
+      await expect.poll(() => orders(page)).toEqual(first)
+      await holdOnto(page, o4, o1)
+      await expect(said(page)).toHaveText(/boven Optie, plaats 1 van 4/)
+      await page.mouse.up()
+      await expect.poll(() => orders(page)).toEqual(manual)
+      await expect.poll(async () => (await stored(api, o4)).position).not.toBeNull()
+      await shot(page, 'board-sorted-to-manual-stale-ranks')
+
+      await reopen(page, 'e2e Bord gesorteerd oud', o4)
+      await expect.poll(() => orders(page)).toEqual(manual)
+      await expect(changedMark(page)).toBeVisible()
     } finally {
       if (view) await admin.request.delete(`/api/views/${view}`)
       await admin.close()
