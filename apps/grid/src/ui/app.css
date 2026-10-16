@@ -414,12 +414,13 @@
   min-height: 0;
 }
 
+/* When the name and the end do not both fit (a drawer open on a narrow screen), the end takes a second row. */
 .nv-toolbar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   min-width: 0;
   align-items: center;
-  gap: 14px;
+  gap: 6px 14px;
   padding: 10px 18px;
   border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
@@ -510,12 +511,6 @@
 
 .nv-toolbar > * {
   flex: none;
-}
-
-/* The last resort of a changed view: its end takes a second row rather than leaving the screen. */
-.nv-toolbar--crowded {
-  flex-wrap: wrap;
-  row-gap: 6px;
 }
 
 
@@ -4391,10 +4386,6 @@
   .nv-tree {
     flex: none;
     max-height: 30vh;
-  }
-
-  .nv-toolbar {
-    flex-wrap: wrap;
   }
 
   .nv-toolbar__end {
