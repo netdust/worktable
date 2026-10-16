@@ -14,7 +14,7 @@ import type { CalendarDef, DateWindow, Model, Row, View } from '../types'
 import type { Shown } from '../ui/Toolbar'
 import { iso, isoWeek, parse } from '../ui/Window'
 import { type Bar, bars } from './layout'
-import { overlapsOf, pairsOf } from './overlap'
+import { overlapsOf, pairsOf, timesOf } from './overlap'
 
 const MONTH = (date: Date) => new Intl.DateTimeFormat(locale(), { month: 'short' }).format(date).replace(/\./g, '')
 const LETTER = (date: Date) => new Intl.DateTimeFormat(locale(), { weekday: 'narrow' }).format(date).toLocaleLowerCase(locale())
@@ -80,12 +80,13 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.
   const place: Column | undefined = useMemo(() => placeOf(factsOf(columns, layout), [lane]), [columns, layout, lane])
   const toned: Column | undefined = columns.find((c) => c.kind === 'select' && c.tones)
-  // Bars of one lane sharing a day, a cancelled (bad-toned) one left out.
+  // Bars of one lane sharing a day, or their times where they carry them, a cancelled (bad-toned) one left out.
   const clashes = useMemo(() => {
     const at = new Map(laid.lanes.flatMap((l) => l.bars).map((bar) => [bar.row.id, bar]))
     const first = (r: Row) => at.get(r.id)?.start ?? 0
-    return overlapsOf([...at.values()].map((bar) => bar.row), (r) => String(lane ? r.fields[lane] ?? '' : ''), first, (r) => first(r) + (at.get(r.id)?.length ?? 1) - 1, (r) => toned?.tones?.[String(toned.value(r) ?? '')] === 'bad')
-  }, [laid, lane, toned])
+    return overlapsOf([...at.values()].map((bar) => bar.row), (r) => String(lane ? r.fields[lane] ?? '' : ''), first, (r) => first(r) + (at.get(r.id)?.length ?? 1) - 1,
+      (r) => toned?.tones?.[String(toned.value(r) ?? '')] === 'bad', cal.start ? timesOf(cal.start, cal.end) : undefined)
+  }, [laid, lane, toned, cal.start, cal.end])
   const overlaps = pairsOf(clashes)
   const window = useMemo(() => Array.from({ length: laid.days }, (_, i) => iso(new Date((parse(shown.from) as Date).getTime() + i * 86_400_000 + 43_200_000))), [shown.from, laid.days])
   const today = iso(new Date())

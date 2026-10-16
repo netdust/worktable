@@ -101,3 +101,41 @@ describe('the timeline overlap', () => {
     expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 0 }))
   })
 })
+
+describe('the timeline overlap of bars with times', () => {
+  const TIMED: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['productie_id'] }
+  const activity = {
+    key: 'activity', label: 'Activiteiten', title_label: 'Omschrijving', title_readonly: false,
+    fields: {
+      productie_id: { type: 'relation', label: 'Productie', required: true, relation: { model: 'productie', multiple: false } },
+      plandag: { type: 'date', label: 'Plandag', required: true },
+      start_at: { type: 'datetime', label: 'Start', required: false },
+      eind_at: { type: 'datetime', label: 'Einde', required: false },
+    },
+  } as unknown as Model
+  const timed = { ...view, table: 'activity', model: 'activity', calendar: TIMED } as View
+  const at = (id: number, title: string, from: string, to: string): Row => ({
+    id, title, status: '',
+    fields: { plandag: '2026-10-14', start_at: `2026-10-14T${from}`, eind_at: `2026-10-14T${to}`, productie_id: 1 },
+    lookups: { productie_id: { id: 1, title: 'De Kersentuin', status: '', fields: {} } },
+  })
+  const draw = (rows: Row[]) => {
+    const onTitle = vi.fn()
+    render(<Timeline view={timed} model={activity} models={{ activity, productie: productie() }} rows={rows} cal={TIMED} shown={{ from: '2026-10-12', to: '2026-10-18' }} lane="productie_id" layout={defaults(timed)} onTitle={onTitle} />)
+    return onTitle
+  }
+
+  it('leaves two bars of one day apart when their times are: one at 10:00, one at 20:00', () => {
+    const onTitle = draw([at(1, 'Repetitie', '10:00', '12:00'), at(2, 'Voorstelling', '20:00', '21:15')])
+
+    expect(screen.queryAllByTitle(/^Overlapt met /)).toHaveLength(0)
+    expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 0 }))
+  })
+
+  it('marks two bars of one day whose times overlap', () => {
+    const onTitle = draw([at(1, 'Repetitie', '10:00', '12:00'), at(2, 'Opbouw', '11:00', '13:00')])
+
+    expect(screen.getByTitle('Overlapt met Opbouw')).toBeTruthy()
+    expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 1 }))
+  })
+})
