@@ -70,6 +70,17 @@ export function linkedDataset(role: Account['role'], model: Model): string | und
   return role === 'administrator' && model.record_link ? model.key : undefined
 }
 
+/** Each band's key: its flag's text and marks, so Negeren keeps hiding that flag when a re-read lists the flags in another order. */
+function bandKeys(flags: Flag[]): string[] {
+  const seen = new Map<string, number>()
+  return flags.map((flag) => {
+    const key = `${flag.text}|${Object.entries(flag.marks).sort().join()}`
+    const n = seen.get(key) ?? 0
+    seen.set(key, n + 1)
+    return `${key}|${n}`
+  })
+}
+
 /** The drawer reads; a checkbox's toggle is the sheet's. */
 const noToggle = () => undefined
 
@@ -167,6 +178,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
   const longs = columns.filter((c) => c.kind === 'longtext')
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
   const raised = model && flags && row.id > 0 ? flags.marksOf(model.key, row.id) : []
+  const bands = bandKeys(raised)
   // The band asks the link section to choose for the place its flag marks: the choosing is the section's.
   const choosers = useRef<Record<string, Chooser | null>>({})
   const chooseOther = (flag: Flag): AlertAction[] => {
@@ -183,7 +195,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
           {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
         </p>
       )}
-      {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${at}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
+      {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more

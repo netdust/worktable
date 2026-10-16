@@ -303,6 +303,18 @@ describe('a flag in the drawer', () => {
     expect(band()).not.toBeNull()
   })
 
+  it('keeps hiding the flag Negeren hid after a re-read that lists the flags in another order', () => {
+    const two = [flag('Sien staat dubbel ingepland.', { activity: 1, assignment: 11 }), flag('Lieve is afwezig.', { activity: 1, assignment: 12 })]
+    const read = (list: Flag[]): Flags => ({ ...flags, marksOf: (dataset, id) => list.filter((f) => f.marks[dataset] === id) })
+    const texts = () => screen.queryAllByRole('alert').map((a) => a.querySelector('.nv-dw-alert__text')?.textContent)
+    const { rerender } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={read(two)} onClose={() => undefined} />)
+    fireEvent.click(within(screen.getAllByRole('alert')[0]).getByRole('button', { name: 'Negeren' }))
+    expect(texts()).toEqual(['Lieve is afwezig.'])
+
+    rerender(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={read(two.toReversed())} onClose={() => undefined} />)
+    expect(texts()).toEqual(['Lieve is afwezig.'])
+  })
+
   it("shows another record's own band once the drawer steps to it, and none on a record without a flag", () => {
     const { rerender } = render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: 'Negeren' }))
