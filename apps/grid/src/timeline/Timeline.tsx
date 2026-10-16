@@ -1,6 +1,7 @@
 import { type CSSProperties, useContext, useEffect, useMemo, useRef } from 'react'
 import { type Column, columnsFor } from '../grid/columns'
 import { SchemaContext } from '../grid/drawer/context'
+import type { Places } from '../grid/drawer/place'
 import type { Layout } from '../grid/layout'
 import { factsOf, placeOf } from '../ui/facts'
 import { FlagMark } from '../ui/Flag'
@@ -62,16 +63,18 @@ const DAY_PX = 44
 const TONE_CLASS = { warn: 'nv-tl__bar--option', bad: 'nv-tl__bar--cancelled' } as const
 
 /** Rows as bars across the window's days, in lanes; read-only, a bar opens its row. */
-export function Timeline({ view, model, models, rows, cal, shown, lane, layout, onTitle }: {
+export function Timeline({ view, model, models, rows, cal, shown, lane, layout, onTitle, places }: {
   view: View; model: Model; models: Record<string, Model>; rows: Row[]; cal: CalendarDef; shown: DateWindow; lane: string | null
   /** Which facts a bar shows (Kolommen): its place line is the first that names another record. */
   layout: Layout
   /** What the title line says it shows: the bars and the lanes. */
   onTitle?: (shown: Shown) => void
+  /** The drawer's "Iemand anders kiezen" on a flagged place. */
+  places?: Places
 }) {
   const flags = useFlags(useContext(SchemaContext), null, shown, model.key, rows)
   const flagged = flaggedOf(flags, model.key, rows)
-  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags, places)
   const laid = useMemo(() => bars(rows, cal, shown, lane), [rows, cal, shown.from, shown.to, lane])
   const columns = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.

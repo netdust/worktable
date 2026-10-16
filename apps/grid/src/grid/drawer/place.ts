@@ -4,6 +4,9 @@ import type { ApiError } from '../../types'
 import type { Store } from '../store'
 import type { WriteLink } from './Sections'
 
+/** A record drawer's place writer, built once by the page from the store on screen. */
+export type Places = (model: string, id: number) => WriteLink
+
 /**
  * Puts another record on a place of one of the record's links. The place is a row of the link's own dataset, written
  * there as one step of the tab's history; the record is read again at once, so its links and flags follow. The step

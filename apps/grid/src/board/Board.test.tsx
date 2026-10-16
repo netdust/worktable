@@ -1,9 +1,18 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SchemaContext } from '../grid/drawer/context'
+import { placeWriter } from '../grid/drawer/place'
 import { defaults, type Layout } from '../grid/layout'
-import type { Model, Row, View } from '../types'
+import { createStore, type Store } from '../grid/store'
+import type { Model, Row, Schema, View } from '../types'
+import { createHistory } from '../ui/history'
 import { Board } from './Board'
 import type { Drop } from './drop'
+
+const remote = vi.hoisted(() => ({ rows: vi.fn(), optionsFrom: vi.fn(), update: vi.fn(), rowOf: vi.fn(),
+  rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), recordHistory: vi.fn(() => Promise.resolve([])) }))
+vi.mock('../api', async (original) => ({ ...(await original<typeof import('../api')>()), ...remote }))
 
 afterEach(cleanup)
 
@@ -149,5 +158,67 @@ describe('the drag in words and keys', () => {
     await press('Repetitie', 'Space')
     expect(screen.queryByText(/opgepakt/)).toBeNull()
     expect(card('Repetitie').className).not.toContain('nv-board__card--slot')
+  })
+})
+
+describe("a flagged place in the board's drawer", () => {
+  const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
+  const link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }
+  const staffed = { ...model, key: 'activity', fields: { ...model.fields, people: { type: 'links', label: 'Mensen', required: false, fact: false, link } } } as unknown as Model
+  const staffedView = { ...view, table: 'activity', model: 'activity' } as View
+  const int = { type: 'int', label: 'Id', required: false, fact: true }
+  const served = {
+    models: {
+      activity: staffed,
+      assignment: { key: 'assignment', label: 'Plaatsen', fields: { person_id: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false }, options_from: from } } },
+      clashes: { key: 'clashes', label: 'Botsingen', fields: { activity_id: int, assignment_id: int, weight: { type: 'select', label: 'Ernst', required: true, fact: true, options: { clash: 'Botsing' }, tones: { clash: 'bad' } } } },
+    },
+    tables: [{ key: 'clashes', label: 'Botsingen', model: 'clashes', flags: { marks: { activity: 'activity_id', assignment: 'assignment_id' }, tone: 'weight' } }],
+    views: [], writable: { activity: true, assignment: true },
+  } as unknown as Schema
+  const holding = (target: number, title: string): Row => ({ id: 1, title: 'Repetitie', status: '', fields: { status: 'optie', people: [{ id: 11, target, title, state: null }] } })
+
+  afterEach(() => {
+    for (const mock of [remote.rows, remote.optionsFrom, remote.update, remote.rowOf]) mock.mockReset()
+  })
+
+  /** The board as the app holds it: its rows the store's, the place writer built on that store. */
+  function Sheet({ store }: { store: Store }) {
+    const state = useSyncExternalStore(store.subscribe, store.getState)
+    return (
+      <SchemaContext.Provider value={served}>
+        <Board view={staffedView} model={staffed} models={served.models} rows={state.rows} column="status" layout={defaults(staffedView)}
+          places={(of, id) => placeWriter(store, of, id)} />
+      </SchemaContext.Provider>
+    )
+  }
+
+  it('offers "Iemand anders kiezen" beside Negeren, and a pick writes the place once and the band goes', async () => {
+    let clashing = true
+    remote.rows.mockImplementation(() => Promise.resolve(clashing
+      ? { rows: [{ id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 1, assignment_id: 11, weight: 'clash' } }], total: 1 }
+      : { rows: [], total: 0 }))
+    remote.optionsFrom.mockResolvedValue([{ id: 7, title: 'Noor Janssens', status: '', fields: {} }])
+    remote.update.mockImplementationOnce(() => {
+      clashing = false
+      return Promise.resolve({ row: { id: 11, title: '', status: '', fields: { person_id: 7 } }, batch: 'b-place' })
+    })
+    remote.rowOf.mockResolvedValueOnce(holding(7, 'Noor Janssens'))
+    const store = createStore({ model: 'activity', rows: [holding(5, 'Sien Peeters')], api: { update: vi.fn(), create: vi.fn() }, history: createHistory(vi.fn()) })
+    render(<Sheet store={store} />)
+
+    fireEvent.click(card('Repetitie'))
+    const drawer = screen.getByRole('complementary', { name: 'Repetitie' })
+    const band = await within(drawer).findByRole('alert')
+    expect([...band.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Negeren'])
+
+    fireEvent.click(within(band).getByRole('button', { name: 'Iemand anders kiezen' }))
+    const noor = await screen.findByRole('option', { name: 'Noor Janssens' })
+    await act(async () => fireEvent.click(noor))
+
+    expect(remote.update).toHaveBeenCalledExactlyOnceWith('assignment', 11, { person_id: [7] })
+    await waitFor(() => expect(within(drawer).queryByRole('alert')).toBeNull())
+    expect(within(within(drawer).getByRole('region', { name: 'Mensen' })).getByRole('listitem').textContent).toContain('Noor Janssens')
+    expect(store.getState().canUndo).toBe(true)
   })
 })

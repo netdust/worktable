@@ -50,6 +50,7 @@ import { formatWindow, isMonth, isoWeek, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { writeDrop } from '../board/drop'
+import { placeWriter } from '../grid/drawer/place'
 import { Dashboard } from '../dashboard/Dashboard'
 import { QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
@@ -504,6 +505,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       }, refused(row))
     },
   }
+  const places = store ? (of: string, id: number) => placeWriter(store, of, id, (message) => notify({ message })) : undefined
   const changeDisplay = (table: Table, data: { label?: string; icon?: string }) => {
     setDisplay(table.key, data).then(
       (shown) => setDisplays((was) => ({ ...was, [table.key]: shown })),
@@ -604,15 +606,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onSaved={(saved) => savedViews().then((list) => { load(list); setActiveKey(saved.key) }, () => undefined)}
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
-            <Calendar key={view.key} view={view} model={model} models={models} rows={result.rows} cal={calendar} shown={calendarShown}
-              lane={layout.group} layout={layout} onTitle={setShown} />
+            <Calendar key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} cal={calendar} shown={calendarShown}
+              lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
-            <Timeline key={view.key} view={view} model={model} models={models} rows={result.rows} cal={timeline} shown={timelineShown}
-              lane={layout.group} layout={layout} onTitle={setShown} />
+            <Timeline key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} cal={timeline} shown={timelineShown}
+              lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
-              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} />
+              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (

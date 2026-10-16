@@ -1,6 +1,7 @@
 import { type CSSProperties, useContext, useEffect, useMemo, useState } from 'react'
 import { Drawer } from '../grid/Drawer'
 import { SchemaContext } from '../grid/drawer/context'
+import type { Places } from '../grid/drawer/place'
 import { type Column, columnsFor } from '../grid/columns'
 import { t } from '../i18n'
 import type { CalendarDef, DateWindow, Model, Row, Tone, View } from '../types'
@@ -28,6 +29,8 @@ interface Props {
   layout: Layout
   /** What the title line says it shows: the events. */
   onTitle?: (shown: Shown) => void
+  /** The drawer's "Iemand anders kiezen" on a flagged place. */
+  places?: Places
 }
 
 const NO_LANE = '-'
@@ -214,8 +217,10 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
 }
 
 /** Rows on their days, a week or a month, in lanes; read-only: an event opens its row. */
-export function Calendar({ view, model, models, rows, cal, shown, lane, layout, onTitle }: Props) {
-  const [open, setOpen] = useState<Row | null>(null)
+export function Calendar({ view, model, models, rows, cal, shown, lane, layout, onTitle, places }: Props) {
+  const [opened, setOpen] = useState<Row | null>(null)
+  // The row as the calendar now holds it: a place chosen in the drawer repaints it.
+  const open = opened ? (rows.find((row) => row.id === opened.id) ?? opened) : null
   const month = isMonth(shown)
   const weeks = useMemo(() => (month ? monthWeeks(shown) : []), [month, shown.from, shown.to])
   const window = month && weeks.length > 0 ? { from: weeks[0][0], to: weeks[weeks.length - 1][6] } : shown
@@ -247,7 +252,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
           {!month && <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} spans={cal.spans ? cal : null} toneOf={toneOf} marks={marks} whereOf={whereOf} onOpen={setOpen} />}
         </div>
         )}
-        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags}
+        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)}
           nav={{ ids: rows.map((r) => r.id), onStep: (id) => setOpen(rows.find((r) => r.id === id) ?? null) }} />}
       </div>
     </div>

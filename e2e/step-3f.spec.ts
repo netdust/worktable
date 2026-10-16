@@ -26,6 +26,7 @@ const WEEK = {
   conflict: '2034-09-04',
   ignore: '2034-09-11',
   choose: '2034-09-18',
+  chooseOnBoard: '2034-09-25',
   overlap: '2028-11-06',
 }
 const MANUAL = ['position']
@@ -948,7 +949,7 @@ test.describe('step 3f: conflicten flags what it names', () => {
       const band = drawer.getByRole('alert')
       await expect(band.locator('.nv-dw-alert__head')).toHaveText('Conflict')
       await expect(band.locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
-      await expect(band.getByRole('button')).toHaveText(['Negeren'])
+      await expect(band.getByRole('button')).toHaveText(['Iemand anders kiezen', 'Negeren'])
       // The person in Mensen carries the flag, its text in place of their role.
       const person = drawer
         .getByRole('region', { name: 'Mensen' })
@@ -976,74 +977,104 @@ test.describe('step 3f: the record drawer chooses someone else for a flagged pla
 
   test('conflict-choose-other @e2e', async ({ page }) => {
     const api = page.request
-    const booking = doubleBooking(api)
+    const bookings = [doubleBooking(api), doubleBooking(api)]
     const made = { person: 0, roles: [] as number[] }
     const rowsOf = async (path: string) =>
       ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
     const where = (filter: Values) => encodeURIComponent(JSON.stringify(filter))
     try {
       const speler = (await rowsOf('/api/rows/rol?limit=500')).find((r) => r.naam === 'Speler')?.id as number
-      const [one, two] = await booking.add(WEEK.choose, 'e2e kies', { rol_id: speler })
       made.person = await posted(api, '/api/rows/persoon', { voornaam: 'Mira', achternaam: 'Invaller' })
-      for (const persoon_id of [booking.made.person, made.person])
-        made.roles.push(await posted(api, '/api/rows/persoon_rol', { persoon_id, rol_id: speler }))
-      const listed = await rowsOf(`/api/rows/conflicten?filter=${where({ persoon_id: booking.made.person })}`)
-      expect(listed.map((r) => [r.activiteit_id, r.ernst]).sort()).toEqual([
-        [one, 'conflict'],
-        [two, 'conflict'],
-      ])
-      const place = booking.made.places[0]
-      const holder = async () => (await rowsOf(`/api/rows/toewijzing?filter=${where({ id: place })}`))[0]?.persoon_id
+      made.roles.push(await posted(api, '/api/rows/persoon_rol', { persoon_id: made.person, rol_id: speler }))
 
-      /** The Planning sheet on the flow's week, the first activity's drawer open from its row. */
-      const drawerOf = async () => {
-        await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK.choose)
-        const row = page.locator('tbody tr.nv-tr[data-title="e2e kies een"]')
-        await row.hover()
-        await row.getByRole('button', { name: 'Openen' }).click()
-        const drawer = page.getByRole('complementary', { name: 'e2e kies een' })
-        await expect(drawer).toBeVisible()
-        return drawer
+      /** The first activity's drawer: from its row on the Planning sheet, or from its card on the Per status board. */
+      const surfaces = [
+        {
+          name: 'Planning',
+          week: WEEK.choose,
+          title: 'e2e kies',
+          drawerOf: async (title: string) => {
+            await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK.choose)
+            const row = page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
+            await row.hover()
+            await row.getByRole('button', { name: 'Openen' }).click()
+          },
+        },
+        {
+          name: 'Per status',
+          week: WEEK.chooseOnBoard,
+          title: 'e2e kies bord',
+          drawerOf: async (_title: string, id: number) => {
+            await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.chooseOnBoard)
+            await card(page, id).click()
+          },
+        },
+      ]
+      for (const [at, surface] of surfaces.entries()) {
+        await test.step(`from the ${surface.name} drawer`, async () => {
+          const booking = bookings[at] as ReturnType<typeof doubleBooking>
+          const [one, two] = await booking.add(surface.week, surface.title, { rol_id: speler })
+          made.roles.push(
+            await posted(api, '/api/rows/persoon_rol', { persoon_id: booking.made.person, rol_id: speler }),
+          )
+          const listed = await rowsOf(`/api/rows/conflicten?filter=${where({ persoon_id: booking.made.person })}`)
+          expect(listed.map((r) => [r.activiteit_id, r.ernst]).sort()).toEqual([
+            [one, 'conflict'],
+            [two, 'conflict'],
+          ])
+          const place = booking.made.places[0]
+          const holder = async () =>
+            (await rowsOf(`/api/rows/toewijzing?filter=${where({ id: place })}`))[0]?.persoon_id
+
+          const drawerOf = async () => {
+            await surface.drawerOf(`${surface.title} een`, one as number)
+            const drawer = page.getByRole('complementary', { name: `${surface.title} een` })
+            await expect(drawer).toBeVisible()
+            return drawer
+          }
+          const drawer = await drawerOf()
+          const band = drawer.getByRole('alert')
+          const mensen = drawer.getByRole('region', { name: 'Mensen' })
+          /** The band's "Iemand anders kiezen": the picker opens in place on the flagged person, and Mira is picked. */
+          const chooseMira = async (screenshot?: string) => {
+            await expect(band.getByRole('button')).toHaveText(['Iemand anders kiezen', 'Negeren'])
+            await band.getByRole('button', { name: 'Iemand anders kiezen' }).click()
+            const search = mensen
+              .locator('li', { has: page.locator('.nv-flag') })
+              .getByRole('combobox', { name: 'Persoon' })
+            await expect(search).toBeFocused()
+            await search.fill('Mira')
+            const mira = page.getByRole('option', { name: 'Mira Invaller', exact: true })
+            await expect(mira).toBeVisible()
+            if (screenshot) await shot(page, screenshot)
+            await mira.click()
+          }
+
+          await chooseMira(at === 0 ? 'conflict-choose-other' : 'conflict-choose-other-board')
+          await expect(band).toHaveCount(0)
+          await expect(mensen.getByRole('listitem')).toHaveText([/Mira Invaller/])
+          await expect.poll(holder).toBe(made.person)
+
+          // One ⌘Z on the page puts the first person back on the place, and the band with them.
+          await page.keyboard.press('ControlOrMeta+z')
+          await expect.poll(holder).toBe(booking.made.person)
+          await expect(mensen.getByRole('listitem')).toHaveText([/Ezra Dubbelboek/])
+          await expect(band.locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
+
+          // Chosen again, the place holds Mira after a reload, and no band comes back.
+          await chooseMira()
+          await expect(band).toHaveCount(0)
+          await expect.poll(holder).toBe(made.person)
+          const again = await drawerOf()
+          await expect(again.getByRole('region', { name: 'Mensen' }).getByRole('listitem')).toHaveText([
+            /Mira Invaller/,
+          ])
+          await expect(again.getByRole('alert')).toHaveCount(0)
+        })
       }
-      const drawer = await drawerOf()
-      const band = drawer.getByRole('alert')
-      const mensen = drawer.getByRole('region', { name: 'Mensen' })
-      /** The band's "Iemand anders kiezen": the picker opens in place on the flagged person, and Mira is picked. */
-      const chooseMira = async (screenshot?: string) => {
-        await expect(band.getByRole('button')).toHaveText(['Iemand anders kiezen', 'Negeren'])
-        await band.getByRole('button', { name: 'Iemand anders kiezen' }).click()
-        const search = mensen
-          .locator('li', { has: page.locator('.nv-flag') })
-          .getByRole('combobox', { name: 'Persoon' })
-        await expect(search).toBeFocused()
-        await search.fill('Mira')
-        const mira = page.getByRole('option', { name: 'Mira Invaller', exact: true })
-        await expect(mira).toBeVisible()
-        if (screenshot) await shot(page, screenshot)
-        await mira.click()
-      }
-
-      await chooseMira('conflict-choose-other')
-      await expect(band).toHaveCount(0)
-      await expect(mensen.getByRole('listitem')).toHaveText([/Mira Invaller/])
-      await expect.poll(holder).toBe(made.person)
-
-      // One ⌘Z on the page puts the first person back on the place, and the band with them.
-      await page.keyboard.press('ControlOrMeta+z')
-      await expect.poll(holder).toBe(booking.made.person)
-      await expect(mensen.getByRole('listitem')).toHaveText([/Ezra Dubbelboek/])
-      await expect(band.locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
-
-      // Chosen again, the place holds Mira after a reload, and no band comes back.
-      await chooseMira()
-      await expect(band).toHaveCount(0)
-      await expect.poll(holder).toBe(made.person)
-      const again = await drawerOf()
-      await expect(again.getByRole('region', { name: 'Mensen' }).getByRole('listitem')).toHaveText([/Mira Invaller/])
-      await expect(again.getByRole('alert')).toHaveCount(0)
     } finally {
       for (const id of made.roles) await api.delete(`/api/rows/persoon_rol/${id}`)
-      await booking.remove()
+      for (const booking of bookings) await booking.remove()
       if (made.person) await api.delete(`/api/rows/persoon/${made.person}`)
     }
   })

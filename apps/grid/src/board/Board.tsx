@@ -3,6 +3,7 @@ import { useContext, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { columnsFor } from '../grid/columns'
 import { SchemaContext } from '../grid/drawer/context'
+import type { Places } from '../grid/drawer/place'
 import type { Layout } from '../grid/layout'
 import { useOpenRow } from '../grid/useOpenRow'
 import { locale, t } from '../i18n'
@@ -37,6 +38,8 @@ interface Props {
   onLayout?: (next: Layout) => void
   /** A column head's +: a new record with that column's value. */
   onCreate?: (preset: Record<string, unknown>) => void
+  /** The drawer's "Iemand anders kiezen" on a flagged place; absent, the band offers Negeren alone. */
+  places?: Places
 }
 
 /** A column per option of the board's column, in its order, "Geen" last when it holds a card; a manual board orders each by rank. */
@@ -52,11 +55,11 @@ function lanesOf(rows: Row[], column: string, field: Field | undefined, manual: 
 }
 
 /** Cards in a column per option of the board's column; a card opens its row, and drags to its place in any column. */
-export function Board({ view, model, models, rows, column, layout, onShown, onDrop, onLayout, onCreate }: Props) {
+export function Board({ view, model, models, rows, column, layout, onShown, onDrop, onLayout, onCreate, places }: Props) {
   const flags = useFlags(useContext(SchemaContext), null, windowOfRows(rows, view.date_field), model.key, rows)
   const marks = (row: Row) => flags?.marksOf(model.key, row.id) ?? []
   const flagged = flaggedOf(flags, model.key, rows)
-  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags)
+  const [openRow, drawer, open] = useOpenRow(model, view, models, rows, layout, flags, places)
   const field = model.fields[column]
   const all = useMemo(() => columnsFor(model, view, false, models), [model, view, models])
   // The card shows the facts Kolommen leaves, in its order; the column the board sorts by needs no line.
