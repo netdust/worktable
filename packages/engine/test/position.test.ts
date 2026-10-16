@@ -210,7 +210,11 @@ describe('writing position', () => {
     expect(res.status).toBe(200)
     const { id } = sqlite.query("SELECT id FROM account WHERE role = 'editor'").get() as { id: number }
     sqlite.query("UPDATE account SET role = 'owner', subject_dataset = 'project', subject_id = 1 WHERE id = ?").run(id)
-    await denied(() => editor('POST', `/api/batches/${res.body.revision.batch_id}/undo`, { body: '{}' }), 403, 'forbidden')
+    await denied(
+      () => editor('POST', `/api/batches/${res.body.revision.batch_id}/undo`, { body: '{}' }),
+      403,
+      'forbidden',
+    )
     expect(rankOf(1)).toBe('V')
   })
 
