@@ -205,6 +205,15 @@ describe('writing position', () => {
     await denied(() => patch(owner, 1, { tekst: 'eigen', position: 'V' }), 403, 'forbidden')
   })
 
+  test('an undo of a rank its maker wrote as an editor, now an owner, is 403 forbidden: the rank stays', async () => {
+    const res = await patch(editor, 1, { position: 'V' })
+    expect(res.status).toBe(200)
+    const { id } = sqlite.query("SELECT id FROM account WHERE role = 'editor'").get() as { id: number }
+    sqlite.query("UPDATE account SET role = 'owner', subject_dataset = 'project', subject_id = 1 WHERE id = ?").run(id)
+    await denied(() => editor('POST', `/api/batches/${res.body.revision.batch_id}/undo`, { body: '{}' }), 403, 'forbidden')
+    expect(rankOf(1)).toBe('V')
+  })
+
   test('a person link never writes it: it is no owner-writable column', async () => {
     const token = recordLinkFor(sqlite, TEST_LINK_SECRET, 'project', 1)
     const link = async () => {
