@@ -563,6 +563,7 @@ test('planning-details @e2e', async ({ page }) => {
     expect(await cell.evaluate((td) => td.scrollWidth <= td.clientWidth), 'the Tijd cell holds its day and time').toBe(
       true,
     )
+    await shot(page, 'planning-tijd-fits')
   } finally {
     await page.request.delete(`/api/rows/activiteit/${id}`)
   }

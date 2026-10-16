@@ -547,6 +547,7 @@ test.describe('step 3e: ⌘Z on the page', () => {
       await page.getByRole('heading', { level: 1 }).click()
       await page.keyboard.press('ControlOrMeta+z')
       await expect.poll(async () => (await stored())?.status).toBe('optie')
+      await shot(page, 'undo-from-the-page')
     } finally {
       await api.delete(`/api/rows/activiteit/${id}`)
     }
