@@ -100,12 +100,19 @@ Declined to judge (code reviewer):
 - Should fix 2, the CHECKS stamps: restamped at the shake-out on the final gate's commit.
 - Notes 3, 4, 5, 7 and 8, security L2, the cheap list, and Stefan's NOTITIES block and gallery card line: done.
 
+- A defect found in the orchestrator's preview drive (2026-10-16), fixed in the same pass with no new review round, as ruled.
+  - The defect: a sorted→manual switch moved other cards whenever stale ranks existed.
+  - The fix: on the switch, every column shown keeps its longest ranked, strictly increasing prefix, and the other ranked cards in the window have their rank cleared in the same step, so one ⌘Z restores them. 8459b55 (with the SPEC sentence), fff05f7 (e2e `board-sorted-to-manual-stale-ranks`, RED on the old code with the preview's swap and jump), c94e674 (CHECKS).
+  - Measured with 32 clears: the writes answer 0.4–1.0 s after mouse-up, and the cards reorder at once.
+
 ## Deferrals
 
 - The app-wide focus ring vs Stefan's no-coloured-rounded-borders rule: his call, a whole-app change, never note-only (orchestrator, 2026-10-16; theme.css untouched).
 - The dashboard drawer (no store) and the matrix row drawer (move repaints rollups only) offer "Negeren" only. They are deferred with the editable Mensen section.
 - Security L1, a 255-character rank refuses drops next to it: carried in plan.md.
 - Note 6 (one history entry per ranked card) stays a Note.
+- A refused switch leaves its landed clears without an undo, as a refused drop leaves no undo step. The cleared ranks were stale: they disagreed with the order shown, and on the sorted board nothing visible changes. A planner whose own manual view relied on those ranks sees those cards move to the unranked tail.
+- Ranks beyond the read limit of a board's window (5000 rows) are not cleared on a switch.
 - With the board.css `!important` gone, a keyboard drag no longer forces the grabbing cursor on a resting mouse. Left as it is (orchestrator, 2026-10-16).
 
 Findings: 0 Blocking · 2 Should fix · 13 Note
