@@ -15,9 +15,10 @@ const known = new Map<string, Keys>()
 export function useTones(models: Record<string, Model>, dataset: string | undefined): Map<number, Tone> | null | undefined {
   const column = dataset ? models[dataset]?.tone : undefined
   const tones = dataset && column ? models[dataset]?.fields[column]?.tones : undefined
+  const toned = tones !== undefined
   const [read, setRead] = useState<{ dataset: string; keys: Keys | null } | null>(null)
   useEffect(() => {
-    if (!dataset || !column) return
+    if (!dataset || !column || !toned) return
     let live = true
     const done = (keys: Keys | null) => {
       if (keys) known.set(dataset, keys)
@@ -31,7 +32,7 @@ export function useTones(models: Record<string, Model>, dataset: string | undefi
     return () => {
       live = false
     }
-  }, [dataset, column])
+  }, [dataset, column, toned])
   const keys = !dataset ? undefined : read?.dataset === dataset ? read.keys : known.get(dataset)
   return useMemo(() => {
     if (keys === undefined && dataset && column && tones) return undefined

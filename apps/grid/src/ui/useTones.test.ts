@@ -66,4 +66,10 @@ describe("a dataset's tones", () => {
     expect(renderHook(() => useTones({ team: team('colour') }, undefined)).result.current).toBeNull()
     expect(api.records).not.toHaveBeenCalled()
   })
+
+  it('is null and reads nothing for a caller not served the tone column', () => {
+    const unserved = { ...team('colour'), fields: {} } as unknown as Model
+    expect(renderHook(() => useTones({ team: unserved }, 'team')).result.current).toBeNull()
+    expect(api.records).not.toHaveBeenCalled()
+  })
 })
