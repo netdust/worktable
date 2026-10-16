@@ -1,6 +1,7 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
 import { card, glide, lane, lift, listening, orders, said } from './board'
+import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -1345,4 +1346,33 @@ test.describe('step 3f: the timeline marks bars of a lane that overlap', () => {
       for (const id of stops) await api.delete(`/api/rows/speelreeks/${id}`)
     }
   })
+})
+
+// Found in the 3f shake-out: the board scrolls under its padding, so a card showed in the strip above a stuck head.
+test.describe('the board: a stuck column head covers the cards scrolled under it', () => {
+  for (const theme of ['Licht', 'Donker'] as const) {
+    test(`board-heads-cover-scrolled-cards in ${theme} @e2e`, async ({ page }) => {
+      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', '2026-10-12')
+      await openLooks(page)
+      await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: theme }).click()
+      await expect(page.locator('#root')).toHaveAttribute('data-theme', theme === 'Donker' ? 'dark' : 'light')
+      const column = lane(page, 'Bevestigd')
+      await expect(column.locator('.nv-board__card').nth(8)).toBeVisible()
+      const board = page.locator('.nv-board')
+      await board.evaluate((el) => el.scrollTo({ top: 600 }))
+      await expect.poll(() => board.evaluate((el) => el.scrollTop)).toBeGreaterThan(300)
+      const seen = await column.evaluate((col) => {
+        const box = (col.closest('.nv-board') as HTMLElement).getBoundingClientRect()
+        const head = (col.querySelector('.nv-board__head') as HTMLElement).getBoundingClientRect()
+        const x = head.left + head.width / 2
+        // Every pixel row from the board's top to the head's bottom shows the head, never a card.
+        const rows = Array.from({ length: Math.ceil(head.bottom - box.top) - 1 }, (_, i) => box.top + 1 + i)
+        const under = rows.filter((y) => document.elementFromPoint(x, y)?.closest('.nv-board__card'))
+        return { boardTop: box.top, headTop: head.top, under: under.length }
+      })
+      expect(seen.under).toBe(0)
+      expect(seen.headTop).toBeLessThanOrEqual(seen.boardTop + 1)
+      await shot(page, `board-heads-cover-scrolled-cards-${theme === 'Licht' ? 'light' : 'dark'}`)
+    })
+  }
 })
