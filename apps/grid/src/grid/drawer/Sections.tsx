@@ -9,6 +9,7 @@ import type { Column } from '../columns'
 import { actorOf, dayLabel, type Inbound } from './derive'
 import { Note } from './Note'
 import { type Choosing, PlaceRow } from './PlaceRow'
+import './long.css'
 
 /** A section under the fields: an 11px heading with its count and, at the right, its action. */
 export function Section({ ref, title, count, action, children }: { ref?: Ref<HTMLElement>; title: string; count?: string; action?: ReactNode; children: ReactNode }) {

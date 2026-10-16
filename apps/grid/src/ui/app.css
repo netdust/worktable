@@ -3224,38 +3224,6 @@
   cursor: text;
 }
 
-/* A long text's block, as the prototype's note. */
-#root .nv-dw-long {
-  box-sizing: border-box;
-  display: block;
-  width: 100%;
-  min-height: calc(1.5em + 16px);
-  margin: 0;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
-  color: var(--color-fg-muted);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-#root button.nv-dw-long {
-  cursor: text;
-}
-
-/* Pressed, the block's field takes its place with its text where it stood. */
-#root .nv-dw-long__area {
-  padding: 7px 9px;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.5;
-}
-
 .nv-dw-dot {
   width: 8px;
   height: 8px;

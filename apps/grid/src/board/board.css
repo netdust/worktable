@@ -224,7 +224,7 @@
 
 body.nv-dragging,
 body.nv-dragging * {
-  cursor: grabbing !important;
+  cursor: grabbing;
 }
 
 /* The card's top line: its kind, and a flag at the right, as the prototype's .card-top. */
