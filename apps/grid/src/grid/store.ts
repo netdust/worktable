@@ -373,6 +373,9 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       if (!batch) history.drop(entry)
     },
     async applyStep(changes) {
+      // The last write waits in its record's queue for the others: a second change to its record would wait on it forever.
+      const twice = changes.find((change, at) => changes.findIndex((other) => other.id === change.id) !== at)
+      if (twice) throw new Error(`A step names record ${twice.id} twice`)
       // The listeners hear of a step twice: its paint, and once every write answered or the refusal snapped the card back.
       const painted = together(() => {
         const last = changes.at(-1)

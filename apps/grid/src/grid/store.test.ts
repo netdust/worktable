@@ -747,6 +747,16 @@ describe('a second field in one write, and a step of several writes', () => {
     expect(store.getState().canUndo).toBe(false)
   })
 
+  it('refuses a step whose changes name one record twice, before it paints or sends anything', async () => {
+    const { api, store, positions } = stepping()
+
+    await expect(store.applyStep([three[0], { ...three[1], id: 101 }])).rejects.toThrow('A step names record 101 twice')
+
+    expect(api.update).not.toHaveBeenCalled()
+    expect(positions()).toEqual([null, null, null])
+    expect(store.getState().canUndo).toBe(false)
+  })
+
   it('a refusal of the first write, as every rank write of an owner is, reverts all three and sends no third', async () => {
     const { api, store, positions, sent } = stepping()
     api.update.mockRejectedValue({ code: 'forbidden', message: 'Nee.' })
