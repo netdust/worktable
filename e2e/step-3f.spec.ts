@@ -257,6 +257,7 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
 
       await reopen(page, 'e2e Bord volgorde', one)
       await expect.poll(() => orders(page)).toEqual(twice)
+      await shot(page, 'board-reorder')
     } finally {
       if (view) await api.delete(`/api/views/${view}`)
       await made.remove()
@@ -290,6 +291,7 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
 
       await reopen(page, 'e2e Bord vers', one)
       await expect.poll(() => orders(page)).toEqual(placed)
+      await shot(page, 'board-reorder-fresh')
     } finally {
       if (view) await api.delete(`/api/views/${view}`)
       await made.remove()
@@ -498,6 +500,7 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
           // One ⌘Z: the column, the place and every rank the step wrote.
           await page.keyboard.press('ControlOrMeta+z')
           await expect.poll(() => orders(page)).toEqual(first)
+          if (focus === 'drawer') await shot(page, 'board-undo-both')
           await expect.poll(written).toEqual([
             ['optie', false],
             ['optie', false],
