@@ -278,6 +278,29 @@ A manual board orders each column's cards with `byRank`, so the painted ranks sh
 
 Landed before the plan's tasks as 043a5bc (ruled by the orchestrator, 2026-10-15): four flows no longer lean on the seed's fixed dates or the day of the month.
 
+### Task 12: "Iemand anders kiezen" in the record drawer (G4, Stefan 2026-10-16)
+
+Stefan: "iemand anders kiezen is a good feature to have" (2026-10-16, relayed by the orchestrator); SPEC 9080f1f. The design is the second plan review's B3 smallest change and S7 (plan-review.md, second review, B3 and S7). The board mockup marks the flagged person's row in Mensen (`board-prototype.html:695-696`) and gives the band's button no handler, so the picker opens in place on that marked row.
+
+**Files:**
+- Create: `apps/grid/src/grid/drawer/PlaceRow.tsx` (one row of a link section: face, title, role, state, the flag mark, and, while choosing, a `RelationPicker` in its place; keeps LinkSection under a screen)
+- Modify: `apps/grid/src/grid/drawer/Sections.tsx` (LinkSection renders PlaceRow; holds which row is choosing; keeps the place rows it already reads for the roles), `grid/Drawer.tsx` (the band's "Iemand anders kiezen" for a flag that marks a row of a link section whose target column declares `options_from`, when the caller can write that dataset; it asks LinkSection to choose for that row), `grid/drawer/Alert.tsx` if the band needs a second action slot, `i18n.ts` if a word is missing
+- Test: `grid/Drawer.test.tsx`, `grid/drawer/Sections.test.tsx`; `e2e/step-3f.spec.ts` › `conflict-choose-other`
+
+**Interfaces:**
+- Consumes: `RelationPicker` (`grid/cells/RelationPicker.tsx`, its `candidates` prop), `optionsFrom(from, record)` (`api.ts:230`), the drawer's flags (Task 9), the store's write path the drawer already uses for a field edit, `history` (one entry, `refresh` re-reads the section), the flag re-read on a version change (b01afc4).
+- Generic: the link's own dataset and target column (`link.dataset`, `link.target`), never a domain word; the button is absent when the flag marks no row of a link section, when that target column has no `options_from`, or when the caller cannot write the link's dataset.
+
+- [ ] **Step 1: Failing tests:**
+  - `Drawer.test.tsx`: a flag marking a row of the Mensen link (target column with `options_from`) shows "Iemand anders kiezen" and "Negeren"; a flag marking only the record shows "Negeren" alone; a read-only link dataset shows "Negeren" alone; pressing it opens the picker on the marked row, listing `optionsFrom`'s candidates; a pick PATCHes that row's target column once with the picked id; one ⌘Z restores the first person.
+  - `e2e/step-3f.spec.ts` › `conflict-choose-other`: one invented person confirmed on two timed, overlapping activities of two different productions in the flow's own far-future week (codes 1 and 7, ernst `conflict`); from one activity's drawer, "Iemand anders kiezen", pick another invented person; the band goes; after a reload the place holds the new person and no band; ⌘Z (before the reload, on the page) restores the first person and the band returns. Everything deleted in `finally`.
+- [ ] **Step 2: Run** `bun run --filter @worktable/grid test Drawer Sections` and the e2e — FAIL.
+- [ ] **Step 3: Implement.** The choosing state lives in LinkSection (or PlaceRow), nothing in Workspace; LinkSection stays under a screen.
+- [ ] **Step 4: Run** the grid suite once, typecheck, `bun run check`, the e2e and `bunx playwright test e2e/step-3f.spec.ts e2e/step-3e.spec.ts -g "conflict|drawer-anatomy|matrix-cell-drawer" --reporter=line` — PASS.
+- [ ] **Step 5: Commit** `feat(grid): "Iemand anders kiezen" in the record drawer picks another person for the flagged place, in place, one ⌘Z`; a CHECKS.md row for the flow.
+
+Out: "Open plek invullen" and "+ Toewijzen" (the rest of an editable Mensen section) stay deferred.
+
 ### Carried to later features
 
 - Workspace re-renders on every grid-store notification (≈26 ms per render in dev, 66 renders on a 30-card drop before coalescing): UI-architecture feature.
