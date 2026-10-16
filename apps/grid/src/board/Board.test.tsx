@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SchemaContext } from '../grid/drawer/context'
 import { placeWriter } from '../grid/drawer/place'
@@ -8,7 +8,7 @@ import { createStore, type Store } from '../grid/store'
 import type { Model, Row, Schema, View } from '../types'
 import { createHistory } from '../ui/history'
 import { Board } from './Board'
-import type { Drop } from './drop'
+import { type Drop, writeDrop } from './drop'
 
 const remote = vi.hoisted(() => ({ rows: vi.fn(), optionsFrom: vi.fn(), update: vi.fn(), rowOf: vi.fn(),
   rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), recordHistory: vi.fn(() => Promise.resolve([])) }))
@@ -143,6 +143,43 @@ describe('a keyboard drag on a sorted board', () => {
     expect(onDrop).not.toHaveBeenCalled()
     expect(onLayout).not.toHaveBeenCalled()
     expect(order('Optie')).toEqual(['Repetitie', 'Opbouw', 'Afbraak'])
+  })
+})
+
+describe('a drop that switches a sorted board holding stale ranks', () => {
+  // Shown by date, their ranks left by another manual view: Optie's run against the order, Bevestigd's last after an unranked card.
+  const rows = [row(1, 'Repetitie', 'optie', 'C'), row(2, 'Opbouw', 'optie', 'a'), row(3, 'Afbraak', 'optie', 'I'), row(4, 'Pauze', 'optie', '6'),
+    row(5, 'Voorstelling', 'bevestigd', 'V'), row(6, 'Première', 'bevestigd'), row(7, 'Nabespreking', 'bevestigd', 't')]
+
+  /** The board as the app holds it: the store's rows, its drops written through the store, the switch kept as the layout. */
+  function Switching({ store }: { store: Store }) {
+    const state = useSyncExternalStore(store.subscribe, store.getState)
+    const [layout, setLayout] = useState(sorted)
+    return <Board view={view} model={model} models={{}} rows={state.rows} column="status" layout={layout} onLayout={setLayout} onDrop={(drop, id) => writeDrop(store, 'status', drop, id)} />
+  }
+
+  it('clears them in the drop\'s own step, so only the dropped card moves, and one undo puts them back', async () => {
+    const served = new Map(rows.map((one) => [one.id, one]))
+    const api = {
+      update: vi.fn(async (_model: string, id: number, data: Record<string, unknown>, one: Row) => ({ row: { ...one, fields: { ...one.fields, ...data } }, batch: `b${id}` })),
+      create: vi.fn(),
+      read: vi.fn(async (_model: string, id: number) => served.get(id) ?? null),
+      undo: vi.fn(async (batch: string) => `u-${batch}`),
+    }
+    const store = createStore({ model: 'activiteit', rows, api })
+    render(<Switching store={store} />)
+
+    await press('Pauze', 'Space', 'ArrowUp', 'ArrowUp', 'ArrowUp', 'Space')
+
+    await waitFor(() => expect(api.update).toHaveBeenCalledTimes(3))
+    expect(api.update.mock.calls.map(([, id, data]) => [id, data])).toEqual([[3, { position: null }], [7, { position: null }], [4, { position: expect.any(String) }]])
+    await waitFor(() => expect(order('Optie')).toEqual(['Pauze', 'Repetitie', 'Opbouw', 'Afbraak']))
+    expect(order('Bevestigd')).toEqual(['Voorstelling', 'Première', 'Nabespreking'])
+
+    await act(() => store.undo())
+
+    expect(api.undo.mock.calls).toEqual([['b4'], ['b7'], ['b3']])
+    expect([3, 4, 7].map((id) => store.getState().rows.find((one) => one.id === id)?.fields.position)).toEqual(['I', '6', 't'])
   })
 })
 

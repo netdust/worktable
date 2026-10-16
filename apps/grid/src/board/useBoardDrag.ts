@@ -83,8 +83,8 @@ function measure(root: HTMLElement | null): Lists {
   return lists
 }
 
-/** A column ordered by its ranks with a drop's ranks written over them. */
-function ranked(cards: Row[], ranks: Map<number, string>): Row[] {
+/** A column ordered by its ranks with a drop's ranks and clears written over them. */
+function ranked(cards: Row[], ranks: Map<number, string | null>): Row[] {
   const at = (row: Row) => (ranks.has(row.id) ? { ...row, fields: { ...row.fields, position: ranks.get(row.id) } } : row)
   return cards.map((row) => ({ row, at: at(row) })).sort((a, b) => byRank(a.at, b.at)).map(({ row }) => row)
 }
@@ -108,7 +108,7 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
   const [lifted, setLifted] = useState<Lifted | null>(null)
   const [target, setTarget] = useState<Target | null>(null)
   // A sorted board's dropped column, in the drop's ranks until its writes answer.
-  const [pending, setPending] = useState<{ lane: string; ranks: Map<number, string> } | null>(null)
+  const [pending, setPending] = useState<{ lane: string; ranks: Map<number, string | null> } | null>(null)
   const shown = useMemo(
     () => (pending ? lanes.map((lane) => (lane.key === pending.lane ? { ...lane, cards: ranked(lane.cards, pending.ranks) } : lane)) : lanes),
     [lanes, pending],
@@ -232,10 +232,11 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     const lane = laneOf(at.lane)
     if (!lane || !onDrop) return
     const cards = lane.cards.filter((row) => row.id !== from.id)
-    const drop = dropOf({ manual, from: at.lane === from.lane ? from.index : null, index: at.index, cards, value: lane.value })
+    const others = latest.current.shown.filter((one) => one.key !== at.lane).map((one) => one.cards)
+    const drop = dropOf({ manual, from: at.lane === from.lane ? from.index : null, index: at.index, cards, value: lane.value, others })
     if (drop.kind === 'none') return
     const switching = drop.kind === 'place' && !drop.manual
-    if (switching) setPending({ lane: at.lane, ranks: new Map([...drop.ranks.map((r) => [r.id, r.position] as const), [from.id, drop.position]]) })
+    if (switching) setPending({ lane: at.lane, ranks: new Map([...drop.clears.map((id) => [id, null] as const), ...drop.ranks.map((r) => [r.id, r.position] as const), [from.id, drop.position]]) })
     const landed = await onDrop(drop, from.id).catch(() => false)
     if (!switching) return
     // The writes first, the switch after: a refused drop leaves the board sorted as it was.
