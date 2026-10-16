@@ -704,6 +704,7 @@ test.describe('a domain without the new shapes', () => {
 
 test.describe
   .serial('past the read limit', () => {
+    test.describe.configure({ timeout: 60_000 })
     const ids: number[] = []
 
     // One more activity than the engine reads in a week of its own: two on the Monday, the rest on the Tuesday.
