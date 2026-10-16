@@ -19,7 +19,7 @@ Stefan, after using the 3e preview: "the drag&drop is not working smoothly... i 
 | B9 | A board over a query does not drag, as today (`App.tsx:624` passes no `onMove` for a query): no lift, no line, no write. | ruling 4, 2026-10-15 (no line on a query board) |
 | B10 | Drag state lives in `board/` (its own hook and module), never in `Workspace`. The board's CSS sits with the board, and the react-aria drag rules it replaces are deleted in the same change. | memory ui-code-has-a-place; worktable-33 2026-10-15 |
 
-Out: the rail's view reordering, and dragging on the timeline and the calendar. Deferred: the rest of an editable Mensen section in the record drawer ("Open plek invullen", "+ Toewijzen").
+Out: the rail's view reordering, and dragging on the timeline and the calendar. Deferred: the rest of an editable Mensen section in the record drawer ("Open plek invullen", "+ Toewijzen"); the dashboard drawer (no store) and the matrix row drawer (move repaints rollups only) offer "Negeren" only.
 
 ## E. The engine's five shapes
 
