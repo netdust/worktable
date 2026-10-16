@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
-import { card, glide, lane, lift, orders, said } from './board'
+import { card, glide, lane, lift, listening, orders, said } from './board'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -533,6 +533,7 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       const press = async (key: string, words: RegExp) => {
         await page.keyboard.press(key)
         await expect(said(page)).toHaveText(words)
+        if (key === 'Space' && /opgepakt/.test(words.source)) await listening(page)
       }
 
       // Space lifts; ↓ ↑ within a column, ← → to the neighbour at the same place; Space drops.
@@ -635,6 +636,7 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await card(page, id).focus()
       await page.keyboard.press('Space')
       await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
       await page.keyboard.press('ArrowRight')
       await expect(said(page)).toHaveText(/^e2e bevestigd blijft boven Geweigerd, plaats \d+ van \d+\.$/)
       await page.keyboard.press('Space')
@@ -668,6 +670,7 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
         const press = async (key: string, words: RegExp) => {
           await page.keyboard.press(key)
           await expect(said(page)).toHaveText(words)
+          if (key === 'Space' && /opgepakt/.test(words.source)) await listening(page)
         }
 
         // The edit before: Voorlopig to the top of Bevestigd.
@@ -1006,6 +1009,7 @@ test.describe('step 3f: conflicten flags what it names', () => {
       await card(page, one).focus()
       await page.keyboard.press('Space')
       await expect(said(page)).toHaveText(/^e2e dubbel een opgepakt in Bevestigd/)
+      await listening(page)
       await page.keyboard.press('ArrowRight')
       await expect(said(page)).toHaveText(/^e2e dubbel een boven Geannuleerd/)
       await page.keyboard.press('Space')

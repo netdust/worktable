@@ -54,3 +54,7 @@ export async function glide(page: Page, from: Pointer, to: Pointer): Promise<Poi
   await page.mouse.move(to.x, to.y, { steps })
   return to
 }
+
+/** After a keyboard lift: dnd-kit's KeyboardSensor listens for keys a tick after activation, so the next key waits for it. */
+export const listening = (page: Page): Promise<void> =>
+  page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => setTimeout(done, 0))))

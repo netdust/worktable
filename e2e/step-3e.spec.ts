@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { cardIn, glide, lane, lift } from './board'
+import { cardIn, glide, lane, lift, listening } from './board'
 import { openEditor } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
@@ -194,6 +194,7 @@ test.describe('step 3e: the board drags', () => {
       await card(page, 'Optie', title).focus()
       await page.keyboard.press('Space')
       await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
       await page.keyboard.press('ArrowRight')
       await page.keyboard.press('Space')
       await expect(card(page, 'Bevestigd', title)).toBeVisible()
@@ -204,6 +205,7 @@ test.describe('step 3e: the board drags', () => {
       await card(page, 'Bevestigd', title).focus()
       await page.keyboard.press('Space')
       await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
       await page.keyboard.press('ArrowLeft')
       await page.keyboard.press('Space')
       await expect(card(page, 'Optie', title)).toBeVisible()
@@ -677,6 +679,7 @@ test.describe('step 3e: the title line and the rail', () => {
       await cardIn(page, 'Optie', 'e2e inzicht een').focus()
       await page.keyboard.press('Space')
       await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
+      await listening(page)
       await page.keyboard.press('ArrowRight')
       await page.keyboard.press('Space')
       await expect(cardIn(page, 'Bevestigd', 'e2e inzicht een')).toBeVisible()
