@@ -303,6 +303,19 @@ describe('a flag in the drawer', () => {
     expect(band()).not.toBeNull()
   })
 
+  it("moves the focus to the drawer's close button once Negeren took the band away, so Escape still closes the drawer", () => {
+    const onClose = vi.fn()
+    render(<Drawer row={staffed(1, 'Lunch bistrot')} columns={every} model={model} flags={flags} onClose={onClose} />)
+    const negeren = screen.getByRole('button', { name: 'Negeren' })
+    negeren.focus()
+    fireEvent.click(negeren)
+
+    const sluiten = screen.getByRole('button', { name: 'Sluiten' })
+    expect(document.activeElement).toBe(sluiten)
+    fireEvent.keyDown(sluiten, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps hiding the flag Negeren hid after a re-read that lists the flags in another order', () => {
     const two = [flag('Sien staat dubbel ingepland.', { activity: 1, assignment: 11 }), flag('Lieve is afwezig.', { activity: 1, assignment: 12 })]
     const read = (list: Flag[]): Flags => ({ ...flags, marksOf: (dataset, id) => list.filter((f) => f.marks[dataset] === id) })
