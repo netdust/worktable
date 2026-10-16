@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { targetOf } from './target'
+import { targetOf, within } from './target'
 
 const four = [0, 108, 216, 324].map((top, i) => ({ id: i + 1, top, height: 100 }))
 
@@ -22,5 +22,21 @@ describe('targetOf', () => {
   it('skips the dragged card', () => {
     expect(targetOf(four, 170, 2)).toBe(1)
     expect(targetOf(four, 500, 2)).toBe(3)
+  })
+})
+
+describe('within', () => {
+  const box = { left: 100, top: 50, right: 900, bottom: 600 }
+
+  it("takes a pointer inside the board's box, its gutters too, and a keyboard drop without one", () => {
+    expect(within(box, { x: 412, y: 300 })).toBe(true)
+    expect(within(box, { x: 100, y: 600 })).toBe(true)
+    expect(within(box, null)).toBe(true)
+  })
+
+  it("refuses a pointer let go outside the board's box", () => {
+    expect(within(box, { x: 500, y: 26 })).toBe(false)
+    expect(within(box, { x: 40, y: 300 })).toBe(false)
+    expect(within(box, { x: 901, y: 300 })).toBe(false)
   })
 })

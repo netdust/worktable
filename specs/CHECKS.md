@@ -230,7 +230,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dashboard · titelpil, bijgewerkt | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "dashboard-title-pill @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Rail · aantallen | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "rail-counts @e2e"` | e2e/step-3e.spec.ts | step-3e | ea74984 2026-10-14 |
 | Titelregel · inzicht Optie | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "title-line-insight @e2e"` | e2e/step-3e.spec.ts | step-3e | ffb52ec 2026-10-15 |
-| Bord · drop tussen kaart 2 en 3, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drop-between @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
+| Bord · drop tussen kaart 2 en 3, na herladen; buiten het bord losgelaten: geannuleerd, niets geschreven | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-drop-between @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · volgorde in een kolom, na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-reorder @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · ongerangschikte kolom, kaart 1 naar plaats 3 | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-reorder-fresh @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |
 | Bord · gesorteerd naar handmatig, gewijzigd, terugzetten | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "board-sorted-to-manual @e2e"` | e2e/step-3f.spec.ts | step-3f | ffb52ec 2026-10-15 |

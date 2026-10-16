@@ -15,3 +15,9 @@ export function targetOf(cards: Measured[], y: number, dragged: number): number 
   }
   return index
 }
+
+/** Whether a pointer let go inside the board's box; a keyboard drop has no pointer and always is. */
+export function within(box: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'> | undefined, pointer: { x: number; y: number } | null): boolean {
+  if (!pointer || !box) return true
+  return pointer.x >= box.left && pointer.x <= box.right && pointer.y >= box.top && pointer.y <= box.bottom
+}

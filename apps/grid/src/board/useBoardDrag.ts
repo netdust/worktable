@@ -21,7 +21,7 @@ import type { Row } from '../types'
 import type { ColumnLook } from './Column'
 import { type Drop, dropOf } from './drop'
 import { byRank } from './rank'
-import { type Measured, targetOf } from './target'
+import { type Measured, targetOf, within } from './target'
 
 export interface BoardLane {
   key: string
@@ -120,6 +120,7 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
   const live = useRef<Target | null>(null)
   const heard = useRef<Target | null>(null)
   const last = useRef<Collision[]>([])
+  const pointer = useRef<{ x: number; y: number } | null>(null)
   const measured = useRef(measure(null))
 
   useEffect(() => {
@@ -144,6 +145,7 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
       const over = laneOf(now.lane)?.cards[now.index]
       return over ? [{ id: over.id }] : []
     }
+    pointer.current = args.pointerCoordinates
     const hit = pointerWithin({ ...args, droppableContainers: args.droppableContainers.filter((c) => isLane(c.id)) })[0]
     if (!hit) return last.current
     const key = String(hit.id).slice(LANE.length)
@@ -192,12 +194,14 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     return t(key, { title: title || t('openPlace'), label: lane.label, place: at.index + 1, count })
   }
   const moved = () => (live.current === heard.current ? undefined : words('dragOver', live.current))
+  const cancelled = () => (drag.current ? words('dragCancelled', { lane: drag.current.lane, index: drag.current.index }) : undefined)
+  const inside = () => within(root.current?.getBoundingClientRect(), pointer.current)
   const announcements: Announcements = {
     onDragStart: () => words('dragLifted', live.current),
     onDragMove: moved,
     onDragOver: moved,
-    onDragEnd: () => words('dragDropped', live.current),
-    onDragCancel: () => (drag.current ? words('dragCancelled', { lane: drag.current.lane, index: drag.current.index }) : undefined),
+    onDragEnd: () => (inside() ? words('dragDropped', live.current) : cancelled()),
+    onDragCancel: cancelled,
   }
 
   const start = ({ active }: DragStartEvent) => {
@@ -209,16 +213,18 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     drag.current = { id, lane, index, height: own?.cards.find((card) => card.id === id)?.height ?? 0, inset: own?.left.get(id) ?? 0 }
     live.current = { lane, index }
     last.current = []
+    pointer.current = null
     setLifted(drag.current)
     setTarget(live.current)
   }
 
+  // Let go outside the board, the drag is cancelled; between its columns it lands at the last target.
   const end = () => {
     const from = drag.current
     const at = live.current
     setLifted(null)
     setTarget(null)
-    if (from && at) void land(from, at)
+    if (from && at && inside()) void land(from, at)
   }
 
   const land = async (from: Lifted, at: Target) => {

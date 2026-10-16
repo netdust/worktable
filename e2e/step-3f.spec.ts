@@ -198,6 +198,24 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
 
       await reopen(page, 'e2e Bord tussen', held)
       await expect.poll(() => orders(page)).toEqual(landed)
+
+      // Let go outside the board: the drag is cancelled, wherever it was aimed, and nothing is written.
+      const patches: string[] = []
+      page.on('request', (request) => {
+        if (request.method() === 'PATCH') patches.push(request.url())
+      })
+      await holdAcross(page, held, 'Optie', 0)
+      await expect.poll(() => slotIn(page, 'Optie')).toBe(0)
+      const board = await page.locator('.nv-board').boundingBox()
+      const list = await lane(page, 'Optie').locator('.nv-board__list').boundingBox()
+      if (!board || !list) throw new Error('no board on the page')
+      await glide(page, { x: list.x + list.width / 2, y: list.y + 12 }, { x: list.x + list.width / 2, y: board.y - 24 })
+      await page.mouse.up()
+      await expect(said(page)).toHaveText(/^Slepen geannuleerd: e2e tussen sleep blijft in Bevestigd\.$/)
+      await expect(page.locator('.nv-board__card--lifted')).toHaveCount(0)
+      await expect.poll(() => orders(page)).toEqual(landed)
+      expect((await stored(api, held)).status).toBe('bevestigd')
+      expect(patches).toEqual([])
     } finally {
       if (view) await api.delete(`/api/views/${view}`)
       await made.remove()
