@@ -489,7 +489,9 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
           else {
             await card(page, held).click()
             const drawer = page.getByRole('complementary', { name: 'e2e ongedaan sleep' })
-            await drawer.getByRole('button', { name: 'Sluiten' }).focus()
+            const sluiten = drawer.getByRole('button', { name: 'Sluiten' })
+            await sluiten.focus()
+            await expect(sluiten).toBeFocused()
           }
           // One ⌘Z: the column, the place and every rank the step wrote.
           await page.keyboard.press('ControlOrMeta+z')
