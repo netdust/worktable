@@ -170,6 +170,12 @@ describe('an activity without a time', () => {
   test('clearing only start_at on a row with an end is refused, saying to clear Einde first', () =>
     refused(() => patch(9, { start_at: null }), CLEAR_END_FIRST))
 
+  test('clearing only eind_at on a timed row is accepted and leaves start_at and plandag', async () => {
+    const res = await patch(9, { eind_at: null })
+    expect(res.status).toBe(200)
+    expect(stored(9)).toMatchObject({ start_at: '2026-10-14T00:30', plandag: '2026-10-13', eind_at: null })
+  })
+
   test('editing datum alone on a timed row is refused, saying to change Start', () =>
     refused(() => patch(1, { datum: '2026-10-13' }), FOLLOWS_START))
 
