@@ -46,7 +46,7 @@
 | Buttons, MoreMenu, Confirm, SidePanel, Drawer | component render | unit · `Grid.test.tsx` ("the drawer", DeleteRow's Zeker?), `Drawer.test.tsx`, new `ui/MoreMenu.test.tsx` (Escape closes and returns focus) · `cd apps/grid && bunx vitest run` | the-open-models-menu-exports, rename-and-icon-a-model |
 | Column picker, Search, RailFoot/Theme, Toast, Spinner, EmptyState | component render | unit · existing `Toolbar`, `Search`, `Toast`, `App` tests · same | dark-and-density |
 | Dialogs: NewViewDialog, Share, sign-in overlay | component render | unit · existing `NewViewDialog`, `Share`, `SignIn` tests · same | create-team-and-personal-view, publish-from-share-menu |
-| Pickers: SpaceSelect, Pick, FilterBuilder (with the date range) | component render | unit · existing `FilterBuilder`, `App` tests · same | filter-builder, period-is-a-filter |
+| Pickers: SpaceSelect, Pick, FilterBuilder (with the date range) | component render | unit · existing `FilterBuilder`, `App` tests · same | filter-builder, period-is-the-period |
 | ViewList on `GridList` with drag order | component render | unit · `ViewList.test.tsx`, its reorder tests rewritten · same | query-views-under-model, tree-scrolls-in-rail; reorder-views (new, `/shakeout`) |
 | Sakani removal | the build | `bun run gate` | the whole e2e suite |
 

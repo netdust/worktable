@@ -59,7 +59,7 @@
 | --- | --- | --- | --- |
 | Title line, bar, scrollbars | render | unit · `apps/grid/src/ui/Toolbar.test.tsx`, `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | autosave-own-view |
 | Filter operators | `GET /api/rows/:source?filter=`, `POST /api/views` | integration · `packages/engine/test/filter.test.ts`, `rows.test.ts` · `bun test packages/engine` | none, proven by filter-builder |
-| Filter builder | render, `rowsQuery`, `toStoredView` | unit · `apps/grid/src/ui/FilterBuilder.test.tsx` (new), `engine.test.ts`, `grid/conditions.test.ts` · `cd apps/grid && bunx vitest run` | filter-builder, period-is-a-filter, filter-link, filter-or |
+| Filter builder | render, `rowsQuery`, `toStoredView` | unit · `apps/grid/src/ui/FilterBuilder.test.tsx` (new), `engine.test.ts`, `grid/conditions.test.ts` · `cd apps/grid && bunx vitest run` | filter-builder, period-is-the-period, filter-link, filter-or |
 | History route | `GET /api/history/:source` | integration · `packages/engine/test/history.test.ts` (new), `route-matrix.test.ts` · `bun test packages/engine` | none |
 | History panel | render | unit · `apps/grid/src/ui/HistoryPanel.test.tsx` (new) · `cd apps/grid && bunx vitest run` | history-undo-own |
 | Fiche unchanged | the fiche grid | e2e · `e2e/grid-ux.spec.ts` › `fiche-renders-as-before` · `bunx playwright test e2e/grid-ux.spec.ts` | fiche-renders-as-before |
@@ -242,7 +242,7 @@
 - [ ] Step 4: Run them. Expected: PASS.
 - [ ] Step 5: E2E flows:
   - `filter-builder @e2e`: add "Soort is Repetitie of Opbouw" by searching; add "Omschrijving bevat 'zaal'"; the rows narrow; remove one chip; reload keeps the rest.
-  - `period-is-a-filter @e2e`: Dagplanning opens with "Plandag deze week"; × shows every date; "ligt tussen" two dates narrows again.
+  - `period-is-the-period @e2e`: Dagplanning opens with "Plandag deze week"; × shows every date; "ligt tussen" two dates narrows again. Renamed by 442b2da, when the period left the chips.
   - `filter-link @e2e`: on the seeded Dagplanning, copy the address with two conditions; open it in a fresh context; the same chips show and the view is unchanged on the server.
   - In `fiche-renders-as-before`: the builder opens and offers the fiche's text operators (bevat, bevat niet, is, is leeg).
   - Both in `e2e/toolbar.spec.ts`.
