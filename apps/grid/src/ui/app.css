@@ -610,12 +610,6 @@
   font-weight: 600;
 }
 
-/* The radio itself is hidden: the mark goes on its label. */
-#root .nv-theme__option[data-focus-visible] {
-  outline: 1px solid var(--color-fg-default);
-  outline-offset: 2px;
-}
-
 .nv-kbd {
   display: inline-flex;
   align-items: center;
@@ -1371,11 +1365,6 @@
   opacity: 1;
 }
 
-.nv-check[data-focus-visible] .nv-check__box {
-  outline: 1px solid var(--color-fg-default);
-  outline-offset: 2px;
-}
-
 .nv-check[data-disabled] {
   opacity: 0.6;
   cursor: not-allowed;
@@ -1874,11 +1863,6 @@
 
 .nv-switch[data-selected] .nv-switch__track {
   background: var(--color-accent-default);
-}
-
-.nv-switch[data-focus-visible] .nv-switch__track {
-  outline: 1px solid var(--color-fg-default);
-  outline-offset: 2px;
 }
 
 .nv-switch__thumb {

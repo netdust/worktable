@@ -81,6 +81,16 @@ body {
   outline-offset: 2px;
 }
 
+/* A choice whose input is hidden (React Aria) or small (a native radio or checkbox): the mark goes on its whole label. */
+:where(label[data-focus-visible], label:has(> input:is([type="radio"], [type="checkbox"]):focus-visible)) {
+  outline: 1px solid var(--color-fg-default);
+  outline-offset: 2px;
+}
+
+:where(label > input:is([type="radio"], [type="checkbox"])) {
+  outline: none;
+}
+
 /* Colours crossfade on a theme switch; zero specificity, so any rule of its own wins. */
 *,
 *::before,

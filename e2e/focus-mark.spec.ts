@@ -5,14 +5,18 @@ import { modelNode, openView } from './tree'
 
 // The text colour where an element sits; a new element has no transition, so this is the settled value.
 function inkAt(target: Locator): Promise<string> {
-  return target.evaluate((el) => {
-    const probe = document.createElement('span')
-    probe.style.color = 'var(--color-fg-default)'
-    ;(el.parentElement ?? document.body).appendChild(probe)
-    const ink = getComputedStyle(probe).color
-    probe.remove()
-    return ink
-  })
+  return target.evaluate(
+    (el) => {
+      const probe = document.createElement('span')
+      probe.style.color = 'var(--color-fg-default)'
+      ;(el.parentElement ?? document.body).appendChild(probe)
+      const ink = getComputedStyle(probe).color
+      probe.remove()
+      return ink
+    },
+    undefined,
+    { timeout: 10_000 },
+  )
 }
 
 // Retried: colours crossfade, so a value read at once can still be on its way.
@@ -94,6 +98,14 @@ for (const theme of ['Licht', 'Donker'] as const) {
       await field.focus()
       await expectMark(field)
       await shot(page, name('dialog'))
+
+      // A radio in its label: the label carries the mark, the small circle none of its own.
+      await page.keyboard.press('Tab')
+      const radio = dialog.getByRole('radio', { name: 'Het team' })
+      await expect(radio).toBeFocused()
+      await expectMark(dialog.locator('label').filter({ has: page.getByRole('radio', { name: 'Het team' }) }))
+      await expect(radio).toHaveCSS('outline-style', 'none')
+      await shot(page, name('dialog-choice'))
       await page.keyboard.press('Escape')
       await expect(dialog).toHaveCount(0)
     } finally {
