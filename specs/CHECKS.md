@@ -97,9 +97,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Matrix · open plek invullen | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "fill-splits-slot-and-undo @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Matrix · uitnodiging (outbox) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "invite-in-outbox @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | #/act · bevestigen zonder aanmelden | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "confirm-without-login @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| #/act · hergebruikt of verlopen | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "reused-or-expired-refused @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | POST /api/act · token A niet B | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "token-a-not-b @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| #/act · geannuleerde uitnodiging | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "cancelled-invite-offers-no-answer @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | #/act · weigeren → Geweigerd | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "decline-shows-geweigerd @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Matrix · uitnodiging zonder e-mailadres | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "no-email-no-invite @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Toewijzingen · verboden overgang | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "disallowed-transition @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
@@ -108,11 +106,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Matrix · verouderde status (409) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "stale-state-409 @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | PATCH /api/rows/toewijzing · race (409) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "planner-and-person-race-409 @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Exporteren / delen · Voor eigenaars + #/link | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "link-shows-own-projects-only @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| Drawer · Nieuwe link + #/link | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "rotated-link-refused @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| #/link · uitgenodigd of geweigerd | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "declined-or-invited-no-project @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| GET /api/owner/views · sleutels | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "owner-view-key-script @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| POST /api/record-links/request | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "link-request-identical @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| Service account · Bearer | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "agent-token-write-undo-revoke @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | GET /api/record-links/:dataset/:id | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "a record link is copied only with a session, never cached @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Time cell editor (no source serves a time column yet) | auth | — | | react-aria | |
 | Long text cell editor (no source serves a textarea column yet) | auth | — | | react-aria | |

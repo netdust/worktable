@@ -67,6 +67,14 @@ describe('the person page', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('a view with no rows for the person still shows its table, with no row', async () => {
+    answer({ '/api/owner/views': () => json(views), '/api/owner/views/21/rows': () => json({ columns, rows: [], total: 0 }) })
+    render(<App />)
+
+    const table = await screen.findByRole('table', { name: 'Mijn producties' })
+    expect(within(table).getAllByRole('row')).toHaveLength(1)
+  })
+
   it('a 401 reads "Deze link werkt niet meer"', async () => {
     answer({ '/api/owner/views': () => json({ code: 'bad_link', message: 'This link is not valid' }, 401) })
     render(<App />)
