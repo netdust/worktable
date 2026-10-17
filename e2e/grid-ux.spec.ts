@@ -713,6 +713,7 @@ test.describe
     // One more activity than the engine reads in a week of its own: two on the Monday, the rest on the Tuesday.
     // Straight into the database: no writer runs, so plandag is filled as the writer would (it follows datum on a day without a time).
     test.beforeAll(() => {
+      writeDb(`DELETE FROM activiteit WHERE omschrijving LIKE 'Grens e2e %'`)
       seeded = writeDb(
         `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
          INSERT INTO activiteit (productie_id, soort, datum, plandag, omschrijving)
