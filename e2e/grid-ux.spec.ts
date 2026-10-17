@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { writeDb } from './db'
 import { openLooks } from './editor'
 import { shot } from './shots'
 import { modelNode, openModel, openView, openWeek } from './tree'
@@ -707,40 +708,28 @@ test.describe('a domain without the new shapes', () => {
 test.describe
   .serial('past the read limit', () => {
     test.describe.configure({ timeout: 60_000 })
-    const ids: number[] = []
+    let seeded = 0
 
     // One more activity than the engine reads in a week of its own: two on the Monday, the rest on the Tuesday.
-    test.beforeAll(async ({ browser }) => {
-      test.setTimeout(300_000)
-      const context = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('editor') })
-      const api = context.request
-      const productie_id = await idByName(api, 'productie', 'titel', 'Zomerstorm')
-      const tuesday = plusDays(CUT_WEEK, 1)
-      const days = [CUT_WEEK, CUT_WEEK, ...Array.from({ length: MAX_READ - 1 }, () => tuesday)]
-      for (let at = 0; at < days.length; at += 50) {
-        const made = await Promise.all(
-          days
-            .slice(at, at + 50)
-            .map((datum, i) =>
-              idOf(api, 'activiteit', { productie_id, soort: 'repetitie', datum, omschrijving: `Grens e2e ${at + i}` }),
-            ),
-        )
-        ids.push(...made)
-      }
-      await context.close()
+    // Straight into the database: no writer runs, so plandag is filled as the writer would (it follows datum on a day without a time).
+    test.beforeAll(() => {
+      seeded = writeDb(
+        `WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+         INSERT INTO activiteit (productie_id, soort, datum, plandag, omschrijving)
+         SELECT (SELECT id FROM productie WHERE titel = 'Zomerstorm'), 'repetitie', day, day, 'Grens e2e ' || i
+         FROM (SELECT i, CASE WHEN i < 2 THEN ? ELSE ? END AS day FROM n)`,
+        MAX_READ,
+        CUT_WEEK,
+        plusDays(CUT_WEEK, 1),
+      )
     })
 
-    test.afterAll(async ({ browser }) => {
-      test.setTimeout(300_000)
-      const context = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('editor') })
-      for (let at = 0; at < ids.length; at += 50) {
-        await Promise.all(ids.slice(at, at + 50).map((id) => context.request.delete(`/api/rows/activiteit/${id}`)))
-      }
-      await context.close()
+    test.afterAll(() => {
+      writeDb(`DELETE FROM activiteit WHERE omschrijving LIKE 'Grens e2e %'`)
     })
 
     test('read-limit-cut @e2e', async ({ page }) => {
-      expect(ids).toHaveLength(MAX_READ + 1)
+      expect(seeded).toBe(MAX_READ + 1)
       await openWeek(page, 'Planning', 'Activiteiten', 'plandag', CUT_WEEK)
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
