@@ -1,6 +1,5 @@
 import { inScope, scopeOf, visibleSource } from './access'
 import {
-  type ActionCreate,
   type ActionDecl,
   type ActionInput,
   type ActionUpdate,
@@ -14,6 +13,7 @@ import { ApiError, isRealDate } from './params'
 import {
   applyWrite,
   contextOf,
+  createAs,
   expectedOf,
   type Hooked,
   noneHooked,
@@ -25,7 +25,6 @@ import {
 
 type Values = Record<string, unknown>
 type Step = { key: string; hooked: Hooked }
-const WRITE: TransitionMode = { kind: 'write' }
 
 export interface ActionRun {
   batch_id: string
@@ -85,16 +84,6 @@ function readRecord(store: Store, dataset: string, id: number, actor: Actor): Va
     throw new ApiError(404, 'unknown_record', `unknown record ${id}`)
   }
   return record
-}
-
-type Done = { dataset: string; id: number }
-
-// Every write joins the action's batch; a create then makes its children under the id it got.
-function createAs(store: Store, actor: Actor, step: ActionCreate, at: Step): Done[] {
-  const target = writableOf(store.domain, step.dataset, 'create', actor)
-  const { id } = applyWrite(store, target, 'create', null, step.values, actor, WRITE, at.hooked, at.key)
-  const children = (step.children?.(id) ?? []).flatMap((child) => createAs(store, actor, child, at))
-  return [{ dataset: step.dataset, id }, ...children]
 }
 
 function updateAs(store: Store, actor: Actor, step: ActionUpdate, at: Step): void {

@@ -35,6 +35,7 @@ export type {
   Tone,
   WriteContext,
   Writer,
+  WriterUpdate,
 } from './declare'
 export { defineDataset, defineQuery, ICONS, TONES } from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'

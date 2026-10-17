@@ -8,6 +8,7 @@ import { mintActionToken, ownerSubject, revokeMintedBy } from './action-token'
 import { undoAttachments } from './attachments'
 import { POSITION } from './ddl'
 import type {
+  ActionCreate,
   Actor,
   ColumnDecl,
   DatasetDecl,
@@ -16,6 +17,7 @@ import type {
   TransitionMode,
   WriteContext,
   Writer,
+  WriterUpdate,
 } from './declare'
 import type { BatchKind } from './engine-tables'
 import { lookupSelect, ownBody } from './lookups'
@@ -474,7 +476,21 @@ export interface Written {
   id: number
   batch_id: string | null
   changed: string[]
+  /** The rows the writer's update added to its batch; absent when it added none. */
+  created?: Done[]
   notices: string[]
+}
+
+export type Done = { dataset: string; id: number }
+type Step = { key: string; hooked: Hooked }
+const WRITE: TransitionMode = { kind: 'write' }
+
+/** One create under a batch, through its dataset's writer as the actor; a create then makes its children under the id it got. */
+export function createAs(store: Store, actor: Actor, step: ActionCreate, at: Step): Done[] {
+  const target = writableOf(store.domain, step.dataset, 'create', actor)
+  const { id } = applyWrite(store, target, 'create', null, step.values, actor, WRITE, at.hooked, at.key)
+  const children = (step.children?.(id) ?? []).flatMap((child) => createAs(store, actor, child, at))
+  return [{ dataset: step.dataset, id }, ...children]
 }
 
 export function recordBatch(sqlite: Database, key: string, actorId: number, kind: BatchKind, now: string): void {
@@ -571,6 +587,23 @@ export function valuesOf(
   ctx: WriteContext,
   scope: Scope,
 ): Values {
+  return answeredOf(store, target, op, body, ctx, scope).values
+}
+
+// No dataset column is named creates, so that key alone says an update added rows to its batch.
+function answerOf(answer: Values | WriterUpdate | undefined): { values: Values; creates: ActionCreate[] } {
+  if (answer && Object.hasOwn(answer, 'creates')) return answer as WriterUpdate
+  return { values: (answer as Values | undefined) ?? {}, creates: [] }
+}
+
+function answeredOf(
+  store: Store,
+  target: Writable,
+  op: WriteOp,
+  body: Values,
+  ctx: WriteContext,
+  scope: Scope,
+): { values: Values; creates: ActionCreate[] } {
   const { dataset, writer } = target
   const { rank, rest: given } = rankOf(op, ctx.actor, cutBody(dataset, ownBody(dataset, body)))
   checkOwner(scope, given)
@@ -579,10 +612,12 @@ export function valuesOf(
   const mode = ctx.lifecycle ?? { kind: 'write' }
   checkTransition(dataset, ctx.current, cut, ctx.actor, mode)
   // A rank alone still reaches the writer, with an empty change, so a row it refuses is refused the move (threat 7).
-  const returned = op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx)
-  checkOwner(scope, returned ?? {})
+  const { values: returned, creates } = answerOf(
+    op === 'create' ? writer.create?.(cut, ctx) : writer.update?.(cut, ctx),
+  )
+  checkOwner(scope, returned)
   // Forced again on what is stored: a writer may return a fresh object without the owner column.
-  const written = op === 'create' ? forcedOwner(scope, returned ?? {}) : (returned ?? {})
+  const written = op === 'create' ? forcedOwner(scope, returned) : returned
   const values = { ...written, ...rank }
   checkTransition(dataset, ctx.current, values, ctx.actor, mode)
   checkLinkAddress(dataset, ctx.current, values, ctx.actor)
@@ -590,7 +625,7 @@ export function valuesOf(
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
   if (op === 'create') checkRequired(dataset, values)
-  return values
+  return { values, creates }
 }
 
 // On delete the writer runs before the in-use check, so an actor it refuses never learns the counts.
@@ -602,11 +637,14 @@ function storedOf(
   ctx: WriteContext,
   scope: Scope,
   now: string,
-): Stored {
-  if (op !== 'delete') return encodeAll(target.dataset, valuesOf(store, target, op, body, ctx, scope))
+): { stored: Stored; creates: ActionCreate[] } {
+  if (op !== 'delete') {
+    const { values, creates } = answeredOf(store, target, op, body, ctx, scope)
+    return { stored: encodeAll(target.dataset, values), creates }
+  }
   target.writer.delete?.(ctx)
   inUse(store, target.dataset, ctx.current?.id as number)
-  return { deleted_at: now }
+  return { stored: { deleted_at: now }, creates: [] }
 }
 
 function currentOf(sqlite: Database, target: Writable, id: number | null, scope: Scope): Stored | null {
@@ -633,7 +671,7 @@ export function applyWrite(
   const current = currentOf(sqlite, target, id, scope)
   const ctx = contextOf(store, actor, current && decodeAll(target.dataset, current), mode)
   const now = new Date().toISOString()
-  const stored = storedOf(store, target, op, body, ctx, scope, now)
+  const { stored, creates } = storedOf(store, target, op, body, ctx, scope, now)
   const key = batch ?? crypto.randomUUID()
   if (id === null || current === null) {
     const made = create(sqlite, target.dataset, stored, now, actor.id, key)
@@ -642,13 +680,17 @@ export function applyWrite(
     return { ...made, batch_id: key }
   }
   const changes = diff(stored, current)
-  if (changes.length === 0) return { id, batch_id: null, changed: [] }
-  update(sqlite, target.dataset.name, id, stored, now)
-  revise(sqlite, target.dataset, id, changes, now, actor.id, key)
-  retireOnNewAddress(store, target.dataset, id, changes, actor)
+  if (changes.length === 0 && creates.length === 0) return { id, batch_id: null, changed: [] }
+  if (changes.length > 0) {
+    update(sqlite, target.dataset.name, id, stored, now)
+    revise(sqlite, target.dataset, id, changes, now, actor.id, key)
+    retireOnNewAddress(store, target.dataset, id, changes, actor)
+  }
+  // Each runs as the actor, through its dataset's writer and scope: an update gains no authority by adding rows.
+  const created = creates.flatMap((step) => createAs(store, actor, step, { key, hooked }))
   if (!batch) recordBatch(sqlite, key, actor.id, 'write', now)
   if (op === 'update') enterState(store, target.dataset, id, ctx, hooked, key)
-  return { id, batch_id: key, changed: changes.map(([field]) => field) }
+  return { id, batch_id: key, changed: changes.map(([field]) => field), ...(created.length > 0 && { created }) }
 }
 
 // One transaction: a refusal or a failed Revision insert leaves the table and revision untouched.

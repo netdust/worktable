@@ -672,6 +672,9 @@ export function validateDomain(domain: Domain): void {
     if (Object.hasOwn(dataset.columns, 'expect')) {
       throw new DomainError(dataset.name, 'expect', '"expect" is reserved: PATCH reads it as the expected state')
     }
+    if (Object.hasOwn(dataset.columns, 'creates')) {
+      throw new DomainError(dataset.name, 'creates', '"creates" is reserved: a writer\'s update adds rows under it')
+    }
     checkPosition(dataset)
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
