@@ -351,6 +351,12 @@ describe('the seeds', () => {
   })
 })
 
+test('PATCH and DELETE on sjabloon are 405 read_only', async () => {
+  const [{ id }] = sqlite.query('SELECT id FROM sjabloon ORDER BY id').all() as { id: number }[]
+  await denied(editor('PATCH', `/api/rows/sjabloon/${id}`, { naam: 'anders' }), 405, 'read_only')
+  await denied(editor('DELETE', `/api/rows/sjabloon/${id}`), 405, 'read_only')
+})
+
 test('/api/schema marks sjabloon not writable', async () => {
   const sources = (await editor('GET', '/api/schema')).body.sources as Record<string, { writable: boolean }>
   expect(sources.sjabloon?.writable).toBe(false)
