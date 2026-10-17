@@ -322,6 +322,7 @@ test('edit-datetime-cell @e2e', async ({ page }) => {
     await expect.poll(() => patches.length).toBe(3)
     expect(patches[2]).toEqual({ start_at: null })
     expect((await stored(api, 'activiteit', id)).start_at ?? null).toBeNull()
+    await expect(await start()).toHaveText('')
   } finally {
     await removeActivity(api, id)
   }
