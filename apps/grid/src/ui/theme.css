@@ -91,6 +91,11 @@ body {
   outline: none;
 }
 
+/* A field draws its own border: the mark lies on it, so the border turns the text colour, not a second frame. */
+:where(input, textarea, select):where(:focus-visible) {
+  outline-offset: -1px;
+}
+
 /* Colours crossfade on a theme switch; zero specificity, so any rule of its own wins. */
 *,
 *::before,

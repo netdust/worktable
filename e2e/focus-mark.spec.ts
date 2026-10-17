@@ -97,6 +97,8 @@ for (const theme of ['Licht', 'Donker'] as const) {
       const field = dialog.getByRole('textbox', { name: 'Naam' })
       await field.focus()
       await expectMark(field)
+      // On the field's own border, not a second frame outside it.
+      await expect(field).toHaveCSS('outline-offset', '-1px')
       await shot(page, name('dialog'))
 
       // A radio in its label: the label carries the mark, the small circle none of its own.
