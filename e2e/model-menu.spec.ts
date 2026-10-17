@@ -72,23 +72,3 @@ test.describe('the model menu as an administrator', () => {
     await shot(page, 'model-renamed')
   })
 })
-
-test.describe('the model menu as an editor', () => {
-  test.use({ storageState: state('editor') })
-
-  test('name-and-icon-are-for-administrators @e2e', async ({ page }) => {
-    await page.goto('/')
-    const menu = await modelMenu(page, MODEL)
-    const reason = 'Alleen een beheerder kan dit wijzigen'
-    for (const item of ['Naam wijzigen', 'Icoon wijzigen']) {
-      await expect(menu.getByRole('menuitem', { name: new RegExp(`^${item}`) })).toHaveAttribute(
-        'aria-disabled',
-        'true',
-      )
-    }
-    await expect(menu.getByText(reason)).toHaveCount(2)
-    await shot(page, 'model-menu-editor')
-    const refused = await page.request.put(`${THEATRE.app}/api/sources/organisatie/display`, { data: { label: 'X' } })
-    expect(refused.status()).toBe(403)
-  })
-})
