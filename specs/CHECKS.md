@@ -111,7 +111,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Activiteiten · Locatie filteren, sorteren, groeperen | e2e | `bunx playwright test e2e/step-2b.spec.ts --grep "filter-sort-group-on-locatie @e2e"` | e2e/step-2b.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
 | Filter builder · is vandaag | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "filter-is-vandaag @e2e"` | e2e/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
 | Own view · is vandaag after a reload | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "vandaag-kept-after-reload @e2e"` | e2e/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
-| Filter builder · new date condition | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "new-date-condition-starts-at-deze-week @e2e"` | e2e/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
 | Tourstop drawer · Tourstop verschuiven | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-tourstop @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
 | Tourstop drawer · refusal under the action | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-refused-in-dutch @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
 | Activiteit drawer · Bijlagen (upload, openen, verwijderen, ongedaan maken) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "upload-open-delete-undo @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |

@@ -187,34 +187,3 @@ test('vandaag-kept-after-reload @e2e', async ({ page }) => {
     await cleanUp(api, made)
   }
 })
-
-test('new-date-condition-starts-at-deze-week @e2e', async ({ page }) => {
-  const api = page.request
-  const made: Made = { views: [], activiteit: [] }
-  const name = 'Eigen e2e nieuwe datum'
-  try {
-    await page.setViewportSize({ width: 1600, height: 900 })
-    await page.goto('/')
-    await newView(page, made, name)
-    await filterButton(page).click()
-    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
-    const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
-    await pickIn(row, 'Veld', 'Datum')
-    await expect(row.getByRole('button', { name: 'Vergelijking: is deze week' })).toBeVisible()
-    await row.getByRole('button', { name: /^Vergelijking:/ }).click()
-    const offered = await row.getByRole('listbox', { name: 'Vergelijking' }).getByRole('option').allTextContents()
-    expect(offered.map((o) => o.trim())).toEqual([
-      'is vandaag',
-      'is deze week',
-      'is volgende week',
-      'is deze maand',
-      'ligt tussen',
-    ])
-    await shot(page, 'new-date-deze-week')
-    await page.keyboard.press('Escape')
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.nv-bar .nv-chip--filter').filter({ hasText: /^Datum/ })).toHaveText('Datum deze week')
-  } finally {
-    await cleanUp(api, made)
-  }
-})

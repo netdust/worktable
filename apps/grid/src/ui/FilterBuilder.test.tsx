@@ -92,6 +92,13 @@ describe('the filter builder', () => {
     expect(changed?.[1]).toEqual({ field: 'plandag', op: 'week', values: [] })
   })
 
+  it('starts a row switched to a date field at "is deze week"', () => {
+    bar([{ field: 'omschrijving', op: 'like', values: ['zaal'] }])
+    open()
+    fireEvent.click(within(listOf(row(0), 'Veld')).getByRole('option', { name: 'Plandag' }))
+    expect(changed).toEqual([{ field: 'plandag', op: 'week', values: [] }])
+  })
+
   it('searches a choice as one types, lists only what is not chosen, and adds a pick', () => {
     bar([{ field: 'soort', op: 'in', values: ['repetitie'] }])
     open()
