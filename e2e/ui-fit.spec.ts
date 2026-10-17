@@ -62,6 +62,7 @@ async function setDensity(page: Page, density: 'Compact' | 'Normaal' | 'Ruim') {
 
 /** Light and dark, each shot named after the surface. */
 async function bothThemes(page: Page, name: string, open: () => Promise<void>, close: () => Promise<void>) {
+  if (!process.env.SHAKEOUT_SHOTS) return
   for (const theme of ['Licht', 'Donker'] as const) {
     await setTheme(page, theme)
     await open()

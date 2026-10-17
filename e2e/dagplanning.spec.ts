@@ -3,7 +3,7 @@ import { state } from './auth'
 import { openEditor } from './editor'
 import { fillDate } from './segments'
 import { shot } from './shots'
-import { modelNode, openView, openWeek, pickIn } from './tree'
+import { dropViews, modelNode, openView, openWeek, pickIn } from './tree'
 
 const WEEK = '2026-12-21'
 const VENUE = 'Theater Het Anker'
@@ -187,6 +187,7 @@ test('period-is-the-period @e2e', async ({ page }) => {
 // The specs share one database: what this flow made would show up in later ones, so it goes again whatever happens.
 test('people-tags @e2e', async ({ page }) => {
   const api = page.request
+  await dropViews(page, ['Planning (kopie)'])
   try {
     await peopleTags(page)
   } finally {

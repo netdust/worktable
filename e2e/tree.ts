@@ -23,9 +23,72 @@ const plusDays = (day: string, n: number) => {
   return d.toISOString().slice(0, 10)
 }
 
+type Condition = { field: string; op: string; values: string[] }
+
 /**
- * Opens a view on one week, keeping its own conditions: Link kopiëren gives the view's address, its date
- * condition becomes "ligt tussen" that week, and the page lands on that address.
+ * A stored filter as the link's conditions, for the operators whose conversion needs no column kind
+ * (grid/conditions.ts plainConditions). Null when the filter says anything else.
+ */
+function linkConditions(stored: Record<string, unknown>, dateField: string): Condition[] | null {
+  const out: Condition[] = []
+  for (const [field, raw] of Object.entries(stored)) {
+    if (field === dateField) continue
+    const rest =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
+    if (!rest || field.startsWith('$') || field.startsWith('custom.')) return null
+    const { $in, $nin, $exists, ...other } = rest
+    if (Object.keys(other).length > 0) return null
+    const lists = [
+      ['in', $in],
+      ['nin', $nin],
+    ] as const
+    for (const [op, list] of lists) {
+      if (list === undefined) continue
+      if (!Array.isArray(list) || !list.every((v) => typeof v === 'string' || typeof v === 'number')) return null
+      out.push({ field, op, values: list.map(String) })
+    }
+    if (typeof $exists === 'boolean') out.push({ field, op: $exists ? 'filled' : 'empty', values: [] })
+    else if ($exists !== undefined) return null
+  }
+  return out
+}
+
+/** The view's id and the conditions it keeps, read from the API; null when only the app's own converter can say. */
+async function viewLanding(
+  page: Page,
+  view: string,
+  model: string,
+  field: string,
+): Promise<{ id: number; kept: Condition[] } | null> {
+  const { sources } = (await (await page.request.get('/api/schema')).json()) as {
+    sources: Record<string, { label: string }>
+  }
+  const source = Object.keys(sources).find((name) => sources[name].label === model)
+  const { views } = (await (await page.request.get('/api/views')).json()) as {
+    views: { id: number; name: string; source: string | null; filters: Record<string, unknown> }[]
+  }
+  const found = views.find((v) => v.name === view && v.source === source)
+  const kept = found ? linkConditions(found.filters, field) : null
+  return found && kept ? { id: found.id, kept } : null
+}
+
+/** Through the rail and the share menu: the app builds the address itself. */
+async function viewLinkParams(page: Page, view: string, model: string): Promise<URLSearchParams> {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/')
+  await openView(page, view, model)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
+  await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
+  await page.getByRole('menu', { name: 'Exporteren / delen' }).getByRole('menuitem', { name: 'Link kopiëren' }).click()
+  await expect(page.getByText('Link gekopieerd')).toBeVisible()
+  const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()))
+  return new URLSearchParams(copied.hash.slice(1))
+}
+
+/**
+ * Opens a view on one week, keeping its own conditions: its date condition becomes "ligt tussen" that week and
+ * the page lands on the view's address. The address is built from the API; a view whose filters need the app's
+ * own converter (an equality, a like, an $or) takes the share menu's Link kopiëren instead.
  */
 export async function openWeek(
   page: Page,
@@ -35,16 +98,11 @@ export async function openWeek(
   monday: string,
   span = 6,
 ): Promise<void> {
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.goto('/')
-  await openView(page, view, model)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
-  await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
-  await page.getByRole('menu', { name: 'Exporteren / delen' }).getByRole('menuitem', { name: 'Link kopiëren' }).click()
-  await expect(page.getByText('Link gekopieerd')).toBeVisible()
-  const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()))
-  const params = new URLSearchParams(copied.hash.slice(1))
-  const kept = (JSON.parse(params.get('f') ?? '[]') as { field: string }[]).filter((c) => c.field !== field)
+  const landing = await viewLanding(page, view, model, field)
+  const params = landing ? new URLSearchParams({ view: String(landing.id) }) : await viewLinkParams(page, view, model)
+  const kept = landing
+    ? landing.kept
+    : (JSON.parse(params.get('f') ?? '[]') as { field: string }[]).filter((c) => c.field !== field)
   params.set('f', JSON.stringify([{ field, op: 'between', values: [monday, plusDays(monday, span)] }, ...kept]))
   await page.goto(`/#${params.toString()}`)
   await page.reload()

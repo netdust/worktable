@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { addCondition, modelNode, openModel, openView, openWeek, pickIn } from './tree'
+import { addCondition, dropViews, modelNode, openModel, openView, openWeek, pickIn } from './tree'
 
 const MONDAY = '2026-10-12'
 const MATRIX = 'Toewijzingen per activiteit'
@@ -185,60 +185,73 @@ test('matrix-two-activities-undo', async ({ page }) => {
 
 test('view-saved-after-reload', async ({ page }) => {
   const name = 'Mijn planning'
-  expect((await views(page)).map((v) => v.name)).not.toContain(name)
-  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
+  await dropViews(page, [name, 'Bevestigd (kopie)'])
+  try {
+    expect((await views(page)).map((v) => v.name)).not.toContain(name)
+    await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
 
-  const head = page.locator('thead th', { hasText: 'Soort' })
-  const before = (await head.boundingBox())?.width as number
-  const grip = head.locator('.nv-th__resize')
-  const at = (await grip.boundingBox()) as { x: number; y: number; width: number; height: number }
-  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(at.x + at.width / 2 + 60, at.y + at.height / 2, { steps: 5 })
-  await page.mouse.up()
-  await expect.poll(async () => (await head.boundingBox())?.width as number).toBeGreaterThan(before + 30)
-  const widened = await head.evaluate((th) => (th as HTMLElement).style.width)
+    const head = page.locator('thead th', { hasText: 'Soort' })
+    const before = (await head.boundingBox())?.width as number
+    const grip = head.locator('.nv-th__resize')
+    const at = (await grip.boundingBox()) as { x: number; y: number; width: number; height: number }
+    await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(at.x + at.width / 2 + 60, at.y + at.height / 2, { steps: 5 })
+    await page.mouse.up()
+    await expect.poll(async () => (await head.boundingBox())?.width as number).toBeGreaterThan(before + 30)
+    const widened = await head.evaluate((th) => (th as HTMLElement).style.width)
 
-  await addCondition(page, 'Productie', 'Nachtwacht')
-  await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+    await addCondition(page, 'Productie', 'Nachtwacht')
+    await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+    await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+    await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
+    await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
 
-  await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
-  await page.reload()
-  await pick(page, name, page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' }), 'Activiteiten')
-  await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toContainText('Nachtwacht')
-  await expect(page.locator('thead th', { hasText: 'Soort' })).toHaveAttribute('style', new RegExp(`width: ${widened}`))
+    await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
+    await page.reload()
+    await pick(page, name, page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' }), 'Activiteiten')
+    await expect(page.locator('.nv-chip--filter', { hasText: 'Productie' })).toContainText('Nachtwacht')
+    await expect(page.locator('thead th', { hasText: 'Soort' })).toHaveAttribute(
+      'style',
+      new RegExp(`width: ${widened}`),
+    )
+  } finally {
+    await dropViews(page, [name, 'Bevestigd (kopie)'])
+  }
 })
 
 test('view-delete-undo', async ({ page }) => {
   const copy = 'Planning (kopie)'
-  expect((await views(page)).map((v) => v.name)).not.toContain(copy)
-  await open(page, 'Planning', header(page, 'Omschrijving'), 'Activiteiten')
-  await page.getByRole('button', { name: 'More actions: Planning' }).click()
-  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
-  const made = (await views(page)).find((v) => v.name === copy)
-  expect(made?.mine).toBe(true)
+  await dropViews(page, [copy])
+  try {
+    expect((await views(page)).map((v) => v.name)).not.toContain(copy)
+    await open(page, 'Planning', header(page, 'Omschrijving'), 'Activiteiten')
+    await page.getByRole('button', { name: 'More actions: Planning' }).click()
+    await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+    await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
+    const made = (await views(page)).find((v) => v.name === copy)
+    expect(made?.mine).toBe(true)
 
-  await page.getByRole('button', { name: `More actions: ${copy}` }).click()
-  const deleted = page.waitForResponse(
-    (res) => res.request().method() === 'DELETE' && res.url().endsWith(`/api/views/${made?.id}`),
-  )
-  await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
-  expect((await deleted).status()).toBe(200)
+    await page.getByRole('button', { name: `More actions: ${copy}` }).click()
+    const deleted = page.waitForResponse(
+      (res) => res.request().method() === 'DELETE' && res.url().endsWith(`/api/views/${made?.id}`),
+    )
+    await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
+    expect((await deleted).status()).toBe(200)
 
-  const restored = page.waitForResponse((res) => res.url().endsWith(`/api/views/${made?.id}/restore`))
-  await page
-    .getByRole('status', { name: 'Weergave verwijderd' })
-    .getByRole('button', { name: 'Ongedaan maken' })
-    .click()
-  expect((await restored).status()).toBe(200)
-  await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
-  expect((await views(page)).find((v) => v.name === copy)?.id).toBe(made?.id)
+    const restored = page.waitForResponse((res) => res.url().endsWith(`/api/views/${made?.id}/restore`))
+    await page
+      .getByRole('status', { name: 'Weergave verwijderd' })
+      .getByRole('button', { name: 'Ongedaan maken' })
+      .click()
+    expect((await restored).status()).toBe(200)
+    await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
+    expect((await views(page)).find((v) => v.name === copy)?.id).toBe(made?.id)
+  } finally {
+    await dropViews(page, [copy])
+  }
 })
 
 test('person-to-name', async ({ page }) => {
