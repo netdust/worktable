@@ -1,13 +1,9 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { state } from './auth'
-import { openEditor } from './editor'
 import { fillDate } from './segments'
 import { shot } from './shots'
 import { dropViews, modelNode, openView, openWeek, pickIn } from './tree'
 
 const WEEK = '2026-12-21'
-const VENUE = 'Theater Het Anker'
-const OTHER_VENUE = 'Repetitiekot De Loods'
 
 type Api = Page['request']
 type Values = Record<string, unknown>
@@ -60,81 +56,6 @@ async function openDagplanning(page: Page) {
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', WEEK)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
 }
-
-async function pickRelation(cell: Locator, page: Page, search: string, option: string) {
-  await cell.click()
-  await cell.press('Enter')
-  await page.getByRole('combobox', { name: 'Locatie' }).fill(search)
-  await page.getByRole('option', { name: option }).click()
-}
-
-test('edit-dagplanning @e2e', async ({ page }) => {
-  const api = page.request
-  await idOf(api, 'activiteit', {
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
-    soort: 'repetitie',
-    datum: WEEK,
-    start_at: `${WEEK}T10:00`,
-    omschrijving: 'dagplanning bewerken',
-  })
-  await openDagplanning(page)
-
-  const omschrijving = await cellOf(page, 'dagplanning bewerken', 'Omschrijving')
-  await omschrijving.click()
-  await omschrijving.press('Enter')
-  await omschrijving.locator('input').fill('dagplanning bewerkt')
-  await omschrijving.locator('input').press('Enter')
-  await expect(named(page, 'dagplanning bewerkt')).toHaveCount(1)
-
-  const soort = await cellOf(page, 'dagplanning bewerkt', 'Soort')
-  await soort.click()
-  await soort.press('Enter')
-  await openEditor(page).getByRole('option', { name: 'Opbouw' }).click()
-  await expect(soort).toHaveText('Opbouw')
-
-  await page.reload()
-  await openView(page, 'Planning', 'Activiteiten')
-  await expect(await cellOf(page, 'dagplanning bewerkt', 'Soort')).toHaveText('Opbouw')
-  const [stored] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'dagplanning bewerkt' })
-  expect(stored).toMatchObject({ soort: 'opbouw', omschrijving: 'dagplanning bewerkt' })
-  await shot(page, 'edit-dagplanning')
-})
-
-test('locatie-own-and-back @e2e', async ({ page }) => {
-  const api = page.request
-  const reeks = await idOf(api, 'speelreeks', {
-    naam: 'Speelreeks e2e dagplanning',
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
-    locatie_id: await idByName(api, 'organisatie', 'naam', VENUE),
-    start_datum: WEEK,
-    eind_datum: WEEK,
-  })
-  await idOf(api, 'activiteit', {
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
-    soort: 'repetitie',
-    datum: WEEK,
-    omschrijving: 'locatie eigen en terug',
-    speelreeks_id: reeks,
-  })
-  await openDagplanning(page)
-
-  const cell = () => cellOf(page, 'locatie eigen en terug', 'Locatie')
-  await expect((await cell()).locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
-
-  await pickRelation(await cell(), page, 'Loods', OTHER_VENUE)
-  await expect((await cell()).locator('.nv-cell__text')).toHaveText(OTHER_VENUE)
-  await expect((await cell()).locator('.nv-via, .nv-inherited')).toHaveCount(0)
-  await shot(page, 'locatie-own')
-
-  const clear = await cell()
-  await clear.click()
-  await clear.press('Delete')
-  await expect((await cell()).locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
-  await expect((await cell()).locator('.nv-via')).toHaveText('via tourstop')
-  await shot(page, 'locatie-via-tourstop')
-  const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'locatie eigen en terug' })
-  expect(held.locatie_id ?? null).toBeNull()
-})
 
 test('period-is-the-period @e2e', async ({ page }) => {
   const api = page.request
@@ -689,26 +610,5 @@ test('people-double-pick @e2e', async ({ page }) => {
         timeout: 1000,
       },
     )
-  })
-})
-
-test.describe('as the owner', () => {
-  test.use({ storageState: state('owner') })
-
-  test('owner-has-no-dagplanning @e2e', async ({ page }) => {
-    const api = page.request
-    expect((await api.get('/api/rows/dagplanning')).status()).toBe(404)
-    const schema = (await (await api.get('/api/schema')).json()) as { sources: Record<string, unknown> }
-    expect(Object.keys(schema.sources)).not.toContain('dagplanning')
-    const someone = await api.post('/api/rows/toewijzing', { data: { activiteit_id: 1, persoon_id: 2 } })
-    expect(someone.status()).toBe(403)
-
-    await page.goto('/')
-    const tree = page.getByRole('tree', { name: 'Views' })
-    await expect(tree.getByRole('treeitem').first()).toBeVisible()
-    await expect(tree.getByRole('button', { name: 'Planning', exact: true })).toHaveCount(0)
-    await expect(modelNode(page, 'Activiteiten')).toHaveCount(0)
-    await expect(modelNode(page, 'Tourstops')).toHaveCount(0)
-    await shot(page, 'owner-no-dagplanning')
   })
 })

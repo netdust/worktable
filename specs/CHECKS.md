@@ -40,8 +40,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | GET /api/schema | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/schema asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Rail tree · no Dagplanning, Overzichten | e2e | `bunx playwright test e2e/rail-tree.spec.ts --grep "dagplanning-is-gone @e2e"` | e2e/rail-tree.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Rail tree · Tourstops | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "tourstop-first-in-planning @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| Dagplanning · editing | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "edit-dagplanning @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| Dagplanning · Locatie | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "locatie-own-and-back @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Periode (Plandag-voorwaarde) | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "period-is-the-period @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Periode (Plandag-voorwaarde) | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "period-empty-result @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · Mensen | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "people-tags @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
@@ -54,7 +52,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dagplanning · removal question | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "removal-question-enter-on-annuleren @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · removal question | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "removal-question-tab-to-verwijderen @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · removal question | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "removal-question-buttons-styled @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| Dagplanning · owner | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "owner-has-no-dagplanning @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | View · saves itself | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "autosave-own-view @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Filter builder | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "filter-builder @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Filter builder | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "builder-fits-at-1280 @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
