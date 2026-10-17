@@ -431,19 +431,54 @@ describe('storage', () => {
   })
 
   test('a photo uploaded with a camera make, a GPS location and a motion-photo trailer is served without any of them', async () => {
-    const exif = ascii('Exif\0\0InventCam GPSLatitude 50.8512N')
+    const u16 = (n: number) => [n >> 8, n & 0xff]
+    const u32 = (n: number) => [...u16(n >>> 16), ...u16(n & 0xffff)]
+    const segment = (marker: number, data: number[]) => [0xff, marker, ...u16(data.length + 2), ...data]
+    const entry = (tag: number, type: number, count: number, value: number[]) => [
+      ...u16(tag),
+      ...u16(type),
+      ...u32(count),
+      ...value,
+    ]
+    // Big-endian TIFF: IFD0 holds Make "Phone", Orientation 6 and a pointer to a GPS IFD with latitude "N".
+    const makeAt = 8 + 2 + 3 * 12 + 4
+    const gpsAt = makeAt + 6
+    const tiff = [
+      ...ascii('MM\0*'),
+      ...u32(8),
+      ...u16(3),
+      ...entry(0x010f, 2, 6, u32(makeAt)),
+      ...entry(0x0112, 3, 1, [...u16(6), 0, 0]),
+      ...entry(0x8825, 4, 1, u32(gpsAt)),
+      ...u32(0),
+      ...ascii('Phone\0'),
+      ...u16(1),
+      ...entry(0x0001, 2, 2, [...ascii('N\0'), 0, 0]),
+      ...u32(0),
+    ]
+    const scan = [0xff, 0xda, 0, 8, 1, 1, 0, 0, 0x3f, 0, 0x12, 0x34]
     const sent = new Uint8Array([
-      ...[0xff, 0xd8, 0xff, 0xe1, 0, exif.length + 2],
-      ...exif,
-      ...[0xff, 0xd9],
+      0xff,
+      0xd8,
+      ...segment(0xe1, [...ascii('Exif\0\0'), ...tiff]),
+      ...scan,
+      0xff,
+      0xd9,
       ...ascii('MOTION video GPS 4.3567E'),
     ])
+    const orientationOnly = segment(0xe1, [
+      ...ascii('Exif\0\0II*\0'),
+      ...[8, 0, 0, 0, 1, 0],
+      ...[0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0],
+      ...[0, 0, 0, 0],
+    ])
     const { status, body } = await upload(sent, { kind: 'photo', name: 'gps.jpg' })
-    const served = new Uint8Array(await (await download(body.id)).arrayBuffer())
     expect(status).toBe(201)
-    expect(served).toEqual(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))
-    for (const leak of ['InventCam', 'GPS', '50.8512', 'MOTION'])
-      expect(Buffer.from(served).includes(leak), leak).toBe(false)
+    const res = await download(body.id)
+    expect(res.headers.get('content-type')).toBe('image/jpeg')
+    const served = new Uint8Array(await res.arrayBuffer())
+    expect(served).toEqual(new Uint8Array([0xff, 0xd8, ...orientationOnly, ...scan, 0xff, 0xd9]))
+    for (const leak of ['Phone', 'MOTION', 'GPS']) expect(Buffer.from(served).includes(leak), leak).toBe(false)
   })
 
   test('a failed insert removes the file it wrote, and leaves one that was there before', async () => {
