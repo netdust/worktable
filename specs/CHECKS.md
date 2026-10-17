@@ -22,11 +22,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dagplanning · redo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-redo-refused @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | POST /api/rows/speelreeks | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "speelreeks-boundaries @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Speelreeks · owner scope | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "owner-denied-speelreeks @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Sign-in page | smoke | `bunx playwright test e2e/smoke/step-1.spec.ts --grep "sign-in page renders @smoke"` | e2e/smoke/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| GET /api/rows/speelreeks | smoke | `bunx playwright test e2e/smoke/step-1.spec.ts --grep "speelreeks asks for a session @smoke"` | e2e/smoke/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| GET /api/rows/rol | smoke | `bunx playwright test e2e/smoke/step-1.spec.ts --grep "rol asks for a session @smoke"` | e2e/smoke/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| GET /api/rows/sjabloon | smoke | `bunx playwright test e2e/smoke/step-1.spec.ts --grep "sjabloon asks for a session @smoke"` | e2e/smoke/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| GET /api/rows/activiteit | smoke | `bunx playwright test e2e/smoke/step-1.spec.ts --grep "activiteit asks for a session @smoke"` | e2e/smoke/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Theme · density | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "dark-and-density @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Production switcher | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "switch-production @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Production switcher · owner | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "owner-has-no-switcher @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
@@ -49,11 +44,8 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut-bar-and-foot @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Dagplanning · inherited venue | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "inherited-venue @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Planning · details | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "planning-details @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| Grid shell (lang nl, Plex) | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "the grid shell speaks Dutch in Plex @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
+| Sign-in page (lang, Plex, meta, tokens, own colours, button) | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "the sign-in page is Dutch, Plex, unindexed and in its own colours @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | GET /api/schema | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/schema asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| GET /api/views | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/views asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| GET /api/rows/productie | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/rows/productie asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| GET /api/rows/activiteit | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/rows/activiteit asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Rail tree · no Dagplanning, Overzichten | e2e | `bunx playwright test e2e/rail-tree.spec.ts --grep "dagplanning-is-gone @e2e"` | e2e/rail-tree.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Rail tree · Tourstops | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "tourstop-first-in-planning @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · editing | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "edit-dagplanning @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
@@ -71,10 +63,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dagplanning · removal question | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "removal-question-tab-to-verwijderen @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · removal question | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "removal-question-buttons-styled @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · owner | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "owner-has-no-dagplanning @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| Grid shell · link with conditions | smoke | `bunx playwright test e2e/smoke/dagplanning.spec.ts --grep "a link with conditions lands on the sign-in page \(#view=activiteit&f=%5B%7\) @smoke"` | e2e/smoke/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| Grid shell · link with conditions | smoke | `bunx playwright test e2e/smoke/dagplanning.spec.ts --grep "a link with conditions lands on the sign-in page \(#view=activiteit&f=%7Bno\) @smoke"` | e2e/smoke/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| GET /api/rows/toewijzing | smoke | `bunx playwright test e2e/smoke/dagplanning.spec.ts --grep "/api/rows/toewijzing asks for a session @smoke"` | e2e/smoke/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
-| GET /api/rows/activiteit (window) | smoke | `bunx playwright test e2e/smoke/dagplanning.spec.ts --grep "/api/rows/activiteit\?from=2026-12-21&to=2026-12-27 asks for a session @smoke"` | e2e/smoke/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | View · saves itself | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "autosave-own-view @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Filter builder | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "filter-builder @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Filter builder | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "builder-fits-at-1280 @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
@@ -90,10 +78,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Published view | e2e | `bunx playwright test e2e/toolbar.spec.ts --grep "published-view-stays-put @e2e"` | e2e/toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Scrollbars | e2e | `bunx playwright test e2e/scrollbars.spec.ts --grep "minimal-scrollbars @e2e"` | e2e/scrollbars.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Focus · licht en donker: de cel van de grid, een filterchip, een bordkaart die het toetsenbord versleept, de knop Sluiten van de lade en het veld van een dialoog dragen één dunne lijn in de tekstkleur, zonder blauwe ring | e2e | `bunx playwright test e2e/focus-mark.spec.ts --grep "focus-mark"` | e2e/focus-mark.spec.ts | focus-ring | a9d407f 2026-10-17 |
-| Grid shell · link joined by Of | smoke | `bunx playwright test e2e/smoke/grid-toolbar.spec.ts --grep "a link joined by Of lands on the sign-in page @smoke"` | e2e/smoke/grid-toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
-| GET /api/history/activiteit | smoke | `bunx playwright test e2e/smoke/grid-toolbar.spec.ts --grep "/api/history/activiteit asks for a session @smoke"` | e2e/smoke/grid-toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
-| GET /api/history/toewijzing | smoke | `bunx playwright test e2e/smoke/grid-toolbar.spec.ts --grep "/api/history/toewijzing asks for a session @smoke"` | e2e/smoke/grid-toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
-| GET /api/public/views/:token | smoke | `bunx playwright test e2e/smoke/grid-toolbar.spec.ts --grep "an unknown public view token is not found @smoke"` | e2e/smoke/grid-toolbar.spec.ts | grid-toolbar | 1e3309c 2026-10-16 |
 | Date cell editor | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "edit-date-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Datetime cell editor | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "edit-datetime-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Date and datetime calendar | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "calendar-clears-its-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
@@ -116,8 +100,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Date and datetime editor · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "date-editors-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Filter builder · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "filter-row-fits @e2e"` | e2e/ui-fit.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Drawer picker · frame | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "drawer-picker-keeps-its-frame @e2e"` | e2e/ui-fit.spec.ts | react-aria | 1e3309c 2026-10-16 |
-| Sign-in form · React Aria button | smoke | `bunx playwright test e2e/smoke/react-aria.spec.ts --grep "the sign-in button waits for an address @smoke"` | e2e/smoke/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
-| Grid shell · no Sakani, own colours | smoke | `bunx playwright test e2e/smoke/react-aria.spec.ts --grep "the page carries no Sakani markup and paints its own colours @smoke"` | e2e/smoke/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Speelreeks · Sjabloon met plaatsen → matrix Open | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "apply-template-with-slots @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Matrix · Open-kolom | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "open-counts @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Matrix · open plek invullen | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "fill-splits-slot-and-undo @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
@@ -139,33 +121,21 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | GET /api/owner/views · sleutels | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "owner-view-key-script @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | POST /api/record-links/request | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "link-request-identical @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Service account · Bearer | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "agent-token-write-undo-revoke @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| Grid shell · referrer and robots meta | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "the page sends no referrer and asks not to be indexed @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | GET /api/record-links/:dataset/:id | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "a record link is copied only with a session, never cached @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| GET /api/rows/mijn_producties | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "/api/rows/mijn_producties asks for a session @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
-| GET /api/schema?format=openapi | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "/api/schema\?format=openapi asks for a session @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Time cell editor (no source serves a time column yet) | auth | — | | react-aria | |
 | Long text cell editor (no source serves a textarea column yet) | auth | — | | react-aria | |
 | Activiteiten · nieuwe weergave · Kolommen (Tourstop, Locatie, Mensen) | e2e | `bunx playwright test e2e/step-2b.spec.ts --grep "new-view-offers-locatie-and-mensen @e2e"` | e2e/step-2b.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
 | Planning · Locatie overschrijven en wissen | e2e | `bunx playwright test e2e/step-2b.spec.ts --grep "override-and-clear-venue @e2e"` | e2e/step-2b.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
 | Activiteiten · Locatie filteren, sorteren, groeperen | e2e | `bunx playwright test e2e/step-2b.spec.ts --grep "filter-sort-group-on-locatie @e2e"` | e2e/step-2b.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
-| Grid shell · link with a Locatie condition | smoke | `bunx playwright test e2e/smoke/virtual-columns.spec.ts --grep "a link with a Locatie condition lands on the sign-in page @smoke"` | e2e/smoke/virtual-columns.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
-| GET /api/rows/activiteit (by Locatie) | smoke | `bunx playwright test e2e/smoke/virtual-columns.spec.ts --grep "/api/rows/activiteit by Locatie asks for a session @smoke"` | e2e/smoke/virtual-columns.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
-| GET /api/schema | smoke | `bunx playwright test e2e/smoke/virtual-columns.spec.ts --grep "/api/schema asks for a session @smoke"` | e2e/smoke/virtual-columns.spec.ts | virtual-columns | 1e3309c 2026-10-16 |
 | Filter builder · is vandaag | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "filter-is-vandaag @e2e"` | e2e/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
 | Own view · is vandaag after a reload | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "vandaag-kept-after-reload @e2e"` | e2e/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
 | Filter builder · new date condition | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "new-date-condition-starts-at-deze-week @e2e"` | e2e/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
-| Grid shell · link with an is-vandaag condition | smoke | `bunx playwright test e2e/smoke/period-today.spec.ts --grep "a link with an is-vandaag condition lands on the sign-in page @smoke"` | e2e/smoke/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
-| GET /api/rows/activiteit (today) | smoke | `bunx playwright test e2e/smoke/period-today.spec.ts --grep "/api/rows/activiteit for today asks for a session @smoke"` | e2e/smoke/period-today.spec.ts | period-today | 1e3309c 2026-10-16 |
 | Tourstop drawer · Tourstop verschuiven | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-tourstop @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
 | Tourstop drawer · refusal under the action | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-refused-in-dutch @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
-| Grid shell · Tourstops link | smoke | `bunx playwright test e2e/smoke/action-inputs.spec.ts --grep "a tourstop link lands on the sign-in page @smoke"` | e2e/smoke/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
-| GET /api/actions/tourstop_verschuiven | smoke | `bunx playwright test e2e/smoke/action-inputs.spec.ts --grep "/api/actions/tourstop_verschuiven asks for a session @smoke"` | e2e/smoke/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
 | Activiteit drawer · Bijlagen (upload, openen, verwijderen, ongedaan maken) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "upload-open-delete-undo @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Activiteit drawer · Bijlagen · foto zonder locatie | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "photo-location-gone @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Activiteit drawer · Bijlagen · weigeringen (type, grootte) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "refusals-in-dutch @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Tourstop en Toewijzing drawer · Bijlagen; Organisatie zonder | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "bijlagen-on-tourstop-and-assignment @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
-| GET /api/attachments/:dataset/:id | smoke | `bunx playwright test e2e/smoke/attachments.spec.ts --grep "/api/attachments/activiteit/1 asks for a session @smoke"` | e2e/smoke/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
-| GET /api/attachments/file/:id | smoke | `bunx playwright test e2e/smoke/attachments.spec.ts --grep "/api/attachments/file/1 asks for a session @smoke"` | e2e/smoke/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Matrix · kandidaten in Open plek invullen | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "candidates-picker @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Matrix · geen kandidaten, Iedereen tonen | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "candidates-none @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Conflicten · zes types | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "conflicten-six-types @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
@@ -178,8 +148,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Persoonskalender · activiteit zonder einde (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Bedrijfsweek · week, maand, drawer | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "company-week @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Bedrijfsweek · maand die op zondag begint | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "month-starting-sunday @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| GET /api/rows/conflicten | smoke | `bunx playwright test e2e/smoke/step-3.spec.ts --grep "/api/rows/conflicten asks for a session @smoke"` | e2e/smoke/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| Grid shell · calendar link | smoke | `bunx playwright test e2e/smoke/step-3.spec.ts --grep "a calendar link lands on the sign-in page @smoke"` | e2e/smoke/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Dashboard · landing, licht en donker | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
@@ -196,10 +164,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | GET /api/views · owner, geen dashboard | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "owner-no-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | GET /api/attachments/activiteit?ids · 200 en 201 | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "gallery-batch-boundary @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| GET /api/views | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/views asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| Grid shell · landing | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "the landing page shows the sign-in @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| GET /api/attachments/activiteit?ids | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "/api/attachments/activiteit batch asks for a session @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| Grid shell · skin link | smoke | `bunx playwright test e2e/smoke/step-3c.spec.ts --grep "a skin view link lands on the sign-in page @smoke"` | e2e/smoke/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Chiprij · elke weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "one-chip-row @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
@@ -214,8 +178,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Matrix · koppen en legende | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "matrix-heads-and-legend @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Galerij · initialen, met beeld | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "gallery-placeholder @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Titelregel · samenvatting per weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "summary-per-view @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Grid shell · tokens | smoke | `bunx playwright test e2e/smoke/step-3d.spec.ts --grep "the shell carries the prototype tokens @smoke"` | e2e/smoke/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Grid shell · tijdlijnlink | smoke | `bunx playwright test e2e/smoke/step-3d.spec.ts --grep "a timeline view link lands on the sign-in page @smoke"` | e2e/smoke/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Planning · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Planning @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Bord · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Per status @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Galerij · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Galerij activiteiten @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
@@ -254,9 +216,3 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Lade van Planning en van het bord Per status · Iemand anders kiezen: zoeker op de gemarkeerde persoon in Mensen, kandidaten, band weg; één ⌘Z zet de eerste terug met band; opnieuw gekozen, na herladen de nieuwe zonder band | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "conflict-choose-other @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
 | Tijdlijn over Activiteiten · Iemand anders kiezen in de lade van een balk: conflict over twee producties, band weg, één ⌘Z zet de eerste terug, na herladen de nieuwe zonder band | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "conflict-choose-other-timeline @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
 | Kalender activiteiten · Iemand anders kiezen in de eigen lade van de kalender: conflict over twee producties, band weg, één ⌘Z zet de eerste terug, na herladen de nieuwe zonder band | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "conflict-choose-other-calendar @e2e"` | e2e/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
-| GET /api/schema (flags, tone, position) | smoke | `bunx playwright test e2e/smoke/step-3f.spec.ts --grep "/api/schema asks for a session before it serves flags, tones and ranks @smoke"` | e2e/smoke/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
-| GET /api/rows/activiteit?sort=position | smoke | `bunx playwright test e2e/smoke/step-3f.spec.ts --grep "/api/rows/activiteit sorted on position asks for a session @smoke"` | e2e/smoke/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
-| GET /api/rows/toewijzing?sort=position | smoke | `bunx playwright test e2e/smoke/step-3f.spec.ts --grep "/api/rows/toewijzing sorted on position asks for a session @smoke"` | e2e/smoke/step-3f.spec.ts | step-3f | 1e3309c 2026-10-16 |
-| Grid shell · lade-link met voorwaarde | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "a drawer link with a condition lands on the sign-in page @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
-| GET /api/rows/kandidaten | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "/api/rows/kandidaten asks for a session @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
-| GET /api/rows/werklijst | smoke | `bunx playwright test e2e/smoke/step-3e.spec.ts --grep "/api/rows/werklijst asks for a session @smoke"` | e2e/smoke/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
