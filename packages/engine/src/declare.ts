@@ -341,9 +341,15 @@ export interface ActionDecl {
   run(record: Values, input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 
+/** An update that adds rows to its own batch: each create runs as an action's does, as the same actor. */
+export interface WriterUpdate {
+  values: Values
+  creates: ActionCreate[]
+}
+
 export interface Writer {
   create?(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown>
-  update?(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown>
+  update?(values: Record<string, unknown>, ctx: WriteContext): Record<string, unknown> | WriterUpdate
   delete?(ctx: WriteContext): void
 }
 

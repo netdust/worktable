@@ -125,8 +125,8 @@ export interface EngineRow {
   title?: string
   /** With `cells=1`: the matrix's live join rows. */
   cells?: EngineRow[]
-  /** On a write reply: the write's batch and the columns it changed. */
-  revision?: { batch_id: string | null; changed: string[] }
+  /** On a write reply: the write's batch, the columns it changed, and the rows the writer added to it. */
+  revision?: { batch_id: string | null; changed: string[]; created?: { dataset: string; id: number }[] }
   /** Per link name, the linked rows the caller may read. */
   links?: Record<string, LinkItem[]>
   inherited?: string[]

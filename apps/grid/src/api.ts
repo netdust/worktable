@@ -271,7 +271,8 @@ export async function records(model: string, search: string): Promise<RowsRespon
 /** A write's row, and the batch an undo names it by: none when the write changed nothing. */
 function writtenOf(reply: EngineRow): Saved {
   heard(reply)
-  return { row: toRow(reply), batch: reply.revision?.batch_id ?? null }
+  const created = reply.revision?.created
+  return { row: toRow(reply), batch: reply.revision?.batch_id ?? null, ...(created && { created }) }
 }
 
 export async function create(model: string, data: Record<string, unknown>): Promise<Saved> {
@@ -317,7 +318,8 @@ async function updateThrough(model: string, source: EngineSource, id: number, se
   const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.
   const found = await rowOf(model, id).catch(() => null)
-  return { row: found ?? written, batch: reply.revision?.batch_id ?? null }
+  const created = reply.revision?.created
+  return { row: found ?? written, batch: reply.revision?.batch_id ?? null, ...(created && { created }) }
 }
 
 /** Undoes a batch on the server; answers the undo's own batch, which a redo undoes. An empty JSON body: the write guard refuses a POST that is not JSON. */

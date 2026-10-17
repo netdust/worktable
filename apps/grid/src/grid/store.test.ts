@@ -303,6 +303,31 @@ describe('undo and redo, by batch on the server', () => {
     expect(reload).toHaveBeenCalledTimes(2)
   })
 
+  it('a write whose batch added rows reads the view again, after it lands and after its undo and redo', async () => {
+    const { api, store, row, reload } = setup()
+    const saved = { ...row(101), fields: { ...row(101).fields, kind: 'show' } }
+    api.update.mockResolvedValue({ row: saved, batch: 'b-split', created: [{ dataset: 'activity', id: 900 }] })
+    api.undo.mockResolvedValueOnce('b-undo').mockResolvedValueOnce('b-redo')
+    api.read.mockResolvedValue(saved)
+
+    await store.apply({ id: 101, field: 'kind', value: 'show' })
+    // The edited row shows what the server holds, and the rows the batch added come in with the view.
+    expect(row(101).fields.kind).toBe('show')
+    expect(reload).toHaveBeenCalledTimes(1)
+
+    await store.undo()
+    expect(reload).toHaveBeenCalledTimes(2)
+    await store.redo()
+    expect(reload).toHaveBeenCalledTimes(3)
+  })
+
+  it('a write that added no rows does not read the view again', async () => {
+    const { api, store, row, reload } = setup()
+    api.update.mockResolvedValue({ row: { ...row(101), fields: { ...row(101).fields, kind: 'show' } }, batch: 'b-1' })
+    await store.apply({ id: 101, field: 'kind', value: 'show' })
+    expect(reload).not.toHaveBeenCalled()
+  })
+
   it('follows the history another store pushed to', async () => {
     const { store, history } = setup()
     const listener = vi.fn()

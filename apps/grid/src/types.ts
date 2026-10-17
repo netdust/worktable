@@ -410,6 +410,8 @@ export interface HistoryEntry {
 export interface Saved {
   row: Row
   batch: string | null
+  /** The rows the write's batch added beside its own, which only a fresh read of the view shows. */
+  created?: { dataset: string; id: number }[]
 }
 
 /** The inclusive window a dated view shows, as local `YYYY-MM-DD` days. */

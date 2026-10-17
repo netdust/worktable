@@ -41,9 +41,9 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
-  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, notices }: Written) => ({
+  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, created, notices }: Written) => ({
     ...rowOf(store, dataset, id, scopeOf(actor, dataset)),
-    revision: { batch_id, changed },
+    revision: { batch_id, changed, ...(created && { created }) },
     notices,
   })
 
