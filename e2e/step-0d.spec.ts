@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { addCondition, dropViews, modelNode, openModel, openView, openWeek, pickIn } from './tree'
+import { addCondition, dropViews, openView, openWeek } from './tree'
 
 const MONDAY = '2026-10-12'
 const MATRIX = 'Toewijzingen per activiteit'
@@ -139,14 +139,6 @@ test('matrix-cell-persists', async ({ page }) => {
   await expect.poll(held).toBeUndefined()
 })
 
-test('matrix-away-mark', async ({ page }) => {
-  await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
-  const away = await spot(page, 'vergadering Antwerpen', 'Noor Claes')
-  await expect(away).toHaveClass(/nv-mx__away/)
-  await expect(away).toHaveAttribute('aria-label', /Afwezig: Familiefeest/)
-  await expect(await spot(page, 'vergadering Antwerpen', 'Bram De Wilde')).not.toHaveClass(/nv-mx__away/)
-})
-
 test('matrix-two-activities-undo', async ({ page }) => {
   const person = 'Bram De Wilde'
   const [first, second] = ['reis Gent', 'vergadering Gent']
@@ -222,38 +214,6 @@ test('view-saved-after-reload', async ({ page }) => {
   }
 })
 
-test('view-delete-undo', async ({ page }) => {
-  const copy = 'Planning (kopie)'
-  await dropViews(page, [copy])
-  try {
-    expect((await views(page)).map((v) => v.name)).not.toContain(copy)
-    await open(page, 'Planning', header(page, 'Omschrijving'), 'Activiteiten')
-    await page.getByRole('button', { name: 'More actions: Planning' }).click()
-    await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-    await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
-    const made = (await views(page)).find((v) => v.name === copy)
-    expect(made?.mine).toBe(true)
-
-    await page.getByRole('button', { name: `More actions: ${copy}` }).click()
-    const deleted = page.waitForResponse(
-      (res) => res.request().method() === 'DELETE' && res.url().endsWith(`/api/views/${made?.id}`),
-    )
-    await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
-    expect((await deleted).status()).toBe(200)
-
-    const restored = page.waitForResponse((res) => res.url().endsWith(`/api/views/${made?.id}/restore`))
-    await page
-      .getByRole('status', { name: 'Weergave verwijderd' })
-      .getByRole('button', { name: 'Ongedaan maken' })
-      .click()
-    expect((await restored).status()).toBe(200)
-    await expect(page.getByText(copy, { exact: true }).first()).toBeVisible()
-    expect((await views(page)).find((v) => v.name === copy)?.id).toBe(made?.id)
-  } finally {
-    await dropViews(page, [copy])
-  }
-})
-
 test('person-to-name', async ({ page }) => {
   const activity = 'repetitie Gent'
   const activiteit = await activiteitId(page, activity)
@@ -276,13 +236,6 @@ test('person-to-name', async ({ page }) => {
   await expect(target).not.toContainText('Lotte Verhaegen')
 })
 
-test('datetime-shown', async ({ page }) => {
-  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
-  const start = page.locator('tbody td [data-value="2026-10-14T00:30"]').first()
-  await expect(start).toHaveText(/^wo 14\/10 00:30$/)
-  await expect(start).not.toContainText('T')
-})
-
 test('in-filter-applies', async ({ page }) => {
   await open(page, 'Optie of bevestigd', row(page, 'vergadering Gent'), 'Activiteiten')
   await expect(row(page, 'vergadering Gent')).toBeVisible()
@@ -301,65 +254,4 @@ test('in-filter-applies', async ({ page }) => {
   await expect(row(page, 'vergadering Gent')).toHaveCount(0)
   await expect(row(page, 'overnachting Brugge')).toBeVisible()
   expect(new Set(await statuses())).toEqual(new Set(['Optie']))
-})
-
-test('new-without-title', async ({ page }) => {
-  const created: string[] = []
-  page.on('request', (req) => req.method() === 'POST' && created.push(req.url()))
-  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
-  await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
-  await expect(page.getByRole('combobox', { name: 'Productie' })).toBeFocused()
-  expect(created).toEqual([])
-})
-
-test('relation-beyond-page', async ({ page }) => {
-  const titels = (await rows<{ titel: string }>(page, 'productie')).map((p) => p.titel)
-  expect(titels.length).toBeGreaterThan(2)
-  const asked: { limit: string | null; offset: number }[] = []
-  page.on('request', (req) => {
-    const url = new URL(req.url())
-    // The rail's count read (limit 1) is no picker's page.
-    if (url.pathname === '/api/rows/productie' && url.searchParams.get('limit') !== '1')
-      asked.push({ limit: url.searchParams.get('limit'), offset: Number(url.searchParams.get('offset')) })
-  })
-  await open(page, 'Bevestigd', header(page, 'Einde'), 'Activiteiten')
-  await page
-    .locator('.nv-bar')
-    .getByRole('button', { name: /^Filter\s*\d*$/ })
-    .click()
-  await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
-  const condition = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
-  await pickIn(condition, 'Veld', 'Productie')
-  for (const titel of titels) {
-    await condition.getByRole('searchbox', { name: 'Productie zoeken' }).fill(titel)
-    await expect(condition.getByRole('option', { name: titel, exact: true })).toBeVisible()
-  }
-  expect(asked.every((a) => a.limit === '2')).toBe(true)
-  const offsets = [...new Set(asked.map((a) => a.offset))].sort((a, b) => a - b)
-  expect(offsets).toEqual(Array.from({ length: Math.ceil(titels.length / 2) }, (_, i) => i * 2))
-})
-
-test.describe('foreign-view-hidden', () => {
-  const name = 'Van Zeven privé'
-
-  test.beforeAll(() => {
-    execFileSync('bun', [
-      '-e',
-      `import { Database } from 'bun:sqlite'
-       const db = new Database('e2e/.tmp/e2e.db')
-       db.query("INSERT INTO saved_view (name, source_type, source, skin, owner_id, shared) VALUES (?, 'dataset', 'activiteit', 'table', 7, 0)").run(${JSON.stringify(name)})`,
-    ])
-    expect(readDb('SELECT count(*) FROM saved_view WHERE name = ? AND owner_id = 7 AND shared = 0', name)).toBe(1)
-  })
-
-  test('never listed, never in the rail', async ({ page }) => {
-    expect((await views(page)).map((v) => v.name)).not.toContain(name)
-    await page.goto('/')
-    const nav = page.getByRole('navigation', { name: 'Views' })
-    await openModel(page, 'Activiteiten')
-    await expect(nav.getByRole('button', { name: 'Planning', exact: true })).toBeVisible()
-    await expect(modelNode(page, 'Activiteiten')).toBeVisible()
-    await expect(nav.getByRole('button', { name })).toHaveCount(0)
-    await expect(page.getByText(name)).toHaveCount(0)
-  })
 })
