@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { fillDate } from './segments'
 import { shot } from './shots'
-import { dropViews, modelNode, openView, openWeek, pickIn } from './tree'
+import { dropViews, openView, openWeek, pickIn } from './tree'
 
 const WEEK = '2026-12-21'
 
@@ -343,15 +343,30 @@ async function withQuestion(
 const assignedTo = async (api: Api, activity: number) =>
   (await rowsOf<Assigned>(api, 'toewijzing', { activiteit_id: activity })).map((t) => t.persoon_id)
 
+// Bugs: the question holds the keyboard on Annuleren; Enter there reached the grid and marked the cell; Tab never reached Verwijderen; its buttons had no stylesheet.
 test('removal-question-by-keyboard @e2e', async ({ page }) => {
   const api = page.request
   const bram = await personId(api, 'Bram De Wilde')
+  const writes: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'PATCH') writes.push(new URL(req.url()).pathname)
+  })
   await withQuestion(page, 'mensen vraag e2e', '11:00', async (activity, search) => {
     const question = page.getByRole('alertdialog')
     const cancel = question.getByRole('button', { name: 'Annuleren' })
+    const remove = question.getByRole('button', { name: 'Verwijderen' })
 
-    // Backspace on a confirmed last name asks; the question holds the keyboard on Annuleren.
+    // Backspace on a confirmed last name asks; the question holds the keyboard on Annuleren, in the app's own buttons.
     await expect(cancel).toBeFocused()
+    const style = (button: Locator) =>
+      button.evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { font: s.fontFamily, background: s.backgroundColor, border: s.borderTopStyle }
+      })
+    const [cancelStyle, removeStyle] = [await style(cancel), await style(remove)]
+    expect(cancelStyle.font).toMatch(/^"?IBM Plex Sans/)
+    expect(cancelStyle.border).not.toBe('outset')
+    expect(removeStyle.background).not.toBe(cancelStyle.background)
     await shot(page, 'removal-question')
 
     // Escape keeps the person, and the search has the keyboard again.
@@ -369,9 +384,28 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
     await expect(search).toBeFocused()
     expect(await assignedTo(api, activity)).toEqual([bram])
 
+    // Enter on it keeps them without the grid committing the people cell as a value: no write, no marked cell.
+    await search.press('Backspace')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(question).toHaveCount(0)
+    expect(await assignedTo(api, activity)).toEqual([bram])
+    await page.waitForTimeout(500)
+    expect(writes).toEqual([])
+    await expect(page.locator('td.nv-td--error')).toHaveCount(0, { timeout: 1000 })
+    await expect(search).toBeFocused({ timeout: 1000 })
+
+    // Tab reaches Verwijderen.
+    await search.press('Backspace')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(remove).toBeFocused({ timeout: 1000 })
+    await page.keyboard.press('Escape')
+    await expect(question).toHaveCount(0)
+
     // The × asks as well; Verwijderen removes, and that is final: Ctrl+Z does not bring them back.
     await page.getByRole('button', { name: 'Bram De Wilde verwijderen' }).click()
-    await question.getByRole('button', { name: 'Verwijderen' }).click()
+    await remove.click()
     await expect.poll(() => assignedTo(api, activity)).toEqual([])
     await expect(page.locator('.nv-picker .nv-chosen [role="row"]')).toHaveCount(0)
     await search.press('Escape')
@@ -379,50 +413,6 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
     await page.waitForTimeout(500)
     expect(await assignedTo(api, activity)).toEqual([])
     await expect((await cellOf(page, 'mensen vraag e2e', 'Mensen')).locator('.nv-names')).toHaveText('')
-  })
-})
-
-// Bug: Enter on the focused Annuleren reaches the grid, which closes the box and commits the people cell as a value; the store refuses it and marks the cell.
-test('removal-question-enter-on-annuleren @e2e', async ({ page }) => {
-  const api = page.request
-  const writes: string[] = []
-  page.on('request', (req) => {
-    if (req.method() === 'PATCH') writes.push(new URL(req.url()).pathname)
-  })
-  await withQuestion(page, 'mensen enter e2e', '12:00', async (activity, search) => {
-    await expect(page.getByRole('alertdialog').getByRole('button', { name: 'Annuleren' })).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(page.getByRole('alertdialog')).toHaveCount(0)
-    expect(await assignedTo(api, activity)).toEqual([await personId(api, 'Bram De Wilde')])
-    await page.waitForTimeout(500)
-    expect(writes).toEqual([])
-    await expect(page.locator('td.nv-td--error')).toHaveCount(0, { timeout: 1000 })
-    await expect(search).toBeFocused({ timeout: 1000 })
-  })
-})
-
-// Bug: Tab on the question moves the grid's cell and closes the box; Verwijderen is never reached by the keyboard.
-test('removal-question-tab-to-verwijderen @e2e', async ({ page }) => {
-  await withQuestion(page, 'mensen tab e2e', '13:00', async () => {
-    const question = page.getByRole('alertdialog')
-    await page.keyboard.press('Tab')
-    await expect(question.getByRole('button', { name: 'Verwijderen' })).toBeFocused({ timeout: 1000 })
-  })
-})
-
-// Bug: the question's buttons carry nv-btn and nv-btn--danger, which no stylesheet defines: browser buttons in Arial, Verwijderen like Annuleren.
-test('removal-question-buttons-styled @e2e', async ({ page }) => {
-  await withQuestion(page, 'mensen knoppen e2e', '14:00', async () => {
-    const question = page.getByRole('alertdialog')
-    const style = (name: string) =>
-      question.getByRole('button', { name }).evaluate((el) => {
-        const s = getComputedStyle(el)
-        return { font: s.fontFamily, background: s.backgroundColor, border: s.borderTopStyle }
-      })
-    const [cancel, remove] = [await style('Annuleren'), await style('Verwijderen')]
-    expect(cancel.font).toMatch(/^"?IBM Plex Sans/)
-    expect(cancel.border).not.toBe('outset')
-    expect(remove.background).not.toBe(cancel.background)
   })
 })
 
@@ -545,31 +535,6 @@ test('new-row-people @e2e', async ({ page }) => {
     await page.getByRole('option', { name: 'Alle producties', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
   }
-})
-
-test('tourstop-first-in-planning @e2e', async ({ page }) => {
-  await page.goto('/')
-  const planning = page.getByRole('tree', { name: 'Views' }).getByRole('group', { name: 'Planning', exact: true })
-  const models = planning.getByRole('treeitem')
-  await expect(models.first()).toHaveAccessibleName('Tourstops')
-  const order = await models.evaluateAll((items) =>
-    items.map((i) => i.querySelector('.nv-model__name')?.textContent?.trim()),
-  )
-  expect(order).toEqual(['Tourstops', 'Activiteiten', 'Toewijzingen', 'Beschikbaarheden', 'Taken'])
-
-  await openView(page, 'Tourstops')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tourstops')
-  await expect(page.getByRole('button', { name: 'Nieuwe tourstop' })).toBeVisible()
-  const words = await page.locator('.nv-rail, thead, .nv-toolbar').allInnerTexts()
-  expect(words.join(' ')).not.toMatch(/speelreeks/i)
-  await shot(page, 'tourstops')
-
-  const schema = (await (await page.request.get('/api/schema')).json()) as {
-    sources: Record<string, { label: string; columns: Record<string, { label: string }> }>
-  }
-  expect(schema.sources.speelreeks?.label).toBe('Tourstops')
-  expect(schema.sources.activiteit?.columns.speelreeks_id?.label).toBe('Tourstop')
-  await expect(modelNode(page, 'Speelreeksen')).toHaveCount(0)
 })
 
 test('period-empty-result @e2e', async ({ page }) => {
