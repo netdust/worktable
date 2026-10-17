@@ -81,7 +81,7 @@ E2E flows: **matrix-cell-persists** — open "Toewijzingen per activiteit" (it o
 2. A saved filter is compiled exactly like a `/rows` filter (attack 3) → views denial tests, in-filter-applies.
 3. The assignee switch must not clear on an ambiguous body (both set) → theatre matrix tests.
 4. Titles through a relation follow a rename → engine title test renames the target and re-reads.
-5. Away periods that start before the window must still mark the week → grid away test, matrix-cell-persists.
+5. Away periods that start before the window must still mark the week → `away.test.ts` "a period that started before the window marks the days it still covers", and away-only-afwezig (`e2e/step-3.spec.ts`).
 
 ---
 
