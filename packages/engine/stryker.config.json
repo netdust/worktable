@@ -5,6 +5,7 @@
   "tempDirName": "../../.stryker-tmp/engine",
   "tsconfigFile": "tsconfig.none.json",
   "concurrency": 4,
+  "timeoutMS": 60000,
   "incremental": true,
   "reporters": ["json", "progress"],
   "jsonReporter": { "fileName": "../../reports/mutation/engine.last.json" },

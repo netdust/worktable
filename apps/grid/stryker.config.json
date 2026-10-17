@@ -6,6 +6,7 @@
   "tempDirName": "../../.stryker-tmp/grid",
   "tsconfigFile": "tsconfig.none.json",
   "concurrency": 4,
+  "timeoutMS": 60000,
   "incremental": true,
   "reporters": ["json", "progress"],
   "jsonReporter": { "fileName": "../../reports/mutation/grid.last.json" },
