@@ -9,3 +9,9 @@
   background: none;
   box-shadow: none;
 }
+
+/* An open place for more than one: how many, beside it, muted. */
+.nv-dw-list__times {
+  margin-left: 6px;
+  color: var(--color-fg-subtle);
+}

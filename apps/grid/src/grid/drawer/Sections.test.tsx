@@ -65,7 +65,21 @@ describe('a link section', () => {
     ]
     render(<LinkSection label="Mensen" link={toned} items={items} schema={schema} id={1} />)
     await waitFor(() => expect(remote.rowsWhere).toHaveBeenCalled())
-    expect(screen.getByRole('region', { name: 'Mensen' }).querySelector('.nv-dw-sec__n')?.textContent).toBe('1/3')
+    const section = screen.getByRole('region', { name: 'Mensen' })
+    expect(section.querySelector('.nv-dw-sec__n')?.textContent).toBe('1/3')
+    // The open ×2 says how many beside it; a place for one says nothing.
+    expect([...section.querySelectorAll('li')].map((li) => li.querySelector('.nv-dw-list__main > span')?.textContent)).toEqual([
+      'Sien Peeters',
+      'Open plek×2',
+      'Open plek×3',
+    ])
+    expect(section.querySelectorAll('.nv-dw-list__times')).toHaveLength(2)
+    // The cancelled one says so, as a filled place does, so the head's 3 reads true.
+    expect([...section.querySelectorAll('li')].map((li) => li.querySelector('.nv-pill')?.textContent ?? null)).toEqual([
+      'Bevestigd',
+      null,
+      'Geannuleerd',
+    ])
   })
 
   it('re-reads its places once its items change, and asks for the candidates of the place as it reads now', async () => {
