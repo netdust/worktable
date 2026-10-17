@@ -280,6 +280,15 @@ describe('writes', () => {
     expect(toEngineData({ start_at: '' }, source, writes.sources)).toEqual({ start_at: null })
   })
 
+  it('a cleared nullable text goes on the wire as null, and one that may not be null stays empty for its writer to refuse', () => {
+    const columns = {
+      ...writes.sources.activiteit.columns,
+      contract: { type: 'text' as const, label: 'Contract', nullable: true, options: { vast: 'Vast' } },
+      naam: { type: 'text' as const, label: 'Naam' },
+    }
+    expect(toEngineData({ contract: '', naam: '' }, { ...writes.sources.activiteit, columns }, writes.sources)).toEqual({ contract: null, naam: '' })
+  })
+
   it("a mapped query column reads the options the engine serves on it, and its target's relation", () => {
     const own: EngineSchema = {
       ...writes,

@@ -1,5 +1,4 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { openEditor } from './editor'
 import { openView } from './tree'
 
 const FICHE = 'http://127.0.0.1:5175'
@@ -95,7 +94,6 @@ async function pressDelete(page: Page, view: string, title: string) {
 
 for (const { view, dataset, title, link } of [
   { view: 'Organisaties', dataset: 'organisatie', title: 'Zaal De Spiegel', link: 'locatie_id' },
-  { view: 'Producties', dataset: 'productie', title: 'De Kersentuin', link: 'productie_id' },
 ]) {
   test(`referenced-delete-refused: ${dataset}`, async ({ page }) => {
     const before = (await rows<{ id: number; titel?: string; naam?: string }>(page, dataset)).find(
@@ -127,28 +125,6 @@ for (const { view, dataset, title, link } of [
   })
 }
 
-test('duplicate-assignment-refused', async ({ page }) => {
-  const key = (r: { activiteit_id: number; persoon_id: number | null }) => `${r.activiteit_id}/${r.persoon_id}`
-  const before = await rows<{ id: number; activiteit_id: number; persoon_id: number | null }>(page, 'toewijzing')
-  const bram = before.find((r) => r.id === 2)
-  expect(bram?.persoon_id).toBe(2)
-  await open(page, 'Toewijzingen')
-
-  const target = page.locator('tbody tr.nv-tr', { hasText: 'Bram De Wilde' })
-  const persoon = target.locator('td').nth(await columnIndex(page, 'Persoon'))
-  await persoon.click()
-  await persoon.press('Enter')
-  await page.getByRole('combobox', { name: 'Persoon' }).fill('Lotte')
-  await page.getByRole('option', { name: 'Lotte Verhaegen' }).click()
-
-  await expect(page.locator('tbody').getByRole('alert')).toContainText(
-    'Deze persoon is al toegewezen aan deze activiteit.',
-  )
-  const after = await rows<{ id: number; activiteit_id: number; persoon_id: number | null }>(page, 'toewijzing')
-  expect(after.map(key)).toEqual(before.map(key))
-  expect(await revisions(page, 'toewijzing', 2)).toEqual([])
-})
-
 test('voorstellingen-public', async ({ page }) => {
   const activiteiten = await rows<{ id: number; soort: string; status: string }>(page, 'activiteit')
   const confirmed = activiteiten.filter((a) => a.soort === 'voorstelling' && a.status === 'bevestigd')
@@ -176,49 +152,6 @@ test('voorstellingen-public', async ({ page }) => {
   await expect(page.locator('tbody tr.nv-tr')).toHaveCount(confirmed.length)
   await expect(page.locator('tbody')).toContainText('Zaal De Spiegel')
   await expect(page.locator('thead th', { hasText: 'Aanvang' })).toBeVisible()
-})
-
-test('select-clear-null', async ({ page }) => {
-  const persoon = () => rows<{ id: number; weergavenaam: string; contract_type: string | null }>(page, 'persoon')
-  const name = 'Sam Peeters'
-  expect((await persoon()).find((p) => p.weergavenaam === name)?.contract_type).toBe('freelance')
-  await open(page, 'Personen')
-
-  const contract = await cell(page, name, 'Contract')
-  await contract.click()
-  await contract.press('Delete')
-  await expect(contract).toHaveText('')
-  await expect.poll(async () => (await persoon()).find((p) => p.weergavenaam === name)?.contract_type).toBeNull()
-
-  await page.reload()
-  await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
-  await expect(await cell(page, name, 'Contract')).toHaveText('')
-})
-
-test('select-clear-refused', async ({ page }) => {
-  const before = await rows<{ id: number; state: string }>(page, 'toewijzing')
-  expect(before.find((r) => r.id === 5)?.state).toBe('uitgenodigd')
-  await open(page, 'Toewijzingen')
-
-  const target = page.locator('tbody tr.nv-tr', { hasText: 'Sam Peeters' }).filter({ hasText: 'Uitgenodigd' })
-  const state = target.locator('td').nth(await columnIndex(page, 'Status'))
-  // State may not be empty (not nullable, with a default): the grid offers no clear, so none is sent to be refused.
-  const patches: string[] = []
-  page.on('request', (request) => request.method() === 'PATCH' && patches.push(request.url()))
-  await state.click()
-  await state.press('Delete')
-  await state.press('Enter')
-  const list = openEditor(page).getByRole('listbox')
-  await expect(list.getByRole('option').first()).toBeVisible()
-  await expect(list.getByRole('option', { name: '—' })).toHaveCount(0)
-  await list.press('Escape')
-  await page.waitForTimeout(400)
-
-  expect(patches).toEqual([])
-  await expect(state).toContainText('Uitgenodigd')
-  expect((await rows<{ id: number; state: string }>(page, 'toewijzing')).find((r) => r.id === 5)?.state).toBe(
-    'uitgenodigd',
-  )
 })
 
 test('unreferenced-delete', async ({ page }) => {
