@@ -25,7 +25,6 @@
   --color-border-subtle: #e7eaee;
   --color-border-default: #d9dee4;
   --color-border-strong: #c4cbd3;
-  --color-border-focus: #2563ab;
 
   --color-accent-default: #2563ab;
   --color-accent-hover: #1d4f8c;
@@ -76,11 +75,25 @@ body {
   font-family: var(--font-sans);
 }
 
-:where(button, a, [tabindex]):focus-visible {
+/* One focus mark app-wide (Stefan, 2026-10-17): a thin square line in the text colour; a rounded element keeps its own radius. Zero specificity, so a rule that moves it wins. */
+:where(:focus-visible) {
+  outline: 1px solid var(--color-fg-default);
+  outline-offset: 2px;
+}
+
+/* A choice whose input is hidden (React Aria) or small (a native radio or checkbox): the mark goes on its whole label. */
+:where(label[data-focus-visible], label:has(> input:is([type="radio"], [type="checkbox"]):focus-visible)) {
+  outline: 1px solid var(--color-fg-default);
+  outline-offset: 2px;
+}
+
+:where(label > input:is([type="radio"], [type="checkbox"])) {
   outline: none;
-  box-shadow:
-    0 0 0 2px var(--color-bg-surface),
-    0 0 0 4px var(--color-border-focus);
+}
+
+/* A field draws its own border: the mark lies on it, so the border turns the text colour, not a second frame. */
+:where(input, textarea, select):where(:focus-visible) {
+  outline-offset: -1px;
 }
 
 /* Colours crossfade on a theme switch; zero specificity, so any rule of its own wins. */
@@ -127,7 +140,6 @@ body {
     --color-border-subtle: #24262b;
     --color-border-default: #2c2e34;
     --color-border-strong: #3a3d44;
-    --color-border-focus: #5b9be0;
     --color-accent-default: #5b9be0;
     --color-accent-hover: #7db0e8;
     --color-accent-active: #9cc3ee;
@@ -177,7 +189,6 @@ body {
   --color-border-subtle: #24262b;
   --color-border-default: #2c2e34;
   --color-border-strong: #3a3d44;
-  --color-border-focus: #5b9be0;
   --color-accent-default: #5b9be0;
   --color-accent-hover: #7db0e8;
   --color-accent-active: #9cc3ee;
