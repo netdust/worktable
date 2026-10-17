@@ -56,8 +56,8 @@ Not a security surface: no route, auth or input-parsing change beyond the writer
 
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
-| Theatre Activiteit writer and declaration | `POST/PATCH /api/rows/activiteit`, `/rows/voorstellingen` | integration · `packages/theatre/test/writer.test.ts`, `theatre.test.ts` · `bun test packages/theatre` | untimed-activity |
-| Grid empty datetime | `DateCell`, `useTable` sort, newRow | unit · `apps/grid/src/grid/*.test.ts(x)` · `bun run --filter @worktable/grid test` | untimed-activity |
+| Theatre Activiteit writer and declaration | `POST/PATCH /api/rows/activiteit`, `/rows/voorstellingen` | integration · `packages/theatre/test/writer.test.ts`, `theatre.test.ts` · `bun test packages/theatre` | none (untimed-activity is gone: `packages/theatre/test/writer.test.ts` "an activity without a time" and "a 05:00 start stays a time", with the `edit-datetime-cell` flow in `e2e/react-aria.spec.ts`) |
+| Grid empty datetime | `DateCell`, `useTable` sort, newRow | unit · `apps/grid/src/grid/*.test.ts(x)` · `bun run --filter @worktable/grid test` | none (untimed-activity is gone: `grid/columns.test.ts` "shows an empty datetime as nothing", `grid/newRow.test.ts` "asks only for the production on Activiteit", `edit-datetime-cell` in `e2e/react-aria.spec.ts`) |
 | Laika exporter | `wp laika export-planning` | unit and integration · `tests/Unit/WorktableExport/ActivityMapTest.php`, `ChecksTest.php`, `tests/Integration/WorktableExport/ExportCommandTest.php` · `ddev composer test:unit`, `test:int` | none |
 | Rebuild of the local engine | the import CLI, parity | manual · Task 4 | none |
 
@@ -95,7 +95,7 @@ Not a security surface: no route, auth or input-parsing change beyond the writer
 - [ ] **Step 3: Commit.** `feat(theatre): an activity can have no time — datum required, start optional`.
 
 ### Task 2: Grid — an empty time is just the day
-**Files:** `apps/grid/src/grid/cells/Date.tsx` (the picker editor accepts clearing to empty; plan review N1: rendering empty and sorting first already hold, so those get tests that are expected to pass on arrival, said so in the report), `newRow.test.ts` (`needs` is `['productie_id']` and `fields.datum` is the window's day; no `newRow.ts` change), `apps/grid/src/grid/columns.test.ts` (an empty datetime renders `''`; a 05:00 start renders as 05:00), `apps/grid/src/grid/group.test.ts` (an untimed row sorts first within its plandag group, never in the previous day), and `e2e/step-0e.spec.ts`, flow **untimed-activity**:
+**Files:** `apps/grid/src/grid/cells/Date.tsx` (the picker editor accepts clearing to empty; plan review N1: rendering empty and sorting first already hold, so those get tests that are expected to pass on arrival, said so in the report), `newRow.test.ts` (`needs` is `['productie_id']` and `fields.datum` is the window's day; no `newRow.ts` change), `apps/grid/src/grid/columns.test.ts` (an empty datetime renders `''`; a 05:00 start renders as 05:00), `apps/grid/src/grid/group.test.ts` (an untimed row sorts first within its plandag group, never in the previous day), and the e2e flow **untimed-activity** in `e2e/step-0e.spec.ts`, written here and since gone (its steps are pinned by `writer.test.ts`, `columns.test.ts`, `newRow.test.ts` and `edit-datetime-cell` in `e2e/react-aria.spec.ts`); it did:
 - open the seeded view "Optie of bevestigd" (a table on `activiteit`, `status` in optie/bevestigd, and it shows `datum` after Task 1). Clicking the "Activiteiten" table would open Planning, which filters `bevestigd`, and the new `optie` row would vanish;
 - press "+ New", pick a production;
 - the row lands on the day `newRow` picks (today when today is in the window, else the window's first day) with no time; the test asserts against the `datum` in the POST body, never a fixed date;

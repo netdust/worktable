@@ -40,6 +40,7 @@ test('autosave-own-view @e2e', async ({ page }) => {
     await page.getByRole('group', { name: 'Groeperen' }).getByRole('button', { name: 'Soort' }).click()
     await page.waitForTimeout(800)
     expect((await views(page)).find((v) => v.id === seeded?.id)?.group_by).toBe(seeded?.group_by)
+    await expect(page.locator('.nv-toolbar').getByText(/gewijzigd|Opslaan|Opgeslagen/)).toHaveCount(0)
     await page.getByRole('button', { name: 'More actions', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Terugzetten' }).click()
   } finally {

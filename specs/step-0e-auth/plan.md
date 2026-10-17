@@ -126,12 +126,12 @@ For scoping, a domain-coded `WHERE` per dataset is simplest. It is rejected by t
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
 | Sign-in and sessions | `/api/auth/*`, the session middleware, CLI flags | integration · `packages/engine/test/auth.test.ts` (denials first: attacks 1–5, 11) · `bun test packages/engine` | sign-in-by-link |
-| Access and owner scope | `/rows`, `/revisions`, `?cells=1`, `/schema`, writes | integration · `packages/engine/test/access.test.ts` (attacks 6, 7, 9) | owner-sees-own |
+| Access and owner scope | `/rows`, `/revisions`, `?cells=1`, `/schema`, writes | integration · `packages/engine/test/access.test.ts` (attacks 6, 7, 9) | none (owner-sees-own is gone: `packages/theatre/test/access.test.ts` "an owner reads only its own rows" and `packages/engine/test/access.test.ts` "/views lists the shared views on readable sources only", with `apps/grid/src/ui/App.test.tsx` "falls back to the first view when the hash names an id that is no saved view") |
 | Route × role matrix | every registered route | integration · `packages/engine/test/route-matrix.test.ts`, from `EXPECTED` in the test file plus `app.routes` | none |
-| Views: system owner, public route | `/api/views*`, `/api/public/views/:token` | integration · `packages/engine/test/views.test.ts`, `public.test.ts` (attacks 8, 10) | seeded-view-read-only, public-view-by-token |
-| Theatre owners and writers | theatre through the routes | integration · `packages/theatre/test/access.test.ts` | owner-sees-own |
-| Grid sign-in, 401, read-only views | `App`, `SignIn`, `Confirm`, `api.ts` | unit · `apps/grid/src/ui/SignIn.test.tsx`, `api.test.ts` · `bun run --filter @worktable/grid test` | sign-in-by-link, seeded-view-read-only |
-| Browser gate | Playwright | e2e · `e2e/step-0e.spec.ts` · `bun run e2e` | all five above, plus session-less-401 |
+| Views: system owner, public route | `/api/views*`, `/api/public/views/:token` | integration · `packages/engine/test/views.test.ts`, `public.test.ts` (attacks 8, 10) | none (seeded-view-read-only and public-view-by-token are gone: `views.test.ts` "PATCH, DELETE and restore of a system view are 403 read_only_view", `public.test.ts` "the public route serves the view rows projected to visible_fields" and "a rotated token is 404; the new one answers", `useSavedViews.test.ts` "keeps a change local on a view one cannot write", and `autosave-own-view` in `e2e/toolbar.spec.ts`) |
+| Theatre owners and writers | theatre through the routes | integration · `packages/theatre/test/access.test.ts` | none (owner-sees-own is gone: see the access row above) |
+| Grid sign-in, 401, read-only views | `App`, `SignIn`, `Confirm`, `api.ts` | unit · `apps/grid/src/ui/SignIn.test.tsx`, `api.test.ts` · `bun run --filter @worktable/grid test` | sign-in-by-link (seeded-view-read-only is gone: see the views row above) |
+| Browser gate | Playwright | e2e · `e2e/step-0e.spec.ts` · `bun run e2e` | sign-in-by-link, session-less-401 |
 
 ## Review Focus
 1. The denied actor through the whole chain, not the route function (edge 2): an owner reaching another person's row through lookups, `?cells=1`, `/revisions` or a query → `access.test.ts`.
@@ -319,9 +319,9 @@ Final review and security audit 15:58–16:00; fix wave 16:00–16:08. Commit st
   - A system view's Save is disabled.
 - [ ] **Step 3: Write `e2e/step-0e.spec.ts`:**
   1. **sign-in-by-link:** request a link, read it from the outbox file, open it, press the button, and see the grid.
-  2. **owner-sees-own:** as the owner, Toewijzingen shows only their rows and Afwezigheden only theirs; another person's row id typed into the URL hash shows nothing.
-  3. **seeded-view-read-only:** Save is disabled; "Opslaan als nieuw" creates a copy, which saves after a change and survives a reload.
-  4. **public-view-by-token:** create a token with the administrator API in setup; a cookie-less `request.get` returns the projected rows; a wrong token gives 404.
+  2. (gone, pinned by the Test map's access rows) **owner-sees-own:** as the owner, Toewijzingen shows only their rows and Afwezigheden only theirs; another person's row id typed into the URL hash shows nothing.
+  3. (gone, pinned by the Test map's views rows) **seeded-view-read-only:** Save is disabled; "Opslaan als nieuw" creates a copy, which saves after a change and survives a reload.
+  4. (gone, pinned by `public.test.ts`) **public-view-by-token:** create a token with the administrator API in setup; a cookie-less `request.get` returns the projected rows; a wrong token gives 404.
   5. **session-less-401:** clear cookies mid-session; the next action shows sign-in.
 - [ ] **Step 4: Implement, then run** `rm -rf e2e/.tmp && bun run gate` → PASS. Quote the counts.
 - [ ] **Step 5: Commit.** `feat: theatre owners, the grid signs in, and the 0e auth gate`.
