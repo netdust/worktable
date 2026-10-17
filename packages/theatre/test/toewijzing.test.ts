@@ -190,6 +190,54 @@ describe('aantal', () => {
   })
 })
 
+describe('a direct edit that fills an open slot for more than one', () => {
+  const others = (id: number) => sqlite.query('SELECT * FROM toewijzing WHERE id > ? ORDER BY id').all(id) as Body[]
+
+  test("the row takes the person with aantal 1; a new open row holds the other places, with the slot's notitie", async () => {
+    const slot = await created({ rol_id: 1, aantal: 3, notitie: 'eigen instrument' })
+    const res = await patch(editor, slot, { persoon_id: 2 })
+    expect(res.status).toBe(200)
+    expect(stored(slot)).toMatchObject({ persoon_id: 2, aantal: 1, state: 'voorlopig', rol_id: 1 })
+    const [rest] = others(slot)
+    expect(rest).toMatchObject({
+      activiteit_id: 5,
+      rol_id: 1,
+      aantal: 2,
+      state: 'open',
+      persoon_id: null,
+      notitie: 'eigen instrument',
+    })
+    expect((res.body.revision as Body).created).toEqual([{ dataset: 'toewijzing', id: rest?.id }])
+  })
+
+  test('a name fills it the same way', async () => {
+    const slot = await created({ rol_id: 1, aantal: 2 })
+    expect((await patch(editor, slot, { naam: 'Gastmuzikant' })).status).toBe(200)
+    expect(stored(slot)).toMatchObject({ naam: 'Gastmuzikant', aantal: 1, state: 'voorlopig' })
+    expect(others(slot)).toMatchObject([{ rol_id: 1, aantal: 1, state: 'open', naam: null }])
+  })
+
+  test('one undo restores the open slot for three and removes the new row', async () => {
+    const slot = await created({ rol_id: 1, aantal: 3 })
+    const { batch_id } = (await patch(editor, slot, { persoon_id: 2 })).body.revision as { batch_id: string }
+    expect(others(slot)).toMatchObject([{ aantal: 2, state: 'open', deleted_at: null }])
+    expect((await editor('POST', `/api/batches/${batch_id}/undo`, {})).status).toBe(200)
+    expect(stored(slot)).toMatchObject({ persoon_id: null, aantal: 3, state: 'open' })
+    expect(others(slot).every((row) => row.deleted_at !== null)).toBe(true)
+  })
+
+  test('an open slot for one, or a cancelled one, adds no row', async () => {
+    const single = await created({ rol_id: 1, aantal: 1 })
+    expect((await patch(editor, single, { persoon_id: 2 })).status).toBe(200)
+    expect(stored(single)).toMatchObject({ persoon_id: 2, aantal: 1 })
+    const cancelled = await created({ rol_id: 1, aantal: 3 })
+    expect((await patch(editor, cancelled, { state: 'geannuleerd' })).status).toBe(200)
+    expect((await patch(editor, cancelled, { persoon_id: 3 })).status).toBe(200)
+    expect(stored(cancelled)).toMatchObject({ persoon_id: 3, aantal: 3, state: 'geannuleerd' })
+    expect(others(cancelled)).toEqual([])
+  })
+})
+
 describe('an owner', () => {
   const invited = () => created({ persoon_id: 1, state: 'uitgenodigd' })
 

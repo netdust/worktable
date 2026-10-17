@@ -12,6 +12,8 @@ export interface Entry {
   ids?: number[]
   /** Repaints what the step changed beside the rows, such as a record's files. */
   refresh?: () => void
+  /** Its write added rows to its batch: after an undo or a redo the view is read again. */
+  reloads?: boolean
 }
 
 /** The server's refusal of an undo; `undone` when a step went part-way: what went through, now the redo, to repaint. */

@@ -147,6 +147,8 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
   const pending = new Map<number, number>()
   const latest = new Map<number, number>()
   const queues = new Map<number, Promise<unknown>>()
+  // The batches whose write added rows beside its own: their undo and redo read the view again.
+  const grew = new Set<string>()
   // What the server last said each record holds: a refusal reverts to this, never to another write's paint.
   const confirmed = new Map<number, Row>(rows.map((row) => [row.id, row]))
   // Records whose DELETE is in flight or landed: no write goes to them.
@@ -249,7 +251,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
   async function land({ change, row, mine }: Painted, ready?: Promise<boolean>, quiet = false): Promise<string | null | undefined> {
     const key = cellKey(change.id, change.field)
     try {
-      const { row: saved, batch } = await queued(change, row, ready)
+      const { row: saved, batch, created } = await queued(change, row, ready)
       confirmed.set(saved.id, saved)
       track(change.id, -1)
       // Answers come in order; one with a later write still queued would repaint over that write's paint.
@@ -257,6 +259,11 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
         refused = false
         set({ rows: patch(DRAFT, () => saved), needs: [], errors: withoutDraftErrors(), save: settle() }, quiet)
       } else set({ rows: latest.get(change.id) === mine ? patch(change.id, () => saved) : state.rows, save: settle() }, quiet)
+      // Rows the writer added beside this one show only in a fresh read of the view.
+      if (batch && created?.length) {
+        grew.add(batch)
+        reload()
+      }
       return batch
     } catch (error) {
       track(change.id, -1)
@@ -307,6 +314,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
   /** Repaints the undone step's rows as the server now has them; a step on another view's rows, or an action, reloads; a step with its own refresh runs it. */
   async function repaint(entry: Entry): Promise<void> {
     if (entry.refresh) return entry.refresh()
+    if (entry.reloads) return reload()
     const ids = entry.ids ?? (entry.id === null ? [] : [entry.id])
     const read = api.read
     const found = entry.model === model && ids.length > 0 && read ? await Promise.all(ids.map((id) => read(model, id).catch(() => null))) : [null]
@@ -371,6 +379,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
       const batch = await commit(change)
       answered(batch ?? null)
       if (!batch) history.drop(entry)
+      else if (grew.has(batch)) entry.reloads = true
     },
     async applyStep(changes) {
       // The last write waits in its record's queue for the others: a second change to its record would wait on it forever.

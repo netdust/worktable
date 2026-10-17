@@ -1,4 +1,4 @@
-import { type DatasetDecl, forbid, refuse, type WriteContext, type Writer } from '@worktable/engine'
+import { type DatasetDecl, forbid, refuse, type WriteContext, type Writer, type WriterUpdate } from '@worktable/engine'
 import {
   activiteit,
   beschikbaarheid,
@@ -179,12 +179,26 @@ function stateOnUpdate(values: Values, ctx: WriteContext): Values {
   return state === 'open' || (PERSONAL.includes(state) && moved) ? { ...values, state: 'voorlopig' } : values
 }
 
+// The slot's plan side, which the places left open keep.
+const PLAN_SIDE = ['notitie']
+
+// Someone landing on an open slot for more than one takes one place; a new open row holds the rest, as vul_slot leaves them.
+function splitOnFill(values: Values, ctx: WriteContext): Values | WriterUpdate {
+  const slot = ctx.current
+  const aantal = Number(slot?.aantal)
+  const { persoon_id, naam, ...rest } = merged(values, ctx)
+  if (slot?.state !== 'open' || aantal <= 1 || (!isSet(persoon_id) && !filled(naam))) return values
+  const kept = Object.fromEntries(PLAN_SIDE.map((key) => [key, rest[key]]))
+  const open = { activiteit_id: rest.activiteit_id, rol_id: rest.rol_id, aantal: aantal - 1, ...kept }
+  return { values: { ...values, aantal: 1 }, creates: [{ dataset: 'toewijzing', values: open }] }
+}
+
 const toewijzingPlanned = forPlanners(
   {
     create: (values, ctx) => toewijzingAccept(stateOnCreate(values), ctx),
     update(values, ctx) {
       switchAssignee(values)
-      return toewijzingAccept(stateOnUpdate(values, ctx), ctx)
+      return splitOnFill(toewijzingAccept(stateOnUpdate(values, ctx), ctx), ctx)
     },
     delete() {},
   },

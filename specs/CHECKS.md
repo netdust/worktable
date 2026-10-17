@@ -129,6 +129,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Matrix · uitnodiging zonder e-mailadres | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "no-email-no-invite @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Toewijzingen · verboden overgang | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "disallowed-transition @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Toewijzingen · persoon wisselen → Voorlopig | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "swap-pencils-back-in @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
+| Toewijzingen · een persoon op een open plek ×2: die rij krijgt de persoon met aantal 1, een nieuwe open rij houdt de andere plek; één ⌘Z zet de open ×2 terug | e2e | `bunx playwright test e2e/slot-split.spec.ts --grep "fill-open-slot-splits @e2e"` | e2e/slot-split.spec.ts | slot-split-on-edit | pending gate |
 | Matrix · verouderde status (409) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "stale-state-409 @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | PATCH /api/rows/toewijzing · race (409) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "planner-and-person-race-409 @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
 | Exporteren / delen · Voor eigenaars + #/link | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "link-shows-own-projects-only @e2e"` | e2e/step-2.spec.ts | step-2 | 1e3309c 2026-10-16 |
