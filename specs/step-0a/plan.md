@@ -47,14 +47,14 @@ First working version: Task 2 — `bun packages/engine/src/serve.ts --domain @wo
 
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
-| Grid port (copy, WP removal, adapter, layout → server) | the app rendered against `/api` | unit · `apps/grid/src/**/*.test.ts(x)` (ported suite) + `apps/grid/src/engine.test.ts` · `bun run --filter @worktable/grid test` | planning-grouped-sorted, planning-status-filter, query-view-loads |
-| Rows REST + filter compiler + params | `GET /api/rows/:source`, `GET /api/schema` | integration · `packages/engine/test/rows.test.ts`, `packages/engine/test/filter.test.ts` · `bun test packages/engine` — denials first: attacks 1–6 each assert 400/404 and that the database is unchanged | planning-status-filter |
+| Grid port (copy, WP removal, adapter, layout → server) | the app rendered against `/api` | unit · `apps/grid/src/**/*.test.ts(x)` (ported suite) + `apps/grid/src/engine.test.ts` · `bun run --filter @worktable/grid test` | none: the three flows are gone from the browser. planning-grouped-sorted rests on `group.test.ts` "makes one section per day, ordered…", `writer.test.ts` "update of start_at to 03:30 stores the previous day…" and the sort tests in `rows.test.ts`; planning-status-filter on `e2e/toolbar.spec.ts` filter-builder and `e2e/step-0d.spec.ts` in-filter-applies; query-view-loads on `e2e/step-0c.spec.ts` voorstellingen-public |
+| Rows REST + filter compiler + params | `GET /api/rows/:source`, `GET /api/schema` | integration · `packages/engine/test/rows.test.ts`, `packages/engine/test/filter.test.ts` · `bun test packages/engine` — denials first: attacks 1–6 each assert 400/404 and that the database is unchanged | none (planning-status-filter: filter-builder in `e2e/toolbar.spec.ts`) |
 | Migrator (R3's refusal) | `migrate(sqlite, domain)` | integration · `packages/engine/test/migrate.test.ts` · `bun test packages/engine` | none — proven by flow |
-| plandag | `plandag(startAt, dayLineHour)` | unit · `packages/theatre/test/plandag.test.ts` · `bun test packages/theatre` | planning-grouped-sorted |
-| Theatre declarations, view, seeds | `@worktable/theatre` default export | none — configuration over the engine; proven by flow | all three |
-| Gate | `bun run gate` | e2e · `e2e/step-0a.spec.ts` · `bun run e2e` | all three |
+| plandag | `plandag(startAt, dayLineHour)` | unit · `packages/theatre/test/plandag.test.ts` · `bun test packages/theatre` | none (planning-grouped-sorted: `writer.test.ts` stores the day line) |
+| Theatre declarations, view, seeds | `@worktable/theatre` default export | none — configuration over the engine; proven by flow | none (the flows live on in the covers named above) |
+| Gate | `bun run gate` | `e2e/step-0a.spec.ts` is deleted whole; the gate is `bun run gate` over the other specs | none |
 
-E2E flows: **planning-grouped-sorted** — open Planning; day headers appear in plandag order; inside a day rows run by `start_at`. **planning-status-filter** — the Planning view opens filtered on `status = bevestigd`; removing that chip and adding Status: optie shows only optie rows and the `/api/rows/activiteit` request carries `filter` with `optie`. **query-view-loads** — open "Per productie per dag"; rows load from `/api/rows/productie_dag`.
+Former E2E flows (the browser tests are gone; see the Test map for what pins each): **planning-grouped-sorted** — open Planning; day headers appear in plandag order; inside a day rows run by `start_at`. **planning-status-filter** — the Planning view opens filtered on `status = bevestigd`; removing that chip and adding Status: optie shows only optie rows and the `/api/rows/activiteit` request carries `filter` with `optie`. **query-view-loads** — open "Voorstellingen"; rows load from `/api/rows/voorstellingen` (the plan's first wording named "Per productie per dag", which the test never opened).
 
 ## Review Focus
 
@@ -204,10 +204,10 @@ Reviews and fixes: per-task reviews ran between tasks; final review and security
 **Interfaces:**
 - Consumes: Task 2's CLI, Task 3's `vite` dev server.
 
-- [ ] **Step 1: Write the three flows** in `e2e/step-0a.spec.ts` against `webServer`: engine `--fresh --db e2e/.tmp/e2e.db --port 4311`, Vite on 5174 with `ENGINE_URL=http://127.0.0.1:4311`, window navigated to `#from=2026-10-12` (the grid shows the Monday–Sunday week of `from`; `to` is ignored):
+- [ ] **Step 1: Write the three flows** (since deleted with `e2e/step-0a.spec.ts`; covers in the Test map) against `webServer`: engine `--fresh --db e2e/.tmp/e2e.db --port 4311`, Vite on 5174 with `ENGINE_URL=http://127.0.0.1:4311`, window navigated to `#from=2026-10-12` (the grid shows the Monday–Sunday week of `from`; `to` is ignored):
   - **planning-grouped-sorted** — group headers' days ascend; within each group `start_at` cells ascend; the 00:30 activity of 2026-10-14 sits under the 2026-10-13 header
   - **planning-status-filter** — every row's status reads `bevestigd`; remove the status chip, then "+ Filter" → Status → optie; `page.waitForRequest` on `/api/rows/activiteit` has a `filter` containing `optie`; every row reads `optie`
-  - **query-view-loads** — open "Per productie per dag"; the response for `/api/rows/productie_dag` is 200 and the grid shows its rows
+  - **query-view-loads** — open "Voorstellingen"; the response for `/api/rows/voorstellingen` is 200 and the grid shows its rows
 - [ ] **Step 2: Run** — `bunx playwright install chromium` once, then `bun run e2e` → 3 passed. Then `bun run gate` → exit 0.
 - [ ] **Step 3: Commit** — `test(e2e): step 0a gate in a real browser`.
 
