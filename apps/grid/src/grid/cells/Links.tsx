@@ -29,8 +29,10 @@ export const isOpen = (item: LinkItem): boolean => item.target === null && item.
 
 /** Who holds a place, a refused or cancelled one aside, and the places in all: have/need, as the prototype's Bezetting. */
 export function crewOf(items: LinkItem[], link?: Link): { have: number; need: number } {
-  const have = items.filter((item) => !isOpen(item) && link?.state?.tones[item.state ?? ''] !== 'bad').length
-  return { have, need: have + items.filter(isOpen).length }
+  const counted = items.filter((item) => link?.state?.tones[item.state ?? ''] !== 'bad')
+  const have = counted.filter((item) => !isOpen(item)).length
+  const open = counted.filter(isOpen).reduce((sum, item) => sum + (item.places ?? 1), 0)
+  return { have, need: have + open }
 }
 
 export function LinksCell({ column, row }: CellProps) {

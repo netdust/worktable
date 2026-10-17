@@ -15,7 +15,7 @@ import { domain, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
 type Request = ReturnType<typeof send>
-type Link = { id: number; target: number | null; title: string; state: string | null }
+type Link = { id: number; target: number | null; title: string; state: string | null; places?: number }
 type Row = { id: number; links?: Record<string, Link[]> }
 
 const json = (value: unknown) => JSON.stringify(value)
@@ -126,6 +126,12 @@ describe('validateDomain refuses a links declaration', () => {
   test('a state that is not an options column', () => {
     expect(failure(onTaak({ koppels: link({ state: 'tekst' }) }))).toEqual(['taak', 'tekst'])
     expect(failure(onTaak({ koppels: link({ state: 'onbekend' }) }))).toEqual(['taak', 'onbekend'])
+  })
+
+  test('a count that is not an integer column, or is a relation', () => {
+    expect(failure(onTaak({ koppels: link({ count: 'tekst' }) }))).toEqual(['taak', 'tekst'])
+    expect(failure(onTaak({ koppels: link({ count: 'onbekend' }) }))).toEqual(['taak', 'onbekend'])
+    expect(failure(onTaak({ koppels: link({ count: 'project_id' }) }))).toEqual(['taak', 'project_id'])
   })
 
   test('a link name that clashes with a column', () => {
@@ -262,6 +268,69 @@ describe('/rows serves each row its link rows', () => {
     const rows = rowsOf((await editor('GET', '/api/rows/taak')).body).filter((r) => expected.has(r.id))
     expect(rows).toHaveLength(600)
     for (const row of rows) expect(linkIds(row, 'koppels')).toEqual(expected.get(row.id) as number[])
+  })
+})
+
+describe('a link with a count serves each item its places', () => {
+  // koppel gains a stuks column, and taak's koppels count by it.
+  function counted(ownerVisible: boolean): Domain {
+    const stuks: ColumnDecl = {
+      type: 'integer',
+      label: 'Stuks',
+      default: 1,
+      ...(ownerVisible && { owner_visible: true }),
+    }
+    return {
+      ...domain,
+      datasets: domain.datasets.map((d) => {
+        if (d.name === 'koppel') return { ...d, columns: { ...d.columns, stuks } }
+        if (d.name !== 'taak') return d
+        return { ...d, links: { ...d.links, koppels: { ...(d.links?.koppels as LinkDecl), count: 'stuks' } } }
+      }),
+    }
+  }
+  async function engineWith(ownerVisible: boolean) {
+    const db = new Database(':memory:')
+    const d = counted(ownerVisible)
+    migrate(db, d)
+    seedDomain(db, d)
+    const app = testEngine(db, d)
+    const as = async (role: 'editor' | 'owner') =>
+      send(app, await signIn(app, role, role === 'owner' ? { dataset: 'project', id: 1 } : undefined))
+    return { db, editor: await as('editor'), owner: await as('owner') }
+  }
+  const stuks = (db: Database, id: number, n: number) => db.query('UPDATE koppel SET stuks = ? WHERE id = ?').run(n, id)
+
+  test('places is the count when it is a positive integer, else 1; a link without a count serves none', async () => {
+    const { db, editor } = await engineWith(false)
+    const three = koppel(db, 1, 1, 'drie')
+    stuks(db, three, 3)
+    const zero = koppel(db, 1, 2, 'nul')
+    stuks(db, zero, 0)
+    const free = koppel(db, 1, null, 'los')
+    const row = rowsOf((await editor('GET', '/api/rows/taak')).body)[0]
+    expect(row?.links?.koppels?.map((l) => [l.id, l.places])).toEqual([
+      [three, 3],
+      [zero, 1],
+      [free, 1],
+    ])
+    expect(row?.links?.platen?.map((l) => Object.keys(l).sort())).toEqual(
+      [0, 1, 2].map(() => ['id', 'state', 'target', 'title']),
+    )
+  })
+
+  test('an owner gets places only when the count column is owner_visible', async () => {
+    for (const visible of [false, true]) {
+      const { db, owner } = await engineWith(visible)
+      const mine = koppel(db, 1, 1, 'mijn')
+      stuks(db, mine, 2)
+      const one = rowsOf((await owner('GET', '/api/rows/taak')).body).find((r) => r.id === 1)
+      const item = { id: mine, target: 1, title: 'Alfa', state: 'open' }
+      expect({ visible, koppels: one?.links?.koppels }).toEqual({
+        visible,
+        koppels: [visible ? { ...item, places: 2 } : item],
+      })
+    }
   })
 })
 

@@ -63,7 +63,7 @@ export type GroupFact =
   | { kind: 'first'; column: string; where: Record<string, unknown>; label: string }
   | { kind: 'count'; where?: Record<string, unknown>; label: string }
   | { kind: 'empty'; column: string; label: string }
-  /** "label have/need" over the group's rows: the link's items with a target, and all its items. */
+  /** "label have/need" over the group's rows, in the places of the link's items. */
   | { kind: 'filled'; link: string; label: string }
 
 export type TitleDecl = string | { via: string; else: string }
@@ -89,7 +89,7 @@ export interface MatrixDecl {
   open?: { match: string; count: string; fill: string }
 }
 
-/** The rows of `dataset` whose `key` column is this row's id; `item` is the word for one of them. */
+/** The rows of `dataset` whose `key` column is this row's id; `item` is the word for one of them; `count` an integer column holding the places each holds. */
 export interface LinkDecl {
   label: string
   item: string
@@ -97,6 +97,7 @@ export interface LinkDecl {
   key: string
   target: string
   state?: string
+  count?: string
 }
 
 /** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. `owner_visible` serves it to the row's owner too. */

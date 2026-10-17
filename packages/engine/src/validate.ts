@@ -269,6 +269,9 @@ function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
     if (link.state !== undefined && !linked.columns[link.state]?.options) {
       throw at(link.state, `state "${link.state}" is not an options column`)
     }
+    const count = link.count === undefined ? undefined : linked.columns[link.count]
+    if (link.count !== undefined && (count?.type !== 'integer' || count.relation))
+      throw at(link.count, `count "${link.count}" is not an integer column that is no relation`)
   }
 }
 
