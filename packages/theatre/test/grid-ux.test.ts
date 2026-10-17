@@ -70,8 +70,13 @@ describe('theatre declares its space, sections, facts and inherited venue', () =
         ],
       },
     ])
-    expect(body.sources.beschikbaarheid.label).toBe('Beschikbaarheden')
-    expect(body.sources.speelreeks.label).toBe('Tourstops')
+    expect(body.sections[0].sources.map((s: string) => body.sources[s].label)).toEqual([
+      'Tourstops',
+      'Activiteiten',
+      'Toewijzingen',
+      'Beschikbaarheden',
+      'Taken',
+    ])
     expect(body.sources.speelreeks.new_label).toBe('Nieuwe tourstop')
     expect(body.sources.activiteit.columns.speelreeks_id.label).toBe('Tourstop')
     expect(JSON.stringify(body)).not.toMatch(/label":"[^"]*speelreeks/i)
