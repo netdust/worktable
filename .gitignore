@@ -10,3 +10,5 @@ test-results/
 playwright-report/
 laika-planning-export*.json
 *.report.json
+.stryker-tmp/
+reports/

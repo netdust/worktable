@@ -14,14 +14,22 @@
     "check": "bun scripts/check-boundaries.ts && bun scripts/check-vocabulary.ts && bun scripts/check-staged-export.ts && bun scripts/check-export-terms.ts && biome check . && bun run --filter '*' typecheck",
     "e2e": "playwright test",
     "parity": "bun scripts/parity.ts",
+    "mutation": "bun scripts/mutation.ts",
     "gate": "bun run check && bun test packages scripts && bun run --filter @worktable/grid test && bun run e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@playwright/test": "^1.63.0",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
     "@types/bun": "^1.4.2",
     "@worktable/fiche": "workspace:*",
     "@worktable/theatre": "workspace:*",
+    "mutation-testing-metrics": "3.8.4",
+    "mutation-testing-report-schema": "3.8.4",
     "typescript": "^7.0.2"
+  },
+  "patchedDependencies": {
+    "@stryker-mutator/vitest-runner@10.0.0": "patches/@stryker-mutator%2Fvitest-runner@10.0.0.patch"
   }
 }
