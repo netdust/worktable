@@ -9,19 +9,11 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | surface | tier | entry | test | first feature | verified |
 |---|---|---|---|---|---|
 | Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-template @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-twice @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Speelreeksen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "speelreeks-delete-in-use @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Speelreeksen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "speelreeks-end-before-start @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Dagplanning · undo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "\sundo-changed-since @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Rollen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "rollen-editor-rate-refused @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Rollen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "rollen-admin-rate @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Sjablonen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "sjablonen-read-only @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Planning · Locatie via Tourstop | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "planning-locatie-via-tourstop @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-double-submit @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Dagplanning · undo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-undo-changed-since @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Dagplanning · redo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-redo-refused @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| POST /api/rows/speelreeks | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "speelreeks-boundaries @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
-| Speelreeks · owner scope | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "owner-denied-speelreeks @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Theme · density | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "dark-and-density @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Production switcher | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "switch-production @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Production switcher · owner | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "owner-has-no-switcher @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |

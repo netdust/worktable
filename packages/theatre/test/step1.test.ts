@@ -100,6 +100,9 @@ describe('the Speelreeks writer refuses', () => {
   test('an unknown productie', () =>
     refused(editor('POST', '/api/rows/speelreeks', { ...REEKS, productie_id: 99 }), 'Productie bestaat niet.'))
 
+  test('an unknown locatie', () =>
+    refused(editor('POST', '/api/rows/speelreeks', { ...REEKS, locatie_id: 99_999 }), 'Locatie bestaat niet.'))
+
   test('a deleted locatie', () => {
     softDelete('organisatie', 3)
     return refused(editor('POST', '/api/rows/speelreeks', REEKS), 'Locatie bestaat niet.')
