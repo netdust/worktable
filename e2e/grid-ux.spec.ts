@@ -3,7 +3,7 @@ import { state } from './auth'
 import { writeDb } from './db'
 import { openLooks } from './editor'
 import { shot } from './shots'
-import { modelNode, openModel, openView, openWeek } from './tree'
+import { dropViews, modelNode, openModel, openView, openWeek } from './tree'
 
 // One empty week per flow that applies a speeldag, so no flow sees another's rows.
 const FOLD_WEEK = '2027-03-01'
@@ -257,75 +257,85 @@ const viewRow = (page: Page, model: string, name: string) =>
 test('create-team-and-personal-view @e2e', async ({ page }) => {
   const team = 'Team e2e weergave'
   const own = 'Eigen e2e weergave'
-  await page.goto('/')
-  await pick(page, 'Bevestigd', 'Activiteiten')
+  await dropViews(page, [team, own])
+  try {
+    await page.goto('/')
+    await pick(page, 'Bevestigd', 'Activiteiten')
 
-  await newView(page, 'Activiteiten', team, 'Het team', 'dialog')
-  await expect(viewRow(page, 'Activiteiten', team)).toHaveCount(1)
-  await expect(viewRow(page, 'Activiteiten', team).getByRole('img', { name: 'Alleen voor jou' })).toHaveCount(0)
+    await newView(page, 'Activiteiten', team, 'Het team', 'dialog')
+    await expect(viewRow(page, 'Activiteiten', team)).toHaveCount(1)
+    await expect(viewRow(page, 'Activiteiten', team).getByRole('img', { name: 'Alleen voor jou' })).toHaveCount(0)
 
-  await newView(page, 'Activiteiten', own, 'Alleen ik')
-  await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
-  await shot(page, 'views-created')
+    await newView(page, 'Activiteiten', own, 'Alleen ik')
+    await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+    await shot(page, 'views-created')
 
-  const held = await views(page.request)
-  expect(held.find((v) => v.name === team)).toMatchObject({ shared: true, mine: true })
-  expect(held.find((v) => v.name === own)).toMatchObject({ shared: false, mine: true })
+    const held = await views(page.request)
+    expect(held.find((v) => v.name === team)).toMatchObject({ shared: true, mine: true })
+    expect(held.find((v) => v.name === own)).toMatchObject({ shared: false, mine: true })
 
-  await page.reload()
-  await pick(page, team, 'Activiteiten')
-  await pick(page, own, 'Activiteiten')
-  await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+    await page.reload()
+    await pick(page, team, 'Activiteiten')
+    await pick(page, own, 'Activiteiten')
+    await expect(viewRow(page, 'Activiteiten', own).getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+  } finally {
+    await dropViews(page, [team, own])
+  }
 })
 
 test('copy-rename-delete-view @e2e', async ({ page }) => {
   const copy = 'Tourstops (kopie)'
   const renamed = 'Reeksen e2e hernoemd'
-  await page.goto('/')
-  await pick(page, 'Tourstops')
+  await dropViews(page, [copy, renamed])
+  try {
+    await page.goto('/')
+    await pick(page, 'Tourstops')
 
-  await page.getByRole('button', { name: 'More actions: Tourstops' }).click()
-  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(1)
-  await expect.poll(async () => (await views(page.request)).find((v) => v.name === copy)?.mine).toBe(true)
-  const made = (await views(page.request)).find((v) => v.name === copy) as SavedView
+    await page.getByRole('button', { name: 'More actions: Tourstops' }).click()
+    await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+    await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(1)
+    await expect.poll(async () => (await views(page.request)).find((v) => v.name === copy)?.mine).toBe(true)
+    const made = (await views(page.request)).find((v) => v.name === copy) as SavedView
 
-  // A blank name renames nothing.
-  await page.getByRole('button', { name: `More actions: ${copy}` }).click()
-  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('   ')
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
-  await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(1)
-  expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(copy)
+    // A blank name renames nothing.
+    await page.getByRole('button', { name: `More actions: ${copy}` }).click()
+    await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+    await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('   ')
+    await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+    await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(1)
+    expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(copy)
 
-  await page.getByRole('button', { name: `More actions: ${copy}` }).click()
-  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(renamed)
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
-  await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(1)
-  await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(0)
-  await expect.poll(async () => (await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
+    await page.getByRole('button', { name: `More actions: ${copy}` }).click()
+    await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+    await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(renamed)
+    await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+    await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(1)
+    await expect(viewRow(page, 'Tourstops', copy)).toHaveCount(0)
+    await expect.poll(async () => (await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
 
-  await page.getByRole('button', { name: `More actions: ${renamed}` }).click()
-  const deleted = page.waitForResponse(
-    (res) => res.request().method() === 'DELETE' && new URL(res.url()).pathname === `/api/views/${made.id}`,
-  )
-  await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
-  expect((await deleted).status()).toBe(200)
-  await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(0)
-  await shot(page, 'view-deleted')
-  expect((await views(page.request)).some((v) => v.id === made.id)).toBe(false)
+    await page.getByRole('button', { name: `More actions: ${renamed}` }).click()
+    const deleted = page.waitForResponse(
+      (res) => res.request().method() === 'DELETE' && new URL(res.url()).pathname === `/api/views/${made.id}`,
+    )
+    await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
+    expect((await deleted).status()).toBe(200)
+    await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(0)
+    await shot(page, 'view-deleted')
+    expect((await views(page.request)).some((v) => v.id === made.id)).toBe(false)
 
-  const restored = page.waitForResponse((res) => new URL(res.url()).pathname === `/api/views/${made.id}/restore`)
-  await page
-    .getByRole('status', { name: 'Weergave verwijderd' })
-    .getByRole('button', { name: 'Ongedaan maken' })
-    .click()
-  expect((await restored).status()).toBe(200)
-  await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(1)
-  expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
-  await page.reload()
-  await pick(page, renamed, 'Tourstops')
+    const restored = page.waitForResponse((res) => new URL(res.url()).pathname === `/api/views/${made.id}/restore`)
+    await page
+      .getByRole('status', { name: 'Weergave verwijderd' })
+      .getByRole('button', { name: 'Ongedaan maken' })
+      .click()
+    expect((await restored).status()).toBe(200)
+    await expect(viewRow(page, 'Tourstops', renamed)).toHaveCount(1)
+    expect((await views(page.request)).find((v) => v.id === made.id)?.name).toBe(renamed)
+    await page.reload()
+    await pick(page, renamed, 'Tourstops')
+  } finally {
+    await dropViews(page, [copy, renamed])
+  }
 })
 
 const facts = (band: Locator) => band.locator('.nv-group__fact')
@@ -589,74 +599,84 @@ async function addViewDialog(page: Page, model: string): Promise<Locator> {
 
 test('new-view-blank-and-double-submit @e2e', async ({ page }) => {
   const name = 'Dubbel e2e weergave'
-  await page.goto('/')
-  await pick(page, 'Tourstops')
-  const posts: string[] = []
-  page.on('request', (req) => {
-    if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/views') posts.push(req.url())
-  })
+  await dropViews(page, [name])
+  try {
+    await page.goto('/')
+    await pick(page, 'Tourstops')
+    const posts: string[] = []
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/views') posts.push(req.url())
+    })
 
-  // Escape leaves without a view.
-  let dialog = await addViewDialog(page, 'Tourstops')
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
+    // Escape leaves without a view.
+    let dialog = await addViewDialog(page, 'Tourstops')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
 
-  // A blank name cannot be made.
-  dialog = await addViewDialog(page, 'Tourstops')
-  await dialog.getByRole('textbox', { name: 'Naam' }).fill('   ')
-  await expect(dialog.getByRole('button', { name: 'Weergave maken' })).toBeDisabled()
-  await dialog.getByRole('textbox', { name: 'Naam' }).press('Enter')
-  await expect(dialog).toBeVisible()
+    // A blank name cannot be made.
+    dialog = await addViewDialog(page, 'Tourstops')
+    await dialog.getByRole('textbox', { name: 'Naam' }).fill('   ')
+    await expect(dialog.getByRole('button', { name: 'Weergave maken' })).toBeDisabled()
+    await dialog.getByRole('textbox', { name: 'Naam' }).press('Enter')
+    await expect(dialog).toBeVisible()
 
-  // A double click makes one view.
-  await dialog.getByRole('textbox', { name: 'Naam' }).fill(name)
-  await dialog.getByRole('button', { name: 'Weergave maken' }).dblclick()
-  await expect(dialog).toHaveCount(0)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
-  await page.waitForTimeout(500)
-  expect(posts).toHaveLength(1)
-  expect((await views(page.request)).filter((v) => v.name === name)).toHaveLength(1)
-  await expect(viewRow(page, 'Tourstops', name)).toHaveCount(1)
-  await shot(page, 'view-double-submit')
+    // A double click makes one view.
+    await dialog.getByRole('textbox', { name: 'Naam' }).fill(name)
+    await dialog.getByRole('button', { name: 'Weergave maken' }).dblclick()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
+    await page.waitForTimeout(500)
+    expect(posts).toHaveLength(1)
+    expect((await views(page.request)).filter((v) => v.name === name)).toHaveLength(1)
+    await expect(viewRow(page, 'Tourstops', name)).toHaveCount(1)
+    await shot(page, 'view-double-submit')
+  } finally {
+    await dropViews(page, [name])
+  }
 })
 
 test('colleague-shared-view @e2e', async ({ page, browser }) => {
   const name = 'Collega e2e weergave'
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('admin') })
   const theirs = await admin.newPage()
-  await theirs.goto('/')
-  await pick(theirs, 'Tourstops')
-  await newView(theirs, 'Tourstops', name, 'Het team')
-  const made = (await views(theirs.request)).find((v) => v.name === name) as SavedView
-  await admin.close()
+  await dropViews(theirs, [name])
+  try {
+    await theirs.goto('/')
+    await pick(theirs, 'Tourstops')
+    await newView(theirs, 'Tourstops', name, 'Het team')
+    const made = (await views(theirs.request)).find((v) => v.name === name) as SavedView
 
-  // The editor sees it shared by a colleague: a people mark, never the default's lock.
-  await page.goto('/')
-  await pick(page, name, 'Tourstops')
-  const mark = viewRow(page, 'Tourstops', name).getByRole('img')
-  await expect(mark).toHaveAccessibleName('Gedeeld door een collega, alleen te kopiëren')
-  await expect(page.locator('.nv-toolbar__lock')).toHaveAccessibleName(
-    'Gedeeld door een collega: maak een kopie om aan te passen',
-  )
-  await expect(viewRow(page, 'Tourstops', name).getByRole('img', { name: /^Standaardweergave/ })).toHaveCount(0)
-  // The seeded default keeps its lock.
-  await expect(
-    viewRow(page, 'Tourstops', 'Tourstops').getByRole('img', { name: 'Standaardweergave, alleen te kopiëren' }),
-  ).toBeVisible()
-  await shot(page, 'colleague-view')
+    // The editor sees it shared by a colleague: a people mark, never the default's lock.
+    await page.goto('/')
+    await pick(page, name, 'Tourstops')
+    const mark = viewRow(page, 'Tourstops', name).getByRole('img')
+    await expect(mark).toHaveAccessibleName('Gedeeld door een collega, alleen te kopiëren')
+    await expect(page.locator('.nv-toolbar__lock')).toHaveAccessibleName(
+      'Gedeeld door een collega: maak een kopie om aan te passen',
+    )
+    await expect(viewRow(page, 'Tourstops', name).getByRole('img', { name: /^Standaardweergave/ })).toHaveCount(0)
+    // The seeded default keeps its lock.
+    await expect(
+      viewRow(page, 'Tourstops', 'Tourstops').getByRole('img', { name: 'Standaardweergave, alleen te kopiëren' }),
+    ).toBeVisible()
+    await shot(page, 'colleague-view')
 
-  // Denied: the editor may copy it, never rename or delete it, and the engine refuses both.
-  await page.getByRole('button', { name: `More actions: ${name}` }).click()
-  const items = page.getByRole('menuitem')
-  await expect(items.filter({ hasText: 'Kopie maken' })).toHaveCount(1)
-  await expect(items.filter({ hasText: 'Naam wijzigen' })).toHaveCount(0)
-  await expect(items.filter({ hasText: 'Verwijderen' })).toHaveCount(0)
-  await page.keyboard.press('Escape')
-  const patched = await page.request.patch(`/api/views/${made.id}`, { data: { name: 'Overgenomen' } })
-  expect([403, 404]).toContain(patched.status())
-  const removed = await page.request.delete(`/api/views/${made.id}`)
-  expect([403, 404]).toContain(removed.status())
-  expect((await views(page.request)).find((v) => v.id === made.id)).toMatchObject({ name, mine: false, shared: true })
+    // Denied: the editor may copy it, never rename or delete it, and the engine refuses both.
+    await page.getByRole('button', { name: `More actions: ${name}` }).click()
+    const items = page.getByRole('menuitem')
+    await expect(items.filter({ hasText: 'Kopie maken' })).toHaveCount(1)
+    await expect(items.filter({ hasText: 'Naam wijzigen' })).toHaveCount(0)
+    await expect(items.filter({ hasText: 'Verwijderen' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    const patched = await page.request.patch(`/api/views/${made.id}`, { data: { name: 'Overgenomen' } })
+    expect([403, 404]).toContain(patched.status())
+    const removed = await page.request.delete(`/api/views/${made.id}`)
+    expect([403, 404]).toContain(removed.status())
+    expect((await views(page.request)).find((v) => v.id === made.id)).toMatchObject({ name, mine: false, shared: true })
+  } finally {
+    await dropViews(theirs, [name])
+    await admin.close()
+  }
 })
 
 test.describe('without the space', () => {
