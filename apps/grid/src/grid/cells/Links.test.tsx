@@ -68,6 +68,12 @@ afterEach(() => {
 })
 
 describe('a links cell', () => {
+  it('names only who holds a place: an open one beside a name adds no separator', () => {
+    const open: LinkItem = { id: 73, target: null, title: '', state: null, places: 2 }
+    renderGrid({ ...lunch, fields: { people: [open, lotte] } })
+    expect(cell().querySelector('.nv-names')?.textContent).toBe('Lotte')
+  })
+
   it('counts an open place by its places in the meter: an open ×2 is two', () => {
     const open: LinkItem = { id: 73, target: null, title: '', state: null, places: 2 }
     renderGrid({ ...lunch, fields: { people: [lotte, open] } })

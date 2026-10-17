@@ -37,7 +37,8 @@ export function crewOf(items: LinkItem[], link?: Link): { have: number; need: nu
 
 export function LinksCell({ column, row }: CellProps) {
   const items = linksOf(row, column.field ?? column.id)
-  const all = items.map((item) => item.title).join(', ')
+  const named = items.filter((item) => !isOpen(item))
+  const all = named.map((item) => item.title).join(', ')
   const { have, need } = crewOf(items, column.link)
   return (
     <span className="nv-links">
@@ -48,7 +49,7 @@ export function LinksCell({ column, row }: CellProps) {
       </span>
     )}
     <span className="nv-names" title={all || undefined}>
-      {items.map((item, i) => (
+      {named.map((item, i) => (
         <span key={item.id}>
           {i > 0 && ', '}
           <span className={pillOf(item, column.link)}>{item.title}</span>
