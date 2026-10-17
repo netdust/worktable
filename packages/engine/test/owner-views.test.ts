@@ -312,6 +312,7 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
       for (const name of lookupNames) expect(keys).not.toContain(name)
       const res = await asLink(`/api/owner/views/${view.id}/rows`)
       expect(res.status).toBe(200)
+      expect(res.body.columns).toEqual(view.columns)
       expect(res.body.rows.length).toBeGreaterThan(0)
       expect(res.body.total).toBe(res.body.rows.length)
       for (const row of res.body.rows as Record<string, unknown>[]) {
