@@ -248,8 +248,8 @@ Assets: fields of related records; the write path's checks.
 - Consumes: Task 5's seeded Planning. Flows address the view by its name "Planning" (as 18405aa already does). A URL `#view=dagplanning` becomes the Planning view's key; an API path `/api/rows/dagplanning` becomes `/api/rows/activiteit`; the column "Locatie van" (`locatie_bron`) becomes the inherited cell's "via Tourstop".
 
 - [ ] **Step 1:** Run `bunx playwright test` and list every failure. Most are flows that named the removed query; a failure in a flow that reaches Planning by name only (`toolbar`, `title-line`, `ui-fit`, `step-0b`, `step-0d`) is a regression to fix in the code, never by loosening the assertion.
-- [ ] **Step 2:** Retarget each flow to Planning on activiteit, keeping every assertion at its strength. A flow that asserted only the query itself becomes `dagplanning-is-gone @e2e` (the rail shows no Dagplanning; the queries sit under Overzichten). That covers `query-views-under-model`, `owner-has-no-dagplanning` and `dagplanning asks for a session`.
-- [ ] **Step 3:** Update the matching `specs/CHECKS.md` rows' names, commands and files. Keep the count unless a flow became `dagplanning-is-gone`.
+- [ ] **Step 2:** Retarget each flow to Planning on activiteit, keeping every assertion at its strength. A flow that asserted only the query itself became `dagplanning-is-gone @e2e`, since removed: the absence is pinned by `packages/theatre/test/seed-missing.test.ts` (`no dagplanning source`, `queries sit under Overzichten`) and `grid-ux.test.ts` (the sections), which covered `query-views-under-model`, `owner-has-no-dagplanning` and `dagplanning asks for a session`.
+- [ ] **Step 3:** Update the matching `specs/CHECKS.md` rows' names, commands and files. Keep the count.
 - [ ] **Step 4: Run** `bun run gate`. Expected: PASS.
 - [ ] **Step 5: Commit** `test(e2e): flows follow Planning on Activiteiten`.
 
