@@ -74,9 +74,19 @@ export async function pickIn(row: Locator, label: string, option: string): Promi
   await row.getByRole('listbox', { name: label }).getByRole('option', { name: option, exact: true }).click()
 }
 
+/** One's own views by these names, gone through the API: a test that makes them starts without another's leftovers. */
+export async function dropViews(page: Page, names: string[]): Promise<void> {
+  const { views } = (await (await page.request.get('/api/views')).json()) as {
+    views: { id: number; name: string; mine: boolean }[]
+  }
+  for (const view of views.filter((v) => v.mine && names.includes(v.name)))
+    await page.request.delete(`/api/views/${view.id}`)
+}
+
 /**
- * "Kopie maken" on a rail view, then a rename of the copy. Its ⋯ opens only once the copy is open, one's own and loaded,
- * and the reads that follow have settled: a press while the rail re-renders opened no menu (step-0e, 2026-10-17).
+ * "Kopie maken" on a rail view, then a rename of the copy, once the copy is open, one's own, loaded and settled.
+ * Its ⋯ is scrolled fully into the rail first and pressed a frame later: scrolled and clicked in one frame, the scroll
+ * event lands after the menu opens, and React Aria closes a menu whose trigger scrolls (step-0e, 2026-10-17).
  */
 export async function copyAndRename(page: Page, view: string, name: string): Promise<void> {
   const copy = `${view} (kopie)`
@@ -87,7 +97,11 @@ export async function copyAndRename(page: Page, view: string, name: string): Pro
   await expect(row.getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
   await expect(page.locator('.nv-bar__count')).toBeVisible()
   await page.waitForLoadState('networkidle')
-  await page.getByRole('button', { name: `More actions: ${copy}`, exact: true }).click()
+  const more = page.getByRole('button', { name: `More actions: ${copy}`, exact: true })
+  await more.scrollIntoViewIfNeeded()
+  await expect(more).toBeInViewport({ ratio: 1 })
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))
+  await more.click()
   await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
   await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')

@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Page, request, test } from '@playw
 import { ACCOUNTS, requestAndOpenLink, state, THEATRE } from './auth'
 import { fillDate } from './segments'
 import { shot } from './shots'
-import { addCondition, copyAndRename, openModel, openView, openWeek } from './tree'
+import { addCondition, copyAndRename, dropViews, openModel, openView, openWeek } from './tree'
 
 const LOTTE = 'Lotte Verhaegen'
 
@@ -107,6 +107,7 @@ test.describe('as the owner', () => {
 
 test('seeded-view-read-only', async ({ page }) => {
   const name = 'Planning Nachtwacht'
+  await dropViews(page, [name, 'Bevestigd (kopie)'])
   const seeded = (await views(page.request)).find((v) => v.name === 'Bevestigd')
   expect(seeded?.editable).toBe(false)
   const patched = await page.request.patch(`/api/views/${seeded?.id}`, { data: { name: 'Mijn planning' } })

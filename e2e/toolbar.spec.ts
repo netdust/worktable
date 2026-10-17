@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { openEditor } from './editor'
 import { shot } from './shots'
-import { addCondition, copyAndRename, openModel, openView, openWeek, pickIn } from './tree'
+import { addCondition, copyAndRename, dropViews, openModel, openView, openWeek, pickIn } from './tree'
 
 type Stored = { id: number; name: string; group_by: string | null; mine: boolean }
 
@@ -16,6 +16,7 @@ async function views(page: Page): Promise<Stored[]> {
 // The specs share one database: the view this flow makes goes again whatever happens.
 test('autosave-own-view @e2e', async ({ page }) => {
   const name = 'Eigen e2e autosave'
+  await dropViews(page, [name, 'Bevestigd (kopie)'])
   try {
     await page.goto('/')
     await openView(page, 'Bevestigd', 'Activiteiten')
