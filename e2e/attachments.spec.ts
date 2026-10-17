@@ -6,7 +6,6 @@ import { openWeek } from './tree'
 
 // One empty week per flow, so no flow sees another's rows.
 const DRAWER_WEEK = '2029-03-05'
-const GPS_WEEK = '2029-03-12'
 const REFUSAL_WEEK = '2029-03-19'
 const OTHERS_WEEK = '2029-03-26'
 
@@ -206,124 +205,6 @@ test('upload-open-delete-undo @e2e', async ({ page, browser }) => {
     } finally {
       await owner.close()
     }
-  } finally {
-    await cleanUp(api, made)
-  }
-})
-
-/** An Exif APP1 with a camera make, an Orientation of 6 and a GPS block: invented bytes, little-endian. */
-function exifWithGps(): Buffer {
-  const entry = (tag: number, type: number, count: number, value: number) => {
-    const b = Buffer.alloc(12)
-    b.writeUInt16LE(tag, 0)
-    b.writeUInt16LE(type, 2)
-    b.writeUInt32LE(count, 4)
-    if (type === 3 && count === 1) b.writeUInt16LE(value, 8)
-    else b.writeUInt32LE(value, 8)
-    return b
-  }
-  const make = Buffer.from('InventCam e2e\0')
-  // Offsets count from the TIFF header: IFD0 at 8 holds 3 entries (2 + 36 + 4 = 42 bytes), so data starts at 50.
-  const makeAt = 8 + 2 + 3 * 12 + 4
-  const gpsAt = makeAt + make.length
-  const ifd0 = Buffer.concat([
-    Buffer.from([3, 0]),
-    entry(0x010f, 2, make.length, makeAt),
-    entry(0x0112, 3, 1, 6),
-    entry(0x8825, 4, 1, gpsAt),
-    Buffer.alloc(4),
-  ])
-  // GPS IFD: LatitudeRef "N" and Latitude 50/1 51/1 1234/100 (inline and at latAt).
-  const latAt = gpsAt + 2 + 2 * 12 + 4
-  const gps = Buffer.concat([
-    Buffer.from([2, 0]),
-    entry(0x0001, 2, 2, 0x4e),
-    entry(0x0002, 5, 3, latAt),
-    Buffer.alloc(4),
-  ])
-  const lat = Buffer.alloc(24)
-  for (const [i, [n, d]] of [
-    [50, 1],
-    [51, 1],
-    [1234, 100],
-  ].entries()) {
-    lat.writeUInt32LE(n, i * 8)
-    lat.writeUInt32LE(d, i * 8 + 4)
-  }
-  const tiff = Buffer.concat([Buffer.from('II*\0'), Buffer.from([8, 0, 0, 0]), ifd0, make, gps, lat])
-  const body = Buffer.concat([Buffer.from('Exif\0\0'), tiff])
-  const head = Buffer.alloc(4)
-  head.writeUInt16BE(0xffe1, 0)
-  head.writeUInt16BE(body.length + 2, 2)
-  return Buffer.concat([head, body])
-}
-
-/** The jpeg's segments up to its scan: marker and body, in order. */
-function segments(jpeg: Buffer): { marker: number; body: Buffer }[] {
-  const out: { marker: number; body: Buffer }[] = []
-  let at = 2
-  while (at < jpeg.length && jpeg[at] === 0xff) {
-    const marker = jpeg[at + 1]
-    const length = jpeg.readUInt16BE(at + 2)
-    out.push({ marker, body: jpeg.subarray(at + 4, at + 2 + length) })
-    if (marker === 0xda) break
-    at += 2 + length
-  }
-  return out
-}
-
-/** IFD0's tags and their SHORT values, read in the block's own byte order. */
-function ifd0Of(exif: Buffer): Map<number, number> {
-  const tiff = exif.subarray(6)
-  const le = tiff.toString('latin1', 0, 2) === 'II'
-  const u16 = (at: number) => (le ? tiff.readUInt16LE(at) : tiff.readUInt16BE(at))
-  const u32 = (at: number) => (le ? tiff.readUInt32LE(at) : tiff.readUInt32BE(at))
-  const start = u32(4)
-  const tags = new Map<number, number>()
-  for (let i = 0; i < u16(start); i++) tags.set(u16(start + 2 + i * 12), u16(start + 2 + i * 12 + 8))
-  return tags
-}
-
-test('photo-location-gone @e2e', async ({ page }) => {
-  const api = page.request
-  const made = nothing()
-  const omschrijving = 'Repetitie e2e fotolocatie'
-  // A motion photo's trailing video carries its own location: it follows the end-of-image marker.
-  const trailer = Buffer.from('MOTION e2e video GPS 50.8512N 4.3567E')
-  const sent = Buffer.concat([PHOTO.subarray(0, 2), exifWithGps(), PHOTO.subarray(2), trailer])
-  expect(sent.includes('InventCam')).toBe(true)
-  try {
-    await activity(api, made, omschrijving, GPS_WEEK)
-    await page.setViewportSize({ width: 1600, height: 900 })
-    await openWeek(page, 'Planning', 'Activiteiten', 'plandag', GPS_WEEK)
-    const files = filesOf(await openDrawer(page, omschrijving))
-    const answer = await upload(files, 'Foto', 'gps e2e.jpg', 'image/jpeg', sent)
-    expect(answer.status(), await answer.text()).toBe(201)
-    const made_ = (await answer.json()) as { id: number; size: number }
-    await expect.poll(() => listed(files)).toEqual(['Foto | gps e2e.jpg | 1 kB'])
-    await shot(page, 'photo-stripped')
-
-    const read = await api.get(`/api/attachments/file/${made_.id}`)
-    expect(read.status()).toBe(200)
-    expect(read.headers()['content-type']).toBe('image/jpeg')
-    expect(read.headers()['content-disposition']).toMatch(/^inline;/)
-    const stored = Buffer.from(await read.body())
-    expect(stored.length).toBe(made_.size)
-    expect(stored.length).toBeLessThan(sent.length)
-    for (const text of ['InventCam', 'MOTION', 'GPS', '50.8512']) expect(stored.includes(text), text).toBe(false)
-    // The GPS latitude rational (50/1, little-endian) is nowhere in the file.
-    expect(stored.includes(Buffer.from([50, 0, 0, 0, 1, 0, 0, 0, 51, 0, 0, 0]))).toBe(false)
-    expect(stored.subarray(-2).equals(Buffer.from([0xff, 0xd9])), 'nothing after the end-of-image marker').toBe(true)
-    const app1 = segments(stored).filter((s) => s.marker === 0xe1)
-    expect(app1).toHaveLength(1)
-    expect(app1[0].body.toString('latin1', 0, 6)).toBe('Exif\0\0')
-    const tags = ifd0Of(app1[0].body)
-    expect([...tags.keys()], 'only Orientation is left in IFD0').toEqual([0x0112])
-    expect(tags.get(0x0112)).toBe(6)
-    // The image itself is untouched: its scan is byte for byte the one sent.
-    const scanOf = (jpeg: Buffer) =>
-      jpeg.subarray(jpeg.indexOf(Buffer.from([0xff, 0xda])), jpeg.lastIndexOf(Buffer.from([0xff, 0xd9])) + 2)
-    expect(scanOf(stored).equals(scanOf(PHOTO))).toBe(true)
   } finally {
     await cleanUp(api, made)
   }

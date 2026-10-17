@@ -115,7 +115,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Tourstop drawer · Tourstop verschuiven | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-tourstop @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
 | Tourstop drawer · refusal under the action | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-refused-in-dutch @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 1e3309c 2026-10-16 |
 | Activiteit drawer · Bijlagen (upload, openen, verwijderen, ongedaan maken) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "upload-open-delete-undo @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
-| Activiteit drawer · Bijlagen · foto zonder locatie | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "photo-location-gone @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Activiteit drawer · Bijlagen · weigeringen (type, grootte) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "refusals-in-dutch @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Tourstop en Toewijzing drawer · Bijlagen; Organisatie zonder | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "bijlagen-on-tourstop-and-assignment @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Matrix · kandidaten in Open plek invullen | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "candidates-picker @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |

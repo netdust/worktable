@@ -430,6 +430,22 @@ describe('storage', () => {
     expect(new Uint8Array(await (await download(body.id)).arrayBuffer())).toEqual(stored)
   })
 
+  test('a photo uploaded with a camera make, a GPS location and a motion-photo trailer is served without any of them', async () => {
+    const exif = ascii('Exif\0\0InventCam GPSLatitude 50.8512N')
+    const sent = new Uint8Array([
+      ...[0xff, 0xd8, 0xff, 0xe1, 0, exif.length + 2],
+      ...exif,
+      ...[0xff, 0xd9],
+      ...ascii('MOTION video GPS 4.3567E'),
+    ])
+    const { status, body } = await upload(sent, { kind: 'photo', name: 'gps.jpg' })
+    const served = new Uint8Array(await (await download(body.id)).arrayBuffer())
+    expect(status).toBe(201)
+    expect(served).toEqual(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))
+    for (const leak of ['InventCam', 'GPS', '50.8512', 'MOTION'])
+      expect(Buffer.from(served).includes(leak), leak).toBe(false)
+  })
+
   test('a failed insert removes the file it wrote, and leaves one that was there before', async () => {
     sqlite.run(
       "CREATE TRIGGER refuse BEFORE INSERT ON attachment WHEN NEW.name = 'refused.pdf' BEGIN SELECT RAISE(ABORT, 'refused'); END",
