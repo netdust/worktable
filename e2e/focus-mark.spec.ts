@@ -107,6 +107,10 @@ for (const theme of ['Licht', 'Donker'] as const) {
       await expect(radio).toBeFocused()
       await expectMark(dialog.locator('label').filter({ has: page.getByRole('radio', { name: 'Het team' }) }))
       await expect(radio).toHaveCSS('outline-style', 'none')
+      await expect(dialog.locator('label').filter({ has: page.getByRole('radio', { name: 'Het team' }) })).toHaveCSS(
+        'outline-offset',
+        '-1px',
+      )
       await shot(page, name('dialog-choice'))
       await page.keyboard.press('Escape')
       await expect(dialog).toHaveCount(0)

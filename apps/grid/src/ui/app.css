@@ -369,12 +369,19 @@
 
 .nv-dialog__choice input {
   margin: 0;
-  accent-color: var(--color-accent-default);
+  accent-color: var(--color-fg-default);
 }
 
+/* Chosen as the Bijstellen segments are: a flat neutral fill, the border as it was. */
 .nv-dialog__choice:has(input:checked) {
-  border-color: var(--color-accent-default);
-  background: var(--color-accent-subtle);
+  background: var(--color-bg-muted);
+  color: var(--color-fg-default);
+  font-weight: 600;
+}
+
+/* It draws its own border, as a field does: the mark lies on it. */
+.nv-dialog__choice:has(input:focus-visible) {
+  outline-offset: -1px;
 }
 
 .nv-dialog__hint {
