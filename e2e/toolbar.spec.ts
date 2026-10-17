@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { openEditor } from './editor'
 import { shot } from './shots'
-import { addCondition, openModel, openView, openWeek, pickIn } from './tree'
+import { addCondition, copyAndRename, openModel, openView, openWeek, pickIn } from './tree'
 
 type Stored = { id: number; name: string; group_by: string | null; mine: boolean }
 
@@ -19,12 +19,7 @@ test('autosave-own-view @e2e', async ({ page }) => {
   try {
     await page.goto('/')
     await openView(page, 'Bevestigd', 'Activiteiten')
-    await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-    await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
-    await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
-    await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+    await copyAndRename(page, 'Bevestigd', name)
     await expect.poll(async () => (await views(page)).find((v) => v.name === name)?.mine).toBe(true)
 
     // A change on one's own view saves itself; the title line says no save word.
@@ -47,7 +42,7 @@ test('autosave-own-view @e2e', async ({ page }) => {
     await page.getByRole('button', { name: 'More actions', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Terugzetten' }).click()
   } finally {
-    for (const view of (await views(page)).filter((v) => v.name === name))
+    for (const view of (await views(page)).filter((v) => v.mine && [name, 'Bevestigd (kopie)'].includes(v.name)))
       await page.request.delete(`/api/views/${view.id}`)
   }
 })

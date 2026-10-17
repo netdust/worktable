@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Page, request, test } from '@playw
 import { ACCOUNTS, requestAndOpenLink, state, THEATRE } from './auth'
 import { fillDate } from './segments'
 import { shot } from './shots'
-import { addCondition, openModel, openView, openWeek } from './tree'
+import { addCondition, copyAndRename, openModel, openView, openWeek } from './tree'
 
 const LOTTE = 'Lotte Verhaegen'
 
@@ -120,27 +120,30 @@ test('seeded-view-read-only', async ({ page }) => {
   await expect(toolbar.getByText(/gewijzigd|Opslaan|Opgeslagen/)).toHaveCount(0)
   expect((await views(page.request)).find((v) => v.id === seeded?.id)?.filters).toEqual(seeded?.filters)
 
-  // Kopie maken in the rail takes the change along; the copy is one's own.
-  await page.getByRole('button', { name: 'More actions: Bevestigd', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-  await page.getByRole('button', { name: 'More actions: Bevestigd (kopie)', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
-  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
-  await expect.poll(async () => (await views(page.request)).find((v) => v.name === name)?.mine).toBe(true)
-  const copy = (await views(page.request)).find((v) => v.name === name) as SavedView
-  expect(JSON.stringify(copy.filters)).toContain('productie_id')
+  try {
+    // Kopie maken in the rail takes the change along; the copy is one's own.
+    await copyAndRename(page, 'Bevestigd', name)
+    await expect.poll(async () => (await views(page.request)).find((v) => v.name === name)?.mine).toBe(true)
+    const copy = (await views(page.request)).find((v) => v.name === name) as SavedView
+    expect(JSON.stringify(copy.filters)).toContain('productie_id')
 
-  // On one's own view a change saves itself.
-  await page.getByRole('button', { name: 'Filter Productie wissen' }).click()
-  await expect
-    .poll(async () => JSON.stringify((await views(page.request)).find((v) => v.id === copy.id)?.filters))
-    .not.toContain('productie_id')
+    // On one's own view a change saves itself.
+    await page.getByRole('button', { name: 'Filter Productie wissen' }).click()
+    await expect
+      .poll(async () => JSON.stringify((await views(page.request)).find((v) => v.id === copy.id)?.filters))
+      .not.toContain('productie_id')
 
-  await page.reload()
-  await pick(page, name, 'Activiteiten')
-  await expect(toolbar.getByText(/gewijzigd|Opslaan/)).toHaveCount(0)
-  await expect(page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' })).toHaveCount(0)
+    await page.reload()
+    await pick(page, name, 'Activiteiten')
+    await expect(toolbar.getByText(/gewijzigd|Opslaan/)).toHaveCount(0)
+    await expect(page.locator('.nv-chip--filter', { hasText: 'Nachtwacht' })).toHaveCount(0)
+  } finally {
+    // The copy goes, renamed or not, so no later test meets a second one.
+    for (const view of (await views(page.request)).filter(
+      (v) => v.mine && [name, 'Bevestigd (kopie)'].includes(v.name),
+    ))
+      await page.request.delete(`/api/views/${view.id}`)
+  }
 })
 
 test('public-view-by-token', async () => {

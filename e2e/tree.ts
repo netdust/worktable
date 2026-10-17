@@ -73,3 +73,22 @@ export async function pickIn(row: Locator, label: string, option: string): Promi
   await row.getByRole('button', { name: new RegExp(`^${label}:`) }).click()
   await row.getByRole('listbox', { name: label }).getByRole('option', { name: option, exact: true }).click()
 }
+
+/**
+ * "Kopie maken" on a rail view, then a rename of the copy. Its ⋯ opens only once the copy is open, one's own and loaded,
+ * and the reads that follow have settled: a press while the rail re-renders opened no menu (step-0e, 2026-10-17).
+ */
+export async function copyAndRename(page: Page, view: string, name: string): Promise<void> {
+  const copy = `${view} (kopie)`
+  await page.getByRole('button', { name: `More actions: ${view}`, exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(copy)
+  const row = page.locator('[data-view]').filter({ has: page.getByRole('button', { name: copy, exact: true }) })
+  await expect(row.getByRole('img', { name: 'Alleen voor jou' })).toBeVisible()
+  await expect(page.locator('.nv-bar__count')).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  await page.getByRole('button', { name: `More actions: ${copy}`, exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill(name)
+  await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+}
