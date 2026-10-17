@@ -66,7 +66,7 @@
 | T4 | Grid dashboard page: plumbing, stat and list tiles, `set`, refresh | `<Dashboard>` render; `dashboard/tiles.ts` | unit · `apps/grid/src/dashboard/*.test.ts(x)` · `bun run --filter @worktable/grid test` | dashboard-landing, stat-red-then-neutral, stat-opens-view, werklijst-set |
 | T5 | Week strip, progress, quick create (Task 5); composer (Task 5b) | `<WeekTile>`, `<ProgressTile>`, `<QuickCreate>`, composer | unit · same | week-opens-activity, quick-create, space-narrows |
 | T6 | Board, timeline, gallery skins; calendar spans | `<Board>`, `<Timeline>`, `<Gallery>`; `calendar/layout.ts` spans | unit · `apps/grid/src/{board,timeline,gallery}/*.test.tsx`, `calendar/layout.test.ts` · same | skins-open |
-| T7 | The gate | the running grid | e2e · `e2e/step-3c.spec.ts`, `e2e/smoke/step-3c.spec.ts` · `bunx playwright test e2e/step-3c.spec.ts` | all above |
+| T7 | The gate | the running grid | e2e · `e2e/step-3c.spec.ts` (its smoke tests are gone: the R11 sign-in test and the engine route tests in `auth.test.ts` cover them) · `bunx playwright test e2e/step-3c.spec.ts` | all above |
 
 ## Review Focus
 
@@ -341,5 +341,5 @@
   - **space-narrows:** selecting one production lowers or keeps every stat, and a stat equals the view's count under that scope.
   - **owner-no-dashboard:** an owner session lists no dashboard (API) and the person link page shows none.
   - **skins-open:** build rows in a 2028 week, open each seeded skin (Bord, Tijdlijn, Galerij with an uploaded image, both calendars) on that week with `openWeek`, and see the rows (review S7).
-- Create `e2e/smoke/step-3c.spec.ts`: `/api/views asks for a session @smoke`; `the landing page shows the sign-in @smoke`.
+- (Smoke collapse: the former `e2e/smoke/step-3c.spec.ts` is gone; `/api/views` is pinned by `auth.test.ts` "auth denials: no session", the landing page by the R11 sign-in test in `e2e/smoke/step-2.spec.ts`.)
 - [ ] `bun run gate` → green. Commit `test(e2e): step 3c gate — the dashboard lands, stats live and toned, actions and quick creates, space, owner refused, every skin opens`.

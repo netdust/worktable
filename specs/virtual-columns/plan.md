@@ -241,7 +241,7 @@ Assets: fields of related records; the write path's checks.
 ### Task 6: The browser suites follow Planning on Activiteiten
 
 **Files:**
-- Modify: e2e specs that name `dagplanning` (`e2e/dagplanning.spec.ts`, `grid-ux.spec.ts`, `step-1.spec.ts`, `react-aria.spec.ts`, `toolbar.spec.ts`, `title-line.spec.ts`, `rail-tree.spec.ts`, `ui-fit.spec.ts`, `step-0b/0d/0e.spec.ts`, `smoke/dagplanning.spec.ts`, `smoke/grid-toolbar.spec.ts`, `smoke/step-1.spec.ts`), `specs/CHECKS.md` (the rows those name)
+- Modify: e2e specs that name `dagplanning` (`e2e/dagplanning.spec.ts`, `grid-ux.spec.ts`, `step-1.spec.ts`, `react-aria.spec.ts`, `toolbar.spec.ts`, `title-line.spec.ts`, `rail-tree.spec.ts`, `ui-fit.spec.ts`, `step-0b/0d/0e.spec.ts`), `specs/CHECKS.md` (the rows those name)
 - Modify: `apps/grid/src/ui/*.test.tsx`, `api.test.ts`, `store.test.ts`, `export/ics.test.ts` only where a fixture schema needs a `dagplanning` source that no longer exists for the behaviour under test
 
 **Interfaces:**

@@ -15,15 +15,17 @@ test('the sign-in page is Dutch, Plex, unindexed and in its own colours @smoke',
   const own = await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement)
     return {
-      tokens: ['--today', '--color-bg-column'].map((name) => style.getPropertyValue(name).trim()),
+      tokens: ['--today', '--color-bg-column', '--color-accent-default'].map((name) =>
+        style.getPropertyValue(name).trim(),
+      ),
       sakani: [...document.querySelectorAll('[class]')].filter((el) => /sakani/i.test(el.className.toString())).length,
       sheets: [...document.styleSheets].filter((s) => /sakani/i.test(s.href ?? '')).length,
-      page: getComputedStyle(document.querySelector('.nv-auth-page')!).backgroundColor,
     }
   })
   expect(own.tokens.every((value) => value !== '')).toBe(true)
   expect([own.sakani, own.sheets]).toEqual([0, 0])
-  expect(own.page).not.toBe('rgba(0, 0, 0, 0)')
+  const colour = await page.locator('.nv-auth-page').evaluate((el) => getComputedStyle(el).backgroundColor)
+  expect(colour).not.toBe('rgba(0, 0, 0, 0)')
   const button = page.getByRole('button', { name: 'Stuur me een link' })
   await expect(button).toBeDisabled()
   await page.getByRole('textbox', { name: 'E-mailadres' }).fill('iemand@voorbeeld.test')
