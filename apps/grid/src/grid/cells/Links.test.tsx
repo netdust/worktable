@@ -36,10 +36,10 @@ const person = (id: number, title: string): Row => ({ id, title, status: '', fie
 const stores: ReturnType<typeof createStore>[] = []
 let actions: { add: ReturnType<typeof vi.fn<LinkActions['add']>>; remove: ReturnType<typeof vi.fn<LinkActions['remove']>> }
 
-function renderGrid() {
+function renderGrid(row: Row = lunch) {
   actions = { add: vi.fn<LinkActions['add']>().mockResolvedValue(), remove: vi.fn<LinkActions['remove']>().mockResolvedValue() }
   const api = { update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>() }
-  const store = createStore({ model: 'day', rows: [lunch], api })
+  const store = createStore({ model: 'day', rows: [row], api })
   stores.push(store)
   render(
     <Grid model={day} view={view} store={store} writable layout={defaults(view)} onLayout={() => undefined}
@@ -68,6 +68,20 @@ afterEach(() => {
 })
 
 describe('a links cell', () => {
+  it('names only who holds a place: an open one beside a name adds no separator', () => {
+    const open: LinkItem = { id: 73, target: null, title: '', state: null, places: 2 }
+    renderGrid({ ...lunch, fields: { people: [open, lotte] } })
+    expect(cell().querySelector('.nv-names')?.textContent).toBe('Lotte')
+  })
+
+  it('counts an open place by its places in the meter: an open ×2 is two', () => {
+    const open: LinkItem = { id: 73, target: null, title: '', state: null, places: 2 }
+    renderGrid({ ...lunch, fields: { people: [lotte, open] } })
+    const meter = cell().querySelector('.nv-crew') as HTMLElement
+    expect(meter.textContent).toBe('1/3')
+    expect(meter.getAttribute('aria-label')).toBe('1 van 3 plaatsen bezet')
+  })
+
   it("shows the names as text on one line, each in its state's colour, the free-text one muted; all of them in its title", () => {
     renderGrid()
     const names = cell().querySelector('.nv-names') as HTMLElement

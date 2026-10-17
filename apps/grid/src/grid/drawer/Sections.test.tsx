@@ -55,6 +55,33 @@ describe('a link section', () => {
   const place = (person: number): Row => ({ id: 11, title: '', status: '', fields: { activity_id: 1, person_id: person, role_id: 3 }, lookups: { role_id: { id: 3, title: 'Techniek', status: '', fields: {} } } })
   const held = (target: number, title: string): LinkItem[] => [{ id: 11, target, title, state: null }]
 
+  it('counts its head in places: an open ×2 is two, a cancelled open ×3 none', async () => {
+    remote.rowsWhere.mockResolvedValue({ rows: [], total: 0 })
+    const toned: Link = { ...link, state: { options: { ok: 'Bevestigd', weg: 'Geannuleerd' }, tones: { ok: 'ok', weg: 'bad' }, default: null } }
+    const items: LinkItem[] = [
+      { id: 11, target: 5, title: 'Sien Peeters', state: 'ok' },
+      { id: 12, target: null, title: '', state: null, places: 2 },
+      { id: 13, target: null, title: '', state: 'weg', places: 3 },
+    ]
+    render(<LinkSection label="Mensen" link={toned} items={items} schema={schema} id={1} />)
+    await waitFor(() => expect(remote.rowsWhere).toHaveBeenCalled())
+    const section = screen.getByRole('region', { name: 'Mensen' })
+    expect(section.querySelector('.nv-dw-sec__n')?.textContent).toBe('1/3')
+    // The open ×2 says how many beside it; a place for one says nothing.
+    expect([...section.querySelectorAll('li')].map((li) => li.querySelector('.nv-dw-list__main > span')?.textContent)).toEqual([
+      'Sien Peeters',
+      'Open plek×2',
+      'Open plek×3',
+    ])
+    expect(section.querySelectorAll('.nv-dw-list__times')).toHaveLength(2)
+    // The cancelled one says so, as a filled place does, so the head's 3 reads true.
+    expect([...section.querySelectorAll('li')].map((li) => li.querySelector('.nv-pill')?.textContent ?? null)).toEqual([
+      'Bevestigd',
+      null,
+      'Geannuleerd',
+    ])
+  })
+
   it('re-reads its places once its items change, and asks for the candidates of the place as it reads now', async () => {
     remote.rowsWhere.mockResolvedValueOnce({ rows: [place(5)], total: 1 }).mockResolvedValueOnce({ rows: [place(7)], total: 1 })
     remote.optionsFrom.mockResolvedValue([])

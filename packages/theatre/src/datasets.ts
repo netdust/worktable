@@ -163,6 +163,7 @@ export const activiteit = defineDataset({
       key: 'activiteit_id',
       target: 'persoon_id',
       state: 'state',
+      count: 'aantal',
     },
   },
   indexes: [['plandag']],

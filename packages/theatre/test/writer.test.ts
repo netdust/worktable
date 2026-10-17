@@ -246,6 +246,16 @@ describe('the Planning on activiteit', () => {
     expect(row?.links.mensen.map((m) => m.id).sort()).toEqual(ids.sort())
   })
 
+  test("each of mensen holds its toewijzing's aantal as places: an open Speler ×2 is two", async () => {
+    const rol = (await request('GET', '/api/rows/rol?limit=1')).body.rows[0].id
+    const open = await request('POST', '/api/rows/toewijzing', { activiteit_id: 1, rol_id: rol, aantal: 2 })
+    const filled = await request('POST', '/api/rows/toewijzing', { activiteit_id: 1, persoon_id: 2 })
+    expect([open.status, filled.status]).toEqual([201, 201])
+    const mensen = (await activiteitRows()).find((r) => r.id === 1)?.links.mensen ?? []
+    expect(mensen.find((m) => m.id === open.body.id)).toMatchObject({ target: null, places: 2 })
+    expect(mensen.find((m) => m.id === filled.body.id)).toMatchObject({ target: 2, places: 1 })
+  })
+
   test('the theatre domain passes validateDomain', () => {
     expect(() => validateDomain(theatre)).not.toThrow()
   })
@@ -258,7 +268,7 @@ describe('the Planning on activiteit', () => {
       plandag: string
       locatie: number | null
       inherited?: string[]
-      links: { mensen: { id: number }[] }
+      links: { mensen: { id: number; target: number | null; places?: number }[] }
     }[]
   }
 

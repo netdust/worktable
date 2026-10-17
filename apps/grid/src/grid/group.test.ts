@@ -162,6 +162,28 @@ describe('the facts a band declares', () => {
     expect(valuesOf([crew(3, []), at(4, 'show', null)])).toEqual([[]])
   })
 
+  it('counts an open item by its places and leaves a refused or cancelled one out, open or filled', () => {
+    const tones = { bevestigd: 'ok', geweigerd: 'bad', geannuleerd: 'bad' } as const
+    const link = {
+      item: 'Toewijzing', dataset: 'toewijzing', key: 'activiteit_id', target: 'persoon_id', target_dataset: 'persoon',
+      state: { options: { bevestigd: 'Bevestigd', geweigerd: 'Geweigerd', geannuleerd: 'Geannuleerd' }, tones, default: null },
+    }
+    const staffed: Model = { ...timed, fields: { ...timed.fields, mensen: { type: 'links', label: 'Mensen', required: false, fact: false, link } } }
+    const band = columnsFor(staffed, { ...view, columns: [...view.columns, 'mensen'] })
+    const item = (id: number, target: number | null, state: string | null, places?: number) =>
+      ({ id, target, title: target === null ? '' : `P${target}`, state, ...(places && { places }) })
+    const bezetting = (...items: ReturnType<typeof item>[]) => {
+      const row = withField(at(1, 'show', null), 'mensen', items)
+      const filled: GroupFact[] = [{ kind: 'filled', link: 'mensen', label: 'bezetting' }]
+      return groupRows([row], band.find((c) => c.id === 'plandag'), { facts: filled, columns: band, cut: null })[0].facts[0]?.value
+    }
+
+    // A cancelled open slot is a need the planner withdrew.
+    expect(bezetting(item(1, 1, 'bevestigd'), item(2, null, 'geannuleerd', 3))).toBe('1/1')
+    // An open Speler ×3 is three places; a filled row holds one, whatever its count; a refused one holds none.
+    expect(bezetting(item(1, 1, 'bevestigd'), item(2, 2, 'bevestigd', 3), item(3, null, null, 3), item(4, 3, 'geweigerd'))).toBe('2/5')
+  })
+
   it('shows … for each fact of the group the read limit may have cut short', () => {
     const loaded = [at(1, 'show', '2026-10-13T20:00'), at(2, 'build', '2026-10-14T08:00', '2026-10-14')]
     const cut = cutAt(loaded, 9)

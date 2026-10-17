@@ -238,18 +238,27 @@ export interface LinkRow {
   target: number | null
   title: string
   state: string | null
+  places?: number
 }
 
-// Only these four leave: no other column of the link row or of its target.
-function linkOf(row: EngineRow, link: LinkDecl): LinkRow {
+// Only these leave: no other column of the link row or of its target. `places` only when `count` is served.
+function linkOf(row: EngineRow, link: LinkDecl, count: string | undefined): LinkRow {
   const target = row[link.target]
   const state = link.state === undefined ? null : row[link.state]
+  const places = count === undefined ? undefined : row[count]
   return {
     id: row.id,
     target: typeof target === 'number' ? target : null,
     title: row.lookups[link.target]?.title ?? row.title,
     state: typeof state === 'string' ? state : null,
+    ...(count !== undefined && { places: Number.isInteger(places) && (places as number) > 0 ? (places as number) : 1 }),
   }
+}
+
+// The count column, served to an owner only when owner_visible, as a lookup is.
+function servedCount(link: LinkDecl, linked: DatasetDecl, scope: Scope): string | undefined {
+  if (link.count === undefined) return undefined
+  return scope === 'all' || linked.columns[link.count]?.owner_visible === true ? link.count : undefined
 }
 
 // Read through the caller's scope on the link dataset; a link dataset the caller cannot read is left out.
@@ -265,9 +274,11 @@ export function linksOf(
     const linked = domain.datasets.find((d) => d.name === link.dataset)
     if (!linked || !readable(actor, linked)) continue
     for (const id of ids) (links.get(id) as Record<string, LinkRow[]>)[name] = []
-    const raws = pointingAt(db, linked, link.key, ids, scopeOf(actor, linked))
+    const scope = scopeOf(actor, linked)
+    const count = servedCount(link, linked, scope)
+    const raws = pointingAt(db, linked, link.key, ids, scope)
     withLookups(db, domain, linked, raws).forEach((row, i) => {
-      links.get((raws[i] as Raw)[link.key] as number)?.[name]?.push(linkOf(row, link))
+      links.get((raws[i] as Raw)[link.key] as number)?.[name]?.push(linkOf(row, link, count))
     })
   }
   return links

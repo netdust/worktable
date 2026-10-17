@@ -126,6 +126,7 @@ const strings = {
   dragDropped: '{title} neergezet in {label}, plaats {place} van {count}.',
   dragCancelled: 'Slepen geannuleerd: {title} blijft in {label}.',
   openPlace: 'Open plek',
+  openPlaces: '×{n}',
   hints: 'Sneltoetsen',
   changed: 'Gewijzigd',
   addColumn: '+ Kolom',

@@ -53,12 +53,13 @@ export interface Link {
   state?: { options: Record<string, string>; tones: Record<string, Tone>; default: string | null }
 }
 
-/** One linked row as a `links` field holds it. */
+/** One linked row as a `links` field holds it; `places` only on a link that counts them, else it holds one. */
 export interface LinkItem {
   id: number
   target: number | null
   title: string
   state: string | null
+  places?: number
 }
 
 export interface Model {
