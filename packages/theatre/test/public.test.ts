@@ -12,7 +12,9 @@ test("the website's calendar reads the seeded Voorstellingen view by its token: 
   seedDomain(sqlite, theatre)
   const app = testEngine(sqlite, theatre)
   const headers = { host: '127.0.0.1:4310', cookie: await signIn(app, 'administrator') }
-  const listed = (await (await app.request('/api/views', { headers })).json()) as { views: { id: number; name: string }[] }
+  const listed = (await (await app.request('/api/views', { headers })).json()) as {
+    views: { id: number; name: string }[]
+  }
   const view = listed.views.find((v) => v.name === 'Voorstellingen')
   const shared = await app.request(`/api/views/${view?.id}/share-token`, {
     method: 'PUT',
