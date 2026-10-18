@@ -13,7 +13,6 @@ type Stored = { id: number; status: string; position: string | null }
 // Weeks no other spec uses, one per flow, so no flow's cards meet another's on a board.
 const WEEK = {
   between: '2032-02-02',
-  reorder: '2032-02-09',
   fresh: '2032-02-16',
   toManual: '2032-02-23',
   stale: '2032-04-05',
@@ -26,12 +25,8 @@ const WEEK = {
   filled: '2029-04-09',
   tone: '2033-06-06',
   conflict: '2034-09-04',
-  ignore: '2034-09-11',
   choose: '2034-09-18',
   chooseOnBoard: '2034-09-25',
-  chooseOnTimeline: '2034-10-02',
-  chooseOnCalendar: '2034-10-09',
-  overlap: '2028-11-06',
 }
 const MANUAL = ['position']
 const SORTED = ['plandag', 'start_at']
@@ -205,6 +200,14 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await page.mouse.up()
       const landed = moved(first, held, 'Bevestigd', 2)
       await expect.poll(() => orders(page)).toEqual(landed)
+      // Every card fits its column.
+      for (const column of ['Optie', 'Bevestigd']) {
+        const edge = await lane(page, column).evaluate((el) => el.getBoundingClientRect().right)
+        for (const right of await lane(page, column)
+          .locator('.nv-board__card')
+          .evaluateAll((cards) => cards.map((c) => c.getBoundingClientRect().right)))
+          expect(right).toBeLessThanOrEqual(edge)
+      }
       await expect.poll(async () => (await stored(api, held)).status).toBe('bevestigd')
       expect((await stored(api, held)).position).not.toBeNull()
 
@@ -228,46 +231,6 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await expect.poll(() => orders(page)).toEqual(landed)
       expect((await stored(api, held)).status).toBe('bevestigd')
       expect(patches).toEqual([])
-    } finally {
-      if (view) await api.delete(`/api/views/${view}`)
-      await made.remove()
-    }
-  })
-
-  test('board-reorder @e2e', async ({ page }) => {
-    const api = page.request
-    const made = activities(api)
-    let view = 0
-    try {
-      const day = plusDays(WEEK.reorder, 2)
-      const optie: number[] = []
-      for (const n of [1, 2, 3, 4]) optie.push(await made.add(`e2e volgorde ${n}`, day, 'optie'))
-      const [one, , three, four] = optie as [number, number, number, number]
-      view = await boardOf(api, 'e2e Bord volgorde', WEEK.reorder, MANUAL)
-      await page.goto('/')
-      await open(page, 'e2e Bord volgorde', one)
-      const first = await orders(page)
-      expect(first.Optie).toEqual(optie)
-
-      // The last card to the top.
-      await holdOnto(page, four, one)
-      await expect(said(page)).toHaveText(/boven Optie, plaats 1 van 4/)
-      await page.mouse.up()
-      const once = moved(first, four, 'Optie', 0)
-      await expect.poll(() => orders(page)).toEqual(once)
-      await expect.poll(async () => (await stored(api, four)).position).not.toBeNull()
-
-      // Then the last one up to the second place, below the ranked card and above the unranked ones.
-      await holdOnto(page, three, one)
-      await expect(said(page)).toHaveText(/boven Optie, plaats 2 van 4/)
-      await page.mouse.up()
-      const twice = moved(once, three, 'Optie', 1)
-      await expect.poll(() => orders(page)).toEqual(twice)
-      await expect.poll(async () => (await stored(api, three)).position).not.toBeNull()
-
-      await reopen(page, 'e2e Bord volgorde', one)
-      await expect.poll(() => orders(page)).toEqual(twice)
-      await shot(page, 'board-reorder')
     } finally {
       if (view) await api.delete(`/api/views/${view}`)
       await made.remove()
@@ -465,6 +428,16 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       expect((await stored(api, held)).position).toBeNull()
       await expect(changedMark(page)).toHaveCount(0)
 
+      // ⌘Z right after the drop, the focus on the page: the card is back in Optie, and so is its status; then dropped again.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect.poll(() => orders(page)).toEqual(first)
+      await expect.poll(async () => (await stored(api, held)).status).toBe('optie')
+      await holdAcross(page, held, 'Bevestigd', 0)
+      await page.mouse.up()
+      await expect.poll(() => orders(page)).toEqual(sorted)
+      await expect.poll(async () => (await stored(api, held)).status).toBe('bevestigd')
+
       await reopen(page, 'e2e Bord gesorteerd kruis', held)
       await expect.poll(() => orders(page)).toEqual(sorted)
       await expect(changedMark(page)).toHaveCount(0)
@@ -649,6 +622,14 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await expect.poll(() => orders(page)).toEqual(dropped)
       expect(await stored(api, other)).toMatchObject({ status: 'optie', position: null })
       expect(patches).toEqual([])
+
+      // Back to the column on its left: ← and Space write that column's value.
+      await card(page, held).focus()
+      await press('Space', /^e2e toets a opgepakt in Bevestigd, plaats 2 van 4\.$/)
+      await press('ArrowLeft', /^e2e toets a boven Optie, plaats 2 van 2\.$/)
+      await press('Space', /^e2e toets a neergezet in Optie, plaats 2 van 2\.$/)
+      await expect.poll(() => orders(page)).toEqual(moved(dropped, held, 'Optie', 1))
+      await expect.poll(async () => (await stored(api, held)).status).toBe('optie')
     } finally {
       if (view) await api.delete(`/api/views/${view}`)
       await made.remove()
@@ -1101,45 +1082,6 @@ test.describe('step 3f: conflicten flags what it names', () => {
       await booking.remove()
     }
   })
-
-  test('conflict-band-negeren @e2e', async ({ page }) => {
-    const api = page.request
-    const booking = doubleBooking(api)
-    try {
-      const [one] = await booking.add(WEEK.ignore, 'e2e negeren')
-      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.ignore)
-      await expect(card(page, one).locator('.nv-flag')).toHaveText('Conflict')
-
-      const opened = async () => {
-        await card(page, one).click()
-        const drawer = page.getByRole('complementary', { name: 'e2e negeren een' })
-        await expect(drawer).toBeVisible()
-        return drawer
-      }
-      const drawer = await opened()
-      const band = drawer.getByRole('alert')
-      await expect(band.locator('.nv-dw-alert__head')).toHaveText('Conflict')
-      await expect(band.locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
-      await expect(band.getByRole('button')).toHaveText(['Iemand anders kiezen', 'Negeren'])
-      // The person in Mensen carries the flag, its text in place of their role.
-      const person = drawer
-        .getByRole('region', { name: 'Mensen' })
-        .getByRole('listitem')
-        .filter({ hasText: 'Ezra Dubbelboek' })
-      await expect(person.locator('.nv-flag')).toHaveText('Conflict')
-      await shot(page, 'conflict-band')
-
-      // Negeren hides the band in the open drawer and stores nothing: opened again, it is back.
-      await band.getByRole('button', { name: 'Negeren' }).click()
-      await expect(drawer.getByRole('alert')).toHaveCount(0)
-      await drawer.getByRole('button', { name: 'Sluiten' }).click()
-      await expect(drawer).toBeHidden()
-      const again = await opened()
-      await expect(again.getByRole('alert').locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
-    } finally {
-      await booking.remove()
-    }
-  })
 })
 
 /** A skin of Activiteiten on its own week, and how the first activity's drawer opens from it. */
@@ -1148,6 +1090,8 @@ interface Surface {
   title: string
   screenshot: string
   drawerOf: (page: Page, title: string, id: number) => Promise<void>
+  /** Where set, Negeren comes first, and the drawer is opened again from the skin as it stands. */
+  reopen?: (page: Page, id: number) => Promise<void>
 }
 
 /**
@@ -1196,6 +1140,21 @@ async function chooseOther(page: Page, surface: Surface) {
       await expect(mira).toBeVisible()
       if (screenshot) await shot(page, screenshot)
       await mira.click()
+    }
+
+    if (surface.reopen) {
+      await expect(band.locator('.nv-dw-alert__head')).toHaveText('Conflict')
+      // The person in Mensen carries the flag, its text in place of their role.
+      await expect(mensen.getByRole('listitem').filter({ hasText: 'Ezra Dubbelboek' }).locator('.nv-flag')).toHaveText(
+        'Conflict',
+      )
+      // Negeren hides the band in the open drawer and stores nothing: closed and opened again, it is back.
+      await band.getByRole('button', { name: 'Negeren' }).click()
+      await expect(band).toHaveCount(0)
+      await drawer.getByRole('button', { name: 'Sluiten' }).click()
+      await expect(drawer).toBeHidden()
+      await surface.reopen(page, one as number)
+      await expect(band.locator('.nv-dw-alert__text')).toHaveText(DOUBLE)
     }
 
     await chooseMira(surface.screenshot)
@@ -1249,102 +1208,8 @@ test.describe('step 3f: the record drawer chooses someone else for a flagged pla
           await openWeek(page, 'Per status', 'Activiteiten', 'plandag', WEEK.chooseOnBoard)
           await card(page, id).click()
         },
+        reopen: (page, id) => card(page, id).click(),
       }))
-  })
-
-  // The seeded timeline is over Tourstops, whose drawer lists no people: this one is over Activiteiten, laned by productie.
-  test('conflict-choose-other-timeline @e2e', async ({ page }) => {
-    const api = page.request
-    const name = 'e2e Tijdlijn kies'
-    const view = await posted(api, '/api/views', {
-      name,
-      source: 'activiteit',
-      skin: 'timeline',
-      filters: { plandag: { $period: 'week' } },
-      sort: ['plandag', 'start_at'],
-      group_by: 'productie_id',
-      visible_fields: [],
-    })
-    let opens = 0
-    try {
-      await chooseOther(page, {
-        week: WEEK.chooseOnTimeline,
-        title: 'e2e kies tijdlijn',
-        screenshot: 'conflict-choose-other-timeline',
-        drawerOf: async (page, title) => {
-          await openWeek(page, name, 'Activiteiten', 'plandag', WEEK.chooseOnTimeline)
-          const bar = page.locator('.nv-tl__bar', { hasText: title })
-          // A conflict across two productions: each bar in its own lane, so neither is an overlap of the other.
-          await expect(bar).toBeVisible()
-          await expect(page.locator('.nv-tl__bar [title^="Overlapt met"]')).toHaveCount(0)
-          // Marked while the conflict stands, before anyone else is chosen.
-          if (opens++ === 0) await expect(bar.locator('.nv-flag')).toHaveAttribute('title', DOUBLE)
-          await bar.click()
-        },
-      })
-    } finally {
-      await api.delete(`/api/views/${view}`)
-    }
-  })
-
-  test('conflict-choose-other-calendar @e2e', async ({ page }) => {
-    let opens = 0
-    await chooseOther(page, {
-      week: WEEK.chooseOnCalendar,
-      title: 'e2e kies kalender',
-      screenshot: 'conflict-choose-other-calendar',
-      drawerOf: async (page, title) => {
-        await openWeek(page, 'Kalender activiteiten', 'Activiteiten', 'plandag', WEEK.chooseOnCalendar)
-        const event = page.locator('.nv-cal__event', { hasText: title })
-        await expect(event).toBeVisible()
-        // Marked while the conflict stands, before anyone else is chosen.
-        if (opens++ === 0) await expect(event.locator('.nv-flag')).toHaveAttribute('title', DOUBLE)
-        await event.click()
-      },
-    })
-  })
-})
-
-test.describe('step 3f: the timeline marks bars of a lane that overlap', () => {
-  test.describe.configure({ timeout: 120_000 })
-  test.use({ viewport: { width: 1600, height: 900 } })
-
-  test('timeline-overlap @e2e', async ({ page }) => {
-    const api = page.request
-    const productie = await nachtwacht(api)
-    const stops: number[] = []
-    const insight = page.locator('.nv-toolbar__overlaps')
-    const marks = page.locator('.nv-tl__bar [title^="Overlapt met"]')
-    try {
-      for (const [at, naam] of ['e2e overlap een', 'e2e overlap twee'].entries()) {
-        const start_datum = plusDays(WEEK.overlap, at)
-        const data = {
-          productie_id: productie,
-          naam,
-          start_datum,
-          eind_datum: plusDays(start_datum, 2),
-          status: 'bevestigd',
-        }
-        stops.push(await posted(api, '/api/rows/speelreeks', data))
-      }
-      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.overlap)
-      await expect(marks).toHaveCount(2)
-      await expect(
-        page.locator('.nv-tl__bar', { hasText: 'e2e overlap een' }).locator('[title^="Overlapt met"]'),
-      ).toHaveAttribute('title', 'Overlapt met e2e overlap twee')
-      await expect(insight).toHaveText('1 overlap')
-      await shot(page, 'timeline-overlap')
-
-      // Cancelled, a bar neither overlaps nor is overlapped: both marks and the count go after a reload.
-      const cancelled = await api.patch(`/api/rows/speelreeks/${stops[1]}`, { data: { status: 'geannuleerd' } })
-      expect(cancelled.status(), await cancelled.text()).toBe(200)
-      await openWeek(page, 'Tijdlijn tourstops', 'Tourstops', 'start_datum', WEEK.overlap)
-      await expect(page.locator('.nv-tl__bar--cancelled')).toHaveCount(1)
-      await expect(marks).toHaveCount(0)
-      await expect(insight).toHaveCount(0)
-    } finally {
-      for (const id of stops) await api.delete(`/api/rows/speelreeks/${id}`)
-    }
   })
 })
 

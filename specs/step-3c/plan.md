@@ -60,13 +60,13 @@
 
 | Row | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|---|
-| T1 | Dashboard view: schema, validation, owner refusal, seeding by name | `POST/PATCH /views`, `GET /views`, `PUT …/share-token`, `migrate`/`--seed-missing` | integration · `packages/engine/test/dashboard.test.ts` · `bun test packages/engine/test/dashboard.test.ts` | owner-no-dashboard |
+| T1 | Dashboard view: schema, validation, owner refusal, seeding by name | `POST/PATCH /views`, `GET /views`, `PUT …/share-token`, `migrate`/`--seed-missing` | integration · `packages/engine/test/dashboard.test.ts` · `bun test packages/engine/test/dashboard.test.ts` | none; the owner's refusal is `who lists a dashboard (attack 1)` here, the owner's rail and landing `owner-has-no-switcher` (grid-ux) |
 | T2 | Board, gallery and spans needs; timeline skin; batched attachments read | `validateDomain`, `POST /views`, `GET /attachments/:dataset?ids=` | integration · `packages/engine/test/skins.test.ts` · `bun test packages/engine/test/skins.test.ts` | — |
 | T3 | Theatre needs and seeds | `GET /schema`, `GET /views`, the seeded dashboard | integration · `packages/theatre/test/step3c.test.ts` · `bun test packages/theatre/test/step3c.test.ts` | — |
 | T4 | Grid dashboard page: plumbing, stat and list tiles, `set`, refresh | `<Dashboard>` render; `dashboard/tiles.ts` | unit · `apps/grid/src/dashboard/*.test.ts(x)` · `bun run --filter @worktable/grid test` | dashboard-landing, stat-red-then-neutral, stat-opens-view, werklijst-set |
 | T5 | Week strip, progress, quick create (Task 5); composer (Task 5b) | `<WeekTile>`, `<ProgressTile>`, `<QuickCreate>`, composer | unit · same | week-opens-activity, quick-create, space-narrows |
 | T6 | Board, timeline, gallery skins; calendar spans | `<Board>`, `<Timeline>`, `<Gallery>`; `calendar/layout.ts` spans | unit · `apps/grid/src/{board,timeline,gallery}/*.test.tsx`, `calendar/layout.test.ts` · same | skins-open |
-| T7 | The gate | the running grid | e2e · `e2e/step-3c.spec.ts`, `e2e/smoke/step-3c.spec.ts` · `bunx playwright test e2e/step-3c.spec.ts` | all above |
+| T7 | The gate | the running grid | e2e · `e2e/step-3c.spec.ts` (its smoke tests are gone: the R11 sign-in test and the engine route tests in `auth.test.ts` cover them) · `bunx playwright test e2e/step-3c.spec.ts` | all above |
 
 ## Review Focus
 
@@ -328,7 +328,7 @@
 ### Task 7: The gate
 
 - Create `e2e/step-3c.spec.ts` with these flows, each building its own rows in an unused week:
-  - **dashboard-landing:** `/` opens on Overzicht; every stat shows a number equal to its view's row count, read through the API in the test.
+  - **dashboard-landing:** `/` opens on Overzicht; every stat shows a number equal to its view's row count, read through the API in the test. The dark theme is grid-ux's `dark-and-density`.
   - **stat-red-then-neutral:**
     - create a production of its own with one overlap conflict, and select it in the space switcher;
     - the Conflicten stat reads at least 1 and is red (class `nv-stat--bad`; one overlap may give one row per side, review 2 N10);
@@ -339,7 +339,7 @@
   - **werklijst-set:** make an open taak with no deadline (it sorts first: SQLite puts NULL first ascending; the second exception to the 2028 weeks). "Gedaan" on its row in the Te doen list removes it, and the list title's count drops by one (review 2 S1).
   - **quick-create:** "Nieuwe taak" with a title creates a Taak; the Te doen list title's count rises by one.
   - **space-narrows:** selecting one production lowers or keeps every stat, and a stat equals the view's count under that scope.
-  - **owner-no-dashboard:** an owner session lists no dashboard (API) and the person link page shows none.
-  - **skins-open:** build rows in a 2028 week, open each seeded skin (Bord, Tijdlijn, Galerij with an uploaded image, both calendars) on that week with `openWeek`, and see the rows (review S7).
-- Create `e2e/smoke/step-3c.spec.ts`: `/api/views asks for a session @smoke`; `the landing page shows the sign-in @smoke`.
+  - **owner-no-dashboard:** no e2e of its own: an owner session listing no dashboard is pinned by `an owner lists no dashboard; an editor and an administrator list the shared one` (`packages/engine/test/dashboard.test.ts:157`) and the person link by `a link account lists no dashboard` (`:166`), both under `who lists a dashboard (attack 1)`; the owner's rail and landing by `owner-has-no-switcher` (grid-ux.spec.ts).
+  - **skins-open:** build rows in a 2028 week, open each seeded skin (Bord, Tijdlijn, Galerij with an uploaded image, both calendars) on that week with `openWeek`, and see the rows (review S7). Where a spanning bar sits is `a spanning row` in `apps/grid/src/calendar/Calendar.test.tsx`.
+- (Smoke collapse: the former `e2e/smoke/step-3c.spec.ts` is gone; `/api/views` is pinned by `auth.test.ts` "auth denials: no session", the landing page by the R11 sign-in test in `e2e/smoke/step-2.spec.ts`.)
 - [ ] `bun run gate` → green. Commit `test(e2e): step 3c gate — the dashboard lands, stats live and toned, actions and quick creates, space, owner refused, every skin opens`.

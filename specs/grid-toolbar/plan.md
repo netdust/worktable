@@ -204,7 +204,7 @@
     - `e2e/title-line.spec.ts:9,25`: it expects a visible Dagplanning row, which on "deze week" depends on the run's date;
     - `e2e/step-0a.spec.ts:4,13`: Planning's day sections at 93–95 (Planning loses its default week);
     - flows that step with ‹ › ("Vorige/Volgende periode").
-  - Harmless (the `#from=` is now ignored): `e2e/rail-tree.spec.ts:7,27`, `e2e/dagplanning.spec.ts:584,668` (tree only). `e2e/smoke/dagplanning.spec.ts:6` (sign-in page) is rewritten to land with `#view=&f=` so the smoke test checks an address the app reads.
+  - Harmless (the `#from=` is now ignored): `e2e/rail-tree.spec.ts:7,27`, `e2e/dagplanning.spec.ts:584,668` (tree only). `e2e/smoke/dagplanning.spec.ts:6` (sign-in page) is gone (smoke collapse); the R11 sign-in test (`e2e/smoke/step-2.spec.ts`) lands on a `#view=&f=` link, an address the app reads.
 - Also amend the `docs/SPEC.md` working-tree Sidebar line ("The period is a filter chip … with the window in the URL"): the period is a condition on the date column, stored in the view; a matrix reads the condition's days, else the current week.
 
 **Interfaces:**

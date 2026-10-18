@@ -77,7 +77,7 @@
 | T6 | Grid calendar view | `<Calendar>` render; `calendar/layout.ts` `placeEvents` | unit · `apps/grid/src/calendar/layout.test.ts`, `apps/grid/src/calendar/Calendar.test.tsx` · `bun run --filter @worktable/grid test` | person-calendar, company-week |
 | T7 | Grid candidates source | `optionsFrom` in `api.ts`; `FillPicker`, Drawer input, Relation cell | unit · `apps/grid/src/api.test.ts`, `apps/grid/src/matrix/Matrix.test.tsx` · same | candidates-picker |
 | T8 | Grid badge cell | `<BadgeCell>` render | unit · `apps/grid/src/grid/cells/Badge.test.tsx` · same | badge-clears |
-| T9 | Seeded views and the gate | the running grid | e2e · `e2e/step-3.spec.ts`, `e2e/smoke/step-3.spec.ts` · `bunx playwright test e2e/step-3.spec.ts` | all five above, away-only-afwezig |
+| T9 | Seeded views and the gate | the running grid | e2e · `e2e/step-3.spec.ts` (its smoke tests are gone: the R11 sign-in test and `auth.test.ts` cover them) · `bunx playwright test e2e/step-3.spec.ts` | all five above, away-only-afwezig |
 | T10 | Untimed-rule counts on the real copy | `bun scripts/conflict-counts.ts <db>` | none — a report, never asserted (G) | — |
 
 ## Review Focus
@@ -500,9 +500,9 @@
     - in the week of 2026-10-12 there is a lane "Lotte Verhaegen" with her repetitie chip;
     - Lotte's untimed overnachting on 2026-10-15 (seeded in Task 1) shows under "Hele dag" in her lane; laned by production it sits in Nachtwacht's lane (plan review S3).
   - **company-week**: open Bedrijfsweek and pin the week of 2026-10-12 with `openWeek`; it shows lanes De Kersentuin and Nachtwacht.
-- Create: `e2e/smoke/step-3.spec.ts`: `/api/rows/conflicten asks for a session @smoke` → 401; `a calendar link lands on the sign-in page @smoke`.
+- (Smoke collapse: the former `e2e/smoke/step-3.spec.ts` is gone; `/api/rows/conflicten` is pinned by `auth.test.ts` "auth denials: no session" (`/api/rows/taak`), the calendar link by the R11 sign-in test.)
 - Add the flow **away-only-afwezig** described in Task 7 (R13).
-- Modify: `specs/CHECKS.md` (register the six flows `@e2e` and the two `@smoke`; `/shakeout` refines them)
+- Modify: `specs/CHECKS.md` (register the six flows `@e2e`; `/shakeout` refines them)
 
 - Test: in `packages/theatre/test/step3-queries.test.ts`, `every seeded view saves through the views route`: POST each seeded view's fields to `/views` as an administrator → 201, since seeding inserts views without `skinOf`/`groupOf` (review 2 N7).
 - [ ] **Step 1: Write the e2e spec** and run it: `bunx playwright test e2e/step-3.spec.ts` → it fails only where Task 9's seed views are missing.

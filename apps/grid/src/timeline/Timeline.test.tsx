@@ -1,9 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SchemaContext } from '../grid/drawer/context'
 import { defaults } from '../grid/layout'
-import type { CalendarDef, Model, Row, View } from '../types'
+import type { CalendarDef, Model, Row, Schema, View } from '../types'
 
-const api = vi.hoisted(() => ({ records: vi.fn(), recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })) }))
+const api = vi.hoisted(() => ({ records: vi.fn(), rows: vi.fn(), recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })) }))
 vi.mock('../api', () => api)
 const { Timeline } = await import('./Timeline')
 
@@ -97,6 +98,7 @@ describe('the timeline overlap', () => {
   it('leaves a cancelled bar out: no marks, no count', () => {
     const onTitle = draw(clash(true))
 
+    expect(document.querySelectorAll('.nv-tl__bar--cancelled')).toHaveLength(1)
     expect(screen.queryAllByTitle(/^Overlapt met /)).toHaveLength(0)
     expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 0 }))
   })
@@ -137,5 +139,43 @@ describe('the timeline overlap of bars with times', () => {
 
     expect(screen.getByTitle('Overlapt met Opbouw')).toBeTruthy()
     expect(onTitle).toHaveBeenLastCalledWith(expect.objectContaining({ overlaps: 1 }))
+  })
+})
+
+describe("a flagged place in the timeline's drawer", () => {
+  const cal: CalendarDef = { day: 'start', start: null, end: 'einde', lanes: [], spans: true }
+  const link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }
+  const activity = {
+    key: 'activity', label: 'Activiteiten', title_label: 'Omschrijving', title_readonly: false,
+    fields: { people: { type: 'links', label: 'Mensen', required: false, fact: false, link } },
+  } as unknown as Model
+  const int = { type: 'int', label: 'Id', required: false, fact: true }
+  const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
+  const served = {
+    models: {
+      activity,
+      assignment: { key: 'assignment', label: 'Plaatsen', fields: { person_id: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false }, options_from: from } } },
+      clashes: { key: 'clashes', label: 'Botsingen', fields: { activity_id: int, assignment_id: int, weight: { type: 'select', label: 'Ernst', required: true, fact: true, options: { clash: 'Botsing' }, tones: { clash: 'bad' } } } },
+    },
+    tables: [{ key: 'clashes', label: 'Botsingen', model: 'clashes', flags: { marks: { activity: 'activity_id', assignment: 'assignment_id' }, tone: 'weight' } }],
+    views: [], writable: { activity: true, assignment: true },
+  } as unknown as Schema
+  const timeline = { key: 't', label: 'Tijdlijn', table: 'activity', model: 'activity', type: 'timeline', calendar: cal } as unknown as View
+  const repetitie: Row = { id: 1, title: 'Repetitie', status: '', fields: { start: '2030-01-08', einde: '2030-01-09', people: [{ id: 11, target: 5, title: 'Sien Peeters', state: null }] } }
+
+  it('offers "Iemand anders kiezen" beside Negeren on the place the flag marks, with the page\'s place writer', async () => {
+    api.rows.mockResolvedValue({ rows: [{ id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 1, assignment_id: 11, weight: 'clash' } }], total: 1 })
+    const places = vi.fn(() => vi.fn())
+    render(
+      <SchemaContext.Provider value={served}>
+        <Timeline view={timeline} model={activity} models={served.models} rows={[repetitie]} cal={cal} shown={{ from: '2030-01-07', to: '2030-01-13' }} lane={null}
+          layout={defaults(timeline)} places={places} />
+      </SchemaContext.Provider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Repetitie/ }))
+    const band = await within(screen.getByRole('complementary', { name: 'Repetitie' })).findByRole('alert')
+    expect([...band.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Negeren'])
+    expect(places).toHaveBeenCalledWith('activity', 1)
   })
 })

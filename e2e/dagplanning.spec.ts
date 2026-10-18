@@ -1,13 +1,9 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { state } from './auth'
-import { openEditor } from './editor'
 import { fillDate } from './segments'
 import { shot } from './shots'
-import { dropViews, modelNode, openView, openWeek, pickIn } from './tree'
+import { dropViews, openView, openWeek, pickIn } from './tree'
 
 const WEEK = '2026-12-21'
-const VENUE = 'Theater Het Anker'
-const OTHER_VENUE = 'Repetitiekot De Loods'
 
 type Api = Page['request']
 type Values = Record<string, unknown>
@@ -61,85 +57,10 @@ async function openDagplanning(page: Page) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
 }
 
-async function pickRelation(cell: Locator, page: Page, search: string, option: string) {
-  await cell.click()
-  await cell.press('Enter')
-  await page.getByRole('combobox', { name: 'Locatie' }).fill(search)
-  await page.getByRole('option', { name: option }).click()
-}
-
-test('edit-dagplanning @e2e', async ({ page }) => {
-  const api = page.request
-  await idOf(api, 'activiteit', {
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
-    soort: 'repetitie',
-    datum: WEEK,
-    start_at: `${WEEK}T10:00`,
-    omschrijving: 'dagplanning bewerken',
-  })
-  await openDagplanning(page)
-
-  const omschrijving = await cellOf(page, 'dagplanning bewerken', 'Omschrijving')
-  await omschrijving.click()
-  await omschrijving.press('Enter')
-  await omschrijving.locator('input').fill('dagplanning bewerkt')
-  await omschrijving.locator('input').press('Enter')
-  await expect(named(page, 'dagplanning bewerkt')).toHaveCount(1)
-
-  const soort = await cellOf(page, 'dagplanning bewerkt', 'Soort')
-  await soort.click()
-  await soort.press('Enter')
-  await openEditor(page).getByRole('option', { name: 'Opbouw' }).click()
-  await expect(soort).toHaveText('Opbouw')
-
-  await page.reload()
-  await openView(page, 'Planning', 'Activiteiten')
-  await expect(await cellOf(page, 'dagplanning bewerkt', 'Soort')).toHaveText('Opbouw')
-  const [stored] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'dagplanning bewerkt' })
-  expect(stored).toMatchObject({ soort: 'opbouw', omschrijving: 'dagplanning bewerkt' })
-  await shot(page, 'edit-dagplanning')
-})
-
-test('locatie-own-and-back @e2e', async ({ page }) => {
-  const api = page.request
-  const reeks = await idOf(api, 'speelreeks', {
-    naam: 'Speelreeks e2e dagplanning',
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
-    locatie_id: await idByName(api, 'organisatie', 'naam', VENUE),
-    start_datum: WEEK,
-    eind_datum: WEEK,
-  })
-  await idOf(api, 'activiteit', {
-    productie_id: await idByName(api, 'productie', 'titel', 'Nachtwacht'),
-    soort: 'repetitie',
-    datum: WEEK,
-    omschrijving: 'locatie eigen en terug',
-    speelreeks_id: reeks,
-  })
-  await openDagplanning(page)
-
-  const cell = () => cellOf(page, 'locatie eigen en terug', 'Locatie')
-  await expect((await cell()).locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
-
-  await pickRelation(await cell(), page, 'Loods', OTHER_VENUE)
-  await expect((await cell()).locator('.nv-cell__text')).toHaveText(OTHER_VENUE)
-  await expect((await cell()).locator('.nv-via, .nv-inherited')).toHaveCount(0)
-  await shot(page, 'locatie-own')
-
-  const clear = await cell()
-  await clear.click()
-  await clear.press('Delete')
-  await expect((await cell()).locator('.nv-inherited .nv-cell__text')).toHaveText(VENUE)
-  await expect((await cell()).locator('.nv-via')).toHaveText('via tourstop')
-  await shot(page, 'locatie-via-tourstop')
-  const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'locatie eigen en terug' })
-  expect(held.locatie_id ?? null).toBeNull()
-})
-
 test('period-is-the-period @e2e', async ({ page }) => {
   const api = page.request
   const productie = await idByName(api, 'productie', 'titel', 'Nachtwacht')
-  const [near, far] = ['periode in december', 'periode in februari']
+  const [near, far, next] = ['periode in december', 'periode in februari', 'periode na kerst']
   const made = [
     await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: WEEK, omschrijving: near }),
     await idOf(api, 'activiteit', {
@@ -147,6 +68,12 @@ test('period-is-the-period @e2e', async ({ page }) => {
       soort: 'repetitie',
       datum: '2027-02-15',
       omschrijving: far,
+    }),
+    await idOf(api, 'activiteit', {
+      productie_id: productie,
+      soort: 'repetitie',
+      datum: '2026-12-28',
+      omschrijving: next,
     }),
   ]
   try {
@@ -179,6 +106,13 @@ test('period-is-the-period @e2e', async ({ page }) => {
     await expect(bar.locator('.nv-chip--filter')).toHaveCount(0)
     await expect(named(page, near)).toHaveCount(1)
     await expect(named(page, far)).toHaveCount(0)
+    await expect(named(page, next)).toHaveCount(0)
+
+    // One step on: the next week's rows are read in, and this week's go.
+    await bar.getByRole('button', { name: 'Volgende periode' }).click()
+    await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · 28 dec–3 jan$/)
+    await expect(named(page, next)).toHaveCount(1)
+    await expect(named(page, near)).toHaveCount(0)
   } finally {
     for (const id of made) await api.delete(`/api/rows/activiteit/${id}`)
   }
@@ -422,15 +356,30 @@ async function withQuestion(
 const assignedTo = async (api: Api, activity: number) =>
   (await rowsOf<Assigned>(api, 'toewijzing', { activiteit_id: activity })).map((t) => t.persoon_id)
 
+// Bugs: the question holds the keyboard on Annuleren; Enter there reached the grid and marked the cell; Tab never reached Verwijderen; its buttons had no stylesheet.
 test('removal-question-by-keyboard @e2e', async ({ page }) => {
   const api = page.request
   const bram = await personId(api, 'Bram De Wilde')
+  const writes: string[] = []
+  page.on('request', (req) => {
+    if (req.method() === 'PATCH') writes.push(new URL(req.url()).pathname)
+  })
   await withQuestion(page, 'mensen vraag e2e', '11:00', async (activity, search) => {
     const question = page.getByRole('alertdialog')
     const cancel = question.getByRole('button', { name: 'Annuleren' })
+    const remove = question.getByRole('button', { name: 'Verwijderen' })
 
-    // Backspace on a confirmed last name asks; the question holds the keyboard on Annuleren.
+    // Backspace on a confirmed last name asks; the question holds the keyboard on Annuleren, in the app's own buttons.
     await expect(cancel).toBeFocused()
+    const style = (button: Locator) =>
+      button.evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { font: s.fontFamily, background: s.backgroundColor, border: s.borderTopStyle }
+      })
+    const [cancelStyle, removeStyle] = [await style(cancel), await style(remove)]
+    expect(cancelStyle.font).toMatch(/^"?IBM Plex Sans/)
+    expect(cancelStyle.border).not.toBe('outset')
+    expect(removeStyle.background).not.toBe(cancelStyle.background)
     await shot(page, 'removal-question')
 
     // Escape keeps the person, and the search has the keyboard again.
@@ -448,9 +397,28 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
     await expect(search).toBeFocused()
     expect(await assignedTo(api, activity)).toEqual([bram])
 
+    // Enter on it keeps them without the grid committing the people cell as a value: no write, no marked cell.
+    await search.press('Backspace')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(question).toHaveCount(0)
+    expect(await assignedTo(api, activity)).toEqual([bram])
+    await page.waitForTimeout(500)
+    expect(writes).toEqual([])
+    await expect(page.locator('td.nv-td--error')).toHaveCount(0, { timeout: 1000 })
+    await expect(search).toBeFocused({ timeout: 1000 })
+
+    // Tab reaches Verwijderen.
+    await search.press('Backspace')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(remove).toBeFocused({ timeout: 1000 })
+    await page.keyboard.press('Escape')
+    await expect(question).toHaveCount(0)
+
     // The × asks as well; Verwijderen removes, and that is final: Ctrl+Z does not bring them back.
     await page.getByRole('button', { name: 'Bram De Wilde verwijderen' }).click()
-    await question.getByRole('button', { name: 'Verwijderen' }).click()
+    await remove.click()
     await expect.poll(() => assignedTo(api, activity)).toEqual([])
     await expect(page.locator('.nv-picker .nv-chosen [role="row"]')).toHaveCount(0)
     await search.press('Escape')
@@ -458,50 +426,6 @@ test('removal-question-by-keyboard @e2e', async ({ page }) => {
     await page.waitForTimeout(500)
     expect(await assignedTo(api, activity)).toEqual([])
     await expect((await cellOf(page, 'mensen vraag e2e', 'Mensen')).locator('.nv-names')).toHaveText('')
-  })
-})
-
-// Bug: Enter on the focused Annuleren reaches the grid, which closes the box and commits the people cell as a value; the store refuses it and marks the cell.
-test('removal-question-enter-on-annuleren @e2e', async ({ page }) => {
-  const api = page.request
-  const writes: string[] = []
-  page.on('request', (req) => {
-    if (req.method() === 'PATCH') writes.push(new URL(req.url()).pathname)
-  })
-  await withQuestion(page, 'mensen enter e2e', '12:00', async (activity, search) => {
-    await expect(page.getByRole('alertdialog').getByRole('button', { name: 'Annuleren' })).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(page.getByRole('alertdialog')).toHaveCount(0)
-    expect(await assignedTo(api, activity)).toEqual([await personId(api, 'Bram De Wilde')])
-    await page.waitForTimeout(500)
-    expect(writes).toEqual([])
-    await expect(page.locator('td.nv-td--error')).toHaveCount(0, { timeout: 1000 })
-    await expect(search).toBeFocused({ timeout: 1000 })
-  })
-})
-
-// Bug: Tab on the question moves the grid's cell and closes the box; Verwijderen is never reached by the keyboard.
-test('removal-question-tab-to-verwijderen @e2e', async ({ page }) => {
-  await withQuestion(page, 'mensen tab e2e', '13:00', async () => {
-    const question = page.getByRole('alertdialog')
-    await page.keyboard.press('Tab')
-    await expect(question.getByRole('button', { name: 'Verwijderen' })).toBeFocused({ timeout: 1000 })
-  })
-})
-
-// Bug: the question's buttons carry nv-btn and nv-btn--danger, which no stylesheet defines: browser buttons in Arial, Verwijderen like Annuleren.
-test('removal-question-buttons-styled @e2e', async ({ page }) => {
-  await withQuestion(page, 'mensen knoppen e2e', '14:00', async () => {
-    const question = page.getByRole('alertdialog')
-    const style = (name: string) =>
-      question.getByRole('button', { name }).evaluate((el) => {
-        const s = getComputedStyle(el)
-        return { font: s.fontFamily, background: s.backgroundColor, border: s.borderTopStyle }
-      })
-    const [cancel, remove] = [await style('Annuleren'), await style('Verwijderen')]
-    expect(cancel.font).toMatch(/^"?IBM Plex Sans/)
-    expect(cancel.border).not.toBe('outset')
-    expect(remove.background).not.toBe(cancel.background)
   })
 })
 
@@ -626,31 +550,6 @@ test('new-row-people @e2e', async ({ page }) => {
   }
 })
 
-test('tourstop-first-in-planning @e2e', async ({ page }) => {
-  await page.goto('/')
-  const planning = page.getByRole('tree', { name: 'Views' }).getByRole('group', { name: 'Planning', exact: true })
-  const models = planning.getByRole('treeitem')
-  await expect(models.first()).toHaveAccessibleName('Tourstops')
-  const order = await models.evaluateAll((items) =>
-    items.map((i) => i.querySelector('.nv-model__name')?.textContent?.trim()),
-  )
-  expect(order).toEqual(['Tourstops', 'Activiteiten', 'Toewijzingen', 'Beschikbaarheden', 'Taken'])
-
-  await openView(page, 'Tourstops')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tourstops')
-  await expect(page.getByRole('button', { name: 'Nieuwe tourstop' })).toBeVisible()
-  const words = await page.locator('.nv-rail, thead, .nv-toolbar').allInnerTexts()
-  expect(words.join(' ')).not.toMatch(/speelreeks/i)
-  await shot(page, 'tourstops')
-
-  const schema = (await (await page.request.get('/api/schema')).json()) as {
-    sources: Record<string, { label: string; columns: Record<string, { label: string }> }>
-  }
-  expect(schema.sources.speelreeks?.label).toBe('Tourstops')
-  expect(schema.sources.activiteit?.columns.speelreeks_id?.label).toBe('Tourstop')
-  await expect(modelNode(page, 'Speelreeksen')).toHaveCount(0)
-})
-
 test('period-empty-result @e2e', async ({ page }) => {
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2030-01-07')
   const empty = page.locator('.nv-center').getByText('Geen rijen in deze periode', { exact: true })
@@ -689,26 +588,5 @@ test('people-double-pick @e2e', async ({ page }) => {
         timeout: 1000,
       },
     )
-  })
-})
-
-test.describe('as the owner', () => {
-  test.use({ storageState: state('owner') })
-
-  test('owner-has-no-dagplanning @e2e', async ({ page }) => {
-    const api = page.request
-    expect((await api.get('/api/rows/dagplanning')).status()).toBe(404)
-    const schema = (await (await api.get('/api/schema')).json()) as { sources: Record<string, unknown> }
-    expect(Object.keys(schema.sources)).not.toContain('dagplanning')
-    const someone = await api.post('/api/rows/toewijzing', { data: { activiteit_id: 1, persoon_id: 2 } })
-    expect(someone.status()).toBe(403)
-
-    await page.goto('/')
-    const tree = page.getByRole('tree', { name: 'Views' })
-    await expect(tree.getByRole('treeitem').first()).toBeVisible()
-    await expect(tree.getByRole('button', { name: 'Planning', exact: true })).toHaveCount(0)
-    await expect(modelNode(page, 'Activiteiten')).toHaveCount(0)
-    await expect(modelNode(page, 'Tourstops')).toHaveCount(0)
-    await shot(page, 'owner-no-dagplanning')
   })
 })

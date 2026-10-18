@@ -51,7 +51,7 @@
 | --- | --- | --- | --- |
 | Query `of` and the tree | `GET /api/schema`, `validateDomain`, the rail | integration · `packages/engine/test/declarations.test.ts` · `bun test packages/engine`; unit · `apps/grid/src/ui/tables.test.ts`, `ui/Rail.test.tsx`, `ui/App.test.tsx`, `engine.test.ts` · `cd apps/grid && bunx vitest run` | query-views-under-model |
 | Engine `links` | `GET /api/schema`, `GET /api/rows/:source`, `validateDomain` | integration · `packages/engine/test/links.test.ts` (new) · `bun test packages/engine` | none, proven by people-tags |
-| Theatre Dagplanning declarations | `PATCH /api/rows/dagplanning/:id`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/writer.test.ts` (`describe('dagplanning')`, :220) · `bun test packages/theatre` | edit-dagplanning, locatie-own-and-back |
+| Theatre Dagplanning declarations | `PATCH /api/rows/dagplanning/:id`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/writer.test.ts` (`describe('dagplanning')`, :220) · `bun test packages/theatre` | none; the Select edit is pinned by `edit-select-cell` (react-aria), the text edit by `fiche-edits` (step-0c), the own and cleared venue by `override-and-clear-venue` (step-2b) |
 | People cell | render, picker | unit · `apps/grid/src/grid/cells/Links.test.tsx` (new) · `cd apps/grid && bunx vitest run` | people-tags |
 | Period chip | render, `rows()` window | unit · `apps/grid/src/ui/Period.test.tsx` (new), `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | period-chip |
 
@@ -120,8 +120,8 @@
 - [ ] Step 2: Run `bun test packages/theatre`. Expected: FAIL (the columns are not mapped, or are readonly).
 - [ ] Step 3: Add `writes: writesActiviteit('omschrijving')`, `writesActiviteit('soort')` and `writesActiviteit('locatie_id')`. Drop `readonly: true` on `locatie_id` and keep `inherited`.
 - [ ] Step 4: Run `bun test packages/theatre`. Expected: PASS.
-- [ ] Step 5: E2E `edit-dagplanning @e2e`: as the editor, open Dagplanning and edit a row's Omschrijving, then its Soort. Reload; both stay.
-- [ ] Step 6: E2E `locatie-own-and-back @e2e`: on an inherited (grey) Locatie, pick a venue. It shows without "via speelreeks". Clear it, and it is grey again.
+- [ ] Step 5: No e2e of its own: editing a Soort is pinned by `edit-select-cell` (react-aria.spec.ts) and editing a text by `fiche-edits` (step-0c.spec.ts).
+- [ ] Step 6: No e2e of its own: picking a venue on an inherited (grey) Locatie, clearing it so it is grey again, is pinned by `override-and-clear-venue` (step-2b.spec.ts).
 - [ ] Step 7: `bun run gate` exits 0. Commit `feat(theatre): Dagplanning edits the activity's omschrijving, soort and own venue`.
 
 ### Task 2: The period chip (R4)

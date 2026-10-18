@@ -207,6 +207,10 @@ describe('a service account writes as itself', () => {
     expect(entry).toMatchObject({ by: 'account', actor: 'bot', undoable: false })
 
     expect((await asService(token, 'POST', `/api/batches/${batch}/undo`, {})).status).toBe(200)
+    const undone = sqlite.query('SELECT deleted_at FROM note WHERE id = ?').get(made.body.id) as {
+      deleted_at: string | null
+    }
+    expect(undone.deleted_at).toMatch(/^\d{4}-/)
   })
 
   test('a human undo of its batch is 403, and after disable its next write is 401 and the batch stays', async () => {

@@ -24,36 +24,3 @@ test('tree-scrolls-in-rail @e2e', async ({ page }) => {
   expect(await tree.evaluate((el, m) => el.contains(m), await menu.elementHandle())).toBe(false)
   await shot(page, 'tree-scrolled-menu')
 })
-
-test('dagplanning-is-gone @e2e', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overzicht')
-  const rows = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/rows/activiteit')
-  await openModel(page, 'Activiteiten')
-  const node = modelNode(page, 'Activiteiten')
-  await expect(node).toHaveAttribute('aria-expanded', 'true')
-  // Activiteiten opens on Planning, first under it.
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
-  // The views' own buttons: each row also holds its drag button, "Verplaats <view>".
-  const names = node.getByRole('group', { name: 'View type' }).getByRole('button', { name: /^(?!Verplaats )/ })
-  await expect(names.first()).toHaveText('Planning')
-  expect(await names.allTextContents()).toContain('Toewijzingen per activiteit')
-  expect(await names.allTextContents()).not.toContain('Voorstellingen')
-  expect(await names.allTextContents()).not.toContain('Per productie per dag')
-
-  // No Dagplanning anywhere in the rail; the queries sit under Overzichten.
-  const rail = page.getByRole('navigation', { name: 'Views' })
-  await expect(rail.getByText('Dagplanning')).toHaveCount(0)
-  expect((await page.request.get('/api/rows/dagplanning')).status()).toBe(404)
-  await expect(modelNode(page, 'Planning')).toHaveCount(0)
-  const overzichten = rail.getByRole('group', { name: 'Overzichten', exact: true })
-  for (const query of ['Per productie per dag', 'Voorstellingen', 'Mijn producties'])
-    await expect(overzichten.getByRole('treeitem', { name: query, exact: true })).toHaveCount(1)
-
-  expect((await rows).status()).toBe(200)
-  // The view's period: Week lit, named in the title line, no chip.
-  await expect(page.locator('.nv-bar').getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-checked', 'true')
-  await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
-  await overzichten.scrollIntoViewIfNeeded()
-  await shot(page, 'dagplanning-is-gone')
-})

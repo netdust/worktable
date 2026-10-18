@@ -45,7 +45,7 @@
 
 1. **A view with an unusual period:** its date condition is `today`, `next_week` or a hand-set `between` that is neither a week nor a month. The control shows, no chip is lit, the name is `formatWindow`, and steps move by the window's length → Task 1 rows (`period.test.ts`).
 2. **A view whose date condition was set in the filter builder** on `view.date_field`. It is the period. It never shows twice, and the builder doesn't list it → Task 1 (`App.test.tsx` period block).
-3. **A board drop that the writer refuses** (lifecycle on Bord toewijzingen' `state`). The card returns, the error shows, and history holds no entry → Task 3 (`Board.test.tsx`, e2e `board-drag`).
+3. **A board drop that the writer refuses** (lifecycle on Bord toewijzingen' `state`). The card returns, the error shows, and history holds no entry → Task 3 (`Board.test.tsx`; e2e `board-drag-refused`, which step 3f moved to `e2e/step-3f.spec.ts`).
 4. **A layout group that isn't the board's declared column, sent as `/rows ?group=`.** The engine accepts any source column (`params.ts:121`); the e2e proves the board regroups → Task 2 (e2e `groep-everywhere`).
 5. **A record with no kind, no space relation and no dated inbound.** The drawer head is the dataset name alone, and there's no subline and no sections, with nothing broken → Task 5 (`Drawer.test.tsx`).
 6. **History on a query row** (Per persoon per dag, Werklijst): `/history/:source?filter={"id":N}` answers 400 on a query. Geschiedenis is hidden when `model.query` → Task 5 (`Drawer.test.tsx`).
@@ -57,7 +57,7 @@
 |---|---|---|---|
 | Period model | `periodOf`, `todayPeriod`, `pressMonth/Week`, `stepPeriod` | unit · `apps/grid/src/ui/period.test.ts` · `bun run --filter @worktable/grid test period` | period-sequence (6 skins) |
 | Toolbar wiring (period, chips, Groep, skin chips, Kolommen) | render `App` | component · `ui/App.test.tsx`, `ui/ChipBar.test.tsx`, `ui/Filters` in `FilterBuilder.test.tsx` · grid vitest | period-sequence, groep-everywhere |
-| Board | render `Board` with a store | component · `board/Board.test.tsx` (new) · grid vitest | board-drag (mouse, keyboard), board-column-plus |
+| Board | render `Board` with a store | component · `board/Board.test.tsx` (new) · grid vitest | board-column-plus-in-window (the column's option is not asked and is sent); the drags are step 3f's: board-sorted-cross-column (mouse, ⌘Z on the page), board-keyboard (→ and ←), board-drop-between (every card fits its column) |
 | Hints and period keys | render `App` per skin | component · `App.test.tsx` · grid vitest | period-sequence (keys on calendar) |
 | Drawer anatomy | render `Drawer` | component · `grid/Drawer.test.tsx` · grid vitest | drawer-anatomy (grid, calendar) |
 | Matrix cell drawer, Bezet, role line, Afwezigheden | render `Matrix`, `Panel` | component · `matrix/Matrix.test.tsx`, `matrix/Panel.test.tsx` · grid vitest | matrix-cell-drawer |
@@ -163,11 +163,11 @@ withPeriod(layout: Layout, field: string, next: Filter | null): Layout
   - `DropIndicator` is the slot.
   - CSS: `[data-dragging]` at 35%, the column `[data-drop-target]` tint, and the slot from `board-prototype.html`.
 - [ ] The card face from the mockup: kind dot, mono date/time or "zonder tijd", the inherited italic, a 22px avatar stack with tones, the dashed open place and "+N".
-- [ ] e2e `board-drag`:
+- [ ] e2e `board-drag` (since removed: step 3f's `board-sorted-cross-column` drives the mouse drag and its ⌘Z, `board-keyboard` the keyboard both ways, `board-drag-refused` the refused drop):
   - mouse drag Optie → Bevestigd: the card moves, ⌘Z returns it, and the toast shows;
   - keyboard drag;
   - a refused drop on Bord toewijzingen (a lifecycle refusal on `state`; the board falls back to the lifecycle column when the table declares no `board.column`) snaps back with the message.
-  - `board-column-plus`: the column + creates a record with that column's value.
+  - `board-column-plus`: the column + creates a record with that column's value (since removed: `Board.test.tsx` `creates in a column with that column's value from its head's +`, and `board-column-plus-in-window`, which sees the option sent).
 - [ ] Commit.
 
 ### Task 4: Hints per skin and period keys (B4, Q19)

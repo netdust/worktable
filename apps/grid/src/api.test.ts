@@ -670,6 +670,23 @@ describe('the matrix on the engine', () => {
     expect(found.map((row) => [row.id, row.title])).toEqual([[2, 'Bram De Wilde'], [1, 'Lotte Verhaegen']])
   })
 
+  it('optionsFrom pages with offset until the total: five candidates at page size 2 take three calls', async () => {
+    vi.stubEnv('VITE_RECORDS_PAGE_SIZE', '2')
+    const from = { source: 'kandidaten', match: { toewijzing_id: 'id' }, value: 'persoon_id' }
+    const every = [1, 2, 3, 4, 5].map((id) => ({ id, persoon_id: id, toewijzing_id: 7, title: `P${id}`, custom: {}, lookups: { persoon_id: { id, title: `P${id}` } } }))
+    on((path) => {
+      const url = new URL(path, 'http://x')
+      const [limit, offset] = [Number(url.searchParams.get('limit')), Number(url.searchParams.get('offset'))]
+      return json({ rows: every.slice(offset, offset + limit), total: 5 })
+    })
+
+    const found = await optionsFrom(from, { id: 7 })
+
+    vi.unstubAllEnvs()
+    expect(found.map((row) => row.id)).toEqual([1, 2, 3, 4, 5])
+    expect(sent().map(([path]) => new URL(String(path), 'http://x').searchParams.get('offset'))).toEqual(['0', '2', '4'])
+  })
+
   it('a cell create sends one id per relation; clearing it sends DELETE', async () => {
     on((_path, init) => (init?.method === 'DELETE' ? json({ id: 9 }) : json({ ...cell, id: 9, activiteit_id: 2 })))
     const store = createMatrixStore({ view: matrixView, rows: [toRowShape(activiteit([]))], api: matrixWrites })

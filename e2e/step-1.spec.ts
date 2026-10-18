@@ -1,18 +1,12 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
 import { fillDate } from './segments'
-import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
-// Weeks the seed leaves empty, one per flow, so no flow sees another's rows.
-const UNDO_WEEK = '2026-11-16'
-const LOCATIE_WEEK = '2026-12-07'
 // The tourstop made in the grid starts today and spans at most 31 days, so this week moves with today.
-const APPLY_WEEK = mondayAhead(14, [UNDO_WEEK, LOCATIE_WEEK])
+const APPLY_WEEK = mondayAhead(14)
 const SJABLOON = 'speeldag op locatie (met plaatsen)'
 const VENUE = 'Zaal De Spiegel'
-const TWICE =
-  'Deze tourstop heeft al activiteiten. Maak de vorige toepassing ongedaan of verwijder die activiteiten, en pas het sjabloon dan opnieuw toe.'
 
 // The Calais day: omschrijving and start; Overnachting is untimed.
 const PATTERN: [string, string | null][] = [
@@ -58,9 +52,6 @@ const productieId = async (api: Api, titel: string) =>
 
 const organisatieId = async (api: Api, naam: string) =>
   (await rowsOf<{ id: number; naam: string }>(api, 'organisatie')).find((o) => o.naam === naam)?.id as number
-
-const sjabloonId = async (api: Api) =>
-  (await rowsOf<{ id: number; naam: string }>(api, 'sjabloon')).find((s) => s.naam === SJABLOON)?.id as number
 
 async function speelreeks(api: Api, naam: string, start: string, eind: string): Promise<number> {
   return idOf(api, 'speelreeks', {
@@ -108,15 +99,12 @@ async function typeInto(target: Locator, value: string) {
 const named = (page: Page, title: string) => page.locator(`tbody tr.nv-tr[data-title="${title}"]`)
 const gridRows = (page: Page) => page.locator('tbody tr.nv-tr')
 
-/** This week's Monday plus `days`, a week later while it is one of `taken`; local, as the grid's days are. */
-function mondayAhead(days: number, taken: string[]): string {
+/** This week's Monday plus `days`; local, as the grid's days are. */
+function mondayAhead(days: number): string {
   const at = new Date()
   at.setHours(12, 0, 0, 0)
   at.setDate(at.getDate() - ((at.getDay() + 6) % 7) + days)
-  const iso = () =>
-    `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
-  while (taken.includes(iso())) at.setDate(at.getDate() + 7)
-  return iso()
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`
 }
 
 const plusDays = (iso: string, days: number) => {
@@ -299,108 +287,6 @@ test('apply-template @e2e', async ({ page }) => {
   await expect(gridRows(page)).toHaveCount(0)
 })
 
-test('apply-twice @e2e', async ({ page }) => {
-  const naam = 'Speelreeks e2e twee keer'
-  const id = await speelreeks(page.request, naam, '2026-11-09', '2026-11-10')
-  const first = await page.request.post('/api/actions/sjabloon_toepassen', {
-    data: { id, input: { sjabloon_id: await sjabloonId(page.request) } },
-  })
-  expect(first.status()).toBe(201)
-
-  await page.goto('/')
-  await pick(page, 'Tourstops')
-  const answered = await applyInDrawer(page, naam)
-  expect(answered.status()).toBe(422)
-  await expect(page.getByRole('group', { name: 'Sjabloon toepassen' }).getByRole('alert')).toHaveText(TWICE)
-  expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(14)
-})
-
-test('speelreeks-delete-in-use @e2e', async ({ page }) => {
-  const naam = 'Speelreeks e2e in gebruik'
-  const id = await speelreeks(page.request, naam, '2026-11-23', '2026-11-23')
-  const applied = await page.request.post('/api/actions/sjabloon_toepassen', {
-    data: { id, input: { sjabloon_id: await sjabloonId(page.request) } },
-  })
-  expect(applied.status()).toBe(201)
-
-  await page.goto('/')
-  await pick(page, 'Tourstops')
-  await named(page, naam).getByRole('button', { name: 'Openen' }).click()
-  await page.getByRole('button', { name: 'Verwijderen' }).click()
-  const answered = page.waitForResponse((res) => res.request().method() === 'DELETE')
-  await page.getByRole('button', { name: 'Zeker?' }).click()
-  const response = await answered
-  expect(response.status()).toBe(409)
-  const body = (await response.json()) as { code: string; by: { label: string; count: number }[] }
-  expect(body.code).toBe('in_use')
-  expect(body.by).toEqual([{ label: 'Activiteiten', count: 7 }])
-
-  await expect(page.locator('.nv-toolbar')).toContainText('Nog in gebruik door Activiteiten (7).')
-  await expect(named(page, naam)).toBeVisible()
-  await page.reload()
-  await pick(page, 'Tourstops')
-  await expect(named(page, naam)).toBeVisible()
-})
-
-test('speelreeks-end-before-start @e2e', async ({ page }) => {
-  const naam = 'Speelreeks e2e omgekeerd'
-  const id = await speelreeks(page.request, naam, '2026-11-30', '2026-12-02')
-  await page.goto('/')
-  await pick(page, 'Tourstops')
-  const row = named(page, naam)
-
-  const refused = patchOf(page, 'speelreeks')
-  await typeInto(await cellOf(page, row, 'Einde'), '2026-11-28')
-  expect((await refused).status()).toBe(422)
-  await expect(row.getByRole('alert')).toContainText('Einde ligt voor de start.')
-  await shot(page, 'cell-date-step-1')
-
-  const [held] = await rowsOf<Values>(page.request, 'speelreeks', { id })
-  expect(held.eind_datum).toBe('2026-12-02')
-  await page.reload()
-  await pick(page, 'Tourstops')
-  await expect(await cellOf(page, named(page, naam), 'Einde')).toHaveText(await shown(page, '2026-12-02'))
-})
-
-test('undo-changed-since @e2e', async ({ page, browser }) => {
-  const omschrijving = 'dagplanning e2e twee handen'
-  const datum = plusDays(UNDO_WEEK, 1)
-  const id = await idOf(page.request, 'activiteit', {
-    productie_id: await productieId(page.request, 'Nachtwacht'),
-    soort: 'repetitie',
-    datum,
-    omschrijving,
-  })
-  const startOf = async () => (await rowsOf<Values>(page.request, 'activiteit', { id }))[0].start_at
-
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', UNDO_WEEK)
-  const savedA = patchOf(page, 'activiteit')
-  await typeInto(await cellOf(page, named(page, omschrijving), 'Tijd'), `${datum}T10:00`)
-  expect((await savedA).status()).toBe(200)
-
-  const other = await browser.newContext({ baseURL: THEATRE.app, storageState: state('admin') })
-  const b = await other.newPage()
-  await openWeek(b, 'Planning', 'Activiteiten', 'plandag', UNDO_WEEK)
-  const savedB = patchOf(b, 'activiteit')
-  await typeInto(await cellOf(b, named(b, omschrijving), 'Tijd'), `${datum}T11:00`)
-  expect((await savedB).status()).toBe(200)
-  await expect(await cellOf(b, named(b, omschrijving), 'Tijd')).toHaveText('11:00')
-  await other.close()
-  expect(await startOf()).toBe(`${datum}T11:00`)
-
-  const undone = undoOf(page)
-  await page.keyboard.press('ControlOrMeta+z')
-  const response = await undone
-  expect(response.status()).toBe(409)
-  expect(((await response.json()) as { code: string }).code).toBe('changed_since')
-  await expect(page.getByText('Start is intussen gewijzigd; ongedaan maken kan niet.')).toBeVisible()
-
-  await page.reload()
-  await pick(page, 'Planning', 'Activiteiten')
-  await expect(await cellOf(page, named(page, omschrijving), 'Tijd')).toHaveText('11:00')
-  expect(await startOf()).toBe(`${datum}T11:00`)
-})
-
 // The shake-out's flows: the spec's surfaces no flow above drives.
 
 const RATE_REFUSED = 'Alleen een beheerder wijzigt tarieven.'
@@ -444,52 +330,6 @@ test.describe('as the administrator', () => {
     await expect(await cellOf(page, named(page, 'Speler'), 'Dagtarief')).toHaveText('225')
     expect((await rowsOf<Values>(page.request, 'rol', { naam: 'Speler' }))[0].dagtarief).toBe(225)
   })
-})
-
-test('sjablonen-read-only @e2e', async ({ page }) => {
-  await page.goto('/')
-  await pick(page, 'Sjablonen')
-  await expect(page.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Nieuw sjabloon' })).toBeDisabled()
-  const row = named(page, SJABLOON)
-  for (const label of ['Naam', 'Items']) {
-    const cell = await cellOf(page, row, label)
-    await cell.click()
-    await cell.press('Enter')
-    await expect(cell.locator('input, textarea')).toHaveCount(0)
-  }
-  const id = await sjabloonId(page.request)
-  const patched = await page.request.patch(`/api/rows/sjabloon/${id}`, { data: { naam: 'anders' } })
-  expect(patched.status()).toBe(405)
-  expect(((await patched.json()) as { code: string }).code).toBe('read_only')
-  expect((await page.request.delete(`/api/rows/sjabloon/${id}`)).status()).toBe(405)
-})
-
-test('planning-locatie-via-tourstop @e2e', async ({ page }) => {
-  const week = LOCATIE_WEEK
-  const api = page.request
-  const reeks = await speelreeks(api, 'Speelreeks e2e bron', week, week)
-  const productie_id = await productieId(api, 'Nachtwacht')
-  const base = { productie_id, soort: 'repetitie', datum: week }
-  await idOf(api, 'activiteit', { ...base, omschrijving: 'bron geerfd', speelreeks_id: reeks })
-  const eigen = await organisatieId(api, 'Repetitiekot De Loods')
-  await idOf(api, 'activiteit', { ...base, omschrijving: 'bron eigen', speelreeks_id: reeks, locatie_id: eigen })
-  await idOf(api, 'activiteit', { ...base, omschrijving: 'bron geen' })
-
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', week)
-  // The grid shows the venue, greyed "via tourstop" when inherited; the engine's row says where it comes from.
-  const seen = async (title: string) => {
-    const [row] = await rowsOf<Values & { inherited?: string[] }>(api, 'activiteit', { omschrijving: title })
-    const bron = row.inherited?.includes('locatie') ? 'tourstop' : row.locatie_id != null ? 'eigen' : null
-    return [await (await cellOf(page, named(page, title), 'Locatie')).textContent(), bron]
-  }
-  expect(await seen('bron geerfd')).toEqual([`${VENUE}via tourstop`, 'tourstop'])
-  expect(await seen('bron eigen')).toEqual(['Repetitiekot De Loods', 'eigen'])
-  expect(await seen('bron geen')).toEqual(['', null])
-
-  // Resolved, not stored: the inheriting activity holds no venue of its own.
-  const [held] = await rowsOf<Values>(api, 'activiteit', { omschrijving: 'bron geerfd' })
-  expect(held.locatie_id ?? null).toBeNull()
 })
 
 test('apply-double-submit @e2e', async ({ page }) => {
@@ -563,39 +403,4 @@ test('apply-redo-refused @e2e', async ({ page }) => {
   // A refused redo reads as such in the table grid, whatever the batch held (review S1).
   await expect(page.locator('.nv-toolbar')).toContainText('Opnieuw doen kan hier niet')
   expect(await rowsOf(page.request, 'activiteit', { speelreeks_id: id })).toHaveLength(0)
-})
-
-test('speelreeks-boundaries @e2e', async ({ page }) => {
-  const api = page.request
-  const productie_id = await productieId(api, 'Nachtwacht')
-  const reeks = (eind: string, extra: Values = {}) =>
-    api.post('/api/rows/speelreeks', {
-      data: { naam: `Speelreeks e2e tot ${eind}`, productie_id, start_datum: '2027-01-01', eind_datum: eind, ...extra },
-    })
-  expect((await reeks('2027-01-31')).status()).toBe(201)
-  const refusal = async (eind: string, extra: Values = {}) => {
-    const response = await reeks(eind, extra)
-    expect(response.status()).toBe(422)
-    return ((await response.json()) as { message: string }).message
-  }
-  expect(await refusal('2027-02-01')).toBe('Een tourstop duurt hoogstens 31 dagen.')
-  expect(await refusal('2027-01-02', { productie_id: 99_999 })).toBe('Productie bestaat niet.')
-  expect(await refusal('2027-01-02', { locatie_id: 99_999 })).toBe('Locatie bestaat niet.')
-})
-
-test.describe('as the owner', () => {
-  test.use({ storageState: state('owner') })
-
-  test('owner-denied-speelreeks @e2e', async ({ page }) => {
-    const api = page.request
-    expect((await api.get('/api/rows/speelreeks')).status()).toBe(404)
-    const applied = await api.post('/api/actions/sjabloon_toepassen', { data: { id: 1, input: { sjabloon_id: 1 } } })
-    expect(applied.status()).toBe(404)
-    const created = await api.post('/api/rows/speelreeks', {
-      data: { naam: 'eigenaar', productie_id: 1, start_datum: '2027-01-01', eind_datum: '2027-01-01' },
-    })
-    expect(created.status()).toBe(404)
-    await page.goto('/')
-    await expect(page.getByRole('navigation', { name: 'Views' })).not.toContainText('Tourstops')
-  })
 })

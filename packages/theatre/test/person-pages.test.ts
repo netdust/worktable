@@ -1,5 +1,8 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { migrate, seedDomain } from '@worktable/engine'
 import { recordLinkFor } from '@worktable/engine/src/record-link'
 import { signIn, TEST_LINK_SECRET, testEngine } from '@worktable/engine/test/sign-in'
@@ -171,6 +174,24 @@ describe('Mijn producties for owners', () => {
     return seeded().id
   }
 
+  test('a declined or merely invited person reads no production through their link; the confirmed one on it does', async () => {
+    const id = await published({ cookie: await signIn(app, 'administrator') })
+    const day = activity(production('Proef'), daysAgo(-3))
+    const [fien, gijs, tine] = [person('Fien'), person('Gijs'), person('Tine')]
+    assign(day, fien, 'geweigerd')
+    assign(day, gijs, 'uitgenodigd')
+    assign(day, tine, 'bevestigd')
+    const titlesOf = async (persoon: number) => {
+      const asLink = { authorization: `RecordLink ${recordLinkFor(sqlite, TEST_LINK_SECRET, 'persoon', persoon)}` }
+      const read = await request('GET', `/api/owner/views/${id}/rows`, asLink)
+      expect(read.status).toBe(200)
+      return read.body.rows.map((row: { productie: string }) => row.productie)
+    }
+    expect(await titlesOf(fien)).toEqual([])
+    expect(await titlesOf(gijs)).toEqual([])
+    expect(await titlesOf(tine)).toEqual(['Proef'])
+  })
+
   test("from and to narrow a person's productions on the production's last day", async () => {
     const id = await published({ cookie: await signIn(app, 'administrator') })
     const tine = person('Tine')
@@ -208,5 +229,30 @@ describe('Mijn producties for owners', () => {
     const id = Number(sqlite.query(sql).run().lastInsertRowid)
     const refused = await request('PUT', `/api/views/${id}/for-owners`, admin, {})
     expect(refused).toMatchObject({ status: 400, body: { code: 'column_not_owner_visible', key: 'notitie' } })
+  })
+})
+
+describe('the link request', () => {
+  test("a person's address, in any case, gets their own link; an unknown one the same answer and no mail", async () => {
+    const outbox = mkdtempSync(join(tmpdir(), 'wt-person-link-'))
+    app = testEngine(sqlite, theatre, { outbox })
+    const ask = async (email: string) => {
+      const res = await app.request('/api/record-links/request', {
+        method: 'POST',
+        headers: { host: HOST, 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      return { status: res.status, headers: [...res.headers], body: await res.text() }
+    }
+    const known = await ask('lotte@lantaarn.test')
+    expect(known.status).toBe(200)
+    expect(await ask('niemand@nergens.test')).toEqual(known)
+    expect(await ask('LOTTE@lantaarn.test')).toEqual(known)
+
+    await Bun.sleep(20)
+    const lotte = sqlite.query("SELECT id FROM persoon WHERE email = 'lotte@lantaarn.test'").get() as { id: number }
+    const link = `http://127.0.0.1:5173/#/link/${recordLinkFor(sqlite, TEST_LINK_SECRET, 'persoon', lotte.id)}`
+    const mails = readdirSync(outbox).map((name) => readFileSync(join(outbox, name), 'utf8'))
+    expect(mails).toEqual([`To: lotte@lantaarn.test\n\n${link}\n`, `To: lotte@lantaarn.test\n\n${link}\n`])
   })
 })

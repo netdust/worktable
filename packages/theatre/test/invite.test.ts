@@ -111,11 +111,13 @@ describe('another person on an invited row', () => {
     const { id, token } = await invited(BRAM)
     sqlite.run("UPDATE persoon SET email = 'noor@voorbeeld.test' WHERE id = ?", [NOOR])
     mails = []
+    const minted = tokens().length
 
     const swapped = await patch(id, { persoon_id: NOOR })
     expect(swapped.status).toBe(200)
     expect(stateOf(id)).toBe('voorlopig')
     expect(mails).toEqual([])
+    expect(tokens()).toHaveLength(minted)
     const old = await anyone('POST', '/api/act', { token, to: 'bevestigd' })
     expect({ status: old.status, code: old.body.code }).toEqual({ status: 401, code: 'bad_token' })
 
@@ -172,6 +174,14 @@ describe('another person on an answered row', () => {
     expect(stateOf(id)).toBe('voorlopig')
     expect(opens(NOOR)).toBe(false)
     expect(mails).toEqual([])
+  })
+
+  test('geweigerd: another name on a row with a name only pencils it in too', async () => {
+    const declined = await post({ naam: 'Gast Weigeraar', state: 'geweigerd' })
+    expect(declined.status).toBe(201)
+    const id = declined.body.id as number
+    expect((await patch(id, { naam: 'Gast Vervanger' })).status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
   })
 
   test('geannuleerd keeps its state', async () => {

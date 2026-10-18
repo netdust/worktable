@@ -5,7 +5,8 @@ import { openWeek } from './tree'
 
 test.use({ storageState: state('admin'), viewport: { width: 1280, height: 800 } })
 
-test('title-line-reads-in-full @e2e', async ({ page }) => {
+// Shake-out row 20: at 1280px Dagplanning's toolbar must not overflow; the title reads in full and "Nieuwe activiteit" stays on screen.
+test('title-line-fits-at-1280 @e2e', async ({ page }) => {
   await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
   const title = page.getByRole('heading', { level: 1, name: 'Planning' })
   await expect(title).toBeVisible()
@@ -15,16 +16,11 @@ test('title-line-reads-in-full @e2e', async ({ page }) => {
     clientWidth: el.clientWidth,
   }))
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
-  await shot(page, 'title-line')
-})
-
-// Shake-out row 20: at 1280px Dagplanning's toolbar must not overflow; "Nieuwe activiteit" stays on screen.
-test('title-line-fits-at-1280 @e2e', async ({ page }) => {
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2026-10-12')
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
   const toolbar = page.locator('header.nv-toolbar')
   await expect(page.getByRole('button', { name: 'Nieuwe activiteit' })).toBeInViewport({ ratio: 1, timeout: 2000 })
   expect(await toolbar.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  await shot(page, 'title-line')
 })
 
 // With a record drawer open at 1280 the bar's end gives way first: the name reads whole and the period pill stays.

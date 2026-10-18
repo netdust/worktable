@@ -176,6 +176,7 @@ describe('one chip row for every skin', () => {
     const text = el.textContent ?? ''
     if (el.classList.contains('nv-chip--scope')) return ['scope']
     if (el.getAttribute('data-testid') === 'filters') return ['filters']
+    if (el.getAttribute('data-testid') === 'sizes') return ['skin']
     if (text.startsWith('Groep:')) return ['group']
     if (text === 'Vandaag') return ['period']
     if (text === '+ Kolom') return ['addColumn']
@@ -183,12 +184,13 @@ describe('one chip row for every skin', () => {
     if (el.getAttribute('aria-label') === 'Kolommen') return ['columns']
     return []
   })
-  const ORDER = ['scope', 'filters', 'group', 'period', 'addColumn', 'count', 'columns']
+  const ORDER = ['scope', 'filters', 'group', 'period', 'skin', 'addColumn', 'count', 'columns']
   const rowFor = (type: keyof typeof skins) => {
     renderNl(<ChipBar {...barOf({
       view: skins[type] as never, model: activity, layout, onLayout: () => undefined, scope: 'Productie is Nachtwacht',
       filters: <span data-testid="filters">Filter</span>, told, period,
       ...(type === 'matrix' ? { adding: { open: false, onToggle: () => undefined } } : {}),
+      ...(type === 'gallery' ? { skin: <span data-testid="sizes">S M L</span> } : {}),
     })} />)
     const found = slots()
     const texts = [...document.querySelectorAll('.nv-bar .nv-chip, .nv-bar__count')].map((el) => el.textContent)
@@ -204,6 +206,7 @@ describe('one chip row for every skin', () => {
     }
     expect(rowFor('grid').found).toContain('columns')
     expect(rowFor('matrix').found).toContain('addColumn')
+    expect(rowFor('gallery').found).toContain('skin')
   })
 
   it('gives a timeline and a calendar on the same dataset the same chip row', () => {
@@ -240,6 +243,23 @@ describe('one chip row for every skin', () => {
     expect(within(again).getByRole('button', { name: 'Soort' }).getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('counts a board\'s columns and a gallery\'s pictures beside the rows', () => {
+    const countOn = (type: 'board' | 'gallery', shown: { columns?: number; pictures?: number }) => {
+      renderNl(<ChipBar {...barOf({ view: skins[type] as never, model: activity, layout, onLayout: () => undefined, scope: null, told: { ...told, ...shown }, period })} />)
+      const text = document.querySelector('.nv-bar__count')?.textContent
+      cleanup()
+      return text
+    }
+    expect(countOn('board', { columns: 4 })).toBe('12 rijen · 4 kolommen')
+    expect(countOn('gallery', { pictures: 1 })).toBe('12 rijen · 1 met beeld')
+  })
+
+  it('keeps the count on a view with no date, where no period shows', () => {
+    renderNl(<Bar />)
+    expect(screen.queryByRole('radiogroup', { name: 'Periode' })).toBeNull()
+    expect(document.querySelector('.nv-bar__count')?.textContent).toBe('3 rijen')
+  })
+
   it('shows Kolommen on every skin that reports its fields, never on a matrix', () => {
     for (const type of ['grid', 'board', 'gallery', 'calendar', 'timeline'] as const) expect(rowFor(type).found, type).toContain('columns')
     expect(rowFor('matrix').found).not.toContain('columns')
@@ -253,6 +273,11 @@ describe('one chip row for every skin', () => {
     expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Productie', 'Tourstop', 'Geen'])
     click(within(dialog).getByRole('button', { name: 'Geen' }))
     expect(chosen).toBeNull()
+    cleanup()
+    renderNl(<ChipBar {...barOf({ view: skins.calendar as never, model: activity, layout: { ...layout, group: null }, onLayout: () => undefined, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: geen' }))
+    const ungrouped = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(ungrouped).getByRole('button', { name: 'Geen' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('steps the period, opens today, and toggles a lit chip off where the skin shows every date', () => {

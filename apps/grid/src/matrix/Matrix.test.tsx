@@ -231,10 +231,12 @@ describe('the matrix', () => {
   it('heads a person column with its first name, and with the whole name where two first names meet', () => {
     const names = new Map([[5, 'Sien Peeters'], [6, 'Sien Claes'], [7, 'Marit Vos']])
     const people = { ...models, person: { key: 'person', label: 'Personen', title_label: 'Naam', title_readonly: false, record_link: true, fields: {} } } as Record<string, Model>
-    const { container } = render(<WithBar {...props} models={people} titles={names} />)
+    const marit = activity(4, 'Opbouw', '2026-05-20', [join(16, { person: [7], status: 'confirmed' })])
+    const { container } = render(<WithBar {...props} models={people} titles={names} rows={[...week, marit]} />)
     const heads = [...container.querySelectorAll('th.nv-mx__head')].map((th) => [th.querySelector('.nv-th__label')?.textContent, th.getAttribute('title')])
     expect(heads).toContainEqual(['Sien Peeters', 'Sien Peeters'])
     expect(heads).toContainEqual(['Sien Claes', 'Sien Claes'])
+    expect(heads).toContainEqual(['Marit', 'Marit Vos'])
   })
 
   it('heads any other column with its whole value, a place too', () => {

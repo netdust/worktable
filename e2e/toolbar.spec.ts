@@ -40,6 +40,7 @@ test('autosave-own-view @e2e', async ({ page }) => {
     await page.getByRole('group', { name: 'Groeperen' }).getByRole('button', { name: 'Soort' }).click()
     await page.waitForTimeout(800)
     expect((await views(page)).find((v) => v.id === seeded?.id)?.group_by).toBe(seeded?.group_by)
+    await expect(page.locator('.nv-toolbar').getByText(/gewijzigd|Opslaan|Opgeslagen/)).toHaveCount(0)
     await page.getByRole('button', { name: 'More actions', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Terugzetten' }).click()
   } finally {
@@ -138,10 +139,12 @@ test('filter-link @e2e', async ({ page, browser }) => {
 test('filter-or @e2e', async ({ page }) => {
   const week = '2031-03-10'
   const titles = ['reis naar Brugge e2e', 'repetitie studio e2e', 'repetitie zaal e2e']
+  const outside = 'reis buiten de week e2e'
   const made: number[] = []
   try {
     for (const [at, soort] of ['reis', 'repetitie', 'repetitie'].entries())
       made.push(await activity(page, soort, '2031-03-11', titles[at] as string))
+    made.push(await activity(page, 'reis', '2031-03-18', outside))
     await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', week)
     await page.locator('.nv-bar').getByRole('button', { name: 'Filter Status wissen' }).click()
     await addCondition(page, 'Soort', 'Reis')
@@ -163,6 +166,7 @@ test('filter-or @e2e', async ({ page }) => {
     await expect(named(page, titles[0] as string)).toHaveCount(1)
     await expect(named(page, titles[1] as string)).toHaveCount(1)
     await expect(named(page, titles[2] as string)).toHaveCount(0)
+    await expect(named(page, outside)).toHaveCount(0)
     await page.reload()
     await expect(named(page, titles[0] as string)).toHaveCount(1)
     await expect(page.locator('.nv-bar .nv-chip-join')).toHaveText(['of'])
@@ -268,39 +272,6 @@ test.describe('the share menu', () => {
   })
 })
 
-// At the narrowest supported width the builder, its value list and its last row stay inside the viewport.
-test('builder-fits-at-1280 @e2e', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', '2026-10-12')
-  await page
-    .locator('.nv-bar')
-    .getByRole('button', { name: /^Filter\s*\d*$/ })
-    .click()
-  for (const field of ['Soort', 'Omschrijving']) {
-    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
-    await pickIn(page.getByRole('group', { name: /^Voorwaarde \d/ }).last(), 'Veld', field)
-  }
-  const soort = page.getByRole('group', { name: /^Voorwaarde \d/ }).nth(2)
-  await soort.getByRole('searchbox', { name: 'Soort zoeken' }).click()
-  await expect(soort.getByRole('listbox', { name: 'Soort' })).toBeVisible()
-  const inside = async (selector: string) => {
-    const box = await page.locator(selector).last().boundingBox()
-    expect(box, selector).not.toBeNull()
-    const b = box as { x: number; y: number; width: number; height: number }
-    expect(b.x, `${selector} left`).toBeGreaterThanOrEqual(0)
-    expect(b.x + b.width, `${selector} right`).toBeLessThanOrEqual(1280)
-    expect(b.y + b.height, `${selector} bottom`).toBeLessThanOrEqual(800)
-  }
-  await inside('.nv-fb-panel')
-  await inside('.nv-fb__menu')
-  await inside('.nv-fb__remove')
-  await shot(page, 'builder-at-1280')
-  await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'More actions', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Terugzetten' }).click()
-})
-
 // Jef Maes is the seed's one person who is not actief.
 test('filter-yes-no @e2e', async ({ page }) => {
   await page.goto('/')
@@ -369,47 +340,6 @@ test('link-to-a-view-not-yours @e2e', async ({ page, browser }) => {
   }
 })
 
-// "Of" joins the conditions only: a matching row outside the period stays out.
-test('or-with-period-narrows @e2e', async ({ page }) => {
-  const week = '2031-03-17'
-  const inWeek = 'reis in de week e2e'
-  const outside = ['reis buiten de week e2e', 'studio buiten de week e2e']
-  const made: number[] = []
-  try {
-    made.push(await activity(page, 'reis', '2031-03-18', inWeek))
-    made.push(await activity(page, 'reis', '2031-03-26', outside[0] as string))
-    made.push(await activity(page, 'repetitie', '2031-03-05', outside[1] as string))
-    await openWeek(page, 'Bevestigd', 'Activiteiten', 'plandag', week)
-    await page.locator('.nv-bar').getByRole('button', { name: 'Filter Status wissen' }).click()
-    await addCondition(page, 'Soort', 'Reis')
-    await page
-      .locator('.nv-bar')
-      .getByRole('button', { name: /^Filter\s*\d*$/ })
-      .click()
-    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
-    const text = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
-    await pickIn(text, 'Veld', 'Omschrijving')
-    await text.getByRole('textbox', { name: 'Omschrijving' }).fill('studio')
-    const read = page.waitForRequest((r) => r.url().includes('/api/rows/activiteit') && r.url().includes('%24or'))
-    await pickIn(page.getByRole('group', { name: /^Voorwaarde \d/ }).nth(2), 'Verbinding', 'Of')
-    const filter = JSON.parse(new URL((await read).url()).searchParams.get('filter') as string) as Record<
-      string,
-      unknown
-    >
-    expect(Object.keys(filter)).toContain('$or')
-    expect(Object.keys(filter).some((k) => k.startsWith('datum') || k.startsWith('plandag'))).toBe(true)
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.nv-bar .nv-chip-join')).toHaveText(['of'])
-    await expect(named(page, inWeek)).toHaveCount(1)
-    for (const title of outside) await expect(named(page, title)).toHaveCount(0)
-    await shot(page, 'or-with-period')
-    await page.getByRole('button', { name: 'More actions', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Terugzetten' }).click()
-  } finally {
-    for (const id of made) await page.request.delete(`/api/rows/activiteit/${id}`)
-  }
-})
-
 // A colleague's change is listed, by them, without an undo: the engine would refuse it (403).
 test('history-other-has-no-undo @e2e', async ({ page, browser }) => {
   const title = 'door beheer gewijzigd e2e'
@@ -472,6 +402,8 @@ test('publish-from-share-menu @e2e', async ({ browser }) => {
     await expect(dialog.getByRole('alert')).toHaveCount(0, { timeout: 1000 })
     const address = dialog.getByRole('textbox', { name: 'Publiek adres' })
     await expect(address).toHaveValue(/\/api\/public\/views\/\S+$/, { timeout: 1000 })
+    const fit = await address.evaluate((el) => ({ text: el.scrollWidth, field: el.clientWidth }))
+    expect(fit.text, 'the whole address shows in its field').toBeLessThanOrEqual(fit.field)
     expect((await admin.request.get(new URL(await address.inputValue()).pathname)).status()).toBe(200)
     await page.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)

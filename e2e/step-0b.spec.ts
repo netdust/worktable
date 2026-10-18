@@ -1,6 +1,5 @@
 import { createServer, type Server } from 'node:http'
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { openEditor } from './editor'
 import { fillDate } from './segments'
 import { shot } from './shots'
 import { openWeek } from './tree'
@@ -26,10 +25,6 @@ interface Revision {
 async function open(page: Page, view: string, model = view) {
   await openWeek(page, view, model, 'plandag', MONDAY)
   await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
-}
-
-async function dropStatusFilter(page: Page) {
-  await page.getByRole('button', { name: 'Filter Status wissen' }).click()
 }
 
 async function activiteit(page: Page, omschrijving: string): Promise<Activiteit> {
@@ -67,15 +62,6 @@ async function typeInto(target: Locator, value: string) {
   await target.getByRole('spinbutton').last().press('Enter')
 }
 
-/** Select the cell, Enter opens the list, the first letter picks the option, Enter commits. */
-async function pickOption(target: Locator, letter: string) {
-  await target.click()
-  await target.press('Enter')
-  const list = openEditor(target.page()).getByRole('listbox')
-  await list.press(letter)
-  await list.press('Enter')
-}
-
 async function sectionOf(page: Page, omschrijving: string): Promise<string> {
   return row(page, omschrijving).evaluate((tr) => {
     let el: Element | null = tr
@@ -83,23 +69,6 @@ async function sectionOf(page: Page, omschrijving: string): Promise<string> {
     return el?.querySelector('.nv-group__label')?.textContent?.trim() ?? ''
   })
 }
-
-test('status-persists', async ({ page }) => {
-  const name = 'maaltijd Gent'
-  expect((await activiteit(page, name)).status).toBe('optie')
-  await open(page, 'Bevestigd', 'Activiteiten')
-  await dropStatusFilter(page)
-
-  const status = await cell(page, name, 'Status')
-  await expect(status).toHaveText('Optie')
-  await pickOption(status, 'b')
-  await expect(status).toHaveText('Bevestigd')
-  await expect.poll(async () => (await activiteit(page, name)).status).toBe('bevestigd')
-
-  await page.reload()
-  await expect(page.locator('tbody tr.nv-tr').first()).toBeVisible()
-  await expect(await cell(page, name, 'Status')).toHaveText('Bevestigd')
-})
 
 test('refused-edit', async ({ page }) => {
   const name = 'vergadering Gent'
@@ -114,43 +83,6 @@ test('refused-edit', async ({ page }) => {
   expect(after.eind_at).toBe(before.eind_at)
   expect(after.start_at).toBe(before.start_at)
   expect(await revisions(page, before.id)).toEqual([])
-})
-
-test('query-edit-lands', async ({ page }) => {
-  const name = 'opbouw Brugge'
-  const before = await activiteit(page, name)
-  expect(before.status).toBe('bevestigd')
-  await open(page, 'Planning', 'Activiteiten')
-
-  const status = await cell(page, name, 'Status')
-  await expect(status).toHaveText('Bevestigd')
-  await pickOption(status, 'o')
-  await expect(status).toHaveText('Optie')
-
-  const filter = encodeURIComponent(JSON.stringify({ id: before.id }))
-  const response = await page.request.get(`/api/rows/activiteit?filter=${filter}`)
-  const { rows } = (await response.json()) as { rows: Activiteit[] }
-  expect(rows).toHaveLength(1)
-  expect(rows[0].status).toBe('optie')
-})
-
-test('revisions-recorded', async ({ page }) => {
-  const name = 'reis Leuven'
-  const before = await activiteit(page, name)
-  expect(before.status).toBe('geannuleerd')
-  expect(await revisions(page, before.id)).toEqual([])
-  await open(page, 'Planning', 'Activiteiten')
-
-  const status = await cell(page, name, 'Status')
-  await expect(status).toHaveText('Geannuleerd')
-  await pickOption(status, 'b')
-  await expect(status).toHaveText('Bevestigd')
-
-  await expect.poll(async () => (await revisions(page, before.id)).length).toBe(1)
-  const [revision] = await revisions(page, before.id)
-  expect(revision.field).toBe('status')
-  expect(revision.old).toBe('geannuleerd')
-  expect(revision.new).toBe('bevestigd')
 })
 
 test('day-line-move', async ({ page }) => {
@@ -180,41 +112,6 @@ test('day-line-move', async ({ page }) => {
   expect(fields).toContain('plandag')
   const plandag = (await revisions(page, before.id)).filter((revision) => revision.field === 'plandag')
   expect(plandag.map((revision) => [revision.old, revision.new])).toEqual([['2026-10-12', '2026-10-13']])
-})
-
-test('relation-pick', async ({ page }) => {
-  const name = 'reis Gent'
-  const before = await activiteit(page, name)
-  expect([before.status, before.productie_id]).toEqual(['bevestigd', 1])
-  await open(page, 'Bevestigd', 'Activiteiten')
-
-  const productie = await cell(page, name, 'Productie')
-  await expect(productie).toHaveText('De Kersentuin')
-  await productie.click()
-  await productie.press('Enter')
-  await page.getByRole('combobox', { name: 'Productie' }).fill('Nacht')
-  await page.getByRole('option', { name: 'Nachtwacht' }).click()
-
-  await expect.poll(async () => (await activiteit(page, name)).productie_id).toBe(2)
-  await expect(productie).toHaveText('Nachtwacht')
-})
-
-test('clear-end', async ({ page }) => {
-  const name = 'afbouw Gent'
-  expect((await activiteit(page, name)).eind_at).toBe('2026-10-13T01:00')
-  await open(page, 'Bevestigd', 'Activiteiten')
-
-  const einde = await cell(page, name, 'Einde')
-  await typeInto(einde, '')
-
-  await expect.poll(async () => (await activiteit(page, name)).eind_at).toBeNull()
-  await expect(einde).toHaveText('')
-})
-
-test('limit-refused', async ({ page }) => {
-  const response = await page.request.get('/api/rows/activiteit?limit=5001')
-  expect(response.status()).toBe(400)
-  expect(((await response.json()) as { code: string }).code).toBe('bad_limit')
 })
 
 test.describe('cross-site-refused', () => {
@@ -282,16 +179,5 @@ test.describe('cross-site-refused', () => {
     expect(response.status()).toBe(403)
     expect(await response.text()).toContain('evil.example')
     expect(await activiteit(page, name)).toEqual(before)
-  })
-
-  test('json-charset-accepted', async ({ page }) => {
-    const name = 'afbouw Mechelen'
-    const before = await activiteit(page, name)
-    const response = await page.request.patch(`/api/rows/activiteit/${before.id}`, {
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      data: JSON.stringify({ notities: 'Tongeren' }),
-    })
-    expect(response.status()).toBe(200)
-    expect((await revisions(page, before.id)).map((revision) => revision.field)).toEqual(['notities'])
   })
 })

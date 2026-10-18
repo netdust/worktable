@@ -69,11 +69,11 @@
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 | --- | --- | --- | --- |
 | Export-terms check | `bun run check` | unit · `scripts/check-export-terms.test.ts` · `bun test scripts` | none |
-| Theatre datasets, writers, seeds, views (Rol, Speelreeks, Sjabloon, relation, dagplanning/voorstellingen) | `POST/PATCH/DELETE /api/rows/*`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/step1.test.ts` · `bun test packages/theatre` | speelreeks-end-before-start, speelreeks-delete-in-use |
-| Batch table, write reply, undo by batch | `POST /api/batches/:id/undo`, write replies | integration · `packages/engine/test/batches.test.ts` · `bun test packages/engine` | undo-changed-since |
+| Theatre datasets, writers, seeds, views (Rol, Speelreeks, Sjabloon, relation, dagplanning/voorstellingen) | `POST/PATCH/DELETE /api/rows/*`, `GET /api/rows/dagplanning` | integration · `packages/theatre/test/step1.test.ts` · `bun test packages/theatre` | refused-edit (step-0b), referenced-delete-refused: organisatie (step-0c) |
+| Batch table, write reply, undo by batch | `POST /api/batches/:id/undo`, write replies | integration · `packages/engine/test/batches.test.ts` · `bun test packages/engine` | apply-undo-changed-since |
 | Actions | `POST /api/actions/:name`, `/api/schema` | integration · `packages/engine/test/actions.test.ts` · `bun test packages/engine` | apply-template |
-| Theatre action `sjabloon_toepassen` | `POST /api/actions/sjabloon_toepassen` | integration · `packages/theatre/test/apply.test.ts` · `bun test packages/theatre` | apply-template, apply-twice |
-| Grid: batch undo, action button | store, history, drawer, App | unit · `apps/grid/src/grid/store.test.ts`, `apps/grid/src/ui/history.test.ts`, `apps/grid/src/grid/Drawer.test.tsx`, `apps/grid/src/grid/Grid.test.tsx`, `apps/grid/src/ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | apply-template, undo-changed-since |
+| Theatre action `sjabloon_toepassen` | `POST /api/actions/sjabloon_toepassen` | integration · `packages/theatre/test/apply.test.ts` · `bun test packages/theatre` | apply-template, shift-refused-in-dutch (action-inputs) |
+| Grid: batch undo, action button | store, history, drawer, App | unit · `apps/grid/src/grid/store.test.ts`, `apps/grid/src/ui/history.test.ts`, `apps/grid/src/grid/Drawer.test.tsx`, `apps/grid/src/grid/Grid.test.tsx`, `apps/grid/src/ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | apply-template, apply-undo-changed-since |
 | Migration on a copy and value parity | operator command | none, proven by command output in the report | none |
 
 ## Review Focus
@@ -82,7 +82,7 @@
 3. `kind = import` and pre-table batches are never undoable (threat 3). Test map row 3.
 4. The engine stays domain-free: no `speelreeks`, `sjabloon`, `rol`, `kleur`, `items` or `datum` in `packages/engine`. Checked by `bun run check` (vocabulary).
 5. Untimed items stay untimed: an item without `start_tijd` creates `start_at` null and no `eind_at`, on its own `datum` (carry-over). Test map row 5.
-6. A query-row edit's batch is the target record's. Undo from Dagplanning restores the activity (the shakeout's query-view case). Test map rows 3 and 6, plus e2e `undo-changed-since` on Dagplanning.
+6. A query-row edit's batch is the target record's. Undo from Dagplanning restores the activity (the shakeout's query-view case). Test map rows 3 and 6. The query-row routing is pinned by `apps/grid/src/grid/store.test.ts` (`a query-row edit's batch comes from the PATCH reply, and its undo re-reads the query row`); the Dagplanning query itself is gone, and `apply-undo-changed-since` pins an action's batch undo.
 
 ---
 
@@ -262,11 +262,10 @@ Steps:
 
 Flows, all on invented fixtures:
 - **apply-template:** create a Speelreeks Mon–Thu at the invented venue, apply "speeldag op locatie" from the drawer, then in Dagplanning check that 28 rows appear on the 4 days, at the pattern's times, with Overnachting untimed and `locatie_bron` speelreeks. In Dagplanning, click a cell so the grid has focus, then one Ctrl+Z (the tab's undo history holds the apply) removes all 28. Reload, and none are back. The Revision rows of the 28 share one batch (read through `GET /api/revisions`).
-- **apply-twice:** the second apply shows the R6 message.
-- **speelreeks-delete-in-use:** delete in the drawer gets the in-use message.
-- **speelreeks-end-before-start:** the Dutch refusal on the cell.
-- **undo-changed-since**, on Dagplanning: two browser contexts: A edits a cell, B edits the same cell, A's Ctrl+Z shows the Dutch message naming the column, and B's value stays after a reload.
-
+- **apply-twice** (now `sjabloon_toepassen > a second apply is refused with how to proceed` in `packages/theatre/test/apply.test.ts`; the drawer shows the refusal, `shift-refused-in-dutch` in `e2e/action-inputs.spec.ts`).
+- **speelreeks-delete-in-use** (now `deleting a Speelreeks > with a live activity is 409 in_use`, and `referenced-delete-refused: organisatie` in `e2e/step-0c.spec.ts` for the drawer sentence).
+- **speelreeks-end-before-start** (now `the Speelreeks writer refuses > an eind_datum before the start_datum` on create and `an end moved past the cap on update` through the same `checkSpan` on PATCH, and `refused-edit` in `e2e/step-0b.spec.ts` for the Dutch refusal on the cell).
+- **undo-changed-since** (now `undo denials > B edits after A: A undo is 409 changed_since naming the column, and B keeps its value` in `packages/engine/test/batches.test.ts`, and `apply-undo-changed-since` in `e2e/step-1.spec.ts` for the Dutch message in the grid).
 Steps:
 - [ ] Write the flows, run `bunx playwright test e2e/step-1.spec.ts`, then `bun run gate` three times. Commit: `test(e2e): the step 1 gate`.
 

@@ -100,6 +100,9 @@ describe('the Speelreeks writer refuses', () => {
   test('an unknown productie', () =>
     refused(editor('POST', '/api/rows/speelreeks', { ...REEKS, productie_id: 99 }), 'Productie bestaat niet.'))
 
+  test('an unknown locatie', () =>
+    refused(editor('POST', '/api/rows/speelreeks', { ...REEKS, locatie_id: 99_999 }), 'Locatie bestaat niet.'))
+
   test('a deleted locatie', () => {
     softDelete('organisatie', 3)
     return refused(editor('POST', '/api/rows/speelreeks', REEKS), 'Locatie bestaat niet.')
@@ -346,6 +349,12 @@ describe('the seeds', () => {
     expect(seeded('rol')).toHaveLength(4)
     for (const row of seeded('rol')) rolWriter.create?.({ ...row }, ctxOf('administrator'))
   })
+})
+
+test('PATCH and DELETE on sjabloon are 405 read_only', async () => {
+  const [{ id }] = sqlite.query('SELECT id FROM sjabloon ORDER BY id').all() as { id: number }[]
+  await denied(editor('PATCH', `/api/rows/sjabloon/${id}`, { naam: 'anders' }), 405, 'read_only')
+  await denied(editor('DELETE', `/api/rows/sjabloon/${id}`), 405, 'read_only')
 })
 
 test('/api/schema marks sjabloon not writable', async () => {

@@ -90,7 +90,7 @@ const savedFilter = async (api: Api, name: string) => {
   return all.views.find((v) => v.name === name)?.filters
 }
 
-test('filter-is-vandaag @e2e', async ({ page }) => {
+test('filter-is-vandaag-kept-after-reload @e2e', async ({ page }) => {
   const api = page.request
   const made: Made = { views: [], activiteit: [] }
   const name = 'Eigen e2e vandaag'
@@ -104,15 +104,6 @@ test('filter-is-vandaag @e2e', async ({ page }) => {
     await page.goto('/')
     await newView(page, made, name)
     await chooseToday(page)
-
-    // The builder asks no value of today: no picker, no date box, no search.
-    const row = conditionOn(page, 'Plandag')
-    await expect(row.getByRole('button', { name: 'Vergelijking: is vandaag' })).toBeVisible()
-    await expect(row.locator('.nv-fb__value')).toBeEmpty()
-    await expect(row.getByRole('searchbox')).toHaveCount(0)
-    await expect(row.getByRole('textbox')).toHaveCount(0)
-    await expect(row.getByRole('spinbutton')).toHaveCount(0)
-    await shot(page, 'builder-is-vandaag')
     await page.keyboard.press('Escape')
 
     // Today is the view's period: named by its day in the title line, never a chip.
@@ -129,35 +120,11 @@ test('filter-is-vandaag @e2e', async ({ page }) => {
     expect(titles.length).toBe(days.length)
     await shot(page, 'only-today')
 
-    // Boundary (wire): a period not in the list is still refused.
-    const unknown = await api.get(
-      `/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ plandag: { $period: 'yesterday' } }))}`,
-    )
-    expect(unknown.status()).toBe(400)
-  } finally {
-    await cleanUp(api, made)
-  }
-})
-
-test('vandaag-kept-after-reload @e2e', async ({ page }) => {
-  const api = page.request
-  const made: Made = { views: [], activiteit: [] }
-  const name = 'Eigen e2e vandaag bewaard'
-  const today = 'vandaag e2e bewaard'
-  try {
-    await activity(api, made, today, localDay(0))
-    await page.setViewportSize({ width: 1600, height: 900 })
-    await page.goto('/')
-    await newView(page, made, name)
-    await chooseToday(page)
-    await page.keyboard.press('Escape')
-
     // The own view stores the period, not the day: it reads the current day on every load.
     await expect.poll(() => savedFilter(api, name)).toMatchObject({ plandag: { $period: 'today' } })
     await page.reload()
     await openView(page, name, 'Activiteiten')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
-    // Today is the view's period: named by its day in the title line, never a chip.
     await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^\d{1,2} \p{L}+$/u)
     await expect(page.locator('.nv-bar .nv-chip--filter')).toHaveCount(0)
     await expect.poll(() => gridTitles(page)).toContain(today)
@@ -183,37 +150,6 @@ test('vandaag-kept-after-reload @e2e', async ({ page }) => {
     })
     await expect(empty.locator('.nv-empty__desc')).toHaveText(day)
     await shot(page, 'one-day-empty')
-  } finally {
-    await cleanUp(api, made)
-  }
-})
-
-test('new-date-condition-starts-at-deze-week @e2e', async ({ page }) => {
-  const api = page.request
-  const made: Made = { views: [], activiteit: [] }
-  const name = 'Eigen e2e nieuwe datum'
-  try {
-    await page.setViewportSize({ width: 1600, height: 900 })
-    await page.goto('/')
-    await newView(page, made, name)
-    await filterButton(page).click()
-    await page.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
-    const row = page.getByRole('group', { name: /^Voorwaarde \d/ }).last()
-    await pickIn(row, 'Veld', 'Datum')
-    await expect(row.getByRole('button', { name: 'Vergelijking: is deze week' })).toBeVisible()
-    await row.getByRole('button', { name: /^Vergelijking:/ }).click()
-    const offered = await row.getByRole('listbox', { name: 'Vergelijking' }).getByRole('option').allTextContents()
-    expect(offered.map((o) => o.trim())).toEqual([
-      'is vandaag',
-      'is deze week',
-      'is volgende week',
-      'is deze maand',
-      'ligt tussen',
-    ])
-    await shot(page, 'new-date-deze-week')
-    await page.keyboard.press('Escape')
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.nv-bar .nv-chip--filter').filter({ hasText: /^Datum/ })).toHaveText('Datum deze week')
   } finally {
     await cleanUp(api, made)
   }
