@@ -485,6 +485,7 @@ describe('serve.ts', () => {
     ['an unknown role', ['--role', 'planner']],
     ['no role', []],
     ['a subject naming an undeclared dataset', ['--role', 'owner', '--subject', 'nope:1']],
+    ['a subject naming an engine table', ['--role', 'owner', '--subject', 'saved_view:1']],
     ['a malformed subject', ['--role', 'owner', '--subject', 'project']],
     ['a subject row that does not exist', ['--role', 'owner', '--subject', 'project:99']],
   ])(

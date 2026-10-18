@@ -114,7 +114,7 @@ The `@e2e` flows of Done-when 1 and 2 are written by `/shakeout` after the revie
 
 ## Review Focus
 - Attack 1 (script in an upload): T1 `an svg, an html file and an exe renamed .pdf are 415`, and the header assertions.
-- Attack 3 (guessing ids): T1 `another record's file and an unknown id answer the same 404`, which holds the owner-session case, and T4 for links.
+- Attack 3 (guessing ids): T1 `another record's attachment id and an unknown id answer the same 404`, which holds the owner-session case, and T4 for links.
 - Attack 7 (location): T2 `a jpeg's GPS and its trailing motion video are gone, Orientation kept; an unparseable image is refused, not stored`.
 - Attack 8 (mass assignment): T4 `a link PATCH naming another column is 403 naming it`.
 - Attack 10 (the fence): T4 `a link DELETE on rows and a link POST on /actions are 403`.

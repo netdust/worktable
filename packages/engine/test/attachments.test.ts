@@ -303,6 +303,12 @@ describe('refusals', () => {
     expect(await other.json()).toEqual(await unknown.json())
     expect((await remove(body.id, owner)).status).toBe(404)
     expect((await list(1, owner)).status).toBe(404)
+    const refused = await upload(PDF, { id: 1, cookie: owner })
+    expect({ status: refused.status, code: refused.body.code, stored: stored() }).toEqual({
+      status: 404,
+      code: 'unknown_record',
+      stored: { n: 1 },
+    })
   })
 
   test('an owner reads its own record’s files but uploads only with owner_writable', async () => {
