@@ -40,7 +40,7 @@
 | Schema mapping and production switcher | `toSchema`, `useSpace`, `rows()` | unit · `apps/grid/src/engine.test.ts`, `apps/grid/src/space.test.ts` (new), `apps/grid/src/api.test.ts`, `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | switch-production |
 | Sidebar tree, menus and dialog | rail | unit · `ui/Rail.test.tsx`, `ui/ViewList.test.tsx`, `ui/NewViewDialog.test.tsx` (new), `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | tree-fold-and-hover, create-team-and-personal-view, copy-rename-delete-view |
 | Title line | `Toolbar` | unit · `ui/Toolbar.test.tsx`, `ui/App.test.tsx` · `cd apps/grid && bunx vitest run` | (covered by the flows above) |
-| Group bands | `GridBody`, `groupRows` | unit · `grid/group.test.ts`, `grid/Grid.test.tsx` · `cd apps/grid && bunx vitest run` | fold-day-band, band-facts |
+| Group bands | `GridBody`, `groupRows` | unit · `grid/group.test.ts`, `grid/Grid.test.tsx` · `cd apps/grid && bunx vitest run` | fold-day-band (band-facts is gone: every band's count and facts and the bar's "28 rijen · 4 groepen" are in fold-day-band, the title line's week summary in `title-line-fits-at-1280`) |
 | Inherited cell | `Display` | unit · `grid/cells/index.test.tsx` (or `Relation.test.tsx`) · `cd apps/grid && bunx vitest run` | inherited-venue |
 
 ## Review Focus

@@ -29,9 +29,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Title line | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-at-1280 @e2e"` | e2e/title-line.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Title line · met een open lade op 1280 leest de naam heel en blijft de periode staan | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-with-a-drawer-open"` | e2e/title-line.spec.ts | fix/title-line-at-1280 | 072eb10 2026-10-16 |
 | Dagplanning · day bands | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "fold-day-band @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| Dagplanning · day bands | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "band-facts @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut-bar-and-foot @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Dagplanning · inherited venue | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "inherited-venue @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Planning · details | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "planning-details @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Sign-in page (lang, Plex, meta, tokens, own colours, button) | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "the sign-in page is Dutch, Plex, unindexed and in its own colours @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 85024bc 2026-10-17 |

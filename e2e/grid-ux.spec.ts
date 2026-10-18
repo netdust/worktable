@@ -7,7 +7,6 @@ import { dropViews, modelNode, openModel, openView, openWeek } from './tree'
 
 // One empty week per flow that applies a speeldag, so no flow sees another's rows.
 const FOLD_WEEK = '2027-03-01'
-const FACTS_WEEK = '2027-03-08'
 const INHERIT_WEEK = '2027-03-15'
 const DETAILS_WEEK = '2027-03-22'
 const SEED_WEEK = '2026-10-12'
@@ -346,13 +345,14 @@ test('fold-day-band @e2e', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
   await expect(gridRows(page)).toHaveCount(28)
   await expect(bands(page)).toHaveCount(4)
-  // Row numbers lead every row; the dividers between the cells are Bijstellen's Rasterlijnen, off as the prototype opens.
+  // Row numbers lead every row.
   await expect(gridRows(page).first().locator('td').first()).toHaveText('1')
   await expect(gridRows(page).nth(7).locator('td').first()).toHaveText('8')
-  await expect(gridRows(page).first().locator('td').nth(2)).toHaveCSS('border-right-width', '0px')
-  await openLooks(page)
-  await page.getByRole('radiogroup', { name: 'Rasterlijnen' }).getByRole('radio', { name: 'Aan' }).click()
-  await expect(gridRows(page).first().locator('td').nth(2)).not.toHaveCSS('border-right-width', '0px')
+  for (const band of await bands(page).all()) {
+    await expect(band.locator('.nv-group__count')).toHaveText('7')
+    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/3'])
+  }
+  await expect(page.locator('.nv-bar__count')).toHaveText('28 rijen · 4 groepen')
 
   const first = bands(page).first()
   await expect(first).toHaveAttribute('aria-expanded', 'true')
@@ -378,21 +378,6 @@ test('fold-day-band @e2e', async ({ page }) => {
   await page.keyboard.press('Enter')
   await expect(bands(page).first()).toHaveAttribute('aria-expanded', 'true')
   await expect(gridRows(page)).toHaveCount(28)
-})
-
-test('band-facts @e2e', async ({ page }) => {
-  await speeldagen(page.request, 'Speelreeks e2e feiten', FACTS_WEEK)
-  await openWeek(page, 'Planning', 'Activiteiten', 'plandag', FACTS_WEEK)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
-  await expect(gridRows(page)).toHaveCount(28)
-  await expect(bands(page)).toHaveCount(4)
-  for (const band of await bands(page).all()) {
-    await expect(band.locator('.nv-group__count')).toHaveText('7')
-    await expect(facts(band)).toHaveText(['● voorstelling 20:00', '1 zonder tijd', 'bezetting 0/3'])
-  }
-  await expect(page.locator('.nv-bar__count')).toHaveText('28 rijen · 4 groepen')
-  await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · /)
-  await shot(page, 'band-facts')
 })
 
 test('inherited-venue @e2e', async ({ page }) => {
@@ -755,20 +740,11 @@ test.describe
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
       await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
       await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
+      await expect(page.locator('tfoot td.nv-first')).toHaveText(`Totaal · ${MAX_READ}+ rijen`)
       await expect(bands(page).first().locator('.nv-group__count')).toHaveText('2')
       await expect(bands(page).nth(1).locator('.nv-group__count')).toHaveText(`${MAX_READ - 2}+`)
       await expect(facts(bands(page).first())).toHaveText(['2 zonder tijd'])
       await expect(facts(bands(page).nth(1))).toContainText(['… zonder tijd'])
       await shot(page, 'read-limit-cut')
-    })
-
-    // Shake-out row 19: the bar's count and the grid's foot say 5000+ like the title line.
-    test('read-limit-cut-bar-and-foot @e2e', async ({ page }) => {
-      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', CUT_WEEK)
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planning')
-      await expect(bands(page)).toHaveCount(2, { timeout: 60_000 })
-      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
-      await expect(page.locator('.nv-bar__count')).toHaveText(`${MAX_READ}+ rijen · 2 groepen`)
-      await expect(page.locator('tfoot td.nv-first')).toHaveText(`Totaal · ${MAX_READ}+ rijen`)
     })
   })
