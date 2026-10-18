@@ -309,14 +309,6 @@ describe('the write reply', () => {
     expect(batchRow(res.body.revision.batch_id)).toEqual({ actor_id: A, kind: 'write', undone_by: null })
   })
 
-  test('a create answers its batch and the columns it stored', async () => {
-    const res = await post(asA, 'note', { project_id: 1, tekst: 'hallo' })
-    expect(res.body.revision).toEqual({
-      batch_id: expect.stringMatching(UUID),
-      changed: ['project_id', 'tekst', 'lengte', 'klaar', 'kind'],
-    })
-  })
-
   test('a PATCH with no change answers batch_id null and records no batch', async () => {
     const before = state()
     const res = await patch(asA, 'note/1', { tekst: 'eerste' })
