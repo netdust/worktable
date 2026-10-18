@@ -72,6 +72,8 @@ describe('reading lookups', () => {
   })
 
   test('a deleted target reads null', async () => {
+    sqlite.run("UPDATE team SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = 1")
+    expect((await rowsOf('item'))[0]?.team_name).toBeNull()
     sqlite.run("UPDATE item SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = 1")
     const rows = await rowsOf('line')
     const inheriting = byId(rows, 2)
