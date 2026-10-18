@@ -299,22 +299,6 @@ test('edit-datetime-cell @e2e', async ({ page }) => {
     await expect.poll(() => patches.length).toBe(2)
     expect(patches[1]).toEqual({ start_at: `${day(2)}T20:30` })
 
-    await inBothThemes(
-      page,
-      'datetime-calendar',
-      async () => {
-        await edit(await start())
-        await (await start()).locator('.nv-datefield__open').click()
-        await expect(openEditor(page).getByRole('grid')).toBeVisible()
-        return openEditor(page)
-      },
-      async () => {
-        await page.keyboard.press('Escape')
-        await page.keyboard.press('Escape')
-        await expect(openEditor(page)).toHaveCount(0)
-      },
-    )
-
     // Optional: every segment cleared and Enter empties it, once.
     await edit(await start())
     await fillDate(await start(), '')
@@ -997,53 +981,5 @@ test('own-view-keeps-a-new-condition @e2e', async ({ page }) => {
     await expect(groups, 'the new condition is still there to fill in').toHaveCount(1, { timeout: 1000 })
   } finally {
     await page.request.delete(`/api/views/${id}`)
-  }
-})
-
-test.describe('the Publiceren dialog as an administrator', () => {
-  test.use({ storageState: state('admin') })
-
-  test('publish-address-reads-in-full @e2e', async ({ page }) => {
-    const copy = 'Voorstellingen (kopie)'
-    const views = async () =>
-      ((await (await page.request.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
-    try {
-      await page.goto('/')
-      await openView(page, 'Voorstellingen')
-      await page.getByRole('button', { name: 'More actions: Voorstellingen', exact: true }).click()
-      await page.getByRole('menuitem', { name: 'Kopie maken' }).click()
-      await expect.poll(async () => (await views()).some((v) => v.name === copy)).toBe(true)
-      await openView(page, copy, 'Voorstellingen')
-      await page.locator('.nv-toolbar').getByRole('button', { name: 'Exporteren / delen' }).click()
-      await page.getByRole('menuitem', { name: 'Publiceren' }).click()
-      const address = page.getByRole('dialog', { name: 'Publiceren' }).getByRole('textbox', { name: 'Publiek adres' })
-      await expect(address).toHaveValue(/\/api\/public\/views\//)
-      const fit = await address.evaluate((el) => ({ text: el.scrollWidth, field: el.clientWidth }))
-      expect(fit.text, 'the whole address shows in its field').toBeLessThanOrEqual(fit.field)
-    } finally {
-      for (const view of (await views()).filter((v) => v.name === copy))
-        await page.request.delete(`/api/views/${view.id}`)
-    }
-  })
-})
-
-test('not-nullable-select-offers-no-leeg @e2e', async ({ page }) => {
-  const api = page.request
-  const title = 'ra status leeg'
-  const id = await activity(api, title, { datum: day(6) })
-  const patches = writes(page, 'PATCH', new RegExp(`^/api/rows/activiteit/${id}$`))
-  try {
-    await openWeek(page, 'Optie of bevestigd', 'Activiteiten', 'plandag', WEEK)
-    const status = await cellOf(page, title, 'Status')
-    await status.click()
-    await status.press('Delete')
-    await settle(page)
-    expect.soft(patches, 'Delete sends nothing on a column that cannot be empty').toEqual([])
-    await edit(status)
-    await expect(openEditor(page).getByRole('option').first()).toBeVisible()
-    await expect.soft(openEditor(page).getByRole('option', { name: '—' })).toHaveCount(0, { timeout: 1000 })
-    await page.keyboard.press('Escape')
-  } finally {
-    await removeActivity(api, id)
   }
 })

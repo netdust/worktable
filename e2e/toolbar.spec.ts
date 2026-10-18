@@ -473,6 +473,8 @@ test('publish-from-share-menu @e2e', async ({ browser }) => {
     await expect(dialog.getByRole('alert')).toHaveCount(0, { timeout: 1000 })
     const address = dialog.getByRole('textbox', { name: 'Publiek adres' })
     await expect(address).toHaveValue(/\/api\/public\/views\/\S+$/, { timeout: 1000 })
+    const fit = await address.evaluate((el) => ({ text: el.scrollWidth, field: el.clientWidth }))
+    expect(fit.text, 'the whole address shows in its field').toBeLessThanOrEqual(fit.field)
     expect((await admin.request.get(new URL(await address.inputValue()).pathname)).status()).toBe(200)
     await page.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)

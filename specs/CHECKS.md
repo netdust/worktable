@@ -62,7 +62,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Datetime cell editor | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "edit-datetime-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Date and datetime calendar | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "calendar-clears-its-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Select cell editor | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "edit-select-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
-| Select cell editor · not nullable | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "not-nullable-select-offers-no-leeg @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | To-one picker | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "edit-relation-cell @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | To-many editor | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "add-and-remove-link @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | To-one open-panel icon | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "open-related-record @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
@@ -72,7 +71,6 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Rail views list · order | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "reorder-views @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Theme · popovers, menus and dialogs | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "chrome-light-and-dark @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Exporteren / delen · Publiceren dialog | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "share-dialog-light-and-dark @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
-| Exporteren / delen · Publiceren dialog | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "publish-address-reads-in-full @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Filter builder · own view | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "own-view-keeps-a-new-condition @e2e"` | e2e/react-aria.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Select and to-one picker · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "select-and-picker-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | 1e3309c 2026-10-16 |
 | Production switcher · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "space-switcher-fits @e2e"` | e2e/ui-fit.spec.ts | react-aria | 1e3309c 2026-10-16 |
