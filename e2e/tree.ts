@@ -133,7 +133,7 @@ export async function pickIn(row: Locator, label: string, option: string): Promi
 }
 
 /** One's own views by these names, gone through the API: a test that makes them starts without another's leftovers. */
-export async function dropViews(page: Page, names: string[]): Promise<void> {
+export async function dropViews(page: Pick<Page, 'request'>, names: string[]): Promise<void> {
   const { views } = (await (await page.request.get('/api/views')).json()) as {
     views: { id: number; name: string; mine: boolean }[]
   }

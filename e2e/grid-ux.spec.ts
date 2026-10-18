@@ -638,9 +638,9 @@ test('new-view-blank-and-double-submit @e2e', async ({ page }) => {
 test('colleague-shared-view @e2e', async ({ page, browser }) => {
   const name = 'Collega e2e weergave'
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:5174', storageState: state('admin') })
-  const theirs = await admin.newPage()
-  await dropViews(theirs, [name])
   try {
+    await dropViews(admin, [name])
+    const theirs = await admin.newPage()
     await theirs.goto('/')
     await pick(theirs, 'Tourstops')
     await newView(theirs, 'Tourstops', name, 'Het team')
@@ -674,7 +674,7 @@ test('colleague-shared-view @e2e', async ({ page, browser }) => {
     expect([403, 404]).toContain(removed.status())
     expect((await views(page.request)).find((v) => v.id === made.id)).toMatchObject({ name, mine: false, shared: true })
   } finally {
-    await dropViews(theirs, [name])
+    await dropViews(admin, [name])
     await admin.close()
   }
 })
