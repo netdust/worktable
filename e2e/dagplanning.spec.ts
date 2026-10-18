@@ -60,7 +60,7 @@ async function openDagplanning(page: Page) {
 test('period-is-the-period @e2e', async ({ page }) => {
   const api = page.request
   const productie = await idByName(api, 'productie', 'titel', 'Nachtwacht')
-  const [near, far] = ['periode in december', 'periode in februari']
+  const [near, far, next] = ['periode in december', 'periode in februari', 'periode na kerst']
   const made = [
     await idOf(api, 'activiteit', { productie_id: productie, soort: 'repetitie', datum: WEEK, omschrijving: near }),
     await idOf(api, 'activiteit', {
@@ -68,6 +68,12 @@ test('period-is-the-period @e2e', async ({ page }) => {
       soort: 'repetitie',
       datum: '2027-02-15',
       omschrijving: far,
+    }),
+    await idOf(api, 'activiteit', {
+      productie_id: productie,
+      soort: 'repetitie',
+      datum: '2026-12-28',
+      omschrijving: next,
     }),
   ]
   try {
@@ -100,6 +106,13 @@ test('period-is-the-period @e2e', async ({ page }) => {
     await expect(bar.locator('.nv-chip--filter')).toHaveCount(0)
     await expect(named(page, near)).toHaveCount(1)
     await expect(named(page, far)).toHaveCount(0)
+    await expect(named(page, next)).toHaveCount(0)
+
+    // One step on: the next week's rows are read in, and this week's go.
+    await bar.getByRole('button', { name: 'Volgende periode' }).click()
+    await expect(page.locator('.nv-toolbar__summary')).toHaveText(/^Week \d+ · 28 dec–3 jan$/)
+    await expect(named(page, next)).toHaveCount(1)
+    await expect(named(page, near)).toHaveCount(0)
   } finally {
     for (const id of made) await api.delete(`/api/rows/activiteit/${id}`)
   }

@@ -22,10 +22,12 @@ const row = (id: number, title: string, state: string | null): Row => ({ id, tit
 afterEach(cleanup)
 
 describe('the board', () => {
-  it('puts cards in the column of their option, in option order, with Geen last; a card opens its row', () => {
-    render(<Board view={view} layout={defaults(view)} model={model} models={{ toewijzing: model }} rows={[row(1, 'Lotte', 'bevestigd'), row(2, 'Bram', 'open'), row(3, 'Naam', null)]} column="state" />)
+  it('puts cards in the column of their option, in option order, with Geen last, and tells the title line how many columns; a card opens its row', () => {
+    const onShown = vi.fn()
+    render(<Board view={view} layout={defaults(view)} model={model} models={{ toewijzing: model }} rows={[row(1, 'Lotte', 'bevestigd'), row(2, 'Bram', 'open'), row(3, 'Naam', null)]} column="state" onShown={onShown} />)
     const columns = screen.getAllByRole('region').map((list) => list.getAttribute('aria-label'))
     expect(columns).toEqual(['Open', 'Voorlopig', 'Bevestigd', 'Geen'])
+    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ columns: 4 }))
     expect(within(screen.getByRole('region', { name: 'Bevestigd' })).getByRole('button', { name: /Lotte/ })).toBeTruthy()
     expect(within(screen.getByRole('region', { name: 'Geen' })).getByRole('button', { name: /Naam/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Bram/ }))
@@ -145,13 +147,15 @@ describe('the gallery card', () => {
     api.filesOf.mockResolvedValue({ 1: { id: 41, mime: 'image/jpeg', name: 'a.jpg' } })
     const activity = { ...model, key: 'activiteit' } as unknown as Model
     const onShown = vi.fn()
-    render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{}} rows={[row(1, 'Repetitie', 'open'), row(2, 'opbouw Gent', 'bevestigd')]} kind="foto" layout={defaults(view)} onShown={onShown} />)
+    render(<Gallery view={{ ...view, model: 'activiteit' } as View} model={activity} models={{}} rows={[row(1, 'Repetitie', 'open'), row(2, 'opbouw Gent', 'bevestigd'), row(3, 'Zonnewende', 'open')]} kind="foto" layout={defaults(view)} onShown={onShown} />)
     await screen.findByRole('img', { name: 'Repetitie' })
+    expect(screen.getByRole('button', { name: /Repetitie/ }).querySelector('.nv-gallery__mark')).toBeNull()
     const card = screen.getByRole('button', { name: /opbouw Gent/ })
     expect(card.querySelector('.nv-gallery__mark')?.textContent).toBe('OG')
+    expect(screen.getByRole('button', { name: /Zonnewende/ }).querySelector('.nv-gallery__mark')?.textContent).toBe('Zo')
     expect((card.querySelector('.nv-gallery__blank') as HTMLElement).style.getPropertyValue('--s')).toBe('var(--color-success-fg)')
     expect(card.textContent).toContain('Bevestigd')
-    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 2, groups: null, cut: false, pictures: 1 }))
+    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 3, groups: null, cut: false, pictures: 1 }))
   })
 })
 
@@ -203,6 +207,7 @@ describe('the timeline', () => {
     const lane = screen.getByRole('row', { name: 'De Kersentuin' })
     const bar = within(lane).getByRole('button', { name: /Brugge/ })
     expect([bar.style.left, bar.style.width]).toEqual(['calc(14.2857% + 2px)', 'calc(42.8571% - 4px)'])
+    expect(document.querySelector('.nv-tl__corner .nv-tl__count')?.textContent).toBe('1')
   })
   it('without a lane, packs the bars into one shared lane by overlap, its head the count alone', () => {
     const cal = { day: 'start_datum', start: null, end: 'eind_datum', lanes: ['productie_id'], spans: true as const }
@@ -212,6 +217,7 @@ describe('the timeline', () => {
     const lanes = screen.getAllByRole('row').filter((r) => r.classList.contains('nv-tl__lane'))
     expect(lanes).toHaveLength(1)
     expect(within(lanes[0]).getByRole('rowheader').textContent).toBe('3')
+    expect(document.querySelector('.nv-tl__corner .nv-tl__count')).toBeNull()
     const top = (name: RegExp) => within(lanes[0]).getByRole('button', { name }).style.top
     expect(top(/Brugge\d/)).not.toBe(top(/Gent\d/))
     expect(top(/Lier\d/)).toBe(top(/Brugge\d/))

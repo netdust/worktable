@@ -98,18 +98,24 @@ test.describe('step 3e: Groep chooses on every skin', () => {
 
   test('groep-everywhere @e2e', async ({ page }) => {
     await page.goto('/')
-    for (const [view, model] of [
-      ['Planning', 'Activiteiten'],
-      ['Per status', 'Activiteiten'],
-      ['Galerij activiteiten', 'Activiteiten'],
-      ['Kalender activiteiten', 'Activiteiten'],
-      ['Tijdlijn tourstops', 'Tourstops'],
-      ['Toewijzingen per activiteit', 'Activiteiten'],
-    ]) {
+    // Groep as each seeded view groups, the lanes a calendar and a timeline offer, and Kolommen, or a matrix's + Kolom.
+    for (const [view, model, chip, lanes] of [
+      ['Planning', 'Activiteiten', null, null],
+      ['Per status', 'Activiteiten', 'Groep: status', null],
+      ['Galerij activiteiten', 'Activiteiten', 'Groep: plandag', null],
+      ['Kalender activiteiten', 'Activiteiten', 'Groep: geen', ['Productie', 'Tourstop', 'Geen']],
+      ['Tijdlijn tourstops', 'Tourstops', 'Groep: productie', ['Productie', 'Geen']],
+      ['Toewijzingen per activiteit', 'Activiteiten', 'Groep: plandag', null],
+    ] as const) {
       await openView(page, view, model)
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(view)
+      if (chip) await expect(groep(page)).toHaveText(chip)
+      const columns = view === 'Toewijzingen per activiteit' ? '+ Kolom' : 'Kolommen'
+      await expect(bar(page).getByRole('button', { name: columns, exact: true })).toBeVisible()
       await groep(page).click()
-      await expect(page.getByRole('dialog', { name: 'Groeperen' }).getByRole('button').first()).toBeVisible()
+      const dialog = page.getByRole('dialog', { name: 'Groeperen' })
+      await expect(dialog.getByRole('button').first()).toBeVisible()
+      if (lanes) await expect(dialog.getByRole('button')).toHaveText(lanes)
       await page.keyboard.press('Escape')
     }
 
@@ -616,6 +622,10 @@ test.describe('step 3e: the title line and the rail', () => {
     // With no production chosen, every production and this week; the bar says when the tiles were read.
     await expect(pill(page)).toHaveText(`Alle producties · week ${week}`)
     await expect(bar(page).locator('.nv-bar__updated')).toHaveText(/^bijgewerkt \d{2}:\d{2}$/)
+    // A dashboard is no view of rows: no Groep, no period, no count.
+    await expect(bar(page).getByText(/^Groep: /)).toHaveCount(0)
+    await expect(bar(page).getByRole('radiogroup', { name: 'Periode' })).toHaveCount(0)
+    await expect(bar(page).locator('.nv-bar__count:not(.nv-bar__updated)')).toHaveCount(0)
     // A production chosen names itself before the week.
     await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
     await page.getByRole('option', { name: 'De Kersentuin', exact: true }).click()

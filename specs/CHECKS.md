@@ -34,7 +34,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Planning · details | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "planning-details @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Sign-in page (lang, Plex, meta, tokens, own colours, button) | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "the sign-in page is Dutch, Plex, unindexed and in its own colours @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | 85024bc 2026-10-17 |
 | GET /api/schema | smoke | `bunx playwright test e2e/smoke/grid-ux.spec.ts --grep "/api/schema asks for a session @smoke"` | e2e/smoke/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| Periode (Plandag-voorwaarde) | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "period-is-the-period @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
+| Periode (Plandag-voorwaarde), volgende week | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "period-is-the-period @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Periode (Plandag-voorwaarde) | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "period-empty-result @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · Mensen | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "people-tags @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
 | Dagplanning · Mensen | e2e | `bunx playwright test e2e/dagplanning.spec.ts --grep "people-colours-and-overflow @e2e"` | e2e/dagplanning.spec.ts | dagplanning | 1e3309c 2026-10-16 |
@@ -107,7 +107,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Matrix · alleen afwezig is weg | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "away-only-afwezig @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Persoonskalender | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "person-calendar @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Persoonskalender · nacht, punt, venster | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "calendar-edges @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| Persoonskalender · activiteit zonder einde (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
+| Persoonskalender · activiteit zonder einde | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Bedrijfsweek · week, maand, drawer | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "company-week @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Dashboard · landing | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
@@ -122,18 +122,9 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Chiprij · elke weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "one-chip-row @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Kalender · Groep (rijen) | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "calendar-lanes-in-groep @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Planning · periode stappen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "grid-period-steps @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Kalender · Nieuwe activiteit | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Kalender · Nieuwe activiteit leesbaar (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar-readable @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Persoonskalender, Bedrijfsweek · geen Nieuw | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "no-add-on-query-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
+| Kalender · Nieuwe activiteit, leesbaar | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Nieuwe tijdlijn · deze maand, rijen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "new-timeline-defaults @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Tijdlijn · Groep geen, één rij | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "unlaned-timeline-one-lane @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Tijdlijn · naar vandaag eenmaal per venster | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "timeline-scroll-holds @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Matrix · koppen en legende | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "matrix-heads-and-legend @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Galerij · initialen, met beeld | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "gallery-placeholder @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
-| Titelregel · samenvatting per weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "summary-per-view @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Planning · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Planning @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Bord · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Per status @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Galerij · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Galerij activiteiten @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
@@ -141,14 +132,14 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Tijdlijn · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Tijdlijn tourstops @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Matrix · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Toewijzingen per activiteit @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Chiprij · geen periode zonder datum | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "a view whose table has no date shows no period control @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
-| Groep · elke weergave, bord hergroepeert | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "groep-everywhere @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
+| Groep, rijen en Kolommen · elke weergave, bord hergroepeert | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "groep-everywhere @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Bord · slepen, muis en toetsen, ⌘Z | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-drag @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Bord · + in kolom | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-column-plus @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Bord · + in kolom, week zonder vandaag | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "board-column-plus-in-window @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Lade · kop, N van M, velden, toetsen, breed | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "drawer-anatomy @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Matrix · cellade, Kiezen, ⌘Z, Afwezigheden | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "matrix-cell-drawer @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Galerij · secties, S M L | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "gallery-sections @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
-| Dashboard · titelpil, bijgewerkt | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "dashboard-title-pill @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
+| Dashboard · titelpil, bijgewerkt, geen Groep of periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "dashboard-title-pill @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Rail · aantallen | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "rail-counts @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Titelregel · inzicht Optie | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "title-line-insight @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |
 | Planning · ⌘Z op de pagina, zonder cel met de focus | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "undo-from-the-page @e2e"` | e2e/step-3e.spec.ts | step-3e | 1e3309c 2026-10-16 |

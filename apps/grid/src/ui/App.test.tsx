@@ -871,6 +871,21 @@ describe('a table with two views', () => {
     await waitFor(() => expect(document.querySelector('table.nv-mx[aria-label="Planning"]')).toBeTruthy())
   })
 
+  it("explains the matrix's marks in the foot, and the table's other view, which carries the same join, does not", async () => {
+    const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { confirmed: 'Bevestigd' }, tones: { confirmed: 'ok' } }
+    const assignment = { ...schema.models.assignment, fields: { ...schema.models.assignment.fields, status } }
+    api.schema.mockResolvedValue({ ...schema, models: { ...schema.models, assignment }, views: [{ ...tabel, join }, matrix, absences] })
+    window.location.hash = '#view=bezetting'
+    render(<App />)
+    await waitFor(() => expect(document.querySelector('table.nv-mx[aria-label="Planning"]')).toBeTruthy())
+    const foot = () => document.querySelector<HTMLElement>('footer.nv-foot')!
+    expect(within(within(foot()).getByRole('list', { name: 'Legende' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['✓bevestigd', 'afwezig', '⚠afwezig en toegewezen'])
+
+    fireEvent.click(within(types()).getByRole('button', { name: 'Tabel' }))
+    expect(await screen.findByRole('grid', { name: 'Planning' })).toBeTruthy()
+    expect(within(foot()).queryByRole('list', { name: 'Legende' })).toBeNull()
+  })
+
   it("keeps the production when switching the table's view; the matrix reads this week, the table no window", async () => {
     await shell()
     fireEvent.click(await within(rail()).findByRole('button', { name: 'Alle producties' }))
