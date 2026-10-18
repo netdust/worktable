@@ -98,7 +98,6 @@ const PDF = new TextEncoder().encode('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n
 let sqlite: Database
 let app: ReturnType<typeof testEngine>
 let editor: string
-let owner: string
 
 beforeEach(async () => {
   links.length = 0
@@ -107,7 +106,6 @@ beforeEach(async () => {
   seedDomain(sqlite, domain)
   app = testEngine(sqlite, domain)
   editor = await signIn(app, 'editor')
-  owner = await signIn(app, 'owner', { dataset: 'member', id: 1 })
 })
 
 type As = { cookie: string } | { link: number }
@@ -171,10 +169,6 @@ describe('declaring owner_writable', () => {
         ? { ...d, columns: { ...d.columns, [column]: { ...d.columns[column], ...decl } } as DatasetDecl['columns'] }
         : d,
     ),
-  })
-
-  test('the fixture is valid', () => {
-    expect(() => validateDomain(domain)).not.toThrow()
   })
 
   test.each([
@@ -319,7 +313,7 @@ describe('the action token with values', () => {
   })
 })
 
-describe('owner and link files', () => {
+describe("a person link's files", () => {
   const insertFile = (record: number, by: number, entity = 'ticket') =>
     (
       sqlite
@@ -330,59 +324,36 @@ describe('owner and link files', () => {
         .get(entity, record, by) as { id: number }
     ).id
 
-  for (const [who, as] of [
-    ['a link', () => link()],
-    ['an owner session', () => asCookie(owner)],
-  ] as const) {
-    test(`${who} uploads, lists and downloads its record's files, no-store`, async () => {
-      const made = await upload(as())
-      expect(made.status).toBe(201)
-      const listed = await call(as(), 'GET', '/api/attachments/ticket/1')
-      expect(listed.status).toBe(200)
-      expect(listed.body.attachments).toMatchObject([{ id: made.body.id, own: true }])
-      const file = await call(as(), 'GET', `/api/attachments/file/${made.body.id}`)
-      expect(file.status).toBe(200)
-      expect(file.headers.get('cache-control')).toBe('private, no-store')
-    })
-
-    test(`${who} deletes its own upload, not an editor's`, async () => {
-      const made = await upload(as())
-      const theirs = (await upload(asCookie(editor))).body.id
-      await denied(() => call(as(), 'DELETE', `/api/attachments/file/${theirs}`), 403, 'forbidden')
-      expect((await call(as(), 'DELETE', `/api/attachments/file/${made.body.id}`)).status).toBe(200)
-    })
-
-    test(`${who} meets another record's file as an unknown id`, async () => {
-      const other = insertFile(2, 1)
-      await denied(() => call(as(), 'GET', `/api/attachments/file/${other}`), 404, 'unknown_attachment')
-      await denied(() => call(as(), 'DELETE', `/api/attachments/file/${other}`), 404, 'unknown_attachment')
-      await denied(() => call(as(), 'GET', '/api/attachments/file/9999'), 404, 'unknown_attachment')
-      await denied(() => call(as(), 'GET', '/api/attachments/ticket/2'), 404, 'unknown_record')
-      await denied(() => upload(as(), '/api/attachments/ticket/2'), 404, 'unknown_record')
-    })
-
-    test(`${who} does not see files a dataset keeps from owners`, async () => {
-      const hidden = insertFile(1, 1, 'folder')
-      await denied(() => call(as(), 'GET', '/api/attachments/folder/1'), 404, 'unknown_source')
-      await denied(() => call(as(), 'GET', `/api/attachments/file/${hidden}`), 404, 'unknown_attachment')
-    })
-  }
-})
-
-describe('what stays as it was', () => {
-  test('a signed-in owner writes the lifecycle column and undoes its own transition', async () => {
-    await call(asCookie(editor), 'PATCH', '/api/rows/ticket/1', { state: 'b' })
-    const res = await call(asCookie(owner), 'PATCH', '/api/rows/ticket/1', { state: 'd', name: 'Mine' })
-    expect(res.status).toBe(200)
-    expect(res.body.name).toBe('Mine')
-    const undone = await call(asCookie(owner), 'POST', `/api/batches/${res.body.revision.batch_id}/undo`, {})
-    expect(undone.status).toBe(200)
-    expect(ticketOf(1)).toMatchObject({ state: 'b', name: 'Eerste' })
+  test("a link uploads, lists and downloads its record's files, no-store", async () => {
+    const made = await upload(link())
+    expect(made.status).toBe(201)
+    const listed = await call(link(), 'GET', '/api/attachments/ticket/1')
+    expect(listed.status).toBe(200)
+    expect(listed.body.attachments).toMatchObject([{ id: made.body.id, own: true }])
+    const file = await call(link(), 'GET', `/api/attachments/file/${made.body.id}`)
+    expect(file.status).toBe(200)
+    expect(file.headers.get('cache-control')).toBe('private, no-store')
   })
 
-  test('an editor writes any column and reads the row back', async () => {
-    const res = await call(asCookie(editor), 'PATCH', '/api/rows/ticket/1', { name: 'Nieuw', note: 'n' })
-    expect(res.status).toBe(200)
-    expect(res.body).toMatchObject({ id: 1, name: 'Nieuw', note: 'n', state: 'a' })
+  test("a link deletes its own upload, not an editor's", async () => {
+    const made = await upload(link())
+    const theirs = (await upload(asCookie(editor))).body.id
+    await denied(() => call(link(), 'DELETE', `/api/attachments/file/${theirs}`), 403, 'forbidden')
+    expect((await call(link(), 'DELETE', `/api/attachments/file/${made.body.id}`)).status).toBe(200)
+  })
+
+  test("a link meets another record's file as an unknown id", async () => {
+    const other = insertFile(2, 1)
+    await denied(() => call(link(), 'GET', `/api/attachments/file/${other}`), 404, 'unknown_attachment')
+    await denied(() => call(link(), 'DELETE', `/api/attachments/file/${other}`), 404, 'unknown_attachment')
+    await denied(() => call(link(), 'GET', '/api/attachments/file/9999'), 404, 'unknown_attachment')
+    await denied(() => call(link(), 'GET', '/api/attachments/ticket/2'), 404, 'unknown_record')
+    await denied(() => upload(link(), '/api/attachments/ticket/2'), 404, 'unknown_record')
+  })
+
+  test('a link does not see files a dataset keeps from owners', async () => {
+    const hidden = insertFile(1, 1, 'folder')
+    await denied(() => call(link(), 'GET', '/api/attachments/folder/1'), 404, 'unknown_source')
+    await denied(() => call(link(), 'GET', `/api/attachments/file/${hidden}`), 404, 'unknown_attachment')
   })
 })

@@ -108,13 +108,13 @@ Everything else stays minimal: one guard extended rather than a second one, raw-
 | T1 table, routes, guard, headers, undo | `/api/attachments/*`, `writeGuard`, `undoBatch` | engine integration | `packages/engine/test/attachments.test.ts`, `packages/engine/test/route-matrix.test.ts` | `bun test packages/engine/test/attachments.test.ts packages/engine/test/route-matrix.test.ts` | — |
 | T2 stripper | `strip(bytes, mime)` and the upload route | engine unit + integration | `packages/engine/test/strip.test.ts`, `packages/engine/test/attachments.test.ts` | `bun test packages/engine/test/strip.test.ts packages/engine/test/attachments.test.ts` | none; the upload route strips (`attachments.test.ts` › `a photo uploaded with a camera make, a GPS location and a motion-photo trailer is served without any of them`) |
 | T3 theatre + drawer | `/schema` attachments; Drawer render, upload, open, delete, undo | theatre integration, vitest | `packages/theatre/test/attachments.test.ts`, `apps/grid/src/grid/Drawer.test.tsx` | `bun test packages/theatre/test/attachments.test.ts`; `bun run --filter @worktable/grid test` | upload a pdf and a photo, open, delete, undo |
-| T4 link writes | link `PATCH /rows`, `POST /act` values, attachment routes as owner/link, `confineLinkActor` | engine integration | `packages/engine/test/owner-writes.test.ts`, `route-matrix.test.ts` | `bun test packages/engine/test/owner-writes.test.ts packages/engine/test/route-matrix.test.ts` | — |
+| T4 link writes | link `PATCH /rows`, `POST /act` values, attachment routes as owner/link, `confineLinkActor` | engine integration | `packages/engine/test/owner-writes.test.ts` (a link), `attachments.test.ts` (an owner session: "another record's attachment id and an unknown id answer the same 404", "an owner reads its own record’s files but uploads only with owner_writable", "an owner deletes its own upload but not another account's, nor undoes that account's batch", "an owner on a dataset without owner_visible gets 404 on list, upload and download, and no attachments in /schema"), `route-matrix.test.ts` | `bun test packages/engine/test/owner-writes.test.ts packages/engine/test/attachments.test.ts packages/engine/test/route-matrix.test.ts` | — |
 
 The `@e2e` flows of Done-when 1 and 2 are written by `/shakeout` after the review, per the house process.
 
 ## Review Focus
 - Attack 1 (script in an upload): T1 `an svg, an html file and an exe renamed .pdf are 415`, and the header assertions.
-- Attack 3 (guessing ids): T1 `another record's file and an unknown id answer the same 404`, and T4 for owners and links.
+- Attack 3 (guessing ids): T1 `another record's file and an unknown id answer the same 404`, which holds the owner-session case, and T4 for links.
 - Attack 7 (location): T2 `a jpeg's GPS and its trailing motion video are gone, Orientation kept; an unparseable image is refused, not stored`.
 - Attack 8 (mass assignment): T4 `a link PATCH naming another column is 403 naming it`.
 - Attack 10 (the fence): T4 `a link DELETE on rows and a link POST on /actions are 403`.
