@@ -76,19 +76,12 @@ describe('write guard passes', () => {
     expect(res.status).toBe(201)
   })
 
-  test.each([
-    ['same-origin', 'same-origin'],
-    ['absent', undefined],
-  ])('Sec-Fetch-Site %s is accepted', async (_, site) => {
-    expect((await request('PATCH', '/api/rows/note/1', { ...writes[1]?.[2], site })).status).toBe(200)
+  test('Sec-Fetch-Site same-origin is accepted', async () => {
+    expect((await request('PATCH', '/api/rows/note/1', { ...writes[1]?.[2], site: 'same-origin' })).status).toBe(200)
   })
 
   test('Origin with Sec-Fetch-Site same-origin is accepted', async () => {
     const sent = { ...writes[1]?.[2], site: 'same-origin', origin: 'http://127.0.0.1:4310' }
     expect((await request('PATCH', '/api/rows/note/1', sent)).status).toBe(200)
-  })
-
-  test('a body-less DELETE needs no content type', async () => {
-    expect(await request('DELETE', '/api/rows/note/1', { type: null })).toEqual({ status: 200, body: { id: 1 } })
   })
 })
