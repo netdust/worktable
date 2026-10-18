@@ -671,6 +671,8 @@ test.describe('without the space', () => {
     await page.goto('/')
     await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Views' }).getByText('Conflicten')).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: 'Views' }).getByText('Per persoon per dag')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toHaveCount(0)
     await expect(page.getByRole('listbox', { name: 'Producties' })).toHaveCount(0)
     const schema = await page.request.get('/api/schema')

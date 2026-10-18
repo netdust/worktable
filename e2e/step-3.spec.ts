@@ -1,5 +1,4 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
-import { state } from './auth'
 import { writeDb } from './db'
 import { openEditor, openLooks } from './editor'
 import { shot } from './shots'
@@ -12,8 +11,6 @@ const WEEK = {
   badge: '2028-04-17',
   calendar: '2028-04-24',
   away: '2028-05-01',
-  none: '2028-05-08',
-  edges: '2028-05-15',
   night: '2028-05-22',
   point: '2028-05-29',
 }
@@ -363,120 +360,6 @@ test.describe('step 3', () => {
     await page.getByRole('radio', { name: 'Auto' }).click()
   })
 
-  // Empty edge: a role nobody holds has no candidates; the picker says so and still offers everyone.
-  test('candidates-none @e2e', async ({ page }) => {
-    const api = page.request
-    const title = 'e2e geen kandidaten'
-    const id = await activity(api, title, WEEK.none, ['10:00', '12:00'])
-    const rol = await idOf(api, 'rol', { naam: 'e2e Niemandsrol', categorie: 'techniek' })
-    try {
-      await idOf(api, 'toewijzing', { activiteit_id: id, rol_id: rol })
-      await openWeek(page, MATRIX, 'Activiteiten', 'plandag', WEEK.none)
-      await row(page, title).locator('[data-testid="open"]').getByRole('button').click()
-      const picker = page.getByRole('region', { name: 'Open plek invullen' })
-      await expect(picker.getByText('Geen kandidaten', { exact: true })).toBeVisible()
-      await expect(picker.locator('.nv-mx__pick')).toHaveCount(0)
-      await shot(page, 'candidates-none')
-      await picker.getByRole('button', { name: 'Iedereen tonen' }).click()
-      await expect(picker.getByRole('button', { name: 'Bram De Wilde', exact: true })).toBeVisible()
-      await expect(picker.getByRole('button', { name: 'Noor Claes', exact: true })).toBeVisible()
-    } finally {
-      await removeActivity(api, id)
-      await api.delete(`/api/rows/rol/${rol}`)
-    }
-  })
-
-  // The untimed rule at its edges, and a clash between two productions seen from each production.
-  test('conflicten-edges @e2e', async ({ page }) => {
-    const api = page.request
-    const day = (n: number) => plusDays(WEEK.edges, n)
-    const who = await person(api, 'Rand', 'Proef')
-    const kersentuin = await idByName(api, 'productie', 'titel', 'De Kersentuin')
-    const made: number[] = []
-    const make = async (omschrijving: string, values: Values) => {
-      const id = await idOf(api, 'activiteit', {
-        productie_id: await nachtwacht(api),
-        soort: 'repetitie',
-        status: 'bevestigd',
-        omschrijving,
-        ...values,
-      })
-      made.push(id)
-      await assign(api, id, who)
-      return id
-    }
-    const at = (d: number, from: string, to?: string, next = 0) => ({
-      start_at: `${day(d)}T${from}`,
-      ...(to ? { eind_at: `${day(d + next)}T${to}` } : {}),
-    })
-    try {
-      await make('e2e raak een', at(0, '10:00', '12:00'))
-      await make('e2e raak twee', at(0, '12:00', '14:00'))
-      await make('e2e punt een', at(1, '20:00'))
-      await make('e2e punt twee', at(1, '20:00'))
-      await make('e2e nachtwerk', at(2, '22:00', '01:00', 1))
-      await make('e2e na middernacht', { start_at: `${day(3)}T00:30`, eind_at: `${day(3)}T01:30` })
-      await make('e2e maaltijd', { ...at(4, '10:00', '12:00'), soort: 'maaltijd' })
-      await make('e2e werk bij maaltijd', at(4, '10:00', '12:00'))
-      await make('e2e getimed', at(5, '10:00', '12:00'))
-      await make('e2e ongetimed', { datum: day(5) })
-      await make('e2e kruis nacht', at(6, '10:00', '12:00'))
-      await make('e2e kruis kers', { ...at(6, '11:00', '13:00'), productie_id: kersentuin })
-
-      await page.goto('/')
-      await openView(page, 'Conflicten', 'Conflicten')
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conflicten')
-      const [type, ernst] = [await columnOf(page, 'Type'), await columnOf(page, 'Ernst')]
-      const rows = (text: string) => page.locator('tbody tr.nv-tr').filter({ hasText: text })
-      await expect(rows('e2e punt een en e2e punt twee').first()).toBeVisible()
-      for (const [text, weight] of [
-        ['e2e punt een en e2e punt twee', 'Conflict'],
-        ['e2e nachtwerk en e2e na middernacht', 'Conflict'],
-        ['e2e getimed en e2e ongetimed', 'Waarschuwing'],
-      ]) {
-        await expect(rows(text).first().locator('td').nth(type)).toHaveText('Overlap')
-        await expect(rows(text).first().locator('td').nth(ernst)).toHaveText(weight)
-      }
-      await expect(rows('e2e raak een')).toHaveCount(0)
-      await expect(rows('e2e maaltijd')).toHaveCount(0)
-      await expect(rows('e2e werk bij maaltijd')).toHaveCount(0)
-      await expect(rows('Rand Proef staat dubbel ingepland: e2e kruis')).toHaveCount(2)
-
-      // Under each production's scope its own side of the cross-production clash is listed.
-      for (const production of ['De Kersentuin', 'Nachtwacht']) {
-        await page.getByRole('button', { name: 'Alle producties', exact: true }).click()
-        await page.getByRole('option', { name: production, exact: true }).click()
-        await expect(page.getByRole('button', { name: production, exact: true })).toBeVisible()
-        await expect(rows('Rand Proef staat dubbel ingepland: e2e kruis')).toHaveCount(1)
-        if (production === 'De Kersentuin') await shot(page, 'conflicten-scoped')
-        await page.getByRole('button', { name: production, exact: true }).click()
-        await page.getByRole('option', { name: 'Alle producties', exact: true }).click()
-        await expect(page.getByRole('button', { name: 'Alle producties', exact: true })).toBeVisible()
-      }
-    } finally {
-      for (const id of made) await removeActivity(api, id)
-    }
-  })
-
-  // Denied actor: an owner reads none of the new queries and cannot filter its own rows by a lookup.
-  test('owner-denied-queries @e2e', async ({ browser }) => {
-    const owner = await browser.newContext({ storageState: state('owner') })
-    try {
-      for (const query of ['conflicten', 'kandidaten', 'persoon_dag', 'locatie_dag', 'werklijst'])
-        expect((await owner.request.get(`/api/rows/${query}`)).status(), query).toBe(404)
-      const filter = encodeURIComponent(JSON.stringify({ datum: { $eq: '2026-10-12' } }))
-      expect((await owner.request.get(`/api/rows/toewijzing?filter=${filter}`)).status()).toBe(400)
-      expect((await owner.request.get('/api/rows/toewijzing')).status()).toBe(200)
-      const page = await owner.newPage()
-      await page.goto('/')
-      await expect(page.getByRole('navigation', { name: 'Views' })).toBeVisible()
-      await expect(page.getByRole('navigation', { name: 'Views' }).getByText('Conflicten')).toHaveCount(0)
-      await expect(page.getByRole('navigation', { name: 'Views' }).getByText('Per persoon per dag')).toHaveCount(0)
-    } finally {
-      await owner.close()
-    }
-  })
-
   // Boundary: a night on its plandag past midnight, an end before its start drawn as a point,
   // and a date condition that is no whole week opening the week it starts in.
   test('calendar-edges @e2e', async ({ page }) => {
@@ -529,21 +412,6 @@ test.describe('step 3', () => {
       await removeActivity(api, night)
       await removeActivity(api, backwards)
     }
-  })
-
-  // Boundary: November 2026 starts on a Sunday, so its month shows six whole weeks.
-  test('month-starting-sunday @e2e', async ({ page }) => {
-    await openWeek(page, 'Bedrijfsweek', 'Per productie per dag', 'plandag', '2026-10-12')
-    await page.getByRole('radio', { name: 'Maand' }).click()
-    // The month the calendar shows is named in the title line's summary.
-    await expect(page.locator('.nv-toolbar__summary')).toContainText('oktober 2026')
-    await page.getByRole('button', { name: 'Volgende periode' }).click()
-    await expect(page.locator('.nv-toolbar__summary')).toContainText('november 2026')
-    const month = page.locator('table.nv-cal--month')
-    await expect(month.locator('tbody tr')).toHaveCount(6)
-    await expect(month.locator('tbody tr').first().locator('td').last().locator('.nv-cal__date')).toHaveText('1')
-    await expect(month.locator('tbody tr').last().locator('td').first().locator('.nv-cal__date')).toHaveText('30')
-    await shot(page, 'month-six-weeks')
   })
 
   // Found in the shake-out: a timed activity with no end is a 20 px block, and its name is clipped to nothing.

@@ -157,6 +157,14 @@ describe('the calendar', () => {
     shown({ shown: { from: '2026-10-01', to: '2026-10-31' } })
     expect(screen.getByRole('button', { name: /Noor Claes · vergadering Antwerpen/ })).toBeTruthy()
   })
+
+  it('a month from a Sunday the 1st shows six whole weeks, the 1st last in the first and the 30th first in the last', () => {
+    shown({ shown: { from: '2026-11-01', to: '2026-11-30' } })
+    const weeks = document.querySelectorAll('table.nv-cal--month tbody tr')
+    expect(weeks).toHaveLength(6)
+    expect(weeks[0].querySelector('td:last-child .nv-cal__date')?.textContent).toBe('1')
+    expect(weeks[5].querySelector('td:first-child .nv-cal__date')?.textContent).toBe('30')
+  })
 })
 
 describe('a spanning row', () => {

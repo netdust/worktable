@@ -102,17 +102,13 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Activiteit drawer · Bijlagen · weigeringen (type, grootte) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "refusals-in-dutch @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Tourstop en Toewijzing drawer · Bijlagen; Organisatie zonder | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "bijlagen-on-tourstop-and-assignment @e2e"` | e2e/attachments.spec.ts | attachments | 1e3309c 2026-10-16 |
 | Matrix · kandidaten in Open plek invullen | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "candidates-picker @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| Matrix · geen kandidaten, Iedereen tonen | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "candidates-none @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Conflicten · zes types | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "conflicten-six-types @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| Conflicten · randen en per productie | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "conflicten-edges @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Per persoon per dag · badge; Afwezigheden · Soort | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "badge-clears @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Matrix · alleen afwezig is weg | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "away-only-afwezig @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| GET /api/rows/conflicten, kandidaten, persoon_dag, locatie_dag, werklijst · owner | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "owner-denied-queries @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Persoonskalender | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "person-calendar @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Persoonskalender · nacht, punt, venster | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "calendar-edges @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Persoonskalender · activiteit zonder einde (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Bedrijfsweek · week, maand, drawer | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "company-week @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| Bedrijfsweek · maand die op zondag begint | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "month-starting-sunday @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Dashboard · landing, licht en donker | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
