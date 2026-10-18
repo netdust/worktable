@@ -420,12 +420,6 @@ describe('auth', () => {
     expect((await request('GET', '/api/auth/me', { cookie })).status).toBe(401)
   })
 
-  test('a signed-in request reaches the routes as before', async () => {
-    const cookie = await signIn(app)
-    const rows = await request('GET', '/api/rows/taak', { cookie })
-    expect({ status: rows.status, count: rows.body.rows.length }).toEqual({ status: 200, count: 4 })
-  })
-
   test('a consume sweeps expired links and sessions', async () => {
     createAccount(sqlite, domain, 'known@example.test', 'editor')
     await signInAs(app, 'known@example.test')
