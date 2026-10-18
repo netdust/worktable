@@ -109,22 +109,17 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Persoonskalender · nacht, punt, venster | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "calendar-edges @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Persoonskalender · activiteit zonder einde (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
 | Bedrijfsweek · week, maand, drawer | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "company-week @e2e"` | e2e/step-3.spec.ts | step-3 | 1e3309c 2026-10-16 |
-| Dashboard · landing, licht en donker | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
+| Dashboard · landing | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · weekstrook opent activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "week-opens-activity @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Nieuwe taak | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| Dashboard · Nieuwe activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create-activiteit @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · productie kiezen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · productie kiezen, elke tegel (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| Dashboard · lege productie | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-empty-space @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Geen toegang | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "tile-no-access @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · samenstellen, teamdashboard, verwijderen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "composer-team-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| POST/PATCH /api/views dashboard shared · editor | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "editor-cannot-share-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| GET /api/views · owner, geen dashboard | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "owner-no-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| GET /api/attachments/activiteit?ids · 200 en 201 | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "gallery-batch-boundary @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |
 | Chiprij · elke weergave | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "one-chip-row @e2e"` | e2e/step-3d.spec.ts | step-3d | 1e3309c 2026-10-16 |

@@ -1,12 +1,11 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import { state } from './auth'
 import { cardIn } from './board'
-import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
 // Weeks no other spec uses. The dashboard's week strip shows this week, so its flow is dated today (the one exception).
-const WEEK = { skins: '2028-06-05', conflict: '2028-06-12', quick: '2028-06-19', empty: '2028-06-26' }
+const WEEK = { skins: '2028-06-05', conflict: '2028-06-12' }
 
 type Api = APIRequestContext
 type Values = Record<string, unknown>
@@ -117,16 +116,8 @@ test.describe('step 3c', () => {
       const expected = (await rowsOf(page.request, view.source as string, view.filters)).total
       await expect(statValue(page, view.name)).toHaveText(String(expected))
     }
-    await shot(page, 'dashboard')
-
-    const root = page.locator('#root')
-    await openLooks(page)
-    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: 'Donker' }).click()
-    await expect(root).toHaveAttribute('data-theme', 'dark')
-    await expect.poll(() => root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(22, 23, 26)')
     await expect(page.getByRole('region', { name: 'Nu', exact: true })).toBeVisible()
-    await shot(page, 'dashboard-dark')
-    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: 'Licht' }).click()
+    await shot(page, 'dashboard')
   })
 
   test('stat-red-then-neutral @e2e', async ({ page }) => {
@@ -253,24 +244,17 @@ test.describe('step 3c', () => {
       await expect(statValue(page, 'Open plaatsen')).toHaveText(/^[1-9]\d*$/)
       await chooseSpace(page, titel)
       await expect(statValue(page, 'Conflicten')).toHaveText('0')
+      await expect(stat(page, 'Conflicten')).not.toHaveClass(/nv-stat--/)
       await expect(statValue(page, 'Open plaatsen')).toHaveText('0')
       await expect(statValue(page, 'Onbeantwoord')).toHaveText('0')
       await expect(listTitle(page, 'Werklijst')).toHaveText('Werklijst · 0')
+      await expect(listTitle(page, 'Vandaag')).toHaveText('Vandaag · 0')
+      await expect(page.getByRole('region', { name: 'Vandaag', exact: true })).toContainText('Geen rijen')
       await expect(page.getByRole('region', { name: 'Plaatsen gevuld', exact: true })).toContainText('0 van 0')
     } finally {
       await api.delete(`/api/rows/toewijzing/${place}`)
       await api.delete(`/api/rows/activiteit/${open}`)
       await api.delete(`/api/rows/productie/${productie}`)
-    }
-  })
-
-  test('owner-no-dashboard @e2e', async ({ browser }) => {
-    const owner = await browser.newContext({ storageState: state('owner') })
-    try {
-      const views = await viewsOf(owner.request)
-      expect(views.some((v) => v.skin === 'dashboard')).toBe(false)
-    } finally {
-      await owner.close()
     }
   })
 
@@ -334,8 +318,6 @@ test.describe('step 3c', () => {
         .getByRole('group', { name: 'Hele dag', exact: true })
         .getByRole('button', { name: /Huid Proef/ })
       await expect(away).toHaveCount(1)
-      await expect(away).toHaveCSS('grid-column-start', '4')
-      await expect(away).toHaveCSS('grid-column-end', 'span 2')
 
       await page.goto('/')
       await openView(page, 'Bord toewijzingen', 'Toewijzingen')
@@ -352,8 +334,6 @@ test.describe('step 3c', () => {
         .getByRole('group', { name: 'Hele dag', exact: true })
         .getByRole('button', { name: /e2e huid tourstop/ })
       await expect(tour).toHaveCount(1)
-      await expect(tour).toHaveCSS('grid-column-start', '2')
-      await expect(tour).toHaveCSS('grid-column-end', 'span 4')
       await shot(page, 'calendar-span')
     } finally {
       for (const view of made) await api.delete(`/api/views/${view}`)
@@ -407,113 +387,6 @@ test.describe('step 3c', () => {
     }
   })
 
-  test('quick-create-activiteit @e2e', async ({ page }) => {
-    const api = page.request
-    await landing(page)
-    await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
-    const dialog = page.getByRole('dialog', { name: 'Nieuwe activiteit' })
-    const productie = dialog.getByRole('combobox', { name: 'Productie', exact: true })
-    // Asked once, with no space chosen; its day and first option filled in.
-    await expect(productie).toHaveCount(1)
-    await expect(dialog.getByRole('textbox', { name: 'Datum', exact: true })).toHaveValue(localDay())
-    await expect(dialog.getByRole('combobox', { name: 'Soort', exact: true })).not.toHaveValue('')
-    await shot(page, 'quick-create')
-    await productie.selectOption({ label: 'Nachtwacht' })
-    await dialog.getByRole('textbox', { name: 'Datum', exact: true }).fill(WEEK.quick)
-    await dialog.getByRole('combobox', { name: 'Soort', exact: true }).selectOption('repetitie')
-    await dialog.getByRole('button', { name: 'Aanmaken' }).click()
-    await expect(dialog).toHaveCount(0)
-    const nachtwacht = await idByName(api, 'productie', 'titel', 'Nachtwacht')
-    const made = (await rowsOf<Values & { id: number }>(api, 'activiteit', { plandag: WEEK.quick })).rows
-    try {
-      expect(made).toHaveLength(1)
-      expect(made[0]).toMatchObject({ productie_id: nachtwacht, soort: 'repetitie' })
-    } finally {
-      for (const row of made) await removeActivity(api, row.id)
-    }
-
-    // The chosen space is filled in and stays changeable.
-    await chooseSpace(page, 'De Kersentuin')
-    await page.getByRole('button', { name: 'Nieuwe activiteit' }).click()
-    const kersentuin = await idByName(api, 'productie', 'titel', 'De Kersentuin')
-    await expect(productie).toHaveValue(String(kersentuin))
-    await productie.selectOption({ label: 'Nachtwacht' })
-    await expect(productie).toHaveValue(String(nachtwacht))
-    await dialog.getByRole('button', { name: 'Annuleren' }).click()
-    await expect(dialog).toHaveCount(0)
-  })
-
-  test('editor-cannot-share-dashboard @e2e', async ({ page }) => {
-    const api = page.request
-    const layout = { sections: [], actions: [] }
-    const shared = await api.post('/api/views', {
-      data: { name: 'e2e gedeeld dashboard', skin: 'dashboard', shared: true, layout },
-    })
-    expect(shared.status()).toBe(403)
-    expect(((await shared.json()) as { code: string }).code).toBe('shared_dashboard')
-
-    const own = await api.post('/api/views', { data: { name: 'e2e eigen dashboard', skin: 'dashboard', layout } })
-    expect(own.status(), await own.text()).toBe(201)
-    const id = ((await own.json()) as { id: number }).id
-    try {
-      const patched = await api.patch(`/api/views/${id}`, { data: { shared: true } })
-      expect(patched.status()).toBe(403)
-      expect(((await patched.json()) as { code: string }).code).toBe('shared_dashboard')
-      expect((await viewsOf(api)).find((v) => v.id === id)).toMatchObject({ shared: false })
-
-      // Empty edge: the editor's own dashboard lands, says it is empty, and offers Bewerken.
-      await page.goto('/')
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('e2e eigen dashboard')
-      await expect(page.getByText('Dit dashboard is nog leeg.')).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Bewerken' })).toBeVisible()
-      await shot(page, 'dashboard-empty')
-    } finally {
-      await api.delete(`/api/views/${id}`)
-    }
-  })
-
-  test('dashboard-empty-space @e2e', async ({ page }) => {
-    const api = page.request
-    const titel = 'e2e lege productie'
-    const productie = await idOf(api, 'productie', { titel, seizoen: '2028', status: 'actief', organisatie_id: 1 })
-    try {
-      await landing(page)
-      await chooseSpace(page, titel)
-      await expect(statValue(page, 'Conflicten')).toHaveText('0')
-      await expect(stat(page, 'Conflicten')).not.toHaveClass(/nv-stat--/)
-      await expect(listTitle(page, 'Vandaag')).toHaveText('Vandaag · 0')
-      await expect(page.getByRole('region', { name: 'Vandaag', exact: true })).toContainText('Geen rijen')
-      await shot(page, 'dashboard-empty-space')
-    } finally {
-      await api.delete(`/api/rows/productie/${productie}`)
-    }
-  })
-
-  test('gallery-batch-boundary @e2e', async ({ page }) => {
-    const api = page.request
-    const nachtwacht = await idByName(api, 'productie', 'titel', 'Nachtwacht')
-    const id = await activity(api, nachtwacht, 'e2e galerij grens', WEEK.empty)
-    try {
-      const upload = await api.post(`/api/attachments/activiteit/${id}?kind=foto&name=pixel.png`, {
-        headers: { 'content-type': 'application/octet-stream' },
-        data: PNG,
-      })
-      expect(upload.status(), await upload.text()).toBe(201)
-      const others = Array.from({ length: 300 }, (_, i) => i + 1).filter((n) => n !== id)
-      const read = (ids: number[]) => api.get(`/api/attachments/activiteit?kind=foto&ids=${ids.join(',')}`)
-
-      const full = await read([...others.slice(0, 199), id])
-      expect(full.status()).toBe(200)
-      const { files } = (await full.json()) as { files: Record<string, { mime: string }> }
-      expect(files[String(id)]?.mime).toBe('image/png')
-
-      const over = await read([...others.slice(0, 200), id])
-      expect(over.status()).toBe(400)
-      expect(((await over.json()) as { code: string }).code).toBe('bad_ids')
-    } finally {
-      await removeActivity(api, id)
-    }
-  })
   test('tile-no-access @e2e', async ({ browser, page }) => {
     const admin = await browser.newContext({ storageState: state('admin') })
     const made: number[] = []

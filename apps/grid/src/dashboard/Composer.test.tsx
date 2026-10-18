@@ -156,6 +156,7 @@ describe('the composer', () => {
 
   it('an empty dashboard offers Bewerken and a new section', () => {
     show(dashboard({}, []))
+    expect(screen.getByText('Dit dashboard is nog leeg.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sectie toevoegen' }))
     expect(screen.getByRole('group', { name: /^Sectie/ })).toBeTruthy()
