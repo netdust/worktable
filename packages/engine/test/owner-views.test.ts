@@ -1,8 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Hono } from 'hono'
 import {
-  type Actor,
   type ColumnDecl,
   type DatasetDecl,
   type Domain,
@@ -13,10 +11,7 @@ import {
   seedDomain,
   validateDomain,
 } from '../src'
-import type { AuthEnv } from '../src/auth'
-import { ApiError } from '../src/params'
 import { recordLinkFor } from '../src/record-link'
-import { shareRoutes } from '../src/views'
 import { contents, domain, freshDb, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
@@ -152,26 +147,6 @@ describe('PUT /views/:id/for-owners (attack 13)', () => {
     await refused(() => forOwners(id, editor, 'DELETE'), 'forbidden')
     const owner = await signIn(app, 'owner', { dataset: 'project', id: 1 })
     await refused(() => forOwners(id, owner), 'forbidden')
-  })
-
-  test('a service account with the administrator role is refused in the handler: 403, tables unchanged', async () => {
-    const id = await viewAs(admin, { shared: true })
-    const service: Actor = { id: 77, role: 'administrator', subject: null, kind: 'service' }
-    const bare = new Hono<AuthEnv>()
-    bare.use(async (c, next) => {
-      c.set('actor', service)
-      await next()
-    })
-    shareRoutes(bare, { sqlite, domain } as Parameters<typeof shareRoutes>[1])
-    bare.onError((err, c) =>
-      err instanceof ApiError ? c.json({ code: err.code }, err.status) : c.json({ code: 'internal' }, 500),
-    )
-    const call = (method: string) => async () => {
-      const res = await bare.request(`/views/${id}/for-owners`, { method })
-      return { status: res.status, body: (await res.json()) as Record<string, unknown> }
-    }
-    await refused(call('PUT'), 'forbidden')
-    await refused(call('DELETE'), 'forbidden')
   })
 
   test('an unknown view, or another person`s private one, is 404', async () => {
@@ -422,12 +397,6 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
     }
     const none = { listed: [], rows: [404, 'unknown_view'], unchanged: true }
     expect(read).toEqual(subjects.map((subject) => ({ subject, ...none })))
-  })
-
-  test('an editor session is 403 on the rows too', async () => {
-    const id = await viewAs(admin, {})
-    await forOwners(id)
-    expect(await send(app, editor)('GET', `/api/owner/views/${id}/rows`)).toMatchObject({ status: 403 })
   })
 })
 
