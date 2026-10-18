@@ -64,7 +64,7 @@ const withOwnedItem = (): Domain => ({
   datasets: domain.datasets.map((d) => (d.name === 'item' ? { ...d, owners: { owner: 'team_id' } } : d)),
 })
 
-describe('a lookup never reaches a view for owners or a public view', () => {
+describe("a query declaration's lookups are inert", () => {
   test('lookups on a query declaration are not served: neither in /schema nor in its rows', async () => {
     const { editor } = await engineOf(domain)
     const schema = await editor('GET', '/api/schema')

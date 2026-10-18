@@ -79,6 +79,25 @@ describe('undo denials', () => {
     await denied(() => undo(asB, key), 403, 'forbidden')
   })
 
+  test("another account's attachment batch is 403 forbidden and the file stays", async () => {
+    const file = '%PDF-1.4 batch'
+    const uploaded = await app.request('/api/attachments/project/1?kind=doc&name=a.pdf', {
+      method: 'POST',
+      headers: {
+        host: '127.0.0.1:4310',
+        cookie: await signIn(app),
+        'content-type': 'application/octet-stream',
+        'content-length': String(file.length),
+      },
+      body: file,
+    })
+    expect(uploaded.status).toBe(201)
+    const key = ((await uploaded.json()) as { revision: { batch_id: string } }).revision.batch_id
+    const files = contents(sqlite, 'attachment')
+    await denied(() => undo(asB, key), 403, 'forbidden')
+    expect(contents(sqlite, 'attachment')).toEqual(files)
+  })
+
   test('B edits after A: A undo is 409 changed_since naming the column, and B keeps its value', async () => {
     const key = await edit(asA, 'note/1', { tekst: 'ander' })
     await edit(asB, 'note/1', { tekst: 'van B' })

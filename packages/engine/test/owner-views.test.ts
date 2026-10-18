@@ -406,6 +406,22 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
     await forOwners(gone)
     await send(app, admin)('DELETE', `/api/views/${gone}`, { type: null })
     expect(await asLink(`/api/owner/views/${gone}/rows`)).toMatchObject({ status: 404 })
+
+    const live = await viewAs(admin, {})
+    await forOwners(live)
+    expect((await asLink('/api/owner/views')).body.views.map((v: { id: number }) => v.id)).toEqual([live])
+    // No subject, and a subject on a dataset the view's owner column does not point at.
+    const subjects = [null, { dataset: 'taak', id: 1 }]
+    const read = []
+    for (const subject of subjects) {
+      const outside = send(app, await signIn(app, 'owner', subject))
+      const before = tables()
+      const listed = (await outside('GET', '/api/owner/views')).body.views
+      const rows = await outside('GET', `/api/owner/views/${live}/rows`)
+      read.push({ subject, listed, rows: [rows.status, rows.body.code], unchanged: Bun.deepEquals(tables(), before) })
+    }
+    const none = { listed: [], rows: [404, 'unknown_view'], unchanged: true }
+    expect(read).toEqual(subjects.map((subject) => ({ subject, ...none })))
   })
 
   test('an editor session is 403 on the rows too', async () => {
