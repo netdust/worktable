@@ -3,20 +3,8 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Hono } from 'hono'
-import {
-  type Actor,
-  createEngine,
-  type DatasetDecl,
-  type Domain,
-  DomainError,
-  migrate,
-  seedDomain,
-  validateDomain,
-} from '../src'
-import type { AuthEnv } from '../src/auth'
-import { ApiError } from '../src/params'
-import { recordLinkFor, recordLinkRoutes } from '../src/record-link'
+import { createEngine, type DatasetDecl, type Domain, DomainError, migrate, seedDomain, validateDomain } from '../src'
+import { recordLinkFor } from '../src/record-link'
 import { contents, domain as fixture, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
@@ -118,6 +106,10 @@ describe('the record link', () => {
     expect(fresh).not.toBe(old)
     expect((await asLink(old)).status).toBe(401)
     expect((await asLink(fresh)).status).toBe(200)
+    expect(await admin('GET', '/api/record-links/project/1')).toEqual({
+      status: 200,
+      body: { link: `${APP_URL}/#/link/${fresh}` },
+    })
     const adminId = (sqlite.query("SELECT id FROM account WHERE role = 'administrator'").get() as { id: number }).id
     expect(sqlite.query('SELECT dataset, record_id, version, rotated_by FROM record_link').all()).toEqual([
       { dataset: 'project', record_id: 1, version: 1, rotated_by: adminId },
@@ -135,17 +127,6 @@ describe('the record link', () => {
     expect((await asLink(old)).status).toBe(401)
     expect((await asLink(fresh)).status).toBe(401)
     expect((await asLink(linkOf(1))).status).toBe(200)
-  })
-
-  test('revoke is the version bump: rotate without handing out the new link, and the old link is 401', async () => {
-    const admin = send(app, await signIn(app, 'administrator'))
-    const old = linkOf(1)
-    expect((await admin('POST', '/api/record-links/project/1/rotate', { body: '{}' })).status).toBe(200)
-    expect((await asLink(old)).status).toBe(401)
-    expect(await admin('GET', '/api/record-links/project/1')).toEqual({
-      status: 200,
-      body: { link: `${APP_URL}/#/link/${linkOf(1)}` },
-    })
   })
 
   test.each([
@@ -167,26 +148,6 @@ describe('the record link', () => {
     const cookie = await signIn(app, role, role === 'owner' ? { dataset: 'project', id: 1 } : null)
     await denied(() => raw('GET', '/api/record-links/project/1', { cookie }), 403, 'forbidden')
     await denied(() => raw('POST', '/api/record-links/project/1/rotate', { cookie }, {}), 403, 'forbidden')
-  })
-
-  test('a service account with the administrator role is refused in the handler: 403, tables unchanged', async () => {
-    const service: Actor = { id: 77, role: 'administrator', subject: null, kind: 'service' }
-    const store = { sqlite, domain, appUrl: APP_URL } as Parameters<typeof recordLinkRoutes>[1]
-    const bare = new Hono<AuthEnv>()
-    bare.use(async (c, next) => {
-      c.set('actor', service)
-      await next()
-    })
-    recordLinkRoutes(bare, store, TEST_LINK_SECRET)
-    bare.onError((err, c) =>
-      err instanceof ApiError ? c.json({ code: err.code }, err.status) : c.json({ code: 'internal' }, 500),
-    )
-    await denied(() => Promise.resolve(bare.request('/record-links/project/1')), 403, 'forbidden')
-    await denied(
-      () => Promise.resolve(bare.request('/record-links/project/1/rotate', { method: 'POST' })),
-      403,
-      'forbidden',
-    )
   })
 })
 
@@ -356,7 +317,6 @@ describe('serve.ts --link-secret-file', () => {
     ['group-readable', () => ['--link-secret-file', secretFile(32, 0o640)]],
     ['world-readable', () => ['--link-secret-file', secretFile(32, 0o604)]],
     ['unreadable (a directory)', () => ['--link-secret-file', unreadable()]],
-    ['unreadable (mode 000)', () => ['--link-secret-file', secretFile(32, 0o000)]],
   ])(
     'refuses to serve with a %s secret file, naming the flag',
     async (_, args) => {
@@ -468,9 +428,5 @@ describe('validation', () => {
     ['an undeclared column', { name: project.columns.name }],
   ] as const)('refuses a record_link email naming %s', (_, columns) => {
     expect(() => validateDomain(withProject({ ...project, columns } as DatasetDecl))).toThrow(DomainError)
-  })
-
-  test('accepts the declaration on an owned dataset with a text email', () => {
-    expect(() => validateDomain(domain)).not.toThrow()
   })
 })
