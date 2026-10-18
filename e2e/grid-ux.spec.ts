@@ -671,6 +671,8 @@ test.describe('without the space', () => {
     await page.goto('/')
     const rail = page.getByRole('navigation', { name: 'Views' })
     await expect(rail).toBeVisible()
+    // The rail marks the open view only once the saved views are in, so the absences below are read after them.
+    await expect(rail.locator('[aria-current="page"]')).toHaveCount(1)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Overzicht')
     await expect(rail.getByRole('group', { name: 'Dashboard' })).toHaveCount(0)

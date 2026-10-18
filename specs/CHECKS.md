@@ -16,7 +16,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dagplanning · redo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-redo-refused @e2e"` | e2e/step-1.spec.ts | step-1 | 1e3309c 2026-10-16 |
 | Theme · density | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "dark-and-density @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Production switcher | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "switch-production @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
-| Production switcher · owner | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "owner-has-no-switcher @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
+| Owner · geen productiekiezer, geen query, geen dashboard | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "owner-has-no-switcher @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Fiche grid (no space, no facts) | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "fiche-renders-as-before @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Rail tree | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "tree-fold-and-hover @e2e"` | e2e/grid-ux.spec.ts | grid-ux | 1e3309c 2026-10-16 |
 | Rail tree | e2e | `bunx playwright test e2e/rail-tree.spec.ts --grep "tree-scrolls-in-rail @e2e"` | e2e/rail-tree.spec.ts | grid-ux | 1e3309c 2026-10-16 |
@@ -116,7 +116,7 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Nieuwe taak | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · productie kiezen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
-| Dashboard · productie kiezen, elke tegel (test.fail tot de fix) | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
+| Dashboard · productie kiezen, elke tegel | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · Geen toegang | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "tile-no-access @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Dashboard · samenstellen, teamdashboard, verwijderen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "composer-team-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
 | Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | 1e3309c 2026-10-16 |
