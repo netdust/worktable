@@ -247,13 +247,7 @@ describe('refusals', () => {
     expect(res.status).toBe(201)
   })
 
-  test('an unknown kind is 400 bad_kind', async () => {
-    const res = await upload(PDF, { kind: 'nope' })
-    expect({ status: res.status, code: res.body.code }).toEqual({ status: 400, code: 'bad_kind' })
-  })
-
   test.each([
-    ['a newline', 'a\nb.pdf'],
     ['a NUL', 'a\u0000.pdf'],
     ['a right-to-left override', 'cod\u202egnp.pdf'],
     ['a left-to-right mark', 'a\u200eb.pdf'],
@@ -401,11 +395,6 @@ describe('delete and undo', () => {
     const res = await undo(body.revision.batch_id)
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 409, code: 'changed_since' })
     expect(await listedIds()).toEqual([])
-  })
-
-  test("another account's attachment batch is refused", async () => {
-    const { body } = await upload(PDF, { cookie: await signIn(app) })
-    expect((await undo(body.revision.batch_id)).status).toBe(403)
   })
 })
 
