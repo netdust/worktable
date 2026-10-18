@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserContext } from '@playwright/test'
 
@@ -58,15 +58,6 @@ export function addFixtureViews(at: Instance): void {
   })
   if (run.error || run.signal || run.status !== 0)
     throw new Error(`fixture views failed: ${run.error?.message ?? run.stderr}`)
-}
-
-export const SERVICE = { name: 'e2e-agent', role: 'editor', token: 'e2e/.tmp/service-token' }
-
-/** Creates the service account and keeps its token, shown once, in a file only its owner reads. */
-export function createService(at: Instance): void {
-  const token = cli(at, ['--create-service', SERVICE.name, '--role', SERVICE.role], '--create-service').trim()
-  writeFileSync(SERVICE.token, `${token}\n`, { mode: 0o600 })
-  chmodSync(SERVICE.token, 0o600)
 }
 
 async function linkFor(outbox: string, email: string, before: string[]): Promise<string> {
