@@ -2151,7 +2151,8 @@ describe('the add button on a calendar', () => {
     render(<App />)
     await screen.findByRole('heading', { level: 1, name: 'Persoonskalender' })
     expect(screen.queryByRole('button', { name: /^Nieuw/ })).toBeNull()
-    expect(screen.queryByText('Alleen lezen')).toBeNull()
+    expect(document.querySelector('.nv-toolbar__note--hint')).toBeNull()
+    expect(screen.queryByText(/alleen-lezen/i)).toBeNull()
     window.location.hash = ''
   })
 })

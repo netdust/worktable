@@ -254,6 +254,12 @@ describe('one chip row for every skin', () => {
     expect(countOn('gallery', { pictures: 1 })).toBe('12 rijen · 1 met beeld')
   })
 
+  it('keeps the count on a view with no date, where no period shows', () => {
+    renderNl(<Bar />)
+    expect(screen.queryByRole('radiogroup', { name: 'Periode' })).toBeNull()
+    expect(document.querySelector('.nv-bar__count')?.textContent).toBe('3 rijen')
+  })
+
   it('shows Kolommen on every skin that reports its fields, never on a matrix', () => {
     for (const type of ['grid', 'board', 'gallery', 'calendar', 'timeline'] as const) expect(rowFor(type).found, type).toContain('columns')
     expect(rowFor('matrix').found).not.toContain('columns')
@@ -267,6 +273,11 @@ describe('one chip row for every skin', () => {
     expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Productie', 'Tourstop', 'Geen'])
     click(within(dialog).getByRole('button', { name: 'Geen' }))
     expect(chosen).toBeNull()
+    cleanup()
+    renderNl(<ChipBar {...barOf({ view: skins.calendar as never, model: activity, layout: { ...layout, group: null }, onLayout: () => undefined, scope: null, told, period })} />)
+    click(screen.getByRole('button', { name: 'Groep: geen' }))
+    const ungrouped = await screen.findByRole('dialog', { name: 'Groeperen' })
+    expect(within(ungrouped).getByRole('button', { name: 'Geen' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('steps the period, opens today, and toggles a lit chip off where the skin shows every date', () => {

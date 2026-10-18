@@ -112,6 +112,7 @@ test.describe('step 3d', () => {
       await expect(matrixCell).toBeVisible()
       await expect(root).toHaveAttribute('data-lines', 'on')
       const withLines = await ownLines()
+      expect(withLines).not.toBe('0px 0px')
       await openLooks(page)
       await page.getByRole('radiogroup', { name: 'Rasterlijnen' }).getByRole('radio', { name: 'Uit' }).click()
       await expect(root).toHaveAttribute('data-lines', 'off')

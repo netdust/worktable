@@ -22,12 +22,12 @@ const row = (id: number, title: string, state: string | null): Row => ({ id, tit
 afterEach(cleanup)
 
 describe('the board', () => {
-  it('puts cards in the column of their option, in option order, with Geen last, and tells the title line how many columns; a card opens its row', () => {
+  it('puts cards in the column of their option, in option order, with Geen last, and tells the title line how many columns; a card opens its row', async () => {
     const onShown = vi.fn()
     render(<Board view={view} layout={defaults(view)} model={model} models={{ toewijzing: model }} rows={[row(1, 'Lotte', 'bevestigd'), row(2, 'Bram', 'open'), row(3, 'Naam', null)]} column="state" onShown={onShown} />)
     const columns = screen.getAllByRole('region').map((list) => list.getAttribute('aria-label'))
     expect(columns).toEqual(['Open', 'Voorlopig', 'Bevestigd', 'Geen'])
-    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ columns: 4 }))
+    await waitFor(() => expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ columns: 4 })))
     expect(within(screen.getByRole('region', { name: 'Bevestigd' })).getByRole('button', { name: /Lotte/ })).toBeTruthy()
     expect(within(screen.getByRole('region', { name: 'Geen' })).getByRole('button', { name: /Naam/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Bram/ }))
@@ -155,7 +155,8 @@ describe('the gallery card', () => {
     expect(screen.getByRole('button', { name: /Zonnewende/ }).querySelector('.nv-gallery__mark')?.textContent).toBe('Zo')
     expect((card.querySelector('.nv-gallery__blank') as HTMLElement).style.getPropertyValue('--s')).toBe('var(--color-success-fg)')
     expect(card.textContent).toContain('Bevestigd')
-    expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 3, groups: null, cut: false, pictures: 1 }))
+    // The count is told from an effect after the picture commits, so it can trail the img.
+    await waitFor(() => expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 3, groups: null, cut: false, pictures: 1 })))
   })
 })
 
