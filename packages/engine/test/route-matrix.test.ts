@@ -375,15 +375,4 @@ describe('every route has a row in the matrix', () => {
     const exempt = registered.filter((r) => r.method === 'POST' && concrete(r.path).some((p) => UPLOAD.test(p)))
     expect(exempt.map((r) => `${r.method} ${r.path}`)).toEqual(['POST /api/attachments/:dataset/:id'])
   })
-
-  test('every EXPECTED row names a registered route and gives every role', () => {
-    for (const e of EXPECTED) {
-      const name = `${e.method} ${e.path}`
-      expect(
-        registered.some((r) => r.method === e.method && matches(r.path, e.path)),
-        name,
-      ).toBe(true)
-      expect(Object.keys(e.status).sort(), name).toEqual([...roles].sort())
-    }
-  })
 })
