@@ -165,15 +165,17 @@ describe("a flagged place in the timeline's drawer", () => {
 
   it('offers "Iemand anders kiezen" beside Negeren on the place the flag marks, with the page\'s place writer', async () => {
     api.rows.mockResolvedValue({ rows: [{ id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 1, assignment_id: 11, weight: 'clash' } }], total: 1 })
+    const places = vi.fn(() => vi.fn())
     render(
       <SchemaContext.Provider value={served}>
         <Timeline view={timeline} model={activity} models={served.models} rows={[repetitie]} cal={cal} shown={{ from: '2030-01-07', to: '2030-01-13' }} lane={null}
-          layout={defaults(timeline)} places={() => vi.fn()} />
+          layout={defaults(timeline)} places={places} />
       </SchemaContext.Provider>,
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Repetitie/ }))
     const band = await within(screen.getByRole('complementary', { name: 'Repetitie' })).findByRole('alert')
     expect([...band.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Negeren'])
+    expect(places).toHaveBeenCalledWith('activity', 1)
   })
 })

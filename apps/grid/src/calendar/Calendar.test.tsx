@@ -211,10 +211,11 @@ describe("a flagged place in the calendar's own drawer", () => {
   } as unknown as Schema
   const calendar = { key: 'k', label: 'Kalender', table: 'activity', model: 'activity', type: 'calendar', calendar: cal } as unknown as View
   const holding = (target: number, title: string): Row => ({ id: 1, title: 'Repetitie', status: '', fields: { plandag: '2030-01-08', people: [{ id: 11, target, title, state: null }] } })
+  const places = vi.fn(() => vi.fn())
   const sheet = (row: Row) => (
     <SchemaContext.Provider value={served}>
       <Calendar view={calendar} model={activity} models={served.models} rows={[row]} cal={cal} shown={{ from: '2030-01-07', to: '2030-01-13' }} lane={null}
-        layout={defaults(calendar)} places={() => vi.fn()} />
+        layout={defaults(calendar)} places={places} />
     </SchemaContext.Provider>
   )
 
@@ -227,6 +228,7 @@ describe("a flagged place in the calendar's own drawer", () => {
     fireEvent.click(screen.getByRole('button', { name: /Repetitie/ }))
     const band = await within(screen.getByRole('complementary', { name: 'Repetitie' })).findByRole('alert')
     expect([...band.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Negeren'])
+    expect(places).toHaveBeenCalledWith('activity', 1)
 
     // A pick writes the place and the record is read again: the drawer shows who holds it now.
     rerender(sheet(holding(7, 'Noor Janssens')))
