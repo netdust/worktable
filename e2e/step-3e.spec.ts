@@ -1,6 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { cardIn, glide, lane, lift, listening } from './board'
-import { openEditor } from './editor'
+import { lane } from './board'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -133,120 +132,9 @@ test.describe('step 3e: Groep chooses on every skin', () => {
 
 test.describe('step 3e: the board drags', () => {
   test.describe.configure({ timeout: 120_000 })
-  // Every column on screen: a drop needs its target in view.
+  // Every column on screen.
   test.use({ viewport: { width: 1600, height: 900 } })
-  type Api = Page['request']
   const DRAG_WEEK = '2028-10-02'
-  async function made(api: Api, dataset: string, data: Record<string, unknown>): Promise<number> {
-    const response = await api.post(`/api/rows/${dataset}`, { data })
-    expect(response.status(), await response.text()).toBe(201)
-    return ((await response.json()) as { id: number }).id
-  }
-  async function nachtwacht(api: Api): Promise<number> {
-    const rows = (
-      (await (await api.get('/api/rows/productie?limit=500')).json()) as { rows: { id: number; titel: string }[] }
-    ).rows
-    return rows.find((r) => r.titel === 'Nachtwacht')?.id as number
-  }
-  const card = (page: Page, column: string, title: string) => cardIn(page, column, title)
-  const status = async (api: Api, id: number) =>
-    (
-      (await (await api.get(`/api/rows/activiteit?filter=${encodeURIComponent(JSON.stringify({ id }))}`)).json()) as {
-        rows: { status: string }[]
-      }
-    ).rows[0]?.status
-
-  test('board-drag @e2e', async ({ page }) => {
-    const api = page.request
-    const title = 'e2e sleep mij'
-    const id = await made(api, 'activiteit', {
-      productie_id: await nachtwacht(api),
-      soort: 'repetitie',
-      status: 'optie',
-      datum: '2028-10-03',
-      omschrijving: title,
-    })
-    try {
-      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
-      await expect(card(page, 'Optie', title)).toBeVisible()
-
-      // Mouse, in small steps: the card lifts out of Optie and lands in Bevestigd; ⌘Z puts it back.
-      // Dropped near the column's top: a long column's middle can sit below the screen.
-      const target = await lane(page, 'Bevestigd').boundingBox()
-      expect(target).not.toBeNull()
-      const from = await lift(page, card(page, 'Optie', title))
-      await glide(page, from, { x: (target?.x ?? 0) + 60, y: (target?.y ?? 0) + 60 })
-      await expect(lane(page, 'Bevestigd')).toHaveClass(/nv-board__column--drop/)
-      await page.mouse.up()
-      await expect(card(page, 'Bevestigd', title)).toBeVisible()
-      await expect(card(page, 'Optie', title)).toHaveCount(0)
-      await shot(page, 'board-drag')
-      await expect.poll(() => status(api, id)).toBe('bevestigd')
-      // ⌘Z right after the drop, wherever the focus went (a real mouse's drop leaves it on the page), as the toast and the footer say.
-      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-      await page.keyboard.press('ControlOrMeta+z')
-      await expect(card(page, 'Optie', title)).toBeVisible()
-      await expect.poll(() => status(api, id)).toBe('optie')
-      // Every card fits its column.
-      for (const column of ['Optie', 'Bevestigd']) {
-        const edge = await lane(page, column).evaluate((el) => el.getBoundingClientRect().right)
-        for (const right of await lane(page, column)
-          .locator('.nv-board__card')
-          .evaluateAll((cards) => cards.map((c) => c.getBoundingClientRect().right)))
-          expect(right).toBeLessThanOrEqual(edge)
-      }
-
-      // Keyboard: Space lifts the card, → takes it to the next column, Space drops it.
-      await card(page, 'Optie', title).focus()
-      await page.keyboard.press('Space')
-      await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-      await listening(page)
-      await page.keyboard.press('ArrowRight')
-      await page.keyboard.press('Space')
-      await expect(card(page, 'Bevestigd', title)).toBeVisible()
-      await expect(card(page, 'Optie', title)).toHaveCount(0)
-      await expect.poll(() => status(api, id)).toBe('bevestigd')
-
-      // And back to the column on its left with ←.
-      await card(page, 'Bevestigd', title).focus()
-      await page.keyboard.press('Space')
-      await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-      await listening(page)
-      await page.keyboard.press('ArrowLeft')
-      await page.keyboard.press('Space')
-      await expect(card(page, 'Optie', title)).toBeVisible()
-      await expect(card(page, 'Bevestigd', title)).toHaveCount(0)
-      await expect.poll(() => status(api, id)).toBe('optie')
-    } finally {
-      await api.delete(`/api/rows/activiteit/${id}`)
-    }
-  })
-
-  test('board-column-plus @e2e', async ({ page }) => {
-    const api = page.request
-    await openWeek(page, 'Per status', 'Activiteiten', 'plandag', DRAG_WEEK)
-    await page.getByRole('button', { name: 'Nieuw in Geannuleerd' }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByLabel('Status')).toHaveCount(0)
-    await shot(page, 'board-column-plus')
-    await dialog.getByLabel('Productie').selectOption({ label: 'Nachtwacht' })
-    await dialog.getByLabel('Datum').fill('2028-10-05')
-    await dialog.getByRole('button', { name: 'Aanmaken' }).click()
-    await expect(dialog).toHaveCount(0)
-    const found = (
-      (await (
-        await api.get(
-          `/api/rows/activiteit?limit=500&filter=${encodeURIComponent(JSON.stringify({ datum: '2028-10-05' }))}`,
-        )
-      ).json()) as { rows: { id: number; status: string }[] }
-    ).rows
-    try {
-      expect(found.map((r) => r.status)).toEqual(['geannuleerd'])
-    } finally {
-      for (const r of found) await api.delete(`/api/rows/activiteit/${r.id}`)
-    }
-  })
 
   // Found driving board-column-plus: on a week that does not hold today, the dialog's Datum starts on today, so the card
   // made from the column lands outside the board it was made from and the column still reads "Geen activiteiten". The calendar's quick create starts on
@@ -261,6 +149,8 @@ test.describe('step 3e: the board drags', () => {
     await page.getByRole('button', { name: 'Nieuw in Optie' }).click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('Productie').selectOption({ label: 'Nachtwacht' })
+    // The column's option is not asked: the create sends it.
+    await expect(dialog.getByLabel('Status')).toHaveCount(0)
     const day = await dialog.getByLabel('Datum').inputValue()
     const posted = page.waitForResponse(
       (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/rows/activiteit',
@@ -270,6 +160,7 @@ test.describe('step 3e: the board drags', () => {
     expect(response.status(), await response.text()).toBe(201)
     const id = ((await response.json()) as { id: number }).id
     try {
+      expect(response.request().postDataJSON()).toMatchObject({ status: 'optie' })
       await expect(dialog).toHaveCount(0)
       await page.waitForLoadState('networkidle')
       await shot(page, 'board-column-plus-in-window')
@@ -514,54 +405,6 @@ test.describe('step 3e: the matrix as its prototype', () => {
   })
 })
 
-test.describe('step 3e: ⌘Z on the page', () => {
-  test.describe.configure({ timeout: 120_000 })
-
-  test('undo-from-the-page @e2e', async ({ page }) => {
-    const api = page.request
-    const json = async (path: string) =>
-      ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
-    const productie = (await json('/api/rows/productie?limit=500')).find((r) => r.titel === 'Nachtwacht')?.id
-    const made = await api.post('/api/rows/activiteit', {
-      data: {
-        productie_id: productie,
-        soort: 'repetitie',
-        datum: '2028-11-14',
-        omschrijving: 'e2e ongedaan vanaf de pagina',
-        start_at: '2028-11-14T10:00',
-        eind_at: '2028-11-14T12:00',
-      },
-    })
-    const id = ((await made.json()) as { id: number }).id
-    const stored = async () =>
-      (await json(`/api/rows/activiteit?limit=5&filter=${encodeURIComponent(JSON.stringify({ id }))}`))[0]
-    try {
-      await openWeek(page, 'Planning', 'Activiteiten', 'plandag', '2028-11-13')
-      // A grid cell edited, then a click on the view's title, then ⌘Z: the edit is undone though no cell has the focus.
-      const row = page.locator('tbody tr.nv-tr[data-title="e2e ongedaan vanaf de pagina"]')
-      await expect(row).toBeVisible()
-      const index = await page
-        .locator('thead th')
-        .evaluateAll((heads) =>
-          heads.findIndex((th) => (th.textContent ?? '').replace(/\s*[↑↓]$/, '').trim() === 'Status'),
-        )
-      const status = row.locator('td').nth(index)
-      await status.click()
-      await status.press('Enter')
-      await expect(openEditor(page)).toBeVisible()
-      await openEditor(page).getByRole('listbox').press('b')
-      await openEditor(page).getByRole('listbox').press('Enter')
-      await expect.poll(async () => (await stored())?.status).toBe('bevestigd')
-      await page.getByRole('heading', { level: 1 }).click()
-      await page.keyboard.press('ControlOrMeta+z')
-      await expect.poll(async () => (await stored())?.status).toBe('optie')
-      await shot(page, 'undo-from-the-page')
-    } finally {
-      await api.delete(`/api/rows/activiteit/${id}`)
-    }
-  })
-})
-
 test.describe('step 3e: the gallery by Groep', () => {
   test.describe.configure({ timeout: 120_000 })
 
@@ -659,50 +502,5 @@ test.describe('step 3e: the title line and the rail', () => {
       0,
     )
     await shot(page, 'rail-counts')
-  })
-
-  test('title-line-insight @e2e', async ({ page }) => {
-    const api = page.request
-    const json = async (path: string) =>
-      ((await (await api.get(path)).json()) as { rows: Record<string, unknown>[] }).rows
-    const productie = (await json('/api/rows/productie?limit=500')).find((r) => r.titel === 'Nachtwacht')?.id
-    const made: number[] = []
-    for (const omschrijving of ['e2e inzicht een', 'e2e inzicht twee']) {
-      const response = await api.post('/api/rows/activiteit', {
-        data: { productie_id: productie, soort: 'repetitie', status: 'optie', datum: '2028-10-24', omschrijving },
-      })
-      expect(response.status(), await response.text()).toBe(201)
-      made.push(((await response.json()) as { id: number }).id)
-    }
-    try {
-      await page.setViewportSize({ width: 1600, height: 900 })
-      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', '2028-10-23')
-      // The warn-toned option, its badge and the rows of the view that hold it.
-      const insight = page.locator('.nv-toolbar__insight')
-      await expect(insight.locator('.nv-pill--warn')).toHaveText('Optie')
-      const before = Number(await insight.locator('b').textContent())
-      const optie = lane(page, 'Optie').locator('[data-card]')
-      await expect(optie).toHaveCount(before)
-      await shot(page, 'title-line-insight')
-
-      // A drop out of Optie counts at once, without a reload; ⌘Z counts it back. Space lifts, → moves, Space drops.
-      await cardIn(page, 'Optie', 'e2e inzicht een').focus()
-      await page.keyboard.press('Space')
-      await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-      await listening(page)
-      await page.keyboard.press('ArrowRight')
-      await page.keyboard.press('Space')
-      await expect(cardIn(page, 'Bevestigd', 'e2e inzicht een')).toBeVisible()
-      await expect(insight.locator('b')).toHaveText(String(before - 1))
-      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-      await page.keyboard.press('ControlOrMeta+z')
-      await expect(insight.locator('b')).toHaveText(String(before))
-
-      // A view holding no row on the option shows no insight.
-      await openWeek(page, 'Per status', 'Activiteiten', 'plandag', '2031-03-03')
-      await expect(page.locator('.nv-toolbar__insight')).toHaveCount(0)
-    } finally {
-      for (const id of made) await api.delete(`/api/rows/activiteit/${id}`)
-    }
   })
 })

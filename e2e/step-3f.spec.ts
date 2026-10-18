@@ -205,6 +205,14 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await page.mouse.up()
       const landed = moved(first, held, 'Bevestigd', 2)
       await expect.poll(() => orders(page)).toEqual(landed)
+      // Every card fits its column.
+      for (const column of ['Optie', 'Bevestigd']) {
+        const edge = await lane(page, column).evaluate((el) => el.getBoundingClientRect().right)
+        for (const right of await lane(page, column)
+          .locator('.nv-board__card')
+          .evaluateAll((cards) => cards.map((c) => c.getBoundingClientRect().right)))
+          expect(right).toBeLessThanOrEqual(edge)
+      }
       await expect.poll(async () => (await stored(api, held)).status).toBe('bevestigd')
       expect((await stored(api, held)).position).not.toBeNull()
 
@@ -465,6 +473,16 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       expect((await stored(api, held)).position).toBeNull()
       await expect(changedMark(page)).toHaveCount(0)
 
+      // ⌘Z right after the drop, the focus on the page: the card is back in Optie, and so is its status; then dropped again.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+      await page.keyboard.press('ControlOrMeta+z')
+      await expect.poll(() => orders(page)).toEqual(first)
+      await expect.poll(async () => (await stored(api, held)).status).toBe('optie')
+      await holdAcross(page, held, 'Bevestigd', 0)
+      await page.mouse.up()
+      await expect.poll(() => orders(page)).toEqual(sorted)
+      await expect.poll(async () => (await stored(api, held)).status).toBe('bevestigd')
+
       await reopen(page, 'e2e Bord gesorteerd kruis', held)
       await expect.poll(() => orders(page)).toEqual(sorted)
       await expect(changedMark(page)).toHaveCount(0)
@@ -649,6 +667,14 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
       await expect.poll(() => orders(page)).toEqual(dropped)
       expect(await stored(api, other)).toMatchObject({ status: 'optie', position: null })
       expect(patches).toEqual([])
+
+      // Back to the column on its left: ← and Space write that column's value.
+      await card(page, held).focus()
+      await press('Space', /^e2e toets a opgepakt in Bevestigd, plaats 2 van 4\.$/)
+      await press('ArrowLeft', /^e2e toets a boven Optie, plaats 2 van 2\.$/)
+      await press('Space', /^e2e toets a neergezet in Optie, plaats 2 van 2\.$/)
+      await expect.poll(() => orders(page)).toEqual(moved(dropped, held, 'Optie', 1))
+      await expect.poll(async () => (await stored(api, held)).status).toBe('optie')
     } finally {
       if (view) await api.delete(`/api/views/${view}`)
       await made.remove()
