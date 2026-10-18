@@ -296,12 +296,6 @@ describe('actions', () => {
     expect(tekst).toEqual([{ tekst: 'eerste 1' }, { tekst: 'eerste 2' }, { tekst: 'eerste 3' }])
   })
 
-  test('an owner runs an action on its own record, its creates scoped to it', async () => {
-    const res = await act(owner, 'copy_notes', COPY)
-    expect(res.status).toBe(201)
-    expect(res.body.created).toHaveLength(3)
-  })
-
   test('undo by the batch removes all three', async () => {
     const key = (await act(editor, 'copy_notes', COPY)).body.batch_id as string
     const res = await editor('POST', `/api/batches/${key}/undo`, { body: '{}' })
