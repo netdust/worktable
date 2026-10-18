@@ -364,6 +364,20 @@ test('filter-row-fits @e2e', async ({ page }) => {
   const cellRight = await second.locator('.nv-fb__remove').evaluate((el) => el.getBoundingClientRect().left)
   expect.soft((await rectOf(text)).right, 'text field clear of the remove button').toBeLessThanOrEqual(cellRight + 0.5)
 
+  // The panel, a value list open in the last row and that row's remove button stay inside the 1280 by 800 viewport.
+  await builder.getByRole('button', { name: 'Voorwaarde toevoegen' }).click()
+  const third = builder.getByRole('group', { name: /^Voorwaarde 3$/ })
+  await pickIn(third, 'Veld', 'Soort')
+  await third.getByRole('searchbox', { name: 'Soort zoeken' }).click()
+  await expect(third.getByRole('listbox', { name: 'Soort' })).toBeVisible()
+  for (const part of ['.nv-fb-panel', '.nv-fb__menu', '.nv-fb__remove']) {
+    const box = await rectOf(page.locator(part).last())
+    expect(box.left, `${part} left`).toBeGreaterThanOrEqual(0)
+    expect(box.right, `${part} right`).toBeLessThanOrEqual(1280)
+    expect(box.bottom, `${part} bottom`).toBeLessThanOrEqual(800)
+  }
+  await page.keyboard.press('Escape')
+
   await page.keyboard.press('Escape')
   await bothThemes(
     page,
