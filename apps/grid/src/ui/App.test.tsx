@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import type { SavedView, Schema } from '../types'
+import type { SavedView, Schema, View } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
+import { iso } from './Window'
 
 const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
@@ -2252,5 +2253,77 @@ describe('the title line\'s summary', () => {
     await screen.findByRole('heading', { level: 1, name: 'Overzicht' })
     // The dashboard says its own: this week, not the calendar's window.
     expect(document.querySelector('.nv-toolbar__summary')?.textContent).toMatch(/^week \d+$/)
+  })
+})
+
+describe("a flagged place in a timeline's and a calendar's drawer", () => {
+  const cal = { day: 'plandag', start: null, end: null, lanes: [] }
+  const link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }
+  const int = { type: 'int', label: 'Id', required: false, fact: true }
+  const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
+  const staffed = {
+    models: {
+      activity: {
+        key: 'activity', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false,
+        fields: { plandag: { type: 'date', label: 'Plandag', required: false, fact: true }, people: { type: 'links', label: 'Mensen', required: false, fact: false, link } },
+      },
+      assignment: { key: 'assignment', label: 'Plaatsen', title_label: 'Titel', title_readonly: false, fields: { person_id: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false }, options_from: from } } },
+      clashes: { key: 'clashes', label: 'Botsingen', title_label: 'Tekst', title_readonly: true, fields: { activity_id: int, assignment_id: int, weight: { type: 'select', label: 'Ernst', required: true, fact: true, options: { clash: 'Botsing' }, tones: { clash: 'bad' } } } },
+    },
+    tables: [
+      { key: 'activity', label: 'Activiteiten', model: 'activity', types: ['timeline', 'calendar'] },
+      { key: 'clashes', label: 'Botsingen', model: 'clashes', query: true, types: ['grid'], flags: { marks: { activity: 'activity_id', assignment: 'assignment_id' }, tone: 'weight' } },
+    ],
+    views: [
+      { key: 'tijdlijn', label: 'Tijdlijn', table: 'activity', model: 'activity', type: 'timeline', calendar: cal },
+      { key: 'kalender', label: 'Kalender', table: 'activity', model: 'activity', type: 'calendar', calendar: cal },
+      { key: 'clashes', label: 'Botsingen', table: 'clashes', model: 'clashes' },
+    ],
+    writable: { activity: true, assignment: true },
+  } as unknown as Schema
+  const repetitie = { id: 1, title: 'Repetitie', status: '', fields: { plandag: iso(new Date()), people: [{ id: 11, target: 5, title: 'Sien Peeters', state: null }] } }
+  const clash = { id: 1, title: 'Sien staat dubbel ingepland.', status: '', fields: { activity_id: 1, assignment_id: 11, weight: 'clash' } }
+
+  it('offers "Iemand anders kiezen" beside Negeren in each one\'s drawer: the page gives both its place writer', async () => {
+    api.schema.mockResolvedValue(staffed)
+    api.rows.mockImplementation(async (view: View) => (view.model === 'clashes' ? { rows: [clash], total: 1 } : { rows: [repetitie], total: 1 }))
+    for (const view of ['tijdlijn', 'kalender']) {
+      window.location.hash = `view=${view}`
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: /Repetitie/ }))
+      const band = await within(screen.getByRole('complementary', { name: 'Repetitie' })).findByRole('alert')
+      expect([...band.querySelectorAll('.nv-dw-alert__acts button')].map((b) => b.textContent)).toEqual(['Iemand anders kiezen', 'Negeren'])
+      cleanup()
+    }
+    window.location.hash = ''
+  })
+})
+
+describe("the timeline's overlap in the title line", () => {
+  const cal = { day: 'datum', start: null, end: null, lanes: [] }
+  const stand = { type: 'select' as const, label: 'Stand', required: false, fact: true, options: { vast: 'Vast', afgelast: 'Afgelast' }, tones: { afgelast: 'bad' } }
+  const schema = {
+    models: { reeks: { key: 'reeks', label: 'Reeks', title_label: 'Naam', title_readonly: false, fields: { datum: { type: 'date', label: 'Datum', required: false, fact: true }, stand } } },
+    tables: [{ key: 'reeks', label: 'Reeksen', model: 'reeks', types: ['timeline'] }],
+    views: [{ key: 'tijdlijn', label: 'Tijdlijn', table: 'reeks', model: 'reeks', type: 'timeline', calendar: cal }],
+    writable: { reeks: true },
+  } as unknown as Schema
+  const stop = (id: number, naam: string, state: string) => ({ id, title: naam, status: '', fields: { datum: iso(new Date()), stand: state } })
+  const overlaps = () => document.querySelector('.nv-toolbar__overlaps')
+
+  it('says one overlap for two bars of a lane on one day, and none once one of them is cancelled', async () => {
+    api.schema.mockResolvedValue(schema)
+    window.location.hash = 'view=tijdlijn'
+    api.rows.mockResolvedValue({ rows: [stop(1, 'Brugge', 'vast'), stop(2, 'Gent', 'vast')], total: 2 })
+    render(<App />)
+    await waitFor(() => expect(overlaps()?.textContent).toBe('1 overlap'))
+    cleanup()
+
+    api.rows.mockResolvedValue({ rows: [stop(1, 'Brugge', 'vast'), stop(2, 'Gent', 'afgelast')], total: 2 })
+    render(<App />)
+    // The bars' count comes in the same report as the overlaps.
+    await waitFor(() => expect(document.querySelector('.nv-bar__count')?.textContent).toBe('2 rijen'))
+    expect(overlaps()).toBeNull()
+    window.location.hash = ''
   })
 })
