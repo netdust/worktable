@@ -117,29 +117,7 @@ async function pressKey(target: Locator, key: string) {
 }
 
 test('matrix-cell-persists', async ({ page }) => {
-  const [activity, person] = ['opbouw Brugge', 'Noor Claes']
-  const [activiteit, persoon] = [await activiteitId(page, activity), await personId(page, person)]
-  const held = async () =>
-    (await toewijzingen(page)).find((t) => t.activiteit_id === activiteit && t.persoon_id === persoon)
-  expect(await held()).toBeUndefined()
-
-  await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
-  const target = await spot(page, activity, person)
-  await expect(target.locator('.nv-mx__mark')).toHaveCount(0)
-  await pressKey(target, 'b')
-  await expect(target.locator('.nv-mx__mark')).toHaveText('✓')
-  await expect.poll(async () => (await held())?.state).toBe('bevestigd')
-
-  await page.reload()
-  await pick(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
-  await expect((await spot(page, activity, person)).locator('.nv-mx__mark')).toHaveText('✓')
-
-  await pressKey(await spot(page, activity, person), 'Delete')
-  await expect((await spot(page, activity, person)).locator('.nv-mx__mark')).toHaveCount(0)
-  await expect.poll(held).toBeUndefined()
-})
-
-test('matrix-two-activities-undo', async ({ page }) => {
+  // One person on two activities: one undo takes back the second cell only.
   const person = 'Bram De Wilde'
   const [first, second] = ['reis Gent', 'vergadering Gent']
   const [one, two, persoon] = [
@@ -153,12 +131,15 @@ test('matrix-two-activities-undo', async ({ page }) => {
   expect(await held(two)).toBeUndefined()
 
   await open(page, MATRIX, header(page, 'Noor Claes'), 'Activiteiten')
-  await pressKey(await spot(page, first, person), 'b')
+  const target = await spot(page, first, person)
+  await expect(target.locator('.nv-mx__mark')).toHaveCount(0)
+  await pressKey(target, 'b')
+  await expect(target.locator('.nv-mx__mark')).toHaveText('✓')
   await expect.poll(async () => (await held(one))?.state).toBe('bevestigd')
   await pressKey(await spot(page, second, person), 'u')
   await expect.poll(async () => (await held(two))?.state).toBe('uitgenodigd')
-
   await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveText('?')
+
   const secondId = (await held(two))?.id as number
   await page.keyboard.press('ControlOrMeta+z')
   await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveCount(0)
@@ -173,6 +154,10 @@ test('matrix-two-activities-undo', async ({ page }) => {
   await expect((await spot(page, second, person)).locator('.nv-mx__mark')).toHaveCount(0)
   expect(await held(two)).toBeUndefined()
   expect((await held(one))?.state).toBe('bevestigd')
+
+  await pressKey(await spot(page, first, person), 'Delete')
+  await expect((await spot(page, first, person)).locator('.nv-mx__mark')).toHaveCount(0)
+  await expect.poll(async () => await held(one)).toBeUndefined()
 })
 
 test('view-saved-after-reload', async ({ page }) => {
