@@ -174,6 +174,14 @@ describe('another person on an answered row', () => {
     expect(mails).toEqual([])
   })
 
+  test('geweigerd: another name on a row with a name only pencils it in too', async () => {
+    const declined = await post({ naam: 'Gast Weigeraar', state: 'geweigerd' })
+    expect(declined.status).toBe(201)
+    const id = declined.body.id as number
+    expect((await patch(id, { naam: 'Gast Vervanger' })).status).toBe(200)
+    expect(stateOf(id)).toBe('voorlopig')
+  })
+
   test('geannuleerd keeps its state', async () => {
     const { id } = await invited(BRAM)
     expect((await patch(id, { state: 'geannuleerd', expect: { state: 'uitgenodigd' } })).status).toBe(200)

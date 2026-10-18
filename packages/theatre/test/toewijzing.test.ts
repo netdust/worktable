@@ -1,5 +1,8 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { migrate, seedDomain } from '@worktable/engine'
 import { signIn, testEngine } from '@worktable/engine/test/sign-in'
 import theatre from '../src'
@@ -12,13 +15,16 @@ const LOTTE = { dataset: 'persoon', id: 1 }
 
 let sqlite: Database
 let app: ReturnType<typeof testEngine>
+let outbox: string
 let editor: Request
 let admin: Request
 let owner: Request
+let anyone: Request
 
-function requester(cookie: string): Request {
+function requester(cookie?: string): Request {
   return async (method, path, body) => {
-    const headers: Record<string, string> = { host: '127.0.0.1:4310', cookie }
+    const headers: Record<string, string> = { host: '127.0.0.1:4310' }
+    if (cookie) headers.cookie = cookie
     if (body !== undefined) headers['content-type'] = 'application/json'
     const res = await app.request(path, {
       method,
@@ -33,10 +39,12 @@ beforeEach(async () => {
   sqlite = new Database(':memory:')
   migrate(sqlite, theatre)
   seedDomain(sqlite, theatre)
-  app = testEngine(sqlite, theatre)
+  outbox = mkdtempSync(join(tmpdir(), 'wt-toewijzing-'))
+  app = testEngine(sqlite, theatre, { outbox })
   editor = requester(await signIn(app, 'editor'))
   admin = requester(await signIn(app, 'administrator'))
   owner = requester(await signIn(app, 'owner', LOTTE))
+  anyone = requester()
 })
 
 const stored = (id: number) => sqlite.query('SELECT * FROM toewijzing WHERE id = ?').get(id) as Body
@@ -174,6 +182,42 @@ describe('the transitions', () => {
       409,
       'transition_lost',
     )
+  })
+})
+
+// SPEC:351: two simultaneous answers on one slot give one success and one 409.
+describe('two answers at once', () => {
+  // Bram De Wilde (persoon 2) has an email: his invite mails a #/act/ link to the outbox.
+  async function invitedBram(): Promise<{ id: number; token: string }> {
+    const id = await created({ persoon_id: 2, state: 'uitgenodigd' })
+    for (const name of readdirSync(outbox)) {
+      const text = readFileSync(join(outbox, name), 'utf8')
+      const token = text.startsWith('To: bram@voorbeeld.test\n') ? text.match(/#\/act\/([\w-]+)/)?.[1] : undefined
+      if (token) return { id, token }
+    }
+    throw new Error('no #/act/ link to Bram')
+  }
+
+  test("the planner's PATCH and the person's /act on one invite: one lands, the other lost the race", async () => {
+    const { id, token } = await invitedBram()
+    const [planner, person] = await Promise.all([
+      patch(editor, id, { state: 'geannuleerd', expect: { state: 'uitgenodigd' } }),
+      anyone('POST', '/api/act', { token, to: 'bevestigd' }),
+    ])
+    expect([planner.status, person.status].sort()).toEqual([200, 409])
+    expect((planner.status === 409 ? planner : person).body.code).toBe('transition_lost')
+    expect(stored(id).state).toBe(planner.status === 200 ? 'geannuleerd' : 'bevestigd')
+  })
+
+  test('two planners with the same expect: one lands, the other lost the race', async () => {
+    const id = await created({ persoon_id: 3, state: 'voorlopig' })
+    const [mine, theirs] = await Promise.all([
+      patch(editor, id, { state: 'bevestigd', expect: { state: 'voorlopig' } }),
+      patch(admin, id, { state: 'uitgenodigd', expect: { state: 'voorlopig' } }),
+    ])
+    expect([mine.status, theirs.status].sort()).toEqual([200, 409])
+    expect((mine.status === 409 ? mine : theirs).body.code).toBe('transition_lost')
+    expect(stored(id).state).toBe(mine.status === 200 ? 'bevestigd' : 'uitgenodigd')
   })
 })
 

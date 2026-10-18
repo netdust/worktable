@@ -586,47 +586,20 @@ test.describe('step 2', () => {
     }
   })
 
-  test('swap-pencils-back-in @e2e', async ({ page, browser }) => {
-    // Ruling R21: another person on an uitgenodigd, bevestigd or geweigerd row is pencilled in; geannuleerd stays.
+  test('swap-pencils-back-in @e2e', async ({ page }) => {
+    // Ruling R21 in the grid; theatre/test/invite.test.ts pins the other states, the mails and the person pages.
     const api = page.request
     const id = await activity(api, 'e2e wissel', WEEK.stale, '11:00')
-    const joppe = await person(api, 'Joppe', 'Wisselaar', 'joppe.wisselaar@e2e-invite.test')
-    const mona = await person(api, 'Mona', 'Ruilvink', 'mona.ruilvink@e2e-invite.test')
+    const joppe = await person(api, 'Joppe', 'Wisselaar')
+    const mona = await person(api, 'Mona', 'Ruilvink')
     const jules = await person(api, 'Jules', 'Afgezegd')
-    const hanne = await person(api, 'Hanne', 'Invaller', 'hanne.invaller@e2e-invite.test')
-    const ilse = await person(api, 'Ilse', 'Gevraagd', 'ilse.gevraagd@e2e-invite.test')
+    const hanne = await person(api, 'Hanne', 'Invaller')
     const confirmed = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: joppe, state: 'bevestigd' })
     const cancelled = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: jules, state: 'geannuleerd' })
-    const admin = await signedIn(browser, 'admin')
-    const outsider = await stranger(browser)
-    type View = { id: number; name: string; for_owners: boolean }
-    let shown: number | undefined
-    let wasShown = true
     try {
-      const views = (await (await admin.request.get(`${API}/views`)).json()) as { views: View[] }
-      const view = views.views.find((v) => v.name === 'Mijn producties') as View
-      wasShown = view.for_owners
-      shown = view.id
-      expect((await admin.request.put(`${API}/views/${shown}/for-owners`, { data: {} })).status()).toBe(200)
-      const pageOf = async (persoon: number) => {
-        const response = await admin.request.get(`${API}/record-links/persoon/${persoon}`)
-        expect(response.status()).toBe(200)
-        const tab = await outsider.newPage()
-        await tab.goto(((await response.json()) as { link: string }).link)
-        const table = tab.getByRole('table', { name: 'Mijn producties' })
-        await expect(table).toBeVisible()
-        return { tab, table }
-      }
-      // Before the swap, Joppe's confirmed row gives him Nachtwacht on his page.
-      const before = await pageOf(joppe)
-      await expect(before.table.locator('tbody tr td').first()).toHaveText('Nachtwacht')
-      await before.tab.close()
-
       await page.goto('/')
       await openView(page, 'Toewijzingen')
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen')
-      const sent = mails()
-      const tokens = readDb('SELECT count(*) FROM action_token')
       const swap = async (from: string, to: string, slot: number) => {
         const persoon = await cellOf(page, from, 'Persoon')
         await persoon.click()
@@ -659,36 +632,9 @@ test.describe('step 2', () => {
       await swap('Jules Afgezegd', 'Hanne Invaller', cancelled)
       await expect(await cellOf(page, 'Hanne Invaller', 'Status')).toHaveText(/^Geannuleerd/)
       expect((await stored(api, 'toewijzing', cancelled))?.state).toBe('geannuleerd')
-
-      // Nobody was invited by either swap: no mail, no token.
-      await page.waitForTimeout(500)
-      expect(mails().filter((name) => !sent.includes(name))).toEqual([])
-      expect(readDb('SELECT count(*) FROM action_token')).toBe(tokens)
-
-      // Joppe lost Nachtwacht with his row; Mona has nothing until she confirms.
-      for (const who of [joppe, mona]) {
-        const after = await pageOf(who)
-        await expect(after.table.locator('tbody tr')).toHaveCount(0)
-        await expect(after.tab.getByRole('region', { name: 'Je overzicht' })).not.toContainText('Nachtwacht')
-        await after.tab.close()
-      }
-
-      // The other personal states on the wire: an invited person swapped, a declined free-text name renamed.
-      const asked = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: ilse, state: 'uitgenodigd' })
-      const moved = await api.patch(`/api/rows/toewijzing/${asked}`, { data: { persoon_id: joppe } })
-      expect(moved.status()).toBe(200)
-      expect((await stored(api, 'toewijzing', asked))?.state).toBe('voorlopig')
-      const guest = await idOf(api, 'toewijzing', { activiteit_id: id, naam: 'Gast Weigeraar', state: 'geweigerd' })
-      const renamed = await api.patch(`/api/rows/toewijzing/${guest}`, { data: { naam: 'Gast Vervanger' } })
-      expect(renamed.status()).toBe(200)
-      expect((await stored(api, 'toewijzing', guest))?.state).toBe('voorlopig')
     } finally {
-      // The person-page flows publish the view themselves: leave it as found.
-      if (shown !== undefined && !wasShown) await admin.request.delete(`${API}/views/${shown}/for-owners`)
-      await outsider.close()
-      await admin.close()
       await removeActivity(api, id)
-      for (const one of [joppe, mona, jules, hanne, ilse]) await api.delete(`/api/rows/persoon/${one}`)
+      for (const one of [joppe, mona, jules, hanne]) await api.delete(`/api/rows/persoon/${one}`)
     }
   })
 
@@ -724,49 +670,6 @@ test.describe('step 2', () => {
       await colleague.close()
       await removeActivity(api, id)
       await api.delete(`/api/rows/persoon/${vera}`)
-    }
-  })
-
-  test('planner-and-person-race-409 @e2e', async ({ page, browser }) => {
-    const api = page.request
-    const email = 'pieter.race@e2e-invite.test'
-    const id = await activity(api, 'e2e race', WEEK.stale, '18:00')
-    const pieter = await person(api, 'Pieter', 'Race', email)
-    const outsider = await stranger(browser)
-    const colleague = await signedIn(browser, 'admin')
-    try {
-      // The planner's PATCH with expect against the person's /act, released together, three rounds.
-      for (let round = 0; round < 3; round++) {
-        const { id: slot, link } = await invited(api, id, pieter, email)
-        const [planner, personAnswer] = await Promise.all([
-          api.patch(`/api/rows/toewijzing/${slot}`, {
-            data: { state: 'geannuleerd', expect: { state: 'uitgenodigd' } },
-          }),
-          outsider.request.post(`${API}/act`, { data: { token: tokenOf(link), to: 'bevestigd' } }),
-        ])
-        const statuses = [planner.status(), personAnswer.status()].sort()
-        expect(statuses).toEqual([200, 409])
-        const loser = planner.status() === 409 ? planner : personAnswer
-        expect((await loser.json()).code).toBe('transition_lost')
-        const final = (await stored(api, 'toewijzing', slot))?.state
-        expect(final).toBe(planner.status() === 200 ? 'geannuleerd' : 'bevestigd')
-        await api.delete(`/api/rows/toewijzing/${slot}`)
-      }
-
-      // Two planners, both with expect: one success, one 409.
-      const slot = await idOf(api, 'toewijzing', { activiteit_id: id, persoon_id: pieter, state: 'voorlopig' })
-      const [mine, theirs] = await Promise.all([
-        api.patch(`/api/rows/toewijzing/${slot}`, { data: { state: 'bevestigd', expect: { state: 'voorlopig' } } }),
-        colleague.request.patch(`${API}/rows/toewijzing/${slot}`, {
-          data: { state: 'uitgenodigd', expect: { state: 'voorlopig' } },
-        }),
-      ])
-      expect([mine.status(), theirs.status()].sort()).toEqual([200, 409])
-    } finally {
-      await outsider.close()
-      await colleague.close()
-      await removeActivity(api, id)
-      await api.delete(`/api/rows/persoon/${pieter}`)
     }
   })
 
