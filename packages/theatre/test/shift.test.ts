@@ -103,13 +103,15 @@ describe('tourstop_verschuiven', () => {
     expect(await row('activiteit', untimed)).toMatchObject({ datum: '2026-11-08' })
   })
 
-  test.each([
+  test.each<[string, unknown]>([
     ['more than a year', 366],
     ['a fraction', 1.5],
-  ])('refuses %s', async (_, dagen) => {
+    ['a number given as text', '3'],
+  ])('refuses %s, and moves nothing', async (_, dagen) => {
     const { reeks } = await tour()
     const res = await editor('POST', '/api/actions/tourstop_verschuiven', { id: reeks, input: { dagen } })
     expect(res.status).toBe(400)
     expect(res.body.message).toContain('input.dagen')
+    expect(await row('speelreeks', reeks)).toMatchObject({ start_datum: '2026-11-09', eind_datum: '2026-11-10' })
   })
 })

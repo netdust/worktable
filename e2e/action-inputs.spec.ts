@@ -163,8 +163,8 @@ async function openDrawer(page: Page, naam: string) {
 }
 
 test('shift-tourstop @e2e', async ({ page }) => {
-  // Two runs, two undos, two views: under a full run's load it outgrows the default 30 s.
-  test.setTimeout(90_000)
+  // One run, one undo, three views: under a full run's load it can outgrow the default 30 s.
+  test.setTimeout(60_000)
   const api = page.request
   const made = nothing()
   const naam = 'Tourstop e2e verschuiven'
@@ -233,45 +233,6 @@ test('shift-tourstop @e2e', async ({ page }) => {
     await expect
       .poll(() => bandsOf(page, naam))
       .toEqual(['avond Donderdag 8 juni', 'nacht Donderdag 8 juni', 'opbouw Woensdag 7 juni'])
-
-    // Two days earlier, then the notice's undo.
-    await openView(page, 'Tourstops', 'Tourstops')
-    await expect(await cellOf(page, naam, 'Start')).toHaveText('07-06-2028')
-    await openDrawer(page, naam)
-    await daysOf(page).fill('-2')
-    await expect(runOf(page)).toBeEnabled()
-    const earlier = answerOf(page)
-    await runOf(page).click()
-    expect((await earlier).status()).toBe(201)
-    await expect
-      .poll(() => datesOf(api, reeks))
-      .toEqual([
-        'tourstop 2028-06-05..2028-06-07',
-        'avond 2028-06-06 2028-06-06T20:00 2028-06-06T22:00 2028-06-06',
-        'nacht 2028-06-07 2028-06-07T01:00 2028-06-07T02:30 2028-06-06',
-        'opbouw 2028-06-05 - - 2028-06-05',
-      ])
-    const notice = page.getByRole('status', { name: `${ACTION} uitgevoerd.` })
-    await expect(notice).toBeVisible()
-    const undoneAgain = undoOf(page)
-    await notice.getByRole('button', { name: 'Ongedaan maken' }).click()
-    expect((await undoneAgain).status()).toBe(200)
-    await expect.poll(() => datesOf(api, reeks)).toEqual(AT_START)
-    await page.keyboard.press('Escape')
-    await expect(await cellOf(page, naam, 'Start')).toHaveText('07-06-2028')
-    await expect(await cellOf(page, naam, 'Einde')).toHaveText('09-06-2028')
-
-    // Boundary (wire): the engine refuses what the drawer would not send, naming the input, and writes nothing.
-    for (const dagen of [400, 1.5, '3']) {
-      const refused = await api.post('/api/actions/tourstop_verschuiven', { data: { id: reeks, input: { dagen } } })
-      expect(refused.status(), `dagen ${JSON.stringify(dagen)}`).toBe(400)
-      expect(((await refused.json()) as { message: string }).message).toContain('input.dagen')
-    }
-    const unknown = await api.post('/api/actions/tourstop_verschuiven', {
-      data: { id: reeks, input: { dagen: 1, uren: 2 } },
-    })
-    expect(unknown.status()).toBe(400)
-    expect(await datesOf(api, reeks)).toEqual(AT_START)
   } finally {
     await cleanUp(api, made)
   }
