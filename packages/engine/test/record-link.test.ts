@@ -18,7 +18,7 @@ const withInbox = (d: DatasetDecl): DatasetDecl =>
         columns: { ...d.columns, inbox: { type: 'text', label: 'Inbox', nullable: true } },
       }
     : d
-// The fixture's note, whose move to lang mails its project an action link; each link minted is kept here.
+// The fixture's note, whose move to lang mails an action link to its project's inbox; each link minted is kept here.
 const actLinks: string[] = []
 const withInvite = (d: DatasetDecl): DatasetDecl =>
   d.name === 'note'
@@ -31,11 +31,15 @@ const withInvite = (d: DatasetDecl): DatasetDecl =>
             { from: ['lang'], to: 'kort', roles: ['owner'] },
           ],
           hooks: {
-            lang: () => ({
+            lang: (row, ctx) => ({
               token: { to: ['kort'], days: 7 },
               mail: (link) => {
                 actLinks.push(link ?? '')
-                return { to: 'alfa@example.test', subject: 'Invite', text: link ?? '' }
+                return {
+                  to: String(ctx.find('project', row.project_id as number)?.inbox),
+                  subject: 'Invite',
+                  text: link ?? '',
+                }
               },
             }),
           },
@@ -363,6 +367,7 @@ describe('the address a link is mailed to (attack 16)', () => {
   test('only a human administrator changes it, and the change rotates the link', async () => {
     const editor = send(app, await signIn(app, 'editor'))
     const old = linkOf(1)
+    expect((await asLink(old)).status).toBe(200)
     const before = tables()
     const refused = await editor('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'x@evil.test' }) })
     expect({ status: refused.status, code: refused.body.code }).toEqual({ status: 403, code: 'forbidden' })
@@ -407,6 +412,30 @@ describe('the address a link is mailed to (attack 16)', () => {
       status: 401,
       code: 'bad_token',
     })
+  })
+
+  test('an undo of the change kills the link and the action tokens delivered to the undone address', async () => {
+    const admin = send(app, await signIn(app, 'administrator'))
+    const moved = await admin('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'new@example.test' }) })
+    expect(moved.status).toBe(200)
+    const delivered = linkOf(1)
+    expect((await asLink(delivered)).status).toBe(200)
+    const editor = send(app, await signIn(app, 'editor'))
+    expect((await editor('PATCH', '/api/rows/note/1', { body: JSON.stringify({ kind: 'lang' }) })).status).toBe(200)
+    const token = (actLinks.at(-1) as string).split('/#/act/')[1]
+    expect((await raw('POST', '/api/act/view', {}, { token })).status).toBe(200)
+
+    const undone = await admin('POST', `/api/batches/${moved.body.revision.batch_id}/undo`, { body: '{}' })
+    expect(undone.status).toBe(200)
+    expect(sqlite.query('SELECT inbox FROM project WHERE id = 1').get()).toEqual({ inbox: 'alfa@example.test' })
+    const link = (await asLink(delivered)).status
+    const act = await raw('POST', '/api/act', {}, { token, to: 'kort' })
+    expect({ link, act: act.status, code: ((await act.json()) as { code: string }).code }).toEqual({
+      link: 401,
+      act: 401,
+      code: 'bad_token',
+    })
+    expect((await asLink(linkOf(1))).status).toBe(200)
   })
 })
 

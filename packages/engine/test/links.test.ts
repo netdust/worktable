@@ -359,10 +359,13 @@ describe('a link in a view', () => {
       { type: 'text', label: `Extra ${n}`, nullable: true },
     ])
     const wide = { ...taak, columns: { ...taak.columns, ...Object.fromEntries(extra) } }
-    const domain: Domain = { ...withQuery, datasets: withQuery.datasets.map((d) => (d.name === 'taak' ? wide : d)) }
+    const wideDomain: Domain = {
+      ...withQuery,
+      datasets: withQuery.datasets.map((d) => (d.name === 'taak' ? wide : d)),
+    }
     const db = new Database(':memory:')
-    migrate(db, domain)
-    const app = testEngine(db, domain)
+    migrate(db, wideDomain)
+    const app = testEngine(db, wideDomain)
     const as = send(app, await signIn(app, 'editor'))
     const post = (visible_fields: string[]) =>
       as('POST', '/api/views', { body: json({ name: 'Every field', source: 'taak', visible_fields }) })
