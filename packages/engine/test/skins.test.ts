@@ -224,6 +224,8 @@ describe('board, timeline and gallery views and /schema', () => {
     expect([made.status, made.body.skin, made.body.group_by]).toEqual([201, 'timeline', 'place_id'])
     const refused = await plain('POST', '/api/views', { body: view('timeline') })
     expect([refused.status, refused.body.code]).toEqual([400, 'bad_view'])
+    const nonLane = await admin('POST', '/api/views', { body: view('timeline', { group_by: 'state' }) })
+    expect([nonLane.status, nonLane.body.code]).toEqual([400, 'bad_view'])
   })
 
   test('a board and a gallery view save where the source declares them, and are refused where not', async () => {

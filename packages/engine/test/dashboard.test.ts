@@ -286,21 +286,6 @@ describe('a dashboard view (attack 6)', () => {
     expect({ status: patch.status, code: patch.body.code }).toEqual({ status: 400, code: 'bad_view' })
   })
 
-  test('a timeline grouped on a non-lane is 400', async () => {
-    const res = await admin('POST', '/api/views', {
-      body: json({ name: 'X', source: 'slot', skin: 'timeline', group_by: 'state' }),
-    })
-    expect({ status: res.status, code: res.body.code }).toEqual({ status: 400, code: 'bad_view' })
-    const lane = await admin('POST', '/api/views', {
-      body: json({ name: 'X', source: 'slot', skin: 'timeline', group_by: 'crew_id' }),
-    })
-    expect(lane.status).toBe(201)
-    const noCalendar = await admin('POST', '/api/views', {
-      body: json({ name: 'X', source: 'crew', skin: 'timeline' }),
-    })
-    expect(noCalendar.status).toBe(400)
-  })
-
   test('caps: 7 sections / 13 tiles / 9 actions / an 81-character label are refused', async () => {
     const stat = { kind: 'stat', view: ALL, measure: 'count' }
     const section = { label: 'S', tiles: [stat] }
