@@ -221,15 +221,6 @@ describe('Mijn producties for owners', () => {
       expect(refused).toMatchObject({ status: 400, body: { code: 'column_not_owner_visible', key: hidden } })
     })
   }
-
-  test('a stored view naming a column the query does not have, such as notitie, is refused for owners too', async () => {
-    const admin = { cookie: await signIn(app, 'administrator') }
-    const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, filters, sort, group_by, visible_fields)
-                 VALUES ('Rauw', 'query', 'mijn_producties', -1, 1, '{}', '[]', NULL, '["productie","notitie"]')`
-    const id = Number(sqlite.query(sql).run().lastInsertRowid)
-    const refused = await request('PUT', `/api/views/${id}/for-owners`, admin, {})
-    expect(refused).toMatchObject({ status: 400, body: { code: 'column_not_owner_visible', key: 'notitie' } })
-  })
 })
 
 describe('the link request', () => {

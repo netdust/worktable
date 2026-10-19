@@ -129,6 +129,14 @@ describe('PUT /views/:id/for-owners (attack 13)', () => {
     await refused(() => forOwners(id), 'column_not_owner_visible', key)
   })
 
+  // POST /views refuses an unknown key, so only a stored row can carry one.
+  test('a stored view naming a column the query does not have is column_not_owner_visible, naming it', async () => {
+    const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, filters, sort, group_by, visible_fields)
+                 VALUES ('Rauw', 'query', 'per_project', -1, 1, '{}', '[]', NULL, '["name","nope"]')`
+    const id = Number(sqlite.query(sql).run().lastInsertRowid)
+    await refused(() => forOwners(id), 'column_not_owner_visible', 'nope')
+  })
+
   test('a link key is link_not_allowed, naming it', async () => {
     const linked = linkedDomain()
     const db = migrated(linked)
