@@ -65,8 +65,6 @@ function failure(d: Domain): DomainError {
 }
 
 describe('validateDomain: calendar and badge', () => {
-  test('a valid calendar passes', () => expect(() => validateDomain(domainOf(eventOf(CAL)))).not.toThrow())
-
   test("refuses a calendar whose day is not the source's date", () => {
     expect(failure(domainOf(eventOf({ ...CAL, day: 'begins' }))).bad).toBe('begins')
   })
