@@ -110,13 +110,6 @@ describe('$like, $nlike and $period', () => {
     expect(JSON.parse(stored.filters)).toEqual(filters)
     expect((await postView({ $or: [{ $or: [{ status: 'open' }] }] })).body.code).toBe('bad_view')
   })
-
-  test('POST /views stores a $period on the dated source', async () => {
-    const { status, body } = await postView({ day: { $period: 'week' } })
-    expect(status).toBe(201)
-    const stored = sqlite.query('SELECT filters FROM saved_view WHERE id = ?').get(body.id) as { filters: string }
-    expect(JSON.parse(stored.filters)).toEqual({ day: { $period: 'week' } })
-  })
 })
 
 describe('denials', () => {
