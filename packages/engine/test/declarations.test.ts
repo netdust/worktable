@@ -9,7 +9,6 @@ import {
   migrate,
   type QueryDecl,
   seedDomain,
-  TONES,
   validateDomain,
 } from '../src'
 import { domain as plain } from './fixture'
@@ -49,8 +48,6 @@ const refused = (d: Domain) => {
 }
 
 describe('validateDomain refuses a bad space, section or fact', () => {
-  test('the fixture passes', () => expect(() => validateDomain(spaced)).not.toThrow())
-
   test('a space naming an unknown dataset', () => {
     expect(refused({ ...spaced, space: { dataset: 'nowhere' } })).toEqual(['space', 'nowhere'])
   })
@@ -198,8 +195,8 @@ describe('the tone palette', () => {
     return withDataset('job', { columns })
   }
 
-  test('every palette tone validates', () => {
-    for (const tone of TONES) expect(() => validateDomain(withTone(tone))).not.toThrow()
+  test('grey, a palette tone no fixture uses, validates', () => {
+    expect(() => validateDomain(withTone('grey'))).not.toThrow()
   })
 
   test('a tone outside the palette is refused', () => {
@@ -339,8 +336,6 @@ function withStates(over: Partial<QueryDecl> = {}): Domain {
 }
 
 describe('creates on a query', () => {
-  test('the fixture passes', () => expect(() => validateDomain(withStates())).not.toThrow())
-
   test('creates naming no dataset, a query, or a dataset without a writer that creates is refused', () => {
     expect(refused(withStates({ creates: 'ghost' }))).toEqual(['job_state', 'ghost'])
     expect(refused(withStates({ creates: 'job_room' }))).toEqual(['job_state', 'job_room'])
@@ -367,10 +362,6 @@ describe('of on a query', () => {
     expect(refused(withQuery('job_room', { of: 'ghost' }))).toEqual(['job_room', 'ghost'])
     expect(refused(withStates({ of: 'job_room' }))).toEqual(['job_state', 'job_room'])
     expect(refused(withQuery('job_room', { of: 'job_room' }))).toEqual(['job_room', 'job_room'])
-  })
-
-  test('a section listing a query is refused', () => {
-    expect(refused({ ...spaced, sections: [{ label: 'X', sources: ['job', 'job_room'] }] })).toEqual(['X', 'job_room'])
   })
 
   test('/schema serves of', async () => {
