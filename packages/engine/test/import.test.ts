@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Actor, createAccount, importExport, migrate } from '../src'
@@ -357,6 +357,32 @@ describe('serve.ts --import', () => {
     expect(count('note')).toBe(2)
   }, 20_000)
 
+  const importTo = (report: string) => cli('--import', file, '--as', 'administrator@example.test', '--report', report)
+
+  test('the report is 0600 even when it overwrites a wider file', async () => {
+    writeFileSync(file, JSON.stringify(exportOf(VALID)))
+    const report = join(dir, 'report.json')
+    writeFileSync(report, '{}')
+    chmodSync(report, 0o644)
+    await withAccount('administrator')
+    expect((await importTo(report)).code).toBe(0)
+    expect(statSync(report).mode & 0o777).toBe(0o600)
+  }, 20_000)
+
+  test('a refused import replaces an earlier report instead of leaving it as current', async () => {
+    writeFileSync(file, JSON.stringify(exportOf(VALID)))
+    const report = join(dir, 'report.json')
+    await withAccount('administrator')
+    expect((await importTo(report)).code).toBe(0)
+    expect(JSON.parse(readFileSync(report, 'utf8')).committed).toBe(true)
+    expect((await importTo(report)).code).toBe(1)
+    expect(JSON.parse(readFileSync(report, 'utf8'))).toEqual({
+      committed: false,
+      error: 'import_needs_empty_database',
+    })
+    expect(statSync(report).mode & 0o777).toBe(0o600)
+  }, 20_000)
+
   test.each([
     ['an editor', 'editor', 'editor@example.test'],
     ['an unknown account', 'administrator', 'nobody@example.test'],
@@ -396,5 +422,18 @@ describe('serve.ts --import', () => {
     const done = await cli('--import', file)
     expect(done.code).toBe(1)
     expect(done.err).toMatch(/--as/)
+  }, 20_000)
+
+  test('--import with an account flag is refused, not silently skipped', async () => {
+    writeFileSync(file, JSON.stringify(exportOf(VALID)))
+    for (const flag of [
+      ['--create-admin', 'administrator@example.test'],
+      ['--create-account', 'x@example.test', '--role', 'editor'],
+      ['--disable-account', 'x@example.test'],
+    ]) {
+      const done = await cli(...flag, '--import', file, '--as', 'administrator@example.test')
+      expect(done.code).toBe(1)
+      expect(done.err).toContain('--import cannot be combined')
+    }
   }, 20_000)
 })
