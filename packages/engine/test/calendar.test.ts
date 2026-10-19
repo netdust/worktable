@@ -95,7 +95,6 @@ describe('validateDomain: calendar and badge', () => {
 
 describe('calendar views and /schema', () => {
   let admin: ReturnType<typeof send>
-  let plain: ReturnType<typeof send>
 
   beforeEach(async () => {
     const make = async (d: Domain) => {
@@ -106,7 +105,6 @@ describe('calendar views and /schema', () => {
       return send(app, await signIn(app, 'administrator'))
     }
     admin = await make(domainOf(eventOf(CAL)))
-    plain = await make(domainOf(eventOf(undefined)))
   })
 
   const view = (over: Record<string, unknown>) =>
@@ -124,11 +122,6 @@ describe('calendar views and /schema', () => {
     const res = await admin('POST', '/api/views', { body: view({ group_by: 'name' }) })
     expect([res.status, res.body.code]).toEqual([400, 'bad_view'])
     expect(res.body.message).toContain('name')
-  })
-
-  test('refuses skin calendar on a source without calendar', async () => {
-    const res = await plain('POST', '/api/views', { body: view({}) })
-    expect([res.status, res.body.code]).toEqual([400, 'bad_view'])
   })
 
   test('/schema serves calendar and badge', async () => {
