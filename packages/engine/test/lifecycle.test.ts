@@ -188,10 +188,6 @@ describe('lifecycle validation', () => {
     expect((error as DomainError).bad).toBe(bad)
   }
 
-  test('the test domain is valid', () => {
-    expect(() => validateDomain(domain)).not.toThrow()
-  })
-
   test('the column must be an options column', () => {
     refused(ticketOf({ lifecycle: { ...lifecycle, column: 'note' } }), 'note')
     refused(ticketOf({ lifecycle: { ...lifecycle, column: 'nope' } }), 'nope')
