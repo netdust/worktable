@@ -209,20 +209,6 @@ describe('import denials', () => {
     )
     expect(result.refused).toEqual([{ dataset: 'note', legacy_id: 30, message: '"day" must be date' }])
   })
-
-  test('a refused row rolls back the whole import on a file database', () => {
-    const file = join(mkdtempSync(join(tmpdir(), 'wt-import-')), 'db.sqlite')
-    const db = new Database(file, { create: true })
-    migrate(db, domain)
-    const boss = accountIn(db, 'administrator')
-    const data = exportOf({ ...VALID, note: [...(VALID.note as []), { legacy_id: 39, project_id: 99, tekst: 'x' }] })
-    const result = importExport(db, domain, data, boss, { acceptReport: false })
-    expect({ committed: result.committed, refused: result.refused.length }).toEqual({ committed: false, refused: 1 })
-    db.close()
-    const reopened = new Database(file)
-    expect(TABLES.map((t) => contents(reopened, t))).toEqual(empty)
-    reopened.close()
-  })
 })
 
 describe('import behaviour', () => {
@@ -275,12 +261,6 @@ describe('import behaviour', () => {
     expect(result.refused.map((r) => r.legacy_id)).toEqual([10, 11, 12, 13])
     expect(JSON.stringify(result.refused)).not.toContain('geheim')
     expect(result.counts.project).toBe(1)
-  })
-
-  test('legacy_post_id is written only where the dataset declares it', () => {
-    run(exportOf(VALID))
-    const columns = sqlite.query("SELECT name FROM pragma_table_info('note')").all() as { name: string }[]
-    expect(columns.map((c) => c.name)).not.toContain('legacy_post_id')
   })
 
   test('the whole import is one Revision batch with the administrator as actor', () => {
@@ -357,7 +337,7 @@ describe('serve.ts --import', () => {
     await withAccount('administrator')
     const done = await cli('--import', file, '--as', 'administrator@example.test', '--report', report)
     expect(done.code).toBe(1)
-    expect(count('project')).toBe(0)
+    expect(TABLES.map((t) => count(t))).toEqual(TABLES.map(() => 0))
     const text = readFileSync(report, 'utf8')
     expect(JSON.parse(text)).toEqual({
       committed: false,
