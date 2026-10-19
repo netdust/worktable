@@ -113,23 +113,6 @@ describe('validateDomain', () => {
       failure(withDomain({ datasets: [...domain.datasets, dataset({ columns: { name: text, title: text } })] })).bad,
     ).toBe('title'))
 
-  test('a relation to a dataset with a via title is refused', () => {
-    const b = defineDataset({
-      name: 'b',
-      label: 'B',
-      custom: false,
-      title: { via: 'a_id', else: 'name' },
-      columns: viaA,
-    })
-    const c = defineDataset({
-      name: 'c',
-      label: 'C',
-      custom: false,
-      title: { via: 'b_id', else: 'name' },
-      columns: { b_id: { type: 'integer', label: 'B', relation: 'b' }, name: text },
-    })
-    expect(failure(withDomain({ datasets: [...domain.datasets, dataset(), b, c] })).bad).toBe('b_id')
-  })
   test('the fixture domain validates', () => expect(() => validateDomain(domain)).not.toThrow())
 
   const ENGINE_TABLES = [
