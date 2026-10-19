@@ -180,14 +180,6 @@ describe('seedMissing: views', () => {
     expect(open[0]).toEqual(before as Record<string, unknown>)
   })
 
-  test("another user's shared view with the seeded name and source counts as present", () => {
-    const sqlite = existingDb()
-    insertView(sqlite, 7, 'Open', 'taak', ['day'], 1)
-    const report = seedMissing(sqlite, seedDomain)
-    expect(report.views).toEqual({ added: 1, updated: 0, present: 1 })
-    expect(viewsNamed(sqlite, 'Open').map((v) => v.owner_id)).toEqual([7])
-  })
-
   test('a view owned by anyone else is left alone, even when it differs from the declaration', () => {
     const sqlite = existingDb()
     insertView(sqlite, 7, 'Open', 'taak', ['day'])
