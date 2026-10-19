@@ -4,6 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFile
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createEngine, type DatasetDecl, type Domain, DomainError, migrate, seedDomain, validateDomain } from '../src'
+import { createService } from '../src/auth'
 import { recordLinkFor } from '../src/record-link'
 import { contents, domain as fixture, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
@@ -17,9 +18,33 @@ const withInbox = (d: DatasetDecl): DatasetDecl =>
         columns: { ...d.columns, inbox: { type: 'text', label: 'Inbox', nullable: true } },
       }
     : d
+// The fixture's note, whose move to lang mails its project an action link; each link minted is kept here.
+const actLinks: string[] = []
+const withInvite = (d: DatasetDecl): DatasetDecl =>
+  d.name === 'note'
+    ? {
+        ...d,
+        lifecycle: {
+          column: 'kind',
+          transitions: [
+            { from: ['kort'], to: 'lang', roles: ['editor'] },
+            { from: ['lang'], to: 'kort', roles: ['owner'] },
+          ],
+          hooks: {
+            lang: () => ({
+              token: { to: ['kort'], days: 7 },
+              mail: (link) => {
+                actLinks.push(link ?? '')
+                return { to: 'alfa@example.test', subject: 'Invite', text: link ?? '' }
+              },
+            }),
+          },
+        },
+      }
+    : d
 const domain: Domain = {
   ...fixture,
-  datasets: fixture.datasets.map(withInbox),
+  datasets: fixture.datasets.map(withInbox).map(withInvite),
   writers: { ...fixture.writers, project: { ...fixture.writers?.project, update: (values) => values } },
 }
 
@@ -31,6 +56,7 @@ let app: ReturnType<typeof testEngine>
 let outbox: string
 
 beforeEach(() => {
+  actLinks.length = 0
   sqlite = new Database(':memory:')
   migrate(sqlite, domain)
   seedDomain(sqlite, domain)
@@ -347,6 +373,40 @@ describe('the address a link is mailed to (attack 16)', () => {
     expect(moved.status).toBe(200)
     expect((await asLink(old)).status).toBe(401)
     expect((await asLink(linkOf(1))).status).toBe(200)
+  })
+
+  test.each(['editor', 'administrator'] as const)(
+    'a service account may not change it, even as %s: 403, tables unchanged',
+    async (role) => {
+      const bearer = { authorization: `Bearer ${createService(sqlite, `bot-${role}`, role)}` }
+      await denied(() => raw('PATCH', '/api/rows/project/1', bearer, { inbox: 'x@evil.test' }), 403, 'forbidden')
+    },
+  )
+
+  test('an editor may echo it unchanged beside a change to another column', async () => {
+    const editor = send(app, await signIn(app, 'editor'))
+    const body = JSON.stringify({ inbox: 'alfa@example.test', name: 'Alfa 2' })
+    expect((await editor('PATCH', '/api/rows/project/1', { body })).status).toBe(200)
+    expect(sqlite.query('SELECT name, inbox FROM project WHERE id = 1').get()).toEqual({
+      name: 'Alfa 2',
+      inbox: 'alfa@example.test',
+    })
+  })
+
+  test("the change also kills its subject's outstanding action tokens", async () => {
+    const editor = send(app, await signIn(app, 'editor'))
+    expect((await editor('PATCH', '/api/rows/note/1', { body: JSON.stringify({ kind: 'lang' }) })).status).toBe(200)
+    const token = (actLinks.at(-1) as string).split('/#/act/')[1]
+    expect((await raw('POST', '/api/act/view', {}, { token })).status).toBe(200)
+
+    const admin = send(app, await signIn(app, 'administrator'))
+    const moved = await admin('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'new@example.test' }) })
+    expect(moved.status).toBe(200)
+    const act = await raw('POST', '/api/act', {}, { token, to: 'kort' })
+    expect({ status: act.status, code: ((await act.json()) as { code: string }).code }).toEqual({
+      status: 401,
+      code: 'bad_token',
+    })
   })
 })
 
