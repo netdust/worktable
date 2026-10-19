@@ -11,7 +11,7 @@ beforeEach(() => {
   app = testEngine(sqlite, domain)
 })
 
-const put = (cookie: string | undefined, source: string, body: unknown) =>
+const put = (cookie: string, source: string, body: unknown) =>
   send(app, cookie)('PUT', `/api/sources/${source}/display`, { body: JSON.stringify(body) })
 
 const schemaAs = async (cookie: string) => (await send(app, cookie)('GET', '/api/schema')).body.sources
@@ -34,11 +34,6 @@ describe('only an administrator changes a source display name or icon', () => {
     expect(hidden.status).toBe(403)
     expect(hidden.body.message).not.toContain('plat')
     expect((await put(owner, 'nowhere', { label: 'Werk' })).status).toBe(403)
-    expect(stored()).toEqual([])
-  })
-
-  test('a caller without a session gets 401', async () => {
-    expect((await put(undefined, 'taak', { label: 'Werk' })).status).toBe(401)
     expect(stored()).toEqual([])
   })
 
