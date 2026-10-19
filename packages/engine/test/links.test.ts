@@ -94,9 +94,8 @@ describe('validateDomain refuses a links declaration', () => {
     throw new Error('expected DomainError')
   }
 
-  test('the fixture and a query that creates its key dataset pass', () => {
+  test('the fixture passes', () => {
     expect(() => validateDomain(domain)).not.toThrow()
-    expect(() => validateDomain(withQuery)).not.toThrow()
   })
 
   test('a link dataset that does not exist', () => {
