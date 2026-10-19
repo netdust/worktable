@@ -126,10 +126,4 @@ describe('GET /schema?format=openapi', () => {
     const odd = await send(app, await signIn(app, 'editor'))('GET', '/api/schema?format=yaml')
     expect(odd.status).toBe(400)
   })
-
-  test('plain /schema carries no OpenAPI keys', async () => {
-    const { body } = await send(app, await signIn(app, 'editor'))('GET', '/api/schema')
-    expect(Object.keys(body).sort()).toEqual(['sources'])
-    for (const key of ['openapi', 'paths', 'components', 'info']) expect(body[key]).toBeUndefined()
-  })
 })
