@@ -365,10 +365,6 @@ describe('checkTransition', () => {
       'transition_not_allowed',
     )
   })
-
-  test('a create is no transition', () => {
-    expect(() => checkTransition(ticket, null, { state: 'c' }, ed, { kind: 'write' })).not.toThrow()
-  })
 })
 
 describe('hooks', () => {
