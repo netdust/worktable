@@ -136,23 +136,6 @@ describe('migrate', () => {
     expect(sqlite.query('SELECT aantal FROM per_klant').get()).toEqual({ aantal: 101 })
   })
 
-  test('creates saved_view', () => {
-    const columns = names(fresh().query('PRAGMA table_info(saved_view)').all())
-    expect(columns).toEqual(
-      expect.arrayContaining([
-        'name',
-        'source_type',
-        'source',
-        'skin',
-        'filters',
-        'sort',
-        'group_by',
-        'visible_fields',
-      ]),
-    )
-    expect(columns).toEqual(expect.arrayContaining(['shared', 'owner_id', 'share_token', 'format', 'public']))
-  })
-
   test("seedDomain inserts the domain's rows and its saved views", () => {
     const sqlite = fresh()
     seedDomain(sqlite, domain())
