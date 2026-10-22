@@ -18,13 +18,18 @@ type Env = Record<string, string | undefined>
 
 const dirs: string[] = []
 
-/** A 0600 token file at an absolute path; removeTokenFiles deletes every one. */
-export function tokenFile(token: string): string {
+/** A fresh directory for one test's files; removeTokenFiles deletes every one. */
+export function scratchDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'wt-mcp-'))
   dirs.push(dir)
-  const file = join(dir, 'token')
-  writeFileSync(file, token, { mode: 0o600 })
-  chmodSync(file, 0o600)
+  return dir
+}
+
+// The mode is set again after writing, because writeFileSync applies it only to a new file under the umask.
+export function tokenFile(token: string, mode = 0o600): string {
+  const file = join(scratchDir(), 'token')
+  writeFileSync(file, token, { mode })
+  chmodSync(file, mode)
   return file
 }
 
