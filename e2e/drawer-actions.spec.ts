@@ -13,11 +13,16 @@ async function open(page: Page, view: string, model: string) {
 }
 
 const drawerOf = async (page: Page, title: string) => {
-  await page.getByRole('row', { name: new RegExp(title) }).getByRole('button', { name: 'Openen' }).click()
+  await page
+    .getByRole('row', { name: new RegExp(title) })
+    .getByRole('button', { name: 'Openen' })
+    .click()
   return page.getByRole('complementary', { name: title })
 }
 
-test('press-a-button @e2e: a declared transition is a button, the drawer shows the next one, and Undo takes it back', async ({ page }) => {
+test('press-a-button @e2e: a declared transition is a button, the drawer shows the next one, and Undo takes it back', async ({
+  page,
+}) => {
   await open(page, 'All members', 'Members')
   const drawer = await drawerOf(page, 'Ann')
   await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
@@ -38,7 +43,9 @@ test('press-a-button @e2e: a declared transition is a button, the drawer shows t
   await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0)
 })
 
-test('link-item-button @e2e: a link item offers its record’s button and detail, and the list shows its new state', async ({ page }) => {
+test('link-item-button @e2e: a link item offers its record’s button and detail, and the list shows its new state', async ({
+  page,
+}) => {
   await open(page, 'All bundles', 'Bundles')
   const drawer = await drawerOf(page, 'Alpha')
   const entries = drawer.getByRole('region', { name: /Entries/ })
