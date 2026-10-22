@@ -193,12 +193,12 @@ describe('an instance that does not answer', () => {
     const started = Date.now()
     const down = await call(refused, 'schema')
     expect(down.isError).toBe(true)
-    expect(down.text).toContain(`worktable op ${BASE} antwoordt niet`)
+    expect(down.text).toContain(`worktable at ${BASE} does not answer`)
 
     const hanging = await connect(() => new Promise<Response>(() => {}), engine.token, 50)
     const silent = await call(hanging, 'schema')
     expect(silent.isError).toBe(true)
-    expect(silent.text).toContain(`worktable op ${BASE} antwoordt niet`)
+    expect(silent.text).toContain(`worktable at ${BASE} does not answer`)
     expect(Date.now() - started).toBeLessThan(2000)
   })
 

@@ -14,13 +14,13 @@ const IDENTIFIER = /^[a-z][a-z0-9_]*$/
 export function assertIdentifier(name: string): void {
   if (!IDENTIFIER.test(name)) {
     throw new ClientError(
-      `${JSON.stringify(name)} is geen identifier: kleine letters, cijfers en _, beginnend met een letter`,
+      `${JSON.stringify(name)} is not an identifier: lowercase letters, digits and _, starting with a letter`,
     )
   }
 }
 
 export function assertId(id: number): void {
-  if (!(Number.isSafeInteger(id) && id > 0)) throw new ClientError(`${id} is geen record-id: een geheel getal groter dan 0`)
+  if (!(Number.isSafeInteger(id) && id > 0)) throw new ClientError(`${id} is not a record id: an integer from 1`)
 }
 
 function parsed(text: string): unknown {
@@ -69,7 +69,7 @@ export class EngineClient {
       signal: AbortSignal.timeout(this.#timeoutMs),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }
-    const unanswered = new ClientError(`worktable op ${this.#base} antwoordt niet`)
+    const unanswered = new ClientError(`worktable at ${this.#base} does not answer`)
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(unanswered), this.#timeoutMs)
