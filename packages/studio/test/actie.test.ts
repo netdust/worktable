@@ -85,6 +85,18 @@ describe('who confirms an update', () => {
     expect((await admin('PATCH', `/api/rows/actie/${fresh}`, { status: 'bevestigd' })).status).toBe(200)
   })
 
+  test('an undone confirmation is redone only on a fresh preview', async () => {
+    const confirmed = await admin('PATCH', '/api/rows/actie/1', { status: 'bevestigd' })
+    const undone = await admin('POST', `/api/batches/${(confirmed.body.revision as Body).batch_id}/undo`, {})
+    expect(undone.status).toBe(200)
+    expect(status(1)).toBe('voorbereid')
+    sqlite.query('UPDATE actie SET voorbereid_op = ? WHERE id = 1').run(ago(30 * HOUR))
+    const redo = await admin('POST', `/api/batches/${undone.body.batch_id}/undo`, {})
+    expect(refused(redo)).toBe(true)
+    expect(JSON.stringify(redo.body)).toContain('Deze preview is verlopen.')
+    expect(status(1)).toBe('voorbereid')
+  })
+
   test('a service PATCH of voorbereid_op is ignored, and an expired preview still refuses Bevestigen', async () => {
     const old = plant('bijwerken', 'voorbereid', { voorbereid_op: ago(25 * HOUR) })
     const stamp = actie(old).voorbereid_op

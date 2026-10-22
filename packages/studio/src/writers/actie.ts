@@ -57,7 +57,7 @@ export const actieWriter: Writer = {
     const undo = ctx.lifecycle?.kind === 'undo'
     if (to === 'bevestigd') {
       checkConfirmer(ctx)
-      if (!undo) checkFresh(current.voorbereid_op)
+      checkFresh(current.voorbereid_op)
     }
     if (!undo) checkFit(current.soort, current.status, to)
     return to === 'voorbereid' && !undo ? { ...values, voorbereid_op: localTime() } : values
