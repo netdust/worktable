@@ -98,6 +98,8 @@ export interface LinkDecl {
   target: string
   state?: string
   count?: string
+  /** A column of the link dataset whose text shows under each item; to an owner only when owner_visible. */
+  detail?: string
 }
 
 /** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. `owner_visible` serves it to the row's owner too. */
@@ -277,11 +279,28 @@ export interface HookResult {
   notice?: string
 }
 
+type Scalar = string | number | boolean | null
+
+/** Every key (a column or lookup of the source) equals its value, or is one of `$in`, on the row as the caller reads it; a key it lacks (an owner's lookup that is not owner_visible) never matches. */
+export type Condition = Record<string, Scalar | { $in: Scalar[] }>
+
 /** A write to `column` on an existing row is a transition; a create is not. Hooks run on entering their state. */
 export interface LifecycleDecl {
   column: string
-  /** `label` is the transition's verb, shown on the action token's page. */
-  transitions: { from: string[] | '*'; to: string; roles: Role[]; label?: string }[]
+  /**
+   * `label` is the transition's verb, shown on the action token's page. `button` is its label as a drawer button.
+   * `when` decides only whether that button shows, never whether the write is allowed: a writer mirrors any `when` that matters.
+   */
+  transitions: {
+    from: string[] | '*'
+    to: string
+    roles: Role[]
+    label?: string
+    button?: string
+    when?: Condition
+  }[]
+  /** The states in which an outside process is busy with the record or picks it up next. */
+  live?: string[]
   hooks?: Record<string, (row: Record<string, unknown>, ctx: WriteContext) => HookResult>
   token_projection?: string[]
 }
@@ -340,6 +359,10 @@ export interface ActionDecl {
   label: string
   on: string
   input: Record<string, ActionInput>
+  /** The grid opens the first record the run created, else the record it ran on. */
+  opens?: true
+  /** A record that does not match is refused 422 `condition_not_met` before `run`. */
+  when?: Condition
   run(record: Values, input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 
@@ -349,6 +372,8 @@ export interface SelectionActionDecl {
   on: string
   many: true
   input: Record<string, ActionInput>
+  opens?: true
+  when?: Condition
   run(records: Values[], input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 

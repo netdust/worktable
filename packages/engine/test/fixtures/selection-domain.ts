@@ -1,4 +1,12 @@
-import { type Domain, defineDataset, defineQuery, refuse, type SelectionActionDecl, type Writer } from '../../src'
+import {
+  type ActionDecl,
+  type Domain,
+  defineDataset,
+  defineQuery,
+  refuse,
+  type SelectionActionDecl,
+  type Writer,
+} from '../../src'
 
 type Values = Record<string, unknown>
 
@@ -11,8 +19,23 @@ const bundle = defineDataset({
   title: 'name',
   custom: false,
   owners: { owner: 'id' },
-  columns: { name: { type: 'text', label: 'Name' } },
-  links: { members: { label: 'Members', item: 'Tie', dataset: 'tie', key: 'bundle_id', target: 'member_id' } },
+  columns: {
+    name: { type: 'text', label: 'Name' },
+    phase: { type: 'text', label: 'Phase', default: 'open', options: { open: 'Open', closed: 'Closed' } },
+  },
+  links: {
+    members: { label: 'Members', item: 'Tie', dataset: 'tie', key: 'bundle_id', target: 'member_id' },
+    entries: {
+      label: 'Entries',
+      item: 'Entry',
+      dataset: 'entry',
+      key: 'bundle_id',
+      target: 'member_id',
+      state: 'status',
+      detail: 'note',
+    },
+    memos: { label: 'Memos', item: 'Entry', dataset: 'entry', key: 'bundle_id', target: 'member_id', detail: 'memo' },
+  },
 })
 
 const member = defineDataset({
@@ -24,6 +47,73 @@ const member = defineDataset({
   columns: {
     name: { type: 'text', label: 'Name' },
     bundle_id: { type: 'integer', label: 'Bundle', relation: 'bundle' },
+    stage: {
+      type: 'text',
+      label: 'Stage',
+      default: 'new',
+      options: { new: 'New', active: 'Active', done: 'Done', parked: 'Parked' },
+    },
+  },
+  lookups: { bundle_phase: { label: 'Bundle phase', via: 'bundle_id', field: 'phase' } },
+  lifecycle: {
+    column: 'stage',
+    live: ['active'],
+    transitions: [
+      { from: ['new'], to: 'active', roles: ['administrator', 'editor', 'owner'], button: 'Start' },
+      {
+        from: ['active'],
+        to: 'done',
+        roles: ['administrator', 'editor'],
+        button: 'Finish',
+        when: { bundle_phase: 'open' },
+      },
+      { from: ['active'], to: 'new', roles: ['administrator'], button: 'Back' },
+      { from: '*', to: 'parked', roles: ['administrator', 'editor'], button: 'Park' },
+      { from: ['done'], to: 'new', roles: ['administrator', 'editor'], label: 'Reopen' },
+      {
+        from: ['new'],
+        to: 'done',
+        roles: ['administrator', 'editor', 'owner'],
+        button: 'Skip',
+        when: { bundle_phase: null },
+      },
+    ],
+  },
+})
+
+// A bundle's entry for a member: the link dataset with its own lifecycle, buttons and detail text.
+const entry = defineDataset({
+  name: 'entry',
+  label: 'Entries',
+  title: 'note',
+  custom: false,
+  listed: false,
+  owners: { owner: 'bundle_id' },
+  columns: {
+    bundle_id: { type: 'integer', label: 'Bundle', relation: 'bundle' },
+    member_id: { type: 'integer', label: 'Member', relation: 'member' },
+    status: {
+      type: 'text',
+      label: 'Status',
+      default: 'pending',
+      options: { pending: 'Pending', confirmed: 'Confirmed', declined: 'Declined' },
+    },
+    note: { type: 'text', label: 'Note', nullable: true, owner_visible: true },
+    memo: { type: 'text', label: 'Memo', nullable: true },
+  },
+  lookups: { bundle_phase: { label: 'Bundle phase', via: 'bundle_id', field: 'phase' } },
+  lifecycle: {
+    column: 'status',
+    transitions: [
+      {
+        from: ['pending'],
+        to: 'confirmed',
+        roles: ['administrator', 'editor', 'owner'],
+        button: 'Confirm',
+        when: { bundle_phase: 'open' },
+      },
+      { from: ['pending'], to: 'declined', roles: ['administrator', 'editor'], button: 'Decline' },
+    ],
   },
 })
 
@@ -113,16 +203,45 @@ const touch: SelectionActionDecl = {
   },
 }
 
+// Opens the record it ran on, and runs only while that record's bundle is open.
+const settle: ActionDecl = {
+  label: 'Settle',
+  on: 'member',
+  input: {},
+  when: { bundle_phase: 'open' },
+  opens: true,
+  run: (record) => {
+    seen.push([record])
+    return []
+  },
+}
+
+const sweep: SelectionActionDecl = {
+  label: 'Sweep',
+  on: 'member',
+  many: true,
+  input: {},
+  when: { bundle_phase: 'open' },
+  opens: true,
+  run: (records) => {
+    seen.push(records)
+    return []
+  },
+}
+
 const domain: Domain = {
-  datasets: [bundle, member, tie, slot],
+  datasets: [bundle, member, tie, slot, entry],
   queries: [roster],
   writers: {
     bundle: { create: accept, update: accept, delete: () => {} },
     member: { create: accept, update: accept, delete: () => {} },
     tie: tieWriter,
     slot: { create: accept, update: accept, delete: () => {} },
+    entry: { create: accept, update: accept, delete: () => {} },
   },
   actions: {
+    settle,
+    sweep,
     gather,
     touch,
     // On a dataset an owner cannot read.
@@ -146,13 +265,17 @@ const domain: Domain = {
     },
   },
   seed: (insert) => {
-    insert('bundle', [{ name: 'Alpha' }, { name: 'Beta' }])
+    insert('bundle', [{ name: 'Alpha' }, { name: 'Beta', phase: 'closed' }])
     insert('member', [
       { name: 'Ann', bundle_id: 1 },
       { name: 'Bob', bundle_id: 1 },
       { name: 'Cy', bundle_id: 2 },
       { name: 'Di', bundle_id: 1 },
       ...Array.from({ length: 110 }, (_, n) => ({ name: `Extra ${String(n + 1).padStart(3, '0')}`, bundle_id: 2 })),
+    ])
+    insert('entry', [
+      { bundle_id: 1, member_id: 1, note: 'Bring a pen', memo: 'Kept inside' },
+      { bundle_id: 2, member_id: 3, note: 'Late', memo: 'Also inside' },
     ])
   },
   views: [

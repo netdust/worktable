@@ -283,3 +283,19 @@ describe('GET /rows/<down>?cells=1', () => {
     expect(body.sources.taak.matrix).toBeUndefined()
   })
 })
+
+describe('a cell row', () => {
+  test('carries no lookup key, so the matrix payload does not grow', async () => {
+    const lookups = { member_name: { label: 'M', via: 'member_id', field: 'name' } }
+    const d = domainOf(member, taak, verlof, join({ lookups }))
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, d)
+    seedDomain(sqlite, d)
+    const app = testEngine(sqlite, d)
+    const res = await app.request('/api/rows/taak?cells=1&from=2026-10-01&to=2026-10-31&sort=id', {
+      headers: { host: '127.0.0.1:4310', cookie: await signIn(app) },
+    })
+    const body = (await res.json()) as { rows: { cells: Record<string, unknown>[] }[] }
+    expect(body.rows[0]?.cells[0]).not.toHaveProperty('member_name')
+  })
+})
