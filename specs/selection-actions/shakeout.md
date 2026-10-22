@@ -1,6 +1,6 @@
 # Shake-out: selection-actions
 
-Driven 2026-10-22 on `feature/selection-actions` at e991993, the review's fix pass. The shake-out adds tests, screenshots and this file, no product code. One flow failed (row 17); the fix pass owes it a RED to GREEN, and the row is re-driven after.
+Driven 2026-10-22 on `feature/selection-actions` at e991993, the review's fix pass, and re-driven at b48dc7d. The shake-out adds tests, screenshots and this file, no product code. Row 17 failed at e991993; it was fixed in b48dc7d (CSS only) and re-driven there by hand: the box column, the header box and the screenshots that show the number column were retaken at b48dc7d.
 
 The artifact is the selection fixture instance the harness boots: engine on 4314 (`packages/engine/test/fixtures/selection-domain.ts`, invented data) and the grid on 5177, signed in as the seeded editor selectie@e2e.test. Every run held the machine-wide e2e lock. The hand drives were Playwright scripts under `e2e/.tmp` (ignored, never committed), driving a real Chromium at 1440 by 900 with real mouse and keyboard events; the committed flows are in `e2e/selection.spec.ts` and `e2e/smoke/selection.spec.ts`.
 
@@ -24,12 +24,12 @@ Not driven, by the brief: the owner and other roles (only the editor exists on t
 | 14 | Escape on the drawer: Escape closes the open drawer. In a link record opened from a bundle it closes the whole drawer. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/drawer-run.png · Test: e2e/selection.spec.ts "drawer-escape @e2e" |
 | 15 | + Nieuw refusals: Aanmaken on an empty Name keeps the dialog open with the alert `"name" is required` and adds no slot; Escape closes the dialog with no slot; a double-click on Aanmaken adds one slot. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/nieuw-calendar-dialog.png · Test: e2e/selection.spec.ts "add-from-query-refusals @e2e" |
 | 16 | Transport failures on a run: an aborted request shows the alert "Failed to fetch", a 500 shows the engine's message, a cleared session shows the sign-in form with "Sign in first". The selection stays in the first two, and the retry then runs once. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/stale-id.png · Test: e2e/selection.spec.ts "transport-failures-run @e2e" |
-| 17 | The box column is one column: in "All members" the row boxes sit at x 300 (rows 1 to 9), 293 (rows 10 to 99) and 286 (rows 100 and up), so the column of boxes steps left as the numbers gain digits. The header box sits at 307. Repro, cold: sign in as the editor, open Members then "All members", run `[...new Set([...document.querySelectorAll('tbody td.nv-num input')].map(b => Math.round(b.getBoundingClientRect().x)))]` and it answers `[300, 293, 286]`; one value is expected. Cause is the number sitting right-aligned in the cell with the box before it, in `.nv-num` of `apps/grid/src/ui/app.css`. Visible in shakeout/selection-bar.png between rows 9 and 10. | browser | fail | Browser: http://127.0.0.1:5177/ · shakeout/three-digit-numbers.png · Test: e2e/selection.spec.ts "checkbox-column-aligned @e2e" (RED on `expect(xs).toHaveLength(1)`, received 3) |
+| 17 | The box column is one column: at b48dc7d the set of `tbody td.nv-num input` x positions is one value, 280, in "All members" (top and scrolled down 3000px) and in "Beta members" (111 rows, top and bottom), and the header box sits at the same 280. Before the fix (e991993) it answered 300, 293 and 286 (the header at 307). Cold check: open Members, "All members", run `[...new Set([...document.querySelectorAll('tbody td.nv-num input')].map(b => Math.round(b.getBoundingClientRect().x)))]`. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/three-digit-numbers.png · Test: e2e/selection.spec.ts "checkbox-column-aligned @e2e" (RED at e991993, GREEN at b48dc7d) |
 | 18 | The sign-in page and the schema without a session (smoke): the page answers 200 with the Aanmelden form and no selection column; GET /api/schema answers 401 `unauthenticated`. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/tree-no-link-table.png · Test: e2e/smoke/selection.spec.ts "@smoke" (two tests) |
 
 Hunt: 3 charters · 1 confirmed · 0 not ours · 3 rejected
 
-The hunt ran in the browser on the dev instance after a fresh boot, about 60 browser actions in all. Its one confirmed bug is row 17.
+The hunt ran in the browser on the dev instance after a fresh boot, about 60 browser actions in all. Its one confirmed bug is row 17, fixed in b48dc7d.
 
 **Charter 1, odd input (Gather and + Nieuw):** a blank-ish name, a refused note, a 600-character name, an empty + Nieuw submit, in about 20 actions.
 - The 600 characters were cut to 500 by the field's maxlength. An empty + Nieuw and the refused note are rows 15 and 13.
@@ -49,7 +49,7 @@ rejected: the dropped request reads "Failed to fetch", in English. It is the bro
 
 ## The registry
 
-`specs/CHECKS.md` gained 17 e2e rows for selection-actions (one per flow of `e2e/selection.spec.ts`; the alignment repro among them, RED until the fix) and 2 smoke rows (`e2e/smoke/selection.spec.ts`), all verified e991993 2026-10-22. `scripts/check-checks.ts` exits 0.
+`specs/CHECKS.md` gained 17 e2e rows for selection-actions (one per flow of `e2e/selection.spec.ts`; the alignment repro among them, RED until the fix) and 2 smoke rows (`e2e/smoke/selection.spec.ts`), all verified b48dc7d 2026-10-22. `scripts/check-checks.ts` exits 0.
 
 ## Bite check
 
