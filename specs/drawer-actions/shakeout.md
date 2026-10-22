@@ -1,6 +1,6 @@
 # Shake-out: drawer-actions
 
-Driven 2026-10-22 on `feature/drawer-actions` at 0934260, the review's fix pass. The shake-out adds tests, screenshots and this file, no product code.
+Driven 2026-10-22 on `feature/drawer-actions` at 0934260, the review's fix pass; row 9 failed there and was re-driven green at 12de8aa after its fix. The shake-out adds tests, screenshots and this file, no product code.
 
 The artifact is the selection fixture instance the harness boots fresh (engine 4314, grid 5177, invented data, `packages/engine/test/fixtures/selection-domain.ts`), driven in a real Chromium at 1440 by 900 as the seeded editor, with the seeded administrator as the outside process. Every run held the machine-wide e2e lock. Committed flows: `e2e/drawer-actions.spec.ts` and `e2e/smoke/drawer-actions.spec.ts`. Step 0: the 17 selection-actions e2e tests and its 2 smoke tests were re-driven at this head, all green, and their `verified` cells bumped.
 
@@ -16,13 +16,13 @@ Flows driven are the Test map's E2E flows column (press-a-button, link-item-butt
 | 6 | Review S2 (a): Cy is live; the poll answer is held, the drawer closed, the answer released: the drawer stays closed, and no further poll goes out for 7 s. | browser | pass | Browser: http://127.0.0.1:5177/#view=1 · shakeout/drawer-live.png · Test: e2e/drawer-actions.spec.ts "live-drawer-closed-mid-poll @e2e" |
 | 7 | Review S2 (b), dashboard: press Start in the dashboard drawer, close it, Undo from the notice: the drawer stays closed. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/dashboard-undo-after-close.png · Test: e2e/drawer-actions.spec.ts "press-then-close-then-undo @e2e" |
 | 8 | Review S2 (b), related drawer: from a bundle's drawer open an entry, Confirm it, close the entry drawer and the bundle drawer, Undo from the notice: no drawer reopens. | browser | pass | Browser: http://127.0.0.1:5177/#view=5 · shakeout/drawer-link-item-button.png · Test: e2e/drawer-actions.spec.ts "press-in-related-drawer-then-close-then-undo @e2e" |
-| 9 | Undo of an action's result: on "All members" tick Ann, run Sweep (drawer "Swept 1" opens), press Ongedaan maken in the notice. The bundle is deleted (the API no longer lists it) but the drawer of "Swept 1" stays open on the deleted record, with its Verwijderen button. Expected: the drawer closes with the record. Cold repro: tick Ann, Sweep, Ongedaan maken, read `getByRole('complementary', { name: 'Swept 1' })` count: 1, want 0. The same ghost shows when the administrator deletes an open live record (DELETE /api/rows/member/2 with Bob's drawer open: the busy mark goes, the drawer keeps Bob with Finish, Park). | browser | fail | Browser: http://127.0.0.1:5177/ · shakeout/undo-ghost-drawer.png · Test: e2e/drawer-actions.spec.ts "undo-closes-the-opened-record @e2e" (RED at 0934260 on its toHaveCount(0) assertion) |
+| 9 | Undo of an action's result: on "All members" tick Ann, run Sweep (drawer "Swept 1" opens), press Ongedaan maken in the notice. The bundle is deleted and the drawer closes with it. Fixed after the first drive (the drawer stayed open on the deleted record; a poll that finds its record gone now closes it too, in every drawer host). | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/undo-closes-result-drawer.png · Test: e2e/drawer-actions.spec.ts "undo-closes-the-opened-record @e2e" (RED at 0934260, green at 12de8aa) |
 | 10 | Smoke: the dashboard without a session answers 200 with the Aanmelden form and no drawer. | browser | pass | Browser: http://127.0.0.1:5177/ · shakeout/smoke-signin.png · Test: e2e/smoke/drawer-actions.spec.ts "drawer surface @smoke" |
 | 11 | Smoke: GET /api/rows/member without a session answers 401 `unauthenticated`, so no row marks are served. | wire | pass | Test: e2e/smoke/drawer-actions.spec.ts "drawer buttons and their marks @smoke" |
 
 Hunt: 3 charters · 1 confirmed · 0 not ours · 3 rejected
 
-The hunt ran in the browser on the freshly booted instance, about 60 browser actions in all (scratch specs under `e2e/.tmp`, since deleted). The one confirmed bug is row 9.
+The hunt ran in the browser on the freshly booted instance, about 60 browser actions in all (scratch specs under `e2e/.tmp`, since deleted). The one confirmed bug is row 9, fixed in 12de8aa.
 
 **Charter 1, drawer buttons, odd input:** a double-click on Start, a closed-bundle record's drawer (Cy), a record outside a button's `when`, in about 20 actions.
 - The double-click made one write and one notice "Start gedaan." (the buttons guard a press in flight).
@@ -44,7 +44,7 @@ rejected: the action notice reads "Settle uitgevoerd." in English. The action's 
 
 ## The registry
 
-`specs/CHECKS.md` gained 9 e2e rows (one per test of `e2e/drawer-actions.spec.ts`, the row 9 repro among them, RED until the fix) and 2 smoke rows (`e2e/smoke/drawer-actions.spec.ts`), verified 0934260 2026-10-22; the selection-actions rows were re-driven and bumped to the same. `bun scripts/check-checks.ts` exits 0.
+`specs/CHECKS.md` gained 9 e2e rows (one per test of `e2e/drawer-actions.spec.ts`) and 2 smoke rows (`e2e/smoke/drawer-actions.spec.ts`), verified 12de8aa 2026-10-22; the selection-actions rows were re-driven and bumped to the same. `bun scripts/check-checks.ts` exits 0.
 
 ## Bite check
 
