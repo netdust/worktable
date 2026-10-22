@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
 import { useReread } from '../grid/drawerWrite'
@@ -52,6 +52,16 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     const model = opened ? models[opened.view.model] : undefined
     return model && opened ? columnsFor(model, { ...opened.view, columns: undefined, lookups: undefined, rollups: undefined }, false, models) : []
   }, [opened, models])
+  const openedNow = useRef(opened)
+  openedNow.current = opened
+  // A re-read lands only on the drawer it was made for. The tiles are read again only when the record's state moved: a press, an Undo, an outside change.
+  const follow = (model: string) => (row: Row) => {
+    const was = openedNow.current
+    if (!was || was.view.model !== model || was.row.id !== row.id) return
+    const column = models[model]?.lifecycle
+    setOpened((now) => (now && now.view.model === model && now.row.id === row.id ? { ...now, row } : now))
+    if (column !== undefined && row.fields[column] !== was.row.fields[column]) refresh()
+  }
   const viewOf = (id: number) => views.find((v) => v.id === id)
   const tileOf = (tile: Tile, at: number) => {
     const missing = viewsOf(tile).some((id) => !viewOf(id))
@@ -105,10 +115,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
         </div>
         )}
         {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags}
-          onDone={reread(opened.view.model, opened.row.id, (row) => {
-            setOpened({ ...opened, row })
-            refresh()
-          })} />}
+          onDone={reread(opened.view.model, opened.row.id, follow(opened.view.model))} />}
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}

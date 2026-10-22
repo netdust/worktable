@@ -1724,6 +1724,18 @@ describe('a selection action', () => {
     expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Solo' })
   })
 
+  it('a run refused as condition_not_met reads the view again and says in Dutch that the row no longer fits', async () => {
+    api.runSelection.mockRejectedValue({ code: 'condition_not_met', message: 'action gather does not apply to record 2' })
+    await shell()
+    await tick('Aart', 'Bo')
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect((await screen.findByRole('alert')).textContent).toBe('Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.')
+  })
+
   it('a run refused as unknown_record reads the view again, drops the gone row and says so in Dutch', async () => {
     api.runSelection.mockRejectedValue({ code: 'unknown_record', message: 'unknown record 2' })
     await shell()
@@ -2666,6 +2678,39 @@ describe('a drawer button', () => {
       expect(within(screen.getByRole('grid', { name: 'Leden' })).queryByText('Alpha', { selector: '.nv-cell__text' })).toBeTruthy()
     })
 
+    it('a reply resolving after close leaves the drawer closed', async () => {
+      const drawer = await related()
+      let answer: (row: unknown) => void = () => undefined
+      api.rowOf.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+      })
+
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
+      await act(async () => answer(bundle('closed', ['open', 'Heropenen'])))
+
+      expect(screen.queryByRole('complementary', { name: 'Alpha' })).toBeNull()
+    })
+
+    it('Undo after closing the drawer keeps it closed', async () => {
+      const drawer = await related()
+      api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
+      api.undoBatch.mockResolvedValue('u-7')
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+      })
+      await within(drawer).findByRole('button', { name: 'Heropenen' })
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
+
+      const notice = await screen.findByRole('status', { name: 'Dichtzetten gedaan.' })
+      await act(async () => {
+        fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+      })
+
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-7')
+      expect(screen.queryByRole('complementary', { name: 'Alpha' })).toBeNull()
+    })
+
     it('Undo re-reads that drawer', async () => {
       const drawer = await related()
       api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
@@ -2683,6 +2728,40 @@ describe('a drawer button', () => {
 
       expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-7')
       expect(await within(drawer).findByRole('button', { name: 'Dichtzetten' })).toBeTruthy()
+    })
+  })
+
+  describe('on the dashboard, with no store of its own', () => {
+    const saved = (id: number, label: string, extra: object) => ({
+      key: String(id), id, label, table: 'members', table_label: 'Leden', model: 'member', type: 'grid', starting: false,
+      arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] },
+      shared: true, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, ...extra,
+    })
+    const wachtend = saved(10, 'Wachtend', {})
+    const overzicht = saved(9, 'Overzicht', { type: 'dashboard', layout: { sections: [{ label: 'Nu', tiles: [{ kind: 'list', view: 10, rows: 5, columns: [] }] }], actions: [] } })
+
+    it('shows a refused Undo as a notice in the engine’s words', async () => {
+      api.schema.mockResolvedValue(stages)
+      api.savedViews.mockResolvedValue([overzicht, wachtend])
+      api.rows.mockResolvedValue({ rows: [at('open', ['active', 'Starten'])], total: 1 })
+      api.rowOf.mockResolvedValue(at('active'))
+      api.undoBatch.mockRejectedValue({ code: 'changed_since', message: 'changed since', column: 'stage', label: 'Stage' })
+      window.location.hash = '#view=9'
+      await shell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Aart' }))
+      const drawer = await screen.findByRole('complementary', { name: 'Aart' })
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+      })
+
+      const notice = await screen.findByRole('status', { name: 'Starten gedaan.' })
+      await act(async () => {
+        fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+      })
+
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+      await waitFor(() => expect(screen.getAllByRole('status').some((n) => /gewijzigd|Stage|stage/i.test(n.getAttribute('aria-label') ?? ''))).toBe(true))
+      window.location.hash = ''
     })
   })
 

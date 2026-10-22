@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Available, LinkItem, Model, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
@@ -66,5 +66,21 @@ describe('the drawer’s buttons', () => {
     expect(screen.getByText('4 plugins')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Niet nu' }))
     expect(press).toHaveBeenCalledExactlyOnceWith('tie', 9, item.available, 'skip', onDone)
+  })
+
+  it('disables its buttons while a press is in flight, so a double click is one press', async () => {
+    let answer: () => void = () => undefined
+    press.mockClear()
+    press.mockImplementationOnce(() => new Promise<void>((resolve) => { answer = resolve }))
+    open(row(available(['klaar', 'Afronden'], ['weg', 'Weg'])))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Afronden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Afronden' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Weg' }))
+
+    expect(press).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', true)
+    await act(async () => answer())
+    expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', false)
   })
 })

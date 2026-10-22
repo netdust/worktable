@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ApiError, Model, Row } from '../types'
 
 const EVERY = 3000
@@ -12,26 +12,34 @@ export function useLive(model: Model | undefined, row: Row, reread: () => Promis
   const live = model?.live
   const liveKey = live?.join('\0')
   const state = column ? row.fields[column] : undefined
-  const busy = typeof state === 'string' && live?.includes(state) === true
+  const [halted, setHalted] = useState(false)
+  const inLive = typeof state === 'string' && live?.includes(state) === true
+  const busy = inLive && !halted
   const again = useRef(reread)
   again.current = reread
   useEffect(() => {
-    if (!busy || !column || !live) return
+    if (!inLive || !column || !live) return
+    setHalted(false)
     let stopped = false
     let errors = 0
     let timer: ReturnType<typeof setTimeout>
     const wait = () => {
       timer = setTimeout(poll, errors >= ERRORS ? BACKED_OFF : EVERY)
     }
+    // Polling that ends takes the busy mark with it.
+    const halt = () => {
+      if (!stopped) setHalted(true)
+    }
     async function poll() {
       try {
         const found = await again.current()
-        if (stopped || !found) return
+        if (stopped) return
+        const next = found?.fields[column as string]
+        if (typeof next !== 'string' || !live?.includes(next)) return halt()
         errors = 0
-        const next = found.fields[column as string]
-        if (typeof next !== 'string' || !live?.includes(next)) return
       } catch (error) {
-        if (stopped || REFUSED.has((error as ApiError).status ?? 0)) return
+        if (stopped) return
+        if (REFUSED.has((error as ApiError).status ?? 0)) return halt()
         errors += 1
       }
       wait()
@@ -41,6 +49,6 @@ export function useLive(model: Model | undefined, row: Row, reread: () => Promis
       stopped = true
       clearTimeout(timer)
     }
-  }, [busy, column, liveKey, row.id])
+  }, [inLive, column, liveKey, row.id])
   return { busy }
 }

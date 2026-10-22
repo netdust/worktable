@@ -92,4 +92,16 @@ describe('a live drawer', () => {
     await tick(60_000)
     expect(reread).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    ['the record is gone', () => Promise.resolve(null)],
+    ['a refusal answers', () => Promise.reject({ code: 'forbidden', message: 'no', status: 403 })],
+    ['the record left its live state', () => Promise.resolve(at('done'))],
+  ])('drops the busy mark when polling stops because %s', async (_name, answer) => {
+    const reread = vi.fn(answer)
+    const { result } = renderHook(() => useLive(model, at('busy'), reread))
+    expect(result.current.busy).toBe(true)
+    await tick(3100)
+    expect(result.current.busy).toBe(false)
+  })
 })

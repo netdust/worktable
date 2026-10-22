@@ -397,6 +397,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
   const live = useRef(store)
   live.current = store
+  const viewNow = useRef(view)
+  viewNow.current = view
   const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
@@ -549,8 +551,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   }
   // A button the server marked is the ordinary transition write, expecting the state it was marked against.
   const drawerWrite: DrawerWrite = {
+    // Read through refs: a re-read may land after the view moved on, and must not repaint a dead store or over a write in flight.
     fresh: (of, row) => {
-      if (of === view?.model) store?.replace(row)
+      const current = live.current
+      if (of === viewNow.current?.model && current && !current.isPending(row.id)) current.replace(row)
     },
     press: async (of, id, available, to, again) => {
       const onDone = () => void again().catch(() => undefined)
@@ -563,7 +567,10 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           history.push(entry)
           const undo = () => {
             if (history.last() !== entry) return
-            void (live.current?.undo() ?? history.undo().then((undone) => (undone?.refresh ? undone.refresh() : reloadView()), () => undefined))
+            void (live.current?.undo() ?? history.undo().then(
+              (undone) => (undone?.refresh ? undone.refresh() : reloadView()),
+              (error: ApiError) => notify({ message: undoText(error) }),
+            ))
           }
           notify({ message: t('buttonDone', { button: available.buttons.find((b) => b.to === to)?.label ?? to }), action: { label: t('undo'), run: undo } })
         }
@@ -577,9 +584,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const opening = (action: ModelAction, created: Opened[], acted: Opened | null): Opened | null => (action.opens ? (created[0] ?? acted) : null)
   const act = async (row: Row, action: ModelAction, input: Record<string, unknown>): Promise<Opened | null> => {
     if (!view) return null
-    const done = await runAction(action.name, row.id, input)
-    finished(done.batch, action)
-    return opening(action, done.created, { dataset: view.model, id: row.id })
+    try {
+      const done = await runAction(action.name, row.id, input)
+      finished(done.batch, action)
+      return opening(action, done.created, { dataset: view.model, id: row.id })
+    } catch (error) {
+      // The row moved out of the action's condition since the sheet loaded: read again, so the drawer stops offering it.
+      if ((error as ApiError).code === 'condition_not_met') reloadView()
+      throw error
+    }
   }
   const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>): Promise<Opened | null> => {
     if (!view) return null
@@ -589,7 +602,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       return opening(action, done.created, null)
     } catch (error) {
       // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
-      if ((error as ApiError).code === 'unknown_record') reloadView()
+      if (['unknown_record', 'condition_not_met'].includes((error as ApiError).code)) reloadView()
       throw error
     }
   }

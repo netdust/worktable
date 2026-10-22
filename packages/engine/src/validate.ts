@@ -456,20 +456,31 @@ const isInList = (v: unknown): v is { $in: unknown[] } =>
   typeof v === 'object' && v !== null && Object.keys(v).join() === '$in' && Array.isArray((v as { $in: unknown }).$in)
 
 // Equality and `$in` only, on a column or lookup the source serves.
-function checkCondition(source: DatasetDecl, what: string, when: Condition): void {
+function checkCondition(domain: Domain, source: DatasetDecl, what: string, when: Condition): void {
   const at = (bad: string, message: string) => new DomainError(source.name, bad, `${what}: when ${message}`)
   if (typeof when !== 'object' || when === null || Array.isArray(when)) throw at(what, 'must be an object')
   for (const [key, want] of Object.entries(when)) {
     if (!Object.hasOwn(source.columns, key) && !lookupOf(source, key)) {
       throw at(key, `names "${key}", which is no column or lookup of "${source.name}"`)
     }
-    if (isScalar(want)) continue
-    const list = isInList(want) ? want.$in : null
+    const list = isScalar(want) ? [want] : isInList(want) ? want.$in : null
     if (!list?.every(isScalar)) throw at(key, `value of "${key}" must be a scalar or { $in: [scalars] }`)
+    const options = optionsOf(domain, source, key)
+    const stray =
+      options && list.find((value) => value !== null && !(typeof value === 'string' && Object.hasOwn(options, value)))
+    if (stray !== undefined) throw at(key, `value ${JSON.stringify(stray)} of "${key}" is not one of its options`)
   }
 }
 
-function checkLifecycle(dataset: DatasetDecl): void {
+// The options of a column, or of the column a lookup reads from its target, when it has any.
+function optionsOf(domain: Domain, source: DatasetDecl, key: string): Record<string, string> | undefined {
+  const lookup = lookupOf(source, key)
+  if (!lookup) return source.columns[key]?.options
+  const target = domain.datasets.find((d) => d.name === source.columns[lookup.via]?.relation)
+  return target?.columns[lookup.field]?.options
+}
+
+function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
   const lifecycle = dataset.lifecycle
   if (!lifecycle) return
   const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lifecycle ${message}`)
@@ -487,7 +498,7 @@ function checkLifecycle(dataset: DatasetDecl): void {
     if (button !== undefined && (typeof button !== 'string' || button.trim() === '')) {
       throw at(to, `button of the transition to "${to}" must be a non-empty string`)
     }
-    if (when !== undefined) checkCondition(dataset, `transition to "${to}"`, when)
+    if (when !== undefined) checkCondition(domain, dataset, `transition to "${to}"`, when)
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
   for (const key of lifecycle.live ?? []) checkOption('live state', key)
@@ -595,7 +606,12 @@ function checkActions(domain: Domain): void {
     if (action.opens !== undefined && action.opens !== true)
       throw new DomainError(name, 'opens', 'opens must be true, and absent otherwise')
     if (action.when !== undefined) {
-      checkCondition(domain.datasets.find((d) => d.name === action.on) as DatasetDecl, `action ${name}`, action.when)
+      checkCondition(
+        domain,
+        domain.datasets.find((d) => d.name === action.on) as DatasetDecl,
+        `action ${name}`,
+        action.when,
+      )
     }
     for (const [key, input] of Object.entries(action.input)) {
       checkInput(name, key, input, datasets)
@@ -725,7 +741,7 @@ export function validateDomain(domain: Domain): void {
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkTone(dataset)
-    checkLifecycle(dataset)
+    checkLifecycle(domain, dataset)
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
     checkAttachments(dataset)

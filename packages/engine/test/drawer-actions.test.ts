@@ -13,6 +13,7 @@ import {
   validateDomain,
 } from '../src'
 import { availableOf } from '../src/available'
+import { linkSelect } from '../src/rows'
 import { contents, send } from './fixture'
 import domain, { seen } from './fixtures/selection-domain'
 import { signIn, testEngine } from './sign-in'
@@ -124,6 +125,21 @@ describe('a row is marked', () => {
     const editorActor = { id: 1, role: 'editor' as const, subject: null }
     const row = { id: 1, stage: null, bundle_phase: 'open' }
     expect(availableOf(domain, member, row, editorActor)).toMatchObject({ state: null, buttons: [] })
+  })
+
+  test('a condition operator the engine does not know is no match, never a throw, in a domain that skipped validation', () => {
+    const member = domain.datasets.find((d) => d.name === 'member') as DatasetDecl
+    const raw = {
+      ...member,
+      lifecycle: {
+        ...(member.lifecycle as LifecycleDecl),
+        transitions: [{ from: '*', to: 'parked', roles: ['editor'], button: 'Park', when: { stage: { $gt: 1 } } }],
+      },
+    } as DatasetDecl
+    const row = { id: 1, stage: 'new', bundle_phase: 'open' }
+    expect(availableOf(domain, raw, row, { id: 1, role: 'editor' as const, subject: null })).toMatchObject({
+      buttons: [],
+    })
   })
 })
 
@@ -287,6 +303,19 @@ describe('validateDomain: drawer declarations', () => {
     ).not.toThrow()
   })
 
+  test('a when value that is no option of its column or lookup target is refused, and null and other text columns are accepted', () => {
+    expect(refusal(withTransition({ button: 'Park', when: { stage: 'ghost' } })).bad).toBe('stage')
+    expect(refusal(withTransition({ button: 'Park', when: { stage: { $in: ['new', 'ghost'] } } })).bad).toBe('stage')
+    expect(refusal(withTransition({ button: 'Park', when: { bundle_phase: 'ghost' } })).bad).toBe('bundle_phase')
+    expect(refusal(withAction('settle', { when: { bundle_phase: { $in: ['open', 'ghost'] } } })).bad).toBe(
+      'bundle_phase',
+    )
+    expect(() =>
+      validateDomain(withTransition({ button: 'Park', when: { stage: null, bundle_phase: 'closed' } })),
+    ).not.toThrow()
+    expect(() => validateDomain(withTransition({ button: 'Park', when: { name: 'anything' } }))).not.toThrow()
+  })
+
   test('a live state the lifecycle does not have is refused', () => {
     expect(refusal(withLifecycle({ live: ['ghost'] })).bad).toBe('ghost')
   })
@@ -310,5 +339,29 @@ describe('validateDomain: drawer declarations', () => {
     expect(refusal(swapped('member', { columns: { ...member.columns, available: column } })).bad).toBe('available')
     const lookups = { ...member.lookups, available: { label: 'A', via: 'bundle_id', field: 'name' } }
     expect(refusal(swapped('member', { lookups })).bad).toBe('available')
+  })
+})
+
+describe('what a link read selects', () => {
+  const keys = (name: string) => {
+    const linked = domain.datasets.find((d) => d.name === name) as DatasetDecl
+    return Object.keys(linkSelect(domain, linked, 'all'))
+  }
+
+  test('a link dataset that declares marks reads its lookups', () => {
+    expect(keys('entry')).toContain('bundle_phase')
+  })
+
+  test('a link dataset with lookups but without marks carries no lookup keys', () => {
+    const entry = domain.datasets.find((d) => d.name === 'entry') as DatasetDecl
+    const plain = {
+      ...entry,
+      lifecycle: {
+        ...(entry.lifecycle as LifecycleDecl),
+        transitions: (entry.lifecycle as LifecycleDecl).transitions.map((t) => ({ ...t, button: undefined })),
+      },
+    } as DatasetDecl
+    const unmarked = { ...domain, datasets: domain.datasets.map((d) => (d.name === 'entry' ? plain : d)) }
+    expect(Object.keys(linkSelect(unmarked, plain, 'all'))).not.toContain('bundle_phase')
   })
 })

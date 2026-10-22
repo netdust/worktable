@@ -14,7 +14,9 @@ function matches(when: Condition | undefined, row: Row): boolean {
   if (!when) return true
   return Object.entries(when).every(([key, want]) => {
     if (!Object.hasOwn(row, key)) return false
-    return typeof want === 'object' && want !== null ? (want.$in as unknown[]).includes(row[key]) : row[key] === want
+    if (typeof want !== 'object' || want === null) return row[key] === want
+    // Only `$in` is an operator: anything else, in a domain that skipped validation, matches nothing.
+    return Array.isArray(want.$in) && Object.keys(want).length === 1 && (want.$in as unknown[]).includes(row[key])
   })
 }
 

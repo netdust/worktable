@@ -63,6 +63,8 @@ export interface Store {
   redo: () => Promise<void>
   /** The row as the server now holds it, painted over what this store had. */
   replace: (row: Row) => void
+  /** A write for this record is painted and not yet answered: a row read meanwhile is older than the paint. */
+  isPending: (id: number) => boolean
   /** `offers`: the fields to ask for once the writer refused the create, when the schema could not say they were needed. */
   draft: (fields: Record<string, unknown>, needs?: string[], offers?: string[]) => void
   discard: () => void
@@ -418,6 +420,7 @@ export function createStore({ model, rows, api, history = createHistory(api.undo
     redo: () => travel(history.redo, true),
     push: history.push,
     replace,
+    isPending: (id) => pending.has(id),
     draft(fields, needs = ['title'], offered = []) {
       const open = state.rows.some((r) => r.id === DRAFT)
       if (open && touched) return set({ asked: state.asked + 1 })

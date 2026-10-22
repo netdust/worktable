@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, type SQL, 
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
-import { type Available, markOf } from './available'
+import { type Available, declaresMarks, markOf } from './available'
 import { POSITION } from './ddl'
 import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
 import { filterKeys, filterWhere } from './filter'
@@ -279,6 +279,12 @@ export function servedColumn(column: string | undefined, linked: DatasetDecl, sc
   return scope === 'all' || linked.columns[column]?.owner_visible === true ? column : undefined
 }
 
+/** The columns a link read selects: the lookups too only where the link dataset's marks may judge a condition on them. */
+export function linkSelect(domain: Domain, linked: DatasetDecl, scope: Scope): Record<string, SQLiteColumn | SQL> {
+  const table = getTableColumns(tableOf(linked))
+  return declaresMarks(domain, linked) ? { ...table, ...lookupSelect(linked, scope) } : table
+}
+
 // Read through the caller's scope on the link dataset; a link dataset the caller cannot read is left out.
 export function linksOf(
   db: BunSQLiteDatabase,
@@ -294,7 +300,7 @@ export function linksOf(
     for (const id of ids) (links.get(id) as Record<string, LinkRow[]>)[name] = []
     const scope = scopeOf(actor, linked)
     const served = { count: servedColumn(link.count, linked, scope), detail: servedColumn(link.detail, linked, scope) }
-    const select = { ...getTableColumns(tableOf(linked)), ...lookupSelect(linked, scope) }
+    const select = linkSelect(domain, linked, scope)
     const raws = pointingAt(db, linked, link.key, ids, scope, select)
     withLookups(db, domain, linked, raws).forEach((row, i) => {
       const mark = markOf(domain, linked, row, actor)

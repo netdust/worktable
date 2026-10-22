@@ -380,7 +380,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
           attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)}
-          onDone={reread(related.model.key, related.row.id, (row) => setRelated({ ...related, row }))} />}
+          onDone={reread(related.model.key, related.row.id, (row) => setRelated((was) => (was && was.model.key === related.model.key && was.row.id === row.id ? { ...was, row } : was)))} />}
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id)}
