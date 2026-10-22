@@ -11,6 +11,7 @@
         "@stryker-mutator/vitest-runner": "10.0.0",
         "@types/bun": "^1.4.2",
         "@worktable/fiche": "workspace:*",
+        "@worktable/studio": "workspace:*",
         "@worktable/theatre": "workspace:*",
         "mutation-testing-metrics": "3.8.4",
         "mutation-testing-report-schema": "3.8.4",
@@ -59,6 +60,13 @@
     },
     "packages/fiche": {
       "name": "@worktable/fiche",
+      "version": "0.0.0",
+      "dependencies": {
+        "@worktable/engine": "workspace:*",
+      },
+    },
+    "packages/studio": {
+      "name": "@worktable/studio",
       "version": "0.0.0",
       "dependencies": {
         "@worktable/engine": "workspace:*",
@@ -391,6 +399,8 @@
     "@worktable/fiche": ["@worktable/fiche@workspace:packages/fiche"],
 
     "@worktable/grid": ["@worktable/grid@workspace:apps/grid"],
+
+    "@worktable/studio": ["@worktable/studio@workspace:packages/studio"],
 
     "@worktable/theatre": ["@worktable/theatre@workspace:packages/theatre"],
 

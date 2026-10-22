@@ -24,7 +24,11 @@ const repo = resolve(import.meta.dir, '..')
 const { values } = parseArgs({
   options: {
     root: { type: 'string', default: join(repo, 'packages', 'engine') },
-    domain: { type: 'string', multiple: true, default: ['@worktable/theatre', '@worktable/fiche'] },
+    domain: {
+      type: 'string',
+      multiple: true,
+      default: ['@worktable/theatre', '@worktable/fiche', '@worktable/studio'],
+    },
   },
 })
 

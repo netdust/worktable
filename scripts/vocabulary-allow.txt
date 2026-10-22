@@ -17,3 +17,17 @@ record # generic English; the engine's record links and record ids, theatre's Ta
 aan # Dutch 'to', in theatre's toegewezen_aan and gekoppeld_aan; one engine test string
 ander # Dutch 'other', in conflicten's ander_* columns; one engine test string
 taak # the engine test fixture's invented dataset; theatre declares Taak
+project # the engine test fixture's invented dataset, beside taak; studio declares Project
+check # generic English: a check function or constraint; studio's laatste_check
+plan # generic English: a migration or import plan; studio's Werkpakket.plan
+updates # generic English: an action's updates; studio's updates_* columns
+registry # the engine's source registry module; studio's Site.in_registry
+core # drizzle-orm/sqlite-core in imports; studio's updates_core
+branch # generic English, a code branch in a test comment; studio's Werkpakket.branch
+details # generic English: an error's details; studio's Onderhoud.details
+repo # generic English, the repository in a serve.ts comment; studio's Project.repo
+sites # cross-site in the write guard's Sec-Fetch-Site; studio's sites_aandacht
+groep # Dutch 'group': an engine test fixture's invented dataset (rows.test); studio declares Groep
+lid # Dutch 'member': the same engine test fixture; studio's groep_lid
+dagen # Dutch 'days': an engine test's view 'Mijn dagen'; studio's tls_dagen
+door # Dutch 'by': one engine test string; studio's geblokkeerd_door

@@ -1,5 +1,5 @@
 import { chromium } from '@playwright/test'
-import { ACCOUNTS, addFixtureViews, createAccount, FICHE, type Instance, signIn, state, THEATRE } from './auth'
+import { ACCOUNTS, addFixtureViews, createAccount, FICHE, type Instance, STUDIO, signIn, state, THEATRE } from './auth'
 
 export default async function globalSetup(): Promise<void> {
   const browser = await chromium.launch()
@@ -19,6 +19,13 @@ export default async function globalSetup(): Promise<void> {
     createAccount(FICHE, ACCOUNTS.fiche.email, ACCOUNTS.fiche.role)
     // step-0c drives both grids: the fiche editor's state carries the theatre editor's cookie too.
     await signedIn('fiche-editor', FICHE, ACCOUNTS.fiche, 'editor')
+    for (const [name, account] of [
+      ['studio-admin', ACCOUNTS.studioAdmin],
+      ['studio-editor', ACCOUNTS.studioEditor],
+    ] as const) {
+      createAccount(STUDIO, account.email, account.role)
+      await signedIn(name, STUDIO, account)
+    }
   } finally {
     await browser.close()
   }
