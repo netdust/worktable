@@ -32,7 +32,7 @@ const USER_COLUMNS = ['organisatie_id', 'smoke_urls', 'notities']
 const isUser = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 'user'
 
 function checkUnique(ctx: WriteContext, values: Values, exceptId?: number): void {
-  if (values.naam !== undefined && ctx.exists('site', { naam: values.naam }, exceptId)) {
+  if (typeof values.naam === 'string' && ctx.exists('site', { naam: values.naam }, exceptId)) {
     refuse('Er is al een site met deze naam.')
   }
 }

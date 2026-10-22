@@ -103,6 +103,18 @@ describe('site ownership', () => {
   })
 })
 
+describe('a site without a name', () => {
+  test('is a 400 from the engine, not a crash', async () => {
+    const before = row('site', 2)
+    const sites = count('site')
+    const created = await worker('POST', '/api/rows/site', { ...synced, naam: null })
+    const renamed = await worker('PATCH', '/api/rows/site/2', { naam: null })
+    expect([created.status, renamed.status]).toEqual([400, 400])
+    expect(row('site', 2)).toEqual(before)
+    expect(count('site')).toBe(sites)
+  })
+})
+
 describe('the maintenance log', () => {
   const entry = { site_id: 1, datum: '2026-10-01T09:00:00', soort: 'bijwerken', uitkomst: 'ok', samenvatting: 'Klaar' }
 
