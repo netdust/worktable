@@ -21,7 +21,7 @@ export function useOpenRow(model: Model, view: View, models: Record<string, Mode
   }
   // The row as the skin now holds it: a drop or an undo repaints the drawer too.
   const current = open ? (rows.find((row) => row.id === open.id) ?? open) : null
-  const drawer = current ? <Drawer row={current} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} nav={nav} flags={flags} onLink={places?.(model.key, current.id)} onDone={reread(model.key, current.id)}
+  const drawer = current ? <Drawer row={current} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} nav={nav} flags={flags} onLink={places?.(model.key, current.id)} onDone={reread(model.key, current.id, undefined, () => setOpen((now) => (now?.id === current.id ? null : now)))}
     attachments={model.attachments ? { ...model.attachments, dataset: model.key } : undefined} /> : null
   return [setOpen, drawer, current]
 }

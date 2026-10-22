@@ -62,6 +62,8 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     setOpened((now) => (now && now.view.model === model && now.row.id === row.id ? { ...now, row } : now))
     if (column !== undefined && row.fields[column] !== was.row.fields[column]) refresh()
   }
+  // The record is gone (deleted, or out of scope): its drawer closes, if it is still the one on screen.
+  const leave = (model: string, id: number) => setOpened((now) => (now && now.view.model === model && now.row.id === id ? null : now))
   const viewOf = (id: number) => views.find((v) => v.id === id)
   const tileOf = (tile: Tile, at: number) => {
     const missing = viewsOf(tile).some((id) => !viewOf(id))
@@ -115,7 +117,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
         </div>
         )}
         {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags}
-          onDone={reread(opened.view.model, opened.row.id, follow(opened.view.model))} />}
+          onDone={reread(opened.view.model, opened.row.id, follow(opened.view.model), () => leave(opened.view.model, opened.row.id))} />}
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}

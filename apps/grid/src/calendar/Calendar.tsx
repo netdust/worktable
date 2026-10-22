@@ -254,7 +254,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
           {!month && <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} spans={cal.spans ? cal : null} toneOf={toneOf} marks={marks} whereOf={whereOf} onOpen={setOpen} />}
         </div>
         )}
-        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)} onDone={reread(model.key, open.id)}
+        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)} onDone={reread(model.key, open.id, undefined, () => setOpen((now) => (now?.id === open.id ? null : now)))}
           nav={{ ids: rows.map((r) => r.id), onStep: (id) => setOpen(rows.find((r) => r.id === id) ?? null) }} />}
       </div>
     </div>

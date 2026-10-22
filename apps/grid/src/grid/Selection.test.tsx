@@ -19,13 +19,13 @@ const withMany = { ...activity, actions: [gather] }
 
 type Opened = { dataset: string; id: number } | null
 
-function sheet(rows: Row[] = calais, options: { model?: typeof activity; view?: View; onAction?: () => Promise<Opened | void>; query?: string; onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<Opened | void>; models?: Record<string, Model>; onNotice?: (message: string) => void } = {}) {
+function sheet(rows: Row[] = calais, options: { model?: typeof activity; view?: View; onAction?: () => Promise<Opened | void>; query?: string; onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<Opened | void>; models?: Record<string, Model>; onNotice?: (message: string) => void; reloads?: () => number } = {}) {
   const store = createStore({ model: 'activity', rows, api: { update: vi.fn(), create: vi.fn(), remove: vi.fn() } })
   const onSelection = options.onSelection ?? vi.fn(() => Promise.resolve())
   function Harness({ query }: { query: string }) {
     const [layout, setLayout] = useState(defaults(planning))
     return <Grid model={options.model ?? withMany} view={options.view ?? planning} store={store} writable layout={layout} onLayout={setLayout}
-      query={query} emptyTitle="Leeg" onSelection={onSelection} onAction={options.onAction} models={options.models} onNotice={options.onNotice} />
+      query={query} emptyTitle="Leeg" onSelection={onSelection} onAction={options.onAction} models={options.models} onNotice={options.onNotice} reloads={options.reloads?.()} />
   }
   const rendered = renderNl(<Harness query={options.query ?? ''} />)
   return { ...rendered, onSelection, search: (query: string) => rendered.rerender(<Harness query={query} />) }
@@ -281,6 +281,39 @@ describe('an action that opens its result', () => {
 
     await waitFor(() => expect(onNotice).toHaveBeenCalledExactlyOnceWith('Dit record bestaat niet meer of je mag het niet zien'))
     expect(screen.queryByRole('complementary')).toBeNull()
+  })
+
+  it('closes the opened record’s drawer when the view is read again and the record is gone, as after an Undo of the run', async () => {
+    let reads = 0
+    remote.rowOf.mockResolvedValue(record)
+    const onSelection = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
+    const { search } = sheet(calais, { model: opening, models, onSelection, reloads: () => reads })
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })
+
+    remote.rowOf.mockResolvedValue(null)
+    reads += 1
+    search('')
+
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Le Grenier, Calais' })).toBeNull())
+  })
+
+  it('keeps the opened record’s drawer, read again, when the view is read again and the record is still there', async () => {
+    let reads = 0
+    remote.rowOf.mockResolvedValue(record)
+    const onSelection = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
+    const { search } = sheet(calais, { model: opening, models, onSelection, reloads: () => reads })
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })
+    remote.rowOf.mockClear()
+
+    reads += 1
+    search('')
+
+    await waitFor(() => expect(remote.rowOf).toHaveBeenCalledWith('organisation', 12))
+    expect(screen.getByRole('complementary', { name: 'Le Grenier, Calais' })).toBeTruthy()
   })
 
   it('opens nothing for an action that does not declare it', async () => {

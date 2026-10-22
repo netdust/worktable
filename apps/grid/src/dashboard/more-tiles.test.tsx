@@ -140,6 +140,15 @@ describe('a live drawer on the dashboard', () => {
     expect(api.rows.mock.calls.length).toBeGreaterThan(tileReads)
   })
 
+  it('closes when the poll finds the record gone', async () => {
+    await openDrawer()
+    api.rowOf.mockImplementation(() => Promise.resolve(null))
+
+    await tick(3200)
+
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
+
   it('a reply resolving after close leaves the drawer closed', async () => {
     await openDrawer()
     let answer: (row: Row) => void = () => undefined

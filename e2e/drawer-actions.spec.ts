@@ -229,6 +229,6 @@ test('undo-closes-the-opened-record @e2e: Undo of the run takes the record it ma
       ((await (await page.request.get('/api/rows/bundle')).json()).rows as { name: string }[]).map((b) => b.name),
     )
     .not.toContain('Swept 1')
-  await shot(page, 'undo-ghost-drawer')
   await expect(page.getByRole('complementary', { name: 'Swept 1' })).toHaveCount(0)
+  await shot(page, 'undo-closes-result-drawer')
 })

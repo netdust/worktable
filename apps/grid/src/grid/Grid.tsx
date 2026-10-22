@@ -317,6 +317,21 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     event.preventDefault()
   }
 
+  /** A re-read lands only on the related drawer it was made for; a record that is gone closes it. */
+  function followRelated(of: string, row: Row | null, id = row?.id): void {
+    setRelated((was) => (was && was.model.key === of && was.row.id === id ? (row ? { ...was, row } : null) : was))
+  }
+
+  // The view was read again, as after an Undo of the run that opened this record: the drawer shows what is there now, or closes.
+  useEffect(() => {
+    if (!related || reloads === 0) return
+    let current = true
+    rowOf(related.model.key, related.row.id).then((found) => current && followRelated(related.model.key, found, related.row.id), () => undefined)
+    return () => {
+      current = false
+    }
+  }, [reloads])
+
   /** What an action asked to open: a record this table holds stays in its own drawer, any other is read and shown as a related one. */
   function show(opened: Opened | null | void): void {
     if (!opened) return
@@ -380,10 +395,10 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
           attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)}
-          onDone={reread(related.model.key, related.row.id, (row) => setRelated((was) => (was && was.model.key === related.model.key && was.row.id === row.id ? { ...was, row } : was)))} />}
+          onDone={reread(related.model.key, related.row.id, (row) => followRelated(related.model.key, row), () => followRelated(related.model.key, null, related.row.id))} />}
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
-          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id)}
+          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id, undefined, () => setDrawer((now) => (now === open.id ? null : now)))}
           onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then(show) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}

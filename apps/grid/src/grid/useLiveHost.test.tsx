@@ -59,4 +59,14 @@ describe('a drawer opened through the board’s host', () => {
 
     expect(remote.rowOf).toHaveBeenCalledTimes(1)
   })
+
+  it('closes when the poll finds the record gone', async () => {
+    remote.rowOf.mockResolvedValue(null)
+    render(<Host />)
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3100) })
+
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
 })

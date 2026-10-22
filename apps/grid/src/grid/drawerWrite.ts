@@ -12,13 +12,13 @@ export interface DrawerWrite {
 export const DrawerWriteContext = createContext<DrawerWrite | null>(null)
 
 /** Reads a record again and hands it to its host, answering the row it read; none outside App, so a drawer there shows no buttons and does not follow the record. */
-export function useReread(): (model: string, id: number, own?: (row: Row) => void) => (() => Promise<Row | null>) | undefined {
+export function useReread(): (model: string, id: number, own?: (row: Row) => void, gone?: () => void) => (() => Promise<Row | null>) | undefined {
   const write = useContext(DrawerWriteContext)
-  return (model, id, own) => write ? () => rowOf(model, id).then((found) => {
+  return (model, id, own, gone) => write ? () => rowOf(model, id).then((found) => {
     if (found) {
       write.fresh(model, found)
       own?.(found)
-    }
+    } else gone?.()
     return found
   }) : undefined
 }
