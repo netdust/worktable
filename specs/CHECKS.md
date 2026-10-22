@@ -4,7 +4,8 @@ What the shake-outs left to re-run on a running instance. This repo has no Makef
 production: the runner is Playwright through the repo's own harness, which starts a fresh
 invented instance (`playwright.config.ts`). `e2e` rows write and run only on that fresh instance:
 `bunx playwright test --grep @e2e`. `smoke` rows are read-only and sessionless:
-`bunx playwright test --grep @smoke`. Each row's entry narrows to its own title.
+`bunx playwright test --grep @smoke`. Each row's entry narrows to its own title. MCP server rows run
+with `bun test` instead, on an invented instance the test starts itself (the smoke row needs none).
 
 | surface | tier | entry | test | first feature | verified |
 |---|---|---|---|---|---|
@@ -154,3 +155,5 @@ invented instance (`playwright.config.ts`). `e2e` rows write and run only on tha
 | Tijdlijn tourstops · baan en balk in de kleur van de productie, volgt na herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "production-tone @e2e"` | e2e/step-3f.spec.ts | step-3f | ff90908 2026-10-18 |
 | Per status · dubbel geboekt: beide kaarten Conflict, titelregel 2 Conflicten opent Conflicten in dezelfde ruimte; geannuleerd: merken en telling weg zonder herladen | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "conflict-marks-and-insight @e2e"` | e2e/step-3f.spec.ts | step-3f | ff90908 2026-10-18 |
 | Lade van Planning en van het bord Per status · Iemand anders kiezen: zoeker op de gemarkeerde persoon in Mensen, kandidaten, band weg; één ⌘Z zet de eerste terug met band; opnieuw gekozen, na herladen de nieuwe zonder band; op het bord eerst Conflict in de band en bij de persoon, Negeren verbergt de band tot de lade opnieuw opent | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "conflict-choose-other @e2e"` | e2e/step-3f.spec.ts | step-3f | ff90908 2026-10-18 |
+| MCP server (stdio) | e2e | `bun test packages/mcp/test/instance.test.ts -t "mcp-lists-rows"` | packages/mcp/test/instance.test.ts | studio-mcp | 5ae2613 2026-10-22 |
+| MCP server (stdio) | smoke | `bun test packages/mcp/test/smoke.test.ts -t "mcp-boots"` | packages/mcp/test/smoke.test.ts | studio-mcp | 5ae2613 2026-10-22 |
