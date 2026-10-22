@@ -1,9 +1,11 @@
-import { defineDataset } from '@worktable/engine'
+import { defineDataset, type Role } from '@worktable/engine'
 
 const long = (label: string) => ({ type: 'text' as const, label, nullable: true, long: true as const })
 const text = (label: string) => ({ type: 'text' as const, label, nullable: true })
 const relation = (label: string, to: string) => ({ type: 'integer' as const, label, nullable: true, relation: to })
 const vlag = (label: string) => ({ type: 'boolean' as const, label, nullable: true })
+
+const both: Role[] = ['editor', 'administrator']
 
 export const soorten = {
   gezondheidscheck: 'Gezondheidscheck',
@@ -145,11 +147,27 @@ export const actie = defineDataset({
       options: { handmatig: 'Handmatig', schema: 'Schema' },
     },
     gepland_op: { type: 'datetime', label: 'Gepland op', nullable: true },
-    voorbereid_op: { type: 'datetime', label: 'Voorbereid op', nullable: true },
+    voorbereid_op: { type: 'datetime', label: 'Voorbereid op', nullable: true, readonly: true },
     samenvatting: long('Samenvatting'),
   },
   links: {
     sites: { label: 'Sites', item: 'Site', dataset: 'actie_site', key: 'actie_id', target: 'site_id', state: 'state' },
+  },
+  lifecycle: {
+    column: 'status',
+    transitions: [
+      { from: ['aangevraagd'], to: 'bezig', roles: both },
+      { from: ['aangevraagd'], to: 'voorbereiden', roles: both },
+      { from: ['voorbereiden'], to: 'voorbereid', roles: both },
+      { from: ['voorbereiden'], to: 'mislukt', roles: both },
+      { from: ['voorbereid'], to: 'bevestigd', roles: ['administrator'] },
+      { from: ['voorbereid'], to: 'aangevraagd', roles: both },
+      { from: ['bevestigd'], to: 'bezig', roles: both },
+      { from: ['bezig'], to: 'klaar', roles: both },
+      { from: ['bezig'], to: 'deels', roles: both },
+      { from: ['bezig'], to: 'mislukt', roles: both },
+      { from: ['aangevraagd', 'voorbereiden', 'voorbereid'], to: 'geannuleerd', roles: both },
+    ],
   },
   indexes: [['status'], ['groep_id']],
 })
