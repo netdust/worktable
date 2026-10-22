@@ -2685,4 +2685,54 @@ describe('a drawer button', () => {
       expect(await within(drawer).findByRole('button', { name: 'Dichtzetten' })).toBeTruthy()
     })
   })
+
+  describe('an action that opens', () => {
+    const settle = { name: 'settle', label: 'Afhandelen', input: {}, opens: true as const }
+    const gatherOpens = { name: 'gather', label: 'Bundelen', many: true as const, input: {}, opens: true as const }
+    const plain = { name: 'tidy', label: 'Opruimen', many: true as const, input: {} }
+    const opening: Schema = {
+      models: {
+        member: { ...stages.models.member, actions: [settle, gatherOpens, plain] },
+        bundle: { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, fields: {} },
+      },
+      tables: stages.tables, views: stages.views, writable: { member: true, bundle: true },
+    } as unknown as Schema
+
+    it('opens what a selection run created, and the record a single run acted on when it created nothing', async () => {
+      api.schema.mockResolvedValue(opening)
+      api.rows.mockResolvedValue({ rows: [{ ...at('open'), available: { ...marks('open'), actions: ['settle', 'gather', 'tidy'] } }], total: 1 })
+      api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+      api.runAction.mockResolvedValue({ batch: 'b-2', created: [] })
+      api.rowOf.mockResolvedValue({ id: 7, title: 'Voorjaar', status: '', fields: {} })
+      const drawer = await openDrawer()
+
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Afhandelen' }))
+      })
+      expect(api.runAction).toHaveBeenCalledOnce()
+      expect(api.rowOf).not.toHaveBeenCalled()
+      expect(screen.getByRole('complementary', { name: 'Aart' })).toBeTruthy()
+
+      await act(async () => {
+        fireEvent.click(within(screen.getByRole('complementary', { name: 'Aart' })).getByRole('button', { name: 'Bundelen' }))
+      })
+      expect(await screen.findByRole('complementary', { name: 'Voorjaar' })).toBeTruthy()
+      expect(api.rowOf).toHaveBeenCalledWith('bundle', 7)
+    })
+
+    it('opens nothing for an action that does not declare it', async () => {
+      api.schema.mockResolvedValue(opening)
+      api.rows.mockResolvedValue({ rows: [{ ...at('open'), available: { ...marks('open'), actions: ['settle', 'gather', 'tidy'] } }], total: 1 })
+      api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+      const drawer = await openDrawer()
+
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Opruimen' }))
+      })
+
+      await screen.findByRole('status', { name: 'Opruimen uitgevoerd.' })
+      expect(api.rowOf).not.toHaveBeenCalled()
+      expect(screen.queryByRole('complementary', { name: 'Voorjaar' })).toBeNull()
+    })
+  })
 })

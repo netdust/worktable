@@ -1,11 +1,11 @@
 import { useContext } from 'react'
 import { Button } from 'react-aria-components'
-import type { Available } from '../types'
+import type { Available, Row } from '../types'
 import { DrawerWriteContext } from './drawerWrite'
 import './drawer-buttons.css'
 
 /** The buttons the server marked for one record or link item; a press is the ordinary transition write. */
-export function DrawerButtons({ model, id, available, onDone }: { model: string; id: number; available?: Available; onDone: () => void }) {
+export function DrawerButtons({ model, id, available, onDone }: { model: string; id: number; available?: Available; onDone: () => Promise<Row | null> }) {
   const write = useContext(DrawerWriteContext)
   if (!write || !available || available.buttons.length === 0) return null
   return (

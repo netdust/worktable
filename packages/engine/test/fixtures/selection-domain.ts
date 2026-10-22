@@ -225,7 +225,7 @@ const sweep: SelectionActionDecl = {
   opens: true,
   run: (records) => {
     seen.push(records)
-    return []
+    return [{ dataset: 'bundle', values: { name: `Swept ${records.length}` } }]
   },
 }
 

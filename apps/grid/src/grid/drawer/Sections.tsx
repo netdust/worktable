@@ -73,7 +73,7 @@ export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLi
   /** Writes who holds a place; without it, or where the target column offers no candidates, no place is chosen again. */
   onLink?: WriteLink
   /** Re-reads the record after a link item's button: without it no item shows buttons. */
-  onDone?: () => void
+  onDone?: () => Promise<Row | null>
 }) {
   const [choosing, setChoosing] = useState<number | null>(null)
   useImperativeHandle(ref, () => ({ choose: setChoosing }), [])

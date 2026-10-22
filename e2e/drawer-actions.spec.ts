@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page, request, test } from '@playwright/test'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -57,4 +57,42 @@ test('link-item-button @e2e: a link item offers its record’s button and detail
 
   await expect(entries.getByText('Confirmed')).toBeVisible()
   await expect(entries.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+})
+
+test('action-opens-its-result @e2e: tick rows, run, and the record the run made opens in the drawer', async ({
+  page,
+}) => {
+  await open(page, 'All members', 'Members')
+  await page.getByRole('checkbox', { name: 'Ann selecteren' }).check()
+  await page.getByRole('checkbox', { name: 'Bob selecteren' }).check()
+
+  await page.getByRole('button', { name: 'Sweep', exact: true }).click()
+
+  const drawer = page.getByRole('complementary', { name: 'Swept 2' })
+  await expect(drawer).toBeVisible()
+  await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
+  await shot(page, 'drawer-action-result')
+})
+
+test('drawer-follows-an-outside-change @e2e: with the drawer open, a second account moves the record and the drawer follows', async ({
+  page,
+}) => {
+  const outside = await request.newContext({ baseURL: APP, storageState: 'e2e/.tmp/state/selection-admin.json' })
+  const move = async (to: string, from: string) => {
+    const reply = await outside.patch('/api/rows/member/4', { data: { stage: to, expect: { stage: from } } })
+    expect(reply.status()).toBe(200)
+  }
+  await move('active', 'new')
+  await open(page, 'All members', 'Members')
+  const drawer = await drawerOf(page, 'Di')
+  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+  await expect(drawer.getByText('Bezig…')).toBeVisible()
+  await shot(page, 'drawer-live')
+
+  await move('done', 'active')
+
+  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0, { timeout: 5000 })
+  await expect(drawer.getByText('Bezig…')).toHaveCount(0)
+  await expect(drawer.getByRole('button', { name: 'Park', exact: true })).toBeVisible()
+  await outside.dispose()
 })

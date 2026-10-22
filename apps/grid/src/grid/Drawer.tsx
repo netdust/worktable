@@ -21,9 +21,10 @@ import { Display } from './cells'
 import { ICON } from './GridHeader'
 import { ActionInputs } from './ActionInputs'
 import { DrawerButtons } from './DrawerButtons'
+import { useLive } from './useLive'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
-export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<void>
+export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<unknown>
 
 interface Props {
   row: Row
@@ -40,7 +41,7 @@ interface Props {
   actions?: ModelAction[]
   onAction?: RunAction
   /** Re-reads the record: a drawer given it shows the buttons the server marked, on the record and on its link items. */
-  onDone?: () => void
+  onDone?: () => Promise<Row | null>
   /** False leaves focus where it was: the matrix keeps typing in its cell. */
   focusOnOpen?: boolean
   /** The dataset whose record link the drawer copies and renews; an administrator's. */
@@ -103,7 +104,7 @@ const headKey = (nav: Props['nav'], row: Row) => (event: KeyboardEvent<HTMLEleme
 }
 
 /** The head line: what kind of record this is · its dataset; where it is in the view; the steps to its neighbours. */
-function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; icon?: LucideIcon }) {
+function Head({ row, model, nav, busy, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; busy?: boolean; icon?: LucideIcon }) {
   const kind = model ? kindOf(model) : null
   const value = kind ? String(row.fields[kind] ?? '') : ''
   const option = kind && model?.fields[kind]?.options?.[value]
@@ -117,6 +118,7 @@ function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: 
         {option && model && ' · '}
         {model?.label}
       </span>
+      {busy && <span className="nv-dw-head__busy" role="status"><i aria-hidden="true" />{t('liveBusy')}</span>}
       {nav && <span className="nv-dw-head__pos">{at >= 0 ? t('position', { n: at + 1, m: nav.ids.length }) : '–'}</span>}
       {nav && (
         <>
@@ -169,6 +171,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, onDone, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
+  const { busy } = useLive(onDone ? model : undefined, row, onDone ?? (() => Promise.resolve(null)))
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
   const cal = view?.calendar ?? (model ? schema?.tables.find((table) => table.model === model.key && table.calendar)?.calendar : undefined)
   const dateField = view?.date_field ?? schema?.tables.find((table) => table.model === model?.key)?.date_field ?? null
@@ -190,7 +193,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
   }
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
-      head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
+      head={<Head row={row} model={model} nav={nav} busy={busy} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
       {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
@@ -215,7 +218,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {onAction && actions.map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
+      {onAction && actions.filter((action) => !row.available || row.available.actions.includes(action.name)).map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
       </div>
     </SidePanel>

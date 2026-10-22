@@ -146,7 +146,7 @@ describe('rows()', () => {
       String(input) === '/api/schema' ? json(engine) : json({ code: 'bad_sort', message: 'cannot sort on "kleur"' }, 400),
     )
 
-    await expect(rows(planning, {})).rejects.toEqual({ code: 'bad_sort', message: 'cannot sort on "kleur"' })
+    await expect(rows(planning, {})).rejects.toEqual({ code: 'bad_sort', message: 'cannot sort on "kleur"' , status: 400 })
   })
 
   it('rejects an answer that is not the engine\'s JSON as unknown, with its status', async () => {
@@ -154,7 +154,7 @@ describe('rows()', () => {
       String(input) === '/api/schema' ? json(engine) : new Response('Bad Gateway', { status: 502, statusText: 'Bad Gateway' }),
     )
 
-    await expect(rows(planning, {})).rejects.toEqual({ code: 'unknown', message: '502 Bad Gateway' })
+    await expect(rows(planning, {})).rejects.toEqual({ code: 'unknown', message: '502 Bad Gateway' , status: 502 })
   })
 
   it('rejects a source the schema does not serve before asking for its rows', async () => {
@@ -242,7 +242,7 @@ describe('setDisplay()', () => {
   it("rejects with the engine's refusal", async () => {
     fetcher.mockResolvedValue(json({ code: 'forbidden', message: 'only an administrator may change how a source is shown' }, 403))
 
-    await expect(setDisplay('activiteit', { label: 'Werk' })).rejects.toEqual({ code: 'forbidden', message: 'only an administrator may change how a source is shown' })
+    await expect(setDisplay('activiteit', { label: 'Werk' })).rejects.toEqual({ code: 'forbidden', message: 'only an administrator may change how a source is shown' , status: 403 })
   })
 })
 
@@ -337,8 +337,8 @@ describe('saved views on the engine', () => {
     })
     const [view] = await savedViews()
 
-    await expect(updateView(view, { name: 'x' })).rejects.toEqual({ code: 'unknown_view', message: 'unknown view 5' })
-    await expect(deleteView(5)).rejects.toEqual({ code: 'not_owner', message: 'only the owner may change this view' })
+    await expect(updateView(view, { name: 'x' })).rejects.toEqual({ code: 'unknown_view', message: 'unknown view 5' , status: 404 })
+    await expect(deleteView(5)).rejects.toEqual({ code: 'not_owner', message: 'only the owner may change this view' , status: 403 })
   })
 })
 
@@ -469,8 +469,8 @@ describe('writes', () => {
       String(input) === '/api/schema' ? json(engine) : json({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' }, 422),
     )
 
-    await expect(update('activiteit', 7, { status: 'bevestigd' })).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
-    await expect(update('dagplanning', 40, { status: 'bevestigd' }, planned)).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' })
+    await expect(update('activiteit', 7, { status: 'bevestigd' })).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' , status: 422 })
+    await expect(update('dagplanning', 40, { status: 'bevestigd' }, planned)).rejects.toEqual({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' , status: 422 })
   })
 
   it("a 409 in_use reaches the store with the engine's by", async () => {
@@ -479,7 +479,7 @@ describe('writes', () => {
       String(input) === '/api/schema' ? json(engine) : json({ by, code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)' }, 409),
     )
 
-    await expect(remove('productie', 1)).rejects.toEqual({ code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)', by })
+    await expect(remove('productie', 1)).rejects.toEqual({ code: 'in_use', message: 'Still referenced by Activiteiten (3), Personen (1)', by , status: 409 })
   })
 
   it('a 409 keeps only the well-formed by entries, and the store settles on their sentence', async () => {
@@ -489,7 +489,7 @@ describe('writes', () => {
     )
 
     const refused = await remove('productie', 1).catch((error: unknown) => error)
-    expect(refused).toEqual({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Activiteiten', count: 3 }, { label: 'Leveranciers', count: 2 }] })
+    expect(refused).toEqual({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Activiteiten', count: 3 }, { label: 'Leveranciers', count: 2 }] , status: 409 })
 
     const store = createStore({ model: 'productie', rows: [{ id: 1, title: 'Alfa', status: '', fields: {} }], api: { update: vi.fn(), create: vi.fn(), remove: () => Promise.reject(refused) } })
     await store.remove(1)
@@ -557,7 +557,7 @@ describe('writes', () => {
 
   it('answers a refused upload as the engine said it', async () => {
     fetcher.mockImplementation(async () => json({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' }, 415))
-    await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' })
+    await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' , status: 415 })
   })
 
   it('reads the views for owners with the link as a RecordLink header, never in the address', async () => {
@@ -578,7 +578,7 @@ describe('writes', () => {
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } })
 
     fetcher.mockImplementationOnce(async () => json({ code: 'changed_since', message: '"status" changed since', dataset: 'activiteit', id: 7, column: 'status', label: 'Status' }, 409))
-    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status', dataset: 'activiteit' })
+    await expect(undoBatch('b-1')).rejects.toEqual({ code: 'changed_since', message: '"status" changed since', column: 'status', label: 'Status', dataset: 'activiteit' , status: 409 })
   })
 
   it('runs an action on a record with its input, and answers its batch', async () => {
@@ -592,7 +592,7 @@ describe('writes', () => {
   it('reject with the not-found the engine answers', async () => {
     fetcher.mockImplementation(async () => new Response('404 Not Found', { status: 404, statusText: 'Not Found' }))
 
-    await expect(deleteView(5)).rejects.toEqual({ code: 'unknown', message: '404 Not Found' })
+    await expect(deleteView(5)).rejects.toEqual({ code: 'unknown', message: '404 Not Found' , status: 404 })
   })
 })
 
@@ -752,7 +752,7 @@ describe('signing in', () => {
     const stop = onUnauthenticated(lapsed)
     fetcher.mockImplementation(async () => json({ code: 'unauthenticated', message: 'Sign in first' }, 401))
 
-    await expect(records('productie', '')).rejects.toEqual({ code: 'unauthenticated', message: 'Sign in first' })
+    await expect(records('productie', '')).rejects.toEqual({ code: 'unauthenticated', message: 'Sign in first' , status: 401 })
     expect(lapsed).toHaveBeenCalledOnce()
 
     stop()

@@ -22,7 +22,7 @@ const row = (marks?: Available, links?: LinkItem[]): Row => ({ id: 1, title: 'Lu
 
 const press = vi.fn(() => Promise.resolve())
 const write = { press, fresh: vi.fn() }
-const open = (r: Row, onDone: (() => void) | null = vi.fn(), m: Model = model) =>
+const open = (r: Row, onDone: (() => Promise<Row | null>) | null = vi.fn(), m: Model = model) =>
   render(<DrawerWriteContext.Provider value={write}><Drawer row={r} columns={columns} model={m} onDone={onDone ?? undefined} onClose={() => undefined} /></DrawerWriteContext.Provider>)
 
 describe('the drawer’s buttons', () => {

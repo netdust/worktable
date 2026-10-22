@@ -28,7 +28,7 @@ const flaggedClass = (flags: Flag[]) =>
   flags.length === 0 ? undefined : flags.some((flag) => flag.tone === 'bad') ? 'nv-dw-list__flagged' : 'nv-dw-list__flagged nv-dw-list__flagged--warn'
 
 /** One place of a link section: who, in what role, in what state, or the flag on them; choosing, the search in place of the name. */
-export function PlaceRow({ item, link, role, flags, choosing, onDone }: { item: LinkItem; link: Link; role?: string; flags: Flag[]; choosing?: Choosing; onDone?: () => void }) {
+export function PlaceRow({ item, link, role, flags, choosing, onDone }: { item: LinkItem; link: Link; role?: string; flags: Flag[]; choosing?: Choosing; onDone?: () => Promise<Row | null> }) {
   const { openRelated } = useContext(RelationContext)
   const said = flags[0]?.text ?? role
   const detail = item.detail

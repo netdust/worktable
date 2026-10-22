@@ -19,7 +19,7 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, DateWindow, Model, ModelAction, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
+import type { Account, ApiError, DateWindow, Model, ModelAction, Opened, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -552,7 +552,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     fresh: (of, row) => {
       if (of === view?.model) store?.replace(row)
     },
-    press: async (of, id, available, to, onDone) => {
+    press: async (of, id, available, to, again) => {
+      const onDone = () => void again().catch(() => undefined)
       const column = models[of]?.lifecycle
       if (!column) return
       try {
@@ -572,13 +573,20 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       onDone()
     },
   }
-  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
-    if (view) finished((await runAction(action.name, row.id, input)).batch, action)
+  // What an action that opens its result asks the grid to open: the first record it created, else the one a single run acted on.
+  const opening = (action: ModelAction, created: Opened[], acted: Opened | null): Opened | null => (action.opens ? (created[0] ?? acted) : null)
+  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>): Promise<Opened | null> => {
+    if (!view) return null
+    const done = await runAction(action.name, row.id, input)
+    finished(done.batch, action)
+    return opening(action, done.created, { dataset: view.model, id: row.id })
   }
-  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>) => {
-    if (!view) return
+  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>): Promise<Opened | null> => {
+    if (!view) return null
     try {
-      finished((await runSelection(action.name, ids, input)).batch, action)
+      const done = await runSelection(action.name, ids, input)
+      finished(done.batch, action)
+      return opening(action, done.created, null)
     } catch (error) {
       // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
       if ((error as ApiError).code === 'unknown_record') reloadView()

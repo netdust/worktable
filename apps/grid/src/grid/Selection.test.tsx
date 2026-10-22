@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderNl } from '../test-setup'
-import type { ModelAction, Row, View } from '../types'
+import type { Available, Model, ModelAction, Row, View } from '../types'
 import { activity, calais, planning } from './calais.test.data'
 import { Grid } from './Grid'
 import { defaults } from './layout'
@@ -17,13 +17,15 @@ const gather: ModelAction = { name: 'gather', label: 'Bundelen', many: true, inp
 const named: ModelAction = { name: 'name_it', label: 'Benoemen', many: true, input: { name: { type: 'text', label: 'Naam' } } }
 const withMany = { ...activity, actions: [gather] }
 
-function sheet(rows: Row[] = calais, options: { model?: typeof activity; view?: View; onAction?: () => Promise<void>; query?: string; onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<void> } = {}) {
+type Opened = { dataset: string; id: number } | null
+
+function sheet(rows: Row[] = calais, options: { model?: typeof activity; view?: View; onAction?: () => Promise<Opened | void>; query?: string; onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<Opened | void>; models?: Record<string, Model>; onNotice?: (message: string) => void } = {}) {
   const store = createStore({ model: 'activity', rows, api: { update: vi.fn(), create: vi.fn(), remove: vi.fn() } })
   const onSelection = options.onSelection ?? vi.fn(() => Promise.resolve())
   function Harness({ query }: { query: string }) {
     const [layout, setLayout] = useState(defaults(planning))
     return <Grid model={options.model ?? withMany} view={options.view ?? planning} store={store} writable layout={layout} onLayout={setLayout}
-      query={query} emptyTitle="Leeg" onSelection={onSelection} onAction={options.onAction} />
+      query={query} emptyTitle="Leeg" onSelection={onSelection} onAction={options.onAction} models={options.models} onNotice={options.onNotice} />
   }
   const rendered = renderNl(<Harness query={options.query ?? ''} />)
   return { ...rendered, onSelection, search: (query: string) => rendered.rerender(<Harness query={query} />) }
@@ -196,3 +198,107 @@ function renderStores() {
   const rendered = renderNl(<Harness store={storeOf(calais)} />)
   return { ...rendered, rerender: (rows: Row[]) => rendered.rerender(<Harness store={storeOf(rows)} />) }
 }
+
+const marked = (...actions: string[]): Available => ({ state: null, buttons: [], actions })
+const withMarks = (marks: Record<number, Available>): Row[] => calais.map((row) => (marks[row.id] ? { ...row, available: marks[row.id] } : row))
+
+describe('an action the rows do not all allow', () => {
+  it('is disabled with Past niet op N rijen when a ticked row’s available.actions lacks it', () => {
+    sheet(withMarks({ 102: marked('gather'), 104: marked() }))
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(rowBox('Repetitie'))
+
+    expect(screen.getByRole('button', { name: 'Bundelen' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('Past niet op 1 rijen')).toBeTruthy()
+
+    fireEvent.click(rowBox('Repetitie'))
+
+    expect(screen.getByRole('button', { name: 'Bundelen' })).toHaveProperty('disabled', false)
+    expect(screen.queryByText(/Past niet op/)).toBeNull()
+  })
+
+  it('stays enabled on rows that carry no marks: a source without conditions allows every action', () => {
+    sheet()
+    fireEvent.click(rowBox('Montage'))
+    expect(screen.getByRole('button', { name: 'Bundelen' })).toHaveProperty('disabled', false)
+  })
+})
+
+describe('an action that opens its result', () => {
+  const organisation = { key: 'organisation', label: 'Organisatie', title_label: 'Naam', title_readonly: false, fields: {} } as unknown as Model
+  const models = { activity: withMany, organisation } as Record<string, Model>
+  const record: Row = { id: 12, title: 'Le Grenier, Calais', status: '', fields: {} }
+  const many = { ...gather, opens: true as const }
+  const opening = { ...withMany, actions: [many] }
+
+  beforeEach(() => remote.rowOf.mockReset())
+
+  it('opens the created record’s drawer after a run from the bar, and clears the selection', async () => {
+    remote.rowOf.mockResolvedValue(record)
+    const onSelection = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
+    sheet(calais, { model: opening, models, onSelection })
+    fireEvent.click(rowBox('Montage'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+
+    expect(await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })).toBeTruthy()
+    expect(remote.rowOf).toHaveBeenCalledWith('organisation', 12)
+    expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull()
+  })
+
+  it('opens it after a run from the drawer too', async () => {
+    remote.rowOf.mockResolvedValue(record)
+    const onSelection = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
+    sheet(calais, { model: opening, models, onSelection })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
+    const drawer = await screen.findByRole('complementary')
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Bundelen' }))
+
+    expect(await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })).toBeTruthy()
+  })
+
+  it('keeps the table’s own drawer when the result is a record the table holds', async () => {
+    const onSelection = vi.fn(() => Promise.resolve({ dataset: 'activity', id: 102 }))
+    sheet(calais, { model: opening, models, onSelection })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
+    const drawer = await screen.findByRole('complementary')
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Bundelen' }))
+
+    expect(await screen.findByRole('complementary', { name: 'Montage' })).toBeTruthy()
+    expect(remote.rowOf).not.toHaveBeenCalled()
+  })
+
+  it('a gone record shows the recordGone notice and opens nothing', async () => {
+    remote.rowOf.mockResolvedValue(null)
+    const onNotice = vi.fn()
+    const onSelection = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
+    sheet(calais, { model: opening, models, onSelection, onNotice })
+    fireEvent.click(rowBox('Montage'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledExactlyOnceWith('Dit record bestaat niet meer of je mag het niet zien'))
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
+
+  it('opens nothing for an action that does not declare it', async () => {
+    const onSelection = vi.fn(() => Promise.resolve(undefined))
+    sheet(calais, { model: withMany, models, onSelection })
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    await waitFor(() => expect(onSelection).toHaveBeenCalled())
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
+})
+
+describe('the drawer’s actions', () => {
+  it('leaves out an action its row is not marked for, and offers every action on a row with no marks', async () => {
+    sheet(withMarks({ 102: marked('name_it') }), { model: { ...activity, actions: [gather, named] } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' }).find((b) => b.closest('tr')?.textContent?.includes('Montage'))!)
+    const marked104 = await screen.findByRole('complementary', { name: 'Montage' })
+    expect(within(marked104).queryByRole('group', { name: 'Bundelen' })).toBeNull()
+    expect(within(marked104).getByRole('group', { name: 'Benoemen' })).toBeTruthy()
+  })
+})

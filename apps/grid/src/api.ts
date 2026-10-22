@@ -25,7 +25,8 @@ function toApiError(error: unknown): ApiError {
     const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
     const key = 'key' in error && typeof error.key === 'string' ? { key: error.key } : {}
     const dataset = 'dataset' in error && typeof error.dataset === 'string' ? { dataset: error.dataset } : {}
-    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset }
+    const status = 'status' in error && typeof error.status === 'number' ? { status: error.status } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset, ...status }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
@@ -33,7 +34,7 @@ function toApiError(error: unknown): ApiError {
 /** The engine answers a refusal as `{code, message}`; anything else is unknown, with the status as its message. */
 async function refusal(response: Response): Promise<ApiError> {
   const body: unknown = await response.json().catch(() => null)
-  return toApiError(body ?? `${response.status} ${response.statusText}`.trim())
+  return { ...toApiError(body ?? `${response.status} ${response.statusText}`.trim()), status: response.status }
 }
 
 let unauthenticated = () => {}

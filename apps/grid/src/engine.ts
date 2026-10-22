@@ -82,7 +82,7 @@ export interface EngineSource {
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
-  lifecycle?: { column: string }
+  lifecycle?: { column: string; live?: string[] }
   /** Each record has a link its person reads their views through. */
   record_link?: true
   attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
@@ -214,6 +214,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
+    ...(source.lifecycle?.live ? { live: source.lifecycle.live } : {}),
     ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {

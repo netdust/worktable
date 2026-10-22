@@ -30,6 +30,8 @@ export const ACCOUNTS = {
   owner: { email: 'lotte@e2e.test', role: 'owner', subject: 'persoon:1' },
   fiche: { email: 'redactie@e2e.test', role: 'editor' },
   selection: { email: 'selectie@e2e.test', role: 'editor' },
+  // The outside process of the drawer-actions flows: moves a record's state while the editor's drawer is open.
+  selectionAdmin: { email: 'selectie-beheer@e2e.test', role: 'administrator' },
 }
 
 export const state = (name: string) => `e2e/.tmp/state/${name}.json`

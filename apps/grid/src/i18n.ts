@@ -271,6 +271,8 @@ const strings = {
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
   buttonDone: '{button} gedaan.',
+  liveBusy: 'Bezig…',
+  selectionMisfit: 'Past niet op {n} rijen',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   selectedCount: '{n} geselecteerd',
   selectionClear: 'Selectie wissen',
