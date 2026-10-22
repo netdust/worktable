@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { assertId, assertIdentifier, ClientError, type EngineClient, type Reply } from './client'
+import { assertId, assertIdentifier, assertIds, ClientError, type EngineClient, type Reply } from './client'
 
 const NAME = 'lowercase letters, digits and _, starting with a letter, as /schema names it'
 const object = z.record(z.string(), z.unknown())
@@ -31,6 +31,11 @@ function name(value: string): string {
 function record(value: number): number {
   assertId(value)
   return value
+}
+
+function selection(values: number[]): number[] {
+  assertIds(values)
+  return values
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -136,15 +141,21 @@ export function registerTools(server: McpServer, client: EngineClient): void {
   server.registerTool(
     'action',
     {
-      description: 'Run an action a dataset declares (see its actions in schema) on one record.',
+      description:
+        'Run an action a dataset declares (see its actions in schema). An action marked many takes ids, ' +
+        '1 to 500 distinct record ids, and runs on them as one batch; any other action takes id, one record.',
       inputSchema: {
         name: z.string().describe(`the action name: ${NAME}`),
-        id,
+        id: id.optional(),
+        ids: z.array(z.number()).optional().describe('the record ids of a selection action: 1 to 500, no repeats'),
         input: object.optional().describe("the action's inputs: { input: value }"),
       },
     },
-    async (args) =>
-      answer(await client.post(`/api/actions/${name(args.name)}`, { id: record(args.id), input: args.input ?? {} })),
+    async (args) => {
+      if ((args.id === undefined) === (args.ids === undefined)) throw new ClientError('give exactly one of id or ids')
+      const target = args.ids === undefined ? { id: record(args.id as number) } : { ids: selection(args.ids) }
+      return answer(await client.post(`/api/actions/${name(args.name)}`, { ...target, input: args.input ?? {} }))
+    },
   )
 
   server.registerTool(

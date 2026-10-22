@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -52,7 +52,7 @@ import { Board } from '../board/Board'
 import { writeDrop } from '../board/drop'
 import { placeWriter } from '../grid/drawer/place'
 import { Dashboard } from '../dashboard/Dashboard'
-import { QuickCreate } from '../dashboard/QuickCreate'
+import { askedOf, QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
 import { SchemaContext } from '../grid/drawer/context'
 import { AwayChip, SizeChips } from './SizeChips'
@@ -414,10 +414,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const plan = model && view && !model.creates ? newRow(model, view, dated ? conditionDays : null, new Date(), scope ?? null) : null
   const target = model?.creates ? models[model.creates] : undefined
   const made = target ? madeFrom(target, served?.tables ?? [], dated ? conditionDays : null, space.status === 'ready' ? space.scope : null) : null
-  const addBlocked = target ? createBlocked(target, made, served?.writable[target.key] === true)
+  const addBlocked = target ? createBlocked(made, served?.writable[target.key] === true)
     : !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
   const add = () => {
-    if (target && made && !('missing' in made)) return void createThrough(target.key, made.fields)
+    if (target && made && !('missing' in made)) {
+      if (made.needs.length === 0) return void createThrough(target.key, made.fields)
+      const asked = askedOf(target, made, space.status === 'ready' ? space.scope : null)
+      return setQuick(Object.fromEntries(Object.entries(made.fields).filter(([key]) => !asked.includes(key))))
+    }
     if (!store || !model || !plan || 'missing' in plan) return
     if (plan.needs.length === 0) void store.create(plan.fields)
     else store.draft(plan.fields, plan.needs, plan.offers)
@@ -532,9 +536,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     } } })
   }
   // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
-  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
+  const finished = (batch: string, action: ModelAction) => {
     if (!view) return
-    const { batch } = await runAction(action.name, row.id, input)
     const entry = { batch: Promise.resolve(batch), model: view.model, id: null }
     history.push(entry)
     reloadView()
@@ -542,6 +545,19 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
     }
     notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
+  }
+  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
+    if (view) finished((await runAction(action.name, row.id, input)).batch, action)
+  }
+  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>) => {
+    if (!view) return
+    try {
+      finished((await runSelection(action.name, ids, input)).batch, action)
+    } catch (error) {
+      // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
+      if ((error as ApiError).code === 'unknown_record') reloadView()
+      throw error
+    }
   }
 
   if (!served) {
@@ -575,7 +591,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
+          onAdd={target ? add : quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -624,7 +640,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onNotice={(message) => notify({ message })}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onSelection={actOnSelection} onNotice={(message) => notify({ message })}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} recordLink={model ? linkedDataset(role, model) : undefined} reloads={reloads} />
           ) : (
             <Sheet hasView={view !== undefined} result={result} />
@@ -644,9 +660,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         </div>
       </main>
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
-      {quick && model && (
-        <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
-          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreated={() => { setQuick(null); reloadView() }} />
+      {quick && (target ?? model) && (
+        <QuickCreate label={newLabel(target ?? model)} model={(target ?? model) as Model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
+          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)}
+          onCreated={(batch) => {
+            if (target && batch) history.push({ batch: Promise.resolve(batch), model: target.key, id: null })
+            setQuick(null)
+            reloadView()
+          }} />
       )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
@@ -667,12 +688,10 @@ function monthSpan(month: DateWindow): DateWindow {
 }
 
 
-/** Why a query's `+ Nieuw` is off: its dataset is read-only, or a row there still needs what only a pick gives. */
-function createBlocked(target: Model, made: NewRow | null, writable: boolean): string | null {
+/** Why a query's `+ Nieuw` is off: its dataset is read-only, or the dataset has a required column nothing can fill. */
+function createBlocked(made: NewRow | null, writable: boolean): string | null {
   if (!writable || !made) return t('readOnly')
-  if ('missing' in made) return t('needsFields', { fields: made.missing.join(', ') })
-  const asked = made.needs.filter((key) => key !== 'title').map((key) => target.fields[key]?.label ?? key)
-  return asked.length > 0 ? t('pickFirst', { fields: asked.join(', ') }) : null
+  return 'missing' in made ? t('needsFields', { fields: made.missing.join(', ') }) : null
 }
 
 function Sheet({ hasView, result }: { hasView: boolean; result: Rows }) {

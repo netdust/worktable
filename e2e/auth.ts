@@ -15,6 +15,12 @@ export const FICHE = {
   outbox: 'e2e/.tmp/outbox-fiche',
   domain: '@worktable/fiche',
 }
+export const SELECTION = {
+  app: 'http://127.0.0.1:5177',
+  db: 'e2e/.tmp/selection.db',
+  outbox: 'e2e/.tmp/outbox-selection',
+  domain: './packages/engine/test/fixtures/selection-domain.ts',
+}
 export type Instance = typeof THEATRE
 
 export const ACCOUNTS = {
@@ -23,6 +29,7 @@ export const ACCOUNTS = {
   // Lotte Verhaegen (persoon 1) has Toewijzingen and an absence in the seed, beside other people's.
   owner: { email: 'lotte@e2e.test', role: 'owner', subject: 'persoon:1' },
   fiche: { email: 'redactie@e2e.test', role: 'editor' },
+  selection: { email: 'selectie@e2e.test', role: 'editor' },
 }
 
 export const state = (name: string) => `e2e/.tmp/state/${name}.json`

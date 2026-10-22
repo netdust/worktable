@@ -23,6 +23,17 @@ export function assertId(id: number): void {
   if (!(Number.isSafeInteger(id) && id > 0)) throw new ClientError(`${id} is not a record id: an integer from 1`)
 }
 
+// The engine's cap on a selection run (MAX_SELECTION in packages/engine/src/actions.ts); the engine stays the control.
+export const MAX_IDS = 500
+
+export function assertIds(ids: unknown): void {
+  if (!Array.isArray(ids) || ids.length === 0) throw new ClientError('ids must be a non-empty list of record ids')
+  if (ids.length > MAX_IDS) throw new ClientError(`ids takes at most ${MAX_IDS} record ids`)
+  if (!ids.every((id) => Number.isSafeInteger(id) && id > 0))
+    throw new ClientError('ids must hold record ids only: integers from 1')
+  if (new Set(ids).size !== ids.length) throw new ClientError('ids must not repeat an id')
+}
+
 function parsed(text: string): unknown {
   try {
     return JSON.parse(text)

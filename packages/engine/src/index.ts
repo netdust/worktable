@@ -31,6 +31,7 @@ export type {
   QuickAction,
   Role,
   SavedViewSeed,
+  SelectionActionDecl,
   Tile,
   Tone,
   WriteContext,

@@ -104,6 +104,8 @@ export interface ModelAction {
   name: string
   label: string
   input: Record<string, ActionInput>
+  /** Runs once on every ticked row of the table, not on one record. */
+  many?: true
 }
 
 export type ViewType = 'grid' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'
@@ -155,6 +157,8 @@ export interface TableDef {
   space?: 'scoped' | 'global'
   /** A query's rows: joined, never created. */
   query?: boolean
+  /** Kept out of the tree; its records open from a link. */
+  listed?: false
   /** The dataset a query reads: its views sit under that table in the rail. */
   of?: string
   /** A query whose rows flag records of the datasets it marks. */

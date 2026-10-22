@@ -34,6 +34,19 @@ describe('the search', () => {
     expect(options()).toEqual(['Naar Afwezigheden'])
   })
 
+  it('never offers a view of a dataset the tree leaves out', () => {
+    const hidden = groupTables([
+      { key: 'ties', label: 'Ties', model: 'tie', types: ['grid'], listed: false },
+      { key: 'members', label: 'Members', model: 'member', types: ['grid'] },
+    ], [
+      { key: 'ties', label: 'Tabel', model: 'tie', table: 'ties', table_label: 'Ties' },
+      { key: 'members', label: 'Tabel', model: 'member', table: 'members', table_label: 'Members' },
+    ])
+    render(<Search query="e" onQuery={() => undefined} tables={hidden} onJump={() => undefined} />)
+
+    expect(options()).toEqual(['Naar Members'])
+  })
+
   it('jumps to the view and clears the query', () => {
     const onJump = vi.fn()
     const onQuery = vi.fn()

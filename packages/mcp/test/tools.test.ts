@@ -7,8 +7,9 @@ import { type Domain, migrate, seedDomain } from '../../engine/src'
 import { createService } from '../../engine/src/auth'
 import { domain, freshDb } from '../../engine/test/fixture'
 import lineDomain from '../../engine/test/fixtures/lookup-domain'
+import selectionDomain from '../../engine/test/fixtures/selection-domain'
 import { testEngine } from '../../engine/test/sign-in'
-import { EngineClient, type FetchFn } from '../src/client'
+import { assertIds, ClientError, EngineClient, type FetchFn } from '../src/client'
 import { registerTools } from '../src/tools'
 
 const BASE = 'http://127.0.0.1:4310'
@@ -172,6 +173,76 @@ describe('writing', () => {
     const { isError, body } = await call(client, 'create', { dataset: 'note', values: { project_id: 2, tekst: 'x' } })
     expect(isError).toBe(true)
     expect(body).toMatchObject({ status: 422, code: 'refused', message: 'project Beta is gesloten' })
+  })
+})
+
+describe('a selection action', () => {
+  let selection: ReturnType<typeof engineOn>
+  let selectionFetch: Counted
+  let selectionClient: Client
+
+  beforeEach(async () => {
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, selectionDomain)
+    seedDomain(sqlite, selectionDomain)
+    selection = engineOn(sqlite, selectionDomain)
+    selectionFetch = viaApp(selection.app)
+    selectionClient = await connect(selectionFetch, selection.token)
+  })
+
+  test('action with ids runs a selection action as one batch', async () => {
+    const run = await call(selectionClient, 'action', { name: 'gather', ids: [1, 2], input: { name: 'Trio' } })
+    expect(run.isError).toBe(false)
+    expect(run.body.created).toHaveLength(3)
+    expect(typeof run.body.batch_id).toBe('string')
+    const ties = await call(selectionClient, 'rows', { source: 'tie', sort: ['id'] })
+    expect(ties.body.rows.map((r: { member_id: number }) => r.member_id)).toEqual([1, 2])
+    const bundles = await call(selectionClient, 'rows', { source: 'bundle', filter: { name: 'Trio' } })
+    expect(bundles.body.total).toBe(1)
+  })
+
+  test('both id and ids, or neither, is refused before a request', async () => {
+    const tries = [
+      call(selectionClient, 'action', { name: 'gather', id: 1, ids: [1], input: { name: 'x' } }),
+      call(selectionClient, 'action', { name: 'gather', input: { name: 'x' } }),
+    ]
+    for (const result of await Promise.all(tries)) {
+      expect(result.isError).toBe(true)
+      expect(result.text).toContain('exactly one of id or ids')
+    }
+    expect(selectionFetch.calls).toBe(0)
+  })
+
+  test('ids outside 1-500 positive integers are refused before a request', async () => {
+    const wrong: [unknown[], string][] = [
+      [[], 'non-empty'],
+      [Array.from({ length: 501 }, (_, i) => i + 1), 'at most 500'],
+      [[0], 'record ids only'],
+      [[-1], 'record ids only'],
+      [[1.5], 'record ids only'],
+      [['1'], ''],
+      [[1, 2, 1], 'must not repeat'],
+    ]
+    for (const [ids, message] of wrong) {
+      const result = await call(selectionClient, 'action', { name: 'touch', ids })
+      expect(result.isError).toBe(true)
+      expect(result.text).toContain(message)
+    }
+    expect(selectionFetch.calls).toBe(0)
+    const most = await call(selectionClient, 'action', { name: 'touch', ids: [1, 2, 3, 4] })
+    expect(most.isError).toBe(false)
+    expect(selectionFetch.calls).toBe(1)
+  })
+
+  // Wrapped, because test.each spreads an array row into several arguments.
+  const refused: unknown[] = [5, null, undefined, {}, [Number.POSITIVE_INFINITY], [Number.NaN], [-0], [2 ** 53], ['1']]
+  test.each(refused.map((ids) => [ids]))('assertIds refuses %p', (ids) =>
+    expect(() => assertIds(ids)).toThrow(ClientError),
+  )
+
+  test('500 ids pass the client check', () => {
+    expect(() => assertIds(Array.from({ length: 500 }, (_, i) => i + 1))).not.toThrow()
+    expect(() => assertIds(Array.from({ length: 501 }, (_, i) => i + 1))).toThrow('at most 500')
   })
 })
 

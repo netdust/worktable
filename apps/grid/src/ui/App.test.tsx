@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), re
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(), onNotices: vi.fn(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), runSelection: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -1537,14 +1537,112 @@ describe('writes on the engine', () => {
       await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
     })
 
-    it('waits for a pick the dataset needs, and says which', async () => {
+    it('+ Nieuw opens QuickCreate asking Productie, saves into the target, and one Undo removes the record', async () => {
       api.schema.mockResolvedValue(creating({}))
+      api.create.mockResolvedValue({ row: { id: 9, title: '', status: '', fields: {} }, batch: 'b9' })
+      api.undoBatch.mockResolvedValue('u9')
       window.location.hash = '#view=dagplanning'
       render(<App />)
       await screen.findByText('opbouw Gent')
+      const reads = api.rows.mock.calls.length
 
-      expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
-      expect(screen.getByText('Kies eerst Productie')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Nieuwe activiteit' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuwe activiteit' })
+      expect(api.create).not.toHaveBeenCalled()
+      fireEvent.change(await within(dialog).findByRole('combobox', { name: 'Productie' }), { target: { value: '1' } })
+      await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+
+      expect(api.create).toHaveBeenCalledExactlyOnceWith('activiteit', { productie_id: [1] })
+      await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+      await act(async () => {
+        fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true })
+      })
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b9')
+    })
+  })
+
+  it('keeps + Nieuw blocked, and says why, while the dataset needs a field nothing can fill', async () => {
+    const required = { type: 'file' as never, label: 'Bijlage', required: true, fact: false }
+    api.schema.mockResolvedValue({
+      ...engineSchema,
+      models: {
+        ...engineSchema.models,
+        activiteit: { ...engineSchema.models.activiteit, new_label: 'Nieuwe activiteit', fields: { bijlage: required } },
+        dagplanning: { ...engineSchema.models.dagplanning, creates: 'activiteit' },
+      },
+    })
+    window.location.hash = '#view=dagplanning'
+    render(<App />)
+    await screen.findByText('opbouw Gent')
+
+    expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Heeft Bijlage nodig: maak het aan vanuit het record')).toBeTruthy()
+  })
+
+  describe('a calendar of a query that creates in a dataset', () => {
+    const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+    const calendars: Schema = {
+      models: {
+        activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { plandag } },
+        agenda: { key: 'agenda', label: 'Agenda', title_label: 'Omschrijving', title_readonly: true, query: true, creates: 'activiteit', fields: { plandag } },
+      },
+      tables: [
+        { key: 'activiteit', label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] },
+        { key: 'agenda', label: 'Agenda', model: 'agenda', date_field: 'plandag', query: true, types: ['calendar'] },
+      ],
+      views: [{ key: 'agenda', label: 'Agenda', table: 'agenda', model: 'agenda', date_field: 'plandag', type: 'calendar', calendar: { day: 'plandag', start: null, end: null, lanes: [] } }],
+      writable: { activiteit: true, agenda: false },
+    } as unknown as Schema
+
+    it('+ Nieuw asks the title, keeps the day the add filled in, and saves into the dataset', async () => {
+      api.schema.mockResolvedValue(calendars)
+      api.rows.mockResolvedValue({ rows: [], total: 0 })
+      api.create.mockResolvedValue({ row: { id: 9, title: 'Repetitie', status: '', fields: {} }, batch: 'b9' })
+      window.location.hash = '#view=agenda'
+      render(<App />)
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Activiteit' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuw Activiteit' })
+      fireEvent.change(within(dialog).getByRole('textbox', { name: 'Omschrijving' }), { target: { value: 'Repetitie' } })
+      await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+
+      expect(api.create).toHaveBeenCalledExactlyOnceWith('activiteit', { title: 'Repetitie', plandag: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
+      window.location.hash = ''
+    })
+  })
+
+  describe('a query that creates in a scoped dataset, with a space selected', () => {
+    const production = { key: 'production', label: 'Producties', title_label: 'Titel', title_readonly: false, fields: {} }
+    const owner = { type: 'relation' as const, label: 'Productie', required: true, fact: true, relation: { model: 'production', multiple: false } }
+    const spaced: Schema = {
+      models: {
+        production,
+        activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: { production: owner } },
+        agenda: { key: 'agenda', label: 'Agenda', title_label: 'Titel', title_readonly: true, query: true, creates: 'activity', fields: { production: owner } },
+      },
+      tables: [
+        { key: 'activity', label: 'Activiteiten', model: 'activity', space: 'scoped', types: ['grid'] },
+        { key: 'agenda', label: 'Agenda', model: 'agenda', space: 'scoped', query: true, types: ['grid'] },
+      ],
+      views: [{ key: 'agenda', label: 'Agenda', table: 'agenda', model: 'agenda', space: 'scoped' }],
+      space: { field: 'production', model: 'production' },
+      writable: { activity: true, agenda: false, production: false },
+    } as unknown as Schema
+
+    it("still asks the space, filled in with the selected one", async () => {
+      api.schema.mockResolvedValue(spaced)
+      api.rows.mockResolvedValue({ rows: [], total: 0 })
+      api.records.mockResolvedValue({ rows: [{ id: 7, title: 'Glimworm', status: '', fields: {} }, { id: 9, title: 'Wat de uil zag', status: '', fields: {} }], total: 2 })
+      window.location.hash = '#view=agenda'
+      await shell()
+      fireEvent.click(await within(rail()).findByRole('button', { name: 'Alle producties' }))
+      fireEvent.click(await within(rail()).findByRole('option', { name: 'Glimworm' }))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Activiteit' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuw Activiteit' })
+      const space = (await within(dialog).findByRole('combobox', { name: 'Productie' })) as HTMLSelectElement
+      await waitFor(() => expect(space.value).toBe('7'))
     })
   })
 
@@ -1554,6 +1652,101 @@ describe('writes on the engine', () => {
     await screen.findByText('opbouw Gent')
 
     expect((screen.getByRole('button', { name: 'Nieuw Dagplanning' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('a selection action', () => {
+  const gather = { name: 'gather', label: 'Bundelen', many: true as const, input: { name: { type: 'text' as const, label: 'Naam' } } }
+  const grouped: Schema = {
+    models: { member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, actions: [gather], fields: {} } },
+    tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+    views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+    writable: { member: true },
+  }
+  const people = ['Aart', 'Bo', 'Cas'].map((title, i) => ({ id: i + 1, title, status: '', fields: {} }))
+  const reads = () => api.rows.mock.calls.length
+  const tick = async (...titles: string[]) => {
+    await screen.findByRole('grid', { name: 'Leden' })
+    for (const title of titles) fireEvent.click(await screen.findByRole('checkbox', { name: `${title} selecteren` }))
+  }
+  const run = async (name: string) => {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Naam' }), { target: { value: name } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    })
+  }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(grouped)
+    api.rows.mockResolvedValue({ rows: people, total: 3 })
+    api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+    api.undoBatch.mockResolvedValue('u-1')
+  })
+
+  it('asks its inputs once and sends them once, with every ticked id', async () => {
+    await shell()
+    await tick('Aart', 'Cas')
+
+    await run('Voorjaar')
+
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [1, 3], { name: 'Voorjaar' })
+    expect(api.runAction).not.toHaveBeenCalled()
+  })
+
+  it('is one batch: one notice, one Undo that takes the whole run back, and the view reloads', async () => {
+    await shell()
+    await tick('Aart', 'Bo', 'Cas')
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    const notices = await screen.findAllByRole('status', { name: 'Bundelen uitgevoerd.' })
+    expect(notices).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull()
+    await act(async () => {
+      fireEvent.click(within(notices[0]).getByRole('button', { name: 'Ongedaan maken' }))
+    })
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+  })
+
+  it("a drawer run sends the open record alone, and the drawer offers each selection action", async () => {
+    await shell()
+    await screen.findByRole('grid', { name: 'Leden' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Openen' }))[1])
+    const group = await screen.findByRole('group', { name: 'Bundelen' })
+
+    fireEvent.change(within(group).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Solo' } })
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Bundelen' }))
+    })
+
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Solo' })
+  })
+
+  it('a run refused as unknown_record reads the view again, drops the gone row and says so in Dutch', async () => {
+    api.runSelection.mockRejectedValue({ code: 'unknown_record', message: 'unknown record 2' })
+    await shell()
+    await tick('Aart', 'Bo')
+    api.rows.mockResolvedValue({ rows: people.filter((p) => p.title !== 'Bo'), total: 2 })
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect((await screen.findByRole('alert')).textContent).toBe('Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.')
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
+  })
+
+  it("clears a ticked row the view's search no longer shows", async () => {
+    await shell()
+    await tick('Aart', 'Bo')
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Zoeken' }), { target: { value: 'Bo' } })
+
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
+    await run('Bo')
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Bo' })
   })
 })
 

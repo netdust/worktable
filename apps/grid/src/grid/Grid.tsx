@@ -1,7 +1,7 @@
 import { Button } from 'react-aria-components'
-import { type ClipboardEvent, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ClipboardEvent, type CSSProperties, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
-import type { Lookup, Model, Row, Scope, View } from '../types'
+import type { Lookup, Model, ModelAction, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
 import { RelationContext, relatedOf } from './cells/Relation'
 import { type Column, columnsFor, editableAt, inDays } from './columns'
@@ -17,7 +17,8 @@ import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { SchemaContext } from './drawer/context'
 import { placeWriter } from './drawer/place'
 import { GridFoot } from './GridFoot'
-import { GridHeader, NUMBER_WIDTH } from './GridHeader'
+import { GridHeader, NUMBER_WIDTH, SELECT_WIDTH } from './GridHeader'
+import { SelectionBar, useSelection } from './Selection'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
 import { DRAFT, type Store } from './store'
@@ -55,6 +56,8 @@ export interface GridProps {
   spaceModel?: string | null
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
   onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
+  /** Runs a selection action once on the ticked rows; without it the table has no checkboxes. */
+  onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<void>
   /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
   cut?: Row | null
   /** Adds and removes a `links` cell's rows; without it a links cell only shows its tags. */
@@ -79,7 +82,7 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, onSelection, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -113,6 +116,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // A group holding the draft stays open: the row being written must stay in reach.
   const shut = new Set(groups.filter((g) => folded.has(g.key) && !g.rows.some((r) => r.id === DRAFT)).map((g) => g.key))
   const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
+  const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT)
+  const ticking = useSelection(ids)
+  const selectionActions = onSelection ? model.actions?.filter((a) => a.many) ?? [] : []
+  const selectable = selectionActions.length > 0
+  const numberWidth = selectable ? SELECT_WIDTH : NUMBER_WIDTH
 
   const sorted = table.getRowModel().rows
   useEffect(() => {
@@ -337,24 +345,32 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         <EmptyState title={emptyTitle} description={emptyHint ?? ''} />
       </div>
       ) : (
+      <>
+      {selectable && onSelection && (
+        <SelectionBar count={ticking.selected.size} actions={selectionActions} onClear={ticking.clear}
+          onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then(ticking.clear)} />
+      )}
       <div className="nv-body">
         <div className="nv-scroll">
-          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + NUMBER_WIDTH }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
-            <GridHeader table={table} byId={byId} />
+          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+            <GridHeader table={table} byId={byId} numberWidth={numberWidth}
+              selection={selectable ? { all: ids.length > 0 && ticking.selected.size === ids.length, some: ticking.selected.size > 0, onToggle: ticking.selected.size === ids.length ? ticking.clear : ticking.all } : undefined} />
             <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+              selection={selectable ? { has: (id) => ticking.selected.has(id), toggle: ticking.toggle } : undefined}
               emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
             <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
           attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
-        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout} flags={flags}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
-          onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined} onWrite={writable ? apply : undefined}
+          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input)) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>
+      </>
       )}
     </div>
     </RelationContext.Provider>

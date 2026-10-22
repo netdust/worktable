@@ -7,6 +7,7 @@ import {
   type Domain,
   ICONS,
   type InputType,
+  isSelection,
   type OptionsFrom,
   type QueryDecl,
   TONES,
@@ -156,9 +157,11 @@ function checkCreates(domain: Domain, query: QueryDecl): void {
 
 function checkOf(domain: Domain, query: QueryDecl): void {
   const dataset = query.of
-  if (dataset !== undefined && !domain.datasets.some((d) => d.name === dataset)) {
-    throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
-  }
+  if (dataset === undefined) return
+  const found = domain.datasets.find((d) => d.name === dataset)
+  if (!found) throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
+  if (found.listed === false)
+    throw new DomainError(query.name, dataset, `of "${dataset}", which is declared listed: false`)
 }
 
 // A flag marks records by id, so each mark is a dataset and an integer column; its tone reads every row's option.
@@ -401,6 +404,7 @@ function checkOpen(
   }
   const action = domain.actions && Object.hasOwn(domain.actions, open.fill) ? domain.actions[open.fill] : undefined
   if (!action) throw at(open.fill, `open fill "${open.fill}" is not a declared action`)
+  if (isSelection(action)) throw at(open.fill, `open fill "${open.fill}" is a selection action, which fills one place`)
   if (action.on !== join.name)
     throw at(open.fill, `open fill "${open.fill}" acts on "${action.on}", not "${join.name}"`)
   const across = join.columns[m.across]?.relation
@@ -556,9 +560,13 @@ function checkActions(domain: Domain): void {
     if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
       throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
     }
+    if ('many' in action && action.many !== true)
+      throw new DomainError(name, 'many', 'many must be true on a selection action, and absent otherwise')
     for (const [key, input] of Object.entries(action.input)) {
       checkInput(name, key, input, datasets)
       if (!('relation' in input) || !input.options_from) continue
+      if (isSelection(action))
+        throw new DomainError(name, key, `input ${key} of a selection action takes no options_from`)
       const on = domain.datasets.find((d) => d.name === action.on) as DatasetDecl
       const at = (message: string) => new DomainError(name, key, `input ${key} ${message}`)
       checkOptionsFrom(domain, on, at, input.options_from, input.relation)
@@ -608,6 +616,9 @@ function checkSections(domain: Domain): void {
       if (!source) throw new DomainError(label, name, `section lists unknown source "${name}"`)
       if (source.kind === 'query' && source.of !== undefined) {
         throw new DomainError(label, name, `section lists query "${name}", which sits under "${source.of}"`)
+      }
+      if (source.kind === 'dataset' && source.listed === false) {
+        throw new DomainError(label, name, `section lists "${name}", which is declared listed: false`)
       }
       if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
       seen.add(name)

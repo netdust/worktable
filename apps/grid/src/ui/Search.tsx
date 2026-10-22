@@ -18,7 +18,7 @@ function fold(text: string): string {
 /** Every view a query reaches by its table's label or its own, named `table · view` where the table has more than one. */
 function jumps(tables: Table[], wanted: string): { key: string; name: string }[] {
   if (wanted === '') return []
-  return tables.flatMap((table) => {
+  return tables.filter((table) => table.listed !== false).flatMap((table) => {
     const byTable = fold(table.label).includes(wanted)
     return table.views
       .filter((view) => byTable || fold(view.label).includes(wanted))
