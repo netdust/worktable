@@ -14,17 +14,19 @@ import { registerTools } from '../src/tools'
 const BASE = 'http://127.0.0.1:4310'
 
 type App = ReturnType<typeof testEngine>
-type Counted = FetchFn & { calls: number }
+type Counted = FetchFn & { calls: number; urls: string[] }
 
 // app.request builds its Request from the URL alone, so the Host a real fetch would send is set here.
 function viaApp(app: App): Counted {
   const fetchFn = ((url, init) => {
     fetchFn.calls++
+    fetchFn.urls.push(url)
     const headers = new Headers(init.headers)
     headers.set('host', '127.0.0.1:4310')
     return Promise.resolve(app.request(url, { ...init, headers }))
   }) as Counted
   fetchFn.calls = 0
+  fetchFn.urls = []
   return fetchFn
 }
 
@@ -90,6 +92,11 @@ describe('reading', () => {
     const ids = (body.rows as { id: number }[]).map((r) => r.id)
     expect(ids).toEqual(direct.rows.map((r) => r.id))
     expect(ids).toHaveLength(2)
+  })
+
+  test('rows asks 100 rows when no limit is given', async () => {
+    await call(client, 'rows', { source: 'taak' })
+    expect(new URL(fetchFn.urls.at(-1) ?? '').searchParams.get('limit')).toBe('100')
   })
 
   test('rows reports total and pages with offset', async () => {
@@ -188,6 +195,44 @@ describe('refusals before any request', () => {
 })
 
 describe('an instance that does not answer', () => {
+  test('a write that times out says it may have landed; a read does not', async () => {
+    const hanging = await connect(() => new Promise<Response>(() => {}), engine.token, 50)
+    const created = await call(hanging, 'create', { dataset: 'note', values: { project_id: 1, tekst: 'x' } })
+    const updated = await call(hanging, 'update', { dataset: 'note', id: 1, values: { tekst: 'y' } })
+    const read = await call(hanging, 'schema')
+    for (const write of [created, updated]) {
+      expect(write.isError).toBe(true)
+      expect(write.text).toContain('may have landed: read before retrying')
+    }
+    expect(read.text).toContain(`worktable at ${BASE} does not answer`)
+    expect(read.text).not.toContain('landed')
+  })
+
+  test('a write to a real instance that hangs says it may have landed', async () => {
+    const hung = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Promise<Response>(() => {}) })
+    try {
+      const server = new McpServer({ name: 'worktable', version: '0.0.0' })
+      registerTools(server, new EngineClient(`http://127.0.0.1:${hung.port}`, engine.token, { timeoutMs: 50 }))
+      const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+      const waiting = new Client({ name: 'test', version: '0.0.0' })
+      await Promise.all([server.connect(serverSide), waiting.connect(clientSide)])
+      const created = await call(waiting, 'create', { dataset: 'note', values: { tekst: 'x' } })
+      expect(created.text).toContain('may have landed')
+    } finally {
+      hung.stop(true)
+    }
+  })
+
+  test('a refused token reads as a refused service token', async () => {
+    const refused = await connect(viaApp(engine.app), 'not-the-token')
+    const { isError, body } = await call(refused, 'schema')
+    expect(isError).toBe(true)
+    expect(body).toMatchObject({
+      status: 401,
+      message: 'the instance refused the service token (rotated or disabled?)',
+    })
+  })
+
   test('an unreachable instance fails fast', async () => {
     const refused = await connect(() => Promise.reject(new TypeError('connection refused')), engine.token)
     const started = Date.now()

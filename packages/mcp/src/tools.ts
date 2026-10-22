@@ -13,10 +13,14 @@ const textOf = (value: unknown, isError: boolean): CallToolResult => ({
 })
 
 // A refusal keeps the engine's code and message beside its status, so Claude can act on it.
+// A small default keeps an answer inside Claude Code's MCP output cap; total tells Claude to page.
+const DEFAULT_LIMIT = 100
+const REFUSED_TOKEN = 'the instance refused the service token (rotated or disabled?)'
+
 function answer({ status, body }: Reply): CallToolResult {
   if (status >= 200 && status < 300) return textOf(body, false)
   const fields = typeof body === 'object' && body !== null && !Array.isArray(body) ? body : { body }
-  return textOf({ status, ...fields }, true)
+  return textOf({ status, ...fields, ...(status === 401 ? { message: REFUSED_TOKEN } : {}) }, true)
 }
 
 function name(value: string): string {
@@ -38,7 +42,7 @@ function rowsQuery(args: {
   return {
     ...(args.filter ? { filter: JSON.stringify(args.filter) } : {}),
     ...(args.sort?.length ? { sort: args.sort.join(',') } : {}),
-    ...(args.limit !== undefined ? { limit: String(args.limit) } : {}),
+    limit: String(args.limit ?? DEFAULT_LIMIT),
     ...(args.offset !== undefined ? { offset: String(args.offset) } : {}),
   }
 }
@@ -58,7 +62,8 @@ export function registerTools(server: McpServer, client: EngineClient): void {
     'rows',
     {
       description:
-        'Read the rows of a source (a dataset or a query). Answers { rows, total }, total counting every match.',
+        'Read the rows of a source (a dataset or a query). Answers { rows, total }, total counting every match. ' +
+        `It answers ${DEFAULT_LIMIT} rows unless limit says otherwise: page with offset while offset + rows < total.`,
       inputSchema: {
         source: z.string().describe(`the source name: ${NAME}`),
         filter: object
@@ -68,7 +73,12 @@ export function registerTools(server: McpServer, client: EngineClient): void {
               '$contains|$like|$nlike|$period: value } }; every key must hold, and $or takes a list of such filters',
           ),
         sort: z.array(z.string()).optional().describe('columns to sort on, in order; a leading - sorts descending'),
-        limit: z.number().int().min(1).optional().describe('at most this many rows, 1 to 5000; 5000 when left out'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(`at most this many rows, 1 to 5000; ${DEFAULT_LIMIT} when left out`),
         offset: z.number().int().min(0).optional().describe('skip this many rows first'),
       },
     },

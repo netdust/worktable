@@ -59,25 +59,36 @@ export class EngineClient {
 
   // A fetch error may print the request, headers included, so none of it is passed on.
   // The timer races the fetch itself, because a fetch that ignores its signal would otherwise hang.
+  // One timer settles the race and only then aborts the fetch, so a timed-out write never reads as unanswered.
   async #send(method: string, path: string, body?: unknown): Promise<Reply> {
+    const abort = new AbortController()
     const headers: Record<string, string> = { authorization: `Bearer ${this.#token}` }
     if (body !== undefined) headers['content-type'] = 'application/json'
     const init: RequestInit = {
       method,
       headers,
       redirect: 'error',
-      signal: AbortSignal.timeout(this.#timeoutMs),
+      signal: abort.signal,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }
     const unanswered = new ClientError(`worktable at ${this.#base} does not answer`)
+    const late =
+      method === 'GET'
+        ? unanswered
+        : new ClientError(
+            `worktable at ${this.#base} did not answer in time; the write may have landed: read before retrying`,
+          )
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(unanswered), this.#timeoutMs)
+      timer = setTimeout(() => {
+        reject(late)
+        abort.abort()
+      }, this.#timeoutMs)
     })
     try {
       return await Promise.race([this.#exchange(this.#base + path, init), timeout])
-    } catch {
-      throw unanswered
+    } catch (err) {
+      throw err === late ? late : unanswered
     } finally {
       clearTimeout(timer)
     }
