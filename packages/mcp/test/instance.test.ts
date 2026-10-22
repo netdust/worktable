@@ -138,8 +138,8 @@ describe('mcp-lists-rows @e2e', () => {
     expect(await rows({ source: 'taak', filter: { description: 'geen' } })).toEqual({ rows: [], total: 0 })
   })
 
-  // A shake-out finding: the engine's $like matches a substring with % and _ literal. The fix pass drops .failing.
-  test.failing('a $like with SQL wildcards finds the rows or is refused, never an empty page', async () => {
+  // A shake-out finding: the engine's $like matches a substring with % and _ literal.
+  test('a $like with SQL wildcards finds the rows or is refused, never an empty page', async () => {
     const result = await call('rows', { source: 'taak', filter: { description: { $like: '%ee%' } }, sort: ['id'] })
     if (result.isError) expect(result.text).toContain('$like')
     else expect((JSON.parse(result.text) as Page).rows.map((r) => r.description)).toEqual(['een', 'twee'])

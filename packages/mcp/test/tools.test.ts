@@ -188,6 +188,18 @@ describe('refusals before any request', () => {
     expect(fetchFn.calls).toBe(0)
   })
 
+  test('an SQL wildcard in $like or $nlike is refused before any request', async () => {
+    const tries = [
+      call(client, 'rows', { source: 'note', filter: { tekst: { $like: '%eer%' } } }),
+      call(client, 'rows', { source: 'note', filter: { $or: [{ id: 1 }, { tekst: { $nlike: 'eerste%' } }] } }),
+    ]
+    for (const result of await Promise.all(tries)) {
+      expect(result.isError).toBe(true)
+      expect(result.text).toContain('substring')
+    }
+    expect(fetchFn.calls).toBe(0)
+  })
+
   test('there is no delete tool', async () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual(['action', 'create', 'history', 'rows', 'schema', 'update'])

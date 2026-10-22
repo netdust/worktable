@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { assertId, assertIdentifier, type EngineClient, type Reply } from './client'
+import { assertId, assertIdentifier, ClientError, type EngineClient, type Reply } from './client'
 
 const NAME = 'lowercase letters, digits and _, starting with a letter, as /schema names it'
 const object = z.record(z.string(), z.unknown())
@@ -33,12 +33,28 @@ function record(value: number): number {
   return value
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+// The engine's $like and $nlike match a substring with % and _ as themselves, so an SQL pattern finds nothing.
+function refuseWildcards(filter: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(filter)) {
+    if (key === '$or' && Array.isArray(value)) value.filter(isObject).forEach(refuseWildcards)
+    if (!isObject(value)) continue
+    for (const op of ['$like', '$nlike']) {
+      if (typeof value[op] === 'string' && value[op].includes('%'))
+        throw new ClientError(`${op} matches a substring, case-insensitive, and % matches itself: drop the % wildcards`)
+    }
+  }
+}
+
 function rowsQuery(args: {
-  filter?: object
+  filter?: Record<string, unknown>
   sort?: string[]
   limit?: number
   offset?: number
 }): Record<string, string> {
+  if (args.filter) refuseWildcards(args.filter)
   return {
     ...(args.filter ? { filter: JSON.stringify(args.filter) } : {}),
     ...(args.sort?.length ? { sort: args.sort.join(',') } : {}),
@@ -70,7 +86,8 @@ export function registerTools(server: McpServer, client: EngineClient): void {
           .optional()
           .describe(
             'the engine filter: { column: value } or { column: { $eq|$ne|$in|$nin|$gt|$gte|$lt|$lte|$exists|' +
-              '$contains|$like|$nlike|$period: value } }; every key must hold, and $or takes a list of such filters',
+              '$contains|$like|$nlike|$period: value } }; every key must hold, and $or takes a list of such filters. ' +
+              '$like and $nlike match a substring, case-insensitive: % and _ are not wildcards',
           ),
         sort: z.array(z.string()).optional().describe('columns to sort on, in order; a leading - sorts descending'),
         limit: z
