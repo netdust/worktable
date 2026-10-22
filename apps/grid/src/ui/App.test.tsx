@@ -1537,14 +1537,94 @@ describe('writes on the engine', () => {
       await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
     })
 
-    it('waits for a pick the dataset needs, and says which', async () => {
+    it('+ Nieuw opens QuickCreate asking Productie, saves into the target, and one Undo removes the record', async () => {
       api.schema.mockResolvedValue(creating({}))
+      api.create.mockResolvedValue({ row: { id: 9, title: '', status: '', fields: {} }, batch: 'b9' })
+      api.undoBatch.mockResolvedValue('u9')
       window.location.hash = '#view=dagplanning'
       render(<App />)
       await screen.findByText('opbouw Gent')
+      const reads = api.rows.mock.calls.length
 
-      expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
-      expect(screen.getByText('Kies eerst Productie')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Nieuwe activiteit' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuwe activiteit' })
+      expect(api.create).not.toHaveBeenCalled()
+      fireEvent.change(await within(dialog).findByRole('combobox', { name: 'Productie' }), { target: { value: '1' } })
+      await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+
+      expect(api.create).toHaveBeenCalledExactlyOnceWith('activiteit', { productie_id: [1] })
+      await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+      await act(async () => {
+        fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true })
+      })
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b9')
+    })
+  })
+
+  describe('a calendar of a query that creates in a dataset', () => {
+    const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+    const calendars: Schema = {
+      models: {
+        activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { plandag } },
+        agenda: { key: 'agenda', label: 'Agenda', title_label: 'Omschrijving', title_readonly: true, query: true, creates: 'activiteit', fields: { plandag } },
+      },
+      tables: [
+        { key: 'activiteit', label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] },
+        { key: 'agenda', label: 'Agenda', model: 'agenda', date_field: 'plandag', query: true, types: ['calendar'] },
+      ],
+      views: [{ key: 'agenda', label: 'Agenda', table: 'agenda', model: 'agenda', date_field: 'plandag', type: 'calendar', calendar: { day: 'plandag', start: null, end: null, lanes: [] } }],
+      writable: { activiteit: true, agenda: false },
+    } as unknown as Schema
+
+    it('+ Nieuw asks the title, keeps the day the add filled in, and saves into the dataset', async () => {
+      api.schema.mockResolvedValue(calendars)
+      api.rows.mockResolvedValue({ rows: [], total: 0 })
+      api.create.mockResolvedValue({ row: { id: 9, title: 'Repetitie', status: '', fields: {} }, batch: 'b9' })
+      window.location.hash = '#view=agenda'
+      render(<App />)
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Activiteit' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuw Activiteit' })
+      fireEvent.change(within(dialog).getByRole('textbox', { name: 'Omschrijving' }), { target: { value: 'Repetitie' } })
+      await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+
+      expect(api.create).toHaveBeenCalledExactlyOnceWith('activiteit', { title: 'Repetitie', plandag: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
+      window.location.hash = ''
+    })
+  })
+
+  describe('a query that creates in a scoped dataset, with a space selected', () => {
+    const production = { key: 'production', label: 'Producties', title_label: 'Titel', title_readonly: false, fields: {} }
+    const owner = { type: 'relation' as const, label: 'Productie', required: true, fact: true, relation: { model: 'production', multiple: false } }
+    const spaced: Schema = {
+      models: {
+        production,
+        activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: { production: owner } },
+        agenda: { key: 'agenda', label: 'Agenda', title_label: 'Titel', title_readonly: true, query: true, creates: 'activity', fields: { production: owner } },
+      },
+      tables: [
+        { key: 'activity', label: 'Activiteiten', model: 'activity', space: 'scoped', types: ['grid'] },
+        { key: 'agenda', label: 'Agenda', model: 'agenda', space: 'scoped', query: true, types: ['grid'] },
+      ],
+      views: [{ key: 'agenda', label: 'Agenda', table: 'agenda', model: 'agenda', space: 'scoped' }],
+      space: { field: 'production', model: 'production' },
+      writable: { activity: true, agenda: false, production: false },
+    } as unknown as Schema
+
+    it("still asks the space, filled in with the selected one", async () => {
+      api.schema.mockResolvedValue(spaced)
+      api.rows.mockResolvedValue({ rows: [], total: 0 })
+      api.records.mockResolvedValue({ rows: [{ id: 7, title: 'Glimworm', status: '', fields: {} }, { id: 9, title: 'Wat de uil zag', status: '', fields: {} }], total: 2 })
+      window.location.hash = '#view=agenda'
+      await shell()
+      fireEvent.click(await within(rail()).findByRole('button', { name: 'Alle producties' }))
+      fireEvent.click(await within(rail()).findByRole('option', { name: 'Glimworm' }))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Activiteit' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuw Activiteit' })
+      const space = (await within(dialog).findByRole('combobox', { name: 'Productie' })) as HTMLSelectElement
+      await waitFor(() => expect(space.value).toBe('7'))
     })
   })
 

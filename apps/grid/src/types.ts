@@ -157,6 +157,8 @@ export interface TableDef {
   space?: 'scoped' | 'global'
   /** A query's rows: joined, never created. */
   query?: boolean
+  /** Kept out of the tree; its records open from a link. */
+  listed?: false
   /** The dataset a query reads: its views sit under that table in the rail. */
   of?: string
   /** A query whose rows flag records of the datasets it marks. */

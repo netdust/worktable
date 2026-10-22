@@ -1,4 +1,4 @@
-import { type Domain, defineDataset, refuse, type SelectionActionDecl, type Writer } from '../../src'
+import { type Domain, defineDataset, defineQuery, refuse, type SelectionActionDecl, type Writer } from '../../src'
 
 type Values = Record<string, unknown>
 
@@ -38,6 +38,35 @@ const tie = defineDataset({
     bundle_id: { type: 'integer', label: 'Bundle', relation: 'bundle' },
     member_id: { type: 'integer', label: 'Member', relation: 'member' },
     note: { type: 'text', label: 'Note', nullable: true, long: true },
+  },
+})
+
+// A dated record a query creates: its day is filled in from the calendar it is added on.
+const slot = defineDataset({
+  name: 'slot',
+  label: 'Slots',
+  title: 'name',
+  custom: false,
+  columns: {
+    name: { type: 'text', label: 'Name' },
+    day: { type: 'date', label: 'Day' },
+    bundle_id: { type: 'integer', label: 'Bundle', relation: 'bundle', nullable: true },
+  },
+})
+
+const agenda = defineQuery({
+  name: 'agenda',
+  label: 'Agenda',
+  title: 'name',
+  date: 'day',
+  calendar: { day: 'day', lanes: ['bundle_id'] },
+  creates: 'slot',
+  sql: 'SELECT s.id, s.name, s.day, s.bundle_id FROM slot s WHERE s.deleted_at IS NULL',
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    name: { type: 'text', label: 'Name' },
+    day: { type: 'date', label: 'Day' },
+    bundle_id: { type: 'integer', label: 'Bundle', relation: 'bundle' },
   },
 })
 
@@ -85,12 +114,13 @@ const touch: SelectionActionDecl = {
 }
 
 const domain: Domain = {
-  datasets: [bundle, member, tie],
-  queries: [],
+  datasets: [bundle, member, tie, slot],
+  queries: [agenda],
   writers: {
     bundle: { create: accept, update: accept, delete: () => {} },
     member: { create: accept, update: accept, delete: () => {} },
     tie: tieWriter,
+    slot: { create: accept, update: accept, delete: () => {} },
   },
   actions: {
     gather,
@@ -131,6 +161,16 @@ const domain: Domain = {
       sort: ['name'],
       group_by: null,
       visible_fields: ['bundle_id'],
+    },
+    {
+      name: 'Calendar',
+      source_type: 'query',
+      source: 'agenda',
+      skin: 'calendar',
+      filters: {},
+      sort: ['day'],
+      group_by: null,
+      visible_fields: [],
     },
     {
       name: 'All bundles',

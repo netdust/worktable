@@ -59,6 +59,8 @@ export interface EngineSource {
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
+  /** Served `false` on a dataset the tree leaves out. */
+  listed?: false
   actions?: ModelAction[]
   /** Served only beside the schema's `space`. */
   space?: 'scoped' | 'global'
@@ -272,6 +274,7 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.of ? { of: source.of } : {}),
+    ...(source.listed === false ? { listed: false as const } : {}),
     ...(source.flags ? { flags: source.flags } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),

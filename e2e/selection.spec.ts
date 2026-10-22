@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { openView } from './tree'
+import { modelNode, openView } from './tree'
 
 const APP = 'http://127.0.0.1:5177'
 
@@ -119,4 +119,33 @@ test('link-opens-record: a link item opens its record to read, and the links cel
   await cell.press('Enter')
   await page.getByRole('button', { name: 'Bob verwijderen' }).click()
   await expect.poll(linked).toBe(0)
+})
+
+test('tree-hides-link-table: the link dataset is not in the tree', async ({ page }) => {
+  await page.goto('/')
+  await expect(modelNode(page, 'Members')).toBeVisible()
+  await expect(modelNode(page, 'Ties')).toHaveCount(0)
+})
+
+test('add-from-query: + Nieuw on the query calendar asks the title, fills the day, and Undo removes it', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await openView(page, 'Calendar', 'Agenda')
+  await page.getByRole('button', { name: 'Nieuw Slots' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Nieuw Slots' })
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Kick-off')
+  await dialog.getByRole('button', { name: 'Aanmaken' }).click()
+
+  await expect(dialog).toHaveCount(0)
+  const made = () =>
+    rows<{ id: number; name: string; day: string }>(page, 'slot').then((all) =>
+      all.filter((s) => s.name === 'Kick-off'),
+    )
+  const [slot] = await made()
+  expect(slot?.day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  await expect(page.getByText('Kick-off').first()).toBeVisible()
+
+  await page.keyboard.press('Control+z')
+  await expect.poll(async () => (await made()).length).toBe(0)
 })
