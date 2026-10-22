@@ -211,7 +211,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {onAction && actions.filter((action) => !action.many).map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
+      {onAction && actions.map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
       </div>
     </SidePanel>

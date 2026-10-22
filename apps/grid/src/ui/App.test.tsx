@@ -1612,6 +1612,20 @@ describe('a selection action', () => {
     expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
   })
 
+  it("a drawer run sends the open record alone, and the drawer offers each selection action", async () => {
+    await shell()
+    await screen.findByRole('grid', { name: 'Leden' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Openen' }))[1])
+    const group = await screen.findByRole('group', { name: 'Bundelen' })
+
+    fireEvent.change(within(group).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Solo' } })
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Bundelen' }))
+    })
+
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Solo' })
+  })
+
   it("clears a ticked row the view's search no longer shows", async () => {
     await shell()
     await tick('Aart', 'Bo')

@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, ModelAction, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
+import { RelationContext } from './cells/Relation'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
   records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), optionsFrom: vi.fn(),
@@ -671,5 +672,31 @@ describe("a record's files in the drawer", () => {
     render(<Drawer row={row(1, 'Montage')} columns={[]} onClose={() => undefined} />)
     expect(screen.queryByRole('region', { name: 'Bijlagen' })).toBeNull()
     expect(remote.attachmentsOf).not.toHaveBeenCalled()
+  })
+})
+
+describe('a link item in the drawer', () => {
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const model = { ...activity, fields: { ...activity.fields, people } } as Model
+  const every = columnsFor(model, { ...planning, columns: undefined }, false)
+  const crew = [{ id: 11, target: 5, title: 'Sien Peeters', state: null }, { id: 12, target: null, title: '', state: null }]
+  const staffed: Row = { id: 1, title: 'Lunch bistrot', status: 'publish', fields: { date: '2026-05-18', people: crew } }
+
+  it("opens the link's own record, read-only, through openRelated", () => {
+    const openRelated = vi.fn()
+    render(<RelationContext.Provider value={{ models: {}, scope: null, spaceModel: null, openRelated }}>
+      <Drawer row={staffed} columns={every} model={model} onClose={() => undefined} />
+    </RelationContext.Provider>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sien Peeters' }))
+
+    expect(openRelated).toHaveBeenCalledExactlyOnceWith('assignment', 11)
+    expect(within(screen.getByRole('region', { name: 'Mensen' })).getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('stays plain text where no grid can open a record', () => {
+    render(<Drawer row={staffed} columns={every} model={model} onClose={() => undefined} />)
+    expect(screen.getByText('Sien Peeters')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Sien Peeters' })).toBeNull()
   })
 })

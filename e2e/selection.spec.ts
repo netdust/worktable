@@ -72,3 +72,51 @@ test('select-all-in-view: the header box takes the filtered rows, and the parent
   )
   expect(ties).toHaveLength(3)
 })
+
+test('run-from-drawer: the open record alone, and the parent holds exactly that one', async ({ page }) => {
+  await open(page, 'All members', 'Members')
+  await page.getByRole('row', { name: /Bob/ }).getByRole('button', { name: 'Openen' }).click()
+  const group = page.getByRole('group', { name: 'Gather' })
+  await group.getByRole('textbox', { name: 'Name' }).fill('Solo')
+  await group.getByRole('button', { name: 'Gather', exact: true }).click()
+
+  await expect(page.getByRole('status', { name: 'Gather uitgevoerd.' })).toBeVisible()
+  const made = (await rows<{ id: number; name: string }>(page, 'bundle')).filter((b) => b.name === 'Solo')
+  expect(made).toHaveLength(1)
+  const ties = (await rows<{ bundle_id: number; member_id: number }>(page, 'tie')).filter(
+    (t) => t.bundle_id === made[0]?.id,
+  )
+  expect(ties.map((t) => t.member_id)).toEqual([2])
+})
+
+test('link-opens-record: a link item opens its record to read, and the links cell removes it', async ({ page }) => {
+  const run = await page.request.post('/api/actions/gather', { data: { ids: [2], input: { name: 'Linked' } } })
+  expect(run.status()).toBe(201)
+  const linked = async () => {
+    const bundle = (await rows<{ id: number; name: string }>(page, 'bundle')).find((b) => b.name === 'Linked')
+    return (await rows<{ bundle_id: number }>(page, 'tie')).filter((t) => t.bundle_id === bundle?.id).length
+  }
+  expect(await linked()).toBe(1)
+
+  await open(page, 'All bundles', 'Bundles')
+  await page
+    .getByRole('row', { name: /Linked/ })
+    .getByRole('button', { name: 'Openen' })
+    .click()
+  await page.getByRole('complementary', { name: 'Linked' }).getByRole('button', { name: 'Bob' }).click()
+  const record = page.getByRole('complementary', { name: 'Linked' })
+  await expect(record.getByText('Ties')).toBeVisible()
+  await expect(record.getByRole('definition').filter({ hasText: 'Bob' })).toBeVisible()
+  await expect(record.getByText('Linked', { exact: true })).toHaveCount(3)
+  await expect(page.getByRole('textbox')).toHaveCount(0)
+
+  await record.getByRole('button', { name: 'Sluiten' }).click()
+  const cell = page
+    .getByRole('row', { name: /Linked/ })
+    .getByRole('gridcell')
+    .nth(1)
+  await cell.click()
+  await cell.press('Enter')
+  await page.getByRole('button', { name: 'Bob verwijderen' }).click()
+  await expect.poll(linked).toBe(0)
+})

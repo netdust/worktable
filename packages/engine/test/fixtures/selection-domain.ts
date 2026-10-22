@@ -12,6 +12,7 @@ const bundle = defineDataset({
   custom: false,
   owners: { owner: 'id' },
   columns: { name: { type: 'text', label: 'Name' } },
+  links: { members: { label: 'Members', item: 'Tie', dataset: 'tie', key: 'bundle_id', target: 'member_id' } },
 })
 
 const member = defineDataset({
@@ -87,7 +88,7 @@ const domain: Domain = {
   datasets: [bundle, member, tie],
   queries: [],
   writers: {
-    bundle: { create: accept, delete: () => {} },
+    bundle: { create: accept, update: accept, delete: () => {} },
     member: { create: accept, update: accept, delete: () => {} },
     tie: tieWriter,
   },
@@ -139,7 +140,7 @@ const domain: Domain = {
       filters: {},
       sort: ['name'],
       group_by: null,
-      visible_fields: [],
+      visible_fields: ['members'],
     },
   ],
 }

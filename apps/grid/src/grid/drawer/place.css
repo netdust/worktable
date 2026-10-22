@@ -15,3 +15,18 @@
   margin-left: 6px;
   color: var(--color-fg-subtle);
 }
+
+/* A link item's name opens its own record: text first, a button only in how it answers. */
+.nv-dw-list__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-dw-list__open:hover {
+  text-decoration: underline;
+}
