@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { type ClipboardEvent, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ClipboardEvent, type CSSProperties, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, ModelAction, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
@@ -17,7 +17,7 @@ import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { SchemaContext } from './drawer/context'
 import { placeWriter } from './drawer/place'
 import { GridFoot } from './GridFoot'
-import { GridHeader, NUMBER_WIDTH } from './GridHeader'
+import { GridHeader, NUMBER_WIDTH, SELECT_WIDTH } from './GridHeader'
 import { SelectionBar, useSelection } from './Selection'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
@@ -120,6 +120,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const ticking = useSelection(ids)
   const selectionActions = onSelection ? model.actions?.filter((a) => a.many) ?? [] : []
   const selectable = selectionActions.length > 0
+  const numberWidth = selectable ? SELECT_WIDTH : NUMBER_WIDTH
 
   const sorted = table.getRowModel().rows
   useEffect(() => {
@@ -345,14 +346,14 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       </div>
       ) : (
       <>
-      {selectable && ticking.selected.size > 0 && onSelection && (
+      {selectable && onSelection && (
         <SelectionBar count={ticking.selected.size} actions={selectionActions} onClear={ticking.clear}
           onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then(ticking.clear)} />
       )}
       <div className="nv-body">
         <div className="nv-scroll">
-          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + NUMBER_WIDTH }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
-            <GridHeader table={table} byId={byId}
+          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+            <GridHeader table={table} byId={byId} numberWidth={numberWidth}
               selection={selectable ? { all: ids.length > 0 && ticking.selected.size === ids.length, some: ticking.selected.size > 0, onToggle: ticking.selected.size === ids.length ? ticking.clear : ticking.all } : undefined} />
             <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
               selection={selectable ? { has: (id) => ticking.selected.has(id), toggle: ticking.toggle } : undefined}
@@ -362,7 +363,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
           attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
-        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout} flags={flags}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
           onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input)) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}

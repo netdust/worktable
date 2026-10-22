@@ -17,13 +17,13 @@ const gather: ModelAction = { name: 'gather', label: 'Bundelen', many: true, inp
 const named: ModelAction = { name: 'name_it', label: 'Benoemen', many: true, input: { name: { type: 'text', label: 'Naam' } } }
 const withMany = { ...activity, actions: [gather] }
 
-function sheet(rows: Row[] = calais, options: { model?: typeof activity; view?: View; query?: string; onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<void> } = {}) {
+function sheet(rows: Row[] = calais, options: { model?: typeof activity; view?: View; onAction?: () => Promise<void>; query?: string; onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<void> } = {}) {
   const store = createStore({ model: 'activity', rows, api: { update: vi.fn(), create: vi.fn(), remove: vi.fn() } })
   const onSelection = options.onSelection ?? vi.fn(() => Promise.resolve())
   function Harness({ query }: { query: string }) {
     const [layout, setLayout] = useState(defaults(planning))
     return <Grid model={options.model ?? withMany} view={options.view ?? planning} store={store} writable layout={layout} onLayout={setLayout}
-      query={query} emptyTitle="Leeg" onSelection={onSelection} />
+      query={query} emptyTitle="Leeg" onSelection={onSelection} onAction={options.onAction} />
   }
   const rendered = renderNl(<Harness query={options.query ?? ''} />)
   return { ...rendered, onSelection, search: (query: string) => rendered.rerender(<Harness query={query} />) }
@@ -128,4 +128,71 @@ describe('selecting rows', () => {
     expect(screen.getByRole('button', { name: 'Bundelen' })).toHaveProperty('disabled', false)
     expect(screen.queryByText('Maximaal 500 tegelijk')).toBeNull()
   })
+
+  it('keeps its strip while nothing is ticked, so a first tick moves no row', () => {
+    const { container } = sheet()
+    const idle = container.querySelector('.nv-selection')
+    expect(idle).not.toBeNull()
+    expect(idle?.getAttribute('aria-hidden')).toBe('true')
+
+    fireEvent.click(rowBox('Montage'))
+
+    expect(container.querySelectorAll('.nv-selection')).toHaveLength(1)
+    expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBe(container.querySelector('.nv-selection'))
+  })
+
+  it('leaves the row boxes out of the tab order except on the active row; the header box stays in it', () => {
+    sheet()
+    expect(rowBox('Montage')).toHaveProperty('tabIndex', -1)
+    expect(headerBox()).toHaveProperty('tabIndex', 0)
+
+    fireEvent.click(screen.getAllByRole('gridcell').find((c) => c.closest('tr')?.dataset.title === 'Montage' && c.hasAttribute('data-cell'))!)
+
+    expect(rowBox('Montage')).toHaveProperty('tabIndex', 0)
+    expect(rowBox('Repetitie')).toHaveProperty('tabIndex', -1)
+  })
+
+  it('disables the other actions while one run is sending, and frees them when it settles', async () => {
+    let finish: () => void = () => undefined
+    const onSelection = vi.fn(() => new Promise<void>((done) => { finish = done }))
+    sheet(calais, { model: { ...activity, actions: [gather, { ...named, input: {} }] }, onSelection })
+    fireEvent.click(rowBox('Montage'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Benoemen' })).toHaveProperty('disabled', true))
+    finish()
+    await waitFor(() => expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull())
+  })
+
+  it("offers the drawer only the actions whose handler exists", () => {
+    const single: ModelAction = { name: 'once', label: 'Eenmalig', input: {} }
+    sheet(calais, { model: { ...activity, actions: [single, gather] } })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0] as HTMLElement)
+
+    expect(screen.getByRole('group', { name: 'Bundelen' })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: 'Eenmalig' })).toBeNull()
+  })
+
+  it('prunes through a re-read of the same sheet, a store that no longer holds the ticked row', async () => {
+    const { rerender } = renderStores()
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(rowBox('Repetitie'))
+
+    rerender(calais.filter((r) => r.title !== 'Montage'))
+
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
+  })
 })
+
+function renderStores() {
+  const onSelection = vi.fn(() => Promise.resolve())
+  const storeOf = (rows: Row[]) => createStore({ model: 'activity', rows, api: { update: vi.fn(), create: vi.fn(), remove: vi.fn() } })
+  function Harness({ store }: { store: ReturnType<typeof storeOf> }) {
+    const [layout, setLayout] = useState(defaults(planning))
+    return <Grid model={withMany} view={planning} store={store} writable layout={layout} onLayout={setLayout} query="" emptyTitle="Leeg" onSelection={onSelection} />
+  }
+  const rendered = renderNl(<Harness store={storeOf(calais)} />)
+  return { ...rendered, rerender: (rows: Row[]) => rendered.rerender(<Harness store={storeOf(rows)} />) }
+}

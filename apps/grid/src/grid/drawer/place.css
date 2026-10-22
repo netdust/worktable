@@ -27,6 +27,7 @@
   cursor: pointer;
 }
 
-.nv-dw-list__open:hover {
+.nv-dw-list__open:hover,
+.nv-dw-list__open:focus-visible {
   text-decoration: underline;
 }

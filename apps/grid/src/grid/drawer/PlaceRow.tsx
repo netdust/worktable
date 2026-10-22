@@ -39,8 +39,8 @@ export function PlaceRow({ item, link, role, flags, choosing }: { item: LinkItem
       {choosing
         ? <RelationPicker model={link.target_dataset} label={choosing.label} candidates={choosing.candidates} hide={(record) => record.id === item.target}
             onPick={choosing.onPick} onCancel={choosing.onCancel} />
-        : <span className="nv-dw-list__main"><span>{isOpen(item) ? t('openPlace') : openRelated
-          ? <button type="button" className="nv-dw-list__open" onClick={() => openRelated(link.dataset, item.id)}>{item.title}</button>
+        : <span className="nv-dw-list__main"><span>{isOpen(item) ? t('openPlace') : openRelated && item.title !== ''
+          ? <button type="button" className="nv-dw-list__open" aria-label={t('openRecord', { title: item.title })} onClick={() => openRelated(link.dataset, item.id)}>{item.title}</button>
           : item.title}{places > 1 && (
             <span className="nv-dw-list__times">{t('openPlaces', { n: places })}</span>
           )}</span>{said && <small>{said}</small>}</span>}

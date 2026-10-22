@@ -7,6 +7,7 @@ import {
   type Actor,
   type Domain,
   type InputValue,
+  isSelection,
   MAX_INPUT_TEXT,
   type SelectionActionDecl,
   type TransitionMode,
@@ -38,8 +39,6 @@ export const MAX_SELECTION = 500
 
 const badBody = (message: string) => new ApiError(400, 'bad_body', message)
 const isId = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) > 0
-
-const isSelection = (action: ActionDecl | SelectionActionDecl): action is SelectionActionDecl => 'many' in action
 
 function actionOf(domain: Domain, name: string): ActionDecl | SelectionActionDecl {
   const action = domain.actions && Object.hasOwn(domain.actions, name) ? domain.actions[name] : undefined

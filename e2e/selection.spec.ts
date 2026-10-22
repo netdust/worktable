@@ -131,7 +131,7 @@ test('add-from-query: + Nieuw on the query calendar asks the title, fills the da
   page,
 }) => {
   await page.goto('/')
-  await openView(page, 'Calendar', 'Agenda')
+  await openView(page, 'Calendar', 'Roster')
   await page.getByRole('button', { name: 'Nieuw Slots' }).click()
   const dialog = page.getByRole('dialog', { name: 'Nieuw Slots' })
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Kick-off')
@@ -148,4 +148,53 @@ test('add-from-query: + Nieuw on the query calendar asks the title, fills the da
 
   await page.keyboard.press('Control+z')
   await expect.poll(async () => (await made()).length).toBe(0)
+})
+
+test('the bar reserves its strip: no row moves on the first tick, a second tick or Selectie wissen', async ({
+  page,
+}) => {
+  await open(page, 'All members', 'Members')
+  const row = page.getByRole('row', { name: /Cy/ })
+  const top = async () => (await row.boundingBox())?.y
+  const before = await top()
+
+  await tick(page, 'Ann')
+  expect(await top()).toBe(before)
+  await tick(page, 'Bob')
+  expect(await top()).toBe(before)
+  await page.getByRole('button', { name: 'Selectie wissen' }).click()
+  await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
+  expect(await top()).toBe(before)
+})
+
+test('Tab reaches the active row box and the header box, not every row box', async ({ page }) => {
+  await open(page, 'All members', 'Members')
+  await page.getByRole('row', { name: /Bob/ }).locator('td[data-cell]').first().click()
+  const focused = () =>
+    page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.getAttribute('aria-label') ?? '')
+  const stops = await page.evaluate(
+    () =>
+      [...document.querySelectorAll<HTMLInputElement>('tbody input[type=checkbox]')].filter((box) => box.tabIndex >= 0)
+        .length,
+  )
+  expect(stops).toBe(1)
+
+  await page.keyboard.press('Shift+Tab')
+  expect(await focused()).toBe('Bob selecteren')
+  await page.keyboard.press('Shift+Tab')
+  expect(await focused()).not.toMatch(/ selecteren$/)
+})
+
+test('row numbers of three digits fit beside the box', async ({ page }) => {
+  await open(page, 'Beta members', 'Members')
+  const last = page.locator('tbody tr.nv-tr').last()
+  const cell = last.locator('td.nv-num')
+  await expect(cell.locator('span')).toHaveText('111')
+  const [box, number, width] = await Promise.all([
+    cell.locator('input').boundingBox(),
+    cell.locator('span').boundingBox(),
+    cell.evaluate((td) => ({ scroll: td.scrollWidth, client: td.clientWidth })),
+  ])
+  expect(box && number && box.x + box.width <= number.x).toBe(true)
+  expect(width.scroll).toBeLessThanOrEqual(width.client)
 })

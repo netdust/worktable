@@ -146,7 +146,7 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
               <tr key={row.id} data-title={row.title} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
                 {selection && row.id !== DRAFT ? (
                   <td className="nv-td nv-num">
-                    <input type="checkbox" aria-label={t('selectRow', { title: row.title })} checked={selection.has(row.id)} onChange={() => selection.toggle(row.id)} />
+                    <input type="checkbox" tabIndex={keys.active?.row === r ? 0 : -1} aria-label={t('selectRow', { title: row.title })} checked={selection.has(row.id)} onChange={() => selection.toggle(row.id)} />
                     <span aria-hidden="true">{r + 1}</span>
                   </td>
                 ) : <td className="nv-td nv-num" aria-hidden="true">{r + 1}</td>}

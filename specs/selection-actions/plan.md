@@ -30,19 +30,19 @@
 **Assets:** records outside the caller's scope or view, and the integrity of what a run writes. Also the undo of a batch.
 
 **Attacks**
-1. **An owner or record link posts ids it cannot see** (another owner's record, an owner-hidden source), or anyone posts a deleted row, to reach or write them → every id is read through `readRecord` as the caller, as a single action reads its record. Any miss is a 404 on the whole run, before `run` is called. `actions.ts` `recordsOf`. Editors and administrators see every record (`access.ts:75`); a space is a view filter, never a scope (`docs/SPEC.md`).
-2. **A caller floods the route** with a huge, duplicated or malformed `ids` → `idsOf` refuses the run with 400 before any read when the ids:
+1. **An owner or record link posts ids it cannot see** (another owner's record, an owner-hidden source), or anyone posts a deleted row, to reach or write them → every id is read through `readRecord` as the caller, as a single action reads its record. Any miss is a 404 on the whole run, before `run` is called. `actions.ts` `runSelection`, which reads each id inline inside the transaction. Editors and administrators see every record (`access.ts:75`); a space is a view filter, never a scope (`docs/SPEC.md`).
+2. **A caller floods the route** with a huge, duplicated or malformed `ids` → `idsOf` (and `inputOf` for `input`) refuses the run with 400 before any read when the ids:
    - are not an array, or are empty;
    - number more than 500;
    - include a non-integer or a value ≤ 0;
    - include a duplicate.
-3. **Shape confusion:** `{ id }` is posted to a selection action, or `{ ids }` to a single one, to slip past a check written for the other → `inputsOf`/`idsOf` refuse the wrong shape with 400. `matrix.open.fill` may not name a selection action (`validate.ts` `checkMatrix`).
+3. **Shape confusion:** `{ id }` is posted to a selection action, or `{ ids }` to a single one, to slip past a check written for the other → `idOf`/`idsOf` refuse the wrong shape with 400 (a body carrying both keys is refused by each). `matrix.open.fill` may not name a selection action (`validate.ts` `checkMatrix`).
 4. **A link record kept out of the tree is opened** by someone who could not read it in the tree → the drawer opens it read-only through the existing `openRelated`, which reads `GET /rows` as the caller. The drawer's link list gains no write. Removing a link stays where it is today: the parent row's links cell → `links.remove` → `removeRow` on the link dataset, through its writer. `listed: false` hides nothing from the API, by design, and is never an access control.
-5. **An owner or a record link runs a selection action** → the same gate as a single action: `visibleSource(action.on)` plus `inScope` per record. No new actor path.
+5. **An owner or a record link runs a selection action** → `visibleSource(action.on)` plus `inScope` per record, as a single action. An owner link's half is stopped there; a record link's half is stopped by the link fence (`record-link.ts`), which keeps a record-link session off `/api/actions` altogether. No new actor path.
 6. **The MCP sends ids that reach further than its token can see** → the same route and the same checks. The MCP validates the shape client-side too (1–500 positive integers), but the server is the control.
 
 **Mitigations (where they live):**
-- `packages/engine/src/actions.ts`: `idsOf`, `recordsOf`, `runSelection`.
+- `packages/engine/src/actions.ts`: `idOf`, `idsOf`, `inputOf`, `runSelection` (the per-id read is inline in it).
 - `packages/engine/src/validate.ts`: `checkActions` and `checkMatrix` (fill ≠ selection), `checkSections` (no unlisted dataset), and no query declared `of` an unlisted dataset.
 - `apps/grid/src/grid/Selection.tsx`: the cap in the UI.
 - `packages/mcp/src/client.ts`: `assertIds`.

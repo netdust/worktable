@@ -7,6 +7,7 @@ import {
   type Domain,
   ICONS,
   type InputType,
+  isSelection,
   type OptionsFrom,
   type QueryDecl,
   TONES,
@@ -403,7 +404,7 @@ function checkOpen(
   }
   const action = domain.actions && Object.hasOwn(domain.actions, open.fill) ? domain.actions[open.fill] : undefined
   if (!action) throw at(open.fill, `open fill "${open.fill}" is not a declared action`)
-  if ('many' in action) throw at(open.fill, `open fill "${open.fill}" is a selection action, which fills one place`)
+  if (isSelection(action)) throw at(open.fill, `open fill "${open.fill}" is a selection action, which fills one place`)
   if (action.on !== join.name)
     throw at(open.fill, `open fill "${open.fill}" acts on "${action.on}", not "${join.name}"`)
   const across = join.columns[m.across]?.relation
@@ -559,10 +560,13 @@ function checkActions(domain: Domain): void {
     if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
       throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
     }
+    if ('many' in action && action.many !== true)
+      throw new DomainError(name, 'many', 'many must be true on a selection action, and absent otherwise')
     for (const [key, input] of Object.entries(action.input)) {
       checkInput(name, key, input, datasets)
       if (!('relation' in input) || !input.options_from) continue
-      if ('many' in action) throw new DomainError(name, key, `input ${key} of a selection action takes no options_from`)
+      if (isSelection(action))
+        throw new DomainError(name, key, `input ${key} of a selection action takes no options_from`)
       const on = domain.datasets.find((d) => d.name === action.on) as DatasetDecl
       const at = (message: string) => new DomainError(name, key, `input ${key} ${message}`)
       checkOptionsFrom(domain, on, at, input.options_from, input.relation)

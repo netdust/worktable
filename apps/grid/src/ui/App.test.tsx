@@ -1561,6 +1561,24 @@ describe('writes on the engine', () => {
     })
   })
 
+  it('keeps + Nieuw blocked, and says why, while the dataset needs a field nothing can fill', async () => {
+    const required = { type: 'file' as never, label: 'Bijlage', required: true, fact: false }
+    api.schema.mockResolvedValue({
+      ...engineSchema,
+      models: {
+        ...engineSchema.models,
+        activiteit: { ...engineSchema.models.activiteit, new_label: 'Nieuwe activiteit', fields: { bijlage: required } },
+        dagplanning: { ...engineSchema.models.dagplanning, creates: 'activiteit' },
+      },
+    })
+    window.location.hash = '#view=dagplanning'
+    render(<App />)
+    await screen.findByText('opbouw Gent')
+
+    expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Heeft Bijlage nodig: maak het aan vanuit het record')).toBeTruthy()
+  })
+
   describe('a calendar of a query that creates in a dataset', () => {
     const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
     const calendars: Schema = {
@@ -1704,6 +1722,20 @@ describe('a selection action', () => {
     })
 
     expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Solo' })
+  })
+
+  it('a run refused as unknown_record reads the view again, drops the gone row and says so in Dutch', async () => {
+    api.runSelection.mockRejectedValue({ code: 'unknown_record', message: 'unknown record 2' })
+    await shell()
+    await tick('Aart', 'Bo')
+    api.rows.mockResolvedValue({ rows: people.filter((p) => p.title !== 'Bo'), total: 2 })
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect((await screen.findByRole('alert')).textContent).toBe('Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.')
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
   })
 
   it("clears a ticked row the view's search no longer shows", async () => {

@@ -15,6 +15,9 @@ export const ICON: Record<CellKind, LucideIcon> = {
 /** The row-number column's width: fixed, so the table's stretch goes to the data columns. */
 export const NUMBER_WIDTH = 44
 
+/** With the row box beside the number, three digits fit. */
+export const SELECT_WIDTH = 68
+
 const ARROW = { asc: ' ↑', desc: ' ↓' } as const
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const
 
@@ -45,11 +48,11 @@ export interface HeaderSelection {
   onToggle: () => void
 }
 
-export function GridHeader({ table, byId, selection }: { table: Table<Row>; byId: Map<string, Column>; selection?: HeaderSelection }) {
+export function GridHeader({ table, byId, selection, numberWidth = NUMBER_WIDTH }: { table: Table<Row>; byId: Map<string, Column>; selection?: HeaderSelection; numberWidth?: number }) {
   return (
     <>
     <colgroup>
-      <col style={{ width: NUMBER_WIDTH }} />
+      <col style={{ width: numberWidth }} />
       {/* The last column takes what the sheet adds beyond the columns' widths; the others keep theirs. */}
       {table.getVisibleLeafColumns().map((column, i, all) => <col key={column.id} style={i === all.length - 1 ? undefined : { width: column.getSize() }} />)}
     </colgroup>

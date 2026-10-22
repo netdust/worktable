@@ -1668,7 +1668,7 @@
   left: 0;
   z-index: 1;
   box-sizing: border-box;
-  width: 44px;
+  width: var(--nv-num-width, 44px);
   padding: 0 10px 0 0;
   color: var(--color-fg-subtle);
   font: 11.5px var(--font-mono);
@@ -1685,7 +1685,7 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-first {
-  left: 44px;
+  left: var(--nv-num-width, 44px);
   padding-left: 12px;
 }
 
@@ -3439,6 +3439,8 @@
 
 /* The ticked rows' bar, one row above the sheet: the count, each action with its inputs inline, and the way out. */
 .nv-selection {
+  box-sizing: border-box;
+  min-height: 45px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

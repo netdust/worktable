@@ -44,12 +44,19 @@ export function SelectionBar({ count, actions, onRun, onClear }: {
   onRun: (action: ModelAction, input: Record<string, unknown>) => Promise<void>
   onClear: () => void
 }) {
+  const [busy, setBusy] = useState(false)
   const over = count > MAX_SELECTION
+  // The strip stays while nothing is ticked: a bar that mounts on the first tick would push every row down.
+  if (count === 0) return <div className="nv-selection" aria-hidden="true" />
+  const run = (action: ModelAction, input: Record<string, unknown>) => {
+    setBusy(true)
+    return onRun(action, input).finally(() => setBusy(false))
+  }
   return (
     <div className="nv-selection" role="region" aria-label={t('selectedCount', { n: count })}>
       <span className="nv-selection__count">{t('selectedCount', { n: count })}</span>
-      {actions.map((action) => <ActionInputs key={action.name} action={action} disabled={over} onRun={(input) => onRun(action, input)} />)}
-      {over && <span className="nv-selection__max" role="alert">{t('selectionMax')}</span>}
+      {actions.map((action) => <ActionInputs key={action.name} action={action} disabled={over || busy} onRun={(input) => run(action, input)} />)}
+      {over && <span className="nv-selection__max" role="alert">{t('selectionMax', { max: MAX_SELECTION })}</span>}
       <Button className="nv-button nv-button--secondary nv-button--sm" onPress={onClear}>{t('selectionClear')}</Button>
     </div>
   )

@@ -352,6 +352,10 @@ export interface SelectionActionDecl {
   run(records: Values[], input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 
+/** Only `many: true` makes a selection action; a stray `many` is refused at validation, never read as one. */
+export const isSelection = (action: ActionDecl | SelectionActionDecl): action is SelectionActionDecl =>
+  (action as { many?: unknown }).many === true
+
 /** An update that adds rows to its own batch: each create runs as an action's does, as the same actor. */
 export interface WriterUpdate {
   values: Values

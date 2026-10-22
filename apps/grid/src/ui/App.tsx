@@ -550,7 +550,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     if (view) finished((await runAction(action.name, row.id, input)).batch, action)
   }
   const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>) => {
-    if (view) finished((await runSelection(action.name, ids, input)).batch, action)
+    if (!view) return
+    try {
+      finished((await runSelection(action.name, ids, input)).batch, action)
+    } catch (error) {
+      // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
+      if ((error as ApiError).code === 'unknown_record') reloadView()
+      throw error
+    }
   }
 
   if (!served) {

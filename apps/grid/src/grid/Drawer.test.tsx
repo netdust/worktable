@@ -688,10 +688,19 @@ describe('a link item in the drawer', () => {
       <Drawer row={staffed} columns={every} model={model} onClose={() => undefined} />
     </RelationContext.Provider>)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sien Peeters' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Sien Peeters' }))
 
     expect(openRelated).toHaveBeenCalledExactlyOnceWith('assignment', 11)
     expect(within(screen.getByRole('region', { name: 'Mensen' })).getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('shows an item without a title as plain text, never as a nameless button', () => {
+    const nameless: Row = { ...staffed, fields: { ...staffed.fields, people: [{ id: 13, target: 8, title: '', state: null }] } }
+    render(<RelationContext.Provider value={{ models: {}, scope: null, spaceModel: null, openRelated: vi.fn() }}>
+      <Drawer row={nameless} columns={every} model={model} onClose={() => undefined} />
+    </RelationContext.Provider>)
+
+    expect(within(screen.getByRole('region', { name: 'Mensen' })).queryAllByRole('button')).toHaveLength(0)
   })
 
   it('stays plain text where no grid can open a record', () => {

@@ -270,9 +270,10 @@ const strings = {
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
+  recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   selectedCount: '{n} geselecteerd',
   selectionClear: 'Selectie wissen',
-  selectionMax: 'Maximaal 500 tegelijk',
+  selectionMax: 'Maximaal {max} tegelijk',
   selectAll: 'Alle rijen selecteren',
   selectRow: '{title} selecteren',
   addViewTo: 'Weergave toevoegen aan {model}',
@@ -428,6 +429,7 @@ export function setStrings(given: Record<string, unknown> | undefined): void {
 const ENGINE_CODES: Record<string, StringKey> = {
   transition_not_allowed: 'transitionNotAllowed',
   transition_lost: 'transitionLost',
+  unknown_record: 'recordGoneRun',
 }
 
 /** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */

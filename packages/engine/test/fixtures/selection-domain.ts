@@ -54,9 +54,9 @@ const slot = defineDataset({
   },
 })
 
-const agenda = defineQuery({
-  name: 'agenda',
-  label: 'Agenda',
+const roster = defineQuery({
+  name: 'roster',
+  label: 'Roster',
   title: 'name',
   date: 'day',
   calendar: { day: 'day', lanes: ['bundle_id'] },
@@ -115,7 +115,7 @@ const touch: SelectionActionDecl = {
 
 const domain: Domain = {
   datasets: [bundle, member, tie, slot],
-  queries: [agenda],
+  queries: [roster],
   writers: {
     bundle: { create: accept, update: accept, delete: () => {} },
     member: { create: accept, update: accept, delete: () => {} },
@@ -125,6 +125,19 @@ const domain: Domain = {
   actions: {
     gather,
     touch,
+    // On a dataset an owner cannot read.
+    tidy: { label: 'Tidy', on: 'tie', many: true, input: {}, run: () => [] } satisfies SelectionActionDecl,
+    // A picked record the caller must be able to read.
+    pair: {
+      label: 'Pair',
+      on: 'member',
+      many: true,
+      input: { bundle: { relation: 'bundle', label: 'Bundle' } },
+      run: (records) => {
+        seen.push(records)
+        return []
+      },
+    } satisfies SelectionActionDecl,
     rename: {
       label: 'Rename',
       on: 'member',
@@ -139,6 +152,7 @@ const domain: Domain = {
       { name: 'Bob', bundle_id: 1 },
       { name: 'Cy', bundle_id: 2 },
       { name: 'Di', bundle_id: 1 },
+      ...Array.from({ length: 110 }, (_, n) => ({ name: `Extra ${String(n + 1).padStart(3, '0')}`, bundle_id: 2 })),
     ])
   },
   views: [
@@ -163,9 +177,19 @@ const domain: Domain = {
       visible_fields: ['bundle_id'],
     },
     {
+      name: 'Beta members',
+      source_type: 'dataset',
+      source: 'member',
+      skin: 'table',
+      filters: { bundle_id: 2 },
+      sort: ['name'],
+      group_by: null,
+      visible_fields: ['bundle_id'],
+    },
+    {
       name: 'Calendar',
       source_type: 'query',
-      source: 'agenda',
+      source: 'roster',
       skin: 'calendar',
       filters: {},
       sort: ['day'],

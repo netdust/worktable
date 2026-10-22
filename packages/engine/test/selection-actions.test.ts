@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
+  type ActionDecl,
   type ColumnDecl,
   type Domain,
   DomainError,
@@ -149,6 +150,12 @@ describe('selection action denials', () => {
   test('a refusal inside run rolls back every create', () =>
     denied(() => act(editor, 'gather', { ids: [1, 2], input: { name: 'refused' } }), 422, 'refused', true))
 
+  test('an owner running it on a dataset it cannot see is 404 unknown_source', () =>
+    denied(() => act(owner, 'tidy', { ids: [1], input: {} }), 404, 'unknown_source'))
+
+  test('an input naming a record the owner cannot read is 404 unknown_record and run never starts', () =>
+    denied(() => act(owner, 'pair', { ids: [1, 2], input: { bundle: 2 } }), 404, 'unknown_record'))
+
   test('a cross-site run is 403 forbidden_site', () =>
     denied(() => act(editor, 'gather', GATHER, 'cross-site'), 403, 'forbidden_site'))
 })
@@ -250,6 +257,14 @@ describe('validateDomain and selection actions', () => {
       ],
     })
     expect(err.message).toContain('tie')
+  })
+
+  test('refuses a many that is present and not true', () => {
+    const single = domain.actions?.rename as ActionDecl
+    for (const many of [undefined, false, 1, 'true']) {
+      const err = refusal({ ...domain, actions: { ...domain.actions, bad: { ...single, many } as never } })
+      expect(err.message).toContain('many')
+    }
   })
 
   test("refuses options_from on a selection action's input", () => {
