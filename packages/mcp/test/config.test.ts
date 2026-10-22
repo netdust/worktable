@@ -62,7 +62,15 @@ describe('loadConfig', () => {
   })
 
   test('a token on the command line is refused', () => {
-    expect(refusal(['--url', URL_OK, '--token', 'abc'])).toContain('--token-file')
+    const file = tokenFile('t', 0o600)
+    expect(refusal(['--url', URL_OK, '--token-file', file, '--token', 'abc'])).toContain('never as --token')
+    expect(refusal(['--url', URL_OK, '--token-file', file, '--token=abc'])).toContain('never as --token')
+  })
+
+  test('a pasted positional is refused without echoing it', () => {
+    const file = tokenFile('t', 0o600)
+    const message = refusal(['--url', URL_OK, '--token-file', file, 's3cret-pasted'])
+    expect(message).not.toContain('s3cret-pasted')
   })
 
   test('an unknown option is a ConfigError', () => {

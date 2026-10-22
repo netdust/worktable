@@ -31,13 +31,9 @@ function parseOptions(argv: string[]): { url: string; tokenFile: string } {
     allowPositionals: true,
   })
   if ('token' in values) throw new ConfigError('pass the token in a file with --token-file, never as --token')
-  const unknown = [
-    ...Object.keys(values)
-      .filter((key) => key !== 'url' && key !== 'token-file')
-      .map((key) => `--${key}`),
-    ...positionals,
-  ]
-  if (unknown.length > 0) throw new ConfigError(`unknown argument ${unknown[0]}; ${USAGE}`)
+  const unknownOption = Object.keys(values).find((key) => key !== 'url' && key !== 'token-file')
+  if (unknownOption) throw new ConfigError(`unknown option --${unknownOption}; ${USAGE}`)
+  if (positionals.length > 0) throw new ConfigError(`unexpected positional argument; ${USAGE}`)
   const { url, 'token-file': tokenFile } = values
   if (typeof url !== 'string' || typeof tokenFile !== 'string')
     throw new ConfigError(`--url and --token-file are required; ${USAGE}`)
