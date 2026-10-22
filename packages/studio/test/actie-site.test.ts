@@ -209,7 +209,8 @@ describe('the confirmed set', () => {
       expect(link(id).deleted_at ?? null).toBeNull()
     }
     const open = linkIn(actieIn('aangevraagd'), 'wacht')
-    expect((await claude('DELETE', `/api/rows/actie_site/${open}`)).status).toBe(200)
+    expect((await claude('DELETE', `/api/rows/actie_site/${open}`)).status).toBe(403)
+    expect((await admin('DELETE', `/api/rows/actie_site/${open}`)).status).toBe(200)
   })
 
   test('the worker writes results while bezig', async () => {
