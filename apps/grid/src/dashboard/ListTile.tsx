@@ -14,7 +14,7 @@ type List = Extract<Tile, { kind: 'list' }>
 const noToggle = () => undefined
 
 /** A row as the prototype's list: its hours, its kind, the title with its context, a day at the end. */
-function Line({ row, shown }: { row: Row; shown: Column[] }) {
+function Line({ row, shown, onOpenRow }: { row: Row; shown: Column[]; onOpenRow?: (row: Row) => void }) {
   const hours = whenOf(row, shown.filter((c) => c.kind === 'datetime'))
   const kinds = shown.filter((c) => c.kind === 'select')
   const days = shown.filter((c) => c.kind === 'date')
@@ -23,7 +23,9 @@ function Line({ row, shown }: { row: Row; shown: Column[] }) {
     <>
       {hours.from && <span className="nv-time nv-list__time">{hours.from}{hours.to && <span className="nv-time__end">–{hours.to}</span>}</span>}
       {kinds.map((c) => <span key={c.id} className="nv-list__kind"><Display column={c} row={row} onToggle={noToggle} /></span>)}
-      <span className="nv-list__title">{row.title}{rest.map((c) => c.text(row) && <span key={c.id} className="nv-list__cell">{c.text(row)}</span>)}</span>
+      <span className="nv-list__title">{onOpenRow
+        ? <button type="button" className="nv-list__open" aria-label={t('openRecord', { title: row.title })} onClick={() => onOpenRow(row)}>{row.title}</button>
+        : row.title}{rest.map((c) => c.text(row) && <span key={c.id} className="nv-list__cell">{c.text(row)}</span>)}</span>
       {days.map((c) => {
         const day = String(c.value(row) ?? '').slice(0, 10)
         const today = iso(new Date())
@@ -35,9 +37,11 @@ function Line({ row, shown }: { row: Row; shown: Column[] }) {
 }
 
 /** The first rows of a view, its total in the title, "Alles tonen", and the tile's one-click write on each row that takes it. */
-export function ListTile({ tile, view, model, models, scope, version, onOpen, onChanged }: {
+export function ListTile({ tile, view, model, models, scope, version, onOpen, onOpenRow, onChanged }: {
   tile: List; view: SavedView; model?: Model; models: Record<string, Model>; scope: Scope | null; version: number
   onOpen: () => void; onChanged: () => void
+  /** A row of a dataset opens its record in a drawer; a row of a query has no record of its own to open. */
+  onOpenRow?: (row: Row) => void
 }) {
   const [found, setFound] = useState<{ rows: Row[]; total: number } | null>(null)
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -74,7 +78,7 @@ export function ListTile({ tile, view, model, models, scope, version, onOpen, on
       <ul className="nv-list__rows">
         {found?.rows.map((row) => (
           <li key={row.id} className="nv-list__row">
-            <Line row={row} shown={shown} />
+            <Line row={row} shown={shown} onOpenRow={model?.query ? undefined : onOpenRow} />
             {set && (takes(row) ? <button type="button" className="nv-bar__button nv-list__act" onClick={() => run(row)}>{set.label}</button> : <span className="nv-list__act" />)}
           </li>
         ))}

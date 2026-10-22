@@ -96,3 +96,35 @@ test('drawer-follows-an-outside-change @e2e: with the drawer open, a second acco
   await expect(drawer.getByRole('button', { name: 'Park', exact: true })).toBeVisible()
   await outside.dispose()
 })
+
+test('dashboard-row-opens-drawer @e2e: a list row opens its record on the dashboard, a press moves it, and the tile’s count follows', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const tile = page.getByRole('region', { name: 'Waiting members' })
+  const total = async () =>
+    Number(
+      (await tile.getByRole('button', { name: /^Waiting members · \d+$/ }).getAttribute('aria-label'))?.split('· ')[1],
+    )
+  await expect(tile.getByRole('listitem').first()).toBeVisible()
+  const before = await total()
+
+  await tile
+    .getByRole('listitem')
+    .first()
+    .getByRole('button', { name: /^Open / })
+    .click()
+  const drawer = page.getByRole('complementary')
+  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
+  await shot(page, 'dashboard-row-drawer')
+  await drawer.getByRole('button', { name: 'Start', exact: true }).click()
+
+  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+  await expect.poll(total).toBe(before - 1)
+  await page
+    .getByRole('status', { name: /gedaan\./ })
+    .getByRole('button', { name: 'Ongedaan maken' })
+    .click()
+  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
+  await expect.poll(total).toBe(before)
+})

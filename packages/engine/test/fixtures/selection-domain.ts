@@ -329,6 +329,30 @@ const domain: Domain = {
       group_by: null,
       visible_fields: ['members'],
     },
+    {
+      name: 'Waiting members',
+      source_type: 'dataset',
+      source: 'member',
+      skin: 'table',
+      filters: { bundle_id: 1, stage: 'new' },
+      sort: ['name'],
+      group_by: null,
+      visible_fields: ['bundle_id'],
+    },
+    {
+      name: 'Overview',
+      skin: 'dashboard',
+      filters: {},
+      sort: [],
+      group_by: null,
+      visible_fields: [],
+      layout: {
+        sections: [
+          { label: 'Open', tiles: [{ kind: 'list', view: 'Waiting members', rows: 5, columns: ['bundle_id'] }] },
+        ],
+        actions: [],
+      },
+    },
   ],
 }
 

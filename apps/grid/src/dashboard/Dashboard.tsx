@@ -64,7 +64,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
       const view = viewOf(tile.view) as SavedView
       return (
         <ListTile key={at} tile={tile} view={view} model={models[view.model]} models={models} scope={scope} version={version}
-          onOpen={() => onOpenView(view.key)} onChanged={refresh} />
+          onOpen={() => onOpenView(view.key)} onChanged={refresh} onOpenRow={(row) => setOpened({ row, view })} />
       )
     }
     if (tile.kind === 'week') {
