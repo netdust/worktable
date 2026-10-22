@@ -14,6 +14,8 @@ Revised Oct 12, 2026 before step 3c: the skin list (grid, calendar, board, timel
 
 Revised Oct 12, 2026 before step 3: the rule above as the first paragraph, and websites as consumers. Then, after the step 3 findings (`specs/step-3/findings.md`): relation options from a query, lookups on datasets with owners, the calendar skin, the badge column, six conflict types in step 3 with werktijd in step 7, and the untimed rule.
 
+Revised Oct 22, 2026 at the studio plans' approval (`specs/studio/spec.md`): the studio domain and a generic MCP server move in and run before step 4; step 4 keeps Publication and a real mail transport as the next engine step; Laika's theatre-specific steps (step 4's call sheets, steps 5 to 7) are parked. The theatre package stays as the first reference domain.
+
 ## What this is
 
 An engine that knows *shapes* — datasets, queries, views, writers, publications — and domain packages that know *names*. Point it at the theatre declarations and it is Laika's planning tool; point it at a fiche declaration and it is a referral guide. The engine never learns a domain word.
@@ -325,6 +327,8 @@ Seven rules decide every design question. Everything above follows from them.
 | 6. Registration | Plan-side cost (bedrag_gepland from Persoon_rol, then Rol; moved from step 3 by Stefan on 2026-10-12), actual-side columns, the person's confirm-and-correct page, receipts, plan_vs_werkelijk | Hours and expenses come back from the people, approved in one view |
 | 7. werktijd + dagtelling + verrekening_periode | Rules per organisation; payroll and expense export | Monthly settlement from the same rows |
 
+Studio's three plans (`specs/studio/spec.md`: studio-domain, studio-mcp, studio-worker) run before step 4. Step 4 then builds Publication and a real mail transport, for studio's report emails; its call sheets and steps 5 to 7 are parked since 2026-10-21.
+
 Step 0 is 9–13 days of foundation and the only step with no new visible result. Unlike the earlier WordPress-internal version of this step, every one of those days produces engine code that every later domain uses.
 
 ## Scope lock
@@ -338,9 +342,11 @@ This is what gets built. Anything not in the "in" column is out until this docum
 | Theatre domain: 3 reference, 6 core, 2 config datasets, 13 queries, 7 conflict types | Resources (vehicles, equipment, inventory) |
 | voorstellingen query for websites; a WordPress shortcode and YOOtheme element that render a public view by a site-side name | Run-of-show, cueing, minute-level blocks |
 | Publication with person and organisation recipients, language, html/ical/pdf | Child spaces of a venue (zaal, foyer) |
-| Plan and actual on Toewijzing, approval, receipts as Attachment | Hour balance and overtime owed (urensaldo) |
-| Working-time parameters per organisation, defaults for PC 304 | Production-skeleton templates anchored to a première |
+| Plan and actual on Toewijzing, approval, receipts as Attachment (step 6, parked) | Hour balance and overtime owed (urensaldo) |
+| Working-time parameters per organisation, defaults for PC 304 (step 7, parked) | Production-skeleton templates anchored to a première |
 | Record links per person; optional engine account per person | Leave-request approval on Beschikbaarheid |
+| Studio domain (`packages/studio`, `specs/studio/spec.md`) | Laika's theatre-specific steps, parked on 2026-10-21 ("stop developing Leika for worktable" — Stefan): step 4's call sheets, steps 5 to 7 |
+| A generic MCP server (`packages/mcp`) over the REST, for any instance | |
 
 **Acceptance per build step.** Each step is done when its gate passes in a real browser (netdust-gates), not when the code exists. The gates run in worktable's own browser e2e harness, built in step 0 (one day, counted there); each later gate is about a day of e2e work inside its step; step 6 also needs a record-link or action-token actor in the harness.
 
