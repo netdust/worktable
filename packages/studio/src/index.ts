@@ -12,13 +12,13 @@ import {
   taak,
   werkpakket,
 } from './datasets'
-import { agenda, opTafel, sitesAandacht } from './queries'
+import { agenda, opTafel, sitesAandacht, sitesInOrde } from './queries'
 import { seed, views } from './seed'
 import { writers } from './writers'
 
 const studio: Domain = {
   datasets: [organisatie, site, groep, groepLid, actie, actieSite, onderhoud, project, werkpakket, taak, agendapunt],
-  queries: [sitesAandacht, opTafel, agenda],
+  queries: [sitesAandacht, sitesInOrde, opTafel, agenda],
   writers,
   space: { dataset: 'organisatie' },
   sections: [

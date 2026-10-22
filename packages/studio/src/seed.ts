@@ -242,12 +242,11 @@ export const views: SavedViewSeed[] = [
   }),
   view({
     name: 'Sites in orde',
-    source_type: 'dataset',
-    source: 'site',
+    source_type: 'query',
+    source: 'sites_in_orde',
     skin: 'table',
-    filters: { ...IN_REGISTRY, gezondheid: 'ok' },
     sort: ['naam'],
-    visible_fields: SITE_FIELDS,
+    visible_fields: ['naam', 'gezondheid', 'laatste_check', 'organisatie_id'],
   }),
   view({
     name: 'Storing',

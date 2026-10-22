@@ -34,6 +34,23 @@ export const sitesAandacht = defineQuery({
   },
 })
 
+export const sitesInOrde = defineQuery({
+  name: 'sites_in_orde',
+  label: 'Sites in orde',
+  icon: 'check',
+  title: 'naam',
+  of: 'site',
+  scoped: 'organisatie_id',
+  sql: sqlOf('sites_in_orde'),
+  columns: {
+    id: { type: 'integer', label: 'Id' },
+    naam: { type: 'text', label: 'Naam' },
+    gezondheid: { type: 'text', label: 'Gezondheid', ...gezondheden },
+    laatste_check: { type: 'datetime', label: 'Laatste check', nullable: true },
+    organisatie_id: klant,
+  },
+})
+
 export const opTafel = defineQuery({
   name: 'op_tafel',
   label: 'Op tafel',
