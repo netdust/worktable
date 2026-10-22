@@ -3,8 +3,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 
 const root = resolve(import.meta.dir, '..')
 const engine = join(root, 'packages', 'engine')
-const packagesDir = join(root, 'packages')
-const mcp = join(packagesDir, 'mcp')
+const mcp = join(root, 'packages', 'mcp')
 const domains = ['theatre', 'fiche']
 const domainDirs = domains.map((name) => join(root, 'packages', name))
 const sourceFile = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
@@ -27,12 +26,12 @@ function crossesIntoDomain(file: string, spec: string): boolean {
   return domainDirs.some((dir) => target === dir || target.startsWith(dir + sep))
 }
 
-// The MCP server reaches an instance over REST only, so it imports no worktable package at all.
+// The MCP server reaches an instance over REST only, so it imports no worktable code outside its own package.
 function leavesMcp(file: string, spec: string): boolean {
   if (spec.startsWith('@worktable/')) return true
   if (!spec.startsWith('.')) return false
   const target = resolve(dirname(file), spec)
-  return target.startsWith(packagesDir + sep) && target !== mcp && !target.startsWith(mcp + sep)
+  return target !== mcp && !target.startsWith(mcp + sep)
 }
 
 function violationsIn(dir: string, crosses: (file: string, spec: string) => boolean): string[] {
