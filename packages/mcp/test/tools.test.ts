@@ -9,7 +9,7 @@ import { domain, freshDb } from '../../engine/test/fixture'
 import lineDomain from '../../engine/test/fixtures/lookup-domain'
 import selectionDomain from '../../engine/test/fixtures/selection-domain'
 import { testEngine } from '../../engine/test/sign-in'
-import { assertIds, EngineClient, type FetchFn } from '../src/client'
+import { assertIds, ClientError, EngineClient, type FetchFn } from '../src/client'
 import { registerTools } from '../src/tools'
 
 const BASE = 'http://127.0.0.1:4310'
@@ -214,16 +214,31 @@ describe('a selection action', () => {
   })
 
   test('ids outside 1-500 positive integers are refused before a request', async () => {
-    const wrong = [[], Array.from({ length: 501 }, (_, i) => i + 1), [0], [-1], [1.5], ['1'], [1, 2, 1]]
-    for (const ids of wrong) {
+    const wrong: [unknown[], string][] = [
+      [[], 'non-empty'],
+      [Array.from({ length: 501 }, (_, i) => i + 1), 'at most 500'],
+      [[0], 'record ids only'],
+      [[-1], 'record ids only'],
+      [[1.5], 'record ids only'],
+      [['1'], ''],
+      [[1, 2, 1], 'must not repeat'],
+    ]
+    for (const [ids, message] of wrong) {
       const result = await call(selectionClient, 'action', { name: 'touch', ids })
       expect(result.isError).toBe(true)
+      expect(result.text).toContain(message)
     }
     expect(selectionFetch.calls).toBe(0)
     const most = await call(selectionClient, 'action', { name: 'touch', ids: [1, 2, 3, 4] })
     expect(most.isError).toBe(false)
     expect(selectionFetch.calls).toBe(1)
   })
+
+  // Wrapped, because test.each spreads an array row into several arguments.
+  const refused: unknown[] = [5, null, undefined, {}, [Number.POSITIVE_INFINITY], [Number.NaN], [-0], [2 ** 53], ['1']]
+  test.each(refused.map((ids) => [ids]))('assertIds refuses %p', (ids) =>
+    expect(() => assertIds(ids)).toThrow(ClientError),
+  )
 
   test('500 ids pass the client check', () => {
     expect(() => assertIds(Array.from({ length: 500 }, (_, i) => i + 1))).not.toThrow()
