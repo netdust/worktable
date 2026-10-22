@@ -15,18 +15,26 @@ const noToggle = () => undefined
 
 /** A row as the prototype's list: its hours, its kind, the title with its context, a day at the end. */
 function Line({ row, shown }: { row: Row; shown: Column[] }) {
-  const hours = whenOf(row, shown.filter((c) => c.kind === 'datetime'))
+  const times = shown.filter((c) => c.kind === 'datetime')
+  const hours = whenOf(row, times)
+  // Hours alone read as today's, so a moment on another day shows its day: a stale check must look stale.
+  const on = times.map((c) => String(c.value(row) ?? '').slice(0, 10)).find(Boolean) ?? ''
+  const today = iso(new Date())
   const kinds = shown.filter((c) => c.kind === 'select')
   const days = shown.filter((c) => c.kind === 'date')
   const rest = shown.filter((c) => !['datetime', 'select', 'date'].includes(c.kind))
   return (
     <>
-      {hours.from && <span className="nv-time nv-list__time">{hours.from}{hours.to && <span className="nv-time__end">–{hours.to}</span>}</span>}
+      {hours.from && (
+        <span className="nv-time nv-list__time">
+          {on !== today && <span className={`nv-list__on${on < today ? ' nv-list__day--late' : ''}`}>{hours.day}</span>}
+          {hours.from}{hours.to && <span className="nv-time__end">–{hours.to}</span>}
+        </span>
+      )}
       {kinds.map((c) => <span key={c.id} className="nv-list__kind"><Display column={c} row={row} onToggle={noToggle} /></span>)}
       <span className="nv-list__title">{row.title}{rest.map((c) => c.text(row) && <span key={c.id} className="nv-list__cell">{c.text(row)}</span>)}</span>
       {days.map((c) => {
         const day = String(c.value(row) ?? '').slice(0, 10)
-        const today = iso(new Date())
         const when = !day ? '' : day < today ? ' nv-list__day--late' : day === today ? ' nv-list__day--now' : ''
         return <span key={c.id} className={`nv-list__day${when}`}>{whenOf(row, [c]).day ?? c.text(row)}</span>
       })}
