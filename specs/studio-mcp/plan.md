@@ -15,9 +15,9 @@
 ## Global Constraints
 
 - The MCP server knows no domain word. It imports nothing from `packages/theatre`, `packages/fiche` or `packages/studio` (`scripts/check-boundaries.ts` extended), and holds no domain word (`scripts/check-vocabulary.ts --root packages/mcp`).
-- It never offers delete. Studio's writers already refuse what an editor may not do. The MCP adds no second rule set.
+- It never offers delete. That is behaviour, not a control: the domain writers decide what a service account may write or delete. The MCP adds no second rule set.
 - The token is read from a file, never from an argument or an environment variable. It is never echoed, logged or returned.
-- It talks only to a loopback instance: `127.0.0.1` or `localhost`, the two hosts the engine's Host allowlist takes (`app.ts:237-244`).
+- It talks only to a loopback instance: `127.0.0.1` or `localhost`, the two hosts the engine's Host allowlist takes (`app.ts:237-244`). `localhost` is sent to `127.0.0.1`, which the engine binds, and no environment proxy carries a request (review S1, B1).
 - The gate is `bun run gate`.
 
 ## Architecture
@@ -53,21 +53,23 @@ Each tool returns the engine's JSON as text content. An engine refusal (4xx) ret
 
 **Attacks**
 1. **The token leaks from Claude Code's MCP config** (`~/.claude.json` and project files are read by many tools and backups) → the config carries only `--token-file <path>`. `loadConfig` refuses a token file that group or other can read, or that the running user does not own.
-2. **A misconfigured or injected `--url` sends the token to another host** → `loadConfig` refuses any URL whose host is not `127.0.0.1` or `localhost`, or whose scheme is not http/https.
+2. **A misconfigured or injected `--url` sends the token to another host** → `loadConfig` refuses any URL whose host is not `127.0.0.1` or `localhost`, or whose scheme is not http/https. It sends `localhost` to `127.0.0.1`, because `localhost` may resolve to `::1`, where any local process can listen. `main` sets `NO_PROXY=*`, so an `HTTP_PROXY` in Claude Code's environment never carries the token (review B1, S1).
 3. **A model-supplied name builds a different path** (`source: "../views"`, `id: "1/../../"`) → the client validates `source`, `dataset` and `name` against `/^[a-z][a-z0-9_]*$/` and `id` as a positive integer before building a URL. It sends `filter` only as `JSON.stringify` in a query parameter.
-4. **Prompt-injected text in a row** (a site's notities telling Claude to confirm an update or delete data) → no delete tool exists, and confirmation is refused to every service account by studio's writers (studio-domain). The worst an injected session can do is create requests and write rows an editor may write.
+4. **Prompt-injected text in a row** (a site's notities telling Claude to confirm an update or delete data) → the bound is whatever the editor token can do through the engine: a same-uid session can read the token file and call any route with curl, delete included. The control is the domain writers, which refuse a service account's delete and refuse confirmation to every service account (studio-domain). No delete tool exists, but that is MCP behaviour, not a control (review S2).
 5. **The token surfaces in an error** (a fetch failure printing the request) → `EngineClient` builds errors from status and engine message only, and never includes headers.
 
 **Mitigations (where they live)**
-- `packages/mcp/src/config.ts` `loadConfig`: the file mode and owner, and the loopback URL.
+- `packages/mcp/src/config.ts` `loadConfig`: the file's owner and mode, an absolute token-file path, the loopback URL sent to `127.0.0.1`; no refusal echoes a value that could be a pasted token.
+- `packages/mcp/src/main.ts` `main`: `NO_PROXY=*` before the first fetch.
 - `packages/mcp/src/client.ts` `EngineClient`: identifier and id validation, and errors built without headers.
-- `packages/mcp/src/tools.ts` `registerTools`: no delete tool, refusals as `isError`.
+- `packages/mcp/src/tools.ts` `registerTools`: refusals as `isError`; no delete tool (behaviour, not a control).
 - `scripts/check-boundaries.ts` and `check-vocabulary.ts`: no domain imports or words.
 
 **Deferrals**
 - Whatever an editor service account may do through the engine is allowed by design. Studio's writers are the rule set.
 - Rate limiting is the engine's existing `serviceLimit`.
 - Who may run the MCP binary: anyone with the token file, by design. The file's mode is the control.
+- Plain HTTP on loopback is unauthenticated: while the engine is down, any local process that binds its port receives the token. Acceptable on a single-user box (review N4).
 
 ## Test map
 
@@ -82,7 +84,7 @@ Each tool returns the engine's JSON as text content. An engine refusal (4xx) ret
 1. **A token file readable by others** is refused at start, with a message naming the file and the fix (`chmod 600`) → row 1 (`config.test.ts`: "a group-readable token file is refused").
 2. **A name that is not an identifier** never reaches `fetch` → row 2 (`tools.test.ts`: "a path in a name is refused before any request").
 3. **An engine refusal reads as a tool error Claude can act on**, not a crash → row 2 (`tools.test.ts`: "a writer's refusal is isError with its message").
-4. **The engine is not running**: a clear tool error ("worktable op <url> antwoordt niet"), not a hang → row 2 (`tools.test.ts`: "an unreachable instance fails fast").
+4. **The engine is not running**: a clear tool error ("worktable at <url> does not answer"; English, the reviewer's ruling), not a hang → row 2 (`tools.test.ts`: "an unreachable instance fails fast").
 5. **The token in an error**: no tool result, refusal or transport failure contains the token → row 2 (`tools.test.ts`: "the token never appears in a result").
 6. **A transition without `expect`** reads as the engine's 400 with its message, so Claude retries with expect → row 2 (`tools.test.ts`: "a transition needs expect").
 
@@ -135,7 +137,7 @@ Each tool returns the engine's JSON as text content. An engine refusal (4xx) ret
 - Test: `packages/mcp/test/config.test.ts`
 
 **Interfaces:**
-- Produces: `loadConfig(argv: string[]): { url: string; token: string }`, which throws `ConfigError` with a Dutch message naming the problem and the fix.
+- Produces: `loadConfig(argv: string[]): { url: string; token: string }`, which throws `ConfigError` with an English message (the reviewer's ruling) naming the problem and the fix.
 
 - [ ] **Step 1: Write the denial tests first:**
   - "a group-readable token file is refused" (mode 0640 → ConfigError mentioning `chmod 600`)

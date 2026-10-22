@@ -10,6 +10,7 @@ Worktable is a standalone planning and views engine. `docs/SPEC.md` is the contr
 - `packages/theatre`: theatre datasets, SQL views, writers, seeds
 - `packages/fiche`: Doorverwijsgids fiches; stays in the repo as the proof that the engine is domain-free
 - `apps/grid`: the React grid, talking to the engine's REST only
+- `packages/mcp`: the MCP server Claude Code runs over stdio; it imports no worktable package and talks only REST
 
 ## Stack
 Bun, Hono, Drizzle, SQLite, Zod, Biome, TypeScript. One engine instance per client, one database file each. No WordPress code anywhere in this repo. Multi-tenant hosting is out.
