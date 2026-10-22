@@ -1,0 +1,382 @@
+# Studio domain Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** A `studio` domain package that turns worktable into Netdust studio: organisations, sites, groups, requests (Acties) with their status rules, the maintenance log, projects and work packages, tasks, the agenda, and the seeded Monday dashboard.
+
+**Architecture:** One new domain package, `packages/studio`, declared exactly like `packages/theatre` (datasets, writers, queries as SQL views, declared actions, seed and views). No engine file changes. Studio joins the e2e harness as a third instance beside theatre and fiche. The branch is cut from `main` (5f1a34b or later). `~/Sites/worktable` itself is on a fix branch 85 commits behind; the review checked `main`.
+
+**Tech Stack:** Bun, TypeScript, SQLite through the engine, bun:test, Biome, Playwright (harness only).
+
+**Spec:** `specs/studio/spec.md` (approved 2026-10-21), requirements S2–S12 and S22. Sibling plans: `specs/studio-mcp/plan.md`, and `specs/studio-worker/plan.md` in `~/Sites/netdust-studio`. Plan review: `/home/ntdst/Sites/netdust-studio/specs/studio/plan-review.md`. It lives in the private repo because it names real client sites, and this repo holds no client data.
+
+## Before any studio branch
+
+The S22 scope-lock edit lands on `main` as one docs commit, at plan approval, before this branch or studio-mcp's is cut. `AGENTS.md` requires the spec of record to change first, and both plans need it.
+- "In" gains: the studio domain (`packages/studio`, `specs/studio/spec.md`), and the generic MCP server (`packages/mcp`). Publication and a real mail transport stay as the next engine step.
+- "Out" gains: Laika's theatre-specific steps 4 (call sheets) to 7, parked on 2026-10-21 ("stop developing Leika for worktable" — Stefan).
+- One line below the build-order table: studio's three plans run before step 4.
+
+## Global Constraints
+
+- The engine never learns a domain word. `packages/engine` is not modified by this plan. `bun scripts/check-boundaries.ts` (extended to `studio`) and `bun scripts/check-vocabulary.ts` stay green.
+- No WordPress code and no client data in this repo. Fixtures are invented: no real client, site or domain names.
+- Domain names are Dutch (`AGENTS.md`). Refusal messages are Dutch, like theatre's.
+- Studio stores no SSH host, path or credential (S3).
+- Datetimes are written as `YYYY-MM-DDTHH:MM:SS` in local time. The engine refuses `toISOString()` output (`writes.ts:109`). SQL compares against `strftime('%Y-%m-%dT%H:%M:%S','now','localtime')`, never `datetime('now')`.
+- The gate is `bun run gate` (about 20 minutes). A unit's own command runs first, then the gate; the task report quotes both.
+
+## Data contract (consumed by studio-mcp and studio-worker)
+
+These names are the interface the other two plans write against. Changing one breaks them.
+
+| Dataset | Columns (type; options) |
+|---|---|
+| `organisatie` | naam; soort (klant · intern, default klant); notities (long) |
+| `site` | naam (unique, by writer); domein; hosting; sla (bool); risico (laag · normaal · hoog, from `risk:` low/medium/high); health_markers (bool); beheer (volledig · web_alleen · composer); staging (bool); in_registry (bool, default true); organisatie_id → organisatie; smoke_urls (long); notities (long); gezondheid (ok · let_op · storing · onbekend, default onbekend); statuscode (int); responstijd_ms (int); wp_versie; php_versie; updates_plugins (int, default 0); updates_themas (int, default 0); updates_core (bool, default false); tls_dagen (int); laatste_check (datetime) |
+| `groep` | naam (unique, by writer); soort (alle · sla · hosting · site · eigen); notities (long). Link `leden` → `groep_lid` |
+| `groep_lid` | groep_id → groep; site_id → site; unique (groep_id, site_id), by writer |
+| `actie` | titel (nullable text, filled by the writer: "<Soort> · <groep naam>"); soort (gezondheidscheck · malwarescan · bijwerken · smoketest; required); groep_id → groep (required); status (lifecycle below, default aangevraagd); bron (handmatig · schema, default handmatig); gepland_op (datetime); voorbereid_op (datetime, set by the writer); samenvatting (long). Link `sites` → `actie_site`, state `state` |
+| `actie_site` | actie_id → actie; site_id → site; state (wacht · te_bevestigen · bezig · klaar · mislukt · overgeslagen, default wacht); voorstel (long: the preview, pinned versions as JSON text); resultaat (long); unique (actie_id, site_id), by writer |
+| `onderhoud` | site_id → site; datum (datetime); soort (as actie.soort); uitkomst (ok · bevindingen · mislukt); samenvatting; details (long); actie_id → actie; organisatie_id (copied from the site) |
+| `project` | naam; organisatie_id → organisatie (nullable; the writer defaults it to the first `intern` organisatie); repo; notities (long) |
+| `werkpakket` | project_id → project (required); naam; repo; branch; plan; fase (ontwerp · plan · bouwen · review · geblokkeerd · klaar · geparkeerd, default ontwerp); laatste_stap; volgende_stap; geblokkeerd_door; bijgewerkt (datetime, set by the writer); organisatie_id (copied from the project); lookup `project` (via project_id, field naam); unique (repo, branch) when both set, by writer |
+| `taak` | titel; status (open · gedaan, default open); deadline (date); wie (stefan · claude); notities (long); organisatie_id, project_id, werkpakket_id, site_id, actie_id (all optional relations) |
+| `agendapunt` | titel; datum (date); start_at, eind_at (datetime); soort (afspraak · deadline · herinnering, default afspraak); organisatie_id; notities (long) |
+
+**Nullability.** Every column is nullable unless it is required below or has a default (the engine refuses a create missing any other column, `writes.ts:151-157`).
+- organisatie: naam
+- site: naam
+- groep: naam, soort
+- groep_lid: groep_id, site_id
+- actie: soort, groep_id
+- actie_site: actie_id, site_id
+- onderhoud: site_id, datum, soort, uitkomst, samenvatting
+- project: naam
+- werkpakket: project_id, naam
+- taak: titel
+- agendapunt: titel, datum
+
+**Actie status (lifecycle on `status`).**
+- Read-only kinds: aangevraagd → bezig → klaar | mislukt.
+- Bijwerken: aangevraagd → voorbereiden → voorbereid → bevestigd → bezig → klaar | deels | mislukt. Voorbereiden → mislukt, and voorbereid → aangevraagd (expiry).
+- Any of aangevraagd · voorbereiden · voorbereid → geannuleerd.
+- Roles:
+  - voorbereid → bevestigd: `administrator` only. The writer also refuses it when `voorbereid_op` is more than 24 hours old, so an expired preview cannot be confirmed before the worker's next tick.
+  - every other transition: `editor` and `administrator`.
+
+**Writing a lifecycle column.** A service account writes `status` only with `expect: { status: <current> }`. Without it the engine answers 400 (`writes.ts:316-321` `expectFromService`). A second writer with a stale `expect` gets 409 `transition_lost`, which is how a claim is single. A user account needs no `expect`.
+
+**Queries:** `sites_aandacht` (of site), `op_tafel`, `agenda` (calendar need).
+**Declared actions:** on `groep`, `<soort>`; on `site`, `<soort>_site`. No inputs.
+**A site's own groep:** soort `site`, naam equal to the site's naam, exactly one member. The sync and the site action both find it by membership, never by name.
+**Space:** `organisatie`.
+
+## Rulings (plan-level, against the approved spec)
+
+- `Ruling: an Actie targets one required groep; a site action finds the site's own groep (soort site, made by the worker's sync) and creates it when missing — why: the dashboard's quick create asks only required columns, and "exactly one of two nullable relations" cannot be asked — cost if wrong: a site-only request needs a group row, which is invisible noise in Groepen.`
+- `Ruling: Bijwerken always covers core, plugins and themes, with no per-component booleans — why: Stefan, "we also need to make sure that wp, plugins and yootheme gets updated"; and booleans with defaults are not asked by the quick create — cost if wrong: no way to update only plugins in v1.`
+- `Ruling: a state voorbereiden between aangevraagd and voorbereid — why: the worker claims a preview by a transition, as it claims every request; the spec's voorbereid is "preview done" — cost if wrong: none visible to Stefan; one more board column.`
+- `Ruling: actie and groep are not scoped by organisatie, so "Te bevestigen" and the Acties views stay fleet-wide under the space switcher; in the scoped queries op_tafel and agenda, actie rows carry no organisatie and drop out under a client — why: a request spans clients through its groep (SLA-sites holds several); scoping it to one client would hide a bulk update from the client view that it touches — cost if wrong: picking a client still shows other clients' requests in the Te bevestigen tile, and hides failed requests from that client's Op tafel.`
+- `Ruling: spec S4's aangevraagd_door is not a column; who asked is read from Revision, and bron says handmatig or schema — why: a writer sees an actor's id, role and kind, never a name (declare.ts:260-266), and Revision already records the actor of every write — cost if wrong: "who asked" is one click away, in the history, not in the grid.`
+- `Ruling: actie gets a writer-filled titel instead of being titled by soort — why: the quick create renders the title as free text (QuickCreate.tsx:85) and would ask soort as a text box; a filled title keeps soort a pick — cost if wrong: none.`
+
+## Architecture
+
+**First working version:** Task 1. A studio instance runs with invented fixtures and opens on its dashboard in the real grid (`bun packages/engine/src/serve.ts --domain @worktable/studio --db /tmp/studio.db --fresh` plus the grid). It has every tile, the space switcher and the quick creates. The writers' rules follow in Tasks 2–7.
+
+**Simplest design.** The simplest design that meets the ask is a domain package with only datasets and the seeded dashboard, with every rule left to the worker and to convention. This plan uses that shape: no engine change, everything declared. But it adds writer rules in the four places where convention is not enough:
+- the confirmation of a production update
+- a frozen preview
+- an append-only maintenance log
+- registry and health columns that the grid would otherwise let Stefan overwrite by hand
+
+`cutBody` strips `readonly` columns from every REST write, the worker's included, so ownership has to live in writers, not in `readonly`. Everything else (groups kept by the sync, expiry, routing by risk) belongs to the worker plan.
+
+## Threat model
+
+**Assets**
+- The right to confirm a production update: an Actie moving voorbereid → bevestigd.
+- The confirmed set: which sites and which pinned versions (`actie_site.voorstel`) a confirmation covers.
+- The integrity of what Stefan reads as truth: Site's registry and health columns, and the Onderhoud log.
+
+**Attacks**
+1. **A service account (claude or worker, kind service) writes `actie.status` to bevestigd**, with a correct `expect` → the lifecycle declares voorbereid → bevestigd for `administrator` only. In addition, actieWriter.update refuses entering bevestigd unless `ctx.actor.kind === 'user'` and the role is administrator. This covers a service account that was created with role administrator by mistake.
+2. **A service account creates an Actie already in bevestigd, bezig or klaar** (a create is not a transition) → actieWriter.create refuses any status but aangevraagd.
+3. **A service undoes its own batch to land in bevestigd.** The worker's claim bevestigd → bezig, undone by the worker itself, would write bezig → bevestigd → the actieWriter guard on entering bevestigd applies to undo writes too. Only the batch's own account may undo at all (`writes.ts:786-787`). The test uses that account, so the refusal is the writer's.
+4. **The confirmed set is changed after the preview:** a site added, a `voorstel` rewritten, a `site_id` swapped, or a dropped site restored → actieSiteWriter refuses:
+   - creates unless the parent is aangevraagd, voorbereiden or (read-only kinds) bezig
+   - any change to `voorstel`, `site_id` or `actie_id` once the parent is voorbereid or later
+   - in voorbereid, any state change but te_bevestigen → overgeslagen
+   - in bevestigd, every change
+   - in bezig, any state change out of overgeslagen or into te_bevestigen
+5. **Bijwerken scheduled to fire while Stefan is away**, through a future `gepland_op` → actieWriter refuses `gepland_op` after now on soort bijwerken, on create and on update.
+6. **Stefan's grid (kind user) overwrites a site's health or registry column**, so stale data reads as fresh → siteWriter refuses those columns from kind user, and refuses creates and deletes from kind user. Users write only organisatie_id, smoke_urls and notities.
+7. **Anyone rewrites or deletes the maintenance log** → onderhoudWriter refuses every update and delete, and creates from kind user.
+
+**Mitigations (where they live)**
+- `packages/studio/src/datasets.ts` `actie.lifecycle`: the admin-only voorbereid → bevestigd.
+- `packages/studio/src/writers/actie.ts` `actieWriter`:
+  - create forces aangevraagd and fills titel
+  - entering bevestigd needs a user administrator
+  - transitions must fit the soort
+  - no future `gepland_op` on bijwerken
+  - soort and groep_id are immutable
+- `packages/studio/src/writers/actie-site.ts` `actieSiteWriter`: the frozen set.
+- `packages/studio/src/writers/site.ts` `siteWriter`: column ownership by actor kind; naam unique.
+- `packages/studio/src/writers/onderhoud.ts` `onderhoudWriter`: append-only, service-only creates.
+
+**Deferrals**
+- A writer sees role and kind, not which service account acts (spec S3). The claude account can write health columns and Onderhoud rows like the worker. Accepted: it is one person's tooling on a 127.0.0.1 instance, and Revision records the actor of every value.
+- An editor service can write `voorstel` before voorbereid. The control is Stefan reading the preview before he confirms. From voorbereid on, it is frozen.
+- Token theft and transport: owned by studio-mcp and studio-worker.
+- Studio has no owner or link actors. The space switcher is a view filter, not access control.
+
+## Test map
+
+| Unit | Seam | Tests: tier · file · command | E2E flows |
+|---|---|---|---|
+| Actie status rules (lifecycle + actieWriter) | `PATCH /api/rows/actie/:id` (with `expect` for services), `POST /api/rows/actie`, `POST /api/batches/:id/undo` | integration · `packages/studio/test/actie.test.ts` · `bun test packages/studio/test/actie.test.ts` | confirm-update-from-dashboard, service-cannot-confirm |
+| Confirmed set (actieSiteWriter) | `POST`/`PATCH /api/rows/actie_site` | integration · `packages/studio/test/actie-site.test.ts` · `bun test packages/studio/test/actie-site.test.ts` | drop-site-before-confirm |
+| Site and Onderhoud ownership (siteWriter, onderhoudWriter) | `PATCH`/`POST`/`DELETE /api/rows/site`, `/api/rows/onderhoud` | integration · `packages/studio/test/ownership.test.ts` · `bun test packages/studio/test/ownership.test.ts` | — |
+| Groups and site actions | `POST /api/actions/<name>` on groep and site | integration · `packages/studio/test/actions.test.ts` · `bun test packages/studio/test/actions.test.ts` | request-health-check-for-a-site |
+| Queries (sites_aandacht, op_tafel, agenda) | `GET /api/rows/<query>` | integration · `packages/studio/test/queries.test.ts` · `bun test packages/studio/test/queries.test.ts` | — |
+| Planning writers (project, werkpakket, taak, agendapunt, organisatie) | `POST`/`PATCH /api/rows/<dataset>` | integration · `packages/studio/test/planning.test.ts` · `bun test packages/studio/test/planning.test.ts` | add-agenda-item |
+| Seed, views and dashboard | `GET /api/schema`, `GET /api/views` | integration · `packages/studio/test/seed.test.ts` · `bun test packages/studio/test/seed.test.ts` | dashboard-opens-on-monday-questions, space-narrows-dashboard |
+| Boundaries, vocabulary, harness | `bun run check`, `playwright.config.ts` | none: proven by `bun run check` and the harness booting | — |
+
+## Review Focus
+
+1. **A confirmation reached any way but a person's click** (service write with `expect`, a create in bevestigd, the service's own undo, a service account with role administrator): refused every time → row 1 (`actie.test.ts`: "no service account reaches bevestigd").
+2. **A preview changed between Stefan reading it and the update running:** the confirmed set is exactly what he read, and a dropped site stays dropped → row 2 (`actie-site.test.ts`: "voorstel is frozen from voorbereid on", "a dropped site stays dropped after confirmation").
+3. **Stale health shown as current:** a site whose `laatste_check` is older than 8 days, or null, is listed in Sites met aandacht whatever its `gezondheid` says → row 5 (`queries.test.ts`: "an old check is attention, even when ok").
+4. **A site that disappeared from the registry** still counts as healthy → row 5 (`queries.test.ts`: "not in the registry is attention, and leaves Sites in orde").
+5. **The space switcher on a client** shows another client's sites or work packages: every scoped source narrows, and actie/groep are unscoped by ruling → row 7 (`seed.test.ts`: "every list a tile reads is scoped or ruled unscoped").
+
+---
+
+### Task 1: The package, the seed and the dashboard (the first working version)
+
+**Files:**
+- Create: `packages/studio/package.json` (`@worktable/studio`; dependency `@worktable/engine: workspace:*`, like fiche), `packages/studio/tsconfig.json`
+- Create: `packages/studio/src/index.ts`, `src/datasets.ts`, `src/queries.ts`, `src/queries/sites_aandacht.sql`, `src/queries/op_tafel.sql`, `src/queries/agenda.sql`, `src/seed.ts`, `src/writers/index.ts` (pass-through writers for now)
+- Modify: root `package.json` (devDependencies gain `"@worktable/studio": "workspace:*"`, as fiche and theatre are), `bun.lock`
+- Modify: `scripts/check-boundaries.ts` (`domains` gains `'studio'`), `scripts/check-vocabulary.ts` (the default `--domain` list gains `@worktable/studio`), `scripts/vocabulary-allow.txt`
+- Modify: `playwright.config.ts`, `e2e/auth.ts`, `e2e/global-setup.ts` (a studio instance)
+- Test: `packages/studio/test/seed.test.ts`
+
+**Interfaces:**
+- Produces: `export default studio: Domain` from `@worktable/studio`, with every name in the Data contract. `views` include, by name: Sites, Alle sites, Sites in orde, Storing, Let op, Sites met aandacht, Groepen, Acties, Acties per status, Te bevestigen, Onderhoudslog, Projecten, Werkpakketten, Per fase, Taken, Op tafel, Agenda, Vandaag, Agendapunten, Organisaties, and the dashboard Overzicht.
+
+- [ ] **Step 1: Declare the datasets, queries and space** exactly as the Data contract. The actions come in Task 6.
+  - `title`: naam or titel; `actie_site` and `groep_lid` by `{ via: 'site_id', else: … }`.
+  - `scoped: 'organisatie_id'` on site, project, werkpakket, taak, agendapunt, onderhoud, and on the queries sites_aandacht, op_tafel and agenda, each declaring `organisatie_id` as a relation to organisatie. The grid narrows only sources served as scoped (`app.ts:318`, `tiles.ts:16`).
+  - `date`: actie.gepland_op, onderhoud.datum, werkpakket.bijgewerkt, taak.deadline, agendapunt.datum.
+  - `calendar` on agendapunt (day datum, start start_at, end eind_at, lanes organisatie_id) and on the agenda query.
+  - `board` on actie.status and werkpakket.fase.
+  - `tones`:
+    - gezondheid: ok → ok, let_op → warn, storing → bad, onbekend → grey
+    - actie.status: klaar → ok, deels → warn, mislukt → bad, voorbereid → amber, bezig → sky
+    - fase: geblokkeerd → bad, review → warn, bouwen → violet, klaar → ok
+  - `sections`:
+    - Vloot: site, groep, actie, onderhoud
+    - Werk: project, werkpakket, taak, agendapunt, agenda, op_tafel
+    - Klanten: organisatie
+
+    `sites_aandacht` is not listed: it is `of: 'site'`, and `validate.ts:609-611` refuses a section naming a query with `of`. The grid lists it under Sites.
+  - The queries' SQL is written in Task 5. For now each query selects its declared columns from one table, so the views resolve.
+
+- [ ] **Step 2: Wire the package.** Add `"@worktable/studio": "workspace:*"` to the root `package.json` devDependencies, then run `bun install`. `--domain @worktable/studio` must now resolve from the repo root (`serve.ts:83`).
+
+- [ ] **Step 3: Seed invented fixtures and the views.**
+  - Fixtures:
+    - 2 organisations (Studio Voorbeeld, intern; Bakkerij Testmans, klant)
+    - 5 sites, one per gezondheid, one with `in_registry: false`, one `risico: 'hoog'`
+    - the groups Alle sites and SLA-sites, plus each site's own group (soort site)
+    - 2 projects with 3 werkpakketten in different fases
+    - 4 open tasks
+    - 3 agendapunten this week
+    - 1 Actie in voorbereid with 2 actie_site rows in te_bevestigen
+  - The dashboard Overzicht:
+    - **Nu:** progress "Sites in orde" (done Sites in orde, total Alle sites); stat Storing (bad above 0); stat Let op (warn above 0); stat Wacht op jou (Op tafel, warn above 0).
+    - **Waar we stopten:** list Werkpakketten (rows 5, columns project, fase, laatste_stap, bijgewerkt); list Sites met aandacht (rows 5).
+    - **Deze week:** week Agenda; list Vandaag (rows 5).
+    - **Op tafel:** list Te bevestigen (rows 5, set status → bevestigd, label Bevestigen); list Op tafel (rows 8, set status → gedaan, label Gedaan).
+    - Actions: create actie "Nieuwe actie", create taak "Nieuwe taak", create agendapunt "Nieuw agendapunt".
+
+- [ ] **Step 4: Write `seed.test.ts`:**
+  - "every dashboard tile names a live view": every tile's view id is in `/api/views`.
+  - "the agenda serves the calendar need": `/api/schema` sources.agenda.calendar matches `{ day: 'datum' }`.
+  - "every list a tile reads is scoped or ruled unscoped": each tile's source is scoped on organisatie_id, or is actie or groep.
+  - "Nieuwe actie asks soort and groep only": the actie model's required, non-defaulted fields are exactly soort and groep_id.
+
+  Run `bun test packages/studio/test/seed.test.ts`: PASS.
+
+- [ ] **Step 5: Boundaries and vocabulary.**
+  - Add `'studio'` to `domains` in `scripts/check-boundaries.ts`.
+  - Add `'@worktable/studio'` to `check-vocabulary.ts`'s default `--domain` list, then run `bun scripts/check-vocabulary.ts`. Expect about 15 hits in `packages/engine` (project, check, plan, groep, registry, updates, core, lid, branch, dagen, door, details, sites, leden, repo). Add each to `scripts/vocabulary-allow.txt` with its reason: generic English, as `status` is; or a Dutch word in an engine test string, as `mijn`, `aan` and `ander` are; or the engine test fixture's invented dataset, as `taak` is, which covers `project`. Never rename an engine identifier to dodge a hit.
+  - Run `bun run check`: exit 0.
+
+- [ ] **Step 6: The harness instance.** In `playwright.config.ts`, add an engine on port 4313 (`--domain @worktable/studio --db e2e/.tmp/studio.db --fresh --outbox e2e/.tmp/outbox-studio --app-url http://127.0.0.1:5176 --cookie-name wt_session_studio_e2e`: not the live instance's cookie, so opening the harness grid never signs Stefan out of his studio) and a grid on 5176 (`ENGINE_URL=http://127.0.0.1:4313`). Then in `e2e/auth.ts` and `e2e/global-setup.ts`, a studio administrator and editor, following fiche's entries. Run `bunx playwright test e2e/smoke`: PASS, with the three instances booting.
+
+- [ ] **Step 7: Look at it.** Run the engine on a fresh db and the grid as in Step 6. The grid opens on Overzicht, with every tile filled from the fixtures and the switcher listing both organisations. Take a screenshot for the task report.
+
+- [ ] **Step 8: Gate and commit.** Run `bun run gate`: exit 0. Then:
+
+```bash
+git add packages/studio package.json bun.lock scripts/check-boundaries.ts scripts/check-vocabulary.ts scripts/vocabulary-allow.txt playwright.config.ts e2e/auth.ts e2e/global-setup.ts
+git commit -m "feat(studio): the studio domain's datasets, seed and Monday dashboard"
+```
+
+### Task 2: Actie status rules
+
+**Files:**
+- Create: `packages/studio/src/writers/actie.ts`
+- Modify: `packages/studio/src/datasets.ts` (actie.lifecycle), `src/writers/index.ts`
+- Test: `packages/studio/test/actie.test.ts`
+
+**Interfaces:**
+- Consumes: the Data contract's actie columns and lifecycle.
+- Produces: `actieWriter: Writer`. Refusals in Dutch: "Een actie begint als aangevraagd.", "Alleen Stefan bevestigt een update.", "Deze preview is verlopen.", "Bijwerken kan niet vooruit gepland worden.", "Deze stap past niet bij deze soort.", "Soort en groep liggen vast."
+
+- [ ] **Step 1: Write the denial tests first.** In `actie.test.ts`, use `createService(sqlite, 'claude', 'editor')` (from `packages/engine/src/auth.ts`) and `createService(sqlite, 'robot', 'administrator')` as Bearer requesters, beside an administrator user. Every service write of `status` sends `expect: { status: <current> }`.
+  - "no service account reaches bevestigd": from voorbereid, both services' PATCH `{ status: 'bevestigd', expect: { status: 'voorbereid' } }` → refused (403 or 422, not 400), and the row stays voorbereid. The user administrator's PATCH → 200.
+  - "a create starts at aangevraagd": POST with status bevestigd → refused; POST without status → 201, status aangevraagd, titel filled.
+  - "a service's own undo never lands in bevestigd": after the robot service moves bevestigd → bezig (with expect), that same service's `POST /api/batches/:id/undo` → refused by actieWriter (its message), and the status stays bezig.
+  - "bijwerken is never future-dated": POST and PATCH with `gepland_op` tomorrow on bijwerken → refused; the same on gezondheidscheck → 2xx.
+  - "transitions fit the soort": gezondheidscheck aangevraagd → voorbereiden → refused; bijwerken aangevraagd → bezig → refused; gezondheidscheck bezig → deels → refused.
+  - "soort and groep are fixed": a PATCH of soort or groep_id → refused.
+  - "an expired preview cannot be confirmed": with `voorbereid_op` 25 hours ago, the user administrator's PATCH to bevestigd → refused ("Deze preview is verlopen."); 23 hours ago → 200.
+
+  Run them and expect FAIL.
+
+- [ ] **Step 2: Implement** the lifecycle on actie (Data contract) and `actieWriter` with `refuse()`/`forbid()` from `@worktable/engine`, in the style of theatre's `writers.ts`. Set `voorbereid_op` to now, formatted per the Global Constraints, when status enters voorbereid.
+
+- [ ] **Step 3: Run** `bun test packages/studio/test/actie.test.ts`: PASS. Then `bun run gate`: exit 0.
+
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): actie status rules — only a person confirms an update"`
+
+### Task 3: The confirmed set
+
+**Files:**
+- Create: `packages/studio/src/writers/actie-site.ts`
+- Test: `packages/studio/test/actie-site.test.ts`
+
+**Interfaces:**
+- Produces: `actieSiteWriter: Writer`. Refusals "Het voorstel ligt vast sinds de preview." and "Een bevestigde update verandert niet meer."
+
+- [ ] **Step 1: Write the tests first:**
+  - "voorstel is frozen from voorbereid on": a PATCH of voorstel, site_id or actie_id on a link whose actie is voorbereid, bevestigd or bezig → refused.
+  - "no site joins after the preview": a POST of a link on a voorbereid actie → refused; on aangevraagd and voorbereiden → 201.
+  - "Stefan drops a site before confirming": te_bevestigen → overgeslagen on voorbereid → 200; te_bevestigen → klaar on voorbereid → refused.
+  - "a dropped site stays dropped after confirmation": with the actie bevestigd, the claude service's PATCH overgeslagen → te_bevestigen → refused; with it bezig, the same → refused; and that service's undo of its own earlier drop → refused.
+  - "the worker writes results while bezig": state bezig → klaar and `resultaat` by the service → 200.
+
+  Run them and expect FAIL.
+
+- [ ] **Step 2: Implement** `actieSiteWriter`, reading the parent through `ctx.find('actie', …)`.
+
+- [ ] **Step 3: Run** `bun test packages/studio/test/actie-site.test.ts`: PASS. Then `bun run gate`: exit 0.
+
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): a confirmed update covers exactly the previewed sites and versions"`
+
+### Task 4: Site and Onderhoud ownership
+
+**Files:**
+- Create: `packages/studio/src/writers/site.ts`, `src/writers/onderhoud.ts`
+- Test: `packages/studio/test/ownership.test.ts`
+
+**Interfaces:**
+- Produces: `siteWriter`, `onderhoudWriter`, and `SYNCED_COLUMNS` and `HEALTH_COLUMNS` (exported string arrays from `site.ts`, in the Data contract order).
+
+- [ ] **Step 1: Write the tests first:**
+  - "a person cannot overwrite registry or health": a user administrator's PATCH of gezondheid, laatste_check, sla, naam → refused; of organisatie_id, smoke_urls, notities → 200.
+  - "sites come from the registry": a POST and a DELETE by the user → refused; a POST by a service carrying the synced columns only (naam, domein, hosting, sla, risico, health_markers, beheer, staging) → 201.
+  - "a site name is unique": a service's second POST with the same naam → refused.
+  - "the log is append-only": any actor's PATCH or DELETE of onderhoud → refused; a POST by the user → refused; a POST by a service → 201.
+  - "a log row belongs to its site's client": a service's POST sets organisatie_id from the site.
+
+  Run them and expect FAIL.
+
+- [ ] **Step 2: Implement** both writers, deciding by `ctx.actor.kind`.
+
+- [ ] **Step 3: Run** `bun test packages/studio/test/ownership.test.ts`: PASS. Then `bun run gate`: exit 0.
+
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): registry and health columns are the worker's, the maintenance log is append-only"`
+
+### Task 5: The queries
+
+**Files:**
+- Modify: `packages/studio/src/queries.ts`, `src/queries/sites_aandacht.sql`, `src/queries/op_tafel.sql`, `src/queries/agenda.sql`
+- Test: `packages/studio/test/queries.test.ts`
+
+**Interfaces:**
+- Produces:
+  - `sites_aandacht` columns: id (= site id), naam, gezondheid, reden (storing · let_op · oud · nooit · weg), laatste_check, organisatie_id
+  - `op_tafel` columns: id (offset ranges as in theatre's werklijst), soort (taak · bevestigen · mislukt), titel, onderwerp, deadline, taak_id, actie_id, status (writes taak.status by taak_id), organisatie_id
+  - `agenda` columns: id (offset ranges), titel, datum, start_at, eind_at, soort (afspraak · deadline · herinnering · onderhoud · taak), organisatie_id, agendapunt_id, actie_id, taak_id; `creates: 'agendapunt'`
+
+- [ ] **Step 1: Write the tests:**
+  - "an old check is attention, even when ok": laatste_check 9 days ago with gezondheid ok → listed, reden oud; 7 days → not listed; null → reden nooit.
+  - "not in the registry is attention, and leaves Sites in orde": in_registry false → listed, reden weg, and absent from the "Sites in orde" view.
+  - "op tafel holds what waits for Stefan": an open taak, an actie in voorbereid, and an actie mislukt or deels appear; klaar does not; the taak row's status writes back.
+  - "the agenda holds every dated thing": an agendapunt, an actie with gepland_op, and an open taak with a deadline appear on their dates; a gedaan taak does not.
+
+- [ ] **Step 2: Write the SQL.** Compare against `strftime('%Y-%m-%dT%H:%M:%S','now','localtime')` (Global Constraints).
+
+- [ ] **Step 3: Run** `bun test packages/studio/test/queries.test.ts`: PASS. Then `bun run gate`: exit 0.
+
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): sites that need attention, what is on the table, one agenda"`
+
+### Task 6: Groups and the site actions
+
+**Files:**
+- Create: `packages/studio/src/actions.ts`, `src/writers/groep.ts`
+- Test: `packages/studio/test/actions.test.ts`
+
+**Interfaces:**
+- Produces: `actions: Record<string, ActionDecl>`.
+  - `<soort>` on groep (no input): creates one actie on the record.
+  - `<soort>_site` on site: finds the groep with soort site and that site as the sole member, or creates it with its groep_lid as `children`, then creates the actie.
+
+- [ ] **Step 1: Write the tests:**
+  - "a health check for one site": POST `/api/actions/gezondheidscheck_site` with `{ id: <site> }` → one actie (aangevraagd) whose groep has exactly that site.
+  - "the site's own group is reused": a second request leaves the groep count unchanged.
+  - "bulk for a group": `bijwerken` on SLA-sites → one actie on that groep.
+  - "groups are unique by name, members unique per group": duplicate POSTs → refused.
+  - "a person edits only own groups": the user's PATCH of groep_lid in an `alle` group → refused; in an `eigen` group → 200.
+
+- [ ] **Step 2: Implement** the actions, `groepWriter` and `groepLidWriter`.
+
+- [ ] **Step 3: Run** `bun test packages/studio/test/actions.test.ts`: PASS. Then `bun run gate`: exit 0.
+
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): request a check or an update for one site or a group"`
+
+### Task 7: Planning writers
+
+**Files:**
+- Create: `packages/studio/src/writers/planning.ts`
+- Test: `packages/studio/test/planning.test.ts`
+
+**Interfaces:**
+- Produces: `projectWriter`, `werkpakketWriter`, `taakWriter`, `agendapuntWriter`, `organisatieWriter`.
+  - projectWriter defaults `organisatie_id` to the first `intern` organisatie when absent.
+  - werkpakketWriter sets `bijgewerkt` to now on every write, copies `organisatie_id` and (when absent) `repo` from the project, and refuses a second live row with the same repo and branch ("Er is al een werkpakket voor deze repo en branch.").
+
+- [ ] **Step 1: Write the tests:**
+  - "a project without a client belongs to Netdust": a POST without organisatie_id by the claude service → 201, with the intern organisatie.
+  - "one row per repo and branch": a second create → refused; the same branch in another repo → 201.
+  - "bijgewerkt moves on every write": after a PATCH of laatste_stap, bijgewerkt is later than before.
+  - "a werkpakket belongs to its project's client": organisatie_id follows the project.
+  - "titles and names are required": an empty titel or naam on each dataset → refused with its Dutch message.
+  - "options are checked": an unknown fase or soort → refused.
+
+- [ ] **Step 2: Implement** the writers.
+
+- [ ] **Step 3: Run** `bun test packages/studio/test/planning.test.ts`: PASS. Then `bun run gate`: exit 0.
+
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): projects, work packages, tasks and agenda items"`
+
+## Close
+
+As netdust-gates:policy: `bun run gate` → `/feature-review studio-domain` (security-sentinel joins: the plan carries a threat model) → one fix pass → `/shakeout` drives the Test map's e2e flows on the studio instance → push, and hand Stefan the merge. worktable has no `make promote`; a feature merges to main as the repo's history shows.
