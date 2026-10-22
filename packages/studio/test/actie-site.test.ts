@@ -46,13 +46,16 @@ const actieIn = (status: string, soort = 'bijwerken') => plant('actie', { titel:
 const linkIn = (actie: number, state: string, site = 2) =>
   plant('actie_site', { actie_id: actie, site_id: site, state, voorstel: '[]' })
 
-function expectRefused(res: { status: number; body: Body }, message: string, id: number, before: Body) {
+async function expectRefused(send: () => Promise<{ status: number; body: Body }>, message: string, id: number) {
+  const before = link(id)
+  const res = await send()
   expect(refused(res)).toBe(true)
   expect(JSON.stringify(res.body)).toContain(message)
   expect(link(id)).toEqual(before)
 }
 
 const FROZEN = 'Het voorstel ligt vast sinds de preview.'
+const PREVIEW = '[["cache-plugin","1.9.0","1.9.2"]]'
 const CONFIRMED = 'Een bevestigde update verandert niet meer.'
 
 describe('the confirmed set', () => {
@@ -66,8 +69,7 @@ describe('the confirmed set', () => {
       const other = actieIn('aangevraagd')
       for (const who of [admin, claude]) {
         for (const patch of [{ voorstel: '[{"x":1}]' }, { site_id: 3 }, { actie_id: other }]) {
-          const before = link(id)
-          expectRefused(await who('PATCH', `/api/rows/actie_site/${id}`, patch), message, id, before)
+          await expectRefused(() => who('PATCH', `/api/rows/actie_site/${id}`, patch), message, id)
         }
       }
     }
@@ -114,9 +116,64 @@ describe('the confirmed set', () => {
     expect(link(id).state).toBe('te_bevestigen')
     expect((await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'overgeslagen' })).status).toBe(200)
     expect(link(id).state).toBe('overgeslagen')
-    const restore = await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'te_bevestigen' })
-    expect(refused(restore)).toBe(true)
-    expect(link(id).state).toBe('overgeslagen')
+  })
+
+  test('a person restores a site they dropped before confirming', async () => {
+    const id = plant('actie_site', {
+      actie_id: actieIn('voorbereid'),
+      site_id: 2,
+      state: 'te_bevestigen',
+      voorstel: PREVIEW,
+    })
+    const dropped = await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'overgeslagen' })
+    expect(dropped.status).toBe(200)
+    const undone = await admin('POST', `/api/batches/${(dropped.body.revision as Body).batch_id}/undo`, {})
+    expect(undone.status).toBe(200)
+    expect(link(id).state).toBe('te_bevestigen')
+    expect((await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'overgeslagen' })).status).toBe(200)
+    expect((await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'te_bevestigen' })).status).toBe(200)
+    expect(link(id).state).toBe('te_bevestigen')
+  })
+
+  test('a skipped link without a voorstel cannot be restored, even by a person', async () => {
+    const actie = actieIn('voorbereid')
+    for (const voorstel of [null, '', '[]']) {
+      const id = plant('actie_site', { actie_id: actie, site_id: 2, state: 'overgeslagen', voorstel })
+      await expectRefused(() => admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'te_bevestigen' }), FROZEN, id)
+    }
+  })
+
+  test('a service cannot restore a dropped link', async () => {
+    const id = plant('actie_site', {
+      actie_id: actieIn('voorbereid'),
+      site_id: 2,
+      state: 'overgeslagen',
+      voorstel: PREVIEW,
+    })
+    await expectRefused(() => claude('PATCH', `/api/rows/actie_site/${id}`, { state: 'te_bevestigen' }), FROZEN, id)
+  })
+
+  test('a link needs both ids before uniqueness is asked', async () => {
+    const actie = actieIn('aangevraagd')
+    for (const body of [{ actie_id: actie }, { site_id: 2 }, { actie_id: null, site_id: 2 }]) {
+      expect((await claude('POST', '/api/rows/actie_site', body)).status).toBe(400)
+    }
+  })
+
+  test('a voorstel of null cannot be rewritten as the text "null"', async () => {
+    const id = plant('actie_site', { actie_id: actieIn('voorbereid'), site_id: 2, state: 'te_bevestigen' })
+    await expectRefused(() => claude('PATCH', `/api/rows/actie_site/${id}`, { voorstel: 'null' }), FROZEN, id)
+  })
+
+  test('a link cannot be moved into a frozen actie', async () => {
+    for (const [status, message] of [
+      ['voorbereid', FROZEN],
+      ['bevestigd', CONFIRMED],
+    ] as const) {
+      const id = linkIn(actieIn('aangevraagd'), 'wacht')
+      const target = actieIn(status)
+      await expectRefused(() => claude('PATCH', `/api/rows/actie_site/${id}`, { actie_id: target }), message, id)
+    }
   })
 
   test('a dropped site stays dropped after confirmation', async () => {
@@ -129,15 +186,15 @@ describe('the confirmed set', () => {
 
     sqlite.query('UPDATE actie SET status = ? WHERE id = ?').run('bevestigd', actie)
     for (const who of [admin, claude]) {
-      for (const to of ['te_bevestigen', 'bezig']) expectRefused(await move(who, to), CONFIRMED, id, link(id))
+      for (const to of ['te_bevestigen', 'bezig']) await expectRefused(() => move(who, to), CONFIRMED, id)
     }
-    expectRefused(await claude('POST', `/api/batches/${batch}/undo`, {}), CONFIRMED, id, link(id))
+    await expectRefused(() => claude('POST', `/api/batches/${batch}/undo`, {}), CONFIRMED, id)
 
     sqlite.query('UPDATE actie SET status = ? WHERE id = ?').run('bezig', actie)
     for (const who of [admin, claude]) {
-      for (const to of ['te_bevestigen', 'bezig']) expectRefused(await move(who, to), CONFIRMED, id, link(id))
+      for (const to of ['te_bevestigen', 'bezig']) await expectRefused(() => move(who, to), CONFIRMED, id)
     }
-    expectRefused(await claude('POST', `/api/batches/${batch}/undo`, {}), CONFIRMED, id, link(id))
+    await expectRefused(() => claude('POST', `/api/batches/${batch}/undo`, {}), CONFIRMED, id)
     expect(link(id).state).toBe('overgeslagen')
   })
 
@@ -148,8 +205,7 @@ describe('the confirmed set', () => {
       ['bezig', CONFIRMED],
     ] as const) {
       const id = linkIn(actieIn(status), 'te_bevestigen')
-      const res = await claude('DELETE', `/api/rows/actie_site/${id}`)
-      expectRefused(res, message, id, link(id))
+      await expectRefused(() => claude('DELETE', `/api/rows/actie_site/${id}`), message, id)
       expect(link(id).deleted_at ?? null).toBeNull()
     }
     const open = linkIn(actieIn('aangevraagd'), 'wacht')
@@ -157,7 +213,7 @@ describe('the confirmed set', () => {
   })
 
   test('the worker writes results while bezig', async () => {
-    const id = linkIn(actieIn('bezig'), 'te_bevestigen')
+    const id = linkIn(actieIn('bezig'), 'bezig')
     const res = await claude('PATCH', `/api/rows/actie_site/${id}`, { state: 'klaar', resultaat: 'ok' })
     expect(res.status).toBe(200)
     expect(link(id)).toMatchObject({ state: 'klaar', resultaat: 'ok' })
@@ -165,6 +221,6 @@ describe('the confirmed set', () => {
 
   test('bevestigd takes no change at all, not even a result', async () => {
     const id = linkIn(actieIn('bevestigd'), 'te_bevestigen')
-    expectRefused(await claude('PATCH', `/api/rows/actie_site/${id}`, { resultaat: 'x' }), CONFIRMED, id, link(id))
+    await expectRefused(() => claude('PATCH', `/api/rows/actie_site/${id}`, { resultaat: 'x' }), CONFIRMED, id)
   })
 })
