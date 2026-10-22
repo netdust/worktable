@@ -42,9 +42,9 @@ const tie = defineDataset({
 
 const accept = (values: Record<string, unknown>) => values
 
-const bundleWriter: Writer = {
+const tieWriter: Writer = {
   create: (values) => {
-    if (values.name === 'refused') refuse('that name is refused')
+    if (values.note === 'refused') refuse('that note is refused')
     return values
   },
   delete: () => {},
@@ -62,7 +62,10 @@ const gather: SelectionActionDecl = {
         dataset: 'bundle',
         values: { name: input.name },
         children: (id) =>
-          records.map((record) => ({ dataset: 'tie', values: { bundle_id: id, member_id: record.id, note: 'tied' } })),
+          records.map((record) => ({
+            dataset: 'tie',
+            values: { bundle_id: id, member_id: record.id, note: input.name },
+          })),
       },
     ]
   },
@@ -84,9 +87,9 @@ const domain: Domain = {
   datasets: [bundle, member, tie],
   queries: [],
   writers: {
-    bundle: bundleWriter,
+    bundle: { create: accept, delete: () => {} },
     member: { create: accept, update: accept, delete: () => {} },
-    tie: { create: accept, delete: () => {} },
+    tie: tieWriter,
   },
   actions: {
     gather,

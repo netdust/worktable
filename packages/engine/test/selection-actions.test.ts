@@ -143,6 +143,7 @@ describe('selection action denials', () => {
     await denied(() => act(editor, 'rename', { ids: [1], input: {} }), 400, 'bad_body')
     await denied(() => act(editor, 'touch', { id: 1, input: {} }), 400, 'bad_body')
     await denied(() => act(editor, 'touch', { id: 1, ids: [1], input: {} }), 400, 'bad_body')
+    await denied(() => act(editor, 'rename', { id: 1, ids: [1], input: {} }), 400, 'bad_body')
   })
 
   test('a refusal inside run rolls back every create', () =>
