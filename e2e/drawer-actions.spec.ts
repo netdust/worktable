@@ -128,3 +128,107 @@ test('dashboard-row-opens-drawer @e2e: a list row opens its record on the dashbo
   await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
   await expect.poll(total).toBe(before)
 })
+
+test('live-drawer-closed-mid-poll @e2e: a poll answer that lands after the drawer closed leaves it closed, and polling stops', async ({
+  page,
+}) => {
+  const outside = await request.newContext({ baseURL: APP, storageState: 'e2e/.tmp/state/selection-admin.json' })
+  const moved = await outside.patch('/api/rows/member/3', { data: { stage: 'active', expect: { stage: 'new' } } })
+  expect(moved.status()).toBe(200)
+  const polls = { seen: 0 }
+  let release: () => void = () => undefined
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await open(page, 'All members', 'Members')
+  await page.route('**/api/rows/member?*', async (route) => {
+    if (!route.request().url().includes('%22id%22%3A3')) return route.continue()
+    polls.seen += 1
+    if (polls.seen === 1) await held
+    await route.continue()
+  })
+  const drawer = await drawerOf(page, 'Cy')
+  await expect(drawer.getByText('Bezig…')).toBeVisible()
+  await expect.poll(() => polls.seen, { timeout: 6000 }).toBe(1)
+
+  await drawer.getByRole('button', { name: 'Sluiten' }).click()
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+  release()
+
+  const after = polls.seen
+  await page.waitForTimeout(7000)
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+  expect(polls.seen).toBe(after)
+  await outside.dispose()
+})
+
+test('press-then-close-then-undo @e2e: Undo from the notice after the dashboard drawer closed leaves it closed', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const tile = page.getByRole('region', { name: 'Waiting members' })
+  await tile
+    .getByRole('listitem')
+    .first()
+    .getByRole('button', { name: /^Open / })
+    .click()
+  const drawer = page.getByRole('complementary')
+  await drawer.getByRole('button', { name: 'Start', exact: true }).click()
+  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+  const notice = page.getByRole('status', { name: /gedaan\./ })
+  await drawer.getByRole('button', { name: 'Sluiten' }).click()
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+
+  await notice.getByRole('button', { name: 'Ongedaan maken' }).click()
+
+  await page.waitForTimeout(1500)
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+  await shot(page, 'dashboard-undo-after-close')
+})
+
+test('press-in-related-drawer-then-close-then-undo @e2e: Undo after a related drawer closed leaves it closed', async ({
+  page,
+}) => {
+  const made = await page.request.post('/api/rows/entry', { data: { bundle_id: 1, member_id: 2, note: 'Related pen' } })
+  expect(made.status()).toBe(201)
+  await open(page, 'All bundles', 'Bundles')
+  const drawer = await drawerOf(page, 'Alpha')
+  await drawer
+    .getByRole('region', { name: /Entries/ })
+    .getByRole('button', { name: 'Bob' })
+    .click()
+  const related = page.getByRole('complementary', { name: /Related pen/ })
+  await related.getByRole('button', { name: 'Confirm' }).click()
+  await expect(related.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+  const notice = page.getByRole('status', { name: /gedaan\./ })
+  await related.getByRole('button', { name: 'Sluiten' }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+
+  await notice.getByRole('button', { name: 'Ongedaan maken' }).click()
+
+  await page.waitForTimeout(1500)
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+})
+
+test('undo-closes-the-opened-record @e2e: Undo of the run takes the record it made away, and its drawer closes with it', async ({
+  page,
+}) => {
+  await open(page, 'All members', 'Members')
+  await page.getByRole('checkbox', { name: 'Ann selecteren' }).check()
+  await page
+    .getByRole('region', { name: /geselecteerd/ })
+    .getByRole('button', { name: 'Sweep', exact: true })
+    .click()
+  await expect(page.getByRole('complementary', { name: 'Swept 1' })).toBeVisible()
+
+  await page.getByRole('status').getByRole('button', { name: 'Ongedaan maken' }).click()
+
+  await expect
+    .poll(async () =>
+      ((await (await page.request.get('/api/rows/bundle')).json()).rows as { name: string }[]).map((b) => b.name),
+    )
+    .not.toContain('Swept 1')
+  await shot(page, 'undo-ghost-drawer')
+  await expect(page.getByRole('complementary', { name: 'Swept 1' })).toHaveCount(0)
+})
