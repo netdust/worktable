@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -532,9 +532,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     } } })
   }
   // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
-  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
+  const finished = (batch: string, action: ModelAction) => {
     if (!view) return
-    const { batch } = await runAction(action.name, row.id, input)
     const entry = { batch: Promise.resolve(batch), model: view.model, id: null }
     history.push(entry)
     reloadView()
@@ -542,6 +541,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
     }
     notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
+  }
+  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
+    if (view) finished((await runAction(action.name, row.id, input)).batch, action)
+  }
+  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>) => {
+    if (view) finished((await runSelection(action.name, ids, input)).batch, action)
   }
 
   if (!served) {
@@ -624,7 +629,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onNotice={(message) => notify({ message })}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onSelection={actOnSelection} onNotice={(message) => notify({ message })}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} recordLink={model ? linkedDataset(role, model) : undefined} reloads={reloads} />
           ) : (
             <Sheet hasView={view !== undefined} result={result} />

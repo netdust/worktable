@@ -32,6 +32,8 @@ interface Props {
   errors: Record<string, CellError>
   actions: BodyActions
   emptyText: string | null
+  /** The row boxes of a selectable table. */
+  selection?: { has: (id: number) => boolean; toggle: (id: number) => void }
 }
 
 function GridCell({ row, column, cell, keys, error, actions }: {
@@ -126,7 +128,7 @@ function Band({ group, columns, open, onFold }: { group: Group; columns: Column[
   )
 }
 
-export function GridBody({ groups, shut, onFold, columns, keys, errors, actions, emptyText }: Props) {
+export function GridBody({ groups, shut, onFold, columns, keys, errors, actions, emptyText, selection }: Props) {
   let index = 0
   return (
     <tbody>
@@ -142,7 +144,12 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
             const r = index++
             return (
               <tr key={row.id} data-title={row.title} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
-                <td className="nv-td nv-num" aria-hidden="true">{r + 1}</td>
+                {selection && row.id !== DRAFT ? (
+                  <td className="nv-td nv-num">
+                    <input type="checkbox" aria-label={t('selectRow', { title: row.title })} checked={selection.has(row.id)} onChange={() => selection.toggle(row.id)} />
+                    <span aria-hidden="true">{r + 1}</span>
+                  </td>
+                ) : <td className="nv-td nv-num" aria-hidden="true">{r + 1}</td>}
                 {columns.map((column, c) => (
                   <GridCell key={column.id} row={row} column={column} cell={{ row: r, col: c }} keys={keys}
                     error={column.field ? errors[cellKey(row.id, column.field)] : undefined} actions={actions} />

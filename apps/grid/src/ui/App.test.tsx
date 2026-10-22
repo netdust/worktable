@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), re
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(), onNotices: vi.fn(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), runSelection: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -1554,6 +1554,73 @@ describe('writes on the engine', () => {
     await screen.findByText('opbouw Gent')
 
     expect((screen.getByRole('button', { name: 'Nieuw Dagplanning' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('a selection action', () => {
+  const gather = { name: 'gather', label: 'Bundelen', many: true as const, input: { name: { type: 'text' as const, label: 'Naam' } } }
+  const grouped: Schema = {
+    models: { member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, actions: [gather], fields: {} } },
+    tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+    views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+    writable: { member: true },
+  }
+  const people = ['Aart', 'Bo', 'Cas'].map((title, i) => ({ id: i + 1, title, status: '', fields: {} }))
+  const reads = () => api.rows.mock.calls.length
+  const tick = async (...titles: string[]) => {
+    await screen.findByRole('grid', { name: 'Leden' })
+    for (const title of titles) fireEvent.click(await screen.findByRole('checkbox', { name: `${title} selecteren` }))
+  }
+  const run = async (name: string) => {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Naam' }), { target: { value: name } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    })
+  }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(grouped)
+    api.rows.mockResolvedValue({ rows: people, total: 3 })
+    api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+    api.undoBatch.mockResolvedValue('u-1')
+  })
+
+  it('asks its inputs once and sends them once, with every ticked id', async () => {
+    await shell()
+    await tick('Aart', 'Cas')
+
+    await run('Voorjaar')
+
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [1, 3], { name: 'Voorjaar' })
+    expect(api.runAction).not.toHaveBeenCalled()
+  })
+
+  it('is one batch: one notice, one Undo that takes the whole run back, and the view reloads', async () => {
+    await shell()
+    await tick('Aart', 'Bo', 'Cas')
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    const notices = await screen.findAllByRole('status', { name: 'Bundelen uitgevoerd.' })
+    expect(notices).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull()
+    await act(async () => {
+      fireEvent.click(within(notices[0]).getByRole('button', { name: 'Ongedaan maken' }))
+    })
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+  })
+
+  it("clears a ticked row the view's search no longer shows", async () => {
+    await shell()
+    await tick('Aart', 'Bo')
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Zoeken' }), { target: { value: 'Bo' } })
+
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
+    await run('Bo')
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Bo' })
   })
 })
 

@@ -334,6 +334,13 @@ export async function runAction(name: string, id: number, input: Record<string, 
   return { batch: reply.batch_id, created: reply.created }
 }
 
+/** Runs a selection action once on every id, in one batch. */
+export async function runSelection(name: string, ids: number[], input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
+  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[]; notices?: string[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { ids, input })
+  heard(reply)
+  return { batch: reply.batch_id, created: reply.created }
+}
+
 export function remove(model: string, id: number): Promise<unknown> {
   return request('DELETE', `/rows/${model}/${id}`)
 }

@@ -2,6 +2,7 @@ import type { Header, Table } from '@tanstack/react-table'
 import {
   Calendar, CalendarClock, Clock, CornerDownRight, Hash, Link2, List, type LucideIcon, Sigma, SquareCheck, Tag, TextAlignStart, Type, Users,
 } from 'lucide-react'
+import { t } from '../i18n'
 import type { Row } from '../types'
 import type { CellKind, Column } from './columns'
 
@@ -37,7 +38,14 @@ function HeaderCell({ header, column, first, last }: { header: Header<Row, unkno
   )
 }
 
-export function GridHeader({ table, byId }: { table: Table<Row>; byId: Map<string, Column> }) {
+/** The header box of a selectable table: all of the view's rows, some, or none. */
+export interface HeaderSelection {
+  all: boolean
+  some: boolean
+  onToggle: () => void
+}
+
+export function GridHeader({ table, byId, selection }: { table: Table<Row>; byId: Map<string, Column>; selection?: HeaderSelection }) {
   return (
     <>
     <colgroup>
@@ -48,7 +56,12 @@ export function GridHeader({ table, byId }: { table: Table<Row>; byId: Map<strin
     <thead className="nv-grid__head">
       {table.getHeaderGroups().map((group) => (
         <tr key={group.id}>
-          <th className="nv-th nv-num" aria-hidden="true">#</th>
+          {selection ? (
+            <th className="nv-th nv-num">
+              <input type="checkbox" aria-label={t('selectAll')} checked={selection.all} onChange={selection.onToggle}
+                ref={(box) => { if (box) box.indeterminate = selection.some && !selection.all }} />
+            </th>
+          ) : <th className="nv-th nv-num" aria-hidden="true">#</th>}
           {group.headers.map((header, i) => (
             <HeaderCell key={header.id} header={header} column={byId.get(header.column.id)!} first={i === 0} last={i === group.headers.length - 1} />
           ))}

@@ -104,6 +104,8 @@ export interface ModelAction {
   name: string
   label: string
   input: Record<string, ActionInput>
+  /** Runs once on every ticked row of the table, not on one record. */
+  many?: true
 }
 
 export type ViewType = 'grid' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'

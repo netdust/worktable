@@ -110,7 +110,38 @@ const domain: Domain = {
       { name: 'Di', bundle_id: 1 },
     ])
   },
-  views: [],
+  views: [
+    {
+      name: 'All members',
+      source_type: 'dataset',
+      source: 'member',
+      skin: 'table',
+      filters: {},
+      sort: ['name'],
+      group_by: null,
+      visible_fields: ['bundle_id'],
+    },
+    {
+      name: 'Alpha members',
+      source_type: 'dataset',
+      source: 'member',
+      skin: 'table',
+      filters: { bundle_id: 1 },
+      sort: ['name'],
+      group_by: null,
+      visible_fields: ['bundle_id'],
+    },
+    {
+      name: 'All bundles',
+      source_type: 'dataset',
+      source: 'bundle',
+      skin: 'table',
+      filters: {},
+      sort: ['name'],
+      group_by: null,
+      visible_fields: [],
+    },
+  ],
 }
 
 export default domain
