@@ -3483,9 +3483,13 @@
   margin-left: auto;
 }
 
+/* The box sits at the cell's left edge, whatever the number's width: the cell is sticky, so it holds the box. */
 .nv-grid:not(.nv-mx) .nv-num input[type="checkbox"] {
-  margin: 0 6px 0 0;
-  vertical-align: middle;
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  margin: 0;
+  transform: translateY(-50%);
 }
 
 #root .nv-action__refused {
