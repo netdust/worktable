@@ -1,4 +1,5 @@
-import { type ActionDecl, type ActionInput, type ColumnDecl, type Domain, MAX_INPUT_TEXT } from './declare'
+import { MAX_SELECTION, type ServedAction } from './actions'
+import { type ActionInput, type ColumnDecl, type Domain, MAX_INPUT_TEXT } from './declare'
 import { writerOf } from './registry'
 
 type Schema = Record<string, unknown>
@@ -8,7 +9,7 @@ export interface ServedSource {
   kind: 'dataset' | 'query'
   label: string
   columns: Record<string, ColumnDecl>
-  actions: ({ name: string } & Pick<ActionDecl, 'label' | 'input'>)[]
+  actions: ServedAction[]
 }
 
 const TYPES: Record<ColumnDecl['type'], string | null> = {
@@ -110,16 +111,25 @@ function inputSchema(decl: ActionInput): Schema {
   }
 }
 
-function actionPath({ name, label, input }: ServedSource['actions'][number], on: string): Schema {
+const idsSchema = (on: string): Schema => ({
+  type: 'array',
+  minItems: 1,
+  maxItems: MAX_SELECTION,
+  uniqueItems: true,
+  items: { type: 'integer', minimum: 1 },
+  description: `The ids of the ${on} records the action runs on, as one batch`,
+})
+
+function actionPath({ name, label, input, many }: ServedSource['actions'][number], on: string): Schema {
   const inputs = Object.entries(input).map(([key, decl]) => [key, inputSchema(decl)])
   const required = Object.entries(input)
     .filter(([, decl]) => 'relation' in decl || decl.required !== false)
     .map(([key]) => key)
   const body = {
     type: 'object',
-    required: ['id', 'input'],
+    required: [many ? 'ids' : 'id', 'input'],
     properties: {
-      id: { type: 'integer', description: `The id of the ${on} record` },
+      ...(many ? { ids: idsSchema(on) } : { id: { type: 'integer', description: `The id of the ${on} record` } }),
       input: {
         type: 'object',
         additionalProperties: false,

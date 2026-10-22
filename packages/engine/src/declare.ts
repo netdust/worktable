@@ -173,6 +173,8 @@ export interface DatasetDecl {
   /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
   record_link?: { email?: string }
   attachments?: AttachmentsDecl
+  /** `false` keeps it out of the grid's tree. Navigation only: the API serves it as before. */
+  listed?: false
 }
 
 export interface QueryDecl {
@@ -248,7 +250,7 @@ export interface Domain {
   seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void
   views: SavedViewSeed[]
   writers?: Record<string, Writer>
-  actions?: Record<string, ActionDecl>
+  actions?: Record<string, ActionDecl | SelectionActionDecl>
   /** The dataset whose records split the work. A view filter for the grid, never access control. */
   space?: { dataset: string }
   /** The order of the sources in the grid's tree; unlisted sources follow, unlabelled. */
@@ -339,6 +341,15 @@ export interface ActionDecl {
   on: string
   input: Record<string, ActionInput>
   run(record: Values, input: Record<string, InputValue>, ctx: WriteContext): ActionResult
+}
+
+/** Runs once on every selected record (1 to 500), each read as the caller, in one transaction and one batch. */
+export interface SelectionActionDecl {
+  label: string
+  on: string
+  many: true
+  input: Record<string, ActionInput>
+  run(records: Values[], input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 
 /** An update that adds rows to its own batch: each create runs as an action's does, as the same actor. */
