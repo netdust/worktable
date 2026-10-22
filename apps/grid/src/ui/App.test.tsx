@@ -2575,4 +2575,114 @@ describe('a drawer button', () => {
     expect(within(drawer).getByRole('button', { name: 'Starten' })).toBeTruthy()
     expect(api.undoBatch).not.toHaveBeenCalled()
   })
+
+  const stageField = { type: 'select', label: 'Stage', required: false, fact: true, options: { open: 'Open', active: 'Actief' } }
+
+  it('after a press, an inline edit of the sheet shows in the same drawer', async () => {
+    const colour = { type: 'select', label: 'Kleur', required: false, fact: true, options: { rood: 'Rood' } }
+    const own = (state: string, ...buttons: [string, string][]) => ({ ...at(state, ...buttons), fields: { stage: state, colour: 'rood' } })
+    api.schema.mockResolvedValue({ ...stages, models: { member: { ...stages.models.member, fields: { stage: stageField, colour } } } } as unknown as Schema)
+    api.rows.mockResolvedValue({ rows: [own('open', ['active', 'Starten'])], total: 1 })
+    api.rowOf.mockResolvedValue(own('active', ['done', 'Afronden']))
+    const drawer = await openDrawer()
+    await act(async () => {
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+    })
+    await within(drawer).findByRole('button', { name: 'Afronden' })
+    api.update.mockResolvedValue({ row: { ...own('active', ['done', 'Afronden']), fields: { stage: 'active', colour: null } }, batch: 'b-2' })
+
+    const cell = await screen.findByRole('gridcell', { name: /Rood/ })
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Delete' })
+
+    await waitFor(() => expect(within(drawer).queryByText('Rood')).toBeNull())
+    expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+  })
+
+  it("a press in the board's and the calendar's drawer shows the new state and its next button", async () => {
+    const day = { type: 'date', label: 'Dag', required: false, fact: true }
+    const cal = { day: 'day', start: null, end: null, lanes: [] }
+    const skins = {
+      board: { key: 'bord', label: 'Bord', table: 'members', model: 'member', type: 'board', board: { column: 'stage' } },
+      calendar: { key: 'kalender', label: 'Kalender', table: 'members', model: 'member', type: 'calendar', calendar: cal },
+    }
+    for (const [kind, view] of Object.entries(skins)) {
+      const plain = { ...at('open', ['active', 'Starten']), fields: { stage: 'open', day: new Date().toISOString().slice(0, 10) } }
+      api.schema.mockResolvedValue({ ...stages, models: { member: { ...stages.models.member, fields: { stage: stageField, day } } }, tables: [{ ...stages.tables[0], types: ['grid', kind], date_field: 'day' }], views: [view] } as unknown as Schema)
+      api.rows.mockResolvedValue({ rows: [plain], total: 1 })
+      api.rowOf.mockResolvedValue({ ...plain, fields: { ...plain.fields, stage: 'active' }, available: marks('active', ['done', 'Afronden']) })
+      window.location.hash = `view=${view.key}`
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: /Aart/ }))
+      const drawer = await screen.findByRole('complementary', { name: 'Aart' })
+
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+      })
+
+      expect(await within(drawer).findByRole('button', { name: 'Afronden' }), kind).toBeTruthy()
+      expect(within(drawer).queryByRole('button', { name: 'Starten' })).toBeNull()
+      cleanup()
+    }
+    window.location.hash = ''
+  })
+
+  describe('in a related record’s drawer', () => {
+    const linked: Schema = {
+      models: {
+        member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, fields: { bundle_id: { type: 'relation', label: 'Bundel', required: false, fact: true, relation: { model: 'bundle', multiple: false } } } },
+        bundle: { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', fields: { phase: { type: 'select', label: 'Fase', required: false, fact: true, options: { open: 'Open', closed: 'Dicht' } } } },
+      },
+      tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+      views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+      writable: { member: true, bundle: true },
+    } as unknown as Schema
+    // The bundle shares the member's id: a store patch by id alone would overwrite the member's row.
+    const bundle = (phase: string, ...buttons: [string, string][]) => ({ id: 1, title: 'Alpha', status: '', fields: { phase }, available: marks(phase, ...buttons) })
+    const member = { id: 1, title: 'Aart', status: '', fields: { bundle_id: [1] }, lookups: { bundle_id: { id: 1, title: 'Alpha', status: '', fields: {} } } }
+
+    const related = async () => {
+      api.schema.mockResolvedValue(linked)
+      api.rows.mockResolvedValue({ rows: [member], total: 1 })
+      api.rowOf.mockResolvedValueOnce(bundle('open', ['closed', 'Dichtzetten']))
+      api.update.mockResolvedValue({ row: bundle('closed'), batch: 'b-7' })
+      await shell()
+      await screen.findByRole('grid', { name: 'Leden' })
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Alpha' }))
+      return screen.findByRole('complementary', { name: 'Alpha' })
+    }
+
+    it('a press writes on that record, shows its next state, and leaves the table’s row with the same id as it was', async () => {
+      const drawer = await related()
+      api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
+
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+      })
+
+      expect(api.update).toHaveBeenCalledExactlyOnceWith('bundle', 1, { phase: 'closed' }, undefined, { phase: 'open' })
+      expect(await within(drawer).findByRole('button', { name: 'Heropenen' })).toBeTruthy()
+      expect(screen.getByRole('row', { name: /Aart/ })).toBeTruthy()
+      expect(within(screen.getByRole('grid', { name: 'Leden' })).queryByText('Alpha', { selector: '.nv-cell__text' })).toBeTruthy()
+    })
+
+    it('Undo re-reads that drawer', async () => {
+      const drawer = await related()
+      api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
+      api.undoBatch.mockResolvedValue('u-7')
+      await act(async () => {
+        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+      })
+      await within(drawer).findByRole('button', { name: 'Heropenen' })
+      api.rowOf.mockResolvedValue(bundle('open', ['closed', 'Dichtzetten']))
+
+      const notice = await screen.findByRole('status', { name: 'Dichtzetten gedaan.' })
+      await act(async () => {
+        fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+      })
+
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-7')
+      expect(await within(drawer).findByRole('button', { name: 'Dichtzetten' })).toBeTruthy()
+    })
+  })
 })
