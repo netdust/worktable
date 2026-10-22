@@ -1,5 +1,6 @@
 import { type CSSProperties, useContext, useEffect, useMemo, useState } from 'react'
 import { Drawer } from '../grid/Drawer'
+import { useReread } from '../grid/drawerWrite'
 import { SchemaContext } from '../grid/drawer/context'
 import type { Places } from '../grid/drawer/place'
 import { type Column, columnsFor } from '../grid/columns'
@@ -219,6 +220,7 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
 /** Rows on their days, a week or a month, in lanes; read-only: an event opens its row. */
 export function Calendar({ view, model, models, rows, cal, shown, lane, layout, onTitle, places }: Props) {
   const [opened, setOpen] = useState<Row | null>(null)
+  const reread = useReread()
   // The row as the calendar now holds it: a place chosen in the drawer repaints it.
   const open = opened ? (rows.find((row) => row.id === opened.id) ?? opened) : null
   const month = isMonth(shown)
@@ -252,7 +254,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
           {!month && <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} spans={cal.spans ? cal : null} toneOf={toneOf} marks={marks} whereOf={whereOf} onOpen={setOpen} />}
         </div>
         )}
-        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)}
+        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)} onDone={reread(model.key, open.id)}
           nav={{ ids: rows.map((r) => r.id), onStep: (id) => setOpen(rows.find((r) => r.id === id) ?? null) }} />}
       </div>
     </div>

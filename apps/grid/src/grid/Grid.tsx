@@ -7,6 +7,7 @@ import { RelationContext, relatedOf } from './cells/Relation'
 import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { rowOf } from '../api'
 import { Drawer, type RunAction } from './Drawer'
+import { useReread } from './drawerWrite'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
@@ -147,6 +148,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Focus moves to a cell only after the grid itself moved it; a search filtering rows must keep its focus.
   const moved = useRef(false)
   const [drawer, setDrawer] = useState<number | null>(null)
+  const reread = useReread()
   const [filesVersions, setFilesVersions] = useState<Record<string, number>>({})
   const [related, setRelated] = useState<{ row: Row; columns: Column[]; model: Model } | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
@@ -362,10 +364,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
           </table>
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
-          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
+          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)}
+          onDone={reread(related.model.key, related.row.id, (row) => setRelated({ ...related, row }))} />}
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
-          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
+          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id)}
           onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input)) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}

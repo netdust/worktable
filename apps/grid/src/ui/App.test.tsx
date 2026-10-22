@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setStrings } from '../i18n'
+import { errorText, setStrings } from '../i18n'
 import type { SavedView, Schema, View } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 import { iso } from './Window'
@@ -2518,5 +2518,61 @@ describe("the timeline's overlap in the title line", () => {
     await waitFor(() => expect(document.querySelector('.nv-bar__count')?.textContent).toBe('2 rijen'))
     expect(overlaps()).toBeNull()
     window.location.hash = ''
+  })
+})
+
+describe('a drawer button', () => {
+  const marks = (state: string, ...buttons: [string, string][]) => ({ state, buttons: buttons.map(([to, label]) => ({ to, label })), actions: [] })
+  const stages: Schema = {
+    models: { member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, lifecycle: 'stage', fields: {} } },
+    tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+    views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+    writable: { member: true },
+  }
+  const at = (state: string, ...buttons: [string, string][]) => ({ id: 1, title: 'Aart', status: '', fields: { stage: state }, available: marks(state, ...buttons) })
+  const openDrawer = async () => {
+    await shell()
+    await screen.findByRole('grid', { name: 'Leden' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Openen' }))[0])
+    return screen.findByRole('complementary', { name: 'Aart' })
+  }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(stages)
+    api.rows.mockResolvedValue({ rows: [at('open', ['active', 'Starten'])], total: 1 })
+    api.update.mockResolvedValue({ row: at('active'), batch: 'b-1' })
+    api.undoBatch.mockResolvedValue('u-1')
+  })
+
+  it('writes the transition expecting the marked state, re-reads, and makes one Undo entry', async () => {
+    api.rowOf.mockResolvedValue(at('active', ['done', 'Afronden']))
+    const drawer = await openDrawer()
+
+    await act(async () => {
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+    })
+
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('member', 1, { stage: 'active' }, undefined, { stage: 'open' })
+    expect(await within(drawer).findByRole('button', { name: 'Afronden' })).toBeTruthy()
+    expect(within(drawer).queryByRole('button', { name: 'Starten' })).toBeNull()
+    const notice = await screen.findByRole('status', { name: 'Starten gedaan.' })
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+    })
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+  })
+
+  it('shows a refusal as a notice and leaves the row as it was', async () => {
+    api.update.mockRejectedValue({ code: 'transition_lost', message: 'moved on' })
+    api.rowOf.mockResolvedValue(at('open', ['active', 'Starten']))
+    const drawer = await openDrawer()
+
+    await act(async () => {
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+    })
+
+    expect((await screen.findByRole('status', { name: /./ })).getAttribute('aria-label')).toBe(errorText('transition_lost', 'moved on'))
+    expect(within(drawer).getByRole('button', { name: 'Starten' })).toBeTruthy()
+    expect(api.undoBatch).not.toHaveBeenCalled()
   })
 })

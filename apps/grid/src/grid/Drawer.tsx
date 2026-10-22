@@ -20,6 +20,7 @@ import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
 import { ActionInputs } from './ActionInputs'
+import { DrawerButtons } from './DrawerButtons'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
 export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<void>
@@ -38,6 +39,8 @@ interface Props {
   /** The model's declared actions, each a button with a picker per input. */
   actions?: ModelAction[]
   onAction?: RunAction
+  /** Re-reads the record: a drawer given it shows the buttons the server marked, on the record and on its link items. */
+  onDone?: () => void
   /** False leaves focus where it was: the matrix keeps typing in its cell. */
   focusOnOpen?: boolean
   /** The dataset whose record link the drawer copies and renews; an administrator's. */
@@ -163,7 +166,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, onDone, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
@@ -196,6 +199,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
         </p>
       )}
       {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
+      {onDone && model && row.id > 0 && <DrawerButtons model={model.key} id={row.id} available={row.available} onDone={onDone} />}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
@@ -203,7 +207,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
         : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
       {links.map(({ key, link, column }) => (
         <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
-          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} />
+          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
       ))}
       {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}

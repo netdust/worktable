@@ -1,0 +1,12 @@
+/* The record's next steps: a row of small buttons under its title; a link item's sit at the end of its line. */
+.nv-dw-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.nv-dw-list .nv-dw-buttons {
+  flex: none;
+  padding: 0;
+}

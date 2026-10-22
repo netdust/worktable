@@ -270,6 +270,7 @@ const strings = {
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
+  buttonDone: '{button} gedaan.',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   selectedCount: '{n} geselecteerd',
   selectionClear: 'Selectie wissen',

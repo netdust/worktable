@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { Available, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -132,6 +132,7 @@ export interface EngineRow {
   /** Per link name, the linked rows the caller may read. */
   links?: Record<string, LinkItem[]>
   inherited?: string[]
+  available?: Available
   [column: string]: unknown
 }
 
@@ -442,7 +443,7 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
 
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, available, ...fields } = r
   return {
     id,
     title: title ?? '',
@@ -450,6 +451,7 @@ export function toRow(r: EngineRow): Row {
     fields: { ...fields, ...links },
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
     ...(inherited ? { inherited } : {}),
+    ...(available ? { available } : {}),
     ...(cells ? { rollups: { cells: cells.map(toRow) } } : {}),
   }
 }

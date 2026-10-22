@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
+import { useReread } from '../grid/drawerWrite'
 import { locale, t } from '../i18n'
 import type { Account, Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
 import { ChipBar } from '../ui/ChipBar'
@@ -45,6 +46,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     return () => window.removeEventListener('focus', refresh)
   }, [])
   const [opened, setOpened] = useState<{ row: Row; view: SavedView; flags?: Flags | null } | null>(null)
+  const reread = useReread()
   const [creating, setCreating] = useState<{ create: string; label: string } | null>(null)
   const drawerColumns = useMemo(() => {
     const model = opened ? models[opened.view.model] : undefined
@@ -102,7 +104,11 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
           ))}
         </div>
         )}
-        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags} />}
+        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags}
+          onDone={reread(opened.view.model, opened.row.id, (row) => {
+            setOpened({ ...opened, row })
+            refresh()
+          })} />}
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}

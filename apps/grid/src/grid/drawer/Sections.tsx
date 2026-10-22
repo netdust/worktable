@@ -65,13 +65,15 @@ function usePlaces(link: Link, id: number, items: LinkItem[], reads: boolean): M
 }
 
 /** A links field as the prototype's Bezetting: who, in what role, in what state; the open places last; have/need in the head. */
-export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLink }: {
+export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLink, onDone }: {
   ref?: Ref<Chooser>
   label: string; link: Link; items: LinkItem[]; schema: Schema | null; id: number
   /** The flags on one link row: a flagged person shows the flag in place of their role and state. */
   flagsOf?: (id: number) => Flag[]
   /** Writes who holds a place; without it, or where the target column offers no candidates, no place is chosen again. */
   onLink?: WriteLink
+  /** Re-reads the record after a link item's button: without it no item shows buttons. */
+  onDone?: () => void
 }) {
   const [choosing, setChoosing] = useState<number | null>(null)
   useImperativeHandle(ref, () => ({ choose: setChoosing }), [])
@@ -98,7 +100,7 @@ export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLi
         <ul className="nv-dw-list">
           {ordered.map((item) => (
             <PlaceRow key={item.id} item={item} link={link} role={role ? places.get(item.id)?.lookups?.[role]?.title : undefined}
-              flags={flagsOf?.(item.id) ?? []} choosing={choosingOf(item)} />
+              flags={flagsOf?.(item.id) ?? []} choosing={choosingOf(item)} onDone={onDone} />
           ))}
         </ul>
       )}

@@ -2,12 +2,13 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows, update } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
 import { linkedDataset } from '../grid/Drawer'
 import { Grid, type OnScreen } from '../grid/Grid'
+import { type DrawerWrite, DrawerWriteContext } from '../grid/drawerWrite'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
@@ -546,6 +547,31 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     }
     notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
+  // A button the server marked is the ordinary transition write, expecting the state it was marked against.
+  const drawerWrite: DrawerWrite = {
+    fresh: (of, row) => {
+      if (of === view?.model) store?.replace(row)
+    },
+    press: async (of, id, available, to, onDone) => {
+      const column = models[of]?.lifecycle
+      if (!column) return
+      try {
+        const { batch } = await update(of, id, { [column]: to }, undefined, available.state === null ? undefined : { [column]: available.state })
+        if (batch) {
+          const entry = { batch: Promise.resolve(batch), model: of, id, refresh: onDone }
+          history.push(entry)
+          const undo = () => {
+            if (history.last() !== entry) return
+            void (live.current?.undo() ?? history.undo().then((undone) => (undone?.refresh ? undone.refresh() : reloadView()), () => undefined))
+          }
+          notify({ message: t('buttonDone', { button: available.buttons.find((b) => b.to === to)?.label ?? to }), action: { label: t('undo'), run: undo } })
+        }
+      } catch (error) {
+        notify({ message: errorText((error as ApiError).code, (error as ApiError).message) })
+      }
+      onDone()
+    },
+  }
   const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
     if (view) finished((await runAction(action.name, row.id, input)).batch, action)
   }
@@ -573,6 +599,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   return (
     <DrawerSlot.Provider value={drawerSlot}>
     <SchemaContext.Provider value={served}>
+    <DrawerWriteContext.Provider value={drawerWrite}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} counts={counts} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
@@ -632,7 +659,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
               onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={showAway ? result.away : []}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
@@ -675,6 +702,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </DrawerWriteContext.Provider>
     </SchemaContext.Provider>
     </DrawerSlot.Provider>
   )

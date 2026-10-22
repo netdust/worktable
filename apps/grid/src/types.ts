@@ -60,6 +60,16 @@ export interface LinkItem {
   title: string
   state: string | null
   places?: number
+  available?: Available
+  /** The link record's own detail text, under the item. */
+  detail?: string
+}
+
+/** What the server marks on a row or link item: the buttons and actions that apply to this viewer now. `state` is what a press sends as `expect`. */
+export interface Available {
+  state: string | null
+  buttons: { to: string; label: string }[]
+  actions: string[]
 }
 
 export interface Model {
@@ -340,6 +350,8 @@ export interface Row {
   rollups?: Record<string, number | unknown[]>
   /** The inherited lookups whose value came through the relation, not the row's own. */
   inherited?: string[]
+  /** Absent on a source that declares no button or action condition: everything is then allowed. */
+  available?: Available
 }
 
 export interface Lookup {
