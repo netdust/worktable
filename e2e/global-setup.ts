@@ -3,10 +3,12 @@ import {
   ACCOUNTS,
   addFixtureViews,
   createAccount,
+  createServiceToken,
   FICHE,
   type Instance,
   SELECTION,
   STUDIO,
+  STUDIO_SERVICE,
   signIn,
   state,
   THEATRE,
@@ -37,6 +39,7 @@ export default async function globalSetup(): Promise<void> {
       createAccount(STUDIO, account.email, account.role)
       await signedIn(name, STUDIO, account)
     }
+    createServiceToken(STUDIO, 'claude', 'editor', STUDIO_SERVICE)
     createAccount(SELECTION, ACCOUNTS.selection.email, ACCOUNTS.selection.role)
     await signedIn('selection-editor', SELECTION, ACCOUNTS.selection)
     createAccount(SELECTION, ACCOUNTS.selectionAdmin.email, ACCOUNTS.selectionAdmin.role)

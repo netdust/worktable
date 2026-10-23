@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserContext } from '@playwright/test'
 
@@ -59,6 +59,16 @@ function cli(at: Instance, args: string[], what: string): string {
   }
   if (run.status !== 0) throw new Error(`${what} exited ${run.status}: ${run.stderr}`)
   return run.stdout
+}
+
+// A real service account (kind service), not a person with its role: what the studio worker and Claude sign in as.
+export const STUDIO_SERVICE = 'e2e/.tmp/studio-service-token'
+
+/** Creates a service account; the CLI prints its token once, kept mode 0600 in `file`. */
+export function createServiceToken(at: Instance, name: string, role: string, file: string): void {
+  const token = cli(at, ['--create-service', name, '--role', role], `--create-service ${name}`).trim()
+  writeFileSync(file, token, { mode: 0o600 })
+  chmodSync(file, 0o600)
 }
 
 export function createAccount(at: Instance, email: string, role: string, subject?: string): void {
