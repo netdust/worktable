@@ -585,27 +585,46 @@ describe('the enforced values and where they may sit', () => {
   test('written_by, created_by and deleted_by must say service, service and person', () => {
     refusal(domainOf([dataset({ columns: { name: { ...text, written_by: 'persons' as never } } })]), 'a', 'name')
     refusal(domainOf([dataset({ created_by: 'persons' as never })]), 'a', 'created_by')
-    refusal(domainOf([dataset({ attachments: { kinds: { k: 'K' }, deleted_by: 'persons' as never } })]), 'a', 'deleted_by')
+    refusal(
+      domainOf([dataset({ attachments: { kinds: { k: 'K' }, deleted_by: 'persons' as never } })]),
+      'a',
+      'deleted_by',
+    )
   })
 
   test('no written_by on the owner column', () => {
-    const owner = { type: 'integer' as const, label: 'O', relation: 'a', nullable: true, written_by: 'service' as const }
-    refusal(domainOf([dataset({ columns: { name: text, owner_id: owner }, owners: { owner: 'owner_id' } })]), 'a', 'owner_id')
+    const owner = {
+      type: 'integer' as const,
+      label: 'O',
+      relation: 'a',
+      nullable: true,
+      written_by: 'service' as const,
+    }
+    refusal(
+      domainOf([dataset({ columns: { name: text, owner_id: owner }, owners: { owner: 'owner_id' } })]),
+      'a',
+      'owner_id',
+    )
   })
 
   test('no written_by on a lookup’s own column', () => {
     const team = dataset({ name: 'team' })
-    const a = dataset({ columns: { name: text, team_id: { type: 'integer', label: 'T', relation: 'team', nullable: true } } })
+    const a = dataset({
+      columns: { name: text, team_id: { type: 'integer', label: 'T', relation: 'team', nullable: true } },
+    })
     const own = { type: 'integer' as const, label: 'T', relation: 'team', nullable: true }
     const b = (written_by?: 'service') =>
       dataset({
         name: 'b',
         label: 'B',
-        columns: { name: text, a_id: { type: 'integer', label: 'A', relation: 'a' }, team_id: { ...own, ...(written_by ? { written_by } : {}) } },
+        columns: {
+          name: text,
+          a_id: { type: 'integer', label: 'A', relation: 'a' },
+          team_id: { ...own, ...(written_by ? { written_by } : {}) },
+        },
         lookups: { team: { label: 'Team', via: 'a_id', field: 'team_id', own: 'team_id', from: 'A' } },
       })
     expect(valid(domainOf([team, a, b()]))).toBeNull()
     refusal(domainOf([team, a, b('service')]), 'b', 'team_id')
   })
 })
-
