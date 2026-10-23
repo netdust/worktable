@@ -17,7 +17,7 @@ const noToggle = () => undefined
 function Line({ row, shown, onOpenRow }: { row: Row; shown: Column[]; onOpenRow?: (row: Row) => void }) {
   const times = shown.filter((c) => c.kind === 'datetime')
   const hours = whenOf(row, times)
-  // Hours alone read as today's, so a moment on another day shows its day: a stale check must look stale.
+  // Hours alone read as today's, so a moment on another day shows its day, muted: lateness is the view's to say.
   const on = times.map((c) => String(c.value(row) ?? '').slice(0, 10)).find(Boolean) ?? ''
   const today = iso(new Date())
   const kinds = shown.filter((c) => c.kind === 'select')
@@ -27,7 +27,7 @@ function Line({ row, shown, onOpenRow }: { row: Row; shown: Column[]; onOpenRow?
     <>
       {hours.from && (
         <span className="nv-time nv-list__time">
-          {on !== today && <span className={`nv-list__on${on < today ? ' nv-list__day--late' : ''}`}>{hours.day}</span>}
+          {on !== today && <span className="nv-list__on">{hours.day}</span>}
           {hours.from}{hours.to && <span className="nv-time__end">–{hours.to}</span>}
         </span>
       )}

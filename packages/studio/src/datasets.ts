@@ -151,8 +151,8 @@ export const actieSite = defineDataset({
       label: 'Status',
       default: 'wacht',
       options: {
-        wacht: 'Wacht',
-        te_bevestigen: 'Te bevestigen',
+        wacht: 'Niet gestart',
+        te_bevestigen: 'Preview klaar',
         bezig: 'Bezig',
         klaar: 'Klaar',
         mislukt: 'Mislukt',

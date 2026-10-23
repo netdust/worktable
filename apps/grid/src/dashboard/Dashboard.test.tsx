@@ -118,7 +118,9 @@ describe('a list tile', () => {
     render(<Dashboard dashboard={dashboard([{ ...list, columns: ['laatste_check'] }])} views={[conflicten, lijst]} models={{ ...models, werklijst: timed }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
     const time = (await screen.findAllByRole('listitem'))[0].querySelector('.nv-list__time')
     expect(time?.textContent).toMatch(/6.*12:02/)
-    expect(time?.querySelector('.nv-list__day--late')?.textContent).toMatch(/6/)
+    expect(time?.querySelector('.nv-list__on')?.textContent).toMatch(/6/)
+    // A moment's day is context, not a deadline: lateness is the view's to say (a reden such as "Oude check").
+    expect(time?.querySelector('.nv-list__day--late')).toBeNull()
   })
 
   it('a list row from today shows only its hours', async () => {

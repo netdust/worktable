@@ -61,6 +61,7 @@ export const opTafel = defineQuery({
   date: 'deadline',
   of: taak.name,
   scoped: 'organisatie_id',
+  creates: taak.name,
   sql: sqlOf('op_tafel'),
   columns: {
     id: { type: 'integer', label: 'Id' },

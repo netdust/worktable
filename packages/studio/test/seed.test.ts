@@ -120,7 +120,7 @@ describe('the tree', () => {
   })
 
   test('op tafel sits under Taken, and the agenda under Agenda, where it creates', () => {
-    expect(schema.op_tafel?.of).toBe('taak')
+    expect(schema.op_tafel).toMatchObject({ of: 'taak', creates: 'taak' })
     expect(schema.agenda).toMatchObject({ of: 'agendapunt', creates: 'agendapunt' })
   })
 

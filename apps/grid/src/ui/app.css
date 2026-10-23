@@ -5588,8 +5588,8 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 .nv-list__kind {
-  flex: none;
-  width: 128px;
+  flex: 0 1 128px;
+  min-width: 0;
   max-width: 128px;
   overflow: hidden;
   color: var(--color-fg-muted);
@@ -5598,7 +5598,7 @@ table.nv-cal--month .nv-cal__event:hover {
 
 .nv-list__title {
   flex: 1;
-  min-width: 0;
+  min-width: 8ch;
   overflow: hidden;
   font-weight: 500;
   text-overflow: ellipsis;

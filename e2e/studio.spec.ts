@@ -205,7 +205,7 @@ test.describe('studio', () => {
     await expect(drawer.getByText('Bezig…')).toBeVisible()
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Niet meer in de registry')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Overgeslagen')
-    await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Wacht')
+    await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Niet gestart')
     await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
     await shot(page, 'opdracht-drawer-live')
 
@@ -259,7 +259,7 @@ test.describe('studio', () => {
 
     const drawer = page.getByRole('complementary', { name: 'Smoketest · voorbeeld-site' })
     await expect(drawer).toBeVisible()
-    await expect(siteLine(drawer, 'voorbeeld-site')).toContainText('Wacht')
+    await expect(siteLine(drawer, 'voorbeeld-site')).toContainText('Niet gestart')
     await shot(page, 'site-drawer-request')
     const actie = await newest(api, 'actie')
     expect(await rowOf(api, 'actie', actie)).toMatchObject({ titel: 'Smoketest · voorbeeld-site', soort: 'smoketest' })
@@ -279,7 +279,7 @@ test.describe('studio', () => {
     await expect(siteLine(drawer, 'testmans-bestel')).toContainText('WordPress 6.7.2 → 6.8.3 · 1 plugin')
     await expect(siteLine(drawer, 'voorbeeld-site')).toContainText('1 plugin: cache-plugin 1.9.0 → 1.9.2')
     for (const site of ['testmans-bestel', 'voorbeeld-site']) {
-      await expect(siteLine(drawer, site)).toContainText('Te bevestigen')
+      await expect(siteLine(drawer, site)).toContainText('Preview klaar')
       await expect(siteLine(drawer, site).getByRole('button', { name: 'Niet nu' })).toBeVisible()
     }
     await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toBeVisible()
@@ -308,7 +308,7 @@ test.describe('studio', () => {
 
     await line.getByRole('button', { name: 'Niet nu' }).click()
     await line.getByRole('button', { name: 'Toch wel' }).click()
-    await expect(line).toContainText('Te bevestigen')
+    await expect(line).toContainText('Preview klaar')
     await expect(line.getByRole('button', { name: 'Niet nu' })).toBeVisible()
     await expect.poll(stateOf).toBe('te_bevestigen')
   })
