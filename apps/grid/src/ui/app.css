@@ -5356,6 +5356,7 @@ table.nv-cal--month .nv-cal__event:hover {
 
 /* The dashboard: sections of tiles, each a number, a list or a strip over a saved view (design/dashboard-prototype.html). */
 .nv-dash {
+  container-type: inline-size;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -5588,8 +5589,8 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 .nv-list__kind {
-  flex: 0 1 128px;
-  min-width: 0;
+  flex: none;
+  width: 128px;
   max-width: 128px;
   overflow: hidden;
   color: var(--color-fg-muted);
@@ -5598,7 +5599,7 @@ table.nv-cal--month .nv-cal__event:hover {
 
 .nv-list__title {
   flex: 1;
-  min-width: 8ch;
+  min-width: 0;
   overflow: hidden;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -5843,6 +5844,13 @@ table.nv-cal--month .nv-cal__event:hover {
   height: 36px;
   border-style: dashed;
   color: var(--color-fg-muted);
+}
+
+/* A narrow dashboard (a drawer open on a laptop) puts today under the week, so neither loses its titles. */
+@container (max-width: 900px) {
+  .nv-dash__tiles:has(> .nv-week-tile) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Beside the week, a row's kind is its dot. */
