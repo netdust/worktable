@@ -91,6 +91,7 @@ describe('the confirmed set', () => {
       const id = linkIn(actieIn(status), 'te_bevestigen')
       for (const who of [admin, claude]) {
         await expectRefused(() => patch(who, id, { samenvatting: 'anders' }), message, id)
+        await expectRefused(() => patch(who, id, { resultaat: 'anders' }), message, id)
       }
     }
     const bezig = linkIn(actieIn('bezig'), 'bezig')
@@ -127,6 +128,46 @@ describe('the confirmed set', () => {
       expect(JSON.stringify(res.body)).toContain(CLOSED)
     }
     expect((await post(claude, actieIn('aangevraagd'))).status).toBe(201)
+  })
+
+  test('a skip reason cannot be cleared in voorbereid to restore the site', async () => {
+    const id = plant('actie_site', {
+      actie_id: actieIn('voorbereid'),
+      site_id: 2,
+      state: 'overgeslagen',
+      voorstel: PREVIEW,
+      resultaat: 'Beschermd',
+    })
+    await expectRefused(() => patch(admin, id, { resultaat: null }), FROZEN, id)
+    await expectRefused(() => patch(admin, id, { state: 'te_bevestigen' }), SKIPPED, id)
+  })
+
+  test('the set of sites is fixed once the request is claimed', async () => {
+    const claimed = plant('actie', { titel: 'x', soort: 'bijwerken', status: 'voorbereiden' })
+    const expired = plant('actie', {
+      titel: 'x',
+      soort: 'bijwerken',
+      status: 'aangevraagd',
+      voorbereid_op: '2026-10-01T10:00',
+    })
+    const unclaimed = actieIn('aangevraagd')
+    for (const parent of [claimed, expired]) {
+      const id = linkIn(parent, 'wacht')
+      for (const who of [admin, claude]) {
+        await expectRefused(() => patch(who, id, { site_id: 3 }), CLOSED, id)
+        await expectRefused(() => patch(who, id, { actie_id: unclaimed }), CLOSED, id)
+      }
+    }
+    const id = linkIn(expired, 'wacht', 4)
+    await expectRefused(() => admin('DELETE', `/api/rows/actie_site/${id}`), CLOSED, id)
+    const open = linkIn(unclaimed, 'wacht')
+    expect((await patch(admin, open, { site_id: 3 })).status).toBe(200)
+    expect((await admin('DELETE', `/api/rows/actie_site/${open}`)).status).toBe(200)
+  })
+
+  test('the worker still writes voorstel while voorbereiden', async () => {
+    const id = linkIn(actieIn('voorbereiden'), 'wacht')
+    expect((await patch(claude, id, { voorstel: PREVIEW })).status).toBe(200)
   })
 
   test('a site joins an actie once', async () => {
@@ -167,6 +208,34 @@ describe('the confirmed set', () => {
     expect((await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'overgeslagen' })).status).toBe(200)
     expect((await admin('PATCH', `/api/rows/actie_site/${id}`, { state: 'te_bevestigen' })).status).toBe(200)
     expect(link(id).state).toBe('te_bevestigen')
+  })
+
+  test('undoing Niet nu restores a previewed link and refuses one without a preview', async () => {
+    const withPreview = plant('actie_site', {
+      actie_id: actieIn('voorbereid'),
+      site_id: 2,
+      state: 'te_bevestigen',
+      voorstel: PREVIEW,
+    })
+    const dropped = await patch(admin, withPreview, { state: 'overgeslagen' })
+    expect(dropped.status).toBe(200)
+    const undone = await admin('POST', `/api/batches/${(dropped.body.revision as Body).batch_id}/undo`, {})
+    expect(undone.status).toBe(200)
+    expect(link(withPreview).state).toBe('te_bevestigen')
+
+    const bare = plant('actie_site', {
+      actie_id: actieIn('voorbereid'),
+      site_id: 3,
+      state: 'te_bevestigen',
+      voorstel: null,
+    })
+    const bareDrop = await patch(admin, bare, { state: 'overgeslagen' })
+    expect(bareDrop.status).toBe(200)
+    await expectRefused(
+      () => admin('POST', `/api/batches/${(bareDrop.body.revision as Body).batch_id}/undo`, {}),
+      NO_PREVIEW,
+      bare,
+    )
   })
 
   test('a skipped link without a voorstel cannot be restored, even by a person', async () => {
@@ -362,20 +431,53 @@ describe('who moves a link', () => {
     }
   })
 
-  test('the worker skips at apply only in bezig', async () => {
+  test('the worker skips at apply in bezig and at the re-preview in voorbereiden', async () => {
     const skip = (id: number) => patch(claude, id, { state: 'overgeslagen', expect: { state: 'te_bevestigen' } })
-    const applying = planted('bezig', 'te_bevestigen')
-    expect((await skip(applying)).status).toBe(200)
-    const preparing = planted('voorbereiden', 'te_bevestigen')
-    await expectRefused(() => skip(preparing), SERVICE_SKIP, preparing)
+    expect((await skip(planted('bezig', 'te_bevestigen'))).status).toBe(200)
+    expect((await skip(planted('voorbereiden', 'te_bevestigen'))).status).toBe(200)
     const preview = planted('voorbereid', 'te_bevestigen')
     await expectRefused(() => skip(preview), FROZEN, preview)
+    const waiting = planted('aangevraagd', 'te_bevestigen')
+    await expectRefused(() => skip(waiting), SERVICE_SKIP, waiting)
     for (const status of ['aangevraagd', 'voorbereiden', 'voorbereid', 'bevestigd', 'bezig']) {
       const id = planted(status, 'overgeslagen')
       const res = await patch(claude, id, { state: 'te_bevestigen', expect: { state: 'overgeslagen' } })
       expect(refused(res)).toBe(true)
       expect(link(id).state).toBe('overgeslagen')
     }
+  })
+
+  test('the re-preview skips a now-unreachable site in voorbereiden', async () => {
+    const actie = actieIn('voorbereiden')
+    const id = plant('actie_site', { actie_id: actie, site_id: 2, state: 'te_bevestigen', voorstel: PREVIEW })
+    const res = await patch(claude, id, {
+      state: 'overgeslagen',
+      resultaat: 'onbereikbaar',
+      samenvatting: 'Niet bereikbaar bij de preview',
+      voorstel: null,
+      expect: { state: 'te_bevestigen' },
+    })
+    expect(res.status).toBe(200)
+    expect(link(id)).toMatchObject({ state: 'overgeslagen', resultaat: 'onbereikbaar', voorstel: null })
+    sqlite.query('UPDATE actie SET status = ? WHERE id = ?').run('voorbereid', actie)
+    const rows = (await admin('GET', '/api/rows/actie?sort=id')).body.rows as {
+      id: number
+      links: { sites: { id: number; available?: { buttons: unknown[] } }[] }
+    }[]
+    const item = rows.find((r) => r.id === actie)?.links.sites.find((i) => i.id === id)
+    expect(item?.available?.buttons ?? []).toEqual([])
+    await expectRefused(() => patch(admin, id, { state: 'te_bevestigen' }), NO_PREVIEW, id)
+  })
+
+  test('a person cannot move a link anywhere else in voorbereid, nor the worker apply moves in bezig', async () => {
+    const pending = planted('voorbereid', 'te_bevestigen')
+    await expectRefused(() => patch(admin, pending, { state: 'bezig' }), BUTTONS, pending)
+    const waiting = planted('bezig', 'wacht')
+    await expectRefused(
+      () => patch(claude, waiting, { state: 'te_bevestigen', expect: { state: 'wacht' } }),
+      CONFIRMED,
+      waiting,
+    )
   })
 
   test('the worker writes the preview while voorbereiden', async () => {

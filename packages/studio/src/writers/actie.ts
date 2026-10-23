@@ -46,7 +46,7 @@ function checkPersonTitel(values: Values, ctx: WriteContext): void {
 
 export const actieWriter: Writer = {
   create(values, ctx) {
-    if (values.status !== undefined && values.status !== 'aangevraagd') refuse('Een actie begint als aangevraagd.')
+    if (values.status !== undefined && values.status !== 'aangevraagd') refuse('Een opdracht begint als aangevraagd.')
     checkNotFuture(values.soort, values.gepland_op)
     checkPersonTitel(values, ctx)
     const label = soorten[values.soort as keyof typeof soorten] ?? 'Actie'

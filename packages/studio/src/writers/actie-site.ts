@@ -11,7 +11,8 @@ const NO_PREVIEW = 'Deze site heeft geen preview en kan niet terug.'
 const SKIPPED = 'Deze site is bewust overgeslagen en kan niet terug.'
 const SERVICE_SKIP = 'Een site met preview slaat de worker pas over bij het bijwerken.'
 const SERVICE_RESTORE = 'Alleen Stefan zet een overgeslagen site terug.'
-const FIXED_FIELDS = ['voorstel', 'site_id', 'actie_id']
+const SET_FIELDS = ['site_id', 'actie_id']
+const FROZEN_TEXTS = ['samenvatting', 'resultaat']
 const CONFIRMED_STATUSES = ['bevestigd', 'bezig', 'klaar', 'deels']
 
 const parentOf = (ctx: WriteContext, id: unknown): Values | null => (ctx.find('actie', id as number) as Values) ?? null
@@ -28,10 +29,11 @@ function closedMessage(parent: Values): string {
 
 const isSet = (value: unknown): boolean => value !== undefined && value !== null
 
-// A request takes sites only before the worker claims it; an expired preview (voorbereid_op set) is already claimed.
+// The set of sites is open only before the worker claims the request; an expired preview (voorbereid_op set) is claimed.
+const unclaimed = (parent: Values): boolean => parent.status === 'aangevraagd' && !isSet(parent.voorbereid_op)
+
 function checkCanJoin(parent: Values | null): void {
-  if (!parent) return
-  if (parent.status !== 'aangevraagd' || isSet(parent.voorbereid_op)) refuse(closedMessage(parent))
+  if (parent && !unclaimed(parent)) refuse(closedMessage(parent))
 }
 
 function checkUnique(ctx: WriteContext, actieId: unknown, siteId: unknown, exceptId?: number): void {
@@ -39,10 +41,12 @@ function checkUnique(ctx: WriteContext, actieId: unknown, siteId: unknown, excep
   if (ctx.exists('actie_site', { actie_id: actieId, site_id: siteId }, exceptId)) refuse(UNIQUE)
 }
 
+const changes = (values: Values, current: Values, field: string): boolean =>
+  Object.hasOwn(values, field) && values[field] !== current[field]
+
 function checkFields(values: Values, current: Values, parent: Values): void {
-  for (const field of FIXED_FIELDS) {
-    if (Object.hasOwn(values, field) && values[field] !== current[field]) refuse(closedMessage(parent))
-  }
+  if (!isOpen(parent) && changes(values, current, 'voorstel')) refuse(closedMessage(parent))
+  if (!unclaimed(parent) && SET_FIELDS.some((field) => changes(values, current, field))) refuse(closedMessage(parent))
 }
 
 const hasPreview = (voorstel: unknown): boolean =>
@@ -66,7 +70,8 @@ function checkServiceState(current: Values, to: unknown, parent: Values): void {
   const from = current.state
   if (from === 'overgeslagen' && to === 'te_bevestigen') refuse(SERVICE_RESTORE)
   if (parent.status === 'voorbereid') refuse(FROZEN)
-  if (from === 'te_bevestigen' && to === 'overgeslagen' && parent.status !== 'bezig') refuse(SERVICE_SKIP)
+  const skip = from === 'te_bevestigen' && to === 'overgeslagen'
+  if (skip && parent.status !== 'bezig' && parent.status !== 'voorbereiden') refuse(SERVICE_SKIP)
   if (!isOpen(parent) && (from === 'overgeslagen' || to === 'te_bevestigen')) refuse(closedMessage(parent))
 }
 
@@ -82,14 +87,8 @@ function checkChange(values: Values, current: Values, parent: Values, ctx: Write
       if (value !== current[field]) refuse(CONFIRMED)
     }
   }
-  if (!isOpen(parent)) checkFields(values, current, parent)
-  if (
-    parent.status === 'voorbereid' &&
-    Object.hasOwn(values, 'samenvatting') &&
-    values.samenvatting !== current.samenvatting
-  ) {
-    refuse(FROZEN)
-  }
+  checkFields(values, current, parent)
+  if (parent.status === 'voorbereid' && FROZEN_TEXTS.some((field) => changes(values, current, field))) refuse(FROZEN)
   checkState(current, values.state, parent, ctx)
 }
 
@@ -116,6 +115,6 @@ export const actieSiteWriter: Writer = {
 
   delete(ctx) {
     const parent = parentOf(ctx, (ctx.current as Values).actie_id)
-    if (parent && parent.status !== 'aangevraagd') refuse(closedMessage(parent))
+    checkCanJoin(parent)
   },
 }
