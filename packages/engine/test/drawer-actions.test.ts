@@ -239,7 +239,7 @@ describe('the write reply and the schema', () => {
 
   test('/schema serves live, detail and opens', async () => {
     const { sources } = (await editor('GET', '/api/schema')).body
-    expect(sources.member.lifecycle).toEqual({ column: 'stage', live: ['active'] })
+    expect(sources.member.lifecycle).toEqual({ buttons: true, column: 'stage', live: ['active'] })
     expect(sources.bundle.links.entries.detail).toBe('note')
     const opens = (name: string) => sources.member.actions.find((a: { name: string }) => a.name === name).opens
     expect([opens('settle'), opens('sweep'), opens('touch')]).toEqual([true, true, undefined])

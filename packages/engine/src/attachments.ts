@@ -1,7 +1,7 @@
 import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context, Hono } from 'hono'
-import { forbid, inScope, readable as readableSource, scopeOf } from './access'
+import { forbid, inScope, isPerson, readable as readableSource, scopeOf, serviceOnly } from './access'
 import type { AuthEnv } from './auth'
 import type { Actor, AttachmentsDecl, DatasetDecl } from './declare'
 import { attachment } from './engine-tables'
@@ -145,6 +145,12 @@ function checkWrite(store: Store, dataset: Declared, actor: Actor, uploadedBy?: 
   if (actor.role !== 'owner') return
   if (!dataset.attachments.owner_writable) forbid('An owner may not add files here')
   if (uploadedBy !== undefined && uploadedBy !== actor.id) forbid('An owner deletes only its own files')
+}
+
+function checkDeletable(dataset: Declared, actor: Actor): void {
+  if (dataset.attachments.deleted_by === 'person' && !isPerson(actor)) {
+    serviceOnly(`Only a person deletes the files of ${dataset.label}`)
+  }
 }
 
 function checkName(name: string | undefined): string {
@@ -300,6 +306,7 @@ function remove(store: Store, raw: string, actor: Actor) {
     .transaction(() => {
       const { file, dataset } = readable(store, raw, actor)
       checkWrite(store, dataset, actor, file.uploaded_by)
+      checkDeletable(dataset, actor)
       const now = new Date().toISOString()
       const batch = crypto.randomUUID()
       setDeleted(store, file, now, now, actor, batch)
@@ -417,6 +424,7 @@ export function undoAttachments(
     const dataset = file && declaredOf(store, file.entity, actor)
     if (!file || !dataset || !liveRecord(store, dataset, file.record_id, actor)) throw unknownAttachment()
     checkWrite(store, dataset, actor, file.uploaded_by)
+    checkDeletable(dataset, actor)
     if (file.deleted_at !== undo.expect) {
       throw new ApiError(409, 'changed_since', '"deleted_at" changed since', {
         dataset: attachment.name,
