@@ -2,12 +2,13 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows, update } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
 import { linkedDataset } from '../grid/Drawer'
 import { Grid, type OnScreen } from '../grid/Grid'
+import { type DrawerWrite, DrawerWriteContext } from '../grid/drawerWrite'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
@@ -18,7 +19,7 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, DateWindow, Model, ModelAction, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
+import type { Account, ApiError, DateWindow, Model, ModelAction, Opened, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -52,7 +53,7 @@ import { Board } from '../board/Board'
 import { writeDrop } from '../board/drop'
 import { placeWriter } from '../grid/drawer/place'
 import { Dashboard } from '../dashboard/Dashboard'
-import { QuickCreate } from '../dashboard/QuickCreate'
+import { askedOf, QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
 import { SchemaContext } from '../grid/drawer/context'
 import { AwayChip, SizeChips } from './SizeChips'
@@ -396,6 +397,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
   const live = useRef(store)
   live.current = store
+  const viewNow = useRef(view)
+  viewNow.current = view
   const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
@@ -414,10 +417,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const plan = model && view && !model.creates ? newRow(model, view, dated ? conditionDays : null, new Date(), scope ?? null) : null
   const target = model?.creates ? models[model.creates] : undefined
   const made = target ? madeFrom(target, served?.tables ?? [], dated ? conditionDays : null, space.status === 'ready' ? space.scope : null) : null
-  const addBlocked = target ? createBlocked(target, made, served?.writable[target.key] === true)
+  const addBlocked = target ? createBlocked(made, served?.writable[target.key] === true)
     : !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
   const add = () => {
-    if (target && made && !('missing' in made)) return void createThrough(target.key, made.fields)
+    if (target && made && !('missing' in made)) {
+      if (made.needs.length === 0) return void createThrough(target.key, made.fields)
+      const asked = askedOf(target, made, space.status === 'ready' ? space.scope : null)
+      return setQuick(Object.fromEntries(Object.entries(made.fields).filter(([key]) => !asked.includes(key))))
+    }
     if (!store || !model || !plan || 'missing' in plan) return
     if (plan.needs.length === 0) void store.create(plan.fields)
     else store.draft(plan.fields, plan.needs, plan.offers)
@@ -532,9 +539,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     } } })
   }
   // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
-  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
+  const finished = (batch: string, action: ModelAction) => {
     if (!view) return
-    const { batch } = await runAction(action.name, row.id, input)
     const entry = { batch: Promise.resolve(batch), model: view.model, id: null }
     history.push(entry)
     reloadView()
@@ -542,6 +548,63 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
     }
     notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
+  }
+  // A button the server marked is the ordinary transition write, expecting the state it was marked against.
+  const drawerWrite: DrawerWrite = {
+    // Read through refs: a re-read may land after the view moved on, and must not repaint a dead store or over a write in flight.
+    fresh: (of, row) => {
+      const current = live.current
+      if (of === viewNow.current?.model && current && !current.isPending(row.id)) current.replace(row)
+    },
+    press: async (of, id, available, to, again) => {
+      const onDone = () => void again().catch(() => undefined)
+      const column = models[of]?.lifecycle
+      if (!column) return
+      try {
+        const { batch } = await update(of, id, { [column]: to }, undefined, available.state === null ? undefined : { [column]: available.state })
+        if (batch) {
+          const entry = { batch: Promise.resolve(batch), model: of, id, refresh: onDone }
+          history.push(entry)
+          const undo = () => {
+            if (history.last() !== entry) return
+            void (live.current?.undo() ?? history.undo().then(
+              (undone) => (undone?.refresh ? undone.refresh() : reloadView()),
+              (error: ApiError) => notify({ message: undoText(error) }),
+            ))
+          }
+          notify({ message: t('buttonDone', { button: available.buttons.find((b) => b.to === to)?.label ?? to }), action: { label: t('undo'), run: undo } })
+        }
+      } catch (error) {
+        notify({ message: errorText((error as ApiError).code, (error as ApiError).message) })
+      }
+      onDone()
+    },
+  }
+  // What an action that opens its result asks the grid to open: the first record it created, else the one a single run acted on.
+  const opening = (action: ModelAction, created: Opened[], acted: Opened | null): Opened | null => (action.opens ? (created[0] ?? acted) : null)
+  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>): Promise<Opened | null> => {
+    if (!view) return null
+    try {
+      const done = await runAction(action.name, row.id, input)
+      finished(done.batch, action)
+      return opening(action, done.created, { dataset: view.model, id: row.id })
+    } catch (error) {
+      // The row moved out of the action's condition since the sheet loaded: read again, so the drawer stops offering it.
+      if ((error as ApiError).code === 'condition_not_met') reloadView()
+      throw error
+    }
+  }
+  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>): Promise<Opened | null> => {
+    if (!view) return null
+    try {
+      const done = await runSelection(action.name, ids, input)
+      finished(done.batch, action)
+      return opening(action, done.created, null)
+    } catch (error) {
+      // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
+      if (['unknown_record', 'condition_not_met'].includes((error as ApiError).code)) reloadView()
+      throw error
+    }
   }
 
   if (!served) {
@@ -557,6 +620,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   return (
     <DrawerSlot.Provider value={drawerSlot}>
     <SchemaContext.Provider value={served}>
+    <DrawerWriteContext.Provider value={drawerWrite}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} counts={counts} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
@@ -575,7 +639,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
+          onAdd={target ? add : quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -616,7 +680,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
               onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={showAway ? result.away : []}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
@@ -624,7 +688,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : grid ? (
             <Grid model={model} view={view} title={title} store={store} writable={writable} layout={layout} onLayout={setLayout} query={query}
               emptyTitle={t(conditioned ? 'noRowsMatch' : conditionDays ? 'noRowsInWindow' : 'noRows')} emptyHint={conditionDays ? formatWindow(conditionDays) : undefined} snapshot={snapshot} onShown={setShown}
-              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onNotice={(message) => notify({ message })}
+              models={models} scope={scope ?? null} spaceModel={served?.space?.model ?? null} onAction={act} onSelection={actOnSelection} onNotice={(message) => notify({ message })}
               cut={result.status === 'ready' ? cutAt(result.rows, result.total) : null} links={links} recordLink={model ? linkedDataset(role, model) : undefined} reloads={reloads} />
           ) : (
             <Sheet hasView={view !== undefined} result={result} />
@@ -644,9 +708,14 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         </div>
       </main>
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
-      {quick && model && (
-        <QuickCreate label={newLabel(model)} model={model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
-          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreated={() => { setQuick(null); reloadView() }} />
+      {quick && (target ?? model) && (
+        <QuickCreate label={newLabel(target ?? model)} model={(target ?? model) as Model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
+          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)}
+          onCreated={(batch) => {
+            if (target && batch) history.push({ batch: Promise.resolve(batch), model: target.key, id: null })
+            setQuick(null)
+            reloadView()
+          }} />
       )}
       {adding && (
         <NewViewDialog source={adding.table.label} type={adding.type}
@@ -654,6 +723,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </DrawerWriteContext.Provider>
     </SchemaContext.Provider>
     </DrawerSlot.Provider>
   )
@@ -667,12 +737,10 @@ function monthSpan(month: DateWindow): DateWindow {
 }
 
 
-/** Why a query's `+ Nieuw` is off: its dataset is read-only, or a row there still needs what only a pick gives. */
-function createBlocked(target: Model, made: NewRow | null, writable: boolean): string | null {
+/** Why a query's `+ Nieuw` is off: its dataset is read-only, or the dataset has a required column nothing can fill. */
+function createBlocked(made: NewRow | null, writable: boolean): string | null {
   if (!writable || !made) return t('readOnly')
-  if ('missing' in made) return t('needsFields', { fields: made.missing.join(', ') })
-  const asked = made.needs.filter((key) => key !== 'title').map((key) => target.fields[key]?.label ?? key)
-  return asked.length > 0 ? t('pickFirst', { fields: asked.join(', ') }) : null
+  return 'missing' in made ? t('needsFields', { fields: made.missing.join(', ') }) : null
 }
 
 function Sheet({ hasView, result }: { hasView: boolean; result: Rows }) {

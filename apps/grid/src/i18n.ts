@@ -78,7 +78,6 @@ const strings = {
   densityNormal: 'Normaal',
   densityRoomy: 'Ruim',
   needsFields: 'Heeft {fields} nodig: maak het aan vanuit het record',
-  pickFirst: 'Kies eerst {fields}',
   export: 'Exporteren',
   shareMenu: 'Exporteren / delen',
   excel: 'Excel',
@@ -271,6 +270,16 @@ const strings = {
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
+  buttonDone: '{button} gedaan.',
+  liveBusy: 'Bezig…',
+  selectionMisfit: 'Past niet op {n} rijen',
+  recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
+  conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
+  selectedCount: '{n} geselecteerd',
+  selectionClear: 'Selectie wissen',
+  selectionMax: 'Maximaal {max} tegelijk',
+  selectAll: 'Alle rijen selecteren',
+  selectRow: '{title} selecteren',
   addViewTo: 'Weergave toevoegen aan {model}',
   moreFor: 'Meer voor {model}',
   renameModel: 'Naam wijzigen',
@@ -424,6 +433,8 @@ export function setStrings(given: Record<string, unknown> | undefined): void {
 const ENGINE_CODES: Record<string, StringKey> = {
   transition_not_allowed: 'transitionNotAllowed',
   transition_lost: 'transitionLost',
+  unknown_record: 'recordGoneRun',
+  condition_not_met: 'conditionNotMet',
 }
 
 /** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */

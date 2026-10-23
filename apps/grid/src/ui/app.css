@@ -1668,7 +1668,7 @@
   left: 0;
   z-index: 1;
   box-sizing: border-box;
-  width: 44px;
+  width: var(--nv-num-width, 44px);
   padding: 0 10px 0 0;
   color: var(--color-fg-subtle);
   font: 11.5px var(--font-mono);
@@ -1685,7 +1685,7 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-first {
-  left: 44px;
+  left: var(--nv-num-width, 44px);
   padding-left: 12px;
 }
 
@@ -3435,6 +3435,61 @@
 
 .nv-action__input {
   position: relative;
+}
+
+/* The ticked rows' bar, one row above the sheet: the count, each action with its inputs inline, and the way out. */
+.nv-selection {
+  box-sizing: border-box;
+  min-height: 45px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  font-size: 13px;
+}
+
+.nv-selection__count {
+  font-weight: 600;
+}
+
+.nv-selection .nv-action {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.nv-selection .nv-action__input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#root .nv-selection .nv-fb__text {
+  width: 180px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+}
+
+#root .nv-selection__max {
+  color: var(--color-danger-fg);
+}
+
+.nv-selection > .nv-button {
+  margin-left: auto;
+}
+
+/* The box sits at the cell's left edge, whatever the number's width: the cell is sticky, so it holds the box. */
+.nv-grid:not(.nv-mx) .nv-num input[type="checkbox"] {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  margin: 0;
+  transform: translateY(-50%);
 }
 
 #root .nv-action__refused {
@@ -5548,6 +5603,21 @@ table.nv-cal--month .nv-cal__event:hover {
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The title opens its record: text first, a button only in how it answers. */
+.nv-list__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-list__open:hover {
+  text-decoration: underline;
 }
 
 .nv-list__cell {

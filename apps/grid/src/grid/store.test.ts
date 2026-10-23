@@ -179,6 +179,20 @@ describe('undo and redo, by batch on the server', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
+  it('has a write pending for a record from its paint until the server answers, and for no other', async () => {
+    const { api, store } = setup()
+    const answer = deferred<Saved>()
+    api.update.mockReturnValueOnce(answer.promise)
+
+    const written = store.apply({ id: 103, field: 'kind', value: 'show' } as never)
+    expect(store.isPending(103)).toBe(true)
+    expect(store.isPending(102)).toBe(false)
+
+    answer.resolve(ok(show, 'b-edit'))
+    await written
+    expect(store.isPending(103)).toBe(false)
+  })
+
   it('a redo answered not_undoable (an undone invite) drops the redo entry and says redo cannot be done here', async () => {
     const { api, store } = setup()
     api.update.mockResolvedValueOnce(ok(show, 'b-edit'))

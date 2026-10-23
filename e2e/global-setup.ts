@@ -1,5 +1,16 @@
 import { chromium } from '@playwright/test'
-import { ACCOUNTS, addFixtureViews, createAccount, FICHE, type Instance, STUDIO, signIn, state, THEATRE } from './auth'
+import {
+  ACCOUNTS,
+  addFixtureViews,
+  createAccount,
+  FICHE,
+  type Instance,
+  SELECTION,
+  STUDIO,
+  signIn,
+  state,
+  THEATRE,
+} from './auth'
 
 export default async function globalSetup(): Promise<void> {
   const browser = await chromium.launch()
@@ -26,6 +37,10 @@ export default async function globalSetup(): Promise<void> {
       createAccount(STUDIO, account.email, account.role)
       await signedIn(name, STUDIO, account)
     }
+    createAccount(SELECTION, ACCOUNTS.selection.email, ACCOUNTS.selection.role)
+    await signedIn('selection-editor', SELECTION, ACCOUNTS.selection)
+    createAccount(SELECTION, ACCOUNTS.selectionAdmin.email, ACCOUNTS.selectionAdmin.role)
+    await signedIn('selection-admin', SELECTION, ACCOUNTS.selectionAdmin)
   } finally {
     await browser.close()
   }

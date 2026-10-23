@@ -1,9 +1,9 @@
 import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
-import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
+import { type Attachment, attachmentsOf, fileUrl, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
-import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, Row, View } from '../types'
+import type { Account, ApiError, Model, ModelAction, Row, View } from '../types'
 import { iconNamed } from '../ui/icons'
 import { toneColor } from '../ui/tone'
 import { useTones } from '../ui/useTones'
@@ -19,10 +19,12 @@ import { SidePanel } from '../ui/SidePanel'
 import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
-import { RelationPicker } from './cells/RelationPicker'
+import { ActionInputs } from './ActionInputs'
+import { DrawerButtons } from './DrawerButtons'
+import { useLive } from './useLive'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
-export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<void>
+export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<unknown>
 
 interface Props {
   row: Row
@@ -38,6 +40,8 @@ interface Props {
   /** The model's declared actions, each a button with a picker per input. */
   actions?: ModelAction[]
   onAction?: RunAction
+  /** Re-reads the record: a drawer given it shows the buttons the server marked, on the record and on its link items. */
+  onDone?: () => Promise<Row | null>
   /** False leaves focus where it was: the matrix keeps typing in its cell. */
   focusOnOpen?: boolean
   /** The dataset whose record link the drawer copies and renews; an administrator's. */
@@ -100,7 +104,7 @@ const headKey = (nav: Props['nav'], row: Row) => (event: KeyboardEvent<HTMLEleme
 }
 
 /** The head line: what kind of record this is · its dataset; where it is in the view; the steps to its neighbours. */
-function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; icon?: LucideIcon }) {
+function Head({ row, model, nav, busy, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; busy?: boolean; icon?: LucideIcon }) {
   const kind = model ? kindOf(model) : null
   const value = kind ? String(row.fields[kind] ?? '') : ''
   const option = kind && model?.fields[kind]?.options?.[value]
@@ -114,6 +118,7 @@ function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: 
         {option && model && ' · '}
         {model?.label}
       </span>
+      {busy && <span className="nv-dw-head__busy" role="status"><i aria-hidden="true" />{t('liveBusy')}</span>}
       {nav && <span className="nv-dw-head__pos">{at >= 0 ? t('position', { n: at + 1, m: nav.ids.length }) : '–'}</span>}
       {nav && (
         <>
@@ -163,9 +168,10 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, onDone, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
+  const { busy } = useLive(onDone ? model : undefined, row, onDone ?? (() => Promise.resolve(null)))
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
   const cal = view?.calendar ?? (model ? schema?.tables.find((table) => table.model === model.key && table.calendar)?.calendar : undefined)
   const dateField = view?.date_field ?? schema?.tables.find((table) => table.model === model?.key)?.date_field ?? null
@@ -187,7 +193,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
   }
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
-      head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
+      head={<Head row={row} model={model} nav={nav} busy={busy} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
       {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
@@ -196,6 +202,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
         </p>
       )}
       {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
+      {onDone && model && row.id > 0 && <DrawerButtons model={model.key} id={row.id} available={row.available} onDone={onDone} />}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
@@ -203,7 +210,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
         : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
       {links.map(({ key, link, column }) => (
         <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
-          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} />
+          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
       ))}
       {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
@@ -211,7 +218,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
+      {onAction && actions.filter((action) => !row.available || row.available.actions.includes(action.name)).map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
       </div>
     </SidePanel>
@@ -317,86 +324,5 @@ function Attachments({ files: { dataset, kinds, max_mb, writable, version }, id,
       </div>}
       {refused && <p className="nv-action__refused" role="alert">{refused}</p>}
     </section>
-  )
-}
-
-type Sending = { status: 'idle' } | { status: 'sent' } | { status: 'refused'; message: string }
-
-type Typed = Exclude<ActionInput, { relation: string }>
-
-/** As the engine checks it, so the run button waits for a value it would take. */
-function typedValid(input: Typed, value: unknown): boolean {
-  if (value === undefined || value === '') return input.required === false
-  if (input.type !== 'integer') return true
-  const n = value as number
-  return Number.isSafeInteger(n) && (input.min === undefined || n >= input.min) && (input.max === undefined || n <= input.max)
-}
-
-function TypedInput({ input, value, onChange }: { input: Typed; value: unknown; onChange: (value: unknown) => void }) {
-  if (input.type === 'boolean') {
-    return (
-      <label className="nv-action__input nv-action__check">
-        <input type="checkbox" checked={value === true} onChange={(event) => onChange(event.target.checked)} />
-        {input.label}
-      </label>
-    )
-  }
-  const kind = input.type === 'integer' ? 'number' : input.type
-  const read = (raw: string): unknown => (raw === '' ? undefined : input.type === 'integer' ? Number(raw) : raw)
-  return (
-    <label className="nv-action__input">
-      <span>{input.label}</span>
-      <input className="nv-fb__text" type={kind} aria-label={input.label} min={input.min} max={input.max} maxLength={input.type === 'text' ? 500 : undefined}
-        value={value === undefined ? '' : String(value)} onChange={(event) => onChange(read(event.target.value))} />
-    </label>
-  )
-}
-
-/** A required yes/no starts as no, as its box shows; an optional one stays out until ticked. */
-const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
-  Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
-
-/** Keyed by its record, so another row starts with nothing picked. */
-function Action({ action, record, onRun }: { action: ModelAction; record: Record<string, unknown>; onRun: (input: Record<string, unknown>) => Promise<void> }) {
-  const inputs = Object.entries(action.input)
-  const [picked, setPicked] = useState<Record<string, Row>>({})
-  const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
-  const [open, setOpen] = useState<string | null>(null)
-  const [sending, setSending] = useState<Sending>({ status: 'idle' })
-  const valueOf = ([key, input]: [string, ActionInput]) => ('relation' in input ? picked[key]?.id : typed[key])
-  const ready = inputs.every((entry) => {
-    const [, input] = entry
-    return 'relation' in input ? picked[entry[0]] !== undefined : typedValid(input, typed[entry[0]])
-  })
-
-  const run = () => {
-    setSending({ status: 'sent' })
-    const given = inputs.filter((entry) => valueOf(entry) !== undefined).map((entry) => [entry[0], valueOf(entry)])
-    onRun(Object.fromEntries(given)).then(
-      () => setSending({ status: 'idle' }),
-      (error: ApiError) => setSending({ status: 'refused', message: errorText(error.code, error.message) }),
-    )
-  }
-
-  return (
-    <div className="nv-action" role="group" aria-label={action.label}>
-      {inputs.map(([key, input]) => 'relation' in input ? (
-        <div key={key} className="nv-action__input">
-          <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
-          {open === key && (
-            <RelationPicker model={input.relation} label={input.label} onCancel={() => setOpen(null)}
-              candidates={input.options_from ? () => optionsFrom(input.options_from as OptionsFrom, record) : undefined}
-              onPick={(record) => {
-                setPicked((was) => ({ ...was, [key]: record }))
-                setOpen(null)
-              }} />
-          )}
-        </div>
-      ) : (
-        <TypedInput key={key} input={input} value={typed[key]} onChange={(value) => setTyped((was) => ({ ...was, [key]: value }))} />
-      ))}
-      <Button className="nv-button nv-button--primary nv-button--sm" isDisabled={!ready || sending.status === 'sent'} onPress={run}>{action.label}</Button>
-      {sending.status === 'refused' && <p className="nv-action__refused" role="alert">{sending.message}</p>}
-    </div>
   )
 }

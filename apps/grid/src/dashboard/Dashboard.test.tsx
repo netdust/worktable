@@ -2,9 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, SavedView } from '../types'
 
-const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), records: vi.fn() }))
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), records: vi.fn(), rowOf: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
 vi.mock('../api', () => api)
 const { Dashboard } = await import('./Dashboard')
+const { DrawerWriteContext } = await import('../grid/drawerWrite')
 
 const view = (id: number, label: string, model: string, extra: Partial<SavedView> = {}): SavedView =>
   ({
@@ -160,6 +161,41 @@ describe('a list tile', () => {
     await act(async () => fireEvent.click(done))
     expect((await screen.findByRole('alert')).textContent).toContain('Ongeldige status.')
     expect(api.rows).toHaveBeenCalledTimes(1)
+  })
+
+  describe('a row opening its record', () => {
+    const marked = (...buttons: [string, string][]) => ({ state: 'open', buttons: buttons.map(([to, label]) => ({ to, label })), actions: [] })
+    const withButtons = { ...row(1, 'Rider versturen', 5), available: marked(['gedaan', 'Afronden']) }
+    const write = { press: vi.fn(() => Promise.resolve()), fresh: vi.fn() }
+    const showWith = (models: Record<string, Model>) =>
+      render(<DrawerWriteContext.Provider value={write}>
+        <Dashboard dashboard={dashboard([list])} views={[conflicten, lijst]} models={models} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />
+      </DrawerWriteContext.Provider>)
+
+    it('over a dataset opens the record’s drawer, with its buttons', async () => {
+      api.rows.mockResolvedValue({ rows: [withButtons], total: 1 })
+      showWith(models)
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Rider versturen' }))
+      const drawer = screen.getByRole('complementary', { name: 'Rider versturen' })
+      expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+    })
+
+    it('over a query does not', async () => {
+      api.rows.mockResolvedValue({ rows: [withButtons], total: 1 })
+      showWith({ ...models, werklijst: { ...werklijst, query: true } })
+      await screen.findByText('Rider versturen')
+      expect(screen.queryByRole('button', { name: 'Open Rider versturen' })).toBeNull()
+    })
+
+    it('leaves the tile’s own set button working, and it does not open the drawer', async () => {
+      api.rows.mockResolvedValue({ rows: [withButtons], total: 1 })
+      api.update.mockResolvedValue({})
+      showWith(models)
+      const done = await screen.findByRole('button', { name: 'Gedaan' })
+      await act(async () => fireEvent.click(done))
+      expect(api.update).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('complementary')).toBeNull()
+    })
   })
 
   it('says Geen rijen over an empty view', async () => {

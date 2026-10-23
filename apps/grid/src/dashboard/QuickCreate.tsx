@@ -63,7 +63,7 @@ function FieldInput({ name, field, value, onChange, autoFocus }: {
  * What the dialog asks, each once: the title where it is required, every required column the writer takes,
  * and the chosen space. A value `+ New` fills in (a day, a first option, the space) shows as the field's start.
  */
-function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
+export function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
   if ('missing' in made) return []
   const required = Object.entries(model.fields)
     .filter(([key, field]) => field.required && !field.defaulted && !field.readonly && key !== model.title_field)
@@ -79,7 +79,9 @@ export function QuickCreate({ label, model, tables, scope, window = null, preset
   window?: DateWindow | null
   /** Values the place it opens from sets (a board column's option): not asked, always sent. */
   preset?: Record<string, unknown>
-  onClose: () => void; onCreated: () => void
+  onClose: () => void
+  /** Told the create's batch, for a place that keeps its own undo. */
+  onCreated: (batch: string | null) => void
 }) {
   const made = madeFrom(model, tables, window, scope)
   const titleField: Field = { type: 'text', label: model.title_label, required: true, fact: false }
@@ -93,8 +95,8 @@ export function QuickCreate({ label, model, tables, scope, window = null, preset
     setBusy(true)
     setRefusal(null)
     create(model.key, { ...values, ...preset }).then(
-      () => {
-        onCreated()
+      ({ batch }) => {
+        onCreated(batch)
         onClose()
       },
       (error: ApiError) => {

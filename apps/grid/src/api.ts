@@ -25,7 +25,8 @@ function toApiError(error: unknown): ApiError {
     const column = 'column' in error && typeof error.column === 'string' ? { column: error.column } : {}
     const key = 'key' in error && typeof error.key === 'string' ? { key: error.key } : {}
     const dataset = 'dataset' in error && typeof error.dataset === 'string' ? { dataset: error.dataset } : {}
-    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset }
+    const status = 'status' in error && typeof error.status === 'number' ? { status: error.status } : {}
+    return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset, ...status }
   }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
@@ -33,7 +34,7 @@ function toApiError(error: unknown): ApiError {
 /** The engine answers a refusal as `{code, message}`; anything else is unknown, with the status as its message. */
 async function refusal(response: Response): Promise<ApiError> {
   const body: unknown = await response.json().catch(() => null)
-  return toApiError(body ?? `${response.status} ${response.statusText}`.trim())
+  return { ...toApiError(body ?? `${response.status} ${response.statusText}`.trim()), status: response.status }
 }
 
 let unauthenticated = () => {}
@@ -330,6 +331,13 @@ export async function undoBatch(batch: string): Promise<string> {
 /** Runs a dataset's declared action on one record, in one batch. */
 export async function runAction(name: string, id: number, input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
   const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[]; notices?: string[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })
+  heard(reply)
+  return { batch: reply.batch_id, created: reply.created }
+}
+
+/** Runs a selection action once on every id, in one batch. */
+export async function runSelection(name: string, ids: number[], input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
+  const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[]; notices?: string[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { ids, input })
   heard(reply)
   return { batch: reply.batch_id, created: reply.created }
 }

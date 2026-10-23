@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, type SQL, 
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
+import { type Available, declaresMarks, markOf } from './available'
 import { POSITION } from './ddl'
 import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
 import { filterKeys, filterWhere } from './filter'
@@ -196,13 +197,20 @@ export function matrixOf(domain: Domain, source: Source): { join: DatasetDecl; m
   return join?.matrix ? { join, matrix: join.matrix } : null
 }
 
-// The live rows of `dataset` whose `key` is one of `ids`, in the caller's scope, read in chunks.
-function pointingAt(db: BunSQLiteDatabase, dataset: DatasetDecl, key: string, ids: number[], scope: Scope): Raw[] {
+// The live rows of `dataset` whose `key` is one of `ids`, in the caller's scope, read in chunks with `select`.
+function pointingAt(
+  db: BunSQLiteDatabase,
+  dataset: DatasetDecl,
+  key: string,
+  ids: number[],
+  scope: Scope,
+  select: Record<string, SQLiteColumn | SQL>,
+): Raw[] {
   const table = tableOf(dataset)
   const raws: Raw[] = []
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = db
-      .select()
+      .select(select)
       .from(table)
       .where(
         and(
@@ -225,7 +233,7 @@ export function cellsOf(
   downIds: number[],
   scope: Scope,
 ): Map<number, EngineRow[]> {
-  const raws = pointingAt(db, join, matrix.down, downIds, scope)
+  const raws = pointingAt(db, join, matrix.down, downIds, scope, getTableColumns(tableOf(join)))
   const cells = new Map<number, EngineRow[]>(downIds.map((id) => [id, []]))
   withLookups(db, domain, join, raws).forEach((row, i) => {
     cells.get((raws[i] as Raw)[matrix.down] as number)?.push(row)
@@ -239,10 +247,18 @@ export interface LinkRow {
   title: string
   state: string | null
   places?: number
+  detail?: string | null
+  available?: Available
 }
 
-// Only these leave: no other column of the link row or of its target. `places` only when `count` is served.
-function linkOf(row: EngineRow, link: LinkDecl, count: string | undefined): LinkRow {
+interface Served {
+  count?: string
+  detail?: string
+}
+
+// Only these leave: no other column of the link row or of its target. `places` and `detail` only when served.
+function linkOf(row: EngineRow, link: LinkDecl, served: Served, mark: { available?: Available }): LinkRow {
+  const { count, detail } = served
   const target = row[link.target]
   const state = link.state === undefined ? null : row[link.state]
   const places = count === undefined ? undefined : row[count]
@@ -252,13 +268,21 @@ function linkOf(row: EngineRow, link: LinkDecl, count: string | undefined): Link
     title: row.lookups[link.target]?.title ?? row.title,
     state: typeof state === 'string' ? state : null,
     ...(count !== undefined && { places: Number.isInteger(places) && (places as number) > 0 ? (places as number) : 1 }),
+    ...(detail !== undefined && { detail: typeof row[detail] === 'string' ? (row[detail] as string) : null }),
+    ...mark,
   }
 }
 
-// The count column, served to an owner only when owner_visible, as a lookup is.
-function servedCount(link: LinkDecl, linked: DatasetDecl, scope: Scope): string | undefined {
-  if (link.count === undefined) return undefined
-  return scope === 'all' || linked.columns[link.count]?.owner_visible === true ? link.count : undefined
+// A link column, served to an owner only when owner_visible, as a lookup is.
+export function servedColumn(column: string | undefined, linked: DatasetDecl, scope: Scope): string | undefined {
+  if (column === undefined) return undefined
+  return scope === 'all' || linked.columns[column]?.owner_visible === true ? column : undefined
+}
+
+/** The columns a link read selects: the lookups too only where the link dataset's marks may judge a condition on them. */
+export function linkSelect(domain: Domain, linked: DatasetDecl, scope: Scope): Record<string, SQLiteColumn | SQL> {
+  const table = getTableColumns(tableOf(linked))
+  return declaresMarks(domain, linked) ? { ...table, ...lookupSelect(linked, scope) } : table
 }
 
 // Read through the caller's scope on the link dataset; a link dataset the caller cannot read is left out.
@@ -275,10 +299,12 @@ export function linksOf(
     if (!linked || !readable(actor, linked)) continue
     for (const id of ids) (links.get(id) as Record<string, LinkRow[]>)[name] = []
     const scope = scopeOf(actor, linked)
-    const count = servedCount(link, linked, scope)
-    const raws = pointingAt(db, linked, link.key, ids, scope)
+    const served = { count: servedColumn(link.count, linked, scope), detail: servedColumn(link.detail, linked, scope) }
+    const select = linkSelect(domain, linked, scope)
+    const raws = pointingAt(db, linked, link.key, ids, scope, select)
     withLookups(db, domain, linked, raws).forEach((row, i) => {
-      links.get((raws[i] as Raw)[link.key] as number)?.[name]?.push(linkOf(row, link, count))
+      const mark = markOf(domain, linked, row, actor)
+      links.get((raws[i] as Raw)[link.key] as number)?.[name]?.push(linkOf(row, link, served, mark))
     })
   }
   return links

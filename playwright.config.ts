@@ -63,5 +63,21 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
     },
+    {
+      // The engine's own selection fixture, another instance: its cookie name keeps its session apart on 127.0.0.1.
+      command:
+        'bun packages/engine/src/serve.ts --domain ./packages/engine/test/fixtures/selection-domain.ts --db e2e/.tmp/selection.db --port 4314 --fresh' +
+        ' --outbox e2e/.tmp/outbox-selection --app-url http://127.0.0.1:5177 --cookie-name wt_session_selection_e2e',
+      wait: { stdout: /engine listening/ },
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'cd apps/grid && bunx vite --port 5177 --strictPort --host 127.0.0.1',
+      env: { ENGINE_URL: 'http://127.0.0.1:4314' },
+      wait: { stdout: /127\.0\.0\.1:5177/ },
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
   ],
 })

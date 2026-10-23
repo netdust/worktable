@@ -21,6 +21,12 @@ export const STUDIO = {
   outbox: 'e2e/.tmp/outbox-studio',
   domain: '@worktable/studio',
 }
+export const SELECTION = {
+  app: 'http://127.0.0.1:5177',
+  db: 'e2e/.tmp/selection.db',
+  outbox: 'e2e/.tmp/outbox-selection',
+  domain: './packages/engine/test/fixtures/selection-domain.ts',
+}
 export type Instance = typeof THEATRE
 
 export const ACCOUNTS = {
@@ -31,6 +37,9 @@ export const ACCOUNTS = {
   fiche: { email: 'redactie@e2e.test', role: 'editor' },
   studioAdmin: { email: 'beheer@studio.e2e.test', role: 'administrator' },
   studioEditor: { email: 'claude@studio.e2e.test', role: 'editor' },
+  selection: { email: 'selectie@e2e.test', role: 'editor' },
+  // The outside process of the drawer-actions flows: moves a record's state while the editor's drawer is open.
+  selectionAdmin: { email: 'selectie-beheer@e2e.test', role: 'administrator' },
 }
 
 export const state = (name: string) => `e2e/.tmp/state/${name}.json`
