@@ -563,6 +563,14 @@ describe('writes', () => {
     await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual(said)
   })
 
+  it('does not call a failure after the reply a lost connection', async () => {
+    fetcher.mockResolvedValue({ ok: true, status: 200, json: () => Promise.reject(new TypeError('x is not iterable')) } as unknown as Response)
+    forgetSchema()
+    await expect(schema()).rejects.toEqual({ code: 'unknown', message: 'x is not iterable' })
+    fetcher.mockResolvedValue({ ok: true, status: 200, json: () => Promise.reject(new TypeError('y is not iterable')) } as unknown as Response)
+    await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual({ code: 'unknown', message: 'y is not iterable' })
+  })
+
   it('answers a refused upload as the engine said it', async () => {
     fetcher.mockImplementation(async () => json({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' }, 415))
     await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual({ code: 'bad_file_type', message: 'Only pdf, jpeg, png and webp files are taken' , status: 415 })

@@ -29,8 +29,6 @@ function toApiError(error: unknown): ApiError {
     const status = 'status' in error && typeof error.status === 'number' ? { status: error.status } : {}
     return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset, ...status }
   }
-  // A fetch that cannot reach the server rejects with a TypeError, in the browser's English.
-  if (error instanceof TypeError) return { code: 'unknown', message: t('noConnection') }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
 
@@ -65,12 +63,21 @@ function heard(reply: Record<string, unknown>): void {
   if (notices.length > 0) noticed(notices)
 }
 
+/** A fetch that cannot reach the server rejects in the browser's English; only that call says so in Dutch. */
+async function reach(call: () => Promise<Response>): Promise<Response> {
+  try {
+    return await call()
+  } catch {
+    throw { code: 'unknown', message: t('noConnection') } satisfies ApiError
+  }
+}
+
 /** `authorization` replaces the session cookie's say for this one request, such as a person's link. */
 async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>, authorization?: string): Promise<T> {
   try {
     const body = data === undefined ? undefined : JSON.stringify(data)
     const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(authorization ? { Authorization: authorization } : {}) }
-    const response = await fetch(endpoint(path, query), { method, body, headers: Object.keys(headers).length > 0 ? headers : undefined })
+    const response = await reach(() => fetch(endpoint(path, query), { method, body, headers: Object.keys(headers).length > 0 ? headers : undefined }))
     if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     return (await response.json()) as T
@@ -157,7 +164,7 @@ export async function attachmentsOf(model: string, id: number): Promise<Attachme
 export async function uploadAttachment(model: string, id: number, kind: string, file: File): Promise<{ attachment: Attachment; batch: string }> {
   try {
     const url = endpoint(attachmentsPath(model, id), { kind, name: file.name })
-    const response = await fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' } })
+    const response = await reach(() => fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' } }))
     if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     const { revision, ...made } = (await response.json()) as Omit<Attachment, 'own' | 'created_at'> & { revision: { batch_id: string } }
