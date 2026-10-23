@@ -99,6 +99,15 @@ describe('selection actions on site', () => {
     expect(linksOf(before + 2).map((l) => l.state)).toEqual(['wacht', 'wacht'])
   })
 
+  test('every site out of the registry: refused, nothing created', async () => {
+    const count = () => [rows('SELECT id FROM actie').length, rows('SELECT id FROM actie_site').length]
+    const before = count()
+    const res = await run(admin, 'gezondheidscheck', [5])
+    expect(res.status).toBe(422)
+    expect(JSON.stringify(res.body)).toContain('Geen van deze sites staat nog in de registry.')
+    expect(count()).toEqual(before)
+  })
+
   test('a service can start a request on ids', async () => {
     const before = maxActie()
     const res = await run(claude, 'smoketest', [2, 3])
