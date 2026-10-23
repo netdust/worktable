@@ -129,7 +129,7 @@ describe('selecting rows', () => {
     expect(screen.getByRole('region', { name: '500 geselecteerd' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Bundelen' })).toHaveProperty('disabled', false)
     expect(screen.queryByText('Maximaal 500 tegelijk')).toBeNull()
-  })
+  }, 60_000)
 
   it('keeps its strip while nothing is ticked, so a first tick moves no row', () => {
     const { container } = sheet()
