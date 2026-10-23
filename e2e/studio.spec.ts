@@ -782,25 +782,81 @@ test.describe('studio, the toolbar at 1440', () => {
   })
 })
 
-test.describe('studio, row lines at 150%', () => {
-  test.use({ deviceScaleFactor: 1.5 })
+for (const [scale, tag] of [
+  [1.25, '125'],
+  [1.5, '150'],
+] as const)
+  test.describe(`studio, row lines at ${tag}%`, () => {
+    test.use({ deviceScaleFactor: scale })
 
-  test('row-lines-at-150 @e2e: a table row’s separator is the row-line token, stronger than the subtle border', async ({
+    test(`row-lines-at-${tag} @e2e: a table row’s separator is the row-line token, stronger than the subtle border`, async ({
+      page,
+    }) => {
+      await open(page, 'Sites', 'Sites')
+      const [line, row, subtle] = await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement)
+        const cell = document.querySelector('.nv-td') as HTMLElement
+        return [
+          cell && getComputedStyle(cell).borderBottomColor,
+          root.getPropertyValue('--color-border-row'),
+          root.getPropertyValue('--color-border-subtle'),
+        ]
+      })
+      expect(line).toBe('rgb(208, 214, 221)')
+      expect(row.trim()).toBe('#d0d6dd')
+      expect(row.trim()).not.toBe(subtle.trim())
+      await shot(page, `rijlijnen-${tag}`)
+    })
+  })
+
+test.describe('studio-polish, what a person reads', () => {
+  test('board-groups-only @e2e: Opdrachten per status offers no lane + and no drag hints, and a card still opens', async ({
     page,
   }) => {
+    await open(page, 'Opdrachten per status', 'Opdrachten')
+    await expect(page.locator('section.nv-board__column').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Nieuw in/ })).toHaveCount(0)
+    await expect(page.locator('footer.nv-foot > span')).toHaveText(['↑↓←→ bewegen', '↵ openen', '⌘Z ongedaan maken'])
+    await shot(page, 'opdrachten-per-status')
+    await card(page, 1).click()
+    await expect(page.getByRole('complementary', { name: 'Bijwerken · 2 sites' })).toBeVisible()
+  })
+
+  test('drawer-reads-right @e2e: Bevestigen is the filled button beside a quiet Annuleren, the live mark says Volgt live, and a site’s actions sit at its head', async ({
+    page,
+  }) => {
+    const api = page.request
+    const { actie } = await preview(api, [3])
+    try {
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
+      await expect(drawer.getByRole('button', { name: 'Annuleren' })).toHaveClass(/nv-button--secondary/)
+      await expect(drawer.getByText('Volgt live')).toBeVisible()
+      await expect(drawer.getByText('Bezig…')).toHaveCount(0)
+      await shot(page, 'opdracht-drawer-bevestigen')
+
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'voorbeeld-site')
+      for (const action of ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien'])
+        await expect(site.getByRole('group', { name: action })).toBeInViewport()
+      await shot(page, 'site-drawer-acties-boven')
+    } finally {
+      await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
+    }
+  })
+
+  test('title-pill-worst-first @e2e: Sites shows Storing before Let op, each with its count', async ({ page }) => {
+    const api = page.request
     await open(page, 'Sites', 'Sites')
-    const [line, row, subtle] = await page.evaluate(() => {
-      const root = getComputedStyle(document.documentElement)
-      const cell = document.querySelector('.nv-td') as HTMLElement
-      return [
-        cell && getComputedStyle(cell).borderBottomColor,
-        root.getPropertyValue('--color-border-row'),
-        root.getPropertyValue('--color-border-subtle'),
-      ]
-    })
-    expect(line).toBe('rgb(208, 214, 221)')
-    expect(row.trim()).toBe('#d0d6dd')
-    expect(row.trim()).not.toBe(subtle.trim())
-    await shot(page, 'rijlijnen-150')
+    const shown = (await rowsOf(api, 'site')).rows
+    const held = (tone: string) => shown.filter((site) => site.gezondheid === tone).length
+    expect(held('storing')).toBeGreaterThan(0)
+    expect(held('let_op')).toBeGreaterThan(0)
+    const pills = page.locator('.nv-toolbar__insight')
+    await expect(pills).toHaveText([`Storing${held('storing')}`, `Let op${held('let_op')}`])
+    await expect(pills.nth(0).locator('.nv-pill')).toHaveClass(/nv-pill--bad/)
+    await expect(pills.nth(1).locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
+    await shot(page, 'sites-storing-en-let-op')
   })
 })
