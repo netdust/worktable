@@ -110,11 +110,11 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | Persoonskalender · nacht, punt, venster | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "calendar-edges @e2e"` | e2e/step-3.spec.ts | step-3 | ff90908 2026-10-18 |
 | Persoonskalender · activiteit zonder einde | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | ff90908 2026-10-18 |
 | Bedrijfsweek · week, maand, drawer | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "company-week @e2e"` | e2e/step-3.spec.ts | step-3 | ff90908 2026-10-18 |
-| Dashboard · landing | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | b08381e 2026-10-23 |
+| Dashboard · landing | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1845479 2026-10-23 |
 | Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
 | Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
 | Dashboard · weekstrook opent activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "week-opens-activity @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | b08381e 2026-10-23 |
+| Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | 1845479 2026-10-23 |
 | Dashboard · Nieuwe taak | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
 | Dashboard · productie kiezen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
 | Dashboard · productie kiezen, elke tegel | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
@@ -180,33 +180,33 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | Drawer · link item button and detail | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "link-item-button @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Action opens its result | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "action-opens-its-result @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Drawer · follows an outside change (busy mark) | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "drawer-follows-an-outside-change @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
-| Dashboard · list row opens its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "dashboard-row-opens-drawer @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | b08381e 2026-10-23 |
+| Dashboard · list row opens its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "dashboard-row-opens-drawer @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 1845479 2026-10-23 |
 | Drawer · closed while a poll is outstanding | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "live-drawer-closed-mid-poll @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Dashboard drawer · Undo after close | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-then-close-then-undo @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Related drawer · Undo after close | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-in-related-drawer-then-close-then-undo @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Action result · Undo closes its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "undo-closes-the-opened-record @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Drawer surface · dashboard sign-in page without a session | smoke | `bunx playwright test e2e/smoke/drawer-actions.spec.ts --grep "drawer surface: the dashboard without a session shows the sign-in page, no drawer @smoke"` | e2e/smoke/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
 | Drawer surface · rows (marks) without a session | smoke | `bunx playwright test e2e/smoke/drawer-actions.spec.ts --grep "drawer buttons and their marks are not served to a visitor without a session @smoke"` | e2e/smoke/drawer-actions.spec.ts | drawer-actions | 12de8aa 2026-10-22 |
-| Studio · Overzicht, vier vragen, ergste site eerst | e2e | `bunx playwright test e2e/studio.spec.ts --grep "dashboard-opens-on-monday-questions @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Overzicht per klant | e2e | `bunx playwright test e2e/studio.spec.ts --grep "space-narrows-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Sites, selectie en Gezondheid checken | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-health-check-for-selected-sites @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Sites, enkel sites buiten de registry | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-only-retired-sites-refused @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · actie uit de lade van een site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-from-a-site-drawer @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · opdracht, preview per site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "preview-opens-from-request @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · opdracht, Niet nu en Toch wel | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drop-site-before-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Bevestigen vanuit Overzicht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-update-from-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Bevestigen, verlopen preview | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-refused-on-an-expired-preview @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Bevestigen, verzoek valt weg | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-survives-a-dropped-request @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · een service bevestigt nooit (wire) | e2e | `bunx playwright test e2e/studio.spec.ts --grep "service-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · een redacteur bevestigt nooit | e2e | `bunx playwright test e2e/studio.spec.ts --grep "editor-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Sites per gezondheid en Sites in beeld | e2e | `bunx playwright test e2e/studio.spec.ts --grep "sites-board-and-gallery @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Agenda, nieuw agendapunt en geplande opdracht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "add-to-the-agenda @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Op tafel en Gedaan | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Opdrachten per status, slepen naar een stap van de worker | e2e | `bunx playwright test e2e/studio.spec.ts --grep "person-cannot-take-worker-steps @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · opdracht, sitelijnen na Bevestigen of Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "decided-request-lines @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Op tafel, Nieuwe taak | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel-offers-new-task @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Overzicht, recente dag niet te laat | e2e | `bunx playwright test e2e/studio.spec.ts --grep "recent-moment-not-late @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · opdracht, Verwijderen zegt Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "delete-a-request-explains @e2e"` | e2e/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio · Overzicht, Vandaag met open lade op 1280 | e2e | `bunx playwright test e2e/studio.spec.ts --grep "today-keeps-its-titles @e2e"` | e2e/studio.spec.ts | studio-domain | RED at b08381e 2026-10-23 |
-| Studio surface · sign-in page without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio surface: the grid without a session shows the Dutch sign-in page, no dashboard @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
-| Studio surface · GET /api/schema without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio schema asks a visitor without a session to sign in @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | b08381e 2026-10-23 |
+| Studio · Overzicht, vier vragen, ergste site eerst | e2e | `bunx playwright test e2e/studio.spec.ts --grep "dashboard-opens-on-monday-questions @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Overzicht per klant | e2e | `bunx playwright test e2e/studio.spec.ts --grep "space-narrows-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Sites, selectie en Gezondheid checken | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-health-check-for-selected-sites @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Sites, enkel sites buiten de registry | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-only-retired-sites-refused @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · actie uit de lade van een site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-from-a-site-drawer @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · opdracht, preview per site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "preview-opens-from-request @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · opdracht, Niet nu en Toch wel | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drop-site-before-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Bevestigen vanuit Overzicht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-update-from-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Bevestigen, verlopen preview | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-refused-on-an-expired-preview @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Bevestigen, verzoek valt weg | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-survives-a-dropped-request @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · een service bevestigt nooit (wire) | e2e | `bunx playwright test e2e/studio.spec.ts --grep "service-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · een redacteur bevestigt nooit | e2e | `bunx playwright test e2e/studio.spec.ts --grep "editor-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Sites per gezondheid en Sites in beeld | e2e | `bunx playwright test e2e/studio.spec.ts --grep "sites-board-and-gallery @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Agenda, nieuw agendapunt en geplande opdracht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "add-to-the-agenda @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Op tafel en Gedaan | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Opdrachten per status, slepen naar een stap van de worker | e2e | `bunx playwright test e2e/studio.spec.ts --grep "person-cannot-take-worker-steps @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · opdracht, sitelijnen na Bevestigen of Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "decided-request-lines @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Op tafel, Nieuwe taak | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel-offers-new-task @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Overzicht, recente dag niet te laat | e2e | `bunx playwright test e2e/studio.spec.ts --grep "recent-moment-not-late @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · opdracht, Verwijderen zegt Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "delete-a-request-explains @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio · Overzicht, Vandaag met open lade op 1280 | e2e | `bunx playwright test e2e/studio.spec.ts --grep "today-keeps-its-titles @e2e"` | e2e/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio surface · sign-in page without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio surface: the grid without a session shows the Dutch sign-in page, no dashboard @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
+| Studio surface · GET /api/schema without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio schema asks a visitor without a session to sign in @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | 1845479 2026-10-23 |
