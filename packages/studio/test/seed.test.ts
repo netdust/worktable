@@ -184,6 +184,6 @@ describe('the seeded opdracht', () => {
       expect(item.detail).toBeTruthy()
     }
     expect(pending.map((l) => l.detail)).toContain('1 plugin: cache-plugin 1.9.0 → 1.9.2')
-    expect(live).toEqual(['aangevraagd', 'voorbereiden', 'bevestigd', 'bezig'])
+    expect(live).toEqual(['aangevraagd', 'voorbereiden', 'voorbereid', 'bevestigd', 'bezig'])
   })
 })

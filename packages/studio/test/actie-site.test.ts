@@ -103,7 +103,7 @@ describe('the confirmed set', () => {
 
   test('no site joins a request after it is claimed', async () => {
     const post = (service: Send, actie: number) =>
-      service('POST', '/api/rows/actie_site', { actie_id: actie, site_id: 2, voorstel: '[]' })
+      service('POST', '/api/rows/actie_site', { actie_id: actie, site_id: 2 })
     const claimed: [string, string, string][] = [
       ['voorbereiden', 'bijwerken', CLOSED],
       ['voorbereid', 'bijwerken', FROZEN],
@@ -506,5 +506,86 @@ describe('who moves a link', () => {
     const res = await patch(claude, id, { state: 'klaar' })
     expect(res.status).toBe(400)
     expect(link(id).state).toBe('bezig')
+  })
+})
+
+describe('the fix pass on links', () => {
+  const EVIL = '[["evil","1","0.0.1"]]'
+  const count = () => (sqlite.query('SELECT COUNT(*) AS n FROM actie_site').get() as { n: number }).n
+
+  test('in a bijwerken, only a confirmed link is updated', async () => {
+    const msg = 'Alleen een bevestigde site wordt bijgewerkt.'
+    const move = (id: number) => patch(claude, id, { state: 'bezig', expect: { state: 'wacht' } })
+    const wacht = linkIn(actieIn('bezig'), 'wacht')
+    await expectRefused(() => move(wacht), msg, wacht)
+    const prep = linkIn(actieIn('voorbereiden'), 'wacht')
+    await expectRefused(() => move(prep), msg, prep)
+    const confirmed = linkIn(actieIn('bezig'), 'te_bevestigen')
+    expect((await patch(claude, confirmed, { state: 'bezig', expect: { state: 'te_bevestigen' } })).status).toBe(200)
+    const check = linkIn(actieIn('bezig', 'gezondheidscheck'), 'wacht')
+    expect((await move(check)).status).toBe(200)
+  })
+
+  test('a new link starts as wacht, or skipped with a reason', async () => {
+    const actie = actieIn('aangevraagd')
+    const post = (site: number, body: Body) =>
+      claude('POST', '/api/rows/actie_site', { actie_id: actie, site_id: site, ...body })
+    const start = count()
+    const NEW = 'Een site begint als wacht, of overgeslagen met een reden.'
+    for (const [site, body, message] of [
+      [2, { state: 'te_bevestigen' }, NEW],
+      [2, { state: 'bezig' }, NEW],
+      [2, { voorstel: EVIL }, 'Een nieuwe site heeft nog geen voorstel.'],
+      [2, { state: 'overgeslagen' }, NEW],
+      [2, { state: 'overgeslagen', resultaat: ' ' }, NEW],
+    ] as const) {
+      const res = await post(site, body)
+      expect(refused(res)).toBe(true)
+      expect(JSON.stringify(res.body)).toContain(message)
+    }
+    expect(count()).toBe(start)
+    expect((await post(2, { state: 'overgeslagen', resultaat: 'niet in registry', samenvatting: 'x' })).status).toBe(
+      201,
+    )
+    expect((await post(3, { state: 'wacht' })).status).toBe(201)
+    expect((await post(4, {})).status).toBe(201)
+    expect((await post(5, { voorstel: null })).status).toBe(201)
+    expect(count()).toBe(start + 4)
+  })
+
+  test('a skipped link keeps its reason', async () => {
+    const MSG = 'De reden van een overgeslagen site blijft staan.'
+    const actie = actieIn('voorbereiden')
+    const id = plant('actie_site', {
+      actie_id: actie,
+      site_id: 4,
+      state: 'overgeslagen',
+      resultaat: 'Hoog risico',
+    })
+    await expectRefused(() => patch(claude, id, { resultaat: null, voorstel: EVIL }), MSG, id)
+    await expectRefused(() => patch(claude, id, { resultaat: 'Laag risico' }), MSG, id)
+    await expectRefused(() => patch(claude, id, { resultaat: ' ' }), MSG, id)
+    sqlite.query('UPDATE actie SET status = ? WHERE id = ?').run('voorbereid', actie)
+    await expectRefused(() => patch(admin, id, { state: 'te_bevestigen' }), NO_PREVIEW, id)
+  })
+
+  test('samenvatting and resultaat are written only while the work is open', async () => {
+    const edit = (id: number) => patch(claude, id, { samenvatting: 'anders' })
+    for (const status of ['aangevraagd', 'voorbereiden', 'bezig']) {
+      const id = linkIn(actieIn(status), 'wacht')
+      expect((await edit(id)).status).toBe(200)
+    }
+    for (const [status, soort, message] of [
+      ['voorbereid', 'bijwerken', FROZEN],
+      ['bevestigd', 'bijwerken', CONFIRMED],
+      ['klaar', 'bijwerken', CONFIRMED],
+      ['deels', 'bijwerken', CONFIRMED],
+      ['geannuleerd', 'bijwerken', CLOSED],
+      ['mislukt', 'gezondheidscheck', CLOSED],
+    ] as const) {
+      const id = linkIn(actieIn(status, soort), 'klaar')
+      await expectRefused(() => edit(id), message, id)
+      await expectRefused(() => patch(admin, id, { resultaat: 'x' }), message, id)
+    }
   })
 })

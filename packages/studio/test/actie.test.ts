@@ -166,3 +166,100 @@ describe('transitions fit the soort', () => {
     expect(actie(id).soort).toBe('bijwerken')
   })
 })
+
+describe('a preview leaves voorbereid only through Stefan', () => {
+  const move = (service: Send, id: number, from: string, to: string) =>
+    service('PATCH', `/api/rows/actie/${id}`, { status: to, expect: { status: from } })
+  const batchOf = (res: { body: Body }) => (res.body.revision as Body).batch_id
+  const PREVIEW_UNDO = 'Alleen Stefan zet een preview terug.'
+  const link = (id: number) => sqlite.query('SELECT * FROM actie_site WHERE id = ?').get(id) as Body
+
+  test('a service cannot take a fresh preview out of voorbereid', async () => {
+    const before = { actie: actie(1), link: link(1) }
+    const res = await move(claude, 1, 'voorbereid', 'aangevraagd')
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Deze preview is nog niet verlopen.',
+    })
+    expect(actie(1)).toEqual(before.actie)
+    expect(link(1)).toEqual(before.link)
+    expect((await admin('PATCH', '/api/rows/actie/1', { status: 'bevestigd' })).status).toBe(200)
+
+    const old = plant('bijwerken', 'voorbereid', { voorbereid_op: ago(25 * HOUR) })
+    expect((await move(claude, old, 'voorbereid', 'aangevraagd')).status).toBe(200)
+    expect(status(old)).toBe('aangevraagd')
+  })
+
+  test("a service's undo never leaves or enters voorbereid", async () => {
+    const id = plant('bijwerken', 'aangevraagd')
+    await move(claude, id, 'aangevraagd', 'voorbereiden')
+    const prepared = await move(claude, id, 'voorbereiden', 'voorbereid')
+    expect(prepared.status).toBe(200)
+    const undo = await claude('POST', `/api/batches/${batchOf(prepared)}/undo`, {})
+    expect(refused(undo)).toBe(true)
+    expect(JSON.stringify(undo.body)).toContain(PREVIEW_UNDO)
+    expect(status(id)).toBe('voorbereid')
+
+    const cancelled = await move(claude, id, 'voorbereid', 'geannuleerd')
+    expect(cancelled.status).toBe(200)
+    const back = await claude('POST', `/api/batches/${batchOf(cancelled)}/undo`, {})
+    expect(refused(back)).toBe(true)
+    expect(JSON.stringify(back.body)).toContain(PREVIEW_UNDO)
+    expect(status(id)).toBe('geannuleerd')
+  })
+
+  test('cancel, rewrite, undo does not reach Bevestigen', async () => {
+    const skipped = plant('bijwerken', 'voorbereid', { voorbereid_op: ago(HOUR) })
+    const kept = Number(
+      sqlite
+        .query(
+          `INSERT INTO actie_site (actie_id, site_id, state, voorstel, samenvatting, resultaat) VALUES (?,?,?,?,?,?)`,
+        )
+        .run(skipped, 4, 'overgeslagen', '[["a","1","2"]]', 'Detail', 'Hoog risico').lastInsertRowid,
+    )
+    const cancelled = await move(claude, skipped, 'voorbereid', 'geannuleerd')
+    expect(cancelled.status).toBe(200)
+    const before = link(kept)
+    const text = await claude('PATCH', `/api/rows/actie_site/${kept}`, { samenvatting: 'Niets bijzonders' })
+    const reason = await claude('PATCH', `/api/rows/actie_site/${kept}`, { resultaat: null })
+    const undo = await claude('POST', `/api/batches/${batchOf(cancelled)}/undo`, {})
+    expect([text, reason, undo].every(refused)).toBe(true)
+    expect(JSON.stringify(text.body)).toContain('De sites van deze opdracht liggen vast.')
+    expect(status(skipped)).toBe('geannuleerd')
+    expect(link(kept)).toEqual(before)
+  })
+
+  test('an old confirmation is not claimed', async () => {
+    const stale = plant('bijwerken', 'bevestigd', { voorbereid_op: ago(25 * HOUR) })
+    const res = await move(robot, stale, 'bevestigd', 'bezig')
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Deze bevestiging is verlopen. Vraag de update opnieuw aan.',
+    })
+    expect(status(stale)).toBe('bevestigd')
+    const fresh = plant('bijwerken', 'bevestigd', { voorbereid_op: ago(23 * HOUR) })
+    expect((await move(claude, fresh, 'bevestigd', 'bezig')).status).toBe(200)
+  })
+
+  test('Stefan calls off a confirmed update', async () => {
+    const id = plant('bijwerken', 'bevestigd', { voorbereid_op: ago(HOUR) })
+    const editor = await move(claude, id, 'bevestigd', 'geannuleerd')
+    expect({ status: editor.status, code: editor.body.code }).toEqual({ status: 422, code: 'transition_not_allowed' })
+    const service = await move(robot, id, 'bevestigd', 'geannuleerd')
+    expect(service.status).toBe(403)
+    expect(JSON.stringify(service.body)).toContain('Alleen Stefan annuleert een bevestigde update.')
+    expect(status(id)).toBe('bevestigd')
+    type Marked = { id: number; available?: { buttons: { label: string }[] } }
+    const rows = (await admin('GET', '/api/rows/actie')).body.rows as Marked[]
+    expect(rows.find((r) => r.id === id)?.available?.buttons.map((b) => b.label)).toContain('Annuleren')
+    expect((await admin('PATCH', `/api/rows/actie/${id}`, { status: 'geannuleerd' })).status).toBe(200)
+    expect(status(id)).toBe('geannuleerd')
+  })
+
+  test('the drawer re-reads while Stefan reads the preview', async () => {
+    const served = (await admin('GET', '/api/schema')).body as {
+      sources: Record<string, { lifecycle?: { live?: string[] } }>
+    }
+    expect(served.sources.actie?.lifecycle?.live).toContain('voorbereid')
+  })
+})

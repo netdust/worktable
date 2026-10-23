@@ -3,6 +3,10 @@ import { soorten } from '../datasets'
 import { localTime } from '../time'
 
 const PREVIEW_HOURS = 24
+const NOT_EXPIRED = 'Deze preview is nog niet verlopen.'
+const PREVIEW_UNDO = 'Alleen Stefan zet een preview terug.'
+const STALE_CONFIRMATION = 'Deze bevestiging is verlopen. Vraag de update opnieuw aan.'
+const CALL_OFF = 'Alleen Stefan annuleert een bevestigde update.'
 
 type Values = Record<string, unknown>
 
@@ -17,15 +21,29 @@ function checkFit(soort: unknown, from: unknown, to: unknown): void {
 }
 
 function checkConfirmer(ctx: WriteContext): void {
-  if ((ctx.actor.kind ?? 'user') !== 'user' || ctx.actor.role !== 'administrator') {
+  if (!isPerson(ctx) || ctx.actor.role !== 'administrator') {
     forbid('Alleen Stefan bevestigt een update.')
   }
 }
 
-function checkFresh(voorbereidOp: unknown): void {
+const isPerson = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 'user'
+
+function olderThanPreview(voorbereidOp: unknown): boolean {
   const stamp = typeof voorbereidOp === 'string' ? Date.parse(voorbereidOp) : Number.NaN
-  if (!(Date.now() - stamp <= PREVIEW_HOURS * 3_600_000))
-    refuse('Deze preview is verlopen. De worker maakt een nieuwe.')
+  return !(Date.now() - stamp <= PREVIEW_HOURS * 3_600_000)
+}
+
+function checkFresh(voorbereidOp: unknown): void {
+  if (olderThanPreview(voorbereidOp)) refuse('Deze preview is verlopen. De worker maakt een nieuwe.')
+}
+
+// A service never moves a fresh preview, and never rewinds one: Stefan confirms the set he saw.
+function checkServiceMove(current: Values, to: unknown, undo: boolean): void {
+  const from = current.status
+  if (undo && (from === 'voorbereid' || to === 'voorbereid')) refuse(PREVIEW_UNDO)
+  if (from === 'voorbereid' && to === 'aangevraagd' && !olderThanPreview(current.voorbereid_op)) refuse(NOT_EXPIRED)
+  if (from === 'bevestigd' && to === 'bezig' && olderThanPreview(current.voorbereid_op)) refuse(STALE_CONFIRMATION)
+  if (from === 'bevestigd' && to === 'geannuleerd') forbid(CALL_OFF)
 }
 
 function checkNotFuture(soort: unknown, geplandOp: unknown): void {
@@ -40,8 +58,7 @@ function checkFixed(values: Values, current: Values): void {
 
 function checkPersonTitel(values: Values, ctx: WriteContext): void {
   const blank = typeof values.titel !== 'string' || values.titel.trim() === ''
-  if (blank && (ctx.actor.kind ?? 'user') === 'user')
-    forbid('Een opdracht start je in Sites: vink sites aan en kies een actie.')
+  if (blank && isPerson(ctx)) forbid('Een opdracht start je in Sites: vink sites aan en kies een actie.')
 }
 
 export const actieWriter: Writer = {
@@ -61,6 +78,7 @@ export const actieWriter: Writer = {
     const to = values.status
     if (to === undefined || to === current.status) return values
     const undo = ctx.lifecycle?.kind === 'undo'
+    if (!isPerson(ctx)) checkServiceMove(current, to, undo)
     if (to === 'bevestigd') {
       checkConfirmer(ctx)
       checkFresh(current.voorbereid_op)

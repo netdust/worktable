@@ -117,7 +117,7 @@ export const actie = defineDataset({
   },
   lifecycle: {
     column: 'status',
-    live: ['aangevraagd', 'voorbereiden', 'bevestigd', 'bezig'],
+    live: ['aangevraagd', 'voorbereiden', 'voorbereid', 'bevestigd', 'bezig'],
     transitions: [
       { from: ['aangevraagd'], to: 'bezig', roles: both },
       { from: ['aangevraagd'], to: 'voorbereiden', roles: both },
@@ -126,6 +126,7 @@ export const actie = defineDataset({
       { from: ['voorbereid'], to: 'bevestigd', roles: ['administrator'], button: 'Bevestigen' },
       { from: ['voorbereid'], to: 'aangevraagd', roles: both },
       { from: ['bevestigd'], to: 'bezig', roles: both },
+      { from: ['bevestigd'], to: 'geannuleerd', roles: ['administrator'], button: 'Annuleren' },
       { from: ['bezig'], to: 'klaar', roles: both },
       { from: ['bezig'], to: 'deels', roles: both },
       { from: ['bezig'], to: 'mislukt', roles: both },

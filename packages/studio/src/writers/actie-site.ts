@@ -12,12 +12,18 @@ const SKIPPED = 'Deze site is bewust overgeslagen en kan niet terug.'
 const SERVICE_SKIP = 'Een site met preview slaat de worker pas over bij het bijwerken.'
 const SERVICE_RESTORE = 'Alleen Stefan zet een overgeslagen site terug.'
 const SET_FIELDS = ['site_id', 'actie_id']
-const FROZEN_TEXTS = ['samenvatting', 'resultaat']
+const TEXTS = ['samenvatting', 'resultaat']
+const ONLY_CONFIRMED = 'Alleen een bevestigde site wordt bijgewerkt.'
+const NEW_STATE = 'Een site begint als wacht, of overgeslagen met een reden.'
+const NEW_VOORSTEL = 'Een nieuwe site heeft nog geen voorstel.'
+const KEEP_REASON = 'De reden van een overgeslagen site blijft staan.'
 const CONFIRMED_STATUSES = ['bevestigd', 'bezig', 'klaar', 'deels']
 
 const parentOf = (ctx: WriteContext, id: unknown): Values | null => (ctx.find('actie', id as number) as Values) ?? null
 
 const isOpen = (parent: Values): boolean => parent.status === 'aangevraagd' || parent.status === 'voorbereiden'
+
+const isWorking = (parent: Values): boolean => isOpen(parent) || parent.status === 'bezig'
 
 const isPerson = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 'user'
 
@@ -79,6 +85,21 @@ function checkState(current: Values, to: unknown, parent: Values, ctx: WriteCont
   if (to === undefined || to === current.state) return
   if (isPerson(ctx)) checkPersonState(current, to, parent)
   else checkServiceState(current, to, parent)
+  if (to === 'bezig' && parent.soort === 'bijwerken' && current.state !== 'te_bevestigen') refuse(ONLY_CONFIRMED)
+}
+
+function checkKeepsReason(values: Values, current: Values): void {
+  if (current.state === 'overgeslagen' && isSet(current.resultaat) && changes(values, current, 'resultaat')) {
+    refuse(KEEP_REASON)
+  }
+}
+
+function checkNew(values: Values): void {
+  const state = values.state
+  const reason = typeof values.resultaat === 'string' && values.resultaat.trim() !== ''
+  const starts = state === undefined || state === 'wacht' || (state === 'overgeslagen' && reason)
+  if (!starts) refuse(NEW_STATE)
+  if (isSet(values.voorstel)) refuse(NEW_VOORSTEL)
 }
 
 function checkChange(values: Values, current: Values, parent: Values, ctx: WriteContext): void {
@@ -88,13 +109,15 @@ function checkChange(values: Values, current: Values, parent: Values, ctx: Write
     }
   }
   checkFields(values, current, parent)
-  if (parent.status === 'voorbereid' && FROZEN_TEXTS.some((field) => changes(values, current, field))) refuse(FROZEN)
+  if (!isWorking(parent) && TEXTS.some((field) => changes(values, current, field))) refuse(closedMessage(parent))
+  checkKeepsReason(values, current)
   checkState(current, values.state, parent, ctx)
 }
 
 export const actieSiteWriter: Writer = {
   create(values, ctx) {
     checkCanJoin(parentOf(ctx, values.actie_id))
+    checkNew(values)
     checkUnique(ctx, values.actie_id, values.site_id)
     return values
   },
