@@ -202,7 +202,7 @@ test.describe('studio', () => {
     const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
     await expect(drawer).toBeVisible()
     await expect(drawer.getByText('Aangevraagd', { exact: true })).toBeVisible()
-    await expect(drawer.getByText('Bezig…')).toBeVisible()
+    await expect(drawer.getByText('Volgt live')).toBeVisible()
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Niet meer in de registry')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Overgeslagen')
     await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Niet gestart')
@@ -703,5 +703,67 @@ test.describe('studio, what a person is offered', () => {
     await open(page, 'Opdrachten', 'Opdrachten')
     await expect(page.locator('.nv-toolbar .nv-button--primary')).toHaveText(/Nieuwe opdracht/)
     await shot(page, 'sites-zonder-nieuw')
+  })
+})
+
+test.describe('studio, the toolbar at 1440', () => {
+  const LONG =
+    'De wijziging is niet bewaard omdat de server een uitgebreide uitleg geeft over waarom dit niet kan, met veel woorden. '.repeat(
+      3,
+    )
+
+  test('toolbar-at-1440 @e2e: a long save error is cut and keeps the toolbar one line, and + Nieuw leaves an open drawer’s title alone', async ({
+    page,
+  }) => {
+    await page.route('**/api/rows/taak/*', (route) =>
+      route.request().method() === 'PATCH'
+        ? route.fulfill({ status: 422, json: { code: 'refused', message: LONG } })
+        : route.continue(),
+    )
+    await open(page, 'Taken', 'Taken')
+    const toolbar = page.locator('.nv-toolbar')
+    await page
+      .getByRole('row', { name: /e2e|Taak|Controleer|Offerte/ })
+      .first()
+      .getByRole('button', { name: 'Openen' })
+      .click()
+    const drawer = page.locator('.nv-drawer, [aria-label][role=complementary]').first()
+    await expect(drawer).toBeVisible()
+    const title = drawer.locator('.nv-dw-title')
+    const quiet = (await toolbar.boundingBox())?.height as number
+    const cell = page.getByRole('grid', { name: 'Taken', exact: true }).getByRole('gridcell').nth(6)
+    await cell.click({ position: { x: 6, y: 6 } })
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('x')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.nv-save--error')).toBeVisible()
+    await shot(page, 'werkbalk-1440')
+    expect((await toolbar.boundingBox())?.height).toBe(quiet)
+    const add = (await page.locator('.nv-toolbar .nv-button--primary').boundingBox()) as { x: number; width: number }
+    const heading = (await title.boundingBox()) as { x: number }
+    expect(add.x + add.width).toBeLessThanOrEqual(heading.x)
+  })
+})
+
+test.describe('studio, row lines at 150%', () => {
+  test.use({ deviceScaleFactor: 1.5 })
+
+  test('row-lines-at-150 @e2e: a table row’s separator is the row-line token, stronger than the subtle border', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const [line, row, subtle] = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement)
+      const cell = document.querySelector('.nv-td') as HTMLElement
+      return [
+        cell && getComputedStyle(cell).borderBottomColor,
+        root.getPropertyValue('--color-border-row'),
+        root.getPropertyValue('--color-border-subtle'),
+      ]
+    })
+    expect(line).toBe('rgb(223, 227, 233)')
+    expect(row.trim()).toBe('#dfe3e9')
+    expect(row.trim()).not.toBe(subtle.trim())
+    await shot(page, 'rijlijnen-150')
   })
 })

@@ -447,7 +447,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const dashboardSum = spaceName ? t('dashboardSum', { space: spaceName, week: isoWeek(new Date()) }) : t('dashboardSum', { space: '', week: isoWeek(new Date()) }).replace(/^ · /, '')
   // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
   const shownRows = store ? state.rows : result.status === 'ready' ? result.rows : null
-  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? insightOf(model, shownRows) : null), [dashboard, model, shownRows, matrix])
+  const grouped = view && model && layout ? boardColumn(view, model, layout) : null
+  const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped))
+  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? insightOf(model, shownRows) : undefined), [dashboard, model, shownRows, matrix])
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
     ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
@@ -680,7 +682,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
-              onDrop={store && writable && !model.query && draggable(view, model, boardColumn(view, model, layout) as string) ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
+              onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
               onCreate={writable && !model.query && !model.created_by ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
@@ -703,7 +705,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         )}
         </div>
         <footer className="nv-foot" aria-label={t('hints')}>
-          {hintsOf(dashboard ? 'dashboard' : (view?.type ?? 'grid')).map((hint) => <span key={hint}>{hint}</span>)}
+          {hintsOf(dashboard ? 'dashboard' : (view?.type ?? 'grid'), boardDrops).map((hint) => <span key={hint}>{hint}</span>)}
           {matrix && view && <Legend view={view} models={models} />}
         </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>

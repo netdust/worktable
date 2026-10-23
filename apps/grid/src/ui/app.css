@@ -497,7 +497,7 @@
 
 .nv-toolbar > .nv-toolbar__end {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
   align-items: center;
   gap: 8px;
@@ -855,7 +855,21 @@
   flex: none;
 }
 
+/* Its words add nothing to the toolbar's width: it takes what the line leaves and cuts the rest. */
+/* The end group then takes the line's rest, and the name no longer grows into it. */
+.nv-toolbar:has(.nv-save--error) > .nv-toolbar__name {
+  flex-grow: 0;
+}
+
+.nv-toolbar > .nv-toolbar__end:has(.nv-save--error) {
+  flex-grow: 1;
+  justify-content: flex-end;
+}
+
 .nv-save--error {
+  flex: 1 1 0;
+  contain: inline-size;
+  max-width: 60ch;
   color: var(--color-danger-fg);
   font-weight: 500;
 }
@@ -1636,7 +1650,7 @@
   height: 34px;
   padding: 0 10px;
   overflow: hidden;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-row);
   background: var(--color-bg-surface);
   white-space: nowrap;
   text-overflow: ellipsis;

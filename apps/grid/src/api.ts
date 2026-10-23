@@ -1,6 +1,7 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import { isDate } from './grid/conditions'
 import type { Layout } from './grid/layout'
+import { t } from './i18n'
 import type { Account, ActView, ApiError, DashboardLayout, DateWindow, HistoryEntry, MatrixAway, NewView, OptionsFrom, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
@@ -28,6 +29,8 @@ function toApiError(error: unknown): ApiError {
     const status = 'status' in error && typeof error.status === 'number' ? { status: error.status } : {}
     return { code: String(error.code), message: String(error.message), ...by, ...named, ...column, ...key, ...dataset, ...status }
   }
+  // A fetch that cannot reach the server rejects with a TypeError, in the browser's English.
+  if (error instanceof TypeError) return { code: 'unknown', message: t('noConnection') }
   return { code: 'unknown', message: error instanceof Error ? error.message : String(error) }
 }
 

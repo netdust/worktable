@@ -74,6 +74,17 @@ describe('a board', () => {
     expect(cardClass()).toContain('nv-board__card--drags')
   })
 
+  it('says how to drag only where it drags', async () => {
+    await open(schemaOf(unit()), 'bord')
+    expect(screen.getByText('Sleep een kaart om haar te verplaatsen')).toBeTruthy()
+    cleanup()
+    await open(schemaOf(unit(), { board: { column: 'status', drag: false } }), 'bord')
+    expect(screen.queryByText('Sleep een kaart om haar te verplaatsen')).toBeNull()
+    expect(screen.queryByText('Spatie oppakken en neerzetten')).toBeNull()
+    expect(screen.getByText(/↑↓←→/)).toBeTruthy()
+    expect(screen.getByText(/↵/)).toBeTruthy()
+  })
+
   it('does not drag with drag false, and its cards still open', async () => {
     await open(schemaOf(unit(), { board: { column: 'status', drag: false } }), 'bord')
     expect(cardClass()).not.toContain('nv-board__card--drags')

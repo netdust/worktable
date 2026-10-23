@@ -203,6 +203,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
       )}
       {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
       {onDone && model && row.id > 0 && <DrawerButtons model={model.key} id={row.id} available={row.available} onDone={onDone} />}
+      {onAction && actions.filter((action) => !row.available || row.available.actions.includes(action.name)).map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
@@ -215,10 +216,9 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
       {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
       {sections}
-      {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
+      {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} row={row} />}
       {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {onAction && actions.filter((action) => !row.available || row.available.actions.includes(action.name)).map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
       </div>
     </SidePanel>

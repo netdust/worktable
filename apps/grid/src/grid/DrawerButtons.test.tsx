@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Available, LinkItem, Model, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
@@ -112,5 +112,30 @@ describe('a link that declares no meter, in the drawer head', () => {
     expect(container.querySelector('.nv-dw-sec__n')?.textContent).toBe('1/1')
     unmount()
     expect(head(false).container.querySelector('.nv-dw-sec__n')).toBeNull()
+  })
+})
+
+describe('a lifecycle with buttons, in the drawer', () => {
+  it('shows its status read-only, and its buttons stay', () => {
+    const stateful = { ...model, lifecycle_buttons: true as const }
+    const cols = columnsFor(stateful, { ...planning, columns: undefined }, true)
+    render(<DrawerWriteContext.Provider value={write}><Drawer row={row(available(['klaar', 'Afronden']))} columns={cols} model={stateful} onDone={vi.fn()} onClose={() => undefined} /></DrawerWriteContext.Provider>)
+    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
+    expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+    expect(within(drawer).queryByRole('combobox')).toBeNull()
+    expect(within(drawer).queryByRole('listbox')).toBeNull()
+    expect(cols.find((c) => c.id === 'status')?.editable).toBe(false)
+  })
+})
+
+describe('the drawer’s history after the state changed', () => {
+  it('is read again when a press, an undo or a live poll gives the row a new state', async () => {
+    remote.recordHistory.mockClear()
+    const stateful = row(available(['klaar', 'Afronden']))
+    const view = (r: Row) => <DrawerWriteContext.Provider value={write}><Drawer row={r} columns={columns} model={model} onDone={vi.fn()} onClose={() => undefined} /></DrawerWriteContext.Provider>
+    const { rerender } = render(view(stateful))
+    await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(1))
+    rerender(view({ ...stateful, fields: { ...stateful.fields, status: 'bevestigd' } }))
+    await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(2))
   })
 })

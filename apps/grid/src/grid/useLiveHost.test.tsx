@@ -36,12 +36,12 @@ describe('a drawer opened through the board’s host', () => {
     remote.rowOf.mockResolvedValueOnce(at('busy')).mockResolvedValue(at('done'))
     render(<Host />)
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
-    expect(screen.getByRole('status').textContent).toContain('Bezig…')
+    expect(screen.getByRole('status').textContent).toContain('Volgt live')
 
     await act(async () => { await vi.advanceTimersByTimeAsync(3100) })
     await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
     expect(remote.rowOf).toHaveBeenCalledTimes(2)
-    expect(screen.queryByText('Bezig…')).toBeNull()
+    expect(screen.queryByText('Volgt live')).toBeNull()
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
     expect(remote.rowOf).toHaveBeenCalledTimes(2)

@@ -84,7 +84,7 @@ describe('schema() and savedViews()', () => {
   it('asks again after a failed read', async () => {
     fetcher.mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
-    await expect(schema()).rejects.toEqual({ code: 'unknown', message: 'Failed to fetch' })
+    await expect(schema()).rejects.toEqual({ code: 'unknown', message: 'Geen verbinding met de server. Probeer het opnieuw.' })
     await schema()
 
     expect(urls()).toEqual(['/api/schema', '/api/schema'])
@@ -553,6 +553,14 @@ describe('writes', () => {
     ])
     expect(fetcher.mock.calls[1][1]).toMatchObject({ body: file, headers: { 'Content-Type': 'application/octet-stream' } })
     expect(fileUrl(7)).toBe('/api/attachments/file/7')
+  })
+
+  it('says a request that cannot reach the server in Dutch, for a read and an upload alike', async () => {
+    fetcher.mockRejectedValue(new TypeError('Failed to fetch'))
+    const said = { code: 'unknown', message: 'Geen verbinding met de server. Probeer het opnieuw.' }
+    forgetSchema()
+    await expect(schema()).rejects.toEqual(said)
+    await expect(uploadAttachment('activiteit', 3, 'rider', new File(['x'], 'a.txt'))).rejects.toEqual(said)
   })
 
   it('answers a refused upload as the engine said it', async () => {

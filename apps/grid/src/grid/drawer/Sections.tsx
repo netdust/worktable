@@ -147,15 +147,17 @@ const when = (at: string) =>
   new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at)).replace(/\./g, '')
 
 /** This record's changes, newest first, as the prototype's Geschiedenis: who, what became what, when. */
-export function HistorySection({ model, id }: { model: Model; id: number }) {
+/** Read again whenever the record's own content changes: a press, an undo, a live poll. */
+export function HistorySection({ model, id, row }: { model: Model; id: number; row: Row }) {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
+  const content = JSON.stringify(row.fields)
   useEffect(() => {
     let live = true
     recordHistory(model.key, id).then((e) => live && setEntries(e), () => live && setEntries([]))
     return () => {
       live = false
     }
-  }, [model.key, id])
+  }, [model.key, id, content])
   if (!entries) return null
   return (
     <Section title={t('history')} count={String(entries.length)}>
