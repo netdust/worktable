@@ -24,12 +24,7 @@ const organisaties = [
 const sites = [
   {
     naam: 'testmans-winkel',
-    domein: 'winkel.testmans.example',
-    hosting: 'Voorbeeldhost',
     sla: true,
-    risico: 'hoog',
-    staging: true,
-    beheer: 'volledig',
     organisatie_id: KLANT,
     gezondheid: 'ok',
     statuscode: 200,
@@ -41,11 +36,7 @@ const sites = [
   },
   {
     naam: 'testmans-bestel',
-    domein: 'bestel.testmans.example',
-    hosting: 'Voorbeeldhost',
     sla: true,
-    risico: 'normaal',
-    beheer: 'volledig',
     organisatie_id: KLANT,
     gezondheid: 'let_op',
     statuscode: 200,
@@ -59,11 +50,7 @@ const sites = [
   },
   {
     naam: 'voorbeeld-site',
-    domein: 'www.voorbeeld.example',
-    hosting: 'Eigen server',
     sla: false,
-    risico: 'laag',
-    beheer: 'composer',
     organisatie_id: INTERN,
     gezondheid: 'ok',
     statuscode: 200,
@@ -75,18 +62,14 @@ const sites = [
   },
   {
     naam: 'voorbeeld-blog',
-    domein: 'blog.voorbeeld.example',
-    hosting: 'Eigen server',
     sla: false,
-    risico: 'laag',
-    beheer: 'web_alleen',
     organisatie_id: INTERN,
     gezondheid: 'storing',
     statuscode: 500,
     responstijd_ms: 95,
     laatste_check: ago(3 * HOUR),
   },
-  { naam: 'oud-archief', domein: 'archief.voorbeeld.example', in_registry: false, organisatie_id: INTERN },
+  { naam: 'oud-archief', in_registry: false, organisatie_id: INTERN },
 ]
 
 const acties = [
@@ -197,7 +180,7 @@ export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) 
 type View = Omit<SavedViewSeed, 'filters' | 'sort' | 'group_by'> & Partial<SavedViewSeed>
 const view = (v: View): SavedViewSeed => ({ filters: {}, sort: [], group_by: null, ...v })
 const IN_REGISTRY = { in_registry: true }
-const SITE_FIELDS = ['naam', 'domein', 'gezondheid', 'organisatie_id', 'laatste_check', 'updates_plugins', 'risico']
+const SITE_FIELDS = ['naam', 'gezondheid', 'organisatie_id', 'laatste_check', 'updates_plugins']
 
 export const views: SavedViewSeed[] = [
   view({
@@ -208,11 +191,9 @@ export const views: SavedViewSeed[] = [
     sort: ['naam'],
     visible_fields: [
       'naam',
-      'domein',
       'gezondheid',
       'organisatie_id',
       'sla',
-      'risico',
       'statuscode',
       'wp_versie',
       'php_versie',
@@ -225,13 +206,13 @@ export const views: SavedViewSeed[] = [
     ],
   }),
   view({
-    name: 'Sites per risico',
+    name: 'Sites per gezondheid',
     source_type: 'dataset',
     source: 'site',
     skin: 'board',
     filters: IN_REGISTRY,
     sort: ['naam'],
-    visible_fields: ['gezondheid', 'organisatie_id', 'laatste_check'],
+    visible_fields: ['organisatie_id', 'sla', 'laatste_check'],
   }),
   view({
     name: 'Sites in beeld',

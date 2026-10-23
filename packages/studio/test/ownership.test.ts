@@ -50,33 +50,50 @@ const LOG_FIXED = 'Het onderhoudslog verandert niet.'
 const LOG_WORKER = 'Onderhoud schrijft alleen de worker.'
 const NO_DELETE = 'Een serviceaccount verwijdert geen rijen.'
 
-const synced = {
-  naam: 'nieuwe-site',
-  domein: 'nieuw.example',
-  hosting: 'Voorbeeldhost',
-  sla: true,
-  risico: 'laag',
-  health_markers: true,
-  beheer: 'volledig',
-  staging: false,
-}
+const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe site.'
+
+const synced = { naam: 'nieuwe-site', sla: true, in_registry: true }
 
 describe('site ownership', () => {
-  test('a person cannot overwrite registry or health', async () => {
+  test('a person writes no health column, naam or in_registry', async () => {
     const before = row('site', 1)
     const revs = revisions()
     const forbidden: Body[] = [
       { gezondheid: 'ok' },
       { laatste_check: '2026-01-01T10:00:00' },
-      { sla: false },
       { naam: 'andere-naam' },
+      { in_registry: false },
     ]
     for (const change of forbidden) expectRefused(await admin('PATCH', '/api/rows/site/1', change), 403, REGISTRY)
     expect(row('site', 1)).toEqual(before)
     expect(revisions()).toBe(revs)
-    const allowed = { organisatie_id: 1, smoke_urls: '/kassa', notities: 'let op' }
-    expect((await admin('PATCH', '/api/rows/site/1', allowed)).status).toBe(200)
-    expect(row('site', 1)).toMatchObject(allowed)
+  })
+
+  test('a person writes organisatie, sla, smoke URLs and notes', async () => {
+    const changes: [Body, Body][] = [
+      [{ organisatie_id: 1 }, { organisatie_id: 1 }],
+      [{ sla: false }, { sla: 0 }],
+      [{ smoke_urls: '/kassa' }, { smoke_urls: '/kassa' }],
+      [{ notities: 'let op' }, { notities: 'let op' }],
+    ]
+    for (const [change, stored] of changes) {
+      expect((await admin('PATCH', '/api/rows/site/1', change)).status).toBe(200)
+      expect(row('site', 1)).toMatchObject(stored)
+    }
+  })
+
+  test('a service writes sla only on create', async () => {
+    const created = await worker('POST', '/api/rows/site', { ...synced, sla: true })
+    expect(created.status).toBe(201)
+    expect(row('site', created.body.id as number).sla).toBe(1)
+    const before = row('site', 1)
+    const revs = revisions()
+    expectRefused(await worker('PATCH', '/api/rows/site/1', { sla: !before.sla }), 403, SLA_OWN)
+    expect(row('site', 1)).toEqual(before)
+    expect(revisions()).toBe(revs)
+    const own = { organisatie_id: 2, smoke_urls: '/x', notities: 'n' }
+    expect((await worker('PATCH', '/api/rows/site/1', own)).status).toBe(200)
+    expect(row('site', 1)).toMatchObject(own)
   })
 
   test('sites come from the registry', async () => {

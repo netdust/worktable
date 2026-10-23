@@ -2,17 +2,7 @@ import { forbid, refuse, type WriteContext, type Writer } from '@worktable/engin
 
 type Values = Record<string, unknown>
 
-export const SYNCED_COLUMNS = [
-  'naam',
-  'domein',
-  'hosting',
-  'sla',
-  'risico',
-  'health_markers',
-  'beheer',
-  'staging',
-  'in_registry',
-]
+export const SYNCED_COLUMNS = ['naam', 'in_registry']
 
 export const HEALTH_COLUMNS = [
   'gezondheid',
@@ -27,7 +17,9 @@ export const HEALTH_COLUMNS = [
   'laatste_check',
 ]
 
-const USER_COLUMNS = ['organisatie_id', 'smoke_urls', 'notities']
+export const STUDIO_COLUMNS = ['organisatie_id', 'sla', 'smoke_urls', 'notities']
+
+const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe site.'
 
 const isUser = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 'user'
 
@@ -46,11 +38,12 @@ export const siteWriter: Writer = {
 
   update(values, ctx) {
     if (isUser(ctx)) {
-      if (Object.keys(values).some((key) => !USER_COLUMNS.includes(key))) {
+      if (Object.keys(values).some((key) => !STUDIO_COLUMNS.includes(key))) {
         forbid('Registry- en gezondheidsgegevens schrijft alleen de worker.')
       }
       return values
     }
+    if ('sla' in values) forbid(SLA_OWN)
     checkUnique(ctx, values, (ctx.current as Values).id as number)
     return values
   },

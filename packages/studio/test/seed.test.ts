@@ -131,14 +131,40 @@ describe('the tree', () => {
 })
 
 describe('the sites', () => {
-  test('Sites has a board on risico and a gallery of screenshots', () => {
+  test('the Sites board groups on gezondheid, beside a gallery of screenshots', () => {
     expect(schema.site).toMatchObject({
-      board: { column: 'risico' },
+      board: { column: 'gezondheid' },
       gallery: { kind: 'screenshot' },
       attachments: { kinds: { screenshot: 'Screenshot' } },
     })
-    expect(viewNamed('Sites per risico')).toMatchObject({ source: 'site', skin: 'board' })
+    expect(viewNamed('Sites per gezondheid')).toMatchObject({ source: 'site', skin: 'board' })
     expect(viewNamed('Sites in beeld')).toMatchObject({ source: 'site', skin: 'gallery' })
+  })
+
+  test('Site serves no site.yml data', () => {
+    const served = Object.keys((schema.site as unknown as { columns: Body }).columns)
+    const declared = [
+      'naam',
+      'in_registry',
+      'organisatie_id',
+      'sla',
+      'smoke_urls',
+      'notities',
+      'gezondheid',
+      'statuscode',
+      'responstijd_ms',
+      'wp_versie',
+      'php_versie',
+      'updates_plugins',
+      'updates_themas',
+      'updates_core',
+      'tls_dagen',
+      'laatste_check',
+    ]
+    for (const gone of ['domein', 'hosting', 'risico', 'health_markers', 'beheer', 'staging']) {
+      expect(served).not.toContain(gone)
+    }
+    for (const column of declared) expect(served).toContain(column)
   })
 
   test('SLA-sites names the SLA sites still in the registry', () => {
