@@ -111,12 +111,14 @@ const actieSites = [
       core: { from: '6.7.2', to: '6.8.3' },
       plugins: [plugin('formulier-plugin', '2.4.0', '2.5.1')],
     }),
+    samenvatting: 'WordPress 6.7.2 → 6.8.3 · 1 plugin',
   },
   {
     actie_id: 1,
     site_id: 3,
     state: 'te_bevestigen',
     voorstel: voorstel({ plugins: [plugin('cache-plugin', '1.9.0', '1.9.2')] }),
+    samenvatting: '1 plugin: cache-plugin 1.9.0 → 1.9.2',
   },
 ]
 

@@ -17,6 +17,8 @@ type Source = {
   of?: string
   creates?: string
 }
+type Available = { buttons: { label: string }[] }
+type Link = { state?: string; detail?: string | null; available?: Available }
 type View = { id: number; name: string; source: string | null; skin: string; filters: Body; layout?: Layout }
 type Tile = { kind: string; view?: number; done?: number; total?: number; set?: Body }
 type Layout = { sections: { label: string; tiles: Tile[] }[]; actions: { create: string; label: string }[] }
@@ -24,6 +26,8 @@ type Layout = { sections: { label: string; tiles: Tile[] }[]; actions: { create:
 let schema: Record<string, Source>
 let sections: { label: string; sources: string[] }[]
 let views: View[]
+let live: string[] | undefined
+let opdrachten: { id: number; available?: Available; links: { sites: Link[] } }[]
 
 beforeAll(async () => {
   const sqlite = new Database(':memory:')
@@ -37,6 +41,8 @@ beforeAll(async () => {
   schema = served.sources as Record<string, Source>
   sections = served.sections as typeof sections
   views = (await get('/api/views')).views as View[]
+  opdrachten = (await get('/api/rows/actie?sort=id')).rows as typeof opdrachten
+  live = (served.sources as Record<string, { lifecycle?: { live?: string[] } }>).actie?.lifecycle?.live
 })
 
 const dashboard = () => views.find((v) => v.name === 'Overzicht' && v.skin === 'dashboard') as View
@@ -137,5 +143,21 @@ describe('the sites', () => {
 
   test('SLA-sites names the SLA sites still in the registry', () => {
     expect(viewNamed('SLA-sites')).toMatchObject({ source: 'site', filters: { sla: true, in_registry: true } })
+  })
+})
+
+describe('the seeded opdracht', () => {
+  test('offers Bevestigen and Annuleren, and its links Niet nu with their summary', () => {
+    const labels = (available?: Available) => available?.buttons.map((b) => b.label)
+    const opdracht = opdrachten.find((r) => r.id === 1)
+    expect(labels(opdracht?.available)).toEqual(['Bevestigen', 'Annuleren'])
+    const pending = opdracht?.links.sites.filter((l) => l.state === 'te_bevestigen') ?? []
+    expect(pending).toHaveLength(2)
+    for (const item of pending) {
+      expect(labels(item.available)).toEqual(['Niet nu'])
+      expect(item.detail).toBeTruthy()
+    }
+    expect(pending.map((l) => l.detail)).toContain('1 plugin: cache-plugin 1.9.0 → 1.9.2')
+    expect(live).toEqual(['aangevraagd', 'voorbereiden', 'bevestigd', 'bezig'])
   })
 })

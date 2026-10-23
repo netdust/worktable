@@ -24,7 +24,8 @@ function checkConfirmer(ctx: WriteContext): void {
 
 function checkFresh(voorbereidOp: unknown): void {
   const stamp = typeof voorbereidOp === 'string' ? Date.parse(voorbereidOp) : Number.NaN
-  if (!(Date.now() - stamp <= PREVIEW_HOURS * 3_600_000)) refuse('Deze preview is verlopen.')
+  if (!(Date.now() - stamp <= PREVIEW_HOURS * 3_600_000))
+    refuse('Deze preview is verlopen. De worker maakt een nieuwe.')
 }
 
 function checkNotFuture(soort: unknown, geplandOp: unknown): void {
@@ -37,10 +38,17 @@ function checkFixed(values: Values, current: Values): void {
   if (Object.hasOwn(values, 'soort') && values.soort !== current.soort) refuse('De soort ligt vast.')
 }
 
+function checkPersonTitel(values: Values, ctx: WriteContext): void {
+  const blank = typeof values.titel !== 'string' || values.titel.trim() === ''
+  if (blank && (ctx.actor.kind ?? 'user') === 'user')
+    forbid('Een opdracht start je in Sites: vink sites aan en kies een actie.')
+}
+
 export const actieWriter: Writer = {
-  create(values) {
+  create(values, ctx) {
     if (values.status !== undefined && values.status !== 'aangevraagd') refuse('Een actie begint als aangevraagd.')
     checkNotFuture(values.soort, values.gepland_op)
+    checkPersonTitel(values, ctx)
     const label = soorten[values.soort as keyof typeof soorten] ?? 'Actie'
     const titel = typeof values.titel === 'string' && values.titel.trim() !== '' ? values.titel : label
     return { ...values, titel }

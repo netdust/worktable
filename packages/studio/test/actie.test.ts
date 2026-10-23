@@ -80,7 +80,7 @@ describe('who confirms an update', () => {
     const fresh = plant('bijwerken', 'voorbereid', { voorbereid_op: ago(23 * HOUR) })
     const res = await admin('PATCH', `/api/rows/actie/${old}`, { status: 'bevestigd' })
     expect(refused(res)).toBe(true)
-    expect(JSON.stringify(res.body)).toContain('Deze preview is verlopen.')
+    expect(JSON.stringify(res.body)).toContain('Deze preview is verlopen. De worker maakt een nieuwe.')
     expect(status(old)).toBe('voorbereid')
     expect((await admin('PATCH', `/api/rows/actie/${fresh}`, { status: 'bevestigd' })).status).toBe(200)
   })
@@ -93,7 +93,7 @@ describe('who confirms an update', () => {
     sqlite.query('UPDATE actie SET voorbereid_op = ? WHERE id = 1').run(ago(30 * HOUR))
     const redo = await admin('POST', `/api/batches/${undone.body.batch_id}/undo`, {})
     expect(refused(redo)).toBe(true)
-    expect(JSON.stringify(redo.body)).toContain('Deze preview is verlopen.')
+    expect(JSON.stringify(redo.body)).toContain('Deze preview is verlopen. De worker maakt een nieuwe.')
     expect(status(1)).toBe('voorbereid')
   })
 
@@ -115,6 +115,18 @@ describe('creating an actie', () => {
     const res = await create({})
     expect(res.status).toBe(201)
     expect(actie(res.body.id as number)).toMatchObject({ status: 'aangevraagd', titel: 'Gezondheidscheck' })
+  })
+
+  test('a person starts an opdracht in Sites', async () => {
+    const before = (sqlite.query('SELECT COUNT(*) AS n FROM actie').get() as { n: number }).n
+    const res = await admin('POST', '/api/rows/actie', { soort: 'gezondheidscheck' })
+    expect(res.status).toBe(403)
+    expect(JSON.stringify(res.body)).toContain('Een opdracht start je in Sites: vink sites aan en kies een actie.')
+    expect((sqlite.query('SELECT COUNT(*) AS n FROM actie').get() as { n: number }).n).toBe(before)
+    expect((await admin('POST', '/api/rows/actie', { soort: 'gezondheidscheck', titel: 'Check' })).status).toBe(201)
+    const own = await create({})
+    expect(own.status).toBe(201)
+    expect(actie(own.body.id as number).titel).toBe('Gezondheidscheck')
   })
 
   test('bijwerken is never future-dated', async () => {
