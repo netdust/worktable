@@ -798,8 +798,8 @@ test.describe('studio, row lines at 150%', () => {
         root.getPropertyValue('--color-border-subtle'),
       ]
     })
-    expect(line).toBe('rgb(223, 227, 233)')
-    expect(row.trim()).toBe('#dfe3e9')
+    expect(line).toBe('rgb(208, 214, 221)')
+    expect(row.trim()).toBe('#d0d6dd')
     expect(row.trim()).not.toBe(subtle.trim())
     await shot(page, 'rijlijnen-150')
   })
