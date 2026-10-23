@@ -84,14 +84,17 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 
 - **S2 Organisatie.** A client or Netdust itself: naam, soort (klant · intern), notities. It is the domain's space.
   Source: "client/organisation dataset yes" — Stefan.
-- **S3 Site.** One row per site in the registry, keyed by its registry name. Its views include a table, a board by risico, and a gallery of homepage screenshots (S24).
-  - Synced columns: domein, hosting, sla, risico, health_markers (whether `site.yml` declares `health.markers`), in_registry.
-  - Health columns: status (ok · let op · storing · onbekend), http, responstijd, wp, php, updates_plugins, updates_themes, updates_core, tls_dagen, laatste_check.
-  - Studio-owned columns, editable: organisatie (relation), extra smoke-URL's (long text), notities.
-  - Studio stores no SSH host or path.
+- **S3 Site.** One row per site in the registry, keyed by its registry name. Studio shows no site.yml data: from the registry it keeps only the name (to know the site exists) and whether it is still there. Technical facts (domain, servers, paths, risk, markers, staging) stay in `site.yml`, where the worker and the deploy tooling read them.
+  - Studio's own: organisatie, SLA, extra smoke URLs, notes. SLA is imported once from `site.yml` when the site first appears; after that it is studio's.
+  - The worker's: the health columns and the screenshot.
+  - Views: a table, a board by gezondheid, and a gallery of homepage screenshots (S24).
 
-  The REST layer strips `readonly` columns from every write (`cutBody`), so synced and health columns are plain columns. Site's writer refuses changes to them from a `user` account and lets `service` accounts write. A writer sees role and kind but not which service account is acting, so "only the worker writes health" is a convention the claude account is told to follow. Revision records who wrote each value.
-  Source: "sites healthy" — Stefan. The split follows the netdust-wp-manager registry rule (INV-3: generated from `site.yml`, never hand-maintained). The enforcement is invented — approved 2026-10-21, from the builder check.
+  Source: "ok, a split is good. the studio never shows site.yml data. its not needed there" — Stefan, 2026-10-23.
+  - Health columns: status (ok · let op · storing · onbekend), http, responstijd, wp, php, updates_plugins, updates_themes, updates_core, tls_dagen, laatste_check.
+  - Studio stores no SSH host, path, domain or other technical fact.
+
+  The REST layer strips `readonly` columns from every write (`cutBody`), so the registry and health columns are plain columns. Site's writer lets a person write only studio's own columns, and lets a service write the registry and health columns (and SLA only when it creates the site). Revision records who wrote each value.
+  Source: "sites healthy" — Stefan. The registry rule follows netdust-wp-manager's INV-3 (generated from `site.yml`, never hand-maintained). The enforcement is invented — approved 2026-10-21.
 - **S4 Actie, shown as "Opdrachten".** A request:
   - soort: gezondheidscheck · malwarescan · bijwerken · smoketest
   - bijwerken always covers WordPress core, plugins and themes (S15); there is no per-component choice (plan studio-domain, ruling)
@@ -117,7 +120,7 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 - **S8 One Agenda.** The grid shows one Agenda. Its main view is a calendar on the **agenda** query, which unions everything dated: Stefan's own items, requests by gepland_op, and open tasks by deadline. `+ Nieuw` on it asks title and date and saves an Agendapunt (titel, datum, start, eind, organisatie, soort afspraak · deadline · herinnering, notities). The Agendapunt dataset is labelled "Agenda", and the agenda query is listed under it (`of`), so the tree holds one entry. Its other view is a table of his own items, for editing.
   Source: "a agenda where planned items appear and where i can add items amnually too ofcourse" — Stefan; "an Agenda should work like an agenda, i add by hand but it can also import data, so agendapunten should not exist, its confusing" — Stefan, 2026-10-22.
 - **S9 Actions on the sites you pick.** The four kinds are selection actions on Site (engine spec `selection-actions`). Stefan ticks sites in a table view, or takes everything the view shows, and runs one. A site's drawer runs it on that site alone. Each run creates one request with one link per site, in one batch. Saved views ("SLA-sites", or a hosting such as Combell) are the named sets; there are no groups.
-  - In a bijwerken run on more than one site, a `risico: hoog` site gets its link as overgeslagen ("alleen per site"). Such sites are updated one at a time, through their staging route (S15).
+  - In a bijwerken run on more than one site, the worker leaves a `risk: high` site out at preview, with the reason on its line ("Hoog risico: alleen per site bijwerken"). Such sites are updated one at a time, through their staging route (S15).
   - A selected site that is no longer in the registry gets its link as overgeslagen ("niet in registry"), so taking everything a view shows always works.
   Source: "a button that acts on the filtered items is better and/or making sure grid items are selectable should also be possible" and "do you agree this is a better path? more natural to work with? if so, yes, engine first" — Stefan, 2026-10-22, replacing the groups of 2026-10-21 ("i find this a bad solution").
 - **S10 Lifecycle of an Actie.**
@@ -181,7 +184,7 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 - **S16 Schedules.** The worker creates requests on a timer, as its own service account, with one link per site in the registry. Default: gezondheidscheck and malwarescan for every site every Monday at 07:00. Bijwerken is never scheduled.
   Source: "set a shedule even" — Stefan. The default and "never scheduled writes" are invented — approved 2026-10-21.
 - **S17 Registry sync.** The worker reads every `site.yml` under a configured list of roots, on start, hourly, and on demand. The live fleet needs `~/Sites` and a Windows-side Sites folder. A site's key is its `name:`. When two files declare the same name (today: a working copy beside the original, like `*-smoke` or `*-planning-model`), the sync takes neither and writes a task naming both paths. It reads one structure only, schema 2 (S23). A site's production is `environments.production` by name: its `url`, its `path`, its `ssh_host` or else `deploy.ssh_host`, and `deploy.wp_path`. A file without a complete production entry is a site studio checks over the web only. The sync marks it so and puts a task on the table naming the file. It never falls back to older keys. The real files are the test fixtures, in the private repo.
-  - It creates and updates Site rows by name.
+  - It creates Site rows by name, with SLA imported once from `site.yml`, and keeps `in_registry` current. It writes no other `site.yml` fact into studio (S3).
   - It marks sites whose `site.yml` disappeared as not in the registry, and never deletes them.
   - It fails loudly, and writes a task, when it finds zero files or cannot read the root.
   Source: "this replaces fleetmanager, don't make it depended on that folder" — Stefan, plus the anti-goal.

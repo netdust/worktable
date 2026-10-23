@@ -18,7 +18,7 @@ Tasks 1–5 are built (`46a409f` … `78ce848`). Their rulings A, C, D and E sta
 - Op tafel is a filter of tasks
 - new labels (Opdrachten, Onderhoudslog, Features, Agenda)
 - a Logboek section
-- a Sites board by risico and a screenshot gallery
+- a Sites board and a screenshot gallery (the board groups on gezondheid since 2026-10-23: studio shows no site.yml data)
 
 The data contract, rulings, threat model, Test map and Review Focus below are updated to the revision. Tasks 6–8 replace the old Tasks 6 and 7. Struck items say what they replaced, so a restart can read the history.
 
@@ -48,7 +48,7 @@ These names are the interface the other two plans write against. Changing one br
 | Dataset | Columns (type; options) |
 |---|---|
 | `organisatie` | naam; soort (klant · intern, default klant); notities (long) |
-| `site` | naam (unique, by writer); domein; hosting; sla (bool); risico (laag · normaal · hoog, from `risk:` low/medium/high); health_markers (bool); beheer (volledig · web_alleen · composer); staging (bool); in_registry (bool, default true); organisatie_id → organisatie; smoke_urls (long); notities (long); gezondheid (ok · let_op · storing · onbekend, default onbekend); statuscode (int); responstijd_ms (int); wp_versie; php_versie; updates_plugins (int, default 0); updates_themas (int, default 0); updates_core (bool, default false); tls_dagen (int); laatste_check (datetime). Attachments: kind `screenshot` (S24). Board on `risico`; gallery of `screenshot` |
+| `site` | naam (unique, by writer; the only value studio takes from site.yml); in_registry (bool, default true); organisatie_id → organisatie; sla (bool; studio's own, imported once at the site's first sync); smoke_urls (long); notities (long); gezondheid (ok · let_op · storing · onbekend, default onbekend); statuscode (int); responstijd_ms (int); wp_versie; php_versie; updates_plugins (int, default 0); updates_themas (int, default 0); updates_core (bool, default false); tls_dagen (int); laatste_check (datetime). Attachments: kind `screenshot` (S24). Board on `gezondheid`; gallery of `screenshot`. ~~domein, hosting, risico, health_markers, beheer, staging~~ removed on 2026-10-23 (Task 6c) |
 | ~~`groep`, `groep_lid`~~ | removed on 2026-10-22 (spec S9) |
 | `actie` (label "Opdrachten") | titel (nullable text: the action sets "<Soort> · <site naam>" for one site or "<Soort> · <n> sites"; the writer falls back to "<Soort>"); soort (gezondheidscheck · malwarescan · bijwerken · smoketest; required); status (lifecycle below, default aangevraagd); bron (handmatig · schema, default handmatig); gepland_op (datetime); voorbereid_op (datetime, set by the writer); samenvatting (long). Link `sites` → `actie_site`, state `state` |
 | `actie_site` (`listed: false`; lifecycle on `state`, see Rulings; lookup `actie_status` via actie_id, field status; samenvatting (long, the drawer's detail line, frozen from voorbereid like voorstel)) | actie_id → actie; site_id → site; state (wacht · te_bevestigen · bezig · klaar · mislukt · overgeslagen, default wacht); voorstel (long: the preview, pinned versions as JSON text); resultaat (long); unique (actie_id, site_id), by writer |
@@ -113,11 +113,14 @@ Rulings made during Tasks 1–5, ledgered on the branch's executor ledger and wr
 
   actieSiteWriter decides who may write what, mirroring the buttons' when exactly (drawer-actions review N1):
   - A person (kind user) may move te_bevestigen ↔ overgeslagen only while the actie is voorbereid. "Toch wel" also needs a voorstel (Ruling E).
-  - A service may move te_bevestigen → overgeslagen only while the actie is bezig (the worker's apply-time skip), and never overgeslagen → te_bevestigen. Every service write of state sends expect — why: the drawer's buttons are declared transitions, and the engine requires expect for a service's lifecycle write — cost if wrong: a worker write without expect is a 400, caught by its tests.`
+  - A service may move te_bevestigen → overgeslagen only while the actie is voorbereiden (the re-preview's skip, clearing voorstel) or bezig (the apply-time skip), and never overgeslagen → te_bevestigen.
+  - (2026-10-23, from 6b's review) One predicate, unclaimed (aangevraagd with no voorbereid_op), governs every change of the set: create, a change of site_id or actie_id, and a person's delete. resultaat is frozen in voorbereid, beside samenvatting. Every service write of state sends expect — why: the drawer's buttons are declared transitions, and the engine requires expect for a service's lifecycle write — cost if wrong: a worker write without expect is a 400, caught by its tests.`
 - `Ruling (2026-10-22, with drawer-actions): actie's lifecycle declares the buttons "Bevestigen" (voorbereid → bevestigd, administrator) and "Annuleren" (aangevraagd | voorbereiden | voorbereid → geannuleerd), and live: [aangevraagd, voorbereiden, bevestigd, bezig]. The four Site selection actions declare opens: true, with the actie as their first top-level create. The actie.sites link declares detail: 'samenvatting', a new long-text column on actie_site that the worker fills with its one-line summary. From voorbereid on, samenvatting is frozen like voorstel; the worker's outcomes go to resultaat. actie.samenvatting carries the worker's progress text — why: the update flow happens in the drawer that opens on Bijwerken (spec S10, revised) — cost if wrong: none.`
 - `Ruling (2026-10-22): a selected site with in_registry false gets its link as overgeslagen with resultaat "niet in registry" — why: "take everything the view shows" must work on the seeded Sites view — cost if wrong: none.`
 - `Ruling (2026-10-22): the Opdrachten table keeps the engine's + Nieuw, because a writer cannot tell an action's create from the grid's (both go through createAs as the caller). The grid shows + Nieuw on any dataset whose writer can update (`app.ts:36-37`, `App.tsx:577`), and hiding it would need an engine change this plan rules out. A bare request (no sites) is claimed within one poll and ends mislukt "geen sites" with a taak, so "+ Nieuw, then add sites" never works; requests start from Sites. Onderhoudslog and Sites show the same button, and their writers refuse it with a Dutch message. A site added by hand in the Sites cell before the first preview gets wacht whatever its risico; the worker skips a risico hoog site in a request of several at preview and at apply (studio-worker) — cost if wrong: one confusing button.`
-- `Ruling (2026-10-22): in a bijwerken run on more than one site, the action creates the link of a risico hoog site as overgeslagen with resultaat "alleen per site" — why: S9/S15; visible at once, and the worker re-checks at apply — cost if wrong: none.`
+- ~~`Ruling (2026-10-22): in a bijwerken run on more than one site, the action creates the link of a risico hoog site as overgeslagen …`~~ Replaced on 2026-10-23: studio holds no risico. The worker skips a `risk: high` site in a bijwerken on more than one site at preview (wacht → overgeslagen, with the reason in resultaat and samenvatting), and again at apply (studio-worker).
+- `Ruling (2026-10-23): studio shows no site.yml data. Site keeps only naam (to know the site exists) and in_registry from the sync. sla is studio's own: imported once when the sync first creates the site, then set by Stefan and never touched by the sync. organisatie_id, smoke_urls and notities are studio's. The health columns are the worker's. — why: "ok, a split is good. the studio never shows site.yml data. its not needed there" (Stefan, 2026-10-23); technical facts (domain, servers, paths, risk, markers) stay in site.yml, which the worker and the deploy tooling read — cost if wrong: the Sites list identifies a site by its registry name only.`
+- `Ruling (2026-10-23, confirmed with the coder): siteWriter lets a person write organisatie_id, sla, smoke_urls and notities. A service writes naam, in_registry, the health columns, organisatie_id, smoke_urls and notities (as Task 4 built: Claude links a site to its client and adds notes), and sla only on create (forbid "De SLA is van studio: de worker zet ze alleen bij een nieuwe site.") — why: the split, the smallest change — cost if wrong: none.`
 - `Ruling: Bijwerken always covers core, plugins and themes, with no per-component booleans — why: Stefan, "we also need to make sure that wp, plugins and yootheme gets updated"; and per-component inputs would make every run ask questions — cost if wrong: no way to update only plugins in v1.`
 - `Ruling: a state voorbereiden between aangevraagd and voorbereid — why: the worker claims a preview by a transition, as it claims every request; the spec's voorbereid is "preview done" — cost if wrong: none visible to Stefan; one more board column.`
 - `Ruling: actie is not scoped by organisatie, so "Te bevestigen" and the Opdrachten views stay fleet-wide under the space switcher; in the scoped agenda query, actie rows carry no organisatie and drop out under a client — why: a request spans clients through its sites; scoping it to one client would hide a bulk update from the client view that it touches — cost if wrong: picking a client still shows other clients' requests in the Te bevestigen tile, and a request touching several clients shows under none of them in the agenda.`
@@ -240,7 +243,7 @@ Rulings made during Tasks 1–5, ledgered on the branch's executor ledger and wr
 - [ ] **Step 3: Seed invented fixtures and the views.**
   - Fixtures:
     - 2 organisations (Studio Voorbeeld, intern; Bakkerij Testmans, klant)
-    - 5 sites, one per gezondheid, one with `in_registry: false`, one `risico: 'hoog'`
+    - 5 sites, one per gezondheid, one with `in_registry: false` (risico removed in Task 6c)
     - the groups Alle sites and SLA-sites, plus each site's own group (soort site)
     - 2 projects with 3 werkpakketten in different fases
     - 4 open tasks
@@ -448,6 +451,24 @@ git commit -m "feat(studio): the studio domain's datasets, seed and Monday dashb
 - [ ] **Step 3: Run** `bun test packages/studio`: PASS. `bun run check` exits 0. Then the gate under the lock: exit 0. The harness's studio instance must boot with `--files-dir`.
 - [ ] **Step 4: Commit:** `git commit -m "feat(studio): no groups, one agenda, op tafel from tasks, the Logboek and the sites board and gallery"`
 
+### Task 6c: Studio shows no site.yml data (2026-10-23)
+
+**Files:**
+- Modify: `packages/studio/src/datasets.ts`, `seed.ts`, `writers/site.ts`, the views that name the removed columns, `packages/studio/test/seed.test.ts`, `ownership.test.ts`, `queries.test.ts` where they name them.
+
+- [ ] **Step 1: Tests (RED first):**
+  - "Site serves no site.yml data": `/schema`'s site columns are naam, in_registry, organisatie_id, sla, smoke_urls, notities and the health columns, and none of domein, hosting, risico, health_markers, beheer, staging.
+  - "a person writes organisatie, sla, smoke URLs and notes": 200 each.
+  - "a person writes no health column, naam or in_registry" (refused).
+  - "a service writes sla only on create" (a PATCH of sla by a service is refused with the forbid above); a service still writes organisatie_id, smoke_urls and notities.
+  - "the Sites board groups on gezondheid".
+- [ ] **Step 2: Implement.**
+  - Drop the six columns from site, the seed and every view.
+  - Move the Sites board to `board: { column: 'gezondheid' }` and rename its view "Sites per gezondheid".
+  - siteWriter per the 2026-10-23 rulings.
+- [ ] **Step 3: Run** `bun test packages/studio` and `bun run check`: PASS.
+- [ ] **Step 4: Commit:** `git commit -m "feat(studio): studio shows no site.yml data; SLA is studio's own"`
+
 ### Task 7: Selection actions on Site (2026-10-22)
 
 **Files:**
@@ -461,7 +482,6 @@ git commit -m "feat(studio): the studio domain's datasets, seed and Monday dashb
   - "a health check on three selected sites is one request with three links, in one batch": undo removes all four rows.
   - "one site from its drawer": `{ ids: [id] }` → titel "Gezondheidscheck · <naam>".
   - "the result opens": the run's `created[0]` is the actie, and the four actions declare `opens: true`.
-  - "a high-risk site in a bulk update is skipped at request time": bijwerken on two sites, one `risico: 'hoog'` → its link is overgeslagen with resultaat "alleen per site", and the other link is wacht. Bijwerken on that site alone → wacht.
   - "a site gone from the registry is skipped in a request": a selected site with in_registry false gets its link as overgeslagen with resultaat "niet in registry"; the other links are wacht.
   - "a service can start a request on ids": the claude service account → 201.
 - [ ] **Step 2: Implement** `actions.ts` and register it in `index.ts`.
