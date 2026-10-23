@@ -371,8 +371,11 @@ describe('attachments deleted_by person', () => {
 
   test('a person deletes the file, and undoes that', async () => {
     const { id } = await uploaded('editor')
-    expect((await admin('DELETE', `/api/attachments/file/${id}`)).status).toBe(200)
+    const deleted = await admin('DELETE', `/api/attachments/file/${id}`)
+    expect(deleted.status).toBe(200)
     expect(live()?.deleted_at).toBeString()
+    expect((await admin('POST', `/api/batches/${deleted.body.revision.batch_id}/undo`, json({}))).status).toBe(200)
+    expect(live()?.deleted_at ?? null).toBeNull()
   })
 })
 

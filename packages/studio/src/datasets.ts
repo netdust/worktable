@@ -38,7 +38,6 @@ export const organisatie = defineDataset({
 export const site = defineDataset({
   name: 'site',
   label: 'Sites',
-  new_label: 'Nieuwe site',
   icon: 'box',
   title: 'naam',
   board: { column: 'gezondheid' },
@@ -199,7 +198,6 @@ export const actieSite = defineDataset({
 export const onderhoud = defineDataset({
   name: 'onderhoud',
   label: 'Onderhoudslog',
-  new_label: 'Nieuwe logregel',
   icon: 'clock',
   title: 'samenvatting',
   date: 'datum',
