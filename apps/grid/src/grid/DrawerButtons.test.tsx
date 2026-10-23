@@ -84,3 +84,33 @@ describe('the drawer’s buttons', () => {
     expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', false)
   })
 })
+
+describe('a primary button', () => {
+  it('renders filled, and the others stay secondary', () => {
+    const marks: Available = { state: 'open', buttons: [{ to: 'ja', label: 'Bevestigen', primary: true }, { to: 'nee', label: 'Annuleren' }], actions: [] }
+    open(row(marks))
+    expect(screen.getByRole('button', { name: 'Bevestigen' }).className).toContain('nv-button--primary')
+    expect(screen.getByRole('button', { name: 'Annuleren' }).className).toContain('nv-button--secondary')
+  })
+})
+
+describe('a link that declares no meter, in the drawer head', () => {
+  const link = { item: 'Lid', dataset: 'tie', key: 'activity_id', target: 'member_id', target_dataset: 'member' }
+  const head = (meter?: false) => {
+    const field = { type: 'links', label: 'Leden', link: { ...link, ...(meter === false ? { meter } : {}) } } as unknown as Model['fields'][string]
+    const withLink: Model = { ...model, fields: { ...model.fields, members: field } }
+    const cols = columnsFor(withLink, { ...planning, columns: undefined }, false)
+    const item: LinkItem = { id: 9, target: 4, title: 'Ann', state: 'open' }
+    const schema = { models: { tie: { key: 'tie', label: 'Tie', fields: {} } }, tables: [], views: [] } as unknown as Schema
+    return render(<SchemaContext.Provider value={schema}><DrawerWriteContext.Provider value={write}>
+      <Drawer row={row(undefined, [item])} columns={cols} model={withLink} onDone={vi.fn()} onClose={() => undefined} />
+    </DrawerWriteContext.Provider></SchemaContext.Provider>)
+  }
+
+  it('counts have/need by default, and shows no count with meter false', () => {
+    const { container, unmount } = head()
+    expect(container.querySelector('.nv-dw-sec__n')?.textContent).toBe('1/1')
+    unmount()
+    expect(head(false).container.querySelector('.nv-dw-sec__n')).toBeNull()
+  })
+})

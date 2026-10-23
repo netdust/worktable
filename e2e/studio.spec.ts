@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { type APIRequestContext, expect, type Locator, type Page, type Route, request, test } from '@playwright/test'
 import { STUDIO, STUDIO_SERVICE, state } from './auth'
-import { card, lane, listening, orders, said } from './board'
+import { card, lane, orders } from './board'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -411,7 +411,7 @@ test.describe('studio', () => {
     expect(after.link.state).toBe('te_bevestigen')
   })
 
-  test('sites-board-and-gallery @e2e: the board shows the four health columns, a drag is refused as worker-only, the gallery shows the live sites', async ({
+  test('sites-board-and-gallery @e2e: the board shows the four health columns and does not drag, the gallery shows the live sites', async ({
     page,
   }) => {
     const api = page.request
@@ -420,20 +420,10 @@ test.describe('studio', () => {
     const first = await orders(page)
     await shot(page, 'sites-per-gezondheid')
 
-    const write = page.waitForResponse(
-      (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === '/api/rows/site/1',
-    )
+    await expect(card(page, 1)).not.toHaveClass(/nv-board__card--drags/)
     await card(page, 1).focus()
     await page.keyboard.press('Space')
-    await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-    await listening(page)
-    await page.keyboard.press('ArrowRight')
-    await expect(said(page)).toHaveText(/boven Let op/)
-    await page.keyboard.press('Space')
-    expect((await write).status()).toBe(403)
-    await expect(page.getByText('Registry- en gezondheidsgegevens schrijft alleen de worker.').first()).toBeVisible()
-    await shot(page, 'gezondheid-sleep-geweigerd')
-    await expect(lane(page, 'In orde').locator('[data-card="1"]')).toBeVisible()
+    await expect(page.locator('.nv-board__card--lifted')).toHaveCount(0)
     await expect.poll(() => orders(page)).toEqual(first)
     expect((await rowOf(api, 'site', 1)).gezondheid).toBe('ok')
 
@@ -540,25 +530,17 @@ test.describe('studio, the editor', () => {
 
 // The hunt's confirmed bugs (specs/studio-domain/shakeout.md), RED at c43bd3e and fixed by b08381e.
 test.describe('studio, the hunt', () => {
-  test('person-cannot-take-worker-steps @e2e: dragging an opdracht into the worker’s Voorbereiden on the board is refused', async ({
+  test('person-cannot-take-worker-steps @e2e: the Opdrachten board does not drag, so no opdracht reaches the worker’s Voorbereiden', async ({
     page,
   }) => {
     const api = page.request
     const { actie } = await run(api, 'bijwerken', [4])
     await open(page, 'Opdrachten per status', 'Opdrachten')
     await expect(lane(page, 'Aangevraagd').locator(`[data-card="${actie}"]`)).toBeVisible()
-    const write = page.waitForResponse(
-      (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/actie/${actie}`,
-    )
+    await expect(card(page, actie)).not.toHaveClass(/nv-board__card--drags/)
     await card(page, actie).focus()
     await page.keyboard.press('Space')
-    await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-    await listening(page)
-    await page.keyboard.press('ArrowRight')
-    await expect(said(page)).toHaveText(/boven Voorbereiden/)
-    await page.keyboard.press('Space')
-    expect((await write).status()).toBeGreaterThanOrEqual(400)
-    await expect(page.getByText('Deze stap zet de worker.').first()).toBeVisible()
+    await expect(page.locator('.nv-board__card--lifted')).toHaveCount(0)
     await expect(lane(page, 'Aangevraagd').locator(`[data-card="${actie}"]`)).toBeVisible()
     await shot(page, 'opdracht-sleep-voorbereiden')
     expect((await rowOf(api, 'actie', actie)).status).toBe('aangevraagd')
@@ -658,5 +640,68 @@ test.describe('studio, the hunt at 1280 by 720', () => {
     const line = await item.boundingBox()
     const title = await item.locator('.nv-list__title').boundingBox()
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual((line?.x ?? 0) + (line?.width ?? 0))
+  })
+})
+
+test.describe('studio, what a person is offered', () => {
+  const readOnly = async (page: Page, grid: string, headers: string[]) => {
+    const table = page.getByRole('grid', { name: grid, exact: true })
+    const names = await table.getByRole('columnheader').allTextContents()
+    const cells = table
+      .getByRole('row')
+      .filter({ has: page.getByRole('gridcell') })
+      .first()
+      .getByRole('gridcell')
+    expect(await cells.count()).toBe(names.length)
+    for (const header of headers) {
+      const at = names.findIndex((name) => name.includes(header))
+      expect(at, header).toBeGreaterThanOrEqual(0)
+      await expect(cells.nth(at), header).toHaveAttribute('aria-readonly', 'true')
+    }
+  }
+
+  test('no-edit-on-worker-columns @e2e: the worker’s columns are read-only on Sites and the log, and an opdracht’s Status is no inline select', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    await readOnly(page, 'Sites', [
+      'Gezondheid',
+      'HTTP',
+      'WordPress',
+      'PHP',
+      'Updates plugins',
+      'TLS',
+      'Laatste check',
+      'In registry',
+    ])
+    await expect(page.getByRole('row', { name: /testmans-winkel/ })).toBeVisible()
+    await shot(page, 'sites-worker-kolommen')
+
+    await openView(page, 'Onderhoudslog', 'Onderhoudslog')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Onderhoudslog')
+    await expect(
+      page.getByRole('grid', { name: 'Onderhoudslog', exact: true }).locator('[role=gridcell]:not([aria-readonly])'),
+    ).toHaveCount(0)
+
+    await openView(page, 'Opdrachten', 'Opdrachten')
+    await readOnly(page, 'Opdrachten', ['Status'])
+  })
+
+  test('no-new-where-not-allowed @e2e: Sites and the log offer no + Nieuw, and a query view that creates nothing offers none', async ({
+    page,
+  }) => {
+    for (const [view, model] of [
+      ['Sites', 'Sites'],
+      ['Sites per gezondheid', 'Sites'],
+      ['Sites met aandacht', 'Sites'],
+      ['Onderhoudslog', 'Onderhoudslog'],
+    ]) {
+      await open(page, view, model)
+      await expect(page.locator('.nv-toolbar .nv-button--primary'), view).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /^Nieuw/ }), view).toHaveCount(0)
+    }
+    await open(page, 'Opdrachten', 'Opdrachten')
+    await expect(page.locator('.nv-toolbar .nv-button--primary')).toHaveText(/Nieuwe opdracht/)
+    await shot(page, 'sites-zonder-nieuw')
   })
 })

@@ -226,3 +226,19 @@ describe('the page', () => {
     expect(screen.queryByRole('region')).toBeTruthy()
   })
 })
+
+describe('quick actions', () => {
+  const taak = { key: 'taak', label: 'Taken', title_label: 'Titel', title_readonly: false, fields: {} } as unknown as Model
+  const withActions = (made: Model) => {
+    const layout = { sections: [], actions: [{ create: 'taak', label: 'Nieuwe taak' }] }
+    render(<Dashboard dashboard={{ ...dashboard([]), layout } as unknown as SavedView} views={[conflicten, lijst]} models={{ ...models, taak: made }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+  }
+
+  it('offers a model a person creates, and none that only a service creates', () => {
+    withActions(taak)
+    expect(screen.getByRole('button', { name: 'Nieuwe taak' })).toBeTruthy()
+    cleanup()
+    withActions({ ...taak, created_by: 'service' })
+    expect(screen.queryByRole('button', { name: 'Nieuwe taak' })).toBeNull()
+  })
+})

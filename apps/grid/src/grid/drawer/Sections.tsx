@@ -95,7 +95,7 @@ export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLi
   const { have, need } = crewOf(items, link)
   const ordered = [...items.filter((item) => !isOpen(item)), ...items.filter(isOpen)]
   return (
-    <Section title={label} count={`${have}/${need}`}>
+    <Section title={label} count={link?.meter === false ? undefined : `${have}/${need}`}>
       {items.length === 0 ? <p className="nv-dw-none">{t('noneOf', { label: label.toLocaleLowerCase(locale()) })}</p> : (
         <ul className="nv-dw-list">
           {ordered.map((item) => (

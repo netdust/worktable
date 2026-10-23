@@ -162,3 +162,13 @@ describe('the composer', () => {
     expect(screen.getByRole('group', { name: /^Sectie/ })).toBeTruthy()
   })
 })
+
+describe('the quick actions a composer offers', () => {
+  it('leave out a model only a service creates', () => {
+    const only = { ...models, taak: { ...models.taak, created_by: 'service' } } as Record<string, Model>
+    render(<Dashboard dashboard={dashboard({ editable: true, mine: true, owner: { id: 4, name: '' } } as Partial<SavedView>)} views={[conflicten, werklijst]} models={only} tables={[]} scope={null} role="administrator" onOpenView={() => undefined} onSaved={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+    const offered = within(within(screen.getByRole('group', { name: 'Snelle acties' })).getByLabelText('Nieuw in')).getAllByRole('option').map((o) => o.textContent)
+    expect(offered).toEqual(['Conflicten'])
+  })
+})

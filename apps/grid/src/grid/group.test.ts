@@ -96,6 +96,10 @@ describe('an activity without a time', () => {
 })
 
 describe('sums', () => {
+  it('skips a column that declares footer none', () => {
+    expect(sums(calais, Object.values(columns).map((c) => (c.id === 'rollups.confirmed' ? { ...c, footer: 'none' as const } : c)))).toEqual({})
+  })
+
   it('adds the numeric and rollup columns for the foot, nothing else', () => {
     expect(sums(calais, Object.values(columns))).toEqual({ 'rollups.confirmed': 47 })
   })

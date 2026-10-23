@@ -114,9 +114,8 @@ describe('the tree', () => {
     expect(labels).toEqual(['Opdrachten', 'Onderhoudslog', 'Features', 'Agenda'])
   })
 
-  // The grid's + Nieuw reads "Nieuw <label>" without one; a site and a log line still refuse a person's create.
-  test('+ Nieuw names one site and one log line', () => {
-    expect([schema.site?.new_label, schema.onderhoud?.new_label]).toEqual(['Nieuwe site', 'Nieuwe logregel'])
+  test('only a service creates a site or a log line', () => {
+    expect([schema.site?.created_by, schema.onderhoud?.created_by]).toEqual(['service', 'service'])
   })
 
   test('op tafel sits under Taken, and the agenda under Agenda, where it creates', () => {

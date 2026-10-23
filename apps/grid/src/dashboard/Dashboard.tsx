@@ -93,7 +93,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     )
   }
   const sections = dashboard.layout?.sections ?? []
-  const actions = (dashboard.layout?.actions ?? []).filter((action) => models[action.create])
+  const actions = (dashboard.layout?.actions ?? []).filter((action) => models[action.create] && !models[action.create].created_by)
   return (
     <div className="nv-frame">
       <ChipBar actions={actions.map((action) => (

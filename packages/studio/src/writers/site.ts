@@ -52,8 +52,4 @@ export const siteWriter: Writer = {
     checkNameKept(values, ctx.current as Values)
     return values
   },
-
-  delete(ctx) {
-    if (isUser(ctx)) forbid('Sites komen uit de registry.')
-  },
 }

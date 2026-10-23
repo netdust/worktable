@@ -15,6 +15,19 @@ afterEach(() => {
   document.documentElement.lang = ''
 })
 
+describe('a lifecycle column with button transitions', () => {
+  const stateful = { ...activity, lifecycle: 'status' } as Model
+  it('offers no inline edit, where a plain lifecycle column does', () => {
+    expect(byId(planning, stateful).status.editable).toBe(true)
+    expect(byId(planning, { ...stateful, lifecycle_buttons: true }).status.editable).toBe(false)
+  })
+
+  it('offers none on a column the person only reads', () => {
+    const served = { ...activity, fields: { ...activity.fields, kind: { ...activity.fields.kind, readonly: true } } } as Model
+    expect(byId(planning, served).kind.editable).toBe(false)
+  })
+})
+
 describe('columnsFor', () => {
   it('gives the column ids the shared fixture names, the ones Arrangement::ids() mirrors', () => {
     expect(columnsFor(fixtureModel(columnsFixture), columnsFixture.table).map((c) => c.id)).toEqual(columnsFixture.ids)

@@ -20,6 +20,7 @@ export interface EngineColumn {
   hidden?: true
   options_from?: OptionsFrom
   badge?: Tone
+  footer?: 'sum' | 'none'
   /** A text edited as long text, its own block in the drawer. */
   long?: true
 }
@@ -54,8 +55,9 @@ export interface EngineSource {
   matrix_join?: string
   date: string | null
   calendar?: { day: string; start?: string; end?: string; lanes: string[]; spans?: true }
-  board?: { column: string }
+  board?: { column: string; drag?: false }
   gallery?: { kind: string }
+  created_by?: 'service'
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
@@ -82,7 +84,7 @@ export interface EngineSource {
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
-  lifecycle?: { column: string; live?: string[] }
+  lifecycle?: { column: string; live?: string[]; buttons?: true }
   /** Each record has a link its person reads their views through. */
   record_link?: true
   attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
@@ -173,6 +175,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(declared.owner_visible ? { owner_visible: true as const } : {}),
     ...(declared.options_from ? { options_from: declared.options_from } : {}),
     ...(declared.badge ? { badge: declared.badge } : {}),
+    ...(declared.footer ? { footer: declared.footer } : {}),
   }
 }
 
@@ -210,11 +213,13 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.deletable ? { deletable: true } : {}),
     ...(source.creates ? { creates: source.creates } : {}),
+    ...(source.created_by ? { created_by: source.created_by } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
     ...(source.lifecycle?.live ? { live: source.lifecycle.live } : {}),
+    ...(source.lifecycle?.buttons ? { lifecycle_buttons: true as const } : {}),
     ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {

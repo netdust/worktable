@@ -44,10 +44,17 @@ function expectRefused(res: Res, status: number, message: string): void {
   expect(JSON.stringify(res.body)).toContain(message)
 }
 
-const REGISTRY = 'Registry- en gezondheidsgegevens schrijft alleen de worker.'
-const FROM_REGISTRY = 'Sites komen uit de registry.'
+function expectServiceOnly(res: Res): void {
+  expect(res.status).toBe(403)
+  expect(res.body.code).toBe('service_only')
+}
+
+function expectReadOnly(res: Res): void {
+  expect(res.status).toBe(405)
+  expect(res.body.code).toBe('read_only')
+}
+
 const LOG_FIXED = 'Het onderhoudslog verandert niet.'
-const LOG_WORKER = 'Onderhoud schrijft alleen de worker.'
 const NO_DELETE = 'Een serviceaccount verwijdert geen rijen.'
 
 const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe site.'
@@ -65,7 +72,7 @@ describe('site ownership', () => {
       { naam: 'andere-naam' },
       { in_registry: false },
     ]
-    for (const change of forbidden) expectRefused(await admin('PATCH', '/api/rows/site/1', change), 403, REGISTRY)
+    for (const change of forbidden) expectServiceOnly(await admin('PATCH', '/api/rows/site/1', change))
     expect(row('site', 1)).toEqual(before)
     expect(revisions()).toBe(revs)
   })
@@ -99,13 +106,21 @@ describe('site ownership', () => {
 
   test('sites come from the registry', async () => {
     const sites = count('site')
-    expectRefused(await admin('POST', '/api/rows/site', synced), 403, FROM_REGISTRY)
-    expectRefused(await admin('DELETE', '/api/rows/site/5'), 403, FROM_REGISTRY)
+    expectServiceOnly(await admin('POST', '/api/rows/site', synced))
+    expectReadOnly(await admin('DELETE', '/api/rows/site/5'))
     expect(count('site')).toBe(sites)
     expect(row('site', 5).deleted_at ?? null).toBeNull()
     const res = await worker('POST', '/api/rows/site', synced)
     expect(res.status).toBe(201)
     expect(count('site')).toBe(sites + 1)
+  })
+
+  test("the undo of the sync's site create answers 405 read_only, and the row stays", async () => {
+    const created = await worker('POST', '/api/rows/site', synced)
+    expect(created.status).toBe(201)
+    const batch = (created.body.revision as Body).batch_id
+    expectReadOnly(await worker('POST', `/api/batches/${batch}/undo`, {}))
+    expect(row('site', created.body.id as number).deleted_at ?? null).toBeNull()
   })
 
   test('a site name is unique', async () => {
@@ -121,7 +136,7 @@ describe('site ownership', () => {
     const revs = revisions()
     expectRefused(await worker('PATCH', '/api/rows/site/2', { naam: 'tmp-x' }), 422, NAME_FIXED)
     expectRefused(await worker('PATCH', '/api/rows/site/2', { naam: 'testmans-winkel' }), 422, NAME_FIXED)
-    expectRefused(await admin('PATCH', '/api/rows/site/2', { naam: 'tmp-x' }), 403, REGISTRY)
+    expectServiceOnly(await admin('PATCH', '/api/rows/site/2', { naam: 'tmp-x' }))
     expect(row('site', 2)).toEqual(before)
     expect(revisions()).toBe(revs)
   })
@@ -159,13 +174,12 @@ describe('the maintenance log', () => {
     const id = await logged()
     const before = row('onderhoud', id)
     const revs = revisions()
-    for (const send of [admin, worker]) {
-      expectRefused(await send('PATCH', `/api/rows/onderhoud/${id}`, { samenvatting: 'Anders' }), 403, LOG_FIXED)
-      expectRefused(await send('DELETE', `/api/rows/onderhoud/${id}`), 403, LOG_FIXED)
-    }
+    expectServiceOnly(await admin('PATCH', `/api/rows/onderhoud/${id}`, { samenvatting: 'Anders' }))
+    expectRefused(await worker('PATCH', `/api/rows/onderhoud/${id}`, { samenvatting: 'Anders' }), 403, LOG_FIXED)
+    for (const send of [admin, worker]) expectReadOnly(await send('DELETE', `/api/rows/onderhoud/${id}`))
     expect(row('onderhoud', id)).toEqual(before)
     const logs = count('onderhoud')
-    expectRefused(await admin('POST', '/api/rows/onderhoud', entry), 403, LOG_WORKER)
+    expectServiceOnly(await admin('POST', '/api/rows/onderhoud', entry))
     expect(count('onderhoud')).toBe(logs)
     expect(revisions()).toBe(revs)
   })
@@ -180,13 +194,14 @@ describe('the maintenance log', () => {
 })
 
 describe('no service deletes a row', () => {
-  test('a service cannot delete a site, an actie, a taak or a werkpakket', async () => {
+  test('a service cannot delete an actie, a taak or a werkpakket, nor a site', async () => {
     const bare = Number(
       sqlite.query(`INSERT INTO actie (titel, soort, status) VALUES ('x', 'bijwerken', 'aangevraagd')`).run()
         .lastInsertRowid,
     )
+    expectReadOnly(await worker('DELETE', '/api/rows/site/1'))
+    expect(row('site', 1).deleted_at ?? null).toBeNull()
     const targets: [string, number][] = [
-      ['site', 1],
       ['actie', bare],
       ['taak', 1],
       ['werkpakket', 1],

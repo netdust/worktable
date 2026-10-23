@@ -1646,12 +1646,12 @@ describe('writes on the engine', () => {
     })
   })
 
-  it('+ New is blocked on a query view', async () => {
+  it('a query view that creates nothing shows no + Nieuw', async () => {
     window.location.hash = '#view=dagplanning'
     render(<App />)
     await screen.findByText('opbouw Gent')
 
-    expect((screen.getByRole('button', { name: 'Nieuw Dagplanning' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Nieuw Dagplanning' })).toBeNull()
   })
 })
 

@@ -151,7 +151,7 @@ function TileForm({ views, models, onAdd }: { views: SavedView[]; models: Record
 function ActionsEditor({ actions, models, onChange }: {
   actions: DashboardLayout['actions']; models: Record<string, Model>; onChange: (next: DashboardLayout['actions']) => void
 }) {
-  const creatable = Object.values(models).filter((m) => !m.query)
+  const creatable = Object.values(models).filter((m) => !m.query && !m.created_by)
   const [pick, setPick] = useState('')
   const model = creatable.find((m) => m.key === pick) ?? creatable[0]
   return (
