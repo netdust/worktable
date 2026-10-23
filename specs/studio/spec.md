@@ -137,6 +137,7 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
   Source: "maybe this should happen in a opdracht drawer or a popup that opens instead of me having to nivagate around the app" and "yes, spec it that way" — Stefan, 2026-10-22, on the engine's `specs/drawer-actions/spec.md`.
   - What is confirmed is pinned: the worker installs exactly the previewed versions. A premium update whose pending version changed since the preview is skipped and reported.
   - A preview older than 24 hours expires: the request goes back to aangevraagd for a fresh preview.
+  - A confirmed update the worker has not claimed within 24 hours of its preview expires too, and Stefan can cancel a confirmed update until the worker claims it (review 2026-10-23).
   Source: invented — approved 2026-10-21. Stefan was asked "does the click mean go, or preview first" and has not answered. The role guard is how the anti-goal "production touched by a write nobody confirmed" is enforced.
 - **S11 Queries for the dashboard.** sites_aandacht: status not ok, or laatste_check older than 8 days, or not in the registry any more. sites_in_orde: the live sites not in sites_aandacht. op_tafel: open tasks with a deadline this week or earlier, listed under Taken (`of`), because it is a filter of tasks. Tasks without a deadline stay in Taken only. Requests waiting for confirmation have their own tile, Te bevestigen. A failed request is not on the table: the worker's task per failure carries it, and Gedaan clears it. The dashboard's numbers read these and Site.
   Source: the approved mockup; "op tafel should be a filter of taken, no? everything i need to do in near future( today or this week )", "Leave them out (Recommended)" on tasks without a deadline, and "Via the worker's task (Recommended)" on failures — Stefan, 2026-10-22.
@@ -263,7 +264,7 @@ Stefan clicked through studio-domain's first working version (Tasks 1–5 built)
 - Groups are gone. Actions run on the sites he picks (S9), on a new engine feature (`selection-actions`).
 - One Agenda (S8). Op tafel is a filter of tasks (S11).
 - New names: Opdrachten, Onderhoudslog, Features. The tree gains a Logboek section (S12).
-- Sites get a board by risico and a gallery of homepage screenshots (S3, S24).
+- Sites get a board by gezondheid (risico left studio on 2026-10-23) and a gallery of homepage screenshots (S3, S24).
 - Contacts stay after v1 ("After v1, as planned (Recommended)").
 
 ## Open for Stefan
