@@ -820,6 +820,9 @@ test.describe('studio-polish, what a person reads', () => {
     await shot(page, 'opdrachten-per-status')
     await card(page, 1).click()
     await expect(page.getByRole('complementary', { name: 'Bijwerken · 2 sites' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+    await expect(card(page, 1)).toBeFocused()
   })
 
   test('drawer-reads-right @e2e: Bevestigen is the filled button beside a quiet Annuleren, the live mark says Volgt live, and a site’s actions sit at its head', async ({
