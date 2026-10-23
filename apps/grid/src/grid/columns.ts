@@ -50,7 +50,7 @@ export interface Column {
 
 const WIDTH: Record<CellKind, number> = {
   title: 280, text: 160, longtext: 220, select: 130, date: 124, datetime: 140, time: 76, relation: 150,
-  bool: 80, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
+  bool: 108, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
 }
 
 /** "wo 14/10 00:30–02:00" scrolls 184px in a 12px-padded cell; 184 + 24 leaves it whole, and 8 more spare a wider font's glyphs. */

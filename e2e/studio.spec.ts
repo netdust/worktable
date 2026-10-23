@@ -849,6 +849,24 @@ test.describe('studio-polish, what a person reads', () => {
     }
   })
 
+  test('toggle-cell-fits @e2e: a switch cell holds its switch and its label in the column’s default width, no dot', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const cells = page.getByRole('grid', { name: 'Sites', exact: true }).locator('.nv-cell__bool')
+    expect(await cells.count()).toBeGreaterThan(0)
+    const clipped = await cells.evaluateAll(
+      (all) =>
+        all.filter(
+          (one) =>
+            (one.closest('[role=gridcell]') as HTMLElement).scrollWidth >
+            (one.closest('[role=gridcell]') as HTMLElement).clientWidth,
+        ).length,
+    )
+    expect(clipped).toBe(0)
+    await shot(page, 'sites-worker-kolommen')
+  })
+
   test('title-pill-worst-first @e2e: Sites shows Storing before Let op, each with its count', async ({ page }) => {
     const api = page.request
     await open(page, 'Sites', 'Sites')
