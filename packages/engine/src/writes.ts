@@ -678,6 +678,7 @@ export function applyWrite(
   hooked: Hooked,
   batch?: string,
 ): Omit<Written, 'notices'> {
+  if (op !== 'create' && id === null) throw new ApiError(422, 'invalid_update', 'an update or delete needs a record')
   const { sqlite } = store
   const scope = scopeOf(actor, target.dataset)
   const current = currentOf(sqlite, target, id, scope)

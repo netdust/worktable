@@ -139,6 +139,12 @@ const actions: Record<string, ActionDecl> = {
     input: {},
     run: (record) => ({ updates: [{ dataset: 'unit', id: record.id as number, values: { probe: 'by action' } }] }),
   },
+  sneak: {
+    label: 'Sneak',
+    on: 'unit',
+    input: {},
+    run: () => ({ updates: [{ dataset: 'feed', id: null as unknown as number, values: { name: 'sneaky' } }] }),
+  },
   everyone: { label: 'Everyone', on: 'unit', many: true, input: {}, run: () => ({}) },
   busy_only: {
     label: 'Busy only',
@@ -537,5 +543,14 @@ describe('a selectable query and a conditional action', () => {
     const rows = (await editor('GET', '/api/rows/unit_list')).body.rows as { id: number }[]
     const res = await editor('POST', '/api/actions/everyone', json({ ids: rows.map((row) => row.id) }))
     expect(res.status).toBe(201)
+  })
+})
+
+describe('an update step without a record', () => {
+  test('is refused and adds no row, on a dataset only a service creates', async () => {
+    const before = state()
+    const res = await editor('POST', '/api/actions/sneak', json({ id: 1 }))
+    expect({ status: res.status, code: res.body.code }).toEqual({ status: 422, code: 'invalid_update' })
+    expect(state()).toEqual(before)
   })
 })
