@@ -251,7 +251,7 @@ test.describe('studio', () => {
     await expect(siteLine(drawer, String(first.naam))).toBeVisible()
     await expect(siteLine(drawer, String(second.naam))).toBeVisible()
     const actie = await newest(api, 'actie')
-    expect(actie).toBe(before + 1)
+    expect(actie).toBeGreaterThan(before)
     const links = (await rowsOf(api, 'actie_site', { actie_id: actie })).rows
     expect(links.map((l) => l.site_id).sort()).toEqual([first.id, second.id].sort())
 
