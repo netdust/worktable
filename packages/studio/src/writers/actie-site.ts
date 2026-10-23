@@ -81,11 +81,17 @@ function checkServiceState(current: Values, to: unknown, parent: Values): void {
   if (!isOpen(parent) && (from === 'overgeslagen' || to === 'te_bevestigen')) refuse(closedMessage(parent))
 }
 
+function checkMayRun(current: Values, parent: Values): void {
+  const bijwerken = parent.soort === 'bijwerken'
+  if (bijwerken && (parent.status !== 'bezig' || current.state !== 'te_bevestigen')) refuse(ONLY_CONFIRMED)
+  if (!bijwerken && parent.status !== 'bezig') refuse(closedMessage(parent))
+}
+
 function checkState(current: Values, to: unknown, parent: Values, ctx: WriteContext): void {
   if (to === undefined || to === current.state) return
   if (isPerson(ctx)) checkPersonState(current, to, parent)
   else checkServiceState(current, to, parent)
-  if (to === 'bezig' && parent.soort === 'bijwerken' && current.state !== 'te_bevestigen') refuse(ONLY_CONFIRMED)
+  if (to === 'bezig') checkMayRun(current, parent)
 }
 
 function checkKeepsReason(values: Values, current: Values): void {

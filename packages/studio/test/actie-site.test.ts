@@ -526,6 +526,19 @@ describe('the fix pass on links', () => {
     expect((await move(check)).status).toBe(200)
   })
 
+  test('a link is updated only while its opdracht runs', async () => {
+    const msg = 'Alleen een bevestigde site wordt bijgewerkt.'
+    const run = (id: number) => patch(claude, id, { state: 'bezig', expect: { state: 'te_bevestigen' } })
+    for (const status of ['voorbereiden', 'geannuleerd', 'aangevraagd']) {
+      const id = linkIn(actieIn(status), 'te_bevestigen')
+      await expectRefused(() => run(id), msg, id)
+    }
+    const wacht = linkIn(actieIn('aangevraagd', 'gezondheidscheck'), 'wacht')
+    await expectRefused(() => patch(claude, wacht, { state: 'bezig', expect: { state: 'wacht' } }), CLOSED, wacht)
+    const ok = linkIn(actieIn('bezig'), 'te_bevestigen')
+    expect((await run(ok)).status).toBe(200)
+  })
+
   test('a new link starts as wacht, or skipped with a reason', async () => {
     const actie = actieIn('aangevraagd')
     const post = (site: number, body: Body) =>
