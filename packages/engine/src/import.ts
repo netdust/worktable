@@ -160,7 +160,9 @@ function checkCustom(custom: Row): void {
 function importRow(run: Run, plan: Plan, row: Row): number {
   const { store, actor } = run
   if (row.custom !== undefined) checkCustom(row.custom as Row)
-  const values = valuesOf(store, plan, 'create', bodyOf(run, plan.dataset, row), contextOf(store, actor, null), 'all')
+  const values = valuesOf(store, plan, 'create', bodyOf(run, plan.dataset, row), contextOf(store, actor, null), 'all', {
+    trusted: true,
+  })
   const stored = encodeAll(plan.dataset, values)
   if (Object.hasOwn(plan.dataset.columns, LEGACY_COLUMN)) stored[LEGACY_COLUMN] = row.legacy_id as number
   if (row.custom !== undefined) stored.custom = JSON.stringify(row.custom)

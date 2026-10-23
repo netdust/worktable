@@ -41,6 +41,8 @@ export interface Field {
   options_from?: OptionsFrom
   /** An integer shown as a tinted count above 0. */
   badge?: Tone
+  /** What a number column's foot says: its sum, or nothing. */
+  footer?: 'sum' | 'none'
 }
 
 export interface Link {
@@ -50,6 +52,8 @@ export interface Link {
   key: string
   target: string
   target_dataset: string
+  /** `false`: the head shows no have/need count. */
+  meter?: false
   state?: { options: Record<string, string>; tones: Record<string, Tone>; default: string | null }
 }
 
@@ -68,7 +72,7 @@ export interface LinkItem {
 /** What the server marks on a row or link item: the buttons and actions that apply to this viewer now. `state` is what a press sends as `expect`. */
 export interface Available {
   state: string | null
-  buttons: { to: string; label: string }[]
+  buttons: { to: string; label: string; primary?: true }[]
   actions: string[]
 }
 
@@ -87,6 +91,12 @@ export interface Model {
   query?: boolean
   /** Its writer deletes: the drawer offers Verwijderen. */
   deletable?: boolean
+  /** Only a service creates its rows: a person is offered no way to add one. */
+  created_by?: 'service'
+  /** Its lifecycle transitions declare buttons: the column changes through them only. */
+  lifecycle_buttons?: true
+  /** A query whose rows are the records of this dataset: ticked, they run its selection actions. */
+  selectable?: string
   /** A query whose `+ Nieuw` creates a row in this model. */
   creates?: string
   /** The words of `+ Nieuw` ("Nieuwe activiteit"), while the model keeps its declared name. */
@@ -120,6 +130,8 @@ export interface ModelAction {
   many?: true
   /** After a run the grid opens the first record it created, else the record it ran on. */
   opens?: true
+  /** Applies to a record only while a condition holds: a query's rows carry no marks to say whether it does. */
+  conditional?: true
 }
 
 /** A record an action asks the grid to open. */
@@ -194,7 +206,7 @@ export interface TableDef {
   /** A calendar table: how its rows sit on days. */
   calendar?: CalendarDef
   /** A board table: the options column its cards are grouped by. */
-  board?: { column: string }
+  board?: { column: string; drag?: false }
   /** A gallery table: the attachment kind its cards show. */
   gallery?: { kind: string }
   types: ViewType[]

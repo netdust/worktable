@@ -23,6 +23,7 @@ import { SelectionBar, useSelection } from './Selection'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
 import { DRAFT, type Store } from './store'
+import { type Insight, insightOf } from '../ui/insight'
 import { useGridTable } from './useTable'
 
 /** What the grid shows, read when it is exported: the visible columns in order and the sorted, grouped rows. */
@@ -49,7 +50,7 @@ export interface GridProps {
   snapshot?: RefObject<(() => OnScreen) | null>
   /** Told what is on screen, for the title line's summary. */
   /** What the title line and the chip row say: the rows, the groups, and the columns Kolommen offers. */
-  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[]; flagged?: Shown['flagged'] } | null) => void
+  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[]; flagged?: Shown['flagged']; insight?: Insight[] } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
@@ -81,6 +82,12 @@ function fromCell(target: EventTarget): boolean {
 
 function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
+}
+
+/** A table's selection actions; a selectable query's are its dataset's, the ones that apply to every record. */
+function selectionOf(model: Model, models: Record<string, Model>): ModelAction[] {
+  if (!model.selectable) return model.actions?.filter((a) => a.many) ?? []
+  return models[model.selectable]?.actions?.filter((a) => a.many && !a.conditional) ?? []
 }
 
 export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, onSelection, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
@@ -119,7 +126,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
   const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT)
   const ticking = useSelection(ids)
-  const selectionActions = onSelection ? model.actions?.filter((a) => a.many) ?? [] : []
+  const selectionActions = onSelection ? selectionOf(model, models) : []
   const selectable = selectionActions.length > 0
   const numberWidth = selectable ? SELECT_WIDTH : NUMBER_WIDTH
 
@@ -133,12 +140,13 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   })
 
   const shownRows = total(groups)
+  const insightKey = JSON.stringify(insightOf(model, shown))
   const shownGroups = by ? groups.length : null
   const flags = useFlags(useContext(SchemaContext), scope, windowOfRows(state.rows, view.date_field), model.key, state.rows)
   const flagged = flaggedOf(flags, model.key, shown)
   useEffect(() => {
-    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns, flagged })
-  }, [shownRows, shownGroups, cut, columns, flagged?.count])
+    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns, flagged, insight: insightOf(model, shown) })
+  }, [shownRows, shownGroups, cut, columns, flagged?.count, insightKey])
   useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)

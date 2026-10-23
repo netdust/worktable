@@ -2,13 +2,14 @@ import { t } from '../i18n'
 import type { ViewType } from '../types'
 
 /** The footer's hints for a skin, as its prototype writes them, and only for what the skin does. */
-export function hintsOf(skin: ViewType): string[] {
+export function hintsOf(skin: ViewType, drags = true): string[] {
   const undo = `⌘Z ${t('hintUndo')}`
   const period = [`←→ ${t('hintSteps')}`, `T ${t('hintToday')}`]
   switch (skin) {
     case 'matrix':
       return [`↑↓←→ ${t('hintMove')}`, `↵ ${t('hintAssign')}`, undo]
     case 'board':
+      if (!drags) return [`↑↓←→ ${t('hintMove')}`, `↵ ${t('hintOpen')}`, undo]
       return [t('hintDrag'), t('hintLift'), `↑↓←→ ${t('hintMove')}`, `Esc ${t('hintCancel')}`, `↵ ${t('hintOpen')}`, undo]
     case 'calendar':
     case 'timeline':

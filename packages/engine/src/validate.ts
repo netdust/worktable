@@ -97,6 +97,35 @@ function checkLong(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+// The enforced values are judged by equality, so a misspelt one would enforce nothing.
+function checkEnforced(source: DatasetDecl | QueryDecl): void {
+  const refuse = (bad: string, message: string) => new DomainError(source.name, bad, message)
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.written_by !== undefined && decl.written_by !== 'service') {
+      throw refuse(column, `${column} is written_by "${String(decl.written_by)}", which is not "service"`)
+    }
+    if (decl.written_by && column === source.owners?.owner) {
+      throw refuse(column, `${column} is the owner column, so it is not written_by a service`)
+    }
+  }
+  if (source.kind !== 'dataset') return
+  if (source.created_by !== undefined && source.created_by !== 'service') {
+    throw refuse('created_by', `created_by is "${String(source.created_by)}", which is not "service"`)
+  }
+  const deletedBy = source.attachments?.deleted_by
+  if (deletedBy !== undefined && deletedBy !== 'person') {
+    throw refuse('deleted_by', `deleted_by is "${String(deletedBy)}", which is not "person"`)
+  }
+}
+
+function checkFooter(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.footer !== undefined && decl.type !== 'integer' && decl.type !== 'real') {
+      throw new DomainError(source.name, column, `${column} has a footer but is not an integer or real column`)
+    }
+  }
+}
+
 // The calendar reads the rows route's date window, so its day is the source's date.
 function checkCalendar(source: DatasetDecl | QueryDecl): void {
   const cal = source.calendar
@@ -148,18 +177,25 @@ function checkNewLabel(dataset: DatasetDecl): void {
 function checkCreates(domain: Domain, query: QueryDecl): void {
   const dataset = query.creates
   if (dataset === undefined) return
-  if (!domain.datasets.some((d) => d.name === dataset) || !writerOf(domain, dataset)?.create) {
+  const target = domain.datasets.find((d) => d.name === dataset)
+  if (!target || !writerOf(domain, dataset)?.create) {
     throw new DomainError(
       query.name,
       dataset,
       `creates "${dataset}", which is not a dataset with a writer that creates`,
     )
   }
+  if (target.created_by) {
+    throw new DomainError(query.name, dataset, `creates "${dataset}", which only a service account creates`)
+  }
 }
 
 function checkOf(domain: Domain, query: QueryDecl): void {
   const dataset = query.of
-  if (dataset === undefined) return
+  if (dataset === undefined) {
+    if (query.selectable) throw new DomainError(query.name, 'selectable', 'selectable needs of')
+    return
+  }
   const found = domain.datasets.find((d) => d.name === dataset)
   if (!found) throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
   if (found.listed === false)
@@ -208,6 +244,7 @@ function checkOwnerWritable(dataset: DatasetDecl): void {
       new DomainError(dataset.name, column, `${column} ${why}, so it is not owner_writable`)
     if (decl.type === 'json') throw refuse('is json')
     if (decl.readonly) throw refuse('is readonly')
+    if (decl.written_by) throw refuse('is written_by a service')
     // checkRelations only proves the target exists, so a link could point its row at a record it cannot read.
     if (decl.relation) throw refuse('is a relation')
     if (column === dataset.owners?.owner) throw refuse('is the owner column')
@@ -336,7 +373,9 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
       throw at(lookup.own, `own "${lookup.own}" is not a column of the field's type and relation`)
     }
     // A write through the lookup is renamed to own, so own must be a column any editor may clear.
-    if (own.readonly || !own.nullable) throw at(lookup.own, `own "${lookup.own}" is readonly or not nullable`)
+    if (own.readonly || own.written_by || !own.nullable) {
+      throw at(lookup.own, `own "${lookup.own}" is readonly, written_by a service or not nullable`)
+    }
     if (lookup.own === dataset.lifecycle?.column || lookup.own === dataset.record_link?.email) {
       throw at(lookup.own, `own "${lookup.own}" is guarded by the engine`)
     }
@@ -355,6 +394,9 @@ function checkWrites(
   if (!Object.hasOwn(target.columns, writes.field))
     throw at(writes.field, `writes to undeclared field "${writes.field}"`)
   if (target.columns[writes.field]?.readonly) throw at(writes.field, `writes to readonly field "${writes.field}"`)
+  if (target.columns[writes.field]?.written_by) {
+    throw at(writes.field, `writes to field "${writes.field}", which only a service account writes`)
+  }
   if (!declared(query, writes.key)) throw at(writes.key, `has key "${writes.key}", not a column of the query`)
   if (!writerOf(domain, writes.dataset)?.update) {
     throw at(writes.dataset, `writes to "${writes.dataset}", which has no writer with update`)
@@ -489,7 +531,10 @@ function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
   const checkOption = (what: string, key: string) => {
     if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${lifecycle.column}"`)
   }
-  for (const { from, to, roles, label, button, when } of lifecycle.transitions) {
+  if (dataset.columns[lifecycle.column]?.written_by && lifecycle.transitions.some((t) => t.button !== undefined)) {
+    throw at(lifecycle.column, `column "${lifecycle.column}" is written_by a service, so it has no button transitions`)
+  }
+  for (const { from, to, roles, label, button, primary, when } of lifecycle.transitions) {
     if (from !== '*') for (const key of from) checkOption('from', key)
     checkOption('to', to)
     if (label !== undefined && (typeof label !== 'string' || label.trim() === '')) {
@@ -498,6 +543,7 @@ function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
     if (button !== undefined && (typeof button !== 'string' || button.trim() === '')) {
       throw at(to, `button of the transition to "${to}" must be a non-empty string`)
     }
+    if (primary && button === undefined) throw at(to, `primary of the transition to "${to}" needs a button`)
     if (when !== undefined) checkCondition(domain, dataset, `transition to "${to}"`, when)
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
@@ -710,6 +756,8 @@ export function validateDomain(domain: Domain): void {
     checkHidden(source)
     checkTones(source)
     checkLong(source)
+    checkEnforced(source)
+    checkFooter(source)
     checkCalendar(source)
     checkBoard(source)
     checkIcon(source)

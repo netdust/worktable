@@ -11,6 +11,7 @@ export const sitesAandacht = defineQuery({
   icon: 'flag',
   title: 'naam',
   of: 'site',
+  selectable: true,
   scoped: 'organisatie_id',
   sql: sqlOf('sites_aandacht'),
   columns: {

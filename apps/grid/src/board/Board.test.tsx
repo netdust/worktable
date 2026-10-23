@@ -72,6 +72,38 @@ describe('the board', () => {
   })
 })
 
+describe('the board’s drawer and Escape', () => {
+  it('closes with Escape pressed on the card it opened from, and the focus stays on that card', () => {
+    board({ onDrop: vi.fn() })
+    fireEvent.keyDown(card('Repetitie'), { code: 'Enter', key: 'Enter' })
+    expect(screen.getByRole('complementary', { name: 'Repetitie' })).toBeTruthy()
+    card('Repetitie').focus()
+    fireEvent.keyDown(card('Repetitie'), { key: 'Escape' })
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(document.activeElement).toBe(card('Repetitie'))
+  })
+
+  it('closes with Escape inside the drawer too, and the focus returns to the card', () => {
+    board()
+    card('Repetitie').focus()
+    fireEvent.click(card('Repetitie'))
+    const drawer = screen.getByRole('complementary', { name: 'Repetitie' })
+    ;(within(drawer).getByRole('button', { name: 'Sluiten' }) as HTMLElement).focus()
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' })
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(document.activeElement).toBe(card('Repetitie'))
+  })
+
+  it('leaves a drawer open when Escape cancels a drag', async () => {
+    const onDrop = vi.fn(() => Promise.resolve(true))
+    board({ rows: [row(1, 'Repetitie', 'optie'), row(2, 'Opbouw', 'optie')], onDrop })
+    fireEvent.click(card('Opbouw'))
+    await press('Repetitie', 'Space')
+    await press('Repetitie', 'Escape')
+    expect(screen.getByRole('complementary', { name: 'Opbouw' })).toBeTruthy()
+  })
+})
+
 describe('a keyboard drag on a manual board', () => {
   const rows = [row(1, 'Repetitie', 'optie', '1'), row(2, 'Opbouw', 'optie', '2'), row(3, 'Afbraak', 'optie', '3'), row(4, 'Voorstelling', 'bevestigd', '1')]
 

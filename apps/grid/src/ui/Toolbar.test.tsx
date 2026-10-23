@@ -205,3 +205,12 @@ describe('the toolbar overlap insight', () => {
     expect(document.querySelector('.nv-toolbar__overlaps')).toBeNull()
   })
 })
+
+describe('the title line’s pills', () => {
+  it('shows one pill per tone, the worst first', () => {
+    render(<Toolbar {...base} insight={[{ label: 'Storing', count: 2, tone: 'bad' }, { label: 'Let op', count: 1, tone: 'warn' }]} />)
+    const pills = [...document.querySelectorAll('.nv-toolbar__insight')]
+    expect(pills.map((p) => p.textContent)).toEqual(['Storing2', 'Let op1'])
+    expect(pills.map((p) => p.querySelector('.nv-pill')?.className)).toEqual(['nv-pill nv-pill--bad', 'nv-pill nv-pill--warn'])
+  })
+})

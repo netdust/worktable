@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { type APIRequestContext, expect, type Locator, type Page, type Route, request, test } from '@playwright/test'
 import { STUDIO, STUDIO_SERVICE, state } from './auth'
-import { card, lane, listening, orders, said } from './board'
+import { card, lane, orders } from './board'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -202,7 +202,7 @@ test.describe('studio', () => {
     const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
     await expect(drawer).toBeVisible()
     await expect(drawer.getByText('Aangevraagd', { exact: true })).toBeVisible()
-    await expect(drawer.getByText('Bezig…')).toBeVisible()
+    await expect(drawer.getByText('Volgt live')).toBeVisible()
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Niet meer in de registry')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Overgeslagen')
     await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Niet gestart')
@@ -225,6 +225,41 @@ test.describe('studio', () => {
     await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
     expect((await rowsOf(api, 'actie_site', { actie_id: actie })).total).toBe(0)
     await expect(drawer).toHaveCount(0)
+  })
+
+  test('tick-on-a-query-view @e2e: in Sites met aandacht, two ticked sites run Gezondheid checken and the opdracht opens with exactly those two', async ({
+    page,
+  }) => {
+    const api = page.request
+    await open(page, 'Sites met aandacht', 'Sites')
+    const sites = (await rowsOf(api, 'sites_aandacht')).rows
+    expect(sites.length).toBeGreaterThanOrEqual(2)
+    const [first, second] = sites
+    await page.getByRole('checkbox', { name: `${first.naam} selecteren` }).check()
+    await page.getByRole('checkbox', { name: `${second.naam} selecteren` }).check()
+    const bar = page.getByRole('region', { name: '2 geselecteerd' })
+    await expect(bar).toBeVisible()
+    for (const label of ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien'])
+      await expect(bar.getByRole('button', { name: label, exact: true })).toBeVisible()
+    await shot(page, 'sites-aandacht-aangevinkt')
+    const before = await newest(api, 'actie')
+
+    await bar.getByRole('button', { name: 'Gezondheid checken', exact: true }).click()
+
+    const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
+    await expect(drawer).toBeVisible()
+    await expect(siteLine(drawer, String(first.naam))).toBeVisible()
+    await expect(siteLine(drawer, String(second.naam))).toBeVisible()
+    const actie = await newest(api, 'actie')
+    expect(actie).toBeGreaterThan(before)
+    const links = (await rowsOf(api, 'actie_site', { actie_id: actie })).rows
+    expect(links.map((l) => l.site_id).sort()).toEqual([first.id, second.id].sort())
+
+    await page
+      .getByRole('status', { name: 'Gezondheid checken uitgevoerd.' })
+      .getByRole('button', { name: 'Ongedaan maken' })
+      .click()
+    await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
   })
 
   test('request-only-retired-sites-refused @e2e: a selection of sites no longer in the registry makes no opdracht', async ({
@@ -411,7 +446,7 @@ test.describe('studio', () => {
     expect(after.link.state).toBe('te_bevestigen')
   })
 
-  test('sites-board-and-gallery @e2e: the board shows the four health columns, a drag is refused as worker-only, the gallery shows the live sites', async ({
+  test('sites-board-and-gallery @e2e: the board shows the four health columns and does not drag, the gallery shows the live sites', async ({
     page,
   }) => {
     const api = page.request
@@ -420,20 +455,10 @@ test.describe('studio', () => {
     const first = await orders(page)
     await shot(page, 'sites-per-gezondheid')
 
-    const write = page.waitForResponse(
-      (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === '/api/rows/site/1',
-    )
+    await expect(card(page, 1)).not.toHaveClass(/nv-board__card--drags/)
     await card(page, 1).focus()
     await page.keyboard.press('Space')
-    await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-    await listening(page)
-    await page.keyboard.press('ArrowRight')
-    await expect(said(page)).toHaveText(/boven Let op/)
-    await page.keyboard.press('Space')
-    expect((await write).status()).toBe(403)
-    await expect(page.getByText('Registry- en gezondheidsgegevens schrijft alleen de worker.').first()).toBeVisible()
-    await shot(page, 'gezondheid-sleep-geweigerd')
-    await expect(lane(page, 'In orde').locator('[data-card="1"]')).toBeVisible()
+    await expect(page.locator('.nv-board__card--lifted')).toHaveCount(0)
     await expect.poll(() => orders(page)).toEqual(first)
     expect((await rowOf(api, 'site', 1)).gezondheid).toBe('ok')
 
@@ -540,25 +565,17 @@ test.describe('studio, the editor', () => {
 
 // The hunt's confirmed bugs (specs/studio-domain/shakeout.md), RED at c43bd3e and fixed by b08381e.
 test.describe('studio, the hunt', () => {
-  test('person-cannot-take-worker-steps @e2e: dragging an opdracht into the worker’s Voorbereiden on the board is refused', async ({
+  test('person-cannot-take-worker-steps @e2e: the Opdrachten board does not drag, so no opdracht reaches the worker’s Voorbereiden', async ({
     page,
   }) => {
     const api = page.request
     const { actie } = await run(api, 'bijwerken', [4])
     await open(page, 'Opdrachten per status', 'Opdrachten')
     await expect(lane(page, 'Aangevraagd').locator(`[data-card="${actie}"]`)).toBeVisible()
-    const write = page.waitForResponse(
-      (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/actie/${actie}`,
-    )
+    await expect(card(page, actie)).not.toHaveClass(/nv-board__card--drags/)
     await card(page, actie).focus()
     await page.keyboard.press('Space')
-    await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
-    await listening(page)
-    await page.keyboard.press('ArrowRight')
-    await expect(said(page)).toHaveText(/boven Voorbereiden/)
-    await page.keyboard.press('Space')
-    expect((await write).status()).toBeGreaterThanOrEqual(400)
-    await expect(page.getByText('Deze stap zet de worker.').first()).toBeVisible()
+    await expect(page.locator('.nv-board__card--lifted')).toHaveCount(0)
     await expect(lane(page, 'Aangevraagd').locator(`[data-card="${actie}"]`)).toBeVisible()
     await shot(page, 'opdracht-sleep-voorbereiden')
     expect((await rowOf(api, 'actie', actie)).status).toBe('aangevraagd')
@@ -658,5 +675,215 @@ test.describe('studio, the hunt at 1280 by 720', () => {
     const line = await item.boundingBox()
     const title = await item.locator('.nv-list__title').boundingBox()
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual((line?.x ?? 0) + (line?.width ?? 0))
+  })
+})
+
+test.describe('studio, what a person is offered', () => {
+  const readOnly = async (page: Page, grid: string, headers: string[]) => {
+    const table = page.getByRole('grid', { name: grid, exact: true })
+    const names = await table.getByRole('columnheader').allTextContents()
+    const cells = table
+      .getByRole('row')
+      .filter({ has: page.getByRole('gridcell') })
+      .first()
+      .getByRole('gridcell')
+    expect(await cells.count()).toBe(names.length)
+    for (const header of headers) {
+      const at = names.findIndex((name) => name.includes(header))
+      expect(at, header).toBeGreaterThanOrEqual(0)
+      await expect(cells.nth(at), header).toHaveAttribute('aria-readonly', 'true')
+    }
+  }
+
+  test('no-edit-on-worker-columns @e2e: the worker’s columns are read-only on Sites and the log, and an opdracht’s Status is no inline select', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    await readOnly(page, 'Sites', [
+      'Gezondheid',
+      'HTTP',
+      'WordPress',
+      'PHP',
+      'Updates plugins',
+      'TLS',
+      'Laatste check',
+      'In registry',
+    ])
+    await expect(page.getByRole('row', { name: /testmans-winkel/ })).toBeVisible()
+    await shot(page, 'sites-worker-kolommen')
+
+    await openView(page, 'Onderhoudslog', 'Onderhoudslog')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Onderhoudslog')
+    await expect(
+      page.getByRole('grid', { name: 'Onderhoudslog', exact: true }).locator('[role=gridcell]:not([aria-readonly])'),
+    ).toHaveCount(0)
+
+    await openView(page, 'Opdrachten', 'Opdrachten')
+    await readOnly(page, 'Opdrachten', ['Status'])
+  })
+
+  test('no-new-where-not-allowed @e2e: Sites and the log offer no + Nieuw, and a query view that creates nothing offers none', async ({
+    page,
+  }) => {
+    for (const [view, model] of [
+      ['Sites', 'Sites'],
+      ['Sites per gezondheid', 'Sites'],
+      ['Sites met aandacht', 'Sites'],
+      ['Onderhoudslog', 'Onderhoudslog'],
+    ]) {
+      await open(page, view, model)
+      await expect(page.locator('.nv-toolbar .nv-button--primary'), view).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /^Nieuw/ }), view).toHaveCount(0)
+    }
+    await open(page, 'Opdrachten per status', 'Opdrachten')
+    await expect(page.getByRole('button', { name: /^Nieuw in/ })).toHaveCount(0)
+    await open(page, 'Opdrachten', 'Opdrachten')
+    await expect(page.locator('.nv-toolbar .nv-button--primary')).toHaveText(/Nieuwe opdracht/)
+    await shot(page, 'sites-zonder-nieuw')
+  })
+})
+
+test.describe('studio, the toolbar at 1440', () => {
+  const LONG =
+    'De wijziging is niet bewaard omdat de server een uitgebreide uitleg geeft over waarom dit niet kan, met veel woorden. '.repeat(
+      3,
+    )
+
+  test('toolbar-at-1440 @e2e: a long save error is cut and keeps the toolbar one line, and + Nieuw leaves an open drawer’s title alone', async ({
+    page,
+  }) => {
+    await page.route('**/api/rows/taak/*', (route) =>
+      route.request().method() === 'PATCH'
+        ? route.fulfill({ status: 422, json: { code: 'refused', message: LONG } })
+        : route.continue(),
+    )
+    await open(page, 'Taken', 'Taken')
+    const toolbar = page.locator('.nv-toolbar')
+    await page
+      .getByRole('row', { name: /e2e|Taak|Controleer|Offerte/ })
+      .first()
+      .getByRole('button', { name: 'Openen' })
+      .click()
+    const drawer = page.locator('.nv-drawer, [aria-label][role=complementary]').first()
+    await expect(drawer).toBeVisible()
+    const title = drawer.locator('.nv-dw-title')
+    const quiet = (await toolbar.boundingBox())?.height as number
+    const cell = page.getByRole('grid', { name: 'Taken', exact: true }).getByRole('gridcell').nth(6)
+    await cell.click({ position: { x: 6, y: 6 } })
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('x')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.nv-save--error')).toBeVisible()
+    await shot(page, 'werkbalk-1440')
+    expect((await toolbar.boundingBox())?.height).toBe(quiet)
+    const add = (await page.locator('.nv-toolbar .nv-button--primary').boundingBox()) as { x: number; width: number }
+    const heading = (await title.boundingBox()) as { x: number }
+    expect(add.x + add.width).toBeLessThanOrEqual(heading.x)
+  })
+})
+
+for (const [scale, tag] of [
+  [1.25, '125'],
+  [1.5, '150'],
+] as const)
+  test.describe(`studio, row lines at ${tag}%`, () => {
+    test.use({ deviceScaleFactor: scale })
+
+    test(`row-lines-at-${tag} @e2e: a table row’s separator is the row-line token, stronger than the subtle border`, async ({
+      page,
+    }) => {
+      await open(page, 'Sites', 'Sites')
+      const [line, row, subtle] = await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement)
+        const cell = document.querySelector('.nv-td') as HTMLElement
+        return [
+          cell && getComputedStyle(cell).borderBottomColor,
+          root.getPropertyValue('--color-border-row'),
+          root.getPropertyValue('--color-border-subtle'),
+        ]
+      })
+      expect(line).toBe('rgb(196, 203, 211)')
+      expect(row.trim()).toBe('#c4cbd3')
+      expect(row.trim()).not.toBe(subtle.trim())
+      await shot(page, `rijlijnen-${tag}`)
+    })
+  })
+
+test.describe('studio-polish, what a person reads', () => {
+  test('board-groups-only @e2e: Opdrachten per status offers no lane + and no drag hints, and a card still opens', async ({
+    page,
+  }) => {
+    await open(page, 'Opdrachten per status', 'Opdrachten')
+    await expect(page.locator('section.nv-board__column').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Nieuw in/ })).toHaveCount(0)
+    await expect(page.locator('footer.nv-foot > span')).toHaveText(['↑↓←→ bewegen', '↵ openen', '⌘Z ongedaan maken'])
+    await shot(page, 'opdrachten-per-status')
+    await card(page, 1).click()
+    await expect(page.getByRole('complementary', { name: 'Bijwerken · 2 sites' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+    await expect(card(page, 1)).toBeFocused()
+  })
+
+  test('drawer-reads-right @e2e: Bevestigen is the filled button beside a quiet Annuleren, the live mark says Volgt live, and a site’s actions sit at its head', async ({
+    page,
+  }) => {
+    const api = page.request
+    const { actie } = await preview(api, [3])
+    try {
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
+      await expect(drawer.getByRole('button', { name: 'Annuleren' })).toHaveClass(/nv-button--secondary/)
+      await expect(drawer.getByText('Volgt live')).toBeVisible()
+      await expect(drawer.getByText('Bezig…')).toHaveCount(0)
+      await shot(page, 'opdracht-drawer-bevestigen')
+
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'voorbeeld-site')
+      for (const action of ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien'])
+        await expect(site.getByRole('group', { name: action })).toBeInViewport()
+      await shot(page, 'site-drawer-acties-boven')
+    } finally {
+      await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
+    }
+  })
+
+  test('toggle-cell-fits @e2e: a switch cell holds its switch and its label in the column’s default width, no dot', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const cells = page.getByRole('grid', { name: 'Sites', exact: true }).locator('.nv-cell__bool')
+    expect(await cells.count()).toBeGreaterThan(0)
+    const clipped = await cells.evaluateAll(
+      (all) =>
+        all.filter(
+          (one) =>
+            (one.closest('[role=gridcell]') as HTMLElement).scrollWidth >
+            (one.closest('[role=gridcell]') as HTMLElement).clientWidth,
+        ).length,
+    )
+    expect(clipped).toBe(0)
+    await shot(page, 'sites-worker-kolommen')
+  })
+
+  test('title-pill-worst-first @e2e: Sites shows Storing before Let op, each with its count', async ({ page }) => {
+    const api = page.request
+    await open(page, 'Sites', 'Sites')
+    const shown = (await rowsOf(api, 'site')).rows
+    const held = (tone: string) => shown.filter((site) => site.gezondheid === tone).length
+    expect(held('storing')).toBeGreaterThan(0)
+    expect(held('let_op')).toBeGreaterThan(0)
+    const pills = page.locator('.nv-toolbar__insight')
+    await expect(pills).toHaveText([`Storing${held('storing')}`, `Let op${held('let_op')}`])
+    await expect(pills.nth(0).locator('.nv-pill')).toHaveClass(/nv-pill--bad/)
+    await expect(pills.nth(1).locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
+    await shot(page, 'sites-storing-en-let-op')
+
+    // The pills follow the search, as the row count does: an In orde site leaves neither.
+    const fine = shown.find((site) => site.gezondheid === 'ok') as Row
+    await page.getByRole('searchbox').fill(String(fine.naam))
+    await expect(page.getByText('1 rij', { exact: true }).first()).toBeVisible()
+    await expect(pills).toHaveCount(0)
   })
 })

@@ -95,7 +95,7 @@ export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLi
   const { have, need } = crewOf(items, link)
   const ordered = [...items.filter((item) => !isOpen(item)), ...items.filter(isOpen)]
   return (
-    <Section title={label} count={`${have}/${need}`}>
+    <Section title={label} count={link?.meter === false ? undefined : `${have}/${need}`}>
       {items.length === 0 ? <p className="nv-dw-none">{t('noneOf', { label: label.toLocaleLowerCase(locale()) })}</p> : (
         <ul className="nv-dw-list">
           {ordered.map((item) => (
@@ -147,15 +147,17 @@ const when = (at: string) =>
   new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at)).replace(/\./g, '')
 
 /** This record's changes, newest first, as the prototype's Geschiedenis: who, what became what, when. */
-export function HistorySection({ model, id }: { model: Model; id: number }) {
+/** Read again whenever the record's own content changes: a press, an undo, a live poll. */
+export function HistorySection({ model, id, row }: { model: Model; id: number; row: Row }) {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
+  const content = JSON.stringify(row.fields)
   useEffect(() => {
     let live = true
     recordHistory(model.key, id).then((e) => live && setEntries(e), () => live && setEntries([]))
     return () => {
       live = false
     }
-  }, [model.key, id])
+  }, [model.key, id, content])
   if (!entries) return null
   return (
     <Section title={t('history')} count={String(entries.length)}>

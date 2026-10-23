@@ -56,6 +56,13 @@ export interface ColumnDecl {
   badge?: Tone
   /** A text the grid edits as long text and the record drawer shows as its own block; never with options or a relation. */
   long?: true
+  /**
+   * Only a service account writes it; a person's write that sends it is refused 403 `service_only` before the writer runs.
+   * Judged on the keys the caller sends, so a writer must not fill it on a person's write: that batch's undo would be refused.
+   */
+  written_by?: 'service'
+  /** What the grid's foot adds up: a sum (the default) or nothing; integer and real columns only. */
+  footer?: 'sum' | 'none'
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -100,6 +107,8 @@ export interface LinkDecl {
   count?: string
   /** A column of the link dataset whose text shows under each item; to an owner only when owner_visible. */
   detail?: string
+  /** `false` keeps the have/need count out of the head. */
+  meter?: false
 }
 
 /** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. `owner_visible` serves it to the row's owner too. */
@@ -118,6 +127,8 @@ export interface AttachmentsDecl {
   max_mb?: number
   owner_visible?: true
   owner_writable?: true
+  /** `person`: a service's delete of a file, and its undo of its own upload, are refused 403 `service_only`. */
+  deleted_by?: 'person'
 }
 
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
@@ -135,6 +146,8 @@ export interface CalendarDecl {
 /** The options column a board groups its cards on. */
 export interface BoardDecl {
   column: string
+  /** `false`: the board only groups; its cards open and do not move. */
+  drag?: false
 }
 
 /** The attachment kind a gallery shows of each record. */
@@ -156,6 +169,8 @@ export interface DatasetDecl {
   custom: boolean
   matrix?: MatrixDecl
   owners?: Owners
+  /** Only a service account creates its rows; a person's create is refused 403 `service_only`. */
+  created_by?: 'service'
   /** Its seed rows are configuration, not demo data: --seed-missing writes them into an existing database. */
   config?: boolean
   /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
@@ -195,6 +210,8 @@ export interface QueryDecl {
   icon?: Icon
   /** The dataset a new row from this query is created in. */
   creates?: string
+  /** Its rows' ids are `of` records' ids, so the grid offers that dataset's selection actions on ticked rows. */
+  selectable?: true
   /** The dataset this query reads: the grid lists its views under that dataset. */
   of?: string
   links?: Record<string, LinkDecl>
@@ -297,6 +314,8 @@ export interface LifecycleDecl {
     roles: Role[]
     label?: string
     button?: string
+    /** The button the drawer shows filled; only with `button`. */
+    primary?: true
     when?: Condition
   }[]
   /** The states in which an outside process is busy with the record or picks it up next. */

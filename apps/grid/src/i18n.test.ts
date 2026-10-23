@@ -3,6 +3,12 @@ import { errorText, inUse, rowCount, setStrings, t, undoText } from './i18n'
 
 afterEach(() => setStrings(undefined))
 
+describe('errorText', () => {
+  it('reads service_only in Dutch', () => {
+    expect(errorText('service_only', 'Only a service account writes "status"')).toBe('Dit wordt automatisch bijgehouden en kan je niet zelf wijzigen.')
+  })
+})
+
 describe('t()', () => {
   it('reads English until the site says otherwise', () => {
     expect(t('saved')).toBe('Opgeslagen')

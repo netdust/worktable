@@ -86,13 +86,13 @@ test('drawer-follows-an-outside-change @e2e: with the drawer open, a second acco
   await open(page, 'All members', 'Members')
   const drawer = await drawerOf(page, 'Di')
   await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
-  await expect(drawer.getByText('Bezig…')).toBeVisible()
+  await expect(drawer.getByText('Volgt live')).toBeVisible()
   await shot(page, 'drawer-live')
 
   await move('done', 'active')
 
   await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0, { timeout: 5000 })
-  await expect(drawer.getByText('Bezig…')).toHaveCount(0)
+  await expect(drawer.getByText('Volgt live')).toHaveCount(0)
   await expect(drawer.getByRole('button', { name: 'Park', exact: true })).toBeVisible()
   await outside.dispose()
 })
@@ -148,7 +148,7 @@ test('live-drawer-closed-mid-poll @e2e: a poll answer that lands after the drawe
     await route.continue()
   })
   const drawer = await drawerOf(page, 'Cy')
-  await expect(drawer.getByText('Bezig…')).toBeVisible()
+  await expect(drawer.getByText('Volgt live')).toBeVisible()
   await expect.poll(() => polls.seen, { timeout: 6000 }).toBe(1)
 
   await drawer.getByRole('button', { name: 'Sluiten' }).click()

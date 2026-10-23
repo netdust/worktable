@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
-import { linkWritable, readable, scopeOf, visibleSource } from './access'
+import { isPerson, linkWritable, readable, scopeOf, visibleSource } from './access'
 import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
@@ -137,17 +137,32 @@ const servedActions = (domain: Domain, dataset: string, actor: Actor) =>
     ),
   }))
 
+// What a person cannot write is read-only to them; the engine's refusal is the enforcement.
+const readonlyTo = (column: ColumnDecl, actor: Actor): ColumnDecl =>
+  column.written_by && isPerson(actor) ? { ...column, readonly: true } : column
+
 const servedColumns = (domain: Domain, source: Source, actor: Actor): Record<string, ColumnDecl> =>
-  Object.fromEntries(Object.entries(source.columns).map(([name, c]) => [name, servedColumn(domain, c, actor)]))
+  Object.fromEntries(
+    Object.entries(source.columns).map(([name, c]) => [name, readonlyTo(servedColumn(domain, c, actor), actor)]),
+  )
 
 function createsOf(domain: Domain, source: Source, actor: Actor): { creates?: string } {
   const target = source.kind === 'query' && source.creates ? sourceOf(domain, source.creates) : null
   return target && readable(actor, target) ? { creates: target.name } : {}
 }
 
-function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string } {
+function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string; selectable?: true } {
   const target = source.kind === 'query' && source.of ? sourceOf(domain, source.of) : null
-  return target && readable(actor, target) ? { of: target.name } : {}
+  if (!target || !readable(actor, target)) return {}
+  return { of: target.name, ...(source.kind === 'query' && source.selectable ? { selectable: true as const } : {}) }
+}
+
+const hasButtons = (dataset: DatasetDecl): boolean =>
+  dataset.lifecycle?.transitions.some((t) => t.button !== undefined) ?? false
+
+function servedLifecycle(dataset: DatasetDecl) {
+  const { column, live } = dataset.lifecycle as NonNullable<DatasetDecl['lifecycle']>
+  return { lifecycle: { column, ...(live ? { live } : {}), ...(hasButtons(dataset) ? { buttons: true } : {}) } }
 }
 
 // A flag names a dataset only to a caller who can read it, as `of` and `creates` do (threat 5).
@@ -160,7 +175,11 @@ function flagsOf(domain: Domain, source: Source, actor: Actor): { flags?: FlagsD
   return marks.length > 0 ? { flags: { marks: Object.fromEntries(marks), tone: source.flags.tone } } : {}
 }
 
-function servedLink({ label, item, dataset, key, target, state, detail }: LinkDecl, linked: DatasetDecl, actor: Actor) {
+function servedLink(
+  { label, item, dataset, key, target, state, detail, meter }: LinkDecl,
+  linked: DatasetDecl,
+  actor: Actor,
+) {
   const column = state === undefined ? undefined : linked.columns[state]
   const options = column && { options: column.options, tones: column.tones ?? {}, default: column.default ?? null }
   return {
@@ -172,6 +191,7 @@ function servedLink({ label, item, dataset, key, target, state, detail }: LinkDe
     target_dataset: linked.columns[target]?.relation,
     ...(servedLinkColumn(detail, linked, scopeOf(actor, linked)) ? { detail } : {}),
     ...(options ? { state: options } : {}),
+    ...(meter === false ? { meter } : {}),
   }
 }
 
@@ -304,9 +324,8 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
               ? { gallery: s.gallery }
               : {}),
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
-            ...(s.kind === 'dataset' && s.lifecycle
-              ? { lifecycle: { column: s.lifecycle.column, ...(s.lifecycle.live ? { live: s.lifecycle.live } : {}) } }
-              : {}),
+            ...(s.kind === 'dataset' && s.lifecycle ? servedLifecycle(s) : {}),
+            ...(s.kind === 'dataset' && s.created_by ? { created_by: s.created_by } : {}),
             ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),
             ...(s.kind === 'dataset' && s.listed === false ? { listed: false } : {}),
             ...(s.kind === 'dataset' ? { position: true } : {}),

@@ -14,8 +14,4 @@ export const onderhoudWriter: Writer = {
   update() {
     forbid(FIXED)
   },
-
-  delete() {
-    forbid(FIXED)
-  },
 }

@@ -54,7 +54,10 @@ const carries = (sqlite: Database, table: string, key: string, title: unknown): 
 function writeRow(run: Run, dataset: DatasetDecl, row: Row): void {
   const { store } = run
   const target = writableOf(store.domain, dataset.name, 'create', SYSTEM)
-  const stored = encodeAll(dataset, valuesOf(store, target, 'create', row, contextOf(store, SYSTEM, null), 'all'))
+  const stored = encodeAll(
+    dataset,
+    valuesOf(store, target, 'create', row, contextOf(store, SYSTEM, null), 'all', { trusted: true }),
+  )
   if (dataset.custom && row.custom !== undefined) stored.custom = JSON.stringify(row.custom)
   create(store.sqlite, dataset, stored, run.now, SYSTEM_OWNER, run.batch)
 }

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Available, LinkItem, Model, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
@@ -82,5 +82,60 @@ describe('the drawer’s buttons', () => {
     expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', true)
     await act(async () => answer())
     expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', false)
+  })
+})
+
+describe('a primary button', () => {
+  it('renders filled, and the others stay secondary', () => {
+    const marks: Available = { state: 'open', buttons: [{ to: 'ja', label: 'Bevestigen', primary: true }, { to: 'nee', label: 'Annuleren' }], actions: [] }
+    open(row(marks))
+    expect(screen.getByRole('button', { name: 'Bevestigen' }).className).toContain('nv-button--primary')
+    expect(screen.getByRole('button', { name: 'Annuleren' }).className).toContain('nv-button--secondary')
+  })
+})
+
+describe('a link that declares no meter, in the drawer head', () => {
+  const link = { item: 'Lid', dataset: 'tie', key: 'activity_id', target: 'member_id', target_dataset: 'member' }
+  const head = (meter?: false) => {
+    const field = { type: 'links', label: 'Leden', link: { ...link, ...(meter === false ? { meter } : {}) } } as unknown as Model['fields'][string]
+    const withLink: Model = { ...model, fields: { ...model.fields, members: field } }
+    const cols = columnsFor(withLink, { ...planning, columns: undefined }, false)
+    const item: LinkItem = { id: 9, target: 4, title: 'Ann', state: 'open' }
+    const schema = { models: { tie: { key: 'tie', label: 'Tie', fields: {} } }, tables: [], views: [] } as unknown as Schema
+    return render(<SchemaContext.Provider value={schema}><DrawerWriteContext.Provider value={write}>
+      <Drawer row={row(undefined, [item])} columns={cols} model={withLink} onDone={vi.fn()} onClose={() => undefined} />
+    </DrawerWriteContext.Provider></SchemaContext.Provider>)
+  }
+
+  it('counts have/need by default, and shows no count with meter false', () => {
+    const { container, unmount } = head()
+    expect(container.querySelector('.nv-dw-sec__n')?.textContent).toBe('1/1')
+    unmount()
+    expect(head(false).container.querySelector('.nv-dw-sec__n')).toBeNull()
+  })
+})
+
+describe('a lifecycle with buttons, in the drawer', () => {
+  it('shows its status read-only, and its buttons stay', () => {
+    const stateful = { ...model, lifecycle_buttons: true as const }
+    const cols = columnsFor(stateful, { ...planning, columns: undefined }, true)
+    render(<DrawerWriteContext.Provider value={write}><Drawer row={row(available(['klaar', 'Afronden']))} columns={cols} model={stateful} onDone={vi.fn()} onClose={() => undefined} /></DrawerWriteContext.Provider>)
+    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
+    expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+    expect(within(drawer).queryByRole('combobox')).toBeNull()
+    expect(within(drawer).queryByRole('listbox')).toBeNull()
+    expect(cols.find((c) => c.id === 'status')?.editable).toBe(false)
+  })
+})
+
+describe('the drawer’s history after the state changed', () => {
+  it('is read again when a press, an undo or a live poll gives the row a new state', async () => {
+    remote.recordHistory.mockClear()
+    const stateful = row(available(['klaar', 'Afronden']))
+    const view = (r: Row) => <DrawerWriteContext.Provider value={write}><Drawer row={r} columns={columns} model={model} onDone={vi.fn()} onClose={() => undefined} /></DrawerWriteContext.Provider>
+    const { rerender } = render(view(stateful))
+    await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(1))
+    rerender(view({ ...stateful, fields: { ...stateful.fields, status: 'bevestigd' } }))
+    await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(2))
   })
 })

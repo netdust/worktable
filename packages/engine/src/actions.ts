@@ -191,7 +191,10 @@ export function runAction(store: Store, name: string, body: Values, actor: Actor
     : runSingle(store, name, action, body, actor)
 }
 
-export type ServedAction = { name: string; many?: true; opens?: true } & Pick<ActionDecl, 'label' | 'input'>
+export type ServedAction = { name: string; many?: true; opens?: true; conditional?: true } & Pick<
+  ActionDecl,
+  'label' | 'input'
+>
 
 export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
   return Object.entries(domain.actions ?? {})
@@ -202,5 +205,6 @@ export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
       input: action.input,
       ...(isSelection(action) ? { many: true as const } : {}),
       ...(action.opens ? { opens: true as const } : {}),
+      ...(action.when ? { conditional: true as const } : {}),
     }))
 }

@@ -1,6 +1,7 @@
 import { type EngineRow, type EngineSchema, type EngineSource, type EngineView, rowsQuery, titleColumn, toEngineData, withScope, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import { isDate } from './grid/conditions'
 import type { Layout } from './grid/layout'
+import { t } from './i18n'
 import type { Account, ActView, ApiError, DashboardLayout, DateWindow, HistoryEntry, MatrixAway, NewView, OptionsFrom, OwnerRows, OwnerView, Prefs, Referrer, Row, RowsResponse, Saved, SavedView, Schema, Scope, StoredArrangement, View } from './types'
 
 type Query = Record<string, string | undefined>
@@ -62,12 +63,21 @@ function heard(reply: Record<string, unknown>): void {
   if (notices.length > 0) noticed(notices)
 }
 
+/** A fetch that cannot reach the server rejects in the browser's English; only that call says so in Dutch. */
+async function reach(call: () => Promise<Response>): Promise<Response> {
+  try {
+    return await call()
+  } catch {
+    throw { code: 'unknown', message: t('noConnection') } satisfies ApiError
+  }
+}
+
 /** `authorization` replaces the session cookie's say for this one request, such as a person's link. */
 async function request<T>(method: Method, path: string, query?: Query, data?: Record<string, unknown>, authorization?: string): Promise<T> {
   try {
     const body = data === undefined ? undefined : JSON.stringify(data)
     const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(authorization ? { Authorization: authorization } : {}) }
-    const response = await fetch(endpoint(path, query), { method, body, headers: Object.keys(headers).length > 0 ? headers : undefined })
+    const response = await reach(() => fetch(endpoint(path, query), { method, body, headers: Object.keys(headers).length > 0 ? headers : undefined }))
     if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     return (await response.json()) as T
@@ -154,7 +164,7 @@ export async function attachmentsOf(model: string, id: number): Promise<Attachme
 export async function uploadAttachment(model: string, id: number, kind: string, file: File): Promise<{ attachment: Attachment; batch: string }> {
   try {
     const url = endpoint(attachmentsPath(model, id), { kind, name: file.name })
-    const response = await fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' } })
+    const response = await reach(() => fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': 'application/octet-stream' } }))
     if (response.status === 401) unauthenticated()
     if (!response.ok) throw await refusal(response)
     const { revision, ...made } = (await response.json()) as Omit<Attachment, 'own' | 'created_at'> & { revision: { batch_id: string } }

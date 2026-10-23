@@ -5,6 +5,8 @@ const text = (label: string) => ({ type: 'text' as const, label, nullable: true 
 const relation = (label: string, to: string) => ({ type: 'integer' as const, label, nullable: true, relation: to })
 const vlag = (label: string) => ({ type: 'boolean' as const, label, nullable: true })
 
+const worker = { written_by: 'service' as const }
+
 const both: Role[] = ['editor', 'administrator']
 
 export const soorten = {
@@ -36,31 +38,31 @@ export const organisatie = defineDataset({
 export const site = defineDataset({
   name: 'site',
   label: 'Sites',
-  new_label: 'Nieuwe site',
   icon: 'box',
   title: 'naam',
   board: { column: 'gezondheid' },
   gallery: { kind: 'screenshot' },
-  attachments: { kinds: { screenshot: 'Screenshot' } },
+  created_by: 'service',
+  attachments: { kinds: { screenshot: 'Screenshot' }, deleted_by: 'person' },
   scoped: 'organisatie_id',
   custom: true,
   columns: {
-    naam: { type: 'text', label: 'Naam' },
-    in_registry: { type: 'boolean', label: 'In registry', default: true },
+    naam: { type: 'text', label: 'Naam', ...worker },
+    in_registry: { type: 'boolean', label: 'In registry', default: true, ...worker },
     organisatie_id: relation('Organisatie', 'organisatie'),
     sla: vlag('SLA'),
     smoke_urls: long("Extra smoke-URL's"),
     notities: long('Notities'),
-    gezondheid: { type: 'text', label: 'Gezondheid', default: 'onbekend', ...gezondheden },
-    statuscode: { type: 'integer', label: 'HTTP', nullable: true },
-    responstijd_ms: { type: 'integer', label: 'Responstijd (ms)', nullable: true },
-    wp_versie: text('WordPress'),
-    php_versie: text('PHP'),
-    updates_plugins: { type: 'integer', label: 'Updates plugins', default: 0 },
-    updates_themas: { type: 'integer', label: "Updates thema's", default: 0 },
-    updates_core: { type: 'boolean', label: 'Update core', default: false },
-    tls_dagen: { type: 'integer', label: 'TLS (dagen)', nullable: true },
-    laatste_check: { type: 'datetime', label: 'Laatste check', nullable: true },
+    gezondheid: { type: 'text', label: 'Gezondheid', default: 'onbekend', ...gezondheden, ...worker },
+    statuscode: { type: 'integer', label: 'HTTP', nullable: true, footer: 'none', ...worker },
+    responstijd_ms: { type: 'integer', label: 'Responstijd (ms)', nullable: true, footer: 'none', ...worker },
+    wp_versie: { ...text('WordPress'), ...worker },
+    php_versie: { ...text('PHP'), ...worker },
+    updates_plugins: { type: 'integer', label: 'Updates plugins', default: 0, ...worker },
+    updates_themas: { type: 'integer', label: "Updates thema's", default: 0, ...worker },
+    updates_core: { type: 'boolean', label: 'Update core', default: false, ...worker },
+    tls_dagen: { type: 'integer', label: 'TLS (dagen)', nullable: true, footer: 'none', ...worker },
+    laatste_check: { type: 'datetime', label: 'Laatste check', nullable: true, ...worker },
   },
   indexes: [['naam'], ['organisatie_id']],
 })
@@ -72,7 +74,7 @@ export const actie = defineDataset({
   icon: 'flag',
   title: 'titel',
   date: 'gepland_op',
-  board: { column: 'status' },
+  board: { column: 'status', drag: false },
   custom: true,
   columns: {
     titel: text('Titel'),
@@ -113,6 +115,7 @@ export const actie = defineDataset({
       target: 'site_id',
       state: 'state',
       detail: 'samenvatting',
+      meter: false,
     },
   },
   lifecycle: {
@@ -123,7 +126,7 @@ export const actie = defineDataset({
       { from: ['aangevraagd'], to: 'voorbereiden', roles: both },
       { from: ['voorbereiden'], to: 'voorbereid', roles: both },
       { from: ['voorbereiden'], to: 'mislukt', roles: both },
-      { from: ['voorbereid'], to: 'bevestigd', roles: ['administrator'], button: 'Bevestigen' },
+      { from: ['voorbereid'], to: 'bevestigd', roles: ['administrator'], button: 'Bevestigen', primary: true },
       { from: ['voorbereid'], to: 'aangevraagd', roles: both },
       { from: ['bevestigd'], to: 'bezig', roles: both },
       { from: ['bevestigd'], to: 'geannuleerd', roles: ['administrator'], button: 'Annuleren' },
@@ -195,26 +198,27 @@ export const actieSite = defineDataset({
 export const onderhoud = defineDataset({
   name: 'onderhoud',
   label: 'Onderhoudslog',
-  new_label: 'Nieuwe logregel',
   icon: 'clock',
   title: 'samenvatting',
   date: 'datum',
   scoped: 'organisatie_id',
+  created_by: 'service',
   custom: false,
   columns: {
-    site_id: { type: 'integer', label: 'Site', relation: 'site' },
-    datum: { type: 'datetime', label: 'Datum' },
-    soort: { type: 'text', label: 'Soort', options: soorten },
+    site_id: { type: 'integer', label: 'Site', relation: 'site', ...worker },
+    datum: { type: 'datetime', label: 'Datum', ...worker },
+    soort: { type: 'text', label: 'Soort', options: soorten, ...worker },
     uitkomst: {
       type: 'text',
       label: 'Uitkomst',
       options: { ok: 'In orde', bevindingen: 'Bevindingen', mislukt: 'Mislukt' },
       tones: { ok: 'ok', bevindingen: 'warn', mislukt: 'bad' },
+      ...worker,
     },
-    samenvatting: { type: 'text', label: 'Samenvatting' },
-    details: long('Details'),
-    actie_id: relation('Actie', 'actie'),
-    organisatie_id: relation('Organisatie', 'organisatie'),
+    samenvatting: { type: 'text', label: 'Samenvatting', ...worker },
+    details: { ...long('Details'), ...worker },
+    actie_id: { ...relation('Actie', 'actie'), ...worker },
+    organisatie_id: { ...relation('Organisatie', 'organisatie'), ...worker },
   },
   indexes: [['site_id'], ['datum']],
 })

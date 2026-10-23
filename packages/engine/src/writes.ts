@@ -3,7 +3,7 @@ import { eq, getTableColumns } from 'drizzle-orm'
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Context } from 'hono'
-import { forbid, inScope, type Scope, scopeOf, visibleSource } from './access'
+import { forbid, inScope, isPerson, type Scope, scopeOf, serviceOnly, visibleSource } from './access'
 import { mintActionToken, ownerSubject, revokeMintedBy } from './action-token'
 import { undoAttachments } from './attachments'
 import { POSITION } from './ddl'
@@ -579,6 +579,7 @@ function rankOf(op: WriteOp, actor: Actor, given: Values): { rank: Values; rest:
   return { rank: { [POSITION]: value }, rest }
 }
 
+// The import and --seed-missing pass `trusted`; no route can, and an undo never does.
 export function valuesOf(
   store: Store,
   target: Writable,
@@ -586,8 +587,17 @@ export function valuesOf(
   body: Values,
   ctx: WriteContext,
   scope: Scope,
+  options: { trusted?: true } = {},
 ): Values {
-  return answeredOf(store, target, op, body, ctx, scope).values
+  return answeredOf(store, target, op, body, ctx, scope, options.trusted).values
+}
+
+// Judged on the keys sent, before the writer runs (a writer must not fill a written_by column on a person's write).
+function checkServiceOnly(dataset: DatasetDecl, op: WriteOp, given: Values, actor: Actor): void {
+  if (!isPerson(actor)) return
+  if (op === 'create' && dataset.created_by) serviceOnly(`Only a service account creates ${dataset.label}`)
+  const kept = Object.keys(given).find((key) => columnOf(dataset, key)?.written_by)
+  if (kept !== undefined) serviceOnly(`Only a service account writes "${kept}"`)
 }
 
 // No dataset column is named creates, so that key alone says an update added rows to its batch.
@@ -603,11 +613,13 @@ function answeredOf(
   body: Values,
   ctx: WriteContext,
   scope: Scope,
+  trusted?: true,
 ): { values: Values; creates: ActionCreate[] } {
   const { dataset, writer } = target
   const { rank, rest: given } = rankOf(op, ctx.actor, cutBody(dataset, ownBody(dataset, body)))
   checkOwner(scope, given)
   const cut = op === 'create' ? forcedOwner(scope, given) : given
+  if (!trusted) checkServiceOnly(dataset, op, given, ctx.actor)
   checkValues(dataset, { ...cut, ...rank }, false)
   const mode = ctx.lifecycle ?? { kind: 'write' }
   checkTransition(dataset, ctx.current, cut, ctx.actor, mode)
@@ -666,6 +678,7 @@ export function applyWrite(
   hooked: Hooked,
   batch?: string,
 ): Omit<Written, 'notices'> {
+  if (op !== 'create' && id === null) throw new ApiError(422, 'invalid_update', 'an update or delete needs a record')
   const { sqlite } = store
   const scope = scopeOf(actor, target.dataset)
   const current = currentOf(sqlite, target, id, scope)

@@ -271,7 +271,7 @@ const strings = {
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
   buttonDone: '{button} gedaan.',
-  liveBusy: 'Bezig…',
+  liveBusy: 'Volgt live',
   selectionMisfit: 'Past niet op {n} rijen',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
@@ -391,6 +391,8 @@ const strings = {
   historyAlsoOne: 'Dit maakt ook 1 andere wijziging ongedaan',
   historyAlso: 'Dit maakt ook {n} andere wijzigingen ongedaan',
   transitionNotAllowed: 'Deze statuswijziging is niet toegestaan.',
+  noConnection: 'Geen verbinding met de server. Probeer het opnieuw.',
+  serviceOnly: 'Dit wordt automatisch bijgehouden en kan je niet zelf wijzigen.',
   transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
   undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
   redoSkipped: 'Opnieuw doen kan hier niet',
@@ -432,6 +434,7 @@ export function setStrings(given: Record<string, unknown> | undefined): void {
 // The engine says these in English: it knows no domain words.
 const ENGINE_CODES: Record<string, StringKey> = {
   transition_not_allowed: 'transitionNotAllowed',
+  service_only: 'serviceOnly',
   transition_lost: 'transitionLost',
   unknown_record: 'recordGoneRun',
   condition_not_met: 'conditionNotMet',

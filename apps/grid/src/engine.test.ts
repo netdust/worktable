@@ -51,6 +51,26 @@ const views: EngineView[] = [
   },
 ]
 
+describe('toSchema: what a person is offered', () => {
+  const link = { label: 'Sites', item: 'Site', dataset: 'tie', key: 'job_id', target: 'unit_id', target_dataset: 'unit', meter: false as const }
+  const sources: EngineSchema['sources'] = {
+    unit: { kind: 'dataset', label: 'Units', title: 'name', date: null, created_by: 'service', board: { column: 'health', drag: false },
+      columns: { name: { type: 'text', label: 'Naam' }, health: { type: 'text', label: 'Gezondheid', options: { ok: 'Ok' } }, code: { type: 'integer', label: 'Code', footer: 'none' } } },
+    job: { kind: 'dataset', label: 'Jobs', title: 'name', date: null, lifecycle: { column: 'status', buttons: true }, links: { units: link },
+      columns: { name: { type: 'text', label: 'Naam' }, status: { type: 'text', label: 'Status', options: { a: 'A' } } } },
+  }
+
+  it('maps created_by, footer, board drag, lifecycle buttons and the link meter', () => {
+    const schema = toSchema({ sources })
+    expect(schema.models.unit.created_by).toBe('service')
+    expect(schema.models.unit.fields.code.footer).toBe('none')
+    expect(schema.tables.find((t) => t.key === 'unit')?.board).toEqual({ column: 'health', drag: false })
+    expect(schema.models.job.lifecycle_buttons).toBe(true)
+    expect(schema.models.job.fields.units.link?.meter).toBe(false)
+    expect(schema.models.job.created_by).toBeUndefined()
+  })
+})
+
 describe('toSchema: space, sections and facts', () => {
   const declared: EngineSchema = {
     sources: {

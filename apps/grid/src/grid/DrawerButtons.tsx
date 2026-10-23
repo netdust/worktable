@@ -16,7 +16,7 @@ export function DrawerButtons({ model, id, available, onDone }: { model: string;
   return (
     <div className="nv-dw-buttons">
       {available.buttons.map((button) => (
-        <Button key={button.to} className="nv-button nv-button--secondary nv-button--sm" isDisabled={pressing} onPress={() => press(button.to)}>{button.label}</Button>
+        <Button key={button.to} className={`nv-button nv-button--${button.primary ? 'primary' : 'secondary'} nv-button--sm`} isDisabled={pressing} onPress={() => press(button.to)}>{button.label}</Button>
       ))}
     </div>
   )

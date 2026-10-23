@@ -27,6 +27,8 @@ export interface Column {
   options_from?: OptionsFrom
   /** A count shown as a tinted badge. */
   badge?: Tone
+  /** `none`: the column totals nothing. */
+  footer?: 'sum' | 'none'
   /** A `links` column's link: added and removed by its own editor, never written as a value. */
   link?: Link
   value: (row: Row) => unknown
@@ -48,7 +50,7 @@ export interface Column {
 
 const WIDTH: Record<CellKind, number> = {
   title: 280, text: 160, longtext: 220, select: 130, date: 124, datetime: 140, time: 76, relation: 150,
-  bool: 80, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
+  bool: 108, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
 }
 
 /** "wo 14/10 00:30–02:00" scrolls 184px in a 12px-padded cell; 184 + 24 leaves it whole, and 8 more spare a wider font's glyphs. */
@@ -182,6 +184,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   column.relation = field.relation
   column.options_from = field.options_from
   column.badge = field.badge
+  column.footer = field.footer
 
   if (kind === 'select') {
     column.text = (row) => field.options?.[scalar(row.fields[key])] ?? scalar(row.fields[key])
@@ -260,11 +263,14 @@ function rollupColumns(view: View): Column[] {
   )
 }
 
+/** A lifecycle column whose transitions declare buttons changes through them only. */
+export const pressedOnly = (model: Model, key: string): boolean => model.lifecycle_buttons === true && model.lifecycle === key
+
 export function columnsFor(model: Model, view: View, writable = true, models: Record<string, Model> = {}): Column[] {
   const shown = (view.columns ?? Object.keys(model.fields)).filter((key) => key !== 'title' && key in model.fields)
   return [
     titleColumn(model, writable),
-    ...shown.map((key) => fieldColumn(key, model.fields[key], writable)),
+    ...shown.map((key) => fieldColumn(key, model.fields[key], writable && !pressedOnly(model, key))),
     ...lookupColumns(model, view, shown, models),
     ...rollupColumns(view),
   ]

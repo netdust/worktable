@@ -158,7 +158,7 @@ export function total(groups: Group[]): number {
 }
 
 export function sums(rows: Row[], columns: Column[]): Record<string, number> {
-  const numeric = columns.filter((c) => c.kind === 'number' || c.kind === 'rollup')
+  const numeric = columns.filter((c) => (c.kind === 'number' || c.kind === 'rollup') && c.footer !== 'none')
   return Object.fromEntries(
     numeric.map((c) => [c.id, rows.reduce((sum, row) => sum + (Number(c.value(row)) || 0), 0)]),
   )

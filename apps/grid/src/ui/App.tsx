@@ -20,6 +20,7 @@ import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
 import type { Account, ApiError, DateWindow, Model, ModelAction, Opened, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
+import { pressedOnly } from '../grid/columns'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -419,6 +420,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const made = target ? madeFrom(target, served?.tables ?? [], dated ? conditionDays : null, space.status === 'ready' ? space.scope : null) : null
   const addBlocked = target ? createBlocked(made, served?.writable[target.key] === true)
     : !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
+  // A service-created model and a query that creates nothing offer a person no way to add a row.
+  const creatable = !(target ?? model)?.created_by && !(model?.query && !target)
   const add = () => {
     if (target && made && !('missing' in made)) {
       if (made.needs.length === 0) return void createThrough(target.key, made.fields)
@@ -444,7 +447,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const dashboardSum = spaceName ? t('dashboardSum', { space: spaceName, week: isoWeek(new Date()) }) : t('dashboardSum', { space: '', week: isoWeek(new Date()) }).replace(/^ · /, '')
   // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
   const shownRows = store ? state.rows : result.status === 'ready' ? result.rows : null
-  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? insightOf(model, shownRows) : null), [dashboard, model, shownRows, matrix])
+  const grouped = view && model && layout ? boardColumn(view, model, layout) : null
+  const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped))
+  // A table reports the pills for the rows its search leaves, as its count does; the other skins count their own rows.
+  const reported = told?.view === view?.key ? told?.shown?.insight : undefined
+  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? (reported ?? insightOf(model, shownRows)) : undefined), [dashboard, model, shownRows, matrix, reported])
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
     ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}
@@ -639,7 +646,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           saving={saves?.state}
           addLabel={newLabel(target ?? model)}
           addBlocked={quickAdd ? (writable && !model?.query ? null : t('readOnly')) : addBlocked}
-          onAdd={target ? add : quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
+          onAdd={!creatable ? undefined : target ? add : quickAdd ? () => setQuick({}) : matrix || dashboard || calendar || view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' ? undefined : add}
           share={dashboard ? null : share}
           exportNote={exportFailed ? t('exportFailed') : null}
           local={view && modified ? {
@@ -677,8 +684,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
-              onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
-              onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} places={places} />
+              onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
+              onCreate={writable && !model.query && !model.created_by && canSet(model, boardColumn(view, model, layout) as string) ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
@@ -700,7 +707,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         )}
         </div>
         <footer className="nv-foot" aria-label={t('hints')}>
-          {hintsOf(dashboard ? 'dashboard' : (view?.type ?? 'grid')).map((hint) => <span key={hint}>{hint}</span>)}
+          {hintsOf(dashboard ? 'dashboard' : (view?.type ?? 'grid'), boardDrops).map((hint) => <span key={hint}>{hint}</span>)}
           {matrix && view && <Legend view={view} models={models} />}
         </footer>
         <div className="nv-toast-region" data-react-aria-top-layer>
@@ -736,6 +743,12 @@ function monthSpan(month: DateWindow): DateWindow {
   return weeks[0] && last ? { from: weeks[0][0], to: last[6] } : month
 }
 
+
+/** A board drags cards through the column it groups by, unless it declares otherwise or that column changes through its buttons only. */
+const draggable = (view: View, model: Model, column: string): boolean => view.board?.drag !== false && canSet(model, column)
+
+/** The person may set the column: a lane's + presets it, a drop writes it. */
+const canSet = (model: Model, column: string): boolean => !model.fields[column]?.readonly && !pressedOnly(model, column)
 
 /** Why a query's `+ Nieuw` is off: its dataset is read-only, or the dataset has a required column nothing can fill. */
 function createBlocked(made: NewRow | null, writable: boolean): string | null {
