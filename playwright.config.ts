@@ -48,7 +48,24 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      // The engine's own selection fixture, a third instance: its cookie name keeps its session apart on 127.0.0.1.
+      // Not the live studio's cookie name, so opening this grid never signs Stefan out of his own studio.
+      command:
+        'bun packages/engine/src/serve.ts --domain @worktable/studio --db e2e/.tmp/studio.db --port 4313 --fresh' +
+        ' --outbox e2e/.tmp/outbox-studio --files-dir e2e/.tmp/files-studio --app-url http://127.0.0.1:5176' +
+        ' --cookie-name wt_session_studio_e2e',
+      wait: { stdout: /engine listening/ },
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'cd apps/grid && bunx vite --port 5176 --strictPort --host 127.0.0.1',
+      env: { ENGINE_URL: 'http://127.0.0.1:4313' },
+      wait: { stdout: /127\.0\.0\.1:5176/ },
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      // The engine's own selection fixture, another instance: its cookie name keeps its session apart on 127.0.0.1.
       command:
         'bun packages/engine/src/serve.ts --domain ./packages/engine/test/fixtures/selection-domain.ts --db e2e/.tmp/selection.db --port 4314 --fresh' +
         ' --outbox e2e/.tmp/outbox-selection --app-url http://127.0.0.1:5177 --cookie-name wt_session_selection_e2e',

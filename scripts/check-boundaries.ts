@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 const root = resolve(import.meta.dir, '..')
 const engine = join(root, 'packages', 'engine')
 const mcp = join(root, 'packages', 'mcp')
-const domains = ['theatre', 'fiche']
+const domains = ['theatre', 'fiche', 'studio']
 const domainDirs = domains.map((name) => join(root, 'packages', name))
 const sourceFile = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
 const specifier =

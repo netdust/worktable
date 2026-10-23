@@ -112,6 +112,27 @@ describe('a list tile', () => {
     expect(item.querySelector('.nv-list__day')?.className).toBe('nv-list__day nv-list__day--now')
   })
 
+  it('a list row from another day shows its day, not only its hours', async () => {
+    const timed = { ...werklijst, fields: { ...werklijst.fields, laatste_check: { type: 'datetime', label: 'Laatste check', required: false, fact: false } } } as unknown as Model
+    api.rows.mockResolvedValue({ rows: [{ ...row(1, 'Oude check', 5), fields: { ...row(1, '', 5).fields, laatste_check: '2020-01-06T12:02:00' } }], total: 1 })
+    render(<Dashboard dashboard={dashboard([{ ...list, columns: ['laatste_check'] }])} views={[conflicten, lijst]} models={{ ...models, werklijst: timed }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+    const time = (await screen.findAllByRole('listitem'))[0].querySelector('.nv-list__time')
+    expect(time?.textContent).toMatch(/6.*12:02/)
+    expect(time?.querySelector('.nv-list__on')?.textContent).toMatch(/6/)
+    // A moment's day is context, not a deadline: lateness is the view's to say (a reden such as "Oude check").
+    expect(time?.querySelector('.nv-list__day--late')).toBeNull()
+  })
+
+  it('a list row from today shows only its hours', async () => {
+    const timed = { ...werklijst, fields: { ...werklijst.fields, laatste_check: { type: 'datetime', label: 'Laatste check', required: false, fact: false } } } as unknown as Model
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    api.rows.mockResolvedValue({ rows: [{ ...row(1, 'Verse check', 5), fields: { ...row(1, '', 5).fields, laatste_check: `${today}T09:02:00` } }], total: 1 })
+    render(<Dashboard dashboard={dashboard([{ ...list, columns: ['laatste_check'] }])} views={[conflicten, lijst]} models={{ ...models, werklijst: timed }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+    const time = (await screen.findAllByRole('listitem'))[0].querySelector('.nv-list__time')
+    expect(time?.textContent).toBe('09:02')
+  })
+
   it('shows its total, its rows, Alles tonen, and Gedaan only where the row writes', async () => {
     api.rows.mockResolvedValue({ rows: [row(1, 'Rider versturen', 5), row(2, 'Open plaats Speler', null)], total: 12 })
     const open = show([list])

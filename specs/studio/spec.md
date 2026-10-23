@@ -1,6 +1,6 @@
 # Studio: Netdust studio on worktable
 
-Written on 2026-10-21 from a brainstorm with Stefan, and approved by him the same day ("ok"). This is a parent spec, cut into three plans (see "The cut"). "Brainstorm" means that conversation. A requirement marked `invented — approved 2026-10-21` was Claude's call, approved with the document. Each one is listed again under "Calls approved on 2026-10-21".
+Written on 2026-10-21 from a brainstorm with Stefan, and approved by him the same day ("ok"). Revised on 2026-10-22 after he clicked through the first working version (see "Revised on 2026-10-22"). This is a parent spec, cut into plans (see "The cut"). "Brainstorm" means that conversation. A requirement marked `invented — approved 2026-10-21` was Claude's call, approved with the document. Each one is listed again under "Calls approved on 2026-10-21".
 
 ## Why
 
@@ -23,8 +23,8 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 - **Nu:** sites in order (a progress tile, "24 van 30"), storing (red when above zero), let op (orange), wacht op jou (orange).
 - **Waar we stopten:** a list of projects with their stage and last step, beside a list of sites that need attention.
 - **Deze week:** the agenda as a week strip, beside today's items.
-- **Op tafel:** open requests, tasks and findings, with inline buttons.
-- Quick actions in the header: Nieuwe actie, Nieuwe taak, Nieuw agendapunt. The mockup's four action buttons become one Nieuwe actie with the kind picked in its dialog (S12).
+- **Op tafel:** open tasks due this week or overdue, and updates waiting for confirmation, with inline buttons.
+- Quick actions in the header: Nieuwe taak, Nieuw agendapunt. An action always starts from the sites it acts on (S9), so there is no Nieuwe actie in the header.
 - The space switcher (top left) is the organisation: picking a client narrows every tile.
 
 ## Goals, non-goals, anti-goals
@@ -43,7 +43,7 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 - Public pages of any kind ("forget about report pages").
 - An AI agent that acts on its own ("no agentic layer or anything yet").
 - E2E runs from studio. The SLA sites have no tests.
-- Multi-row selection in the grid. Bulk goes through groups (S9).
+- Selection in skins other than the table (the engine's `selection-actions` spec).
 - Deeper malware scanners (maldet, Wordfence CLI).
 - Moving netdust-wp-manager's non-fleet parts (see "Open for Stefan").
 
@@ -84,62 +84,71 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 
 - **S2 Organisatie.** A client or Netdust itself: naam, soort (klant · intern), notities. It is the domain's space.
   Source: "client/organisation dataset yes" — Stefan.
-- **S3 Site.** One row per site in the registry, keyed by its registry name.
-  - Synced columns: domein, hosting, sla, risico, health_markers (whether `site.yml` declares `health.markers`), in_registry.
-  - Health columns: status (ok · let op · storing · onbekend), http, responstijd, wp, php, updates_plugins, updates_themes, updates_core, tls_dagen, laatste_check.
-  - Studio-owned columns, editable: organisatie (relation), extra smoke-URL's (long text), notities.
-  - Studio stores no SSH host or path.
+- **S3 Site.** One row per site in the registry, keyed by its registry name. Studio shows no site.yml data: from the registry it keeps only the name (to know the site exists) and whether it is still there. Technical facts (domain, servers, paths, risk, markers, staging) stay in `site.yml`, where the worker and the deploy tooling read them.
+  - Studio's own: organisatie, SLA, extra smoke URLs, notes. SLA is imported once from `site.yml` when the site first appears; after that it is studio's.
+  - The worker's: the health columns and the screenshot.
+  - Views: a table, a board by gezondheid, and a gallery of homepage screenshots (S24).
 
-  The REST layer strips `readonly` columns from every write (`cutBody`), so synced and health columns are plain columns. Site's writer refuses changes to them from a `user` account and lets `service` accounts write. A writer sees role and kind but not which service account is acting, so "only the worker writes health" is a convention the claude account is told to follow. Revision records who wrote each value.
-  Source: "sites healthy" — Stefan. The split follows the netdust-wp-manager registry rule (INV-3: generated from `site.yml`, never hand-maintained). The enforcement is invented — approved 2026-10-21, from the builder check.
-- **S4 Actie.** A request:
+  Source: "ok, a split is good. the studio never shows site.yml data. its not needed there" — Stefan, 2026-10-23.
+  - Health columns: status (ok · let op · storing · onbekend), http, responstijd, wp, php, updates_plugins, updates_themes, updates_core, tls_dagen, laatste_check.
+  - Studio stores no SSH host, path, domain or other technical fact.
+
+  The REST layer strips `readonly` columns from every write (`cutBody`), so the registry and health columns are plain columns. Site's writer lets a person write only studio's own columns, and lets a service write the registry and health columns (and SLA only when it creates the site). Revision records who wrote each value.
+  Source: "sites healthy" — Stefan. The registry rule follows netdust-wp-manager's INV-3 (generated from `site.yml`, never hand-maintained). The enforcement is invented — approved 2026-10-21.
+- **S4 Actie, shown as "Opdrachten".** A request:
   - soort: gezondheidscheck · malwarescan · bijwerken · smoketest
   - bijwerken always covers WordPress core, plugins and themes (S15); there is no per-component choice (plan studio-domain, ruling)
   - the status (S10)
-  - a target: one groep (required). A request for one site uses that site's own group, which the site's action finds or creates (plan studio-domain, ruling: the quick create asks only required columns).
   - aangevraagd_door, gepland_op, samenvatting (long)
-  - its sites, as links with a state per site: wacht · te bevestigen · bezig · klaar · mislukt · overgeslagen, plus a detail text per link. The worker creates the links from the target when it claims the request.
+  - its sites, as links with a state per site: wacht · te bevestigen · bezig · klaar · mislukt · overgeslagen, plus the preview and a detail text per link. The action that creates the request creates its links in the same batch (S9). A request's sites never change after it is made, except that Stefan may drop one before confirming.
 
-  The engine's `LinkDecl` already carries a `state`. Because the target is one required column, a plain create makes a complete request, so the dashboard's quick create works with no engine change.
+  Stefan never adds an Opdracht by hand: "i will never add anythinh to opdrachten en onderhoudslog, correct? this is all done because actions happened somewhere else, thats why they go to logboek" — Stefan, 2026-10-22.
 
   **gepland_op** means "not before": the worker leaves a request alone until then. A bijwerken request cannot be future-dated (the writer refuses), so a confirmed update runs right after confirmation, never later while Stefan is away. Read-only kinds may be future-dated. The schedule (S16) creates the next run ahead of time, so it shows in the agenda.
   Source: "i need to run action bulk and per site, command line is not good enough." — Stefan.
-- **S5 Onderhoud.** What was actually done: site, datum, soort, uitkomst (ok · bevindingen · mislukt), samenvatting, details (long), actie (relation). Its writer allows creates from `service` accounts and refuses every update and delete. The worker is the one that writes it, by the same convention as S3. Together with Revision, this is the maintenance log.
+- **S5 Onderhoud, shown as "Onderhoudslog".** What was actually done: site, datum, soort, uitkomst (ok · bevindingen · mislukt), samenvatting, details (long), actie (relation). Its writer allows creates from `service` accounts and refuses every update and delete. The worker is the one that writes it, by the same convention as S3. Together with Revision, this is the maintenance log.
   Source: the brainstorm's "missing piece": a durable per-site maintenance log. Agreed with the playback ("ok").
-- **S6 Project and Werkpakket.**
+- **S6 Project and Werkpakket, shown as "Features".**
   - A **Project** is an engagement or a product: naam, organisatie, repo (a path), notities.
-  - A **Werkpakket** is one piece of work inside it, one plan and one branch: project, naam, branch, plan (a path to `specs/<feature>/plan.md`), fase (ontwerp · plan · bouwen · review · geblokkeerd · klaar · geparkeerd), laatste_stap, volgende_stap, geblokkeerd_door, bijgewerkt.
+  - A **Werkpakket** ("Features" in the grid: "Features (Recommended)" — Stefan, 2026-10-22) is one piece of work inside it, one plan and one branch: project, naam, branch, plan (a path to `specs/<feature>/plan.md`), fase (ontwerp · plan · bouwen · review · geblokkeerd · klaar · geparkeerd), laatste_stap, volgende_stap, geblokkeerd_door, bijgewerkt.
   - A Claude session finds its row by repo path plus branch, and creates it if missing. Parallel sessions on one repo each have their own branch, so they never overwrite each other.
   - "Waar we stopten" lists werkpakketten as "project · werkpakket", as the mockup showed.
   - Plan content stays in the repo. Studio holds status and the path.
   Source: "a planner for todos, plans, building where claude code can write/access status of a project. this way i can see whats going on during development" — Stefan. The two-level split, the matching key and the stage names are invented — approved 2026-10-21 (the builder check found about 15 worktable worktrees in flight at once).
-- **S7 Taak.** titel, status (open · gedaan), deadline, wie, notities, and optional relations to project, organisatie, site and actie. Stefan, Claude and the worker create tasks. The worker creates one per failure or finding.
+- **S7 Taak.** titel, status (open · gedaan), deadline, wie, notities, and optional relations to project, organisatie, site and actie. Stefan, Claude and the worker create tasks. The worker creates one per failure or finding. Every task the worker or the sync creates is due the day it is made, so it lands on Op tafel (S11).
   Source: "what's on the table" — Stefan.
-- **S8 Agendapunt and the agenda.** An Agendapunt is a manual entry: titel, datum, start, eind, organisatie, soort (afspraak · deadline · herinnering), notities. The **agenda** query unions everything dated: agendapunten, acties by gepland_op, open tasks by deadline. It declares the calendar need, so the week strip and the calendar skin read it.
-  Source: "a agenda where planned items appear and where i can add items amnually too ofcourse" — Stefan.
-- **S9 Groups for bulk.** A request targets one site, or a group. Groups are:
-  - Alle sites and SLA-sites, kept by the sync
-  - hosting groups
-  - groups Stefan makes himself
-
-  An action picked on a site creates a request for that site. Picked on a group, it creates one request linked to every member. Action inputs pick one record, so a group is how bulk works without grid multi-select.
-  Source: "action bulk and per site" — Stefan. The group mechanism is invented — approved 2026-10-21.
+- **S8 One Agenda.** The grid shows one Agenda. Its main view is a calendar on the **agenda** query, which unions everything dated: Stefan's own items, requests by gepland_op, and open tasks by deadline. `+ Nieuw` on it asks title and date and saves an Agendapunt (titel, datum, start, eind, organisatie, soort afspraak · deadline · herinnering, notities). The Agendapunt dataset is labelled "Agenda", and the agenda query is listed under it (`of`), so the tree holds one entry. Its other view is a table of his own items, for editing.
+  Source: "a agenda where planned items appear and where i can add items amnually too ofcourse" — Stefan; "an Agenda should work like an agenda, i add by hand but it can also import data, so agendapunten should not exist, its confusing" — Stefan, 2026-10-22.
+- **S9 Actions on the sites you pick.** The four kinds are selection actions on Site (engine spec `selection-actions`). Stefan ticks sites in a table view, or takes everything the view shows, and runs one. A site's drawer runs it on that site alone. Each run creates one request with one link per site, in one batch. Saved views ("SLA-sites", or one client's sites) are the named sets; there are no groups.
+  - In a bijwerken run on more than one site, the worker leaves a `risk: high` site out at preview, with the reason on its line ("Hoog risico: alleen per site bijwerken"). Such sites are updated one at a time, through their staging route (S15).
+  - A selected site that is no longer in the registry gets its link as overgeslagen ("niet in registry"), so taking everything a view shows always works.
+  Source: "a button that acts on the filtered items is better and/or making sure grid items are selectable should also be possible" and "do you agree this is a better path? more natural to work with? if so, yes, engine first" — Stefan, 2026-10-22, replacing the groups of 2026-10-21 ("i find this a bad solution").
 - **S10 Lifecycle of an Actie.**
   - Read-only kinds: aangevraagd → bezig → klaar | mislukt. Aangevraagd → geannuleerd.
   - Bijwerken: aangevraagd → voorbereiden → voorbereid → bevestigd → bezig → klaar | deels | mislukt. Voorbereiden is the worker's claimed preview (plan studio-domain, ruling). Aangevraagd, voorbereiden or voorbereid → geannuleerd.
   - On a high-risk site, voorbereid means staging was updated and tested green (S15). On every other site, it means the production preview is written.
   - The transition voorbereid → bevestigd declares the role `administrator` only. Both service accounts (worker, Claude) are `editor`, so neither can confirm a write to production.
-  - One confirmation per request, after the per-site preview. Before confirming, Stefan can drop sites by setting their link to overgeslagen.
+  - One confirmation per request, after the per-site preview, in the opdracht's drawer.
+    - Clicking an action in Sites opens the new opdracht in the drawer at once. It follows the worker live: each site line gains its one-line summary, and the opdracht shows the progress.
+    - When the preview is done, the drawer offers Bevestigen and Annuleren, and on each site line "Niet nu" (take it out) or "Toch wel" (bring it back).
+    - Closing the drawer loses nothing: the opdracht waits under Te bevestigen on the dashboard, whose row opens the same drawer.
+    - A site the action or the worker skipped (high risk in bulk, not in the registry, unreachable) has no preview and cannot be brought back.
+
+  Source: "maybe this should happen in a opdracht drawer or a popup that opens instead of me having to nivagate around the app" and "yes, spec it that way" — Stefan, 2026-10-22, on the engine's `specs/drawer-actions/spec.md`.
   - What is confirmed is pinned: the worker installs exactly the previewed versions. A premium update whose pending version changed since the preview is skipped and reported.
   - A preview older than 24 hours expires: the request goes back to aangevraagd for a fresh preview.
+  - A confirmed update the worker has not claimed within 24 hours of its preview expires too, and Stefan can cancel a confirmed update until the worker claims it (review 2026-10-23).
   Source: invented — approved 2026-10-21. Stefan was asked "does the click mean go, or preview first" and has not answered. The role guard is how the anti-goal "production touched by a write nobody confirmed" is enforced.
-- **S11 Queries for the dashboard.** sites_aandacht: status not ok, or laatste_check older than 8 days, or not in the registry any more. op_tafel: open tasks, requests in voorbereid, failed requests. The dashboard's numbers read these and Site.
-  Source: the approved mockup.
+- **S11 Queries for the dashboard.** sites_aandacht: status not ok, or laatste_check older than 8 days, or not in the registry any more. sites_in_orde: the live sites not in sites_aandacht. op_tafel: open tasks with a deadline this week or earlier, listed under Taken (`of`), because it is a filter of tasks. Tasks without a deadline stay in Taken only. Requests waiting for confirmation have their own tile, Te bevestigen. A failed request is not on the table: the worker's task per failure carries it, and Gedaan clears it. The dashboard's numbers read these and Site.
+  Source: the approved mockup; "op tafel should be a filter of taken, no? everything i need to do in near future( today or this week )", "Leave them out (Recommended)" on tasks without a deadline, and "Via the worker's task (Recommended)" on failures — Stefan, 2026-10-22.
 - **S12 The seeded dashboard.** As in the mockup (sections, tiles, quick actions). Two exceptions:
-  - "Wacht op jou" is a plain count of op_tafel. The breakdown text in the mockup is dropped, because a stat tile only shows its change against the previous period.
-  - Inline buttons are tile `set` writes: Gedaan on a task, Bevestigen on a request in voorbereid.
-  - Quick actions are creates, the only kind the engine has (`dashboard.ts` `actionOf`). Step 3c ruled out declared actions as quick actions. So the header has Nieuwe actie, whose dialog asks soort and groep, plus Nieuwe taak and Nieuw agendapunt. Four separate preset buttons would need an engine addition and a 3c re-decision; they are not in v1.
-  Source: "that looks amazing" — Stefan, on the mockup. The engine check of 2026-10-21 lists what the engine has. The single Nieuwe actie is invented — approved 2026-10-21.
+  - "Wacht op jou" is a plain count of op_tafel; Te bevestigen shows its own count in its tile. The breakdown text in the mockup is dropped, because a stat tile only shows its change against the previous period.
+  - Inline buttons are tile `set` writes: Gedaan on a task. The Te bevestigen tile has no inline Bevestigen: clicking its row opens the opdracht's drawer, so Stefan always confirms after seeing the preview ("ok, remove it" — Stefan, 2026-10-22).
+  - Quick actions are creates (`dashboard.ts` `actionOf`): Nieuwe taak and Nieuw agendapunt. Actions start from Sites (S9).
+  - The tree's sections: Vloot (Sites), Werk (Projecten, Features, Taken), Planning (Agenda), Logboek (Opdrachten, Onderhoudslog), Klanten (Organisaties). The per-site links of a request stay out of the tree and open from the request's drawer.
+  Source: "that looks amazing" — Stefan, on the mockup. The Logboek: "maybe we need a section log/rapports ?" — Stefan, 2026-10-22. The rest of the sections are invented — approved with this revision.
+- **S24 Site screenshots.** Each gezondheidscheck takes a screenshot of the production homepage and stores it as the site's attachment of kind screenshot. The Sites gallery shows the latest one per site.
+  Source: "Sites has Risico ins't that enough for board? and a screenshot of the homepage would be a good image" — Stefan, 2026-10-22.
 
 ## The worker (`netdust-studio`)
 
@@ -151,7 +160,7 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
   - **Gezondheidscheck:**
     - HTTP to the production domain: status, response time, days left on the TLS certificate
     - over SSH: WordPress and PHP versions, pending plugin, theme and core updates as JSON
-    - result: the Site's health columns plus one Onderhoud row
+    - result: the Site's health columns, one Onderhoud row, and a homepage screenshot (S24)
   - **Malwarescan:**
     - `wp core verify-checksums` and `wp plugin verify-checksums --all`
     - plugins that cannot be verified (premium) are listed as such, not as findings
@@ -166,17 +175,17 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
     - **YOOtheme Pro comes from a zip Stefan downloads.** YOOtheme issues one API key per website, entered in that site's customizer, and offers no documented key-based download (https://yootheme.com/docs/wordpress/updating). So once per release Stefan downloads `yootheme_wp_<version>.zip` from his account into a local folder in `netdust-studio`. The worker installs that exact zip, pinned by its version, on staging and production through the same preview and confirmation. No key is stored by studio. Source: "ok, zip folder is fine" — Stefan, 2026-10-21, replacing "I have API key stored locally".
     - On a failed smoke test: roll back what changed where WordPress.org versions allow it, mark the site mislukt, and create a task naming the database export. A database is never restored automatically.
     - A plugin that a site's `health.markers` protect is never updated by studio. It is skipped with that reason, and a task goes on the table, because an update silently wipes the patch the marker guards. After every update, the worker checks the site's markers. A missing marker marks the site mislukt.
-    - Sites with `risk: high` are left out of every bulk group and are updated one at a time.
+    - Sites with `risk: high` are skipped in a bulk run (S9) and are updated one at a time. The worker re-checks this, and that every link it applies has a preview, at apply time.
   - **Smoketest:**
     - homepage answers 200 with no PHP error markers in the body
     - `wp-login.php` answers 200
     - `/wp-json/` answers JSON
     - plus the site's extra URLs
   Source: "i want to run a health, malware script easly", "i want to easly update wordpress + plugins for all site", "i want to easly run smoke tests" — Stefan. The routes: "updating plugins can't happen directly on production as you say. first staging, then e2e, all good? we do prodcutoin with smoke. we also need to make sure that wp, plugins and yootheme gets updated" and "what if we do the staging route only on high risk site? and that i have API key stored locally for it's not on the site?" — Stefan, 2026-10-21. The composer-site exception is invented — approved 2026-10-21. The steps are the brainstorm's action matrix ("should we make an action matrix, what buttons, what scripts, how ai gets involved?"). Rollback and backup scope are invented — approved 2026-10-21.
-- **S16 Schedules.** The worker creates requests on a timer, as its own service account. Default: gezondheidscheck and malwarescan for Alle sites every Monday at 07:00. Bijwerken is never scheduled.
+- **S16 Schedules.** The worker creates requests on a timer, as its own service account, with one link per site in the registry. Default: gezondheidscheck and malwarescan for every site every Monday at 07:00. Bijwerken is never scheduled.
   Source: "set a shedule even" — Stefan. The default and "never scheduled writes" are invented — approved 2026-10-21.
 - **S17 Registry sync.** The worker reads every `site.yml` under a configured list of roots, on start, hourly, and on demand. The live fleet needs `~/Sites` and a Windows-side Sites folder. A site's key is its `name:`. When two files declare the same name (today: a working copy beside the original, like `*-smoke` or `*-planning-model`), the sync takes neither and writes a task naming both paths. It reads one structure only, schema 2 (S23). A site's production is `environments.production` by name: its `url`, its `path`, its `ssh_host` or else `deploy.ssh_host`, and `deploy.wp_path`. A file without a complete production entry is a site studio checks over the web only. The sync marks it so and puts a task on the table naming the file. It never falls back to older keys. The real files are the test fixtures, in the private repo.
-  - It creates and updates Site rows by name and keeps the built-in groups.
+  - It creates Site rows by name, with SLA imported once from `site.yml`, and keeps `in_registry` current. It writes no other `site.yml` fact into studio (S3).
   - It marks sites whose `site.yml` disappeared as not in the registry, and never deletes them.
   - It fails loudly, and writes a task, when it finds zero files or cannot read the root.
   Source: "this replaces fleetmanager, don't make it depended on that folder" — Stefan, plus the anti-goal.
@@ -218,9 +227,10 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
 
 One spec, three plans, each its own `feature/<feature>` branch:
 
-1. **studio-domain** (worktable): S2–S12, S22. First working version: studio's dashboard running on invented fixtures in the real grid.
+0. **selection-actions** (worktable engine): the engine's own spec `specs/selection-actions/spec.md`. Studio's S8, S9 and S12 sit on it. Added on 2026-10-22.
+1. **studio-domain** (worktable): S2–S12, S22, S24's dataset side. First working version: studio's dashboard running on invented fixtures in the real grid. Tasks 1–5 were built before the 2026-10-22 revision; the revised plan reworks what the revision changed.
 2. **studio-mcp** (worktable engine): S18. First working version: a Claude Code session lists studio's sites through the MCP.
-3. **studio-worker** (`netdust-studio`): S1, S13–S17, S19–S21, S23. First working version: the real sites appear in studio from `site.yml`, each with a fresh health check.
+3. **studio-worker** (`netdust-studio`): S1, S13–S17, S19–S21, S23, S24's screenshot. First working version: the real sites appear in studio from `site.yml`, each with a fresh health check.
 
 ## Security surface
 
@@ -236,19 +246,26 @@ The mitigations named above (S10 role guard, S14 allowlist and site.yml-only tar
 ## Left to the builder
 
 - Poll interval, timeouts, and the backup retention on the server.
-- Whether groups are a dataset with member rows or a query per built-in group.
 - The MCP tool list's exact names and argument shapes, within S18.
 - Ports, unit files, and where tokens are stored on disk (mode 0600).
 - The PHP error markers the smoke test looks for.
 - Verifying against the engine, before planning:
   - that a link's `state` shows per site in the drawer
-  - that a relation input can pick a group
   - that a tile `set` can carry the Bevestigen transition, or else which route does
   - that the outbox mailer covers sign-in on 127.0.0.1
 
 ## Calls approved on 2026-10-21
 
-S1 two homes · S3/S5 who may write synced, health and maintenance rows · S4 target as a column, gepland_op as "not before", no future-dated updates · S6 Project plus Werkpakket, matched by repo and branch, stage names · S9 groups for bulk · S12 one Nieuwe actie instead of four buttons · S17 duplicate names and several roots · S10 preview-then-confirm for updates, administrator-only confirm, one confirm per request with per-site drop, pinned versions, 24-hour expiry · S13 Bun/TypeScript, same machine · S14 the run-time rules · S15 rollback and backup scope, plugins protected by `health.markers` never updated, `risk: high` sites never in bulk, composer sites as a Werkpakket · S16 Monday 07:00, writes never scheduled · S18 generic MCP · S20 a `CLAUDE.md` line before a hook.
+S1 two homes · S3/S5 who may write synced, health and maintenance rows · S4 target as a column, gepland_op as "not before", no future-dated updates · S6 Project plus Werkpakket, matched by repo and branch, stage names · S9 groups for bulk (replaced on 2026-10-22) · S12 one Nieuwe actie instead of four buttons (replaced on 2026-10-22) · S17 duplicate names and several roots · S10 preview-then-confirm for updates, administrator-only confirm, one confirm per request with per-site drop, pinned versions, 24-hour expiry · S13 Bun/TypeScript, same machine · S14 the run-time rules · S15 rollback and backup scope, plugins protected by `health.markers` never updated, `risk: high` sites skipped in bulk, composer sites as a Werkpakket · S16 Monday 07:00, writes never scheduled · S18 generic MCP · S20 a `CLAUDE.md` line before a hook.
+
+## Revised on 2026-10-22
+
+Stefan clicked through studio-domain's first working version (Tasks 1–5 built) and reshaped it:
+- Groups are gone. Actions run on the sites he picks (S9), on a new engine feature (`selection-actions`).
+- One Agenda (S8). Op tafel is a filter of tasks (S11).
+- New names: Opdrachten, Onderhoudslog, Features. The tree gains a Logboek section (S12).
+- Sites get a board by gezondheid (risico left studio on 2026-10-23) and a gallery of homepage screenshots (S3, S24).
+- Contacts stay after v1 ("After v1, as planned (Recommended)").
 
 ## Open for Stefan
 

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserContext } from '@playwright/test'
 
@@ -15,6 +15,12 @@ export const FICHE = {
   outbox: 'e2e/.tmp/outbox-fiche',
   domain: '@worktable/fiche',
 }
+export const STUDIO = {
+  app: 'http://127.0.0.1:5176',
+  db: 'e2e/.tmp/studio.db',
+  outbox: 'e2e/.tmp/outbox-studio',
+  domain: '@worktable/studio',
+}
 export const SELECTION = {
   app: 'http://127.0.0.1:5177',
   db: 'e2e/.tmp/selection.db',
@@ -29,6 +35,8 @@ export const ACCOUNTS = {
   // Lotte Verhaegen (persoon 1) has Toewijzingen and an absence in the seed, beside other people's.
   owner: { email: 'lotte@e2e.test', role: 'owner', subject: 'persoon:1' },
   fiche: { email: 'redactie@e2e.test', role: 'editor' },
+  studioAdmin: { email: 'beheer@studio.e2e.test', role: 'administrator' },
+  studioEditor: { email: 'claude@studio.e2e.test', role: 'editor' },
   selection: { email: 'selectie@e2e.test', role: 'editor' },
   // The outside process of the drawer-actions flows: moves a record's state while the editor's drawer is open.
   selectionAdmin: { email: 'selectie-beheer@e2e.test', role: 'administrator' },
@@ -51,6 +59,16 @@ function cli(at: Instance, args: string[], what: string): string {
   }
   if (run.status !== 0) throw new Error(`${what} exited ${run.status}: ${run.stderr}`)
   return run.stdout
+}
+
+// A real service account (kind service), not a person with its role: what the studio worker and Claude sign in as.
+export const STUDIO_SERVICE = 'e2e/.tmp/studio-service-token'
+
+/** Creates a service account; the CLI prints its token once, kept mode 0600 in `file`. */
+export function createServiceToken(at: Instance, name: string, role: string, file: string): void {
+  const token = cli(at, ['--create-service', name, '--role', role], `--create-service ${name}`).trim()
+  writeFileSync(file, token, { mode: 0o600 })
+  chmodSync(file, 0o600)
 }
 
 export function createAccount(at: Instance, email: string, role: string, subject?: string): void {

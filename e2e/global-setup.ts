@@ -3,9 +3,12 @@ import {
   ACCOUNTS,
   addFixtureViews,
   createAccount,
+  createServiceToken,
   FICHE,
   type Instance,
   SELECTION,
+  STUDIO,
+  STUDIO_SERVICE,
   signIn,
   state,
   THEATRE,
@@ -29,6 +32,14 @@ export default async function globalSetup(): Promise<void> {
     createAccount(FICHE, ACCOUNTS.fiche.email, ACCOUNTS.fiche.role)
     // step-0c drives both grids: the fiche editor's state carries the theatre editor's cookie too.
     await signedIn('fiche-editor', FICHE, ACCOUNTS.fiche, 'editor')
+    for (const [name, account] of [
+      ['studio-admin', ACCOUNTS.studioAdmin],
+      ['studio-editor', ACCOUNTS.studioEditor],
+    ] as const) {
+      createAccount(STUDIO, account.email, account.role)
+      await signedIn(name, STUDIO, account)
+    }
+    createServiceToken(STUDIO, 'claude', 'editor', STUDIO_SERVICE)
     createAccount(SELECTION, ACCOUNTS.selection.email, ACCOUNTS.selection.role)
     await signedIn('selection-editor', SELECTION, ACCOUNTS.selection)
     createAccount(SELECTION, ACCOUNTS.selectionAdmin.email, ACCOUNTS.selectionAdmin.role)
