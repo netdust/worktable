@@ -335,3 +335,41 @@ describe('the drawer’s actions', () => {
     expect(within(marked104).getByRole('group', { name: 'Benoemen' })).toBeTruthy()
   })
 })
+
+describe('a selectable query view', () => {
+  const when: ModelAction = { name: 'only_open', label: 'Alleen open', many: true, conditional: true, input: {} }
+  const dataset = { ...activity, key: 'dataset', actions: [gather, when] } as Model
+  const query = { ...activity, query: true, selectable: 'dataset' } as Model
+  const models = { dataset }
+
+  it('offers its dataset’s selection actions that carry no condition, and a plain query offers none', () => {
+    sheet(calais, { model: query, models })
+    expect(boxes()).toHaveLength(calais.length + 1)
+    fireEvent.click(rowBox('Lunch bistrot'))
+    const bar = screen.getByRole('region', { name: /geselecteerd/ })
+    expect(within(bar).getByRole('button', { name: 'Bundelen' })).toBeTruthy()
+    expect(within(bar).queryByRole('button', { name: 'Alleen open' })).toBeNull()
+    cleanup()
+
+    sheet(calais, { model: { ...query, selectable: undefined }, models })
+    expect(boxes()).toHaveLength(0)
+  })
+
+  it('runs the ticked rows as the dataset’s records: one run with the query rows’ ids', async () => {
+    const { onSelection } = sheet(calais, { model: query, models })
+    fireEvent.click(rowBox('Lunch bistrot'))
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(within(screen.getByRole('region', { name: /geselecteerd/ })).getByRole('button', { name: 'Bundelen' }))
+    await waitFor(() => expect(onSelection).toHaveBeenCalledTimes(1))
+    const [action, ids] = (onSelection as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(action.name).toBe('gather')
+    expect(ids).toEqual(calais.filter((row) => ['Lunch bistrot', 'Montage'].includes(row.title)).map((row) => row.id))
+  })
+
+  it('offers the query row’s drawer no action of the dataset', () => {
+    sheet(calais, { model: query, models })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
+    const drawer = screen.getByRole('complementary')
+    expect(within(drawer).queryByRole('button', { name: 'Bundelen' })).toBeNull()
+  })
+})

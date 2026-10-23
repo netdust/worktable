@@ -27,6 +27,8 @@ let schema: Record<string, Source>
 let sections: { label: string; sources: string[] }[]
 let views: View[]
 let live: string[] | undefined
+let aandacht: { id: number; naam: string }[]
+let sites: { id: number; naam: string }[]
 let opdrachten: { id: number; available?: Available; links: { sites: Link[] } }[]
 
 beforeAll(async () => {
@@ -42,6 +44,8 @@ beforeAll(async () => {
   sections = served.sections as typeof sections
   views = (await get('/api/views')).views as View[]
   opdrachten = (await get('/api/rows/actie?sort=id')).rows as typeof opdrachten
+  aandacht = (await get('/api/rows/sites_aandacht')).rows as typeof aandacht
+  sites = (await get('/api/rows/site?limit=500')).rows as typeof sites
   live = (served.sources as Record<string, { lifecycle?: { live?: string[] } }>).actie?.lifecycle?.live
 })
 
@@ -184,5 +188,24 @@ describe('the seeded opdracht', () => {
     }
     expect(pending.map((l) => l.detail)).toContain('1 plugin: cache-plugin 1.9.0 → 1.9.2')
     expect(live).toEqual(['aangevraagd', 'voorbereiden', 'voorbereid', 'bevestigd', 'bezig'])
+  })
+})
+
+describe('Sites met aandacht', () => {
+  test('is selectable, and its ids are site ids', () => {
+    expect(schema.sites_aandacht).toMatchObject({ of: 'site', selectable: true })
+    expect(aandacht.length).toBeGreaterThan(0)
+    for (const row of aandacht) expect(sites.find((site) => site.id === row.id)?.naam).toBe(row.naam)
+  })
+
+  test('the sites’ selection actions are all unconditional, so all four show on it', async () => {
+    const actions = (schema.site as unknown as { actions: { name: string; many?: true; conditional?: true }[] }).actions
+    expect(
+      actions
+        .filter((a) => a.many)
+        .map((a) => a.name)
+        .sort(),
+    ).toEqual(['bijwerken', 'gezondheidscheck', 'malwarescan', 'smoketest'])
+    expect(actions.filter((a) => a.conditional)).toEqual([])
   })
 })

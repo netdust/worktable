@@ -227,6 +227,41 @@ test.describe('studio', () => {
     await expect(drawer).toHaveCount(0)
   })
 
+  test('tick-on-a-query-view @e2e: in Sites met aandacht, two ticked sites run Gezondheid checken and the opdracht opens with exactly those two', async ({
+    page,
+  }) => {
+    const api = page.request
+    await open(page, 'Sites met aandacht', 'Sites')
+    const sites = (await rowsOf(api, 'sites_aandacht')).rows
+    expect(sites.length).toBeGreaterThanOrEqual(2)
+    const [first, second] = sites
+    await page.getByRole('checkbox', { name: `${first.naam} selecteren` }).check()
+    await page.getByRole('checkbox', { name: `${second.naam} selecteren` }).check()
+    const bar = page.getByRole('region', { name: '2 geselecteerd' })
+    await expect(bar).toBeVisible()
+    for (const label of ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien'])
+      await expect(bar.getByRole('button', { name: label, exact: true })).toBeVisible()
+    await shot(page, 'sites-aandacht-aangevinkt')
+    const before = await newest(api, 'actie')
+
+    await bar.getByRole('button', { name: 'Gezondheid checken', exact: true }).click()
+
+    const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
+    await expect(drawer).toBeVisible()
+    await expect(siteLine(drawer, String(first.naam))).toBeVisible()
+    await expect(siteLine(drawer, String(second.naam))).toBeVisible()
+    const actie = await newest(api, 'actie')
+    expect(actie).toBe(before + 1)
+    const links = (await rowsOf(api, 'actie_site', { actie_id: actie })).rows
+    expect(links.map((l) => l.site_id).sort()).toEqual([first.id, second.id].sort())
+
+    await page
+      .getByRole('status', { name: 'Gezondheid checken uitgevoerd.' })
+      .getByRole('button', { name: 'Ongedaan maken' })
+      .click()
+    await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
+  })
+
   test('request-only-retired-sites-refused @e2e: a selection of sites no longer in the registry makes no opdracht', async ({
     page,
   }) => {

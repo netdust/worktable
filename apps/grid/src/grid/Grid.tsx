@@ -83,6 +83,12 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
+/** A table's selection actions; a selectable query's are its dataset's, the ones that apply to every record. */
+function selectionOf(model: Model, models: Record<string, Model>): ModelAction[] {
+  if (!model.selectable) return model.actions?.filter((a) => a.many) ?? []
+  return models[model.selectable]?.actions?.filter((a) => a.many && !a.conditional) ?? []
+}
+
 export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, onSelection, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
@@ -119,7 +125,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
   const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT)
   const ticking = useSelection(ids)
-  const selectionActions = onSelection ? model.actions?.filter((a) => a.many) ?? [] : []
+  const selectionActions = onSelection ? selectionOf(model, models) : []
   const selectable = selectionActions.length > 0
   const numberWidth = selectable ? SELECT_WIDTH : NUMBER_WIDTH
 

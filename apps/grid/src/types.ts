@@ -95,6 +95,8 @@ export interface Model {
   created_by?: 'service'
   /** Its lifecycle transitions declare buttons: the column changes through them only. */
   lifecycle_buttons?: true
+  /** A query whose rows are the records of this dataset: ticked, they run its selection actions. */
+  selectable?: string
   /** A query whose `+ Nieuw` creates a row in this model. */
   creates?: string
   /** The words of `+ Nieuw` ("Nieuwe activiteit"), while the model keeps its declared name. */
@@ -128,6 +130,8 @@ export interface ModelAction {
   many?: true
   /** After a run the grid opens the first record it created, else the record it ran on. */
   opens?: true
+  /** Applies to a record only while a condition holds: a query's rows carry no marks to say whether it does. */
+  conditional?: true
 }
 
 /** A record an action asks the grid to open. */

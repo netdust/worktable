@@ -139,6 +139,17 @@ const actions: Record<string, ActionDecl> = {
     input: {},
     run: (record) => ({ updates: [{ dataset: 'unit', id: record.id as number, values: { probe: 'by action' } }] }),
   },
+  everyone: { label: 'Everyone', on: 'unit', many: true, input: {}, run: () => ({}) },
+  busy_only: {
+    label: 'Busy only',
+    on: 'unit',
+    many: true,
+    input: {},
+    when: { stage: 'busy' },
+    run: (records) => ({
+      updates: records.map((record) => ({ dataset: 'unit', id: record.id as number, values: { name: 'ran' } })),
+    }),
+  },
   spawn: {
     label: 'Spawn',
     on: 'unit',
@@ -501,5 +512,30 @@ describe('the validation refusals', () => {
       columns: { id: { type: 'integer', label: 'Id' }, name: text },
     })
     refusal(withWriter({ datasets: [d], queries: [q] }), 'q', 'a')
+  })
+})
+
+describe('a selectable query and a conditional action', () => {
+  const served = async () =>
+    (await admin('GET', '/api/schema')).body.sources.unit.actions as { name: string; conditional?: true }[]
+
+  test('/schema marks an action conditional only where it declares when', async () => {
+    const byName = Object.fromEntries((await served()).map((a) => [a.name, a.conditional]))
+    expect(byName).toMatchObject({ everyone: undefined, touch: undefined, spawn: undefined, busy_only: true })
+  })
+
+  test('a forged run of a conditional action on ticked query rows is refused, and no row changes', async () => {
+    const rows = (await editor('GET', '/api/rows/unit_list')).body.rows as { id: number }[]
+    const ids = rows.map((row) => row.id)
+    const before = state()
+    const res = await editor('POST', '/api/actions/busy_only', json({ ids }))
+    expect({ status: res.status, code: res.body.code }).toEqual({ status: 422, code: 'condition_not_met' })
+    expect(state()).toEqual(before)
+  })
+
+  test('an action without when runs on the same ticked query rows', async () => {
+    const rows = (await editor('GET', '/api/rows/unit_list')).body.rows as { id: number }[]
+    const res = await editor('POST', '/api/actions/everyone', json({ ids: rows.map((row) => row.id) }))
+    expect(res.status).toBe(201)
   })
 })

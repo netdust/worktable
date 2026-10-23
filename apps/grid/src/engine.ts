@@ -58,6 +58,8 @@ export interface EngineSource {
   board?: { column: string; drag?: false }
   gallery?: { kind: string }
   created_by?: 'service'
+  /** A query's rows are the `of` dataset's records, to tick and act on. */
+  selectable?: true
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
@@ -214,6 +216,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.deletable ? { deletable: true } : {}),
     ...(source.creates ? { creates: source.creates } : {}),
     ...(source.created_by ? { created_by: source.created_by } : {}),
+    ...(source.selectable && source.of ? { selectable: source.of } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
