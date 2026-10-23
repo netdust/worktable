@@ -25,15 +25,44 @@ const named = (key: string, message: string): Writer => ({
 })
 
 export const organisatieWriter = named('naam', 'Een organisatie heeft een naam.')
-export const taakWriter = named('titel', 'Een taak heeft een titel.')
 export const agendapuntWriter = named('titel', 'Een agendapunt heeft een titel.')
+
+const absent = (value: unknown): boolean => value === undefined || value === null
+
+// A task without a client takes the one of what it is about, the most specific first, so the space switcher keeps it.
+function clientOf(values: Values, ctx: WriteContext): unknown {
+  const about: [string, unknown][] = [
+    ['site', values.site_id],
+    ['werkpakket', values.werkpakket_id],
+    ['project', values.project_id],
+  ]
+  for (const [dataset, id] of about) {
+    const found = absent(id) ? null : ctx.find(dataset, id as number)
+    if (found && !absent(found.organisatie_id)) return found.organisatie_id
+  }
+  return null
+}
+
+const TAAK = 'Een taak heeft een titel.'
+
+export const taakWriter: Writer = {
+  create(values, ctx) {
+    checkNamed(values, 'titel', TAAK, true)
+    return absent(values.organisatie_id) ? { ...values, organisatie_id: clientOf(values, ctx) } : values
+  },
+  update(values) {
+    checkNamed(values, 'titel', TAAK, false)
+    return values
+  },
+  delete() {},
+}
 
 const PROJECT = 'Een project heeft een naam.'
 
 export const projectWriter: Writer = {
   create(values, ctx) {
     checkNamed(values, 'naam', PROJECT, true)
-    if (values.organisatie_id !== undefined && values.organisatie_id !== null) return values
+    if (!absent(values.organisatie_id)) return values
     const intern = ctx.findBy('organisatie', { soort: 'intern' })
     return intern ? { ...values, organisatie_id: intern.id } : values
   },

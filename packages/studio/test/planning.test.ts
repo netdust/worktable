@@ -116,6 +116,19 @@ describe('features', () => {
   })
 })
 
+describe('tasks', () => {
+  // A worker task names only its site; without a client it would vanish under the space switcher.
+  test("a task follows its site's, feature's or project's client", async () => {
+    const task = (values: Body) => created('taak', claude('POST', '/api/rows/taak', { titel: 'Taak', ...values }))
+    expect((await task({ site_id: 2 })).organisatie_id).toBe(KLANT)
+    expect((await task({ werkpakket_id: 1 })).organisatie_id).toBe(INTERN)
+    expect((await task({ project_id: SHOP_PROJECT })).organisatie_id).toBe(KLANT)
+    expect((await task({ site_id: 3, project_id: SHOP_PROJECT })).organisatie_id).toBe(INTERN)
+    expect((await task({ site_id: 2, organisatie_id: INTERN })).organisatie_id).toBe(INTERN)
+    expect((await task({})).organisatie_id).toBeNull()
+  })
+})
+
 describe('every record has a name', () => {
   test('titles and names are required', async () => {
     const cases: [string, Body, string][] = [

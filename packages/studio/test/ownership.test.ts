@@ -51,6 +51,7 @@ const LOG_WORKER = 'Onderhoud schrijft alleen de worker.'
 const NO_DELETE = 'Een serviceaccount verwijdert geen rijen.'
 
 const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe site.'
+const NAME_FIXED = 'De naam van een site ligt vast.'
 
 const synced = { naam: 'nieuwe-site', sla: true, in_registry: true }
 
@@ -111,22 +112,35 @@ describe('site ownership', () => {
     const sites = count('site')
     expect((await worker('POST', '/api/rows/site', synced)).status).toBe(201)
     expectRefused(await worker('POST', '/api/rows/site', synced), 422, 'Er is al een site met deze naam.')
-    expectRefused(
-      await worker('PATCH', '/api/rows/site/2', { naam: 'testmans-winkel' }),
-      422,
-      'Er is al een site met deze naam.',
-    )
     expect(count('site')).toBe(sites + 1)
+  })
+
+  // The worker finds a confirmed link's production site by its name, so a rename would point it at another site.
+  test("a site's naam never changes after create, for a service too", async () => {
+    const before = row('site', 2)
+    const revs = revisions()
+    expectRefused(await worker('PATCH', '/api/rows/site/2', { naam: 'tmp-x' }), 422, NAME_FIXED)
+    expectRefused(await worker('PATCH', '/api/rows/site/2', { naam: 'testmans-winkel' }), 422, NAME_FIXED)
+    expectRefused(await admin('PATCH', '/api/rows/site/2', { naam: 'tmp-x' }), 403, REGISTRY)
+    expect(row('site', 2)).toEqual(before)
+    expect(revisions()).toBe(revs)
+  })
+
+  test("the sync's PATCH with the same naam answers 200", async () => {
+    const res = await worker('PATCH', '/api/rows/site/2', { naam: 'testmans-bestel', gezondheid: 'ok' })
+    expect(res.status).toBe(200)
+    expect(row('site', 2)).toMatchObject({ naam: 'testmans-bestel', gezondheid: 'ok' })
   })
 })
 
 describe('a site without a name', () => {
-  test('is a 400 from the engine, not a crash', async () => {
+  test('is refused, not a crash', async () => {
     const before = row('site', 2)
     const sites = count('site')
     const created = await worker('POST', '/api/rows/site', { ...synced, naam: null })
     const renamed = await worker('PATCH', '/api/rows/site/2', { naam: null })
-    expect([created.status, renamed.status]).toEqual([400, 400])
+    expect([created.status, renamed.status]).toEqual([400, 422])
+    expectRefused(renamed, 422, NAME_FIXED)
     expect(row('site', 2)).toEqual(before)
     expect(count('site')).toBe(sites)
   })

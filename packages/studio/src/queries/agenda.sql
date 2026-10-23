@@ -4,7 +4,7 @@ FROM agendapunt a
 WHERE a.deleted_at IS NULL
 
 UNION ALL
-SELECT 2000000000000 + x.id, x.titel, substr(x.gepland_op, 1, 10), x.gepland_op, NULL, 'onderhoud', NULL, NULL, x.id, NULL
+SELECT 2000000000000 + x.id, x.titel, substr(x.gepland_op, 1, 10), x.gepland_op, NULL, 'opdracht', NULL, NULL, x.id, NULL
 FROM actie x
 WHERE x.deleted_at IS NULL AND x.gepland_op IS NOT NULL AND x.status != 'geannuleerd'
 

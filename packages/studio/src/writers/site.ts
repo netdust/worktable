@@ -23,10 +23,15 @@ const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe si
 
 const isUser = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 'user'
 
-function checkUnique(ctx: WriteContext, values: Values, exceptId?: number): void {
-  if (typeof values.naam === 'string' && ctx.exists('site', { naam: values.naam }, exceptId)) {
+function checkUnique(ctx: WriteContext, values: Values): void {
+  if (typeof values.naam === 'string' && ctx.exists('site', { naam: values.naam })) {
     refuse('Er is al een site met deze naam.')
   }
+}
+
+// The worker finds a confirmed link's production site by its name, so a name never changes; the sync resends it as is.
+function checkNameKept(values: Values, current: Values): void {
+  if (Object.hasOwn(values, 'naam') && values.naam !== current.naam) refuse('De naam van een site ligt vast.')
 }
 
 export const siteWriter: Writer = {
@@ -43,8 +48,8 @@ export const siteWriter: Writer = {
       }
       return values
     }
-    if ('sla' in values) forbid(SLA_OWN)
-    checkUnique(ctx, values, (ctx.current as Values).id as number)
+    if (Object.hasOwn(values, 'sla')) forbid(SLA_OWN)
+    checkNameKept(values, ctx.current as Values)
     return values
   },
 

@@ -9,6 +9,7 @@ type Body = Record<string, unknown>
 type Row = Record<string, unknown>
 
 const DAY = 86_400_000
+const TESTMANS_WINKEL = 1
 const VOORBEELD_SITE = 3
 const OUD_ARCHIEF = 5
 
@@ -72,6 +73,26 @@ describe('sites met aandacht', () => {
     expect(await inOrde()).toContain(VOORBEELD_SITE)
     checked(VOORBEELD_SITE, daysAgo(9))
     expect(await inOrde()).not.toContain(VOORBEELD_SITE)
+  })
+
+  // A tile shows its first five rows: a broken site must never sit below a retired one.
+  test('the worst comes first: storing, let op, never checked, old, gone', async () => {
+    checked(TESTMANS_WINKEL, null)
+    checked(VOORBEELD_SITE, daysAgo(9))
+    const lines = await rows('sites_aandacht')
+    const ernst = Object.fromEntries(lines.map((r) => [r.reden, r.ernst]))
+    expect(ernst).toEqual({ storing: 1, let_op: 2, nooit: 3, oud: 4, weg: 5 })
+    const views = (await admin('GET', '/api/views')).body.views as Row[]
+    expect(views.find((v) => v.name === 'Sites met aandacht')?.sort).toEqual(['ernst', 'naam'])
+  })
+
+  test('never checked means no check at all', async () => {
+    checked(VOORBEELD_SITE, daysAgo(1), 'onbekend')
+    expect(await reden(VOORBEELD_SITE)).toBe('onbekend')
+    checked(VOORBEELD_SITE, daysAgo(9), 'onbekend')
+    expect(await reden(VOORBEELD_SITE)).toBe('oud')
+    checked(VOORBEELD_SITE, null, 'onbekend')
+    expect(await reden(VOORBEELD_SITE)).toBe('nooit')
   })
 
   test('the Sites in orde view and the progress tile read sites_in_orde, unfiltered', async () => {
@@ -140,6 +161,7 @@ describe('the agenda', () => {
     const on = (match: (r: Row) => boolean) => lines.find(match)?.datum ?? null
     expect(on((r) => r.agendapunt_id === 1)).not.toBeNull()
     expect(on((r) => r.actie_id === gepland)).toBe(morgen)
+    expect(lines.find((r) => r.actie_id === gepland)?.soort).toBe('opdracht')
     expect(on((r) => r.taak_id === open)).toBe(morgen)
     expect(on((r) => r.taak_id === gedaan)).toBeNull()
   })

@@ -272,7 +272,7 @@ export const views: SavedViewSeed[] = [
     source_type: 'query',
     source: 'sites_aandacht',
     skin: 'table',
-    sort: ['naam'],
+    sort: ['ernst', 'naam'],
     visible_fields: ['naam', 'reden', 'gezondheid', 'laatste_check', 'organisatie_id'],
   }),
   view({
