@@ -1,0 +1,42 @@
+/* The record's next steps: a row of small buttons under its title; a link item's sit at the end of its line. */
+.nv-dw-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.nv-dw-list .nv-dw-buttons {
+  flex: none;
+  padding: 0;
+}
+
+/* A record an outside process holds: a small pulsing dot and the word, in the head line. */
+.nv-dw-head__busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
+}
+
+.nv-dw-head__busy i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: nv-dw-busy 1.2s ease-in-out infinite;
+}
+
+@keyframes nv-dw-busy {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-dw-head__busy i {
+    animation: none;
+  }
+}

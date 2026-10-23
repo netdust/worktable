@@ -60,6 +60,16 @@ export interface LinkItem {
   title: string
   state: string | null
   places?: number
+  available?: Available
+  /** The link record's own detail text, under the item. */
+  detail?: string
+}
+
+/** What the server marks on a row or link item: the buttons and actions that apply to this viewer now. `state` is what a press sends as `expect`. */
+export interface Available {
+  state: string | null
+  buttons: { to: string; label: string }[]
+  actions: string[]
 }
 
 export interface Model {
@@ -87,6 +97,8 @@ export interface Model {
   record_link?: true
   /** The column a write to which is a transition: the record's state. */
   lifecycle?: string
+  /** The states in which an outside process holds the record: an open drawer follows it there. */
+  live?: string[]
   /** The options column whose tone colours each record as a lane and on the rows that point at it. */
   tone?: string
   /** Files its records carry, by kind; the drawer lists and takes them. */
@@ -106,6 +118,14 @@ export interface ModelAction {
   input: Record<string, ActionInput>
   /** Runs once on every ticked row of the table, not on one record. */
   many?: true
+  /** After a run the grid opens the first record it created, else the record it ran on. */
+  opens?: true
+}
+
+/** A record an action asks the grid to open. */
+export interface Opened {
+  dataset: string
+  id: number
 }
 
 export type ViewType = 'grid' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'
@@ -340,6 +360,8 @@ export interface Row {
   rollups?: Record<string, number | unknown[]>
   /** The inherited lookups whose value came through the relation, not the row's own. */
   inherited?: string[]
+  /** Absent on a source that declares no button or action condition: everything is then allowed. */
+  available?: Available
 }
 
 export interface Lookup {
@@ -371,6 +393,8 @@ export interface ApiError {
   dataset?: string
   /** On a refusal about one column, such as one not shown to owners. */
   key?: string
+  /** The HTTP status the engine answered with, when it answered. */
+  status?: number
 }
 
 /** A column of a view shown to owners, as the engine describes it beside the view. */

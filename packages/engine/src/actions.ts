@@ -1,10 +1,12 @@
 import { inScope, scopeOf, visibleSource } from './access'
+import { availableOf } from './available'
 import {
   type ActionDecl,
   type ActionInput,
   type ActionResult,
   type ActionUpdate,
   type Actor,
+  type DatasetDecl,
   type Domain,
   type InputValue,
   isSelection,
@@ -21,6 +23,7 @@ import {
   type Hooked,
   noneHooked,
   recordBatch,
+  rowOf,
   type Store,
   sendAfterCommit,
   writableOf,
@@ -107,6 +110,22 @@ function readRecord(store: Store, dataset: string, id: number, actor: Actor): Va
   return record
 }
 
+// Judged on the record as the caller reads it, lookups included, so the grid's mark and this refusal agree.
+function assertCondition(
+  store: Store,
+  name: string,
+  action: ActionDecl | SelectionActionDecl,
+  id: number,
+  actor: Actor,
+) {
+  if (!action.when) return
+  const source = visibleSource(store.domain, action.on, actor) as DatasetDecl
+  const row = rowOf(store, source, id, scopeOf(actor, source))
+  if (!availableOf(store.domain, source, row, actor)?.actions.includes(name)) {
+    throw new ApiError(422, 'condition_not_met', `record ${id} does not meet the condition of "${name}"`)
+  }
+}
+
 function updateAs(store: Store, actor: Actor, step: ActionUpdate, at: Step): void {
   const target = writableOf(store.domain, step.dataset, 'update', actor)
   const mode: TransitionMode = { kind: 'write', expect: expectedOf(target.dataset, step.expect) }
@@ -141,22 +160,24 @@ function execute(store: Store, actor: Actor, result: () => ActionResult): Action
   return { ...run, notices: hooked.notices }
 }
 
-function runSingle(store: Store, action: ActionDecl, body: Values, actor: Actor): ActionRun {
+function runSingle(store: Store, name: string, action: ActionDecl, body: Values, actor: Actor): ActionRun {
   const id = idOf(body)
   const given = inputOf(action, body)
   return execute(store, actor, () => {
     const record = readRecord(store, action.on, id, actor)
+    assertCondition(store, name, action, id, actor)
     const input = inputsRead(store, action, given, actor)
     return action.run(record, input, contextOf(store, actor, record))
   })
 }
 
 // Every id is read as the caller inside the transaction; one miss fails the run before `run` is called.
-function runSelection(store: Store, action: SelectionActionDecl, body: Values, actor: Actor): ActionRun {
+function runSelection(store: Store, name: string, action: SelectionActionDecl, body: Values, actor: Actor): ActionRun {
   const ids = idsOf(body)
   const given = inputOf(action, body)
   return execute(store, actor, () => {
     const records = ids.map((id) => readRecord(store, action.on, id, actor))
+    for (const id of ids) assertCondition(store, name, action, id, actor)
     const input = inputsRead(store, action, given, actor)
     return action.run(records, input, contextOf(store, actor, null))
   })
@@ -165,10 +186,12 @@ function runSelection(store: Store, action: SelectionActionDecl, body: Values, a
 export function runAction(store: Store, name: string, body: Values, actor: Actor): ActionRun {
   const action = actionOf(store.domain, name)
   visibleSource(store.domain, action.on, actor)
-  return isSelection(action) ? runSelection(store, action, body, actor) : runSingle(store, action, body, actor)
+  return isSelection(action)
+    ? runSelection(store, name, action, body, actor)
+    : runSingle(store, name, action, body, actor)
 }
 
-export type ServedAction = { name: string; many?: true } & Pick<ActionDecl, 'label' | 'input'>
+export type ServedAction = { name: string; many?: true; opens?: true } & Pick<ActionDecl, 'label' | 'input'>
 
 export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
   return Object.entries(domain.actions ?? {})
@@ -178,5 +201,6 @@ export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
       label: action.label,
       input: action.input,
       ...(isSelection(action) ? { many: true as const } : {}),
+      ...(action.opens ? { opens: true as const } : {}),
     }))
 }

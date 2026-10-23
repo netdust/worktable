@@ -42,7 +42,7 @@ const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
   Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
 
 /** Keyed by its record, so another row starts with nothing picked. The bar has no one record: its inputs pick by id, never `options_from`. */
-export function ActionInputs({ action, record, disabled = false, onRun }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; onRun: (input: Record<string, unknown>) => Promise<void> }) {
+export function ActionInputs({ action, record, disabled = false, onRun }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; onRun: (input: Record<string, unknown>) => Promise<unknown> }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
   const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))

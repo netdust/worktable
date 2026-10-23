@@ -7,6 +7,7 @@ import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
+import { markOf } from './available'
 import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, FlagsDecl, LinkDecl, OptionsFrom } from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { readHistory } from './history'
@@ -18,7 +19,7 @@ import { ApiError, parseRowsParams } from './params'
 import { noStoreHeaders } from './public-headers'
 import { recordLinkRequest, recordLinkRoutes } from './record-link'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { cellsOf, linksOf, matrixOf, readRows } from './rows'
+import { cellsOf, linksOf, matrixOf, readRows, servedColumn as servedLinkColumn } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import {
@@ -41,11 +42,15 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
-  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, created, notices }: Written) => ({
-    ...rowOf(store, dataset, id, scopeOf(actor, dataset)),
-    revision: { batch_id, changed, ...(created && { created }) },
-    notices,
-  })
+  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, created, notices }: Written) => {
+    const row = rowOf(store, dataset, id, scopeOf(actor, dataset))
+    return {
+      ...row,
+      ...markOf(domain, dataset, row, actor),
+      revision: { batch_id, changed, ...(created && { created }) },
+      notices,
+    }
+  }
 
   app.post('/rows/:dataset', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'create', c.get('actor'))
@@ -155,7 +160,7 @@ function flagsOf(domain: Domain, source: Source, actor: Actor): { flags?: FlagsD
   return marks.length > 0 ? { flags: { marks: Object.fromEntries(marks), tone: source.flags.tone } } : {}
 }
 
-function servedLink({ label, item, dataset, key, target, state }: LinkDecl, linked: DatasetDecl) {
+function servedLink({ label, item, dataset, key, target, state, detail }: LinkDecl, linked: DatasetDecl, actor: Actor) {
   const column = state === undefined ? undefined : linked.columns[state]
   const options = column && { options: column.options, tones: column.tones ?? {}, default: column.default ?? null }
   return {
@@ -165,6 +170,7 @@ function servedLink({ label, item, dataset, key, target, state }: LinkDecl, link
     key,
     target,
     target_dataset: linked.columns[target]?.relation,
+    ...(servedLinkColumn(detail, linked, scopeOf(actor, linked)) ? { detail } : {}),
     ...(options ? { state: options } : {}),
   }
 }
@@ -173,7 +179,7 @@ function servedLink({ label, item, dataset, key, target, state }: LinkDecl, link
 function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Record<string, unknown> } {
   const served = Object.entries(source.links ?? {}).flatMap(([name, link]) => {
     const linked = domain.datasets.find((d) => d.name === link.dataset)
-    return linked && readable(actor, linked) ? [[name, servedLink(link, linked)] as const] : []
+    return linked && readable(actor, linked) ? [[name, servedLink(link, linked, actor)] as const] : []
   })
   return served.length ? { links: Object.fromEntries(served) } : {}
 }
@@ -298,7 +304,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
               ? { gallery: s.gallery }
               : {}),
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
-            ...(s.kind === 'dataset' && s.lifecycle ? { lifecycle: { column: s.lifecycle.column } } : {}),
+            ...(s.kind === 'dataset' && s.lifecycle
+              ? { lifecycle: { column: s.lifecycle.column, ...(s.lifecycle.live ? { live: s.lifecycle.live } : {}) } }
+              : {}),
             ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),
             ...(s.kind === 'dataset' && s.listed === false ? { listed: false } : {}),
             ...(s.kind === 'dataset' ? { position: true } : {}),
@@ -339,6 +347,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     const cells = found ? cellsOf(db, domain, found, ids, scopeOf(actor, found.join)) : null
     const rows = read.rows.map((r) => ({
       ...r,
+      ...markOf(domain, source, r, actor),
       ...(links ? { links: links.get(r.id) } : {}),
       ...(cells ? { cells: cells.get(r.id) } : {}),
     }))

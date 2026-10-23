@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { t } from '../i18n'
 import type { ModelAction } from '../types'
 import { ActionInputs } from './ActionInputs'
@@ -38,10 +38,12 @@ export function useSelection(rowIds: number[]): Selection {
 }
 
 /** Above the grid while rows are ticked: the count, one button per selection action, and the way out. */
-export function SelectionBar({ count, actions, onRun, onClear }: {
+export function SelectionBar({ count, actions, misfits, onRun, onClear }: {
   count: number
   actions: ModelAction[]
-  onRun: (action: ModelAction, input: Record<string, unknown>) => Promise<void>
+  /** How many ticked rows an action does not apply to, by the marks the server put on them. */
+  misfits?: (action: ModelAction) => number
+  onRun: (action: ModelAction, input: Record<string, unknown>) => Promise<unknown>
   onClear: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -55,7 +57,15 @@ export function SelectionBar({ count, actions, onRun, onClear }: {
   return (
     <div className="nv-selection" role="region" aria-label={t('selectedCount', { n: count })}>
       <span className="nv-selection__count">{t('selectedCount', { n: count })}</span>
-      {actions.map((action) => <ActionInputs key={action.name} action={action} disabled={over || busy} onRun={(input) => run(action, input)} />)}
+      {actions.map((action) => {
+        const misfit = misfits?.(action) ?? 0
+        return (
+          <Fragment key={action.name}>
+            <ActionInputs action={action} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} />
+            {misfit > 0 && <span className="nv-selection__max" title={action.label}>{t('selectionMisfit', { n: misfit })}</span>}
+          </Fragment>
+        )
+      })}
       {over && <span className="nv-selection__max" role="alert">{t('selectionMax', { max: MAX_SELECTION })}</span>}
       <Button className="nv-button nv-button--secondary nv-button--sm" onPress={onClear}>{t('selectionClear')}</Button>
     </div>

@@ -31,6 +31,8 @@ export default async function globalSetup(): Promise<void> {
     await signedIn('fiche-editor', FICHE, ACCOUNTS.fiche, 'editor')
     createAccount(SELECTION, ACCOUNTS.selection.email, ACCOUNTS.selection.role)
     await signedIn('selection-editor', SELECTION, ACCOUNTS.selection)
+    createAccount(SELECTION, ACCOUNTS.selectionAdmin.email, ACCOUNTS.selectionAdmin.role)
+    await signedIn('selection-admin', SELECTION, ACCOUNTS.selectionAdmin)
   } finally {
     await browser.close()
   }

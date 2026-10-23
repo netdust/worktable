@@ -1,12 +1,13 @@
 import { Button } from 'react-aria-components'
 import { type ClipboardEvent, type CSSProperties, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
-import type { Lookup, Model, ModelAction, Row, Scope, View } from '../types'
+import type { Lookup, Model, ModelAction, Opened, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
 import { RelationContext, relatedOf } from './cells/Relation'
 import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { rowOf } from '../api'
 import { Drawer, type RunAction } from './Drawer'
+import { useReread } from './drawerWrite'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
@@ -55,9 +56,9 @@ export interface GridProps {
   scope?: Scope | null
   spaceModel?: string | null
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
-  onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
+  onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<Opened | null | void>
   /** Runs a selection action once on the ticked rows; without it the table has no checkboxes. */
-  onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<void>
+  onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<Opened | null | void>
   /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
   cut?: Row | null
   /** Adds and removes a `links` cell's rows; without it a links cell only shows its tags. */
@@ -147,6 +148,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Focus moves to a cell only after the grid itself moved it; a search filtering rows must keep its focus.
   const moved = useRef(false)
   const [drawer, setDrawer] = useState<number | null>(null)
+  const reread = useReread()
   const [filesVersions, setFilesVersions] = useState<Record<string, number>>({})
   const [related, setRelated] = useState<{ row: Row; columns: Column[]; model: Model } | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
@@ -315,6 +317,33 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     event.preventDefault()
   }
 
+  /** A re-read lands only on the related drawer it was made for; a record that is gone closes it. */
+  function followRelated(of: string, row: Row | null, id = row?.id): void {
+    setRelated((was) => (was && was.model.key === of && was.row.id === id ? (row ? { ...was, row } : null) : was))
+  }
+
+  // The view was read again, as after an Undo of the run that opened this record: the drawer shows what is there now, or closes.
+  useEffect(() => {
+    if (!related || reloads === 0) return
+    let current = true
+    rowOf(related.model.key, related.row.id).then((found) => current && followRelated(related.model.key, found, related.row.id), () => undefined)
+    return () => {
+      current = false
+    }
+  }, [reloads])
+
+  /** What an action asked to open: a record this table holds stays in its own drawer, any other is read and shown as a related one. */
+  function show(opened: Opened | null | void): void {
+    if (!opened) return
+    if (opened.dataset === model.key && state.rows.some((row) => row.id === opened.id)) setDrawer(opened.id)
+    else openRelated(opened.dataset, opened.id)
+  }
+
+  /** The ticked rows an action is not marked on: a row with no marks allows every action. */
+  function misfits(action: ModelAction): number {
+    return state.rows.filter((row) => ticking.selected.has(row.id) && row.available && !row.available.actions.includes(action.name)).length
+  }
+
   function openRelated(target: string, id: number): void {
     const gone = () => onNotice?.(t('recordGone'))
     rowOf(target, id).then((found) => {
@@ -347,8 +376,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       ) : (
       <>
       {selectable && onSelection && (
-        <SelectionBar count={ticking.selected.size} actions={selectionActions} onClear={ticking.clear}
-          onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then(ticking.clear)} />
+        <SelectionBar count={ticking.selected.size} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
+          onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then((opened) => {
+            ticking.clear()
+            show(opened)
+          })} />
       )}
       <div className="nv-body">
         <div className="nv-scroll">
@@ -362,11 +394,12 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
           </table>
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
-          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
+          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)}
+          onDone={reread(related.model.key, related.row.id, (row) => followRelated(related.model.key, row), () => followRelated(related.model.key, null, related.row.id))} />}
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
-          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
-          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input)) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
+          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id, undefined, () => setDrawer((now) => (now === open.id ? null : now)))}
+          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then(show) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
       </div>

@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { Available, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -82,7 +82,7 @@ export interface EngineSource {
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
-  lifecycle?: { column: string }
+  lifecycle?: { column: string; live?: string[] }
   /** Each record has a link its person reads their views through. */
   record_link?: true
   attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
@@ -132,6 +132,7 @@ export interface EngineRow {
   /** Per link name, the linked rows the caller may read. */
   links?: Record<string, LinkItem[]>
   inherited?: string[]
+  available?: Available
   [column: string]: unknown
 }
 
@@ -213,6 +214,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
+    ...(source.lifecycle?.live ? { live: source.lifecycle.live } : {}),
     ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
@@ -442,7 +444,7 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
 
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, available, ...fields } = r
   return {
     id,
     title: title ?? '',
@@ -450,6 +452,7 @@ export function toRow(r: EngineRow): Row {
     fields: { ...fields, ...links },
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
     ...(inherited ? { inherited } : {}),
+    ...(available ? { available } : {}),
     ...(cells ? { rollups: { cells: cells.map(toRow) } } : {}),
   }
 }

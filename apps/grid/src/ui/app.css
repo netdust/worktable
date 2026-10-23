@@ -5598,6 +5598,21 @@ table.nv-cal--month .nv-cal__event:hover {
   white-space: nowrap;
 }
 
+/* The title opens its record: text first, a button only in how it answers. */
+.nv-list__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-list__open:hover {
+  text-decoration: underline;
+}
+
 .nv-list__cell {
   margin-left: 6px;
   color: var(--color-fg-subtle);

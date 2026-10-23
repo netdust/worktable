@@ -1,6 +1,7 @@
 export { forbid } from './access'
 export { createEngine, type EngineOptions } from './app'
 export { createAccount } from './auth'
+export type { Available } from './available'
 export type {
   ActionCreate,
   ActionDecl,
@@ -12,6 +13,7 @@ export type {
   CalendarDecl,
   ColumnDecl,
   ColumnType,
+  Condition,
   DashboardLayout,
   DatasetDecl,
   Domain,

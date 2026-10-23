@@ -2,12 +2,13 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows, update } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
 import { linkedDataset } from '../grid/Drawer'
 import { Grid, type OnScreen } from '../grid/Grid'
+import { type DrawerWrite, DrawerWriteContext } from '../grid/drawerWrite'
 import type { LinkActions } from '../grid/cells/Links'
 import { useGridStore, useLayout } from '../grid/hooks'
 import { cutAt } from '../grid/group'
@@ -18,7 +19,7 @@ import { useMatrixStore } from '../matrix/hooks'
 import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
-import type { Account, ApiError, DateWindow, Model, ModelAction, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
+import type { Account, ApiError, DateWindow, Model, ModelAction, Opened, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -396,6 +397,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
   const live = useRef(store)
   live.current = store
+  const viewNow = useRef(view)
+  viewNow.current = view
   const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
@@ -546,16 +549,60 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     }
     notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
-  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>) => {
-    if (view) finished((await runAction(action.name, row.id, input)).batch, action)
+  // A button the server marked is the ordinary transition write, expecting the state it was marked against.
+  const drawerWrite: DrawerWrite = {
+    // Read through refs: a re-read may land after the view moved on, and must not repaint a dead store or over a write in flight.
+    fresh: (of, row) => {
+      const current = live.current
+      if (of === viewNow.current?.model && current && !current.isPending(row.id)) current.replace(row)
+    },
+    press: async (of, id, available, to, again) => {
+      const onDone = () => void again().catch(() => undefined)
+      const column = models[of]?.lifecycle
+      if (!column) return
+      try {
+        const { batch } = await update(of, id, { [column]: to }, undefined, available.state === null ? undefined : { [column]: available.state })
+        if (batch) {
+          const entry = { batch: Promise.resolve(batch), model: of, id, refresh: onDone }
+          history.push(entry)
+          const undo = () => {
+            if (history.last() !== entry) return
+            void (live.current?.undo() ?? history.undo().then(
+              (undone) => (undone?.refresh ? undone.refresh() : reloadView()),
+              (error: ApiError) => notify({ message: undoText(error) }),
+            ))
+          }
+          notify({ message: t('buttonDone', { button: available.buttons.find((b) => b.to === to)?.label ?? to }), action: { label: t('undo'), run: undo } })
+        }
+      } catch (error) {
+        notify({ message: errorText((error as ApiError).code, (error as ApiError).message) })
+      }
+      onDone()
+    },
   }
-  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>) => {
-    if (!view) return
+  // What an action that opens its result asks the grid to open: the first record it created, else the one a single run acted on.
+  const opening = (action: ModelAction, created: Opened[], acted: Opened | null): Opened | null => (action.opens ? (created[0] ?? acted) : null)
+  const act = async (row: Row, action: ModelAction, input: Record<string, unknown>): Promise<Opened | null> => {
+    if (!view) return null
     try {
-      finished((await runSelection(action.name, ids, input)).batch, action)
+      const done = await runAction(action.name, row.id, input)
+      finished(done.batch, action)
+      return opening(action, done.created, { dataset: view.model, id: row.id })
+    } catch (error) {
+      // The row moved out of the action's condition since the sheet loaded: read again, so the drawer stops offering it.
+      if ((error as ApiError).code === 'condition_not_met') reloadView()
+      throw error
+    }
+  }
+  const actOnSelection = async (action: ModelAction, ids: number[], input: Record<string, unknown>): Promise<Opened | null> => {
+    if (!view) return null
+    try {
+      const done = await runSelection(action.name, ids, input)
+      finished(done.batch, action)
+      return opening(action, done.created, null)
     } catch (error) {
       // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
-      if ((error as ApiError).code === 'unknown_record') reloadView()
+      if (['unknown_record', 'condition_not_met'].includes((error as ApiError).code)) reloadView()
       throw error
     }
   }
@@ -573,6 +620,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   return (
     <DrawerSlot.Provider value={drawerSlot}>
     <SchemaContext.Provider value={served}>
+    <DrawerWriteContext.Provider value={drawerWrite}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} counts={counts} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
         onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
@@ -632,7 +680,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onDrop={store && writable && !model.query && !model.fields[boardColumn(view, model, layout) as string]?.readonly ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
               onCreate={writable && !model.query ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
             <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={showAway ? result.away : []}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
@@ -675,6 +723,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           onSubmit={(name, shared) => create(adding.table.key, name, adding.type, shared)} onClose={() => setAdding(null)} />
       )}
     </div>
+    </DrawerWriteContext.Provider>
     </SchemaContext.Provider>
     </DrawerSlot.Provider>
   )

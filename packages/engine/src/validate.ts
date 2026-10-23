@@ -3,6 +3,7 @@ import { POSITION } from './ddl'
 import {
   type ActionInput,
   type ColumnDecl,
+  type Condition,
   type DatasetDecl,
   type Domain,
   ICONS,
@@ -13,6 +14,7 @@ import {
   TONES,
 } from './declare'
 import { reservedNames } from './engine-tables'
+import { lookupOf } from './lookups'
 import { sourceOf, sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
@@ -231,6 +233,7 @@ const OVERWRITTEN = [
   ['revision', 'the write reply'],
   ['links', "the row's link rows"],
   ['inherited', "the row's inherited lookups"],
+  ['available', "the row's buttons and actions"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -272,6 +275,8 @@ function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
     if (link.state !== undefined && !linked.columns[link.state]?.options) {
       throw at(link.state, `state "${link.state}" is not an options column`)
     }
+    if (link.detail !== undefined && !Object.hasOwn(linked.columns, link.detail))
+      throw at(link.detail, `detail "${link.detail}" is not a column of "${linked.name}"`)
     const count = link.count === undefined ? undefined : linked.columns[link.count]
     if (link.count !== undefined && (count?.type !== 'integer' || count.relation))
       throw at(link.count, `count "${link.count}" is not an integer column that is no relation`)
@@ -291,6 +296,7 @@ const LOOKUP_RESERVED = new Set([
   'title',
   'links',
   'revision',
+  'available',
   'notices',
   'expect',
 ])
@@ -444,7 +450,37 @@ function checkAway(
   }
 }
 
-function checkLifecycle(dataset: DatasetDecl): void {
+const isScalar = (v: unknown): boolean => v === null || ['string', 'number', 'boolean'].includes(typeof v)
+
+const isInList = (v: unknown): v is { $in: unknown[] } =>
+  typeof v === 'object' && v !== null && Object.keys(v).join() === '$in' && Array.isArray((v as { $in: unknown }).$in)
+
+// Equality and `$in` only, on a column or lookup the source serves.
+function checkCondition(domain: Domain, source: DatasetDecl, what: string, when: Condition): void {
+  const at = (bad: string, message: string) => new DomainError(source.name, bad, `${what}: when ${message}`)
+  if (typeof when !== 'object' || when === null || Array.isArray(when)) throw at(what, 'must be an object')
+  for (const [key, want] of Object.entries(when)) {
+    if (!Object.hasOwn(source.columns, key) && !lookupOf(source, key)) {
+      throw at(key, `names "${key}", which is no column or lookup of "${source.name}"`)
+    }
+    const list = isScalar(want) ? [want] : isInList(want) ? want.$in : null
+    if (!list?.every(isScalar)) throw at(key, `value of "${key}" must be a scalar or { $in: [scalars] }`)
+    const options = optionsOf(domain, source, key)
+    const stray =
+      options && list.find((value) => value !== null && !(typeof value === 'string' && Object.hasOwn(options, value)))
+    if (stray !== undefined) throw at(key, `value ${JSON.stringify(stray)} of "${key}" is not one of its options`)
+  }
+}
+
+// The options of a column, or of the column a lookup reads from its target, when it has any.
+function optionsOf(domain: Domain, source: DatasetDecl, key: string): Record<string, string> | undefined {
+  const lookup = lookupOf(source, key)
+  if (!lookup) return source.columns[key]?.options
+  const target = domain.datasets.find((d) => d.name === source.columns[lookup.via]?.relation)
+  return target?.columns[lookup.field]?.options
+}
+
+function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
   const lifecycle = dataset.lifecycle
   if (!lifecycle) return
   const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lifecycle ${message}`)
@@ -453,14 +489,19 @@ function checkLifecycle(dataset: DatasetDecl): void {
   const checkOption = (what: string, key: string) => {
     if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${lifecycle.column}"`)
   }
-  for (const { from, to, roles, label } of lifecycle.transitions) {
+  for (const { from, to, roles, label, button, when } of lifecycle.transitions) {
     if (from !== '*') for (const key of from) checkOption('from', key)
     checkOption('to', to)
     if (label !== undefined && (typeof label !== 'string' || label.trim() === '')) {
       throw at(to, `label of the transition to "${to}" must be a non-empty string`)
     }
+    if (button !== undefined && (typeof button !== 'string' || button.trim() === '')) {
+      throw at(to, `button of the transition to "${to}" must be a non-empty string`)
+    }
+    if (when !== undefined) checkCondition(domain, dataset, `transition to "${to}"`, when)
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
+  for (const key of lifecycle.live ?? []) checkOption('live state', key)
   for (const key of Object.keys(lifecycle.hooks ?? {})) checkOption('hook', key)
   for (const column of lifecycle.token_projection ?? []) {
     checkColumn(dataset, 'token_projection column', column)
@@ -562,6 +603,16 @@ function checkActions(domain: Domain): void {
     }
     if ('many' in action && action.many !== true)
       throw new DomainError(name, 'many', 'many must be true on a selection action, and absent otherwise')
+    if (action.opens !== undefined && action.opens !== true)
+      throw new DomainError(name, 'opens', 'opens must be true, and absent otherwise')
+    if (action.when !== undefined) {
+      checkCondition(
+        domain,
+        domain.datasets.find((d) => d.name === action.on) as DatasetDecl,
+        `action ${name}`,
+        action.when,
+      )
+    }
     for (const [key, input] of Object.entries(action.input)) {
       checkInput(name, key, input, datasets)
       if (!('relation' in input) || !input.options_from) continue
@@ -690,7 +741,7 @@ export function validateDomain(domain: Domain): void {
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkTone(dataset)
-    checkLifecycle(dataset)
+    checkLifecycle(domain, dataset)
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
     checkAttachments(dataset)

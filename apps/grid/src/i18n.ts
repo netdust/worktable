@@ -270,7 +270,11 @@ const strings = {
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
+  buttonDone: '{button} gedaan.',
+  liveBusy: 'Bezig…',
+  selectionMisfit: 'Past niet op {n} rijen',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
+  conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
   selectedCount: '{n} geselecteerd',
   selectionClear: 'Selectie wissen',
   selectionMax: 'Maximaal {max} tegelijk',
@@ -430,6 +434,7 @@ const ENGINE_CODES: Record<string, StringKey> = {
   transition_not_allowed: 'transitionNotAllowed',
   transition_lost: 'transitionLost',
   unknown_record: 'recordGoneRun',
+  condition_not_met: 'conditionNotMet',
 }
 
 /** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */
