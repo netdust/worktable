@@ -2,9 +2,8 @@ import { forbid, type Writer } from '@worktable/engine'
 import { actieWriter } from './actie'
 import { actieSiteWriter } from './actie-site'
 import { onderhoudWriter } from './onderhoud'
+import { agendapuntWriter, organisatieWriter, projectWriter, taakWriter, werkpakketWriter } from './planning'
 import { siteWriter } from './site'
-
-const passThrough: Writer = { create: (values) => values, update: (values) => values, delete() {} }
 
 // A service token can reach DELETE directly: a writer's own rules speak first, then no service deletes.
 function noServiceDeletes(writer: Writer): Writer {
@@ -20,15 +19,15 @@ function noServiceDeletes(writer: Writer): Writer {
 }
 
 const own: Record<string, Writer> = {
-  organisatie: passThrough,
+  organisatie: organisatieWriter,
   site: siteWriter,
   actie: actieWriter,
   actie_site: actieSiteWriter,
   onderhoud: onderhoudWriter,
-  project: passThrough,
-  werkpakket: passThrough,
-  taak: passThrough,
-  agendapunt: passThrough,
+  project: projectWriter,
+  werkpakket: werkpakketWriter,
+  taak: taakWriter,
+  agendapunt: agendapuntWriter,
 }
 
 export const writers: Record<string, Writer> = Object.fromEntries(

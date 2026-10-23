@@ -268,7 +268,7 @@ export const werkpakket = defineDataset({
     laatste_stap: text('Laatste stap'),
     volgende_stap: text('Volgende stap'),
     geblokkeerd_door: text('Geblokkeerd door'),
-    bijgewerkt: { type: 'datetime', label: 'Bijgewerkt', nullable: true },
+    bijgewerkt: { type: 'datetime', label: 'Bijgewerkt', nullable: true, readonly: true },
     organisatie_id: relation('Organisatie', 'organisatie'),
   },
   lookups: { project: { label: 'Project', via: 'project_id', field: 'naam' } },
