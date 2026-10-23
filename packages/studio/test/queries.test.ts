@@ -11,7 +11,6 @@ type Row = Record<string, unknown>
 const DAY = 86_400_000
 const VOORBEELD_SITE = 3
 const OUD_ARCHIEF = 5
-const ALLE = 1
 
 let sqlite: Database
 let admin: (method: string, path: string, body?: unknown) => Promise<{ status: number; body: Body }>
@@ -82,35 +81,33 @@ describe('sites met aandacht', () => {
 })
 
 describe('op tafel', () => {
-  test('op tafel holds what waits for Stefan', async () => {
-    const mislukt = insert('actie', {
-      titel: 'Smoketest · Alle sites',
-      soort: 'smoketest',
-      groep_id: ALLE,
-      status: 'mislukt',
-    })
-    const deels = insert('actie', {
-      titel: 'Bijwerken · Alle sites',
-      soort: 'bijwerken',
-      groep_id: ALLE,
-      status: 'deels',
-    })
-    const klaar = insert('actie', {
-      titel: 'Malwarescan · Alle sites',
-      soort: 'malwarescan',
-      groep_id: ALLE,
-      status: 'klaar',
-    })
-    const lines = await rows('op_tafel')
-    const of = (soort: string) => lines.filter((r) => r.soort === soort)
-    expect(of('taak').length).toBe(4)
-    expect(of('bevestigen').map((r) => r.actie_id)).toEqual([1])
-    expect(
-      of('mislukt')
-        .map((r) => r.actie_id)
-        .sort(),
-    ).toEqual([mislukt, deels].sort())
-    expect(lines.some((r) => r.actie_id === klaar)).toBe(false)
+  // Sunday of this week, local: the last day op tafel reaches.
+  const sunday = () => {
+    const at = new Date()
+    at.setDate(at.getDate() + ((7 - at.getDay()) % 7))
+    return localDay(at)
+  }
+  const dayAfter = (day: string) => localDay(new Date(new Date(`${day}T12:00:00`).getTime() + DAY))
+  const titles = async () => (await rows('op_tafel')).map((r) => r.titel)
+
+  test('op_tafel holds open tasks due this week or earlier, and no task without a deadline', async () => {
+    insert('taak', { titel: 'Achterstallig', deadline: localDay(new Date(Date.now() - 9 * DAY)) })
+    insert('taak', { titel: 'Zondag', deadline: sunday() })
+    insert('taak', { titel: 'Volgende week', deadline: dayAfter(sunday()) })
+    insert('taak', { titel: 'Zonder deadline' })
+    insert('taak', { titel: 'Al gedaan', deadline: localDay(), status: 'gedaan' })
+    const listed = await titles()
+    expect(listed).toEqual(expect.arrayContaining(['Achterstallig', 'Zondag']))
+    for (const absent of ['Volgende week', 'Zonder deadline', 'Al gedaan', 'Dashboard-plan nalezen'])
+      expect(listed).not.toContain(absent)
+  })
+
+  // The worker's task per failure carries it, and Gedaan clears it (spec S11).
+  test('a failed request is not on the table', async () => {
+    const before = await titles()
+    insert('actie', { titel: 'Smoketest · 2 sites', soort: 'smoketest', status: 'mislukt' })
+    insert('actie', { titel: 'Bijwerken · 2 sites', soort: 'bijwerken', status: 'deels' })
+    expect(await titles()).toEqual(before)
   })
 
   test('a taak line writes its status back to the taak, and leaves the table', async () => {
@@ -123,19 +120,18 @@ describe('op tafel', () => {
       field: 'status',
       key: 'taak_id',
     })
-    const line = (await rows('op_tafel')).find((r) => r.soort === 'taak') as Row
+    const line = (await rows('op_tafel'))[0] as Row
     expect((await admin('PATCH', `/api/rows/taak/${line.taak_id}`, { status: 'gedaan' })).status).toBe(200)
     expect((await rows('op_tafel')).some((r) => r.id === line.id)).toBe(false)
   })
 })
 
 describe('the agenda', () => {
-  test('the agenda holds every dated thing', async () => {
+  test('the agenda holds agendapunten, requests by gepland_op and open tasks by deadline', async () => {
     const morgen = localDay(new Date(Date.now() + DAY))
     const gepland = insert('actie', {
-      titel: 'Gezondheidscheck · Alle sites',
+      titel: 'Gezondheidscheck · 4 sites',
       soort: 'gezondheidscheck',
-      groep_id: ALLE,
       gepland_op: `${morgen}T07:00:00`,
     })
     const open = insert('taak', { titel: 'Open taak', deadline: morgen })

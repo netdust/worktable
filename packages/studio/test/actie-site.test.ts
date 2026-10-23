@@ -42,7 +42,7 @@ function plant(table: string, row: Body): number {
   return Number(sqlite.query(sql).run(...(Object.values(row) as never[])).lastInsertRowid)
 }
 
-const actieIn = (status: string, soort = 'bijwerken') => plant('actie', { titel: 'x', soort, groep_id: 1, status })
+const actieIn = (status: string, soort = 'bijwerken') => plant('actie', { titel: 'x', soort, status })
 const linkIn = (actie: number, state: string, site = 2) =>
   plant('actie_site', { actie_id: actie, site_id: site, state, voorstel: '[]' })
 

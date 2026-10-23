@@ -27,8 +27,6 @@ branch # generic English, a code branch in a test comment; studio's Werkpakket.b
 details # generic English: an error's details; studio's Onderhoud.details
 repo # generic English, the repository in a serve.ts comment; studio's Project.repo
 sites # cross-site in the write guard's Sec-Fetch-Site; studio's sites_aandacht
-groep # Dutch 'group': an engine test fixture's invented dataset (rows.test); studio declares Groep
-lid # Dutch 'member': the same engine test fixture; studio's groep_lid
 dagen # Dutch 'days': an engine test's view 'Mijn dagen'; studio's tls_dagen
 door # Dutch 'by': one engine test string; studio's geblokkeerd_door
 urls # generic English: the URLs a fetch saw, in the mcp tools test; studio's smoke_urls

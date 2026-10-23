@@ -150,17 +150,11 @@ describe('the maintenance log', () => {
 
 describe('no service deletes a row', () => {
   test('a service cannot delete a site, an actie, a taak or a werkpakket', async () => {
-    sqlite.run('DELETE FROM groep_lid WHERE site_id = 1')
     for (const dataset of ['site', 'actie', 'taak', 'werkpakket']) {
       const res = await worker('DELETE', `/api/rows/${dataset}/1`)
       expect(res.status).toBe(403)
       expect(JSON.stringify(res.body)).toContain(NO_DELETE)
       expect(row(dataset, 1).deleted_at ?? null).toBeNull()
     }
-  })
-
-  test("the sync's service removes a site from the SLA group", async () => {
-    const member = sqlite.query('SELECT id FROM groep_lid WHERE groep_id = 2 LIMIT 1').get() as { id: number }
-    expect((await worker('DELETE', `/api/rows/groep_lid/${member.id}`)).status).toBe(200)
   })
 })

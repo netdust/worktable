@@ -89,42 +89,35 @@ const sites = [
   { naam: 'oud-archief', domein: 'archief.voorbeeld.example', in_registry: false, organisatie_id: INTERN },
 ]
 
-const ALLE = 1
-const SLA = 2
-const groepen = [
-  { naam: 'Alle sites', soort: 'alle' },
-  { naam: 'SLA-sites', soort: 'sla' },
-  ...sites.map((s) => ({ naam: s.naam, soort: 'site' })),
-]
-const leden = [
-  ...[1, 2, 3, 4].map((site_id) => ({ groep_id: ALLE, site_id })),
-  ...[1, 2].map((site_id) => ({ groep_id: SLA, site_id })),
-  ...sites.map((_, at) => ({ groep_id: 3 + at, site_id: 1 + at })),
-]
-
 const acties = [
   {
-    titel: 'Bijwerken · Alle sites',
+    titel: 'Bijwerken · 2 sites',
     soort: 'bijwerken',
-    groep_id: ALLE,
     status: 'voorbereid',
     voorbereid_op: ago(2 * HOUR),
     samenvatting: 'Twee sites hebben updates klaarstaan.',
   },
 ]
-const voorstel = (items: [string, string, string][]) =>
-  JSON.stringify(items.map(([naam, van, naar]) => ({ naam, van, naar })))
+// The worker's preview: the pinned versions it will install (studio-worker's Voorstel).
+const plugin = (slug: string, from: string, to: string) => ({ slug, from, to, bron: 'wporg' })
+const voorstel = (preview: { core?: { from: string; to: string }; plugins: ReturnType<typeof plugin>[] }) =>
+  JSON.stringify({ themes: [], beschermd: [], ...preview })
 const actieSites = [
   {
     actie_id: 1,
     site_id: 2,
     state: 'te_bevestigen',
-    voorstel: voorstel([
-      ['wordpress', '6.7.2', '6.8.3'],
-      ['formulier-plugin', '2.4.0', '2.5.1'],
-    ]),
+    voorstel: voorstel({
+      core: { from: '6.7.2', to: '6.8.3' },
+      plugins: [plugin('formulier-plugin', '2.4.0', '2.5.1')],
+    }),
   },
-  { actie_id: 1, site_id: 3, state: 'te_bevestigen', voorstel: voorstel([['cache-plugin', '1.9.0', '1.9.2']]) },
+  {
+    actie_id: 1,
+    site_id: 3,
+    state: 'te_bevestigen',
+    voorstel: voorstel({ plugins: [plugin('cache-plugin', '1.9.0', '1.9.2')] }),
+  },
 ]
 
 const projecten = [
@@ -191,8 +184,6 @@ const agendapunten = [
 export function seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void {
   insert('organisatie', organisaties)
   insert('site', sites)
-  insert('groep', groepen)
-  insert('groep_lid', leden)
   insert('actie', acties)
   insert('actie_site', actieSites)
   insert('project', projecten)
@@ -230,6 +221,33 @@ export const views: SavedViewSeed[] = [
       'laatste_check',
       'in_registry',
     ],
+  }),
+  view({
+    name: 'Sites per risico',
+    source_type: 'dataset',
+    source: 'site',
+    skin: 'board',
+    filters: IN_REGISTRY,
+    sort: ['naam'],
+    visible_fields: ['gezondheid', 'organisatie_id', 'laatste_check'],
+  }),
+  view({
+    name: 'Sites in beeld',
+    source_type: 'dataset',
+    source: 'site',
+    skin: 'gallery',
+    filters: IN_REGISTRY,
+    sort: ['naam'],
+    visible_fields: ['gezondheid', 'organisatie_id'],
+  }),
+  view({
+    name: 'SLA-sites',
+    source_type: 'dataset',
+    source: 'site',
+    skin: 'table',
+    filters: { sla: true, ...IN_REGISTRY },
+    sort: ['naam'],
+    visible_fields: SITE_FIELDS,
   }),
   view({
     name: 'Alle sites',
@@ -275,28 +293,20 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['naam', 'reden', 'gezondheid', 'laatste_check', 'organisatie_id'],
   }),
   view({
-    name: 'Groepen',
-    source_type: 'dataset',
-    source: 'groep',
-    skin: 'table',
-    sort: ['naam'],
-    visible_fields: ['naam', 'soort', 'leden'],
-  }),
-  view({
-    name: 'Acties',
+    name: 'Opdrachten',
     source_type: 'dataset',
     source: 'actie',
     skin: 'table',
     sort: ['-id'],
-    visible_fields: ['titel', 'soort', 'groep_id', 'status', 'bron', 'gepland_op', 'sites'],
+    visible_fields: ['titel', 'soort', 'status', 'bron', 'gepland_op', 'sites'],
   }),
   view({
-    name: 'Acties per status',
+    name: 'Opdrachten per status',
     source_type: 'dataset',
     source: 'actie',
     skin: 'board',
     sort: ['-id'],
-    visible_fields: ['soort', 'groep_id', 'sites'],
+    visible_fields: ['soort', 'sites'],
   }),
   view({
     name: 'Te bevestigen',
@@ -305,7 +315,7 @@ export const views: SavedViewSeed[] = [
     skin: 'table',
     filters: { status: 'voorbereid' },
     sort: ['voorbereid_op'],
-    visible_fields: ['titel', 'soort', 'groep_id', 'voorbereid_op', 'sites'],
+    visible_fields: ['titel', 'soort', 'voorbereid_op', 'sites'],
   }),
   view({
     name: 'Onderhoudslog',
@@ -324,7 +334,7 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['naam', 'organisatie_id', 'repo'],
   }),
   view({
-    name: 'Werkpakketten',
+    name: 'Features',
     source_type: 'dataset',
     source: 'werkpakket',
     skin: 'table',
@@ -355,7 +365,7 @@ export const views: SavedViewSeed[] = [
     source: 'op_tafel',
     skin: 'table',
     sort: ['deadline'],
-    visible_fields: ['soort', 'titel', 'onderwerp', 'deadline', 'status'],
+    visible_fields: ['titel', 'deadline', 'status'],
   }),
   view({
     name: 'Agenda',
@@ -375,7 +385,7 @@ export const views: SavedViewSeed[] = [
     visible_fields: ['titel', 'start_at', 'eind_at', 'soort'],
   }),
   view({
-    name: 'Agendapunten',
+    name: 'Zelf toegevoegd',
     source_type: 'dataset',
     source: 'agendapunt',
     skin: 'table',
@@ -417,7 +427,7 @@ export const views: SavedViewSeed[] = [
           tiles: [
             {
               kind: 'list',
-              view: 'Werkpakketten',
+              view: 'Features',
               rows: 5,
               columns: ['project', 'fase', 'laatste_stap', 'bijgewerkt'],
             },
@@ -434,18 +444,13 @@ export const views: SavedViewSeed[] = [
         {
           label: 'Op tafel',
           tiles: [
-            {
-              kind: 'list',
-              view: 'Te bevestigen',
-              rows: 5,
-              set: { column: 'status', value: 'bevestigd', label: 'Bevestigen' },
-            },
+            // A row opens the opdracht's drawer, where Bevestigen sits beside the preview.
+            { kind: 'list', view: 'Te bevestigen', rows: 5 },
             { kind: 'list', view: 'Op tafel', rows: 8, set: { column: 'status', value: 'gedaan', label: 'Gedaan' } },
           ],
         },
       ],
       actions: [
-        { create: 'actie', label: 'Nieuwe actie' },
         { create: 'taak', label: 'Nieuwe taak' },
         { create: 'agendapunt', label: 'Nieuw agendapunt' },
       ],

@@ -36,8 +36,12 @@ export const organisatie = defineDataset({
 export const site = defineDataset({
   name: 'site',
   label: 'Sites',
+  new_label: 'Nieuwe site',
   icon: 'box',
   title: 'naam',
+  board: { column: 'risico' },
+  gallery: { kind: 'screenshot' },
+  attachments: { kinds: { screenshot: 'Screenshot' } },
   scoped: 'organisatie_id',
   custom: true,
   columns: {
@@ -78,42 +82,10 @@ export const site = defineDataset({
   indexes: [['naam'], ['organisatie_id']],
 })
 
-export const groep = defineDataset({
-  name: 'groep',
-  label: 'Groepen',
-  new_label: 'Nieuwe groep',
-  icon: 'tag',
-  title: 'naam',
-  custom: true,
-  columns: {
-    naam: { type: 'text', label: 'Naam' },
-    soort: {
-      type: 'text',
-      label: 'Soort',
-      options: { alle: 'Alle sites', sla: 'SLA', hosting: 'Hosting', site: 'Eén site', eigen: 'Eigen' },
-    },
-    notities: long('Notities'),
-  },
-  links: { leden: { label: 'Leden', item: 'Site', dataset: 'groep_lid', key: 'groep_id', target: 'site_id' } },
-})
-
-export const groepLid = defineDataset({
-  name: 'groep_lid',
-  label: 'Groepsleden',
-  icon: 'tag',
-  title: { via: 'site_id', else: 'site_id' },
-  custom: false,
-  columns: {
-    groep_id: { type: 'integer', label: 'Groep', relation: 'groep' },
-    site_id: { type: 'integer', label: 'Site', relation: 'site' },
-  },
-  indexes: [['groep_id'], ['site_id']],
-})
-
 export const actie = defineDataset({
   name: 'actie',
-  label: 'Acties',
-  new_label: 'Nieuwe actie',
+  label: 'Opdrachten',
+  new_label: 'Nieuwe opdracht',
   icon: 'flag',
   title: 'titel',
   date: 'gepland_op',
@@ -122,7 +94,6 @@ export const actie = defineDataset({
   columns: {
     titel: text('Titel'),
     soort: { type: 'text', label: 'Soort', options: soorten },
-    groep_id: { type: 'integer', label: 'Groep', relation: 'groep' },
     status: {
       type: 'text',
       label: 'Status',
@@ -169,14 +140,15 @@ export const actie = defineDataset({
       { from: ['aangevraagd', 'voorbereiden', 'voorbereid'], to: 'geannuleerd', roles: both },
     ],
   },
-  indexes: [['status'], ['groep_id']],
+  indexes: [['status']],
 })
 
 export const actieSite = defineDataset({
   name: 'actie_site',
-  label: 'Actie per site',
+  label: 'Opdracht per site',
   icon: 'list',
   title: { via: 'site_id', else: 'state' },
+  listed: false,
   custom: false,
   columns: {
     actie_id: { type: 'integer', label: 'Actie', relation: 'actie' },
@@ -203,7 +175,8 @@ export const actieSite = defineDataset({
 
 export const onderhoud = defineDataset({
   name: 'onderhoud',
-  label: 'Onderhoud',
+  label: 'Onderhoudslog',
+  new_label: 'Nieuwe logregel',
   icon: 'clock',
   title: 'samenvatting',
   date: 'datum',
@@ -245,8 +218,8 @@ export const project = defineDataset({
 
 export const werkpakket = defineDataset({
   name: 'werkpakket',
-  label: 'Werkpakketten',
-  new_label: 'Nieuw werkpakket',
+  label: 'Features',
+  new_label: 'Nieuwe feature',
   icon: 'list',
   title: 'naam',
   date: 'bijgewerkt',
@@ -316,7 +289,7 @@ export const taak = defineDataset({
 
 export const agendapunt = defineDataset({
   name: 'agendapunt',
-  label: 'Agendapunten',
+  label: 'Agenda',
   new_label: 'Nieuw agendapunt',
   icon: 'calendar',
   title: 'titel',

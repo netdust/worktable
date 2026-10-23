@@ -34,9 +34,7 @@ function checkNotFuture(soort: unknown, geplandOp: unknown): void {
 }
 
 function checkFixed(values: Values, current: Values): void {
-  for (const field of ['soort', 'groep_id']) {
-    if (Object.hasOwn(values, field) && values[field] !== current[field]) refuse('Soort en groep liggen vast.')
-  }
+  if (Object.hasOwn(values, 'soort') && values.soort !== current.soort) refuse('De soort ligt vast.')
 }
 
 export const actieWriter: Writer = {

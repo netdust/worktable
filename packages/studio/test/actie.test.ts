@@ -46,7 +46,7 @@ const status = (id: number) => actie(id).status
 const refused = (res: { status: number }) => [403, 422].includes(res.status)
 
 function plant(soort: string, state: string, extra: Body = {}): number {
-  const row = { titel: 'x', soort, groep_id: 1, status: state, ...extra }
+  const row = { titel: 'x', soort, status: state, ...extra }
   const keys = Object.keys(row)
   const sql = `INSERT INTO actie (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`
   return Number(sqlite.query(sql).run(...(Object.values(row) as never[])).lastInsertRowid)
@@ -108,14 +108,13 @@ describe('who confirms an update', () => {
 })
 
 describe('creating an actie', () => {
-  const create = (body: Body) => claude('POST', '/api/rows/actie', { soort: 'gezondheidscheck', groep_id: 1, ...body })
+  const create = (body: Body) => claude('POST', '/api/rows/actie', { soort: 'gezondheidscheck', ...body })
 
   test('a create starts at aangevraagd', async () => {
     expect(refused(await create({ status: 'bevestigd' }))).toBe(true)
     const res = await create({})
     expect(res.status).toBe(201)
-    expect(actie(res.body.id as number)).toMatchObject({ status: 'aangevraagd' })
-    expect(String(actie(res.body.id as number).titel).trim()).not.toBe('')
+    expect(actie(res.body.id as number)).toMatchObject({ status: 'aangevraagd', titel: 'Gezondheidscheck' })
   })
 
   test('bijwerken is never future-dated', async () => {
@@ -148,10 +147,10 @@ describe('transitions fit the soort', () => {
     expect((await move(claude, update, 'aangevraagd', 'voorbereiden')).status).toBe(200)
   })
 
-  test('soort and groep are fixed', async () => {
+  test('the soort is fixed', async () => {
     const id = plant('bijwerken', 'aangevraagd')
-    expect(refused(await claude('PATCH', `/api/rows/actie/${id}`, { soort: 'smoketest' }))).toBe(true)
-    expect(refused(await claude('PATCH', `/api/rows/actie/${id}`, { groep_id: 2 }))).toBe(true)
-    expect(actie(id)).toMatchObject({ soort: 'bijwerken', groep_id: 1 })
+    const res = await claude('PATCH', `/api/rows/actie/${id}`, { soort: 'smoketest' })
+    expect({ status: res.status, message: res.body.message }).toEqual({ status: 422, message: 'De soort ligt vast.' })
+    expect(actie(id).soort).toBe('bijwerken')
   })
 })

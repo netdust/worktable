@@ -22,7 +22,6 @@ function noServiceDeletes(writer: Writer): Writer {
 const own: Record<string, Writer> = {
   organisatie: passThrough,
   site: siteWriter,
-  groep: passThrough,
   actie: actieWriter,
   actie_site: actieSiteWriter,
   onderhoud: onderhoudWriter,
@@ -32,7 +31,6 @@ const own: Record<string, Writer> = {
   agendapunt: passThrough,
 }
 
-export const writers: Record<string, Writer> = {
-  ...Object.fromEntries(Object.entries(own).map(([name, writer]) => [name, noServiceDeletes(writer)])),
-  groep_lid: passThrough,
-}
+export const writers: Record<string, Writer> = Object.fromEntries(
+  Object.entries(own).map(([name, writer]) => [name, noServiceDeletes(writer)]),
+)
