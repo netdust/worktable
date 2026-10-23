@@ -538,7 +538,7 @@ test.describe('studio, the editor', () => {
   })
 })
 
-// The hunt's confirmed bugs (specs/studio-domain/shakeout.md): each asserts what should happen, RED until the fix pass.
+// The hunt's confirmed bugs (specs/studio-domain/shakeout.md), RED at c43bd3e and fixed by b08381e.
 test.describe('studio, the hunt', () => {
   test('person-cannot-take-worker-steps @e2e: dragging an opdracht into the worker’s Voorbereiden on the board is refused', async ({
     page,
@@ -557,9 +557,10 @@ test.describe('studio, the hunt', () => {
     await page.keyboard.press('ArrowRight')
     await expect(said(page)).toHaveText(/boven Voorbereiden/)
     await page.keyboard.press('Space')
-    const status = (await write).status()
+    expect((await write).status()).toBeGreaterThanOrEqual(400)
+    await expect(page.getByText('Deze stap zet de worker.').first()).toBeVisible()
+    await expect(lane(page, 'Aangevraagd').locator(`[data-card="${actie}"]`)).toBeVisible()
     await shot(page, 'opdracht-sleep-voorbereiden')
-    expect(status).toBeGreaterThanOrEqual(400)
     expect((await rowOf(api, 'actie', actie)).status).toBe('aangevraagd')
   })
 
@@ -572,8 +573,9 @@ test.describe('studio, the hunt', () => {
     let drawer = await drawerOf(page, 'Bijwerken · testmans-winkel')
     await drawer.getByRole('button', { name: 'Bevestigen' }).click()
     await expect(drawer.getByText('Bevestigd', { exact: true })).toBeVisible()
+    await expect(siteLine(drawer, 'testmans-winkel').getByText('Te bevestigen', { exact: true })).toHaveCount(0)
+    await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Preview klaar')
     await shot(page, 'bevestigd-regels')
-    await expect.soft(siteLine(drawer, 'testmans-winkel').getByText('Te bevestigen', { exact: true })).toHaveCount(0)
 
     await run(api, 'gezondheidscheck', [3])
     await open(page, 'Opdrachten', 'Opdrachten')
@@ -581,6 +583,7 @@ test.describe('studio, the hunt', () => {
     await drawer.getByRole('button', { name: 'Annuleren' }).click()
     await expect(drawer.getByText('Geannuleerd', { exact: true })).toBeVisible()
     await expect(siteLine(drawer, 'voorbeeld-site').getByText('Wacht', { exact: true })).toHaveCount(0)
+    await expect(siteLine(drawer, 'voorbeeld-site')).toContainText('Niet gestart')
   })
 
   test('op-tafel-offers-new-task @e2e: Op tafel’s header offers Nieuwe taak, not a disabled "Nieuw Op tafel" on a list that writes', async ({
@@ -588,9 +591,18 @@ test.describe('studio, the hunt', () => {
   }) => {
     await open(page, 'Op tafel', 'Taken')
     const add = page.locator('.nv-toolbar .nv-button--primary')
-    await shot(page, 'op-tafel-knop')
-    await expect.soft(add).toHaveText(/Nieuwe taak/)
+    await expect(add).toHaveText(/Nieuwe taak/)
     await expect(add).toBeEnabled()
+    await shot(page, 'op-tafel-knop')
+    await add.click()
+    const dialog = page.getByRole('dialog', { name: 'Nieuwe taak' })
+    await dialog.getByLabel('Titel').fill('e2e vanaf op tafel')
+    await dialog.getByRole('button', { name: 'Aanmaken' }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.getByRole('row', { name: /e2e vanaf op tafel/ })).toBeVisible()
+    const made = (await rowsOf(page.request, 'taak')).rows.find((r) => r.titel === 'e2e vanaf op tafel') as Row
+    expect(made.deadline).toBe(today())
+    await page.request.delete(`/api/rows/taak/${made.id}`)
   })
 
   test('recent-moment-not-late @e2e: a check from yesterday and a feature updated two days ago are not marked late on the dashboard', async ({
@@ -601,9 +613,11 @@ test.describe('studio, the hunt', () => {
     const feature = tile(page, 'Features').getByRole('listitem').filter({ hasText: 'Kassakoppeling' })
     await expect(check).toBeVisible()
     await expect(feature).toBeVisible()
-    await shot(page, 'tegel-rode-dagen')
-    await expect.soft(check.locator('.nv-list__day--late')).toHaveCount(0)
+    await expect(check.locator('.nv-list__day--late')).toHaveCount(0)
     await expect(feature.locator('.nv-list__day--late')).toHaveCount(0)
+    await expect(check.locator('.nv-list__on')).toBeVisible()
+    await expect(feature.locator('.nv-list__on')).toBeVisible()
+    await shot(page, 'tegel-rode-dagen')
   })
 
   test('delete-a-request-explains @e2e: Verwijderen on an opdracht says, in studio’s words, to cancel it instead', async ({
@@ -641,5 +655,8 @@ test.describe('studio, the hunt at 1280 by 720', () => {
     await expect(item).toBeVisible()
     await shot(page, 'vandaag-smal')
     await expect(item.getByText('Overleg Testmans')).toBeVisible()
+    const line = await item.boundingBox()
+    const title = await item.locator('.nv-list__title').boundingBox()
+    expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual((line?.x ?? 0) + (line?.width ?? 0))
   })
 })
