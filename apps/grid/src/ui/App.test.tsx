@@ -2363,6 +2363,34 @@ describe('the add button on a calendar', () => {
   })
 })
 
+describe('the title line\'s insight, with a search', () => {
+  const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { optie: 'Optie', vast: 'Vast', weg: 'Weg' }, tones: { optie: 'warn', weg: 'bad', vast: 'ok' } }
+  const schema = {
+    models: { activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { status } } },
+    tables: [{ key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['grid'] }],
+    views: [{ key: 'lijst', label: 'Lijst', table: 'activiteit', model: 'activiteit' }],
+    writable: { activiteit: true },
+  } as unknown as Schema
+  const rows = [
+    { id: 1, title: 'Montage', status: '', fields: { status: 'optie' } },
+    { id: 2, title: 'Afbraak', status: '', fields: { status: 'weg' } },
+    { id: 3, title: 'Repetitie', status: '', fields: { status: 'vast' } },
+  ]
+
+  it('follows the search box: the pills count the rows the search leaves, as the row count does', async () => {
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockResolvedValue({ rows, total: 3 })
+    window.location.hash = 'view=lijst'
+    render(<App />)
+    await waitFor(() => expect(document.querySelectorAll('.nv-toolbar__insight')).toHaveLength(2))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Repetitie' } })
+    await waitFor(() => expect(document.querySelectorAll('.nv-toolbar__insight')).toHaveLength(0))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Afbraak' } })
+    await waitFor(() => expect([...document.querySelectorAll('.nv-toolbar__insight')].map((p) => p.textContent)).toEqual(['Weg1']))
+    window.location.hash = ''
+  })
+})
+
 describe('the title line\'s insight', () => {
   const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { optie: 'Optie', vast: 'Vast' }, tones: { optie: 'warn', vast: 'ok' } }
   const schema = {

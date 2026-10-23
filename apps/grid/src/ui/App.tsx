@@ -449,7 +449,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const shownRows = store ? state.rows : result.status === 'ready' ? result.rows : null
   const grouped = view && model && layout ? boardColumn(view, model, layout) : null
   const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped))
-  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? insightOf(model, shownRows) : undefined), [dashboard, model, shownRows, matrix])
+  // A table reports the pills for the rows its search leaves, as its count does; the other skins count their own rows.
+  const reported = told?.view === view?.key ? told?.shown?.insight : undefined
+  const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? (reported ?? insightOf(model, shownRows)) : undefined), [dashboard, model, shownRows, matrix, reported])
   const grid = store && model && view && layout
   const filters = layout && fields.length > 0
     ? <Filters fields={named} filters={layout.filters} period={dateCondition} join={layout.join} waiting={waiting} onChange={(next) => setLayout(withFilters(layout, next))}

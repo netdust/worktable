@@ -25,6 +25,8 @@ export interface Shown {
   menu?: Column[]
   /** Said in place of the counts: a calendar's period. */
   label?: string
+  /** What waits in the shown rows, as the title line's pills: a table reports it from the rows its search leaves. */
+  insight?: Insight[]
   /** How many of the shown rows a flag query flags, its name, and its key to open it by. */
   flagged?: { count: number; label: string; source: string }
   /** A timeline's pairs of bars of one lane that overlap in time. */

@@ -861,5 +861,11 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(pills.nth(0).locator('.nv-pill')).toHaveClass(/nv-pill--bad/)
     await expect(pills.nth(1).locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
     await shot(page, 'sites-storing-en-let-op')
+
+    // The pills follow the search, as the row count does: an In orde site leaves neither.
+    const fine = shown.find((site) => site.gezondheid === 'ok') as Row
+    await page.getByRole('searchbox').fill(String(fine.naam))
+    await expect(page.getByText('1 rij', { exact: true }).first()).toBeVisible()
+    await expect(pills).toHaveCount(0)
   })
 })
