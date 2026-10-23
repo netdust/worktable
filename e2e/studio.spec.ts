@@ -802,8 +802,8 @@ for (const [scale, tag] of [
           root.getPropertyValue('--color-border-subtle'),
         ]
       })
-      expect(line).toBe('rgb(208, 214, 221)')
-      expect(row.trim()).toBe('#d0d6dd')
+      expect(line).toBe('rgb(196, 203, 211)')
+      expect(row.trim()).toBe('#c4cbd3')
       expect(row.trim()).not.toBe(subtle.trim())
       await shot(page, `rijlijnen-${tag}`)
     })
