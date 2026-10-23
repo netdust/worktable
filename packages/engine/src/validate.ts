@@ -97,7 +97,27 @@ function checkLong(source: DatasetDecl | QueryDecl): void {
   }
 }
 
-// The calendar reads the rows route's date window, so its day is the source's date.
+// The enforced values are judged by equality, so a misspelt one would enforce nothing.
+function checkEnforced(source: DatasetDecl | QueryDecl): void {
+  const refuse = (bad: string, message: string) => new DomainError(source.name, bad, message)
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.written_by !== undefined && decl.written_by !== 'service') {
+      throw refuse(column, `${column} is written_by "${String(decl.written_by)}", which is not "service"`)
+    }
+    if (decl.written_by && column === source.owners?.owner) {
+      throw refuse(column, `${column} is the owner column, so it is not written_by a service`)
+    }
+  }
+  if (source.kind !== 'dataset') return
+  if (source.created_by !== undefined && source.created_by !== 'service') {
+    throw refuse('created_by', `created_by is "${String(source.created_by)}", which is not "service"`)
+  }
+  const deletedBy = source.attachments?.deleted_by
+  if (deletedBy !== undefined && deletedBy !== 'person') {
+    throw refuse('deleted_by', `deleted_by is "${String(deletedBy)}", which is not "person"`)
+  }
+}
+
 function checkFooter(source: DatasetDecl | QueryDecl): void {
   for (const [column, decl] of Object.entries(source.columns)) {
     if (decl.footer !== undefined && decl.type !== 'integer' && decl.type !== 'real') {
@@ -106,6 +126,7 @@ function checkFooter(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+// The calendar reads the rows route's date window, so its day is the source's date.
 function checkCalendar(source: DatasetDecl | QueryDecl): void {
   const cal = source.calendar
   if (!cal) return
@@ -352,7 +373,9 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
       throw at(lookup.own, `own "${lookup.own}" is not a column of the field's type and relation`)
     }
     // A write through the lookup is renamed to own, so own must be a column any editor may clear.
-    if (own.readonly || !own.nullable) throw at(lookup.own, `own "${lookup.own}" is readonly or not nullable`)
+    if (own.readonly || own.written_by || !own.nullable) {
+      throw at(lookup.own, `own "${lookup.own}" is readonly, written_by a service or not nullable`)
+    }
     if (lookup.own === dataset.lifecycle?.column || lookup.own === dataset.record_link?.email) {
       throw at(lookup.own, `own "${lookup.own}" is guarded by the engine`)
     }
@@ -733,6 +756,7 @@ export function validateDomain(domain: Domain): void {
     checkHidden(source)
     checkTones(source)
     checkLong(source)
+    checkEnforced(source)
     checkFooter(source)
     checkCalendar(source)
     checkBoard(source)
