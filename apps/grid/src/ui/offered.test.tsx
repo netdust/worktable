@@ -60,6 +60,17 @@ describe('a model only a service creates', () => {
     expect(screen.queryByRole('button', { name: /^Nieuw/ })).toBeNull()
   })
 
+  it('offers no lane + where the person may not set the board’s column, and keeps it where drag is only switched off', async () => {
+    await open(schemaOf(unit({ lifecycle: 'status', lifecycle_buttons: true })), 'bord')
+    expect(screen.queryByRole('button', { name: /^Nieuw in/ })).toBeNull()
+    cleanup()
+    await open(schemaOf(unit({ fields: { status: { ...state, readonly: true } } })), 'bord')
+    expect(screen.queryByRole('button', { name: /^Nieuw in/ })).toBeNull()
+    cleanup()
+    await open(schemaOf(unit(), { board: { column: 'status', drag: false } }), 'bord')
+    expect(screen.getAllByRole('button', { name: /^Nieuw in/ }).length).toBeGreaterThan(0)
+  })
+
   it('still offers the board column + on a plain model', async () => {
     await open(schemaOf(unit()), 'bord')
     expect(screen.getAllByRole('button', { name: /^Nieuw in/ }).length).toBeGreaterThan(0)
@@ -83,6 +94,7 @@ describe('a board', () => {
     expect(screen.queryByText('Spatie oppakken en neerzetten')).toBeNull()
     expect(screen.getByText(/↑↓←→/)).toBeTruthy()
     expect(screen.getByText(/↵/)).toBeTruthy()
+    expect(screen.getByText(/ongedaan maken/)).toBeTruthy()
   })
 
   it('does not drag with drag false, and its cards still open', async () => {

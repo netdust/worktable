@@ -735,6 +735,8 @@ test.describe('studio, what a person is offered', () => {
       await expect(page.locator('.nv-toolbar .nv-button--primary'), view).toHaveCount(0)
       await expect(page.getByRole('button', { name: /^Nieuw/ }), view).toHaveCount(0)
     }
+    await open(page, 'Opdrachten per status', 'Opdrachten')
+    await expect(page.getByRole('button', { name: /^Nieuw in/ })).toHaveCount(0)
     await open(page, 'Opdrachten', 'Opdrachten')
     await expect(page.locator('.nv-toolbar .nv-button--primary')).toHaveText(/Nieuwe opdracht/)
     await shot(page, 'sites-zonder-nieuw')

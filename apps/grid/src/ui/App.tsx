@@ -683,7 +683,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
-              onCreate={writable && !model.query && !model.created_by ? (preset) => setQuick(preset) : undefined} places={places} />
+              onCreate={writable && !model.query && !model.created_by && canSet(model, boardColumn(view, model, layout) as string) ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
@@ -743,8 +743,10 @@ function monthSpan(month: DateWindow): DateWindow {
 
 
 /** A board drags cards through the column it groups by, unless it declares otherwise or that column changes through its buttons only. */
-const draggable = (view: View, model: Model, column: string): boolean =>
-  view.board?.drag !== false && !model.fields[column]?.readonly && !pressedOnly(model, column)
+const draggable = (view: View, model: Model, column: string): boolean => view.board?.drag !== false && canSet(model, column)
+
+/** The person may set the column: a lane's + presets it, a drop writes it. */
+const canSet = (model: Model, column: string): boolean => !model.fields[column]?.readonly && !pressedOnly(model, column)
 
 /** Why a query's `+ Nieuw` is off: its dataset is read-only, or the dataset has a required column nothing can fill. */
 function createBlocked(made: NewRow | null, writable: boolean): string | null {
