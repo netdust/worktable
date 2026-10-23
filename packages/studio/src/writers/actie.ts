@@ -7,6 +7,10 @@ const NOT_EXPIRED = 'Deze preview is nog niet verlopen.'
 const PREVIEW_UNDO = 'Alleen Stefan zet een preview terug.'
 const STALE_CONFIRMATION = 'Deze bevestiging is verlopen. Vraag de update opnieuw aan.'
 const CALL_OFF = 'Alleen Stefan annuleert een bevestigde update.'
+const WORKER_STEP = 'Deze stap zet de worker.'
+const HAS_SITES = 'Een opdracht met sites verwijder je niet. Annuleer ze.'
+
+const cancellable = new Set(['aangevraagd', 'voorbereiden', 'voorbereid', 'bevestigd'])
 
 type Values = Record<string, unknown>
 
@@ -46,6 +50,13 @@ function checkServiceMove(current: Values, to: unknown, undo: boolean): void {
   if (from === 'bevestigd' && to === 'geannuleerd') forbid(CALL_OFF)
 }
 
+// A person has the drawer's two buttons, Bevestigen and Annuleren; every other step is the worker's.
+function checkPersonMove(from: unknown, to: unknown): void {
+  const button =
+    (from === 'voorbereid' && to === 'bevestigd') || (to === 'geannuleerd' && cancellable.has(from as string))
+  if (!button) refuse(WORKER_STEP)
+}
+
 function checkNotFuture(soort: unknown, geplandOp: unknown): void {
   if (isBijwerken(soort) && typeof geplandOp === 'string' && geplandOp > localTime()) {
     refuse('Bijwerken kan niet vooruit gepland worden.')
@@ -79,6 +90,7 @@ export const actieWriter: Writer = {
     if (to === undefined || to === current.status) return values
     const undo = ctx.lifecycle?.kind === 'undo'
     if (!isPerson(ctx)) checkServiceMove(current, to, undo)
+    else if (!undo) checkPersonMove(current.status, to)
     if (to === 'bevestigd') {
       checkConfirmer(ctx)
       checkFresh(current.voorbereid_op)
@@ -87,5 +99,7 @@ export const actieWriter: Writer = {
     return to === 'voorbereid' && !undo ? { ...values, voorbereid_op: localTime() } : values
   },
 
-  delete() {},
+  delete(ctx) {
+    if (ctx.exists('actie_site', { actie_id: (ctx.current as Values).id })) refuse(HAS_SITES)
+  },
 }

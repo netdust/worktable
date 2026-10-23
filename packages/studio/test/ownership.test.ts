@@ -181,11 +181,21 @@ describe('the maintenance log', () => {
 
 describe('no service deletes a row', () => {
   test('a service cannot delete a site, an actie, a taak or a werkpakket', async () => {
-    for (const dataset of ['site', 'actie', 'taak', 'werkpakket']) {
-      const res = await worker('DELETE', `/api/rows/${dataset}/1`)
+    const bare = Number(
+      sqlite.query(`INSERT INTO actie (titel, soort, status) VALUES ('x', 'bijwerken', 'aangevraagd')`).run()
+        .lastInsertRowid,
+    )
+    const targets: [string, number][] = [
+      ['site', 1],
+      ['actie', bare],
+      ['taak', 1],
+      ['werkpakket', 1],
+    ]
+    for (const [dataset, id] of targets) {
+      const res = await worker('DELETE', `/api/rows/${dataset}/${id}`)
       expect(res.status).toBe(403)
       expect(JSON.stringify(res.body)).toContain(NO_DELETE)
-      expect(row(dataset, 1).deleted_at ?? null).toBeNull()
+      expect(row(dataset, id).deleted_at ?? null).toBeNull()
     }
   })
 })

@@ -263,3 +263,70 @@ describe('a preview leaves voorbereid only through Stefan', () => {
     expect(served.sources.actie?.lifecycle?.live).toContain('voorbereid')
   })
 })
+
+describe('a person makes only the button steps', () => {
+  const WORKER = 'Deze stap zet de worker.'
+  const patch = (id: number, to: string) => admin('PATCH', `/api/rows/actie/${id}`, { status: to })
+
+  test('a person makes only the button steps', async () => {
+    const steps: [string, string, string][] = [
+      ['gezondheidscheck', 'aangevraagd', 'bezig'],
+      ['bijwerken', 'aangevraagd', 'voorbereiden'],
+      ['bijwerken', 'voorbereiden', 'voorbereid'],
+      ['bijwerken', 'voorbereid', 'aangevraagd'],
+      ['bijwerken', 'bevestigd', 'bezig'],
+      ['bijwerken', 'bezig', 'klaar'],
+    ]
+    for (const [soort, from, to] of steps) {
+      const id = plant(soort, from, { voorbereid_op: ago(HOUR) })
+      const res = await patch(id, to)
+      expect({ from, to, status: res.status, message: res.body.message }).toEqual({
+        from,
+        to,
+        status: 422,
+        message: WORKER,
+      })
+      expect(status(id)).toBe(from)
+    }
+    const fresh = plant('bijwerken', 'voorbereid', { voorbereid_op: ago(HOUR) })
+    expect((await patch(fresh, 'bevestigd')).status).toBe(200)
+    const queued = plant('bijwerken', 'aangevraagd')
+    expect((await patch(queued, 'geannuleerd')).status).toBe(200)
+    const confirmed = plant('bijwerken', 'bevestigd', { voorbereid_op: ago(HOUR) })
+    expect((await patch(confirmed, 'geannuleerd')).status).toBe(200)
+  })
+
+  test("a person's undo of Bevestigen still works", async () => {
+    const confirmed = await patch(1, 'bevestigd')
+    expect(confirmed.status).toBe(200)
+    const undo = await admin('POST', `/api/batches/${(confirmed.body.revision as Body).batch_id}/undo`, {})
+    expect(undo.status).toBe(200)
+    expect(status(1)).toBe('voorbereid')
+  })
+})
+
+describe('an opdracht with sites is cancelled, not deleted', () => {
+  const live = (table: string, id: number) =>
+    sqlite.query(`SELECT id FROM ${table} WHERE id = ? AND deleted_at IS NULL`).get(id)
+
+  test('an opdracht with sites is cancelled, not deleted', async () => {
+    const res = await admin('DELETE', '/api/rows/actie/1')
+    expect({ status: res.status, message: res.body.message }).toEqual({
+      status: 422,
+      message: 'Een opdracht met sites verwijder je niet. Annuleer ze.',
+    })
+    expect(live('actie', 1)).not.toBeNull()
+    expect(live('actie_site', 1)).not.toBeNull()
+  })
+
+  test("the undo of a selection action's batch still deletes the opdracht", async () => {
+    const run = await admin('POST', '/api/actions/gezondheidscheck', { ids: [3] })
+    expect(run.status).toBe(201)
+    const created = (sqlite.query('SELECT MAX(id) AS id FROM actie').get() as { id: number }).id
+    const link = (sqlite.query('SELECT id FROM actie_site WHERE actie_id = ?').get(created) as { id: number }).id
+    const undo = await admin('POST', `/api/batches/${run.body.batch_id}/undo`, {})
+    expect(undo.status).toBe(200)
+    expect(live('actie', created)).toBeNull()
+    expect(live('actie_site', link)).toBeNull()
+  })
+})
