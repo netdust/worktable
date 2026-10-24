@@ -200,7 +200,7 @@ test('press-in-related-drawer-then-close-then-undo @e2e: Undo after a related dr
     .click()
   const related = page.getByRole('complementary', { name: /Related pen/ })
   await pressInMenu(page, 'Confirm')
-  await expect.poll(() => offered(page)).not.toContain('Confirm')
+  await expect(page.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toHaveCount(0)
   const notice = page.getByRole('status', { name: /gedaan\./ })
   await related.getByRole('button', { name: 'Sluiten' }).click()
   await page.keyboard.press('Escape')
