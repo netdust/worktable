@@ -314,13 +314,34 @@ function patchOf(body: Record<string, unknown>): Record<string, unknown> {
   return body
 }
 
-// A dashboard's tiles that name a deleted view; the layout itself stays as stored.
-function withGone(sqlite: Database, out: ViewOut): ViewOut {
-  if (out.skin !== 'dashboard' || !out.layout) return out
-  const named = [...new Set(tileViews(out.layout))]
-  if (named.length === 0) return { ...out, gone_views: [] }
-  const sql = `SELECT id FROM saved_view WHERE deleted_at IS NOT NULL AND id IN (${named.map(() => '?').join(', ')}) ORDER BY id`
-  return { ...out, gone_views: (sqlite.query(sql).all(...named) as { id: number }[]).map((row) => row.id) }
+// The deleted views a layout's tiles name that this viewer could have seen; the layout itself stays as stored.
+function goneViews(sqlite: Database, layout: DashboardLayout, viewer: Actor): number[] {
+  const named = [...new Set(tileViews(layout))]
+  if (named.length === 0) return []
+  const sql = `SELECT id FROM saved_view WHERE deleted_at IS NOT NULL AND (owner_id = ? OR shared = 1) AND id IN (${named.map(() => '?').join(', ')}) ORDER BY id`
+  return (sqlite.query(sql).all(viewer.id, ...named) as { id: number }[]).map((row) => row.id)
+}
+
+function withGone(sqlite: Database, out: ViewOut, viewer: Actor): ViewOut {
+  return out.skin === 'dashboard' && out.layout ? { ...out, gone_views: goneViews(sqlite, out.layout, viewer) } : out
+}
+
+// What a stored layout is checked as when a request does not send one: its tiles on deleted views are not what is being changed.
+function withoutGone(sqlite: Database, layout: DashboardLayout): DashboardLayout {
+  const gone = new Set(
+    (sqlite.query('SELECT id FROM saved_view WHERE deleted_at IS NOT NULL').all() as { id: number }[]).map(
+      (row) => row.id,
+    ),
+  )
+  const named = (tile: DashboardLayout['sections'][number]['tiles'][number]) =>
+    tile.kind === 'progress' ? [tile.done, tile.total] : [tile.view]
+  return {
+    ...layout,
+    sections: layout.sections.map((section) => ({
+      ...section,
+      tiles: section.tiles.filter((tile) => !named(tile).some((id) => typeof id === 'number' && gone.has(id))),
+    })),
+  }
 }
 
 function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
@@ -332,7 +353,7 @@ function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
     return source !== null && readable(actor, source)
   }
   return seedOrdered(domain, (sqlite.query(sql).all(actor.id) as Raw[]).filter(onReadable)).map((raw) =>
-    withGone(sqlite, outOf(raw, actor, domain)),
+    withGone(sqlite, outOf(raw, actor, domain), actor),
   )
 }
 
@@ -352,7 +373,8 @@ function changing(actor: Actor): Actor {
 
 export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
   const write = <T>(work: () => T): T => sqlite.transaction(work).immediate()
-  const outById = (id: number, actor: Actor): ViewOut => outOf(ownedView(sqlite, domain, id, actor), actor, domain)
+  const outById = (id: number, actor: Actor): ViewOut =>
+    withGone(sqlite, outOf(ownedView(sqlite, domain, id, actor), actor, domain), actor)
 
   app.get('/views', (c) => c.json({ views: listViews(sqlite, domain, c.get('actor')) }))
 
@@ -371,7 +393,11 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
       const current = ownedView(sqlite, domain, id, actor)
       // Unsharing it would hide it from every list, its administrator's too.
       if (current.owner_id === SYSTEM_OWNER && Object.hasOwn(patch, 'shared')) throw bad('a seeded view stays shared')
-      const next = stored(viewBody({ ...outOf(current, actor, domain), ...patch }, domain, false, { sqlite, actor }))
+      const sent = Object.hasOwn(patch, 'layout')
+      const merged = { ...outOf(current, actor, domain), ...patch }
+      if (current.skin === 'dashboard' && !sent && merged.layout) merged.layout = withoutGone(sqlite, merged.layout)
+      const next = stored(viewBody(merged, domain, false, { sqlite, actor }))
+      if (current.skin === 'dashboard' && !sent) next.layout = current.layout ?? null
       // A view for owners must not gain a hidden column later (attack 13).
       const problem = isForOwners(current) ? forOwnersProblem(domain, { ...current, ...next }) : null
       if (problem) throw problem

@@ -375,6 +375,40 @@ describe('a dashboard tile on a deleted view (R10a)', () => {
     expect(Object.keys((find(views, OVERZICHT)?.layout as object) ?? {})).toEqual(['sections', 'actions'])
   })
 
+  test('a rename of a dashboard with a gone tile is accepted and leaves its layout as stored', async () => {
+    await admin('DELETE', `/api/views/${OPEN}`)
+    const kept = layoutOf(OVERZICHT)
+
+    const renamed = await patch(admin, OVERZICHT, { name: 'Ons overzicht' })
+
+    expect(renamed.status).toBe(200)
+    expect(renamed.body).toMatchObject({ name: 'Ons overzicht', gone_views: [OPEN] })
+    expect(layoutOf(OVERZICHT)).toEqual(kept)
+  })
+
+  test('gone_views names only deleted views the viewer could have seen', async () => {
+    const hidden = (
+      sqlite
+        .query(
+          "INSERT INTO saved_view (name, source_type, source, owner_id, shared, deleted_at) VALUES ('Prive', 'dataset', 'taak', 99, 0, '2026-01-01') RETURNING id",
+        )
+        .get() as { id: number }
+    ).id
+    const layout = {
+      sections: [{ label: 'Nu', tiles: [{ kind: 'stat', view: hidden, measure: 'count' }] }],
+      actions: [],
+    }
+    const board = (
+      sqlite
+        .query(
+          "INSERT INTO saved_view (name, skin, owner_id, shared, layout) VALUES ('Team', 'dashboard', 99, 1, ?) RETURNING id",
+        )
+        .get(JSON.stringify(layout)) as { id: number }
+    ).id
+
+    expect(find(await listed(admin), board)).toMatchObject({ gone_views: [] })
+  })
+
   test('a PATCH of that dashboard whose layout no longer holds the gone tile is accepted; one that adds a tile on a deleted view is 400', async () => {
     await admin('DELETE', `/api/views/${OPEN}`)
     const before = rows()
