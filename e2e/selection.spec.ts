@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 import { offered, pressInMenu } from './drawer'
+import { shot } from './shots'
 import { modelNode, openView } from './tree'
 
 const APP = 'http://127.0.0.1:5177'
@@ -166,6 +167,7 @@ test('bar-reserves-its-strip @e2e: the bar reserves its strip: no row moves on t
   expect(await top()).toBe(before)
   await tick(page, 'Bob')
   expect(await top()).toBe(before)
+  await shot(page, 'selectie-paneel-fixture')
   await page.getByRole('button', { name: 'Selectie wissen' }).click()
   await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
   expect(await top()).toBe(before)

@@ -1125,3 +1125,339 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(pills).toHaveCount(0)
   })
 })
+
+test.describe('views-and-actions, the shake-out', () => {
+  const head = (page: Page) => page.getByRole('complementary').locator('.nv-drawer__head')
+  const waitingLine = (page: Page) => page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
+
+  /** A Bijwerken on voorbeeld-site requested from the Sites panel and prepared as the worker would: its line waits on Bevestigen. */
+  async function waitingRun(page: Page): Promise<number> {
+    const api = page.request
+    await open(page, 'Sites', 'Sites')
+    await page.getByRole('checkbox', { name: 'voorbeeld-site selecteren' }).check()
+    await page
+      .getByRole('region', { name: '1 geselecteerd' })
+      .getByRole('button', { name: 'Bijwerken', exact: true })
+      .click()
+    await expect(page.getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })).toBeVisible()
+    const actie = await newest(api, 'actie')
+    await prepare({ actie, links: (await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.id) })
+    await expect(waitingLine(page)).toBeVisible({ timeout: 15_000 })
+    return actie
+  }
+
+  /** A prepared opdracht keeps its site lines and so cannot be deleted: it is cancelled, as Stefan would. */
+  async function removeRun(page: Page, actie: number | undefined): Promise<void> {
+    if (actie === undefined) return
+    const api = page.request
+    const cancelled = await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
+    expect(cancelled.status(), await cancelled.text()).toBe(200)
+  }
+
+  /** WCAG contrast of an element's text against the run line it sits on. */
+  const contrastOn = (target: Locator) =>
+    target.evaluate((el) => {
+      const rgb = (css: string) => (css.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number)
+      const lum = (css: string) => {
+        const [r, g, b] = rgb(css).map((v) => {
+          const c = v / 255
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      const line = el.closest('.nv-run') as HTMLElement
+      const [fg, bg] = [getComputedStyle(el).color, getComputedStyle(line).backgroundColor]
+      const [a, b] = [lum(fg), lum(bg)]
+      return { ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05), fg, bg }
+    })
+
+  test('table-lines-in-both-themes @e2e: Sites lists only the sites in the registry, and every header and row cell shows its column line in dark and in light', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    await expect(page.locator('tbody tr.nv-tr')).toHaveText([
+      /testmans-bestel/,
+      /testmans-winkel/,
+      /voorbeeld-blog/,
+      /voorbeeld-site/,
+    ])
+    const lines = () =>
+      page
+        .locator('th.nv-th:not(.nv-num), tbody tr.nv-tr td.nv-td:not(.nv-num)')
+        .evaluateAll((cells) => [
+          ...new Set(
+            cells.map((c) => `${getComputedStyle(c).borderRightColor} ${getComputedStyle(c).borderRightWidth}`),
+          ),
+        ])
+    for (const [scheme, colour, name] of [
+      ['dark', 'rgb(58, 61, 68)', 'sites-kolomlijnen-donker'],
+      ['light', 'rgb(196, 203, 211)', 'sites-kolomlijnen-licht'],
+    ] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await expect.poll(lines).toEqual([`${colour} 1px`])
+      await shot(page, name)
+    }
+  })
+
+  test('waiting-line-and-panel-leave-the-last-row @e2e: with a run waiting on Bevestigen and two sites ticked, the table scrolls its last row and its total clear of the dock', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 430 })
+    let actie: number | undefined
+    try {
+      actie = await waitingRun(page)
+      await page
+        .getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })
+        .getByRole('button', { name: 'Sluiten' })
+        .click()
+      await expect(page.getByRole('complementary')).toHaveCount(0)
+      await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
+      await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+      const panel = page.getByRole('region', { name: '2 geselecteerd' })
+      await expect(panel).toBeVisible()
+      await expect(waitingLine(page)).toBeVisible()
+      // The steady dock: the panel over the waiting line, once the request's toast has gone.
+      await expect(page.locator('.nv-dock .nv-toast')).toHaveCount(0, { timeout: 15_000 })
+      await page.locator('.nv-scroll').evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await shot(page, 'wacht-en-selectie-onderaan-donker')
+      await page.emulateMedia({ colorScheme: 'light' })
+      await shot(page, 'wacht-en-selectie-onderaan-licht')
+
+      const last = page.getByRole('row').filter({ hasText: 'voorbeeld-site' })
+      const reached = await last.evaluate((row) => {
+        const box = row.getBoundingClientRect()
+        return row.contains(document.elementFromPoint(box.x + 200, box.y + box.height / 2))
+      })
+      expect(reached).toBe(true)
+      const top = (await panel.boundingBox())?.y ?? 0
+      for (const [name, target] of [
+        ['the last row', last],
+        ['the total', page.locator('tfoot')],
+      ] as const) {
+        const box = await target.boundingBox()
+        expect((box?.y ?? 0) + (box?.height ?? 0), `${name} ends above the panel`).toBeLessThanOrEqual(top)
+      }
+    } finally {
+      await removeRun(page, actie)
+    }
+  })
+
+  test('waiting-line-reads-in-both-themes @e2e: the "— openen" link of a run waiting on Bevestigen reads against its line in dark and in light', async ({
+    page,
+  }) => {
+    let actie: number | undefined
+    try {
+      actie = await waitingRun(page)
+      for (const scheme of ['dark', 'light'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        // The theme fades its surfaces: read the colours once the line's transitions have run.
+        await waitingLine(page).evaluate((el) =>
+          Promise.all(
+            [el, el.closest('.nv-run') as Element].flatMap((one) => one.getAnimations()).map((done) => done.finished),
+          ),
+        )
+        const read = await contrastOn(waitingLine(page))
+        expect(read.ratio, `contrast in ${scheme}: ${read.fg} on ${read.bg}`).toBeGreaterThanOrEqual(4.5)
+      }
+    } finally {
+      await removeRun(page, actie)
+    }
+  })
+
+  test('dock-link-from-the-board @e2e: on Opdrachten per status, the waiting line’s link opens the opdracht in its table', async ({
+    page,
+  }) => {
+    let actie: number | undefined
+    try {
+      actie = await waitingRun(page)
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await openView(page, 'Opdrachten per status', 'Opdrachten')
+      await expect(page.locator('.nv-board')).toBeVisible()
+      await expect(page.getByRole('complementary')).toHaveCount(0)
+      await shot(page, 'bord-dock-openen-voor')
+      await waitingLine(page).click()
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Opdrachten')
+      await expect(page.getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })).toBeVisible()
+      await expect(waitingLine(page)).toHaveCount(0)
+      await shot(page, 'bord-dock-openen-na')
+    } finally {
+      await removeRun(page, actie)
+    }
+  })
+
+  test('acties-menu-by-keyboard @e2e: a site’s Acties opens on Enter, arrows walk it, Escape closes it back onto Acties and a second Escape closes the drawer', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    await page.getByRole('row').filter({ hasText: 'voorbeeld-site' }).getByRole('button', { name: 'Openen' }).click()
+    const drawer = page.getByRole('complementary', { name: 'voorbeeld-site' })
+    await expect(drawer).toBeVisible()
+    const acties = head(page).getByRole('button', { name: 'Acties' })
+    await acties.focus()
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name: 'Acties' })
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      'Gezondheid checken',
+      'Malware scannen',
+      'Bijwerken',
+      'Smoketest draaien',
+    ])
+    await expect(page.getByRole('menuitem', { name: 'Gezondheid checken' })).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(page.getByRole('menuitem', { name: 'Malware scannen' })).toBeFocused()
+    await shot(page, 'site-acties-toetsen')
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(acties).toBeFocused()
+    await expect(drawer).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(drawer).toHaveCount(0)
+  })
+
+  test('delete-asks-twice @e2e: Verwijderen in a task’s Acties asks Zeker?, Escape keeps the task, the second press deletes it', async ({
+    page,
+  }) => {
+    const api = page.request
+    const made = (await (
+      await api.post('/api/rows/taak', { data: { titel: 'e2e verwijderen', deadline: today() } })
+    ).json()) as Row
+    try {
+      await open(page, 'Taken', 'Taken')
+      const drawer = await drawerOf(page, 'e2e verwijderen')
+      await pressInMenu(page, 'Verwijderen')
+      const sure = page.getByRole('dialog', { name: 'Verwijderen' }).getByRole('button', { name: 'Zeker?' })
+      await expect(sure).toBeVisible()
+      await shot(page, 'taak-verwijderen-zeker')
+      await page.keyboard.press('Escape')
+      await expect(sure).toHaveCount(0)
+      await expect(drawer).toBeVisible()
+      expect(await exists(api, 'taak', made.id)).toBe(true)
+
+      await pressInMenu(page, 'Verwijderen')
+      await sure.click()
+      await expect.poll(() => exists(api, 'taak', made.id)).toBe(false)
+      await expect(drawer).toHaveCount(0)
+    } finally {
+      if (await exists(api, 'taak', made.id)) await api.delete(`/api/rows/taak/${made.id}`)
+    }
+  })
+
+  test('seeded-view-menu-by-role @e2e: an administrator renames a seeded view from the rail; an editor is offered only a copy', async ({
+    page,
+    browser,
+  }) => {
+    const api = page.request
+    const viewsOf = async (on: Api) =>
+      ((await (await on.get('/api/views')).json()) as { views: { id: number; name: string }[] }).views
+    const id = (await viewsOf(api)).find((v) => v.name === 'SLA-sites')?.id as number
+    const rail = (on: Page, name: string) =>
+      on.getByRole('navigation', { name: 'Views' }).getByRole('button', { name, exact: true })
+    try {
+      await open(page, 'Sites', 'Sites')
+      await page.getByRole('button', { name: 'More actions: SLA-sites', exact: true }).click()
+      await expect(page.getByRole('menuitem')).toHaveText(['Kopie maken', 'Naam wijzigen', 'Verwijderen'])
+      await shot(page, 'rail-menu-beheerder')
+      await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
+      await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('SLA-klanten')
+      await page.getByRole('textbox', { name: 'Nieuwe naam' }).press('Enter')
+      await expect(rail(page, 'SLA-klanten')).toHaveCount(1)
+      await expect.poll(async () => (await viewsOf(api)).find((v) => v.id === id)?.name).toBe('SLA-klanten')
+
+      const editor = await browser.newContext({
+        storageState: state('studio-editor'),
+        viewport: { width: 1440, height: 900 },
+      })
+      const other = await editor.newPage()
+      await other.goto(STUDIO.app)
+      await openView(other, 'Sites', 'Sites')
+      await expect(rail(other, 'SLA-klanten')).toHaveCount(1)
+      await other.getByRole('button', { name: 'More actions: SLA-klanten', exact: true }).click()
+      await expect(other.getByRole('menuitem')).toHaveText(['Kopie maken'])
+      await shot(other, 'rail-menu-redacteur')
+      await editor.close()
+    } finally {
+      await api.patch(`/api/views/${id}`, { data: { name: 'SLA-sites' } })
+    }
+  })
+
+  test('null-boolean-reads-blank @e2e: a site whose SLA was never given shows a blank cell, no switch and no Nee, and Space sets it', async ({
+    page,
+  }) => {
+    const api = page.request
+    expect((await api.patch('/api/rows/site/1', { data: { sla: null } })).status()).toBe(200)
+    try {
+      await open(page, 'Sites', 'Sites')
+      const row = page.getByRole('row').filter({ hasText: 'testmans-winkel' })
+      const blank = row.locator('.nv-cell__bool--blank')
+      await expect(blank).toHaveCount(1)
+      const cell = row.getByRole('gridcell').filter({ has: page.locator('.nv-cell__bool--blank') })
+      await expect(cell).toHaveText('')
+      await expect(cell.getByRole('switch')).toHaveCount(0)
+      await shot(page, 'sla-leeg')
+      await cell.click()
+      await page.keyboard.press(' ')
+      await expect.poll(async () => (await rowOf(api, 'site', 1)).sla).toBe(true)
+      await expect(row.getByRole('switch', { name: 'SLA' })).toBeChecked()
+    } finally {
+      await api.patch('/api/rows/site/1', { data: { sla: true } })
+    }
+  })
+
+  test('null-boolean-by-mouse @e2e: a click on a site’s blank SLA cell gives it its first value, as Space does', async ({
+    page,
+  }) => {
+    const api = page.request
+    expect((await api.patch('/api/rows/site/1', { data: { sla: null } })).status()).toBe(200)
+    try {
+      await open(page, 'Sites', 'Sites')
+      const row = page.getByRole('row').filter({ hasText: 'testmans-winkel' })
+      await row
+        .getByRole('gridcell')
+        .filter({ has: page.locator('.nv-cell__bool--blank') })
+        .click()
+      await expect.poll(async () => (await rowOf(api, 'site', 1)).sla, { timeout: 3000 }).toBe(true)
+    } finally {
+      await api.patch('/api/rows/site/1', { data: { sla: true } })
+    }
+  })
+
+  test('twenty-runs-leave-the-table-reachable @e2e: with twenty requests followed at once, the dock leaves the table’s rows and the toolbar to the pointer', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const api = page.request
+    const before = await newest(api, 'actie')
+    try {
+      await open(page, 'Sites', 'Sites')
+      for (let n = 0; n < 20; n++) {
+        await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+        await page
+          .getByRole('region', { name: '1 geselecteerd' })
+          .getByRole('button', { name: 'Gezondheid checken', exact: true })
+          .click()
+        await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
+      }
+      await expect(page.locator('.nv-run')).toHaveCount(20)
+      await shot(page, 'twintig-lopende-opdrachten')
+      const cell = page
+        .getByRole('row')
+        .filter({ hasText: 'testmans-bestel' })
+        .getByRole('gridcell')
+        .filter({ hasText: /^Let op$/ })
+      const reached = await cell.evaluate((el) => {
+        const box = el.getBoundingClientRect()
+        return el.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+      })
+      expect(reached, 'the first row’s Gezondheid cell is under the pointer, not under a run line').toBe(true)
+    } finally {
+      for (const actie of (await rowsOf(api, 'actie')).rows.filter((r) => r.id > before)) {
+        for (const link of (await rowsOf(api, 'actie_site', { actie_id: actie.id })).rows)
+          await api.delete(`/api/rows/actie_site/${link.id}`)
+        await api.delete(`/api/rows/actie/${actie.id}`)
+      }
+    }
+  })
+})

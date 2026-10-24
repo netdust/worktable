@@ -728,6 +728,7 @@ test.describe('step 2', () => {
           [(box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2],
         )
         expect(covered).toBe(false)
+        await shot(page, 'toast-over-brede-lade')
         const link = await page.evaluate(() => navigator.clipboard.readText())
         expect(link).toMatch(/^http:\/\/127\.0\.0\.1:5174\/#\/link\/persoon\.1\.[\w-]{43}$/)
 

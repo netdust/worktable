@@ -9,12 +9,12 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 
 | surface | tier | entry | test | first feature | verified |
 |---|---|---|---|---|---|
-| Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-template @e2e"` | e2e/step-1.spec.ts | step-1 | ff90908 2026-10-18 |
-| Rollen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "rollen-editor-rate-refused @e2e"` | e2e/step-1.spec.ts | step-1 | ff90908 2026-10-18 |
-| Rollen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "rollen-admin-rate @e2e"` | e2e/step-1.spec.ts | step-1 | ff90908 2026-10-18 |
-| Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-double-submit @e2e"` | e2e/step-1.spec.ts | step-1 | ff90908 2026-10-18 |
-| Dagplanning · undo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-undo-changed-since @e2e"` | e2e/step-1.spec.ts | step-1 | ff90908 2026-10-18 |
-| Dagplanning · redo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-redo-refused @e2e"` | e2e/step-1.spec.ts | step-1 | ff90908 2026-10-18 |
+| Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-template @e2e"` | e2e/step-1.spec.ts | step-1 | 6ec02d6 2026-10-24 |
+| Rollen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "rollen-editor-rate-refused @e2e"` | e2e/step-1.spec.ts | step-1 | 6ec02d6 2026-10-24 |
+| Rollen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "rollen-admin-rate @e2e"` | e2e/step-1.spec.ts | step-1 | 6ec02d6 2026-10-24 |
+| Speelreeks · Sjabloon toepassen | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-double-submit @e2e"` | e2e/step-1.spec.ts | step-1 | 6ec02d6 2026-10-24 |
+| Dagplanning · undo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-undo-changed-since @e2e"` | e2e/step-1.spec.ts | step-1 | 6ec02d6 2026-10-24 |
+| Dagplanning · redo | e2e | `bunx playwright test e2e/step-1.spec.ts --grep "apply-redo-refused @e2e"` | e2e/step-1.spec.ts | step-1 | 6ec02d6 2026-10-24 |
 | Theme · density | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "dark-and-density @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
 | Production switcher | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "switch-production @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
 | Owner · geen productiekiezer, geen query, geen dashboard | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "owner-has-no-switcher @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
@@ -27,8 +27,8 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | View mark · colleague | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "colleague-shared-view @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
 | Model menu | e2e | `bunx playwright test e2e/model-menu.spec.ts --grep "the-open-models-menu-exports @e2e"` | e2e/model-menu.spec.ts | grid-ux | ff90908 2026-10-18 |
 | Model menu | e2e | `bunx playwright test e2e/model-menu.spec.ts --grep "rename-and-icon-a-model @e2e"` | e2e/model-menu.spec.ts | grid-ux | ff90908 2026-10-18 |
-| Title line | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-at-1280 @e2e"` | e2e/title-line.spec.ts | grid-ux | 3f6de2f 2026-10-23 |
-| Title line · met een open lade op 1280 leest de naam heel en blijft de periode staan | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-with-a-drawer-open"` | e2e/title-line.spec.ts | fix/title-line-at-1280 | 3f6de2f 2026-10-23 |
+| Title line | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-at-1280 @e2e"` | e2e/title-line.spec.ts | grid-ux | 6ec02d6 2026-10-24 |
+| Title line · met een open lade op 1280 leest de naam heel en blijft de periode staan | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-line-fits-with-a-drawer-open"` | e2e/title-line.spec.ts | fix/title-line-at-1280 | 6ec02d6 2026-10-24 |
 | Dagplanning · day bands | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "fold-day-band @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
 | Dagplanning · read limit | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "read-limit-cut @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
 | Dagplanning · inherited venue | e2e | `bunx playwright test e2e/grid-ux.spec.ts --grep "inherited-venue @e2e"` | e2e/grid-ux.spec.ts | grid-ux | ff90908 2026-10-18 |
@@ -71,25 +71,25 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | Theme · popovers, menus and dialogs | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "chrome-light-and-dark @e2e"` | e2e/react-aria.spec.ts | react-aria | ff90908 2026-10-18 |
 | Exporteren / delen · Publiceren dialog | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "share-dialog-light-and-dark @e2e"` | e2e/react-aria.spec.ts | react-aria | ff90908 2026-10-18 |
 | Filter builder · own view | e2e | `bunx playwright test e2e/react-aria.spec.ts --grep "own-view-keeps-a-new-condition @e2e"` | e2e/react-aria.spec.ts | react-aria | ff90908 2026-10-18 |
-| Select and to-one picker · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "select-and-picker-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | ff90908 2026-10-18 |
-| Production switcher · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "space-switcher-fits @e2e"` | e2e/ui-fit.spec.ts | react-aria | ff90908 2026-10-18 |
-| To-many editor · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "chips-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | ff90908 2026-10-18 |
-| Date and datetime editor · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "date-editors-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | ff90908 2026-10-18 |
-| Filter builder · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "filter-row-fits @e2e"` | e2e/ui-fit.spec.ts | react-aria | ff90908 2026-10-18 |
-| Drawer picker · frame | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "drawer-picker-keeps-its-frame @e2e"` | e2e/ui-fit.spec.ts | react-aria | ff90908 2026-10-18 |
-| Speelreeks · Sjabloon met plaatsen → matrix Open | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "apply-template-with-slots @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Matrix · Open-kolom | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "open-counts @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Matrix · open plek invullen | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "fill-splits-slot-and-undo @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Matrix · uitnodiging (outbox) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "invite-in-outbox @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| #/act · bevestigen zonder aanmelden | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "confirm-without-login @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| POST /api/act · token A niet B | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "token-a-not-b @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| #/act · weigeren → Geweigerd | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "decline-shows-geweigerd @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Matrix · uitnodiging zonder e-mailadres | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "no-email-no-invite @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Toewijzingen · verboden overgang | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "disallowed-transition @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Toewijzingen · persoon wisselen → Voorlopig | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "swap-pencils-back-in @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
+| Select and to-one picker · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "select-and-picker-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | 6ec02d6 2026-10-24 |
+| Production switcher · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "space-switcher-fits @e2e"` | e2e/ui-fit.spec.ts | react-aria | 6ec02d6 2026-10-24 |
+| To-many editor · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "chips-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | 6ec02d6 2026-10-24 |
+| Date and datetime editor · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "date-editors-fit @e2e"` | e2e/ui-fit.spec.ts | react-aria | 6ec02d6 2026-10-24 |
+| Filter builder · fit | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "filter-row-fits @e2e"` | e2e/ui-fit.spec.ts | react-aria | 6ec02d6 2026-10-24 |
+| Drawer picker · frame | e2e | `bunx playwright test e2e/ui-fit.spec.ts --grep "drawer-picker-keeps-its-frame @e2e"` | e2e/ui-fit.spec.ts | react-aria | 6ec02d6 2026-10-24 |
+| Speelreeks · Sjabloon met plaatsen → matrix Open | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "apply-template-with-slots @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Matrix · Open-kolom | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "open-counts @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Matrix · open plek invullen | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "fill-splits-slot-and-undo @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Matrix · uitnodiging (outbox) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "invite-in-outbox @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| #/act · bevestigen zonder aanmelden | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "confirm-without-login @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| POST /api/act · token A niet B | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "token-a-not-b @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| #/act · weigeren → Geweigerd | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "decline-shows-geweigerd @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Matrix · uitnodiging zonder e-mailadres | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "no-email-no-invite @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Toewijzingen · verboden overgang | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "disallowed-transition @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Toewijzingen · persoon wisselen → Voorlopig | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "swap-pencils-back-in @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
 | Toewijzingen · een persoon op een open plek ×2: die rij krijgt de persoon met aantal 1, een nieuwe open rij houdt de andere plek; één ⌘Z zet de open ×2 terug | e2e | `bunx playwright test e2e/slot-split.spec.ts --grep "fill-open-slot-splits @e2e"` | e2e/slot-split.spec.ts | slot-split-on-edit | ff90908 2026-10-18 |
-| Matrix · verouderde status (409) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "stale-state-409 @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
-| Exporteren / delen · Voor eigenaars + #/link | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "link-shows-own-projects-only @e2e"` | e2e/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
+| Matrix · verouderde status (409) | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "stale-state-409 @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
+| Exporteren / delen · Voor eigenaars + #/link | e2e | `bunx playwright test e2e/step-2.spec.ts --grep "link-shows-own-projects-only @e2e"` | e2e/step-2.spec.ts | step-2 | 6ec02d6 2026-10-24 |
 | GET /api/record-links/:dataset/:id | smoke | `bunx playwright test e2e/smoke/step-2.spec.ts --grep "a record link is copied only with a session, never cached @smoke"` | e2e/smoke/step-2.spec.ts | step-2 | ff90908 2026-10-18 |
 | Time cell editor (no source serves a time column yet) | auth | — | | react-aria | |
 | Long text cell editor (no source serves a textarea column yet) | auth | — | | react-aria | |
@@ -97,8 +97,8 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | Planning · Locatie overschrijven en wissen | e2e | `bunx playwright test e2e/step-2b.spec.ts --grep "override-and-clear-venue @e2e"` | e2e/step-2b.spec.ts | virtual-columns | ff90908 2026-10-18 |
 | Activiteiten · Locatie filteren, sorteren, groeperen | e2e | `bunx playwright test e2e/step-2b.spec.ts --grep "filter-sort-group-on-locatie @e2e"` | e2e/step-2b.spec.ts | virtual-columns | ff90908 2026-10-18 |
 | Filter builder · is vandaag, kept after a reload | e2e | `bunx playwright test e2e/period-today.spec.ts --grep "filter-is-vandaag-kept-after-reload @e2e"` | e2e/period-today.spec.ts | period-today | ff90908 2026-10-18 |
-| Tourstop drawer · Tourstop verschuiven | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-tourstop @e2e"` | e2e/action-inputs.spec.ts | action-inputs | ff90908 2026-10-18 |
-| Tourstop drawer · refusal under the action | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-refused-in-dutch @e2e"` | e2e/action-inputs.spec.ts | action-inputs | ff90908 2026-10-18 |
+| Tourstop drawer · Tourstop verschuiven | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-tourstop @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 6ec02d6 2026-10-24 |
+| Tourstop drawer · refusal under the action | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "shift-refused-in-dutch @e2e"` | e2e/action-inputs.spec.ts | action-inputs | 6ec02d6 2026-10-24 |
 | Activiteit drawer · Bijlagen (upload, openen, verwijderen, ongedaan maken) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "upload-open-delete-undo @e2e"` | e2e/attachments.spec.ts | attachments | ff90908 2026-10-18 |
 | Activiteit drawer · Bijlagen · weigeringen (type, grootte) | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "refusals-in-dutch @e2e"` | e2e/attachments.spec.ts | attachments | ff90908 2026-10-18 |
 | Tourstop en Toewijzing drawer · Bijlagen; Organisatie zonder | e2e | `bunx playwright test e2e/attachments.spec.ts --grep "bijlagen-on-tourstop-and-assignment @e2e"` | e2e/attachments.spec.ts | attachments | ff90908 2026-10-18 |
@@ -110,22 +110,22 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | Persoonskalender · nacht, punt, venster | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "calendar-edges @e2e"` | e2e/step-3.spec.ts | step-3 | ff90908 2026-10-18 |
 | Persoonskalender · activiteit zonder einde | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "point-event-shows-its-name @e2e"` | e2e/step-3.spec.ts | step-3 | ff90908 2026-10-18 |
 | Bedrijfsweek · week, maand, drawer | e2e | `bunx playwright test e2e/step-3.spec.ts --grep "company-week @e2e"` | e2e/step-3.spec.ts | step-3 | ff90908 2026-10-18 |
-| Dashboard · landing | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 1845479 2026-10-23 |
-| Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · weekstrook opent activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "week-opens-activity @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | 1845479 2026-10-23 |
-| Dashboard · Nieuwe taak | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · productie kiezen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · productie kiezen, elke tegel | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · Geen toegang | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "tile-no-access @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Dashboard · samenstellen, teamdashboard, verwijderen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "composer-team-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | ff90908 2026-10-18 |
-| Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | ff90908 2026-10-18 |
-| Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | ff90908 2026-10-18 |
-| Kalender · Nieuwe activiteit, leesbaar | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | ff90908 2026-10-18 |
-| Nieuwe tijdlijn · deze maand, rijen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "new-timeline-defaults @e2e"` | e2e/step-3d.spec.ts | step-3d | ff90908 2026-10-18 |
-| Tijdlijn · naar vandaag eenmaal per venster | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "timeline-scroll-holds @e2e"` | e2e/step-3d.spec.ts | step-3d | ff90908 2026-10-18 |
+| Dashboard · landing | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "dashboard-landing @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · Conflicten rood dan neutraal | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-red-then-neutral @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · getal opent zijn view | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "stat-opens-view @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · weekstrook opent activiteit | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "week-opens-activity @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · Werklijst Gedaan | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "werklijst-set @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · Nieuwe taak | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "quick-create @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · productie kiezen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · productie kiezen, elke tegel | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "space-narrows-every-tile @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · Geen toegang | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "tile-no-access @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Dashboard · samenstellen, teamdashboard, verwijderen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "composer-team-dashboard @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Bord, tijdlijn, galerij, kalender over dagen | e2e | `bunx playwright test e2e/step-3c.spec.ts --grep "skins-open @e2e"` | e2e/step-3c.spec.ts | step-3c | 6ec02d6 2026-10-24 |
+| Bijstellen · Rasterlijnen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "looks-gridlines @e2e"` | e2e/step-3d.spec.ts | step-3d | 6ec02d6 2026-10-24 |
+| Lade · derde kolom | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "drawer-in-slot @e2e"` | e2e/step-3d.spec.ts | step-3d | 6ec02d6 2026-10-24 |
+| Kalender · Nieuwe activiteit, leesbaar | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "quick-create-calendar @e2e"` | e2e/step-3d.spec.ts | step-3d | 6ec02d6 2026-10-24 |
+| Nieuwe tijdlijn · deze maand, rijen | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "new-timeline-defaults @e2e"` | e2e/step-3d.spec.ts | step-3d | 6ec02d6 2026-10-24 |
+| Tijdlijn · naar vandaag eenmaal per venster | e2e | `bunx playwright test e2e/step-3d.spec.ts --grep "timeline-scroll-holds @e2e"` | e2e/step-3d.spec.ts | step-3d | 6ec02d6 2026-10-24 |
 | Planning · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Planning @e2e"` | e2e/step-3e.spec.ts | step-3e | ff90908 2026-10-18 |
 | Bord · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Per status @e2e"` | e2e/step-3e.spec.ts | step-3e | ff90908 2026-10-18 |
 | Galerij · één periode | e2e | `bunx playwright test e2e/step-3e.spec.ts --grep "period-sequence on Galerij activiteiten @e2e"` | e2e/step-3e.spec.ts | step-3e | ff90908 2026-10-18 |
@@ -157,68 +157,89 @@ with `bun test` instead, on an invented instance the test starts itself (the smo
 | Lade van Planning en van het bord Per status · Iemand anders kiezen: zoeker op de gemarkeerde persoon in Mensen, kandidaten, band weg; één ⌘Z zet de eerste terug met band; opnieuw gekozen, na herladen de nieuwe zonder band; op het bord eerst Conflict in de band en bij de persoon, Negeren verbergt de band tot de lade opnieuw opent | e2e | `bunx playwright test e2e/step-3f.spec.ts --grep "conflict-choose-other @e2e"` | e2e/step-3f.spec.ts | step-3f | ff90908 2026-10-18 |
 | MCP server (stdio) | e2e | `bun test packages/mcp/test/instance.test.ts -t "mcp-lists-rows"` | packages/mcp/test/instance.test.ts | studio-mcp | e22c2b5 2026-10-22 |
 | MCP server (stdio) | smoke | `bun test packages/mcp/test/smoke.test.ts -t "mcp-boots"` | packages/mcp/test/smoke.test.ts | studio-mcp | e22c2b5 2026-10-22 |
-| Selection · select and run | e2e | `bunx playwright test e2e/selection.spec.ts --grep "select-and-run @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · select all in view | e2e | `bunx playwright test e2e/selection.spec.ts --grep "select-all-in-view @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · run from drawer | e2e | `bunx playwright test e2e/selection.spec.ts --grep "run-from-drawer @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Link item opens its record | e2e | `bunx playwright test e2e/selection.spec.ts --grep "link-opens-record @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Rail tree · unlisted dataset | e2e | `bunx playwright test e2e/selection.spec.ts --grep "tree-hides-link-table @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| + Nieuw on a query that creates | e2e | `bunx playwright test e2e/selection.spec.ts --grep "add-from-query @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| + Nieuw on a query · refusals | e2e | `bunx playwright test e2e/selection.spec.ts --grep "add-from-query-refusals @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection bar · reserved strip | e2e | `bunx playwright test e2e/selection.spec.ts --grep "bar-reserves-its-strip @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · keyboard tab stops | e2e | `bunx playwright test e2e/selection.spec.ts --grep "tab-stops @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · row numbers beside the box | e2e | `bunx playwright test e2e/selection.spec.ts --grep "three-digit-numbers @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · clear and empty input | e2e | `bunx playwright test e2e/selection.spec.ts --grep "selection-clear-and-empty-input @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · double submit | e2e | `bunx playwright test e2e/selection.spec.ts --grep "double-submit-run @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · refusal mid-run | e2e | `bunx playwright test e2e/selection.spec.ts --grep "refused-run @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · stale id | e2e | `bunx playwright test e2e/selection.spec.ts --grep "stale-id-run @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Drawer · Escape | e2e | `bunx playwright test e2e/selection.spec.ts --grep "drawer-escape @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · checkbox column aligned | e2e | `bunx playwright test e2e/selection.spec.ts --grep "checkbox-column-aligned @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection surface · sign-in page without a session | smoke | `bunx playwright test e2e/smoke/selection.spec.ts --grep "selection surface: a table view without a session shows the sign-in page, no selection column @smoke"` | e2e/smoke/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection surface · GET /api/schema without a session | smoke | `bunx playwright test e2e/smoke/selection.spec.ts --grep "selection actions are not declared to a visitor without a session @smoke"` | e2e/smoke/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Selection · transport failures | e2e | `bunx playwright test e2e/selection.spec.ts --grep "transport-failures-run @e2e"` | e2e/selection.spec.ts | selection-actions | 12de8aa 2026-10-22 |
-| Drawer · declared buttons, Undo | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-a-button @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Drawer · link item button and detail | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "link-item-button @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Action opens its result | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "action-opens-its-result @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Drawer · follows an outside change (busy mark) | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "drawer-follows-an-outside-change @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Dashboard · list row opens its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "dashboard-row-opens-drawer @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Drawer · closed while a poll is outstanding | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "live-drawer-closed-mid-poll @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Dashboard drawer · Undo after close | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-then-close-then-undo @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Related drawer · Undo after close | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-in-related-drawer-then-close-then-undo @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Action result · Undo closes its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "undo-closes-the-opened-record @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Drawer surface · dashboard sign-in page without a session | smoke | `bunx playwright test e2e/smoke/drawer-actions.spec.ts --grep "drawer surface: the dashboard without a session shows the sign-in page, no drawer @smoke"` | e2e/smoke/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Drawer surface · rows (marks) without a session | smoke | `bunx playwright test e2e/smoke/drawer-actions.spec.ts --grep "drawer buttons and their marks are not served to a visitor without a session @smoke"` | e2e/smoke/drawer-actions.spec.ts | drawer-actions | 3f6de2f 2026-10-23 |
-| Studio · Overzicht, vier vragen, ergste site eerst | e2e | `bunx playwright test e2e/studio.spec.ts --grep "dashboard-opens-on-monday-questions @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Overzicht per klant | e2e | `bunx playwright test e2e/studio.spec.ts --grep "space-narrows-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Sites, selectie en Gezondheid checken | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-health-check-for-selected-sites @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Sites, enkel sites buiten de registry | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-only-retired-sites-refused @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · actie uit de lade van een site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-from-a-site-drawer @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · opdracht, preview per site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "preview-opens-from-request @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · opdracht, Niet nu en Toch wel | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drop-site-before-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Bevestigen vanuit Overzicht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-update-from-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Bevestigen, verlopen preview | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-refused-on-an-expired-preview @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Bevestigen, verzoek valt weg | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-survives-a-dropped-request @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · een service bevestigt nooit (wire) | e2e | `bunx playwright test e2e/studio.spec.ts --grep "service-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · een redacteur bevestigt nooit | e2e | `bunx playwright test e2e/studio.spec.ts --grep "editor-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Sites per gezondheid en Sites in beeld | e2e | `bunx playwright test e2e/studio.spec.ts --grep "sites-board-and-gallery @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Agenda, nieuw agendapunt en geplande opdracht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "add-to-the-agenda @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Op tafel en Gedaan | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Opdrachten per status: het bord sleept niet, dus geen opdracht bereikt de stappen van de worker | e2e | `bunx playwright test e2e/studio.spec.ts --grep "person-cannot-take-worker-steps @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · opdracht, sitelijnen na Bevestigen of Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "decided-request-lines @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Op tafel, Nieuwe taak | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel-offers-new-task @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Overzicht, recente dag niet te laat | e2e | `bunx playwright test e2e/studio.spec.ts --grep "recent-moment-not-late @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · opdracht, Verwijderen zegt Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "delete-a-request-explains @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Overzicht, Vandaag met open lade op 1280 | e2e | `bunx playwright test e2e/studio.spec.ts --grep "today-keeps-its-titles @e2e"` | e2e/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio · Sites en Onderhoudslog: de kolommen van de worker alleen-lezen; de Status van een opdracht geen inline keuze | e2e | `bunx playwright test e2e/studio.spec.ts --grep "no-edit-on-worker-columns @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · geen + Nieuw op Sites, Sites per gezondheid, Sites met aandacht en de Onderhoudslog; geen + in een kolom van Opdrachten per status | e2e | `bunx playwright test e2e/studio.spec.ts --grep "no-new-where-not-allowed @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · werkbalk op 1440: een lange bewaarfout wordt afgekapt, + Nieuw blijft van de titel van de open lade af | e2e | `bunx playwright test e2e/studio.spec.ts --grep "toolbar-at-1440 @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · Sites met aandacht: twee aangevinkt, Gezondheid checken, de opdracht met precies die twee | e2e | `bunx playwright test e2e/studio.spec.ts --grep "tick-on-a-query-view @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · Sites, rijlijnen op 125% | e2e | `bunx playwright test e2e/studio.spec.ts --grep "row-lines-at-125 @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · Sites, rijlijnen op 150% | e2e | `bunx playwright test e2e/studio.spec.ts --grep "row-lines-at-150 @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · Opdrachten per status: geen + in een kolom, geen sleephints, een kaart opent | e2e | `bunx playwright test e2e/studio.spec.ts --grep "board-groups-only @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · opdrachtlade: Bevestigen gevuld, Annuleren rustig, Volgt live; de acties van een site bovenaan de lade | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drawer-reads-right @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · Sites, titelregel: Storing voor Let op, elk met zijn aantal | e2e | `bunx playwright test e2e/studio.spec.ts --grep "title-pill-worst-first @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio · Sites, een schakelcel houdt schakelaar en Ja/Nee binnen de standaardbreedte, geen stip | e2e | `bunx playwright test e2e/studio.spec.ts --grep "toggle-cell-fits @e2e"` | e2e/studio.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Toewijzingen · titelregel: Geweigerd · Geannuleerd in rood voor Uitgenodigd | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-pill-two-tones @e2e"` | e2e/title-line.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
-| Studio surface · sign-in page without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio surface: the grid without a session shows the Dutch sign-in page, no dashboard @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio surface · GET /api/schema without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio schema asks a visitor without a session to sign in @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | 3f6de2f 2026-10-23 |
-| Studio surface · rijlijn-token vóór aanmelden | smoke | `bunx playwright test e2e/smoke/studio-polish.spec.ts --grep "studio row lines: the grid serves a row-line token stronger than the subtle border, before sign-in @smoke"` | e2e/smoke/studio-polish.spec.ts | studio-polish | 3f6de2f 2026-10-23 |
+| Selection · select and run | e2e | `bunx playwright test e2e/selection.spec.ts --grep "select-and-run @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · select all in view | e2e | `bunx playwright test e2e/selection.spec.ts --grep "select-all-in-view @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · run from drawer | e2e | `bunx playwright test e2e/selection.spec.ts --grep "run-from-drawer @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Link item opens its record | e2e | `bunx playwright test e2e/selection.spec.ts --grep "link-opens-record @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Rail tree · unlisted dataset | e2e | `bunx playwright test e2e/selection.spec.ts --grep "tree-hides-link-table @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| + Nieuw on a query that creates | e2e | `bunx playwright test e2e/selection.spec.ts --grep "add-from-query @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| + Nieuw on a query · refusals | e2e | `bunx playwright test e2e/selection.spec.ts --grep "add-from-query-refusals @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection panel · no row moves on a tick, a second tick or Selectie wissen | e2e | `bunx playwright test e2e/selection.spec.ts --grep "bar-reserves-its-strip @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · keyboard tab stops | e2e | `bunx playwright test e2e/selection.spec.ts --grep "tab-stops @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · row numbers beside the box | e2e | `bunx playwright test e2e/selection.spec.ts --grep "three-digit-numbers @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · clear and empty input | e2e | `bunx playwright test e2e/selection.spec.ts --grep "selection-clear-and-empty-input @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · double submit | e2e | `bunx playwright test e2e/selection.spec.ts --grep "double-submit-run @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · refusal mid-run | e2e | `bunx playwright test e2e/selection.spec.ts --grep "refused-run @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · stale id | e2e | `bunx playwright test e2e/selection.spec.ts --grep "stale-id-run @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Drawer · Escape | e2e | `bunx playwright test e2e/selection.spec.ts --grep "drawer-escape @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · checkbox column aligned | e2e | `bunx playwright test e2e/selection.spec.ts --grep "checkbox-column-aligned @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection surface · sign-in page without a session | smoke | `bunx playwright test e2e/smoke/selection.spec.ts --grep "selection surface: a table view without a session shows the sign-in page, no selection column @smoke"` | e2e/smoke/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection surface · GET /api/schema without a session | smoke | `bunx playwright test e2e/smoke/selection.spec.ts --grep "selection actions are not declared to a visitor without a session @smoke"` | e2e/smoke/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Selection · transport failures | e2e | `bunx playwright test e2e/selection.spec.ts --grep "transport-failures-run @e2e"` | e2e/selection.spec.ts | selection-actions | 6ec02d6 2026-10-24 |
+| Drawer · declared buttons, Undo | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-a-button @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Drawer · link item button and detail | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "link-item-button @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Action opens its result | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "action-opens-its-result @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Drawer · follows an outside change (busy mark) | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "drawer-follows-an-outside-change @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Dashboard · list row opens its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "dashboard-row-opens-drawer @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Drawer · closed while a poll is outstanding | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "live-drawer-closed-mid-poll @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Dashboard drawer · Undo after close | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-then-close-then-undo @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Related drawer · Undo after close | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "press-in-related-drawer-then-close-then-undo @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Action result · Undo closes its drawer | e2e | `bunx playwright test e2e/drawer-actions.spec.ts --grep "undo-closes-the-opened-record @e2e"` | e2e/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Drawer surface · dashboard sign-in page without a session | smoke | `bunx playwright test e2e/smoke/drawer-actions.spec.ts --grep "drawer surface: the dashboard without a session shows the sign-in page, no drawer @smoke"` | e2e/smoke/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Drawer surface · rows (marks) without a session | smoke | `bunx playwright test e2e/smoke/drawer-actions.spec.ts --grep "drawer buttons and their marks are not served to a visitor without a session @smoke"` | e2e/smoke/drawer-actions.spec.ts | drawer-actions | 6ec02d6 2026-10-24 |
+| Studio · Overzicht, vier vragen, ergste site eerst | e2e | `bunx playwright test e2e/studio.spec.ts --grep "dashboard-opens-on-monday-questions @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Overzicht per klant | e2e | `bunx playwright test e2e/studio.spec.ts --grep "space-narrows-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Sites, selectie en Gezondheid checken | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-health-check-for-selected-sites @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Sites, enkel sites buiten de registry | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-only-retired-sites-refused @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · actie uit de lade van een site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-from-a-site-drawer @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · opdracht, preview per site | e2e | `bunx playwright test e2e/studio.spec.ts --grep "preview-opens-from-request @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · opdracht, Niet nu en Toch wel | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drop-site-before-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Bevestigen vanuit Overzicht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-update-from-dashboard @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Bevestigen, verlopen preview | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-refused-on-an-expired-preview @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Bevestigen, verzoek valt weg | e2e | `bunx playwright test e2e/studio.spec.ts --grep "confirm-survives-a-dropped-request @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · een service bevestigt nooit (wire) | e2e | `bunx playwright test e2e/studio.spec.ts --grep "service-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · een redacteur bevestigt nooit | e2e | `bunx playwright test e2e/studio.spec.ts --grep "editor-cannot-confirm @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Sites per gezondheid en Sites in beeld | e2e | `bunx playwright test e2e/studio.spec.ts --grep "sites-board-and-gallery @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Agenda, nieuw agendapunt en geplande opdracht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "add-to-the-agenda @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Op tafel en Gedaan | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Opdrachten per status: het bord sleept niet, dus geen opdracht bereikt de stappen van de worker | e2e | `bunx playwright test e2e/studio.spec.ts --grep "person-cannot-take-worker-steps @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · opdracht, sitelijnen na Bevestigen of Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "decided-request-lines @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Op tafel, Nieuwe taak | e2e | `bunx playwright test e2e/studio.spec.ts --grep "op-tafel-offers-new-task @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Overzicht, recente dag niet te laat | e2e | `bunx playwright test e2e/studio.spec.ts --grep "recent-moment-not-late @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · opdracht, Verwijderen zegt Annuleren | e2e | `bunx playwright test e2e/studio.spec.ts --grep "delete-a-request-explains @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Overzicht, Vandaag met open lade op 1280 | e2e | `bunx playwright test e2e/studio.spec.ts --grep "today-keeps-its-titles @e2e"` | e2e/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio · Sites en Onderhoudslog: de kolommen van de worker alleen-lezen; de Status van een opdracht geen inline keuze | e2e | `bunx playwright test e2e/studio.spec.ts --grep "no-edit-on-worker-columns @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · geen + Nieuw op Sites, Sites per gezondheid, Sites met aandacht en de Onderhoudslog; geen + in een kolom van Opdrachten per status | e2e | `bunx playwright test e2e/studio.spec.ts --grep "no-new-where-not-allowed @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · werkbalk op 1440: een lange bewaarfout wordt afgekapt, + Nieuw blijft van de titel van de open lade af | e2e | `bunx playwright test e2e/studio.spec.ts --grep "toolbar-at-1440 @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Sites met aandacht: twee aangevinkt, Gezondheid checken, de opdracht met precies die twee | e2e | `bunx playwright test e2e/studio.spec.ts --grep "tick-on-a-query-view @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Sites, rijlijnen op 125% | e2e | `bunx playwright test e2e/studio.spec.ts --grep "row-lines-at-125 @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Sites, rijlijnen op 150% | e2e | `bunx playwright test e2e/studio.spec.ts --grep "row-lines-at-150 @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Opdrachten per status: geen + in een kolom, geen sleephints, een kaart opent | e2e | `bunx playwright test e2e/studio.spec.ts --grep "board-groups-only @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · opdrachtlade: Bevestigen gevuld in de kop, Annuleren in Acties, geen live-merk terwijl ze op Bevestigen wacht; de acties van een site in de kop | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drawer-reads-right @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Sites, titelregel: Storing voor Let op, elk met zijn aantal | e2e | `bunx playwright test e2e/studio.spec.ts --grep "title-pill-worst-first @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Sites, een schakelcel houdt schakelaar en Ja/Nee binnen de standaardbreedte, geen stip | e2e | `bunx playwright test e2e/studio.spec.ts --grep "toggle-cell-fits @e2e"` | e2e/studio.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Toewijzingen · titelregel: Geweigerd · Geannuleerd in rood voor Uitgenodigd | e2e | `bunx playwright test e2e/title-line.spec.ts --grep "title-pill-two-tones @e2e"` | e2e/title-line.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio surface · sign-in page without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio surface: the grid without a session shows the Dutch sign-in page, no dashboard @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio surface · GET /api/schema without a session | smoke | `bunx playwright test e2e/smoke/studio.spec.ts --grep "studio schema asks a visitor without a session to sign in @smoke"` | e2e/smoke/studio.spec.ts | studio-domain | 6ec02d6 2026-10-24 |
+| Studio surface · rijlijn-token vóór aanmelden | smoke | `bunx playwright test e2e/smoke/studio-polish.spec.ts --grep "studio row lines: the grid serves a row-line token stronger than the subtle border, before sign-in @smoke"` | e2e/smoke/studio-polish.spec.ts | studio-polish | 6ec02d6 2026-10-24 |
+| Studio · Sites: de vinkjes verschijnen bij hover, het zwevende paneel verschuift geen rij en draait de actie; kolomlijnen licht en donker | e2e | `bunx playwright test e2e/studio.spec.ts --grep "tick-and-run-from-the-panel @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · dock: een aangevraagde opdracht loopt in het dock op elke pagina, eindigt vanzelf met haar resultaat en wacht op Bevestigen met een link | e2e | `bunx playwright test e2e/studio.spec.ts --grep "request-shows-running-then-result @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · opdrachtlade: Bevestigen in de kop, Annuleren in Acties, geen actie in de body | e2e | `bunx playwright test e2e/studio.spec.ts --grep "drawer-actions-in-the-bar @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · werkbalk op 1280 met een open lade: één rij, ⌘K opent het zoekveld | e2e | `bunx playwright test e2e/studio.spec.ts --grep "toolbar-at-1280 @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · een gezaaide weergave verwijderen: --seed-missing laat ze weg en dropt haar tegel, herstel brengt beide terug | e2e | `bunx playwright test e2e/studio.spec.ts --grep "delete-a-seeded-view @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · Sites: alleen sites in de registry; kolomlijnen over kop en rijen, donker en licht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "table-lines-in-both-themes @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · dock: een wachtende opdracht en het selectiepaneel laten de laatste rij en het totaal vrij | e2e | `bunx playwright test e2e/studio.spec.ts --grep "waiting-line-and-panel-leave-the-last-row @e2e"` | e2e/studio.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Studio · dock: de link "— openen" leesbaar, donker en licht | e2e | `bunx playwright test e2e/studio.spec.ts --grep "waiting-line-reads-in-both-themes @e2e"` | e2e/studio.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Studio · dock: "openen" vanaf het bord Opdrachten per status opent de opdracht in haar tabel | e2e | `bunx playwright test e2e/studio.spec.ts --grep "dock-link-from-the-board @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · dock: twintig gevolgde opdrachten laten de rijen van de tabel bereikbaar | e2e | `bunx playwright test e2e/studio.spec.ts --grep "twenty-runs-leave-the-table-reachable @e2e"` | e2e/studio.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Studio · sitelade: Acties met Enter, pijlen, Escape terug op Acties, tweede Escape sluit de lade | e2e | `bunx playwright test e2e/studio.spec.ts --grep "acties-menu-by-keyboard @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · takenlade: Verwijderen vraagt Zeker?, Escape houdt de taak, de tweede druk verwijdert | e2e | `bunx playwright test e2e/studio.spec.ts --grep "delete-asks-twice @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · rail: een gezaaide weergave hernoemen als beheerder; de redacteur krijgt alleen een kopie | e2e | `bunx playwright test e2e/studio.spec.ts --grep "seeded-view-menu-by-role @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · Sites: een lege SLA leest blank, Spatie zet ze | e2e | `bunx playwright test e2e/studio.spec.ts --grep "null-boolean-reads-blank @e2e"` | e2e/studio.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio · Sites: een klik op een lege SLA zet ze | e2e | `bunx playwright test e2e/studio.spec.ts --grep "null-boolean-by-mouse @e2e"` | e2e/studio.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Tourstop drawer · invoerpaneel onder de kop, gefocust, met sluitknop, licht en donker; Escape terug op Acties | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "inputs-panel-under-the-head @e2e"` | e2e/action-inputs.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Tourstop drawer · toetsen in het invoerpaneel blijven in het paneel (j in Sjabloon, ↓ in Dagen) | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "keys-in-the-inputs-panel-stay-there @e2e"` | e2e/action-inputs.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Tourstop drawer · Escape na de Sjabloonkiezer, dan het paneel | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "escape-after-the-picker @e2e"` | e2e/action-inputs.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Tourstop drawer · het gefocuste veld Dagen toont een focusmerk | e2e | `bunx playwright test e2e/action-inputs.spec.ts --grep "focused-input-shows-its-mark @e2e"` | e2e/action-inputs.spec.ts | views-and-actions | RED at 6ec02d6 2026-10-24, owed by the fix pass |
+| Studio surface · dock, runregels en kolomlijnen vóór aanmelden | smoke | `bunx playwright test e2e/smoke/views-and-actions.spec.ts --grep "views and actions: the grid serves the dock, its run lines and the column lines before sign-in @smoke"` | e2e/smoke/views-and-actions.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
+| Studio surface · GET /api/views zonder sessie | smoke | `bunx playwright test e2e/smoke/views-and-actions.spec.ts --grep "views and actions: the saved views ask a visitor without a session to sign in @smoke"` | e2e/smoke/views-and-actions.spec.ts | views-and-actions | 6ec02d6 2026-10-24 |
