@@ -1894,6 +1894,14 @@
   align-items: center;
 }
 
+/* A never-given boolean: no switch, but a cell-wide target a press sets to true. */
+.nv-cell__bool--blank {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  cursor: pointer;
+}
+
 .nv-switch {
   display: inline-flex;
   align-items: center;
@@ -3572,11 +3580,15 @@
   color: var(--color-danger-fg);
 }
 
+.nv-run--more {
+  color: var(--color-fg-subtle);
+}
+
 .nv-run__open {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--color-accent-fg, var(--color-fg-default));
+  color: var(--color-fg-default);
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
@@ -3632,7 +3644,7 @@
 
 /* The last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
 .nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll {
-  padding-bottom: 96px;
+  padding-bottom: calc(var(--nv-dock-h, 80px) + 28px);
 }
 
 .nv-selection__count {
@@ -4225,6 +4237,19 @@
   background: none;
   color: var(--color-fg-subtle);
   cursor: pointer;
+}
+
+#root .nv-dw-ask .nv-fb__text {
+  width: 180px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+}
+
+#root .nv-dw-ask .nv-fb__text:focus-visible {
+  border-color: var(--color-fg-default);
+  outline: 2px solid var(--color-fg-default);
+  outline-offset: -1px;
 }
 
 .nv-dw-ask .nv-action {

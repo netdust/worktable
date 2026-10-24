@@ -9,6 +9,8 @@ import type { Notice } from './Toast'
 const FOLLOWED = 20
 const SHOWN_FOR = 6000
 const OPENING_WAIT = 5000
+/** The newest lines the dock shows: more would cover the table; the rest fold into one count. */
+const VISIBLE = 3
 
 /** What a follow is for: the action's label, the record it made, and the rows it acted on. */
 export interface Run {
@@ -188,10 +190,13 @@ export function useRunFollower(models: Record<string, Model>, host: { notify: (n
 
 function RunLines() {
   const { lines, dismiss, open } = useRuns()
+  const shown = lines.slice(-VISIBLE)
+  const more = lines.length - shown.length
   // Always there, so a screen reader hears a line that arrives in it.
   return (
     <div className="nv-runs" aria-live="polite">
-      {lines.map((line) => {
+      {more > 0 && <div className="nv-run nv-run--more">{t('runsMore', { n: more })}</div>}
+      {shown.map((line) => {
         const text = t(line.phase === 'waiting' ? 'runWaiting' : line.phase === 'running' ? 'runBusy' : 'runDone', { action: line.run.label, state: line.state })
         return (
           <section key={line.key} className="nv-run" role="region" aria-label={text} aria-busy={line.phase === 'running'} data-phase={line.phase} data-tone={line.tone}>
@@ -199,7 +204,7 @@ function RunLines() {
             {line.phase === 'waiting'
               ? <button type="button" className="nv-run__open" onClick={() => open(line.run.dataset, line.run.id)}>{text}</button>
               : <span>{text}</span>}
-            {line.phase !== 'running' && <button type="button" className="nv-run__close" aria-label={t('dismiss')} onClick={() => dismiss(line.key)}><X size={14} aria-hidden="true" /></button>}
+            <button type="button" className="nv-run__close" aria-label={t('dismiss')} onClick={() => dismiss(line.key)}><X size={14} aria-hidden="true" /></button>
           </section>
         )
       })}
@@ -209,8 +214,23 @@ function RunLines() {
 
 /** The bottom of the work column: the toast, then the grid's selection panel, then the lines of running requests. */
 export function Dock({ onSlot, onToast }: { onSlot: (slot: HTMLElement | null) => void; onToast?: (slot: HTMLElement | null) => void }): ReactNode {
+  const dock = useRef<HTMLDivElement>(null)
+  // The table keeps room under whatever the dock holds, as measured.
+  useEffect(() => {
+    const el = dock.current
+    const sheet = el?.parentElement
+    if (!el || !sheet) return
+    const measure = () => sheet.style.setProperty('--nv-dock-h', `${el.offsetHeight}px`)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      sheet.style.removeProperty('--nv-dock-h')
+    }
+  }, [])
   return (
-    <div className="nv-dock">
+    <div className="nv-dock" ref={dock}>
       <div className="nv-dock__panel" ref={onToast} data-react-aria-top-layer />
       <div className="nv-dock__panel" ref={onSlot} />
       <RunLines />

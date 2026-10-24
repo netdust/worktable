@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { optionsFrom } from '../api'
 import { errorText, t } from '../i18n'
 import type { ActionInput, ApiError, ModelAction, OptionsFrom, Row } from '../types'
@@ -47,6 +47,12 @@ export function ActionInputs({ action, record, disabled = false, onRun }: { acti
   const [picked, setPicked] = useState<Record<string, Row>>({})
   const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
   const [open, setOpen] = useState<string | null>(null)
+  const openers = useRef<Record<string, HTMLButtonElement | null>>({})
+  // A picker that closes gives the keyboard back to the button that opened it, so Escape goes on to the panel.
+  const closePicker = (key: string) => {
+    setOpen(null)
+    openers.current[key]?.focus()
+  }
   const [sending, setSending] = useState<Sending>({ status: 'idle' })
   const valueOf = ([key, input]: [string, ActionInput]) => ('relation' in input ? picked[key]?.id : typed[key])
   const ready = inputs.every((entry) => {
@@ -67,13 +73,13 @@ export function ActionInputs({ action, record, disabled = false, onRun }: { acti
     <div className="nv-action" role="group" aria-label={action.label}>
       {inputs.map(([key, input]) => 'relation' in input ? (
         <div key={key} className="nv-action__input">
-          <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
+          <Button ref={(element) => { openers.current[key] = element }} className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
           {open === key && (
-            <RelationPicker model={input.relation} label={input.label} onCancel={() => setOpen(null)}
+            <RelationPicker model={input.relation} label={input.label} onCancel={() => closePicker(key)}
               candidates={input.options_from && record ? () => optionsFrom(input.options_from as OptionsFrom, record) : undefined}
               onPick={(record) => {
                 setPicked((was) => ({ ...was, [key]: record }))
-                setOpen(null)
+                closePicker(key)
               }} />
           )}
         </div>

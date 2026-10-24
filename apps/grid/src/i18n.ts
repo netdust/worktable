@@ -276,6 +276,7 @@ const strings = {
   runBusy: '{action} · {state}',
   runWaiting: '{action} · {state} — openen',
   runDone: '{action} · {state}',
+  runsMore: '+{n} eerdere verzoeken',
   buttonDone: '{button} gedaan.',
   liveBusy: 'Volgt live',
   selectionMisfit: 'Past niet op {n} rijen',

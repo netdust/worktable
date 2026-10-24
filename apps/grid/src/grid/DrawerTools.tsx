@@ -67,8 +67,10 @@ export function DrawerTools({ model, row, onDone, actions, onAction, recordLink,
       {asking?.kind === 'action' && (
         // A panel under the head, not an overlay: the pickers inside it open their own, over the page.
         <div ref={panel} className="nv-dw-ask nv-dw-ask--panel" onKeyDown={(event) => {
+          // Typing here is typing here: the head's keys (↑ ↓ j k step to another record) never see it.
+          if (event.key !== 'Escape') return event.stopPropagation()
           const open = event.target instanceof Element && event.target.closest('[aria-expanded="true"]')
-          if (event.key !== 'Escape' || open) return
+          if (open) return
           event.stopPropagation()
           leave()
         }}>

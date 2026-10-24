@@ -161,9 +161,17 @@ describe('following a record an outside process holds', () => {
     expect(screen.queryByRole('region')).toBeNull()
   })
 
-  it('follows at most 20 records, the oldest dropping first', () => {
+  it('follows at most 20 records, the oldest dropping first, and shows the newest three with the rest counted', () => {
     for (let id = 1; id <= 21; id++) act(() => { runs.follow({ ...run(), id }, { ...at('busy'), id }) })
-    expect(screen.getAllByRole('region')).toHaveLength(20)
+    expect(runs.lines).toHaveLength(20)
+    expect(screen.getAllByRole('region')).toHaveLength(3)
+    expect(screen.getByText('+17 eerdere verzoeken')).toBeTruthy()
+  })
+
+  it('lets a running line be dismissed too', () => {
+    start(at('busy'))
+    fireEvent.click(screen.getByRole('button', { name: 'Negeren' }))
+    expect(screen.queryByRole('region')).toBeNull()
   })
 })
 

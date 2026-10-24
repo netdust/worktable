@@ -1440,7 +1440,9 @@ test.describe('views-and-actions, the shake-out', () => {
           .click()
         await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
       }
-      await expect(page.locator('.nv-run')).toHaveCount(20)
+      // The newest three show, the other seventeen are counted in one line: twenty lines would cover the table.
+      await expect(page.getByRole('region', { name: /Gezondheid checken/ })).toHaveCount(3)
+      await expect(page.getByText('+17 eerdere verzoeken')).toBeVisible()
       await shot(page, 'twintig-lopende-opdrachten')
       const cell = page
         .getByRole('row')
