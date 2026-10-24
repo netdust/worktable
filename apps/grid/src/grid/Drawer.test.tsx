@@ -14,6 +14,7 @@ import { columnsFor } from './columns'
 import type { Flag, Flags } from '../ui/useFlags'
 import type { WriteLink } from './drawer/Sections'
 import { activity, planning } from './calais.test.data'
+import { pressAction } from '../test-setup'
 
 const row = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', notes: 'Twee veggie' } })
 const columns = columnsFor(activity, { ...planning, columns: undefined }, false)
@@ -429,6 +430,8 @@ describe("the drawer's actions", () => {
   it('shows a button per action with a picker per input, run only once each input is picked', async () => {
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)
+    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+    await pressAction('Sjabloon toepassen')
     const group = screen.getByRole('group', { name: 'Sjabloon toepassen' })
     const run = within(group).getByRole('button', { name: 'Sjabloon toepassen' })
     expect(run.hasAttribute('disabled')).toBe(true)
@@ -446,6 +449,7 @@ describe("the drawer's actions", () => {
   it("says a refusal under the action, in the writer's words", async () => {
     const onAction = vi.fn().mockRejectedValue({ code: 'refused', message: 'Dit sjabloon is al toegepast.' })
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)
+    await pressAction('Sjabloon toepassen')
 
     await pickSjabloon()
     await act(async () => {
@@ -464,6 +468,7 @@ describe("the drawer's actions", () => {
   it('takes a typed input as a field, sends it as its value, and leaves an optional one out', async () => {
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[shift]} onAction={onAction} onClose={() => undefined} />)
+    await pressAction('Tourstop verschuiven')
     const group = screen.getByRole('group', { name: 'Tourstop verschuiven' })
     const run = within(group).getByRole('button', { name: 'Tourstop verschuiven' })
     expect(run.hasAttribute('disabled')).toBe(true)
@@ -476,9 +481,13 @@ describe("the drawer's actions", () => {
     })
     expect(onAction).toHaveBeenCalledExactlyOnceWith(shift, { dagen: -3 })
 
-    fireEvent.click(within(group).getByLabelText('Stil'))
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Tourstop verschuiven' })).toBeNull())
+    await pressAction('Tourstop verschuiven')
+    const again = screen.getByRole('group', { name: 'Tourstop verschuiven' })
+    fireEvent.change(within(again).getByLabelText('Dagen'), { target: { value: '-3' } })
+    fireEvent.click(within(again).getByLabelText('Stil'))
     await act(async () => {
-      fireEvent.click(run)
+      fireEvent.click(within(again).getByRole('button', { name: 'Tourstop verschuiven' }))
     })
     expect(onAction).toHaveBeenLastCalledWith(shift, { dagen: -3, stil: true })
   })
@@ -487,6 +496,7 @@ describe("the drawer's actions", () => {
     const confirm: ModelAction = { name: 'bevestigen', label: 'Bevestigen', input: { mail: { type: 'boolean', label: 'Mail sturen' } } }
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[confirm]} onAction={onAction} onClose={() => undefined} />)
+    await pressAction('Bevestigen')
     const group = screen.getByRole('group', { name: 'Bevestigen' })
     expect((within(group).getByLabelText('Mail sturen') as HTMLInputElement).checked).toBe(false)
     const run = within(group).getByRole('button', { name: 'Bevestigen' })
@@ -499,10 +509,10 @@ describe("the drawer's actions", () => {
 
   it('offers no action without a way to run it, nor on a model that declares none', () => {
     const { rerender } = render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onClose={() => undefined} />)
-    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
 
     rerender(<Drawer row={row(3, 'Calais')} columns={[]} onAction={vi.fn()} onClose={() => undefined} />)
-    expect(screen.queryByRole('button', { name: 'Sjabloon toepassen' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
   })
 })
 
@@ -519,8 +529,8 @@ describe("a person's link in the drawer", () => {
 
   it('shows no link controls without a linked dataset', () => {
     render(<Drawer row={row(3, 'Noor Claes')} columns={[]} onClose={() => undefined} />)
-    expect(screen.queryByRole('button', { name: 'Link kopiëren' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Nieuwe link' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Link kopiëren' })).toBeNull()
   })
 
   it('"Link kopiëren" reads the current link and copies it; "Nieuwe link" rotates and copies the new one', async () => {
@@ -528,17 +538,19 @@ describe("a person's link in the drawer", () => {
     Object.assign(navigator, { clipboard: { writeText } })
     remote.recordLink.mockResolvedValue(LINK)
     remote.rotateRecordLink.mockResolvedValue(`${LINK}-new`)
-    render(<Drawer row={row(3, 'Noor Claes')} columns={[]} recordLink="persoon" onClose={() => undefined} />)
+    const onSaid = vi.fn()
+    render(<Drawer row={row(3, 'Noor Claes')} columns={[]} recordLink="persoon" onSaid={onSaid} onClose={() => undefined} />)
+    expect(screen.getByRole('complementary', { name: 'Noor Claes' }).querySelector('.nv-dw-body')?.textContent).not.toContain('Link kopiëren')
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Link kopiëren' })))
+    await act(async () => { await pressAction('Link kopiëren') })
     expect(remote.recordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(LINK)
-    expect(screen.getByRole('status').textContent).toBe('Link gekopieerd')
+    expect(onSaid).toHaveBeenLastCalledWith('Link gekopieerd')
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Nieuwe link' })))
+    await act(async () => { await pressAction('Nieuwe link') })
     expect(remote.rotateRecordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(`${LINK}-new`)
-    expect(screen.getByRole('status').textContent).toBe('Nieuwe link gekopieerd; de vorige werkt niet meer')
+    expect(onSaid).toHaveBeenLastCalledWith('Nieuwe link gekopieerd; de vorige werkt niet meer')
   })
 })
 

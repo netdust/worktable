@@ -1,4 +1,5 @@
-import { configure, fireEvent, render } from '@testing-library/react'
+import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { expect } from 'vitest'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { Providers } from './ui/Providers'
 
@@ -31,4 +32,21 @@ export function typeKeys(text: string): void {
     fireEvent.keyDown(target, { key })
     fireEvent(target, new InputEvent('beforeinput', { data: key, inputType: 'insertText', bubbles: true, cancelable: true }))
   }
+}
+
+/** The drawer's record actions: opens the Acties menu in the head and presses one item. */
+export async function pressAction(name: string | RegExp): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: 'Acties' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name }))
+}
+
+/** What the drawer's Acties menu offers, read by opening it and closing it again; empty when there is no menu. */
+export async function actionsOffered(): Promise<string[]> {
+  const trigger = screen.queryByRole('button', { name: 'Acties' })
+  if (!trigger) return []
+  fireEvent.click(trigger)
+  const offered = (await screen.findAllByRole('menuitem')).map((item) => item.textContent ?? '')
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  return offered
 }

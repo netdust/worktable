@@ -14,6 +14,8 @@ interface Props {
   focusKey?: string | number
   /** The head line in place of the title: the drawer's kind, position and steps. */
   head?: ReactNode
+  /** Buttons after the head line, before the widen and close buttons: a drawer's record actions. */
+  tools?: ReactNode
   /** The panel widens over the work column, and Escape or the same button takes it back. */
   expandable?: boolean
   /** A key pressed anywhere in the head line, its close button too: a drawer's steps. */
@@ -24,7 +26,7 @@ interface Props {
 export const DrawerSlot = createContext<HTMLElement | null>(null)
 
 /** Beside the sheet, never over it: the sheet stays live. Closes on Escape, an open list inside first. */
-export function SidePanel({ label, onClose, children, focusOnOpen = true, focusKey, head, expandable = false, onHeadKey }: Props) {
+export function SidePanel({ label, onClose, children, focusOnOpen = true, focusKey, head, tools, expandable = false, onHeadKey }: Props) {
   const [wide, setWide] = useState(false)
   const close = useRef<HTMLButtonElement>(null)
   const slot = useContext(DrawerSlot)
@@ -46,6 +48,7 @@ export function SidePanel({ label, onClose, children, focusOnOpen = true, focusK
     >
       <header className="nv-drawer__head" onKeyDown={onHeadKey}>
         {head ?? <h2 className="nv-drawer__title">{label}</h2>}
+        {tools}
         {expandable && (
           <Button className="nv-drawer__tool" aria-label={t(wide ? 'narrow' : 'expand')} onPress={() => setWide(!wide)}>
             {wide ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}

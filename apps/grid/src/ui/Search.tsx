@@ -1,5 +1,5 @@
 import { Search as Glass } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Input, Keyboard, SearchField } from 'react-aria-components'
 import { t } from '../i18n'
 import type { Table } from './tables'
@@ -29,22 +29,31 @@ function jumps(tables: Table[], wanted: string): { key: string; name: string }[]
 /** ⌘K / Ctrl+K: the rows filter by title as you type, and a matching view is one click away. */
 export function Search({ query, onQuery, tables, onJump }: Props) {
   const input = useRef<HTMLInputElement>(null)
+  // Where the toolbar is narrow the field is an icon until asked for; by the stylesheet, so this only remembers the ask.
+  const [open, setOpen] = useState(false)
   const matches = jumps(tables, fold(query))
 
   useEffect(() => {
     const focus = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
+        setOpen(true)
         input.current?.focus()
       }
     }
     document.addEventListener('keydown', focus)
     return () => document.removeEventListener('keydown', focus)
   }, [])
+  useEffect(() => {
+    if (open) input.current?.focus()
+  }, [open])
 
   return (
-    <div className="nv-search">
-      <SearchField className="nv-search__field" aria-label={t('search')} value={query} onChange={onQuery}>
+    <div className="nv-search" data-open={open ? '' : undefined}>
+      <button type="button" className="nv-more nv-search__toggle" aria-label={t('search')} title={t('search')} onClick={() => setOpen(true)}>
+        <Glass size={16} aria-hidden="true" />
+      </button>
+      <SearchField className="nv-search__field" aria-label={t('search')} value={query} onChange={onQuery} onBlur={() => query === '' && setOpen(false)}>
         <Glass size={14} aria-hidden="true" />
         <Input ref={input} placeholder={t('search')} />
         <Keyboard className="nv-kbd">⌘K</Keyboard>

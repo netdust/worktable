@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Available, LinkItem, Model, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
+import { pressAction } from '../test-setup'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),
   records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), optionsFrom: vi.fn(),
@@ -26,28 +27,33 @@ const open = (r: Row, onDone: (() => Promise<Row | null>) | null = vi.fn(), m: M
   render(<DrawerWriteContext.Provider value={write}><Drawer row={r} columns={columns} model={m} onDone={onDone ?? undefined} onClose={() => undefined} /></DrawerWriteContext.Provider>)
 
 describe('the drawer’s buttons', () => {
-  it('shows the row’s marked buttons and no others', () => {
+  it('lists the row’s marked buttons and no others behind Acties, with no primary one in view', async () => {
     open(row(available(['klaar', 'Afronden'], ['weg', 'Weg'])))
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    expect(within(drawer).getAllByRole('button', { name: /^(Afronden|Weg)$/ }).map((b) => b.textContent)).toEqual(['Afronden', 'Weg'])
+    expect(within(drawer).queryByRole('button', { name: /^(Afronden|Weg)$/ })).toBeNull()
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Acties' }))
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual(['Afronden', 'Weg'])
   })
 
   it('shows none for a transition with only a label: the server marks no button for it', () => {
     open(row(available()))
     expect(screen.queryByRole('button', { name: 'Afronden' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
   })
 
   it('shows none where the host gives no way to re-read, as the matrix’s drawers', () => {
     open(row(available(['klaar', 'Afronden'])), null)
     expect(screen.queryByRole('button', { name: 'Afronden' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
   })
 
-  it('presses with the marks it was given and re-reads through onDone', () => {
+  it('presses with the marks it was given and re-reads through onDone', async () => {
     press.mockClear()
     const onDone = vi.fn()
     const marks = available(['klaar', 'Afronden'])
     open(row(marks), onDone)
-    fireEvent.click(screen.getByRole('button', { name: 'Afronden' }))
+    await pressAction('Afronden')
     expect(press).toHaveBeenCalledExactlyOnceWith(model.key, 1, marks, 'klaar', onDone)
   })
 
@@ -68,29 +74,49 @@ describe('the drawer’s buttons', () => {
     expect(press).toHaveBeenCalledExactlyOnceWith('tie', 9, item.available, 'skip', onDone)
   })
 
-  it('disables its buttons while a press is in flight, so a double click is one press', async () => {
+  it('presses one at a time while a press is in flight, so a double click is one press', async () => {
     let answer: () => void = () => undefined
     press.mockClear()
     press.mockImplementationOnce(() => new Promise<void>((resolve) => { answer = resolve }))
     open(row(available(['klaar', 'Afronden'], ['weg', 'Weg'])))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Afronden' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Afronden' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Weg' }))
+    await pressAction('Afronden')
+    await pressAction('Weg')
 
     expect(press).toHaveBeenCalledOnce()
-    expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', true)
     await act(async () => answer())
-    expect(screen.getByRole('button', { name: 'Weg' })).toHaveProperty('disabled', false)
+    await pressAction('Weg')
+    expect(press).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('the drawer body and its head', () => {
+  it('holds no record action in the body; the head has the primary button, and the menu lists the rest, Verwijderen last', async () => {
+    const marks: Available = { state: 'open', buttons: [{ to: 'ja', label: 'Bevestigen', primary: true }, { to: 'nee', label: 'Annuleren' }], actions: ['bundel'] }
+    const bundel = { name: 'bundel', label: 'Bundelen', input: {} }
+    const onAction = vi.fn(() => Promise.resolve())
+    render(<DrawerWriteContext.Provider value={write}>
+      <Drawer row={row(marks)} columns={columns} model={model} onDone={vi.fn()} actions={[bundel]} onAction={onAction} recordLink="persoon" onDelete={() => Promise.resolve()} onClose={() => undefined} />
+    </DrawerWriteContext.Provider>)
+    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
+    const body = drawer.querySelector('.nv-dw-body') as HTMLElement
+    expect(body.querySelector('.nv-dw-buttons, .nv-action, .nv-button--destructive')).toBeNull()
+    expect(within(body).queryByRole('button', { name: /Bevestigen|Annuleren|Bundelen|Link kopiëren|Nieuwe link|Verwijderen/ })).toBeNull()
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Acties' }))
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Annuleren', 'Bundelen', 'Link kopiëren', 'Nieuwe link', 'Verwijderen'])
   })
 })
 
 describe('a primary button', () => {
-  it('renders filled, and the others stay secondary', () => {
+  it('renders filled in the head, and the others wait behind Acties', async () => {
     const marks: Available = { state: 'open', buttons: [{ to: 'ja', label: 'Bevestigen', primary: true }, { to: 'nee', label: 'Annuleren' }], actions: [] }
     open(row(marks))
-    expect(screen.getByRole('button', { name: 'Bevestigen' }).className).toContain('nv-button--primary')
-    expect(screen.getByRole('button', { name: 'Annuleren' }).className).toContain('nv-button--secondary')
+    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('.nv-drawer__head') as HTMLElement
+    expect(within(head).getByRole('button', { name: 'Bevestigen' }).className).toContain('nv-button--primary')
+    expect(screen.queryByRole('button', { name: 'Annuleren' })).toBeNull()
+    fireEvent.click(within(head).getByRole('button', { name: 'Acties' }))
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Annuleren'])
   })
 })
 
@@ -116,12 +142,12 @@ describe('a link that declares no meter, in the drawer head', () => {
 })
 
 describe('a lifecycle with buttons, in the drawer', () => {
-  it('shows its status read-only, and its buttons stay', () => {
+  it('shows its status read-only, and its buttons stay, behind Acties', () => {
     const stateful = { ...model, lifecycle_buttons: true as const }
     const cols = columnsFor(stateful, { ...planning, columns: undefined }, true)
     render(<DrawerWriteContext.Provider value={write}><Drawer row={row(available(['klaar', 'Afronden']))} columns={cols} model={stateful} onDone={vi.fn()} onClose={() => undefined} /></DrawerWriteContext.Provider>)
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+    expect(within(drawer).getByRole('button', { name: 'Acties' })).toBeTruthy()
     expect(within(drawer).queryByRole('combobox')).toBeNull()
     expect(within(drawer).queryByRole('listbox')).toBeNull()
     expect(cols.find((c) => c.id === 'status')?.editable).toBe(false)

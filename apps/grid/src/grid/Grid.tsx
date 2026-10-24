@@ -1,4 +1,3 @@
-import { Button } from 'react-aria-components'
 import { createPortal } from 'react-dom'
 import { type ClipboardEvent, type CSSProperties, type ReactNode, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
@@ -423,34 +422,12 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id, undefined, () => setDrawer((now) => (now === open.id ? null : now)))}
           onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then(show) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
-          editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
+          onDelete={model.deletable ? () => store.remove(open.id) : undefined} onSaid={onNotice} />}
       </div>
       </>
       )}
     </div>
     </RelationContext.Provider>
     </LinksContext.Provider>
-  )
-}
-
-/** Two presses: Verwijderen, then Zeker?. Keyed by its row, so leaving the drawer starts it over. */
-function DeleteRow({ onDelete }: { onDelete: () => Promise<void> }) {
-  const [step, setStep] = useState<'ask' | 'sure' | 'sent'>('ask')
-  const clicks = useRef(0)
-  const press = () => {
-    // A double click's second click is not a confirmation.
-    const double = clicks.current > 1
-    clicks.current = 0
-    if (step === 'ask') return setStep('sure')
-    if (step !== 'sure' || double) return
-    setStep('sent')
-    void onDelete().finally(() => setStep('ask'))
-  }
-  return (
-    <div aria-live="polite" onMouseDownCapture={(event) => { clicks.current = event.detail }}>
-      <Button className="nv-button nv-button--destructive nv-button--sm" isDisabled={step === 'sent'} onPress={press}>
-        {t(step === 'ask' ? 'delete' : 'deleteConfirm')}
-      </Button>
-    </div>
   )
 }

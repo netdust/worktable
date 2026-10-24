@@ -182,7 +182,8 @@ describe('a list tile', () => {
       showWith(models)
       fireEvent.click(await screen.findByRole('button', { name: 'Open Rider versturen' }))
       const drawer = screen.getByRole('complementary', { name: 'Rider versturen' })
-      expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Acties' }))
+      expect(await screen.findByRole('menuitem', { name: 'Afronden' })).toBeTruthy()
     })
 
     it('over a query does not', async () => {
@@ -276,6 +277,19 @@ describe('the followed runs', () => {
     await waitFor(() => expect(api.rowOf).toHaveBeenCalledWith('werklijst', 1))
     await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
     expect(write.fresh).toHaveBeenCalled()
+  })
+
+  it('a quick create refused service_only says it cannot be added', async () => {
+    api.create.mockRejectedValue({ code: 'service_only', message: 'Only a service writes it.' })
+    const taak = { key: 'taak', label: 'Taken', title_label: 'Titel', title_readonly: false, fields: {} } as unknown as Model
+    const layout = { sections: [], actions: [{ create: 'taak', label: 'Nieuwe taak' }] }
+    render(<Dashboard dashboard={{ ...dashboard([]), layout } as unknown as SavedView} views={[conflicten, lijst]} models={{ ...models, taak }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuwe taak' }))
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'Bellen' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Aanmaken' })))
+    const said = (await screen.findByRole('alert')).textContent ?? ''
+    expect(said).toBe('Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.')
+    expect(said).not.toContain('wijzigen')
   })
 
   it('a quick create tells the follower the record it made', async () => {

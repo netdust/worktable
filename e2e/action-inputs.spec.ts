@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { pressInMenu } from './drawer'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -159,6 +160,7 @@ const undoOf = (page: Page) =>
 
 async function openDrawer(page: Page, naam: string) {
   await named(page, naam).getByRole('button', { name: 'Openen' }).click()
+  await pressInMenu(page, ACTION)
   await expect(actionOf(page)).toBeVisible()
 }
 

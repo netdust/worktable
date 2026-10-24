@@ -197,7 +197,7 @@ function RunLines() {
 export function Dock({ onSlot, onToast }: { onSlot: (slot: HTMLElement | null) => void; onToast?: (slot: HTMLElement | null) => void }): ReactNode {
   return (
     <div className="nv-dock">
-      <div className="nv-dock__panel" ref={onToast} />
+      <div className="nv-dock__panel" ref={onToast} data-react-aria-top-layer />
       <div className="nv-dock__panel" ref={onSlot} />
       <RunLines />
     </div>

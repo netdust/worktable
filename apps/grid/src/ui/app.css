@@ -409,6 +409,11 @@
   min-height: 0;
 }
 
+/* The work column is what the toolbar measures against: a drawer beside it narrows it, the window does not. */
+.nv-main {
+  container: nvmain / inline-size;
+}
+
 /* When the name and the end do not both fit (a drawer open on a narrow screen), the end takes a second row. */
 .nv-toolbar {
   display: flex;
@@ -1020,6 +1025,27 @@
   position: relative;
   flex: 0 1 226px;
   min-width: 136px;
+}
+
+#root .nv-search .nv-search__toggle {
+  display: none;
+}
+
+/* A narrow work column, a drawer open beside it: the search is an icon until asked for. */
+@container nvmain (max-width: 700px) {
+  .nv-search:not([data-open]) {
+    flex: none;
+    min-width: 0;
+  }
+
+  #root .nv-search:not([data-open]) .nv-search__field {
+    display: none;
+  }
+
+  #root .nv-search:not([data-open]) .nv-search__toggle.nv-more {
+    display: inline-flex;
+    height: 36px;
+  }
 }
 
 /* The placeholder must read whole beside the ⌘K hint. */
@@ -4160,6 +4186,20 @@
   background: var(--color-bg-canvas);
 }
 
+
+.nv-menu__item--danger {
+  color: var(--color-danger-fg);
+}
+
+/* Popovers a drawer's menu opens: an action's inputs, the second press of a delete. */
+.nv-dw-ask {
+  padding: 8px;
+  outline: none;
+}
+
+.nv-dw-ask .nv-action {
+  padding: 4px;
+}
 
 .nv-menu__item[data-disabled] {
   opacity: 0.6;

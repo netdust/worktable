@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { pressInMenu } from './drawer'
 import { openView } from './tree'
 
 const FICHE = 'http://127.0.0.1:5175'
@@ -86,7 +87,7 @@ test('fiche-edits', async ({ page }) => {
 async function pressDelete(page: Page, view: string, title: string) {
   await open(page, view)
   await row(page, title).getByRole('button', { name: 'Openen' }).click()
-  await page.getByRole('button', { name: 'Verwijderen' }).click()
+  await pressInMenu(page, 'Verwijderen')
   const answered = page.waitForResponse((res) => res.request().method() === 'DELETE')
   await page.getByRole('button', { name: 'Zeker?' }).click()
   return answered

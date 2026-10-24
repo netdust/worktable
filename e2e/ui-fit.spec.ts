@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { pressInMenu } from './drawer'
 import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek, pickIn } from './tree'
@@ -411,6 +412,7 @@ test('drawer-picker-keeps-its-frame @e2e', async ({ page }) => {
   const id = ((await answer.json()) as { id: number }).id
   try {
     await page.locator('tbody tr.nv-tr[data-title="Kader e2e"]').getByRole('button', { name: 'Openen' }).click()
+    await pressInMenu(page, 'Sjabloon toepassen')
     const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
     const open = async () => {
       await action.getByRole('button', { name: /^Sjabloon: / }).click()

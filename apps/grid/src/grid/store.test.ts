@@ -425,6 +425,23 @@ describe('a new row', () => {
     expect(store.getState().rows[0]).toMatchObject({ id: -1, fields: { activity: [102], person: [5] } })
   })
 
+  it('a create refused service_only says it cannot be added, a draft’s commit too; an edit keeps its own words', async () => {
+    const { api, store } = setup()
+    const refused = { code: 'service_only', message: 'Only a service writes it.' }
+    api.create.mockRejectedValue(refused)
+    api.update.mockRejectedValueOnce(refused)
+
+    await store.create({ title: 'Nieuw' })
+    expect(store.getState().error?.message).toBe('Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.')
+
+    store.draft({ date: '2026-05-18' }, ['title'], [])
+    await store.apply({ id: -1, field: 'title', value: 'Nieuw' })
+    expect(store.getState().error?.message).toBe('Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.')
+
+    await store.apply({ id: calais[0].id, field: 'title', value: 'Anders' })
+    expect(store.getState().errors[`${calais[0].id}:title`]?.message).toContain('wijzigen')
+  })
+
   it('a refusal of an empty field asks for that field again first', async () => {
     const { api, store } = setup()
     api.create.mockRejectedValueOnce({ code: 'title_required', message: 'A title is required.' })

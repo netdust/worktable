@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { type APIRequestContext, expect, type Locator, type Page, type Route, request, test } from '@playwright/test'
 import { STUDIO, STUDIO_SERVICE, state } from './auth'
 import { card, lane, orders } from './board'
+import { offered, pressInMenu } from './drawer'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -424,13 +425,10 @@ test.describe('studio', () => {
   }) => {
     const api = page.request
     await open(page, 'Sites', 'Sites')
-    const site = await drawerOf(page, 'voorbeeld-site')
-    await expect(site.getByRole('group', { name: 'Gezondheid checken' })).toBeAttached()
+    await drawerOf(page, 'voorbeeld-site')
+    expect(await offered(page)).toContain('Gezondheid checken')
 
-    await site
-      .getByRole('group', { name: 'Smoketest draaien' })
-      .getByRole('button', { name: 'Smoketest draaien' })
-      .click()
+    await pressInMenu(page, 'Smoketest draaien')
 
     const drawer = page.getByRole('complementary', { name: 'Smoketest · voorbeeld-site' })
     await expect(drawer).toBeVisible()
@@ -510,7 +508,7 @@ test.describe('studio', () => {
     await expect(drawer.getByText('Bevestigd', { exact: true })).toBeVisible()
     await expect(drawer.getByRole('button', { name: 'Niet nu' })).toHaveCount(0)
     await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0)
-    await expect(drawer.getByRole('button', { name: 'Annuleren' })).toBeVisible()
+    await expect.poll(() => offered(page)).toContain('Annuleren')
     await expect.poll(() => countIn(page, 'Te bevestigen')).toBe(before - 1)
     expect((await rowOf(api, 'actie', 1)).status).toBe('bevestigd')
     await shot(page, 'na-bevestigen')
@@ -693,7 +691,7 @@ test.describe('studio, the editor', () => {
     await open(page, 'Opdrachten', 'Opdrachten')
     const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-blog')
     await expect(siteLine(drawer, 'voorbeeld-blog').getByRole('button', { name: 'Niet nu' })).toBeVisible()
-    await expect(drawer.getByRole('button', { name: 'Annuleren' })).toBeVisible()
+    await expect.poll(() => offered(page)).toContain('Annuleren')
     await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0)
     await shot(page, 'redacteur-drawer')
 
@@ -737,7 +735,7 @@ test.describe('studio, the hunt', () => {
     await run(api, 'gezondheidscheck', [3])
     await open(page, 'Opdrachten', 'Opdrachten')
     drawer = await drawerOf(page, 'Gezondheidscheck · voorbeeld-site')
-    await drawer.getByRole('button', { name: 'Annuleren' }).click()
+    await pressInMenu(page, 'Annuleren')
     await expect(drawer.getByText('Geannuleerd', { exact: true })).toBeVisible()
     await expect(siteLine(drawer, 'voorbeeld-site').getByText('Wacht', { exact: true })).toHaveCount(0)
     await expect(siteLine(drawer, 'voorbeeld-site')).toContainText('Niet gestart')
@@ -783,9 +781,9 @@ test.describe('studio, the hunt', () => {
     const api = page.request
     const { actie } = await run(api, 'malwarescan', [3])
     await open(page, 'Opdrachten', 'Opdrachten')
-    const drawer = await drawerOf(page, 'Malwarescan · voorbeeld-site')
-    await drawer.getByRole('button', { name: 'Verwijderen' }).click()
-    await drawer.getByRole('button', { name: 'Zeker?' }).click()
+    await drawerOf(page, 'Malwarescan · voorbeeld-site')
+    await pressInMenu(page, 'Verwijderen')
+    await page.getByRole('button', { name: 'Zeker?' }).click()
     const refusal = page.getByRole('status').filter({ hasText: 'Niet opgeslagen' })
     await expect(refusal).toBeVisible()
     await shot(page, 'opdracht-verwijderen')
@@ -965,7 +963,7 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(card(page, 1)).toBeFocused()
   })
 
-  test('drawer-reads-right @e2e: Bevestigen is the filled button beside a quiet Annuleren, no live mark shows while it waits on Bevestigen, and a site’s actions sit at its head', async ({
+  test('drawer-reads-right @e2e: Bevestigen is the filled button in the head with Annuleren in Acties, no live mark shows while it waits on Bevestigen, and a site’s actions sit at its head', async ({
     page,
   }) => {
     const api = page.request
@@ -974,19 +972,58 @@ test.describe('studio-polish, what a person reads', () => {
       await open(page, 'Opdrachten', 'Opdrachten')
       const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
       await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
-      await expect(drawer.getByRole('button', { name: 'Annuleren' })).toHaveClass(/nv-button--secondary/)
+      await expect.poll(() => offered(page)).toContain('Annuleren')
       await expect(drawer.getByText('Volgt live')).toHaveCount(0)
       await expect(drawer.getByText('Bezig…')).toHaveCount(0)
       await shot(page, 'opdracht-drawer-bevestigen')
 
       await open(page, 'Sites', 'Sites')
       const site = await drawerOf(page, 'voorbeeld-site')
-      for (const action of ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien'])
-        await expect(site.getByRole('group', { name: action })).toBeInViewport()
+      await expect(site.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toBeInViewport()
+      expect(await offered(page)).toEqual(
+        expect.arrayContaining(['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien']),
+      )
       await shot(page, 'site-drawer-acties-boven')
     } finally {
       await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
     }
+  })
+
+  test('drawer-actions-in-the-bar @e2e: an opdracht waiting on Bevestigen shows it in the drawer head, Annuleren sits in Acties, and the body holds no action', async ({
+    page,
+  }) => {
+    const api = page.request
+    const { actie } = await preview(api, [3])
+    try {
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
+      const head = drawer.locator('.nv-drawer__head')
+      await expect(head.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
+      await expect(drawer.locator('.nv-dw-body').getByRole('button', { name: /Bevestigen|Annuleren/ })).toHaveCount(0)
+      await head.getByRole('button', { name: 'Acties' }).click()
+      await expect(page.getByRole('menuitem', { name: 'Annuleren' })).toBeVisible()
+      await shot(page, 'opdracht-acties-menu')
+    } finally {
+      await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
+    }
+  })
+
+  test('toolbar-at-1280 @e2e: with a drawer open at 1280 px the toolbar keeps its one row', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await open(page, 'Sites', 'Sites')
+    const toolbar = page.locator('.nv-toolbar')
+    const alone = (await toolbar.boundingBox())?.height
+    await shot(page, 'toolbar-1280-alone')
+    await page
+      .getByRole('row')
+      .filter({ has: page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }) })
+      .getByRole('button', { name: 'Openen' })
+      .click()
+    await expect(page.getByRole('complementary', { name: 'testmans-winkel' })).toBeVisible()
+    await shot(page, 'toolbar-1280-drawer')
+    expect((await toolbar.boundingBox())?.height).toBe(alone)
+    await page.keyboard.press('Control+k')
+    await expect(page.getByRole('searchbox', { name: 'Zoeken' })).toBeFocused()
   })
 
   test('toggle-cell-fits @e2e: a switch cell holds its switch and its label in the column’s default width, no dot', async ({

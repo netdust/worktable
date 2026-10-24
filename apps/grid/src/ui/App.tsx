@@ -459,7 +459,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         runs.created(dataset, row)
         reloadView()
       },
-      (error: ApiError) => notify({ message: errorText(error.code, error.message) }),
+      (error: ApiError) => notify({ message: errorText(error.code, error.message, true) }),
     )
 
   // A dashboard's title line: the space it reads and this week, as the prototype's.

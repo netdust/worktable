@@ -104,7 +104,7 @@ export function QuickCreate({ label, model, tables, scope, window = null, preset
       },
       (error: ApiError) => {
         setBusy(false)
-        setRefusal(errorText(error.code, error.message))
+        setRefusal(errorText(error.code, error.message, true))
       },
     )
   }
