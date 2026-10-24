@@ -3503,6 +3503,12 @@
   display: contents;
 }
 
+.nv-dock .nv-toast {
+  position: static;
+  transform: none;
+  pointer-events: auto;
+}
+
 .nv-dock .nv-selection--floating {
   position: static;
   width: max-content;

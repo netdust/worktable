@@ -315,6 +315,13 @@ test.describe('studio', () => {
         'true',
       )
       await expect(page.locator('tr[data-running]')).toHaveCount(1)
+      const toast = page.getByRole('status', { name: 'Gezondheid checken aangevraagd.' })
+      await expect(toast).toBeVisible()
+      const [line, notice] = [
+        await page.getByRole('region', { name: 'Gezondheid checken · Aangevraagd' }).boundingBox(),
+        await toast.boundingBox(),
+      ]
+      expect(line && notice && notice.y + notice.height <= line.y).toBe(true)
       await shot(page, 'opdracht-loopt-in-dock')
 
       await dashboard.click()

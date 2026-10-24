@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Keyboard } from 'react-aria-components'
 import { t } from '../i18n'
 import type { StoreState } from '../grid/store'
+import { ToastSlot } from './runs'
 
 const SHOWN_FOR = 6000
 
@@ -55,7 +57,13 @@ export function useNotice(): [Notice | null, (notice: Notice) => void] {
 }
 
 /** After each saved change, for a few seconds: what happened and the way back. */
-export function Toast({ state, onUndo, onRedo, notice }: Props) {
+export function Toast(props: Props) {
+  const slot = useContext(ToastSlot)
+  const body = <ToastBody {...props} />
+  return slot ? createPortal(body, slot) : body
+}
+
+function ToastBody({ state, onUndo, onRedo, notice }: Props) {
   const [shown, setShown] = useState(false)
   const was = useRef(state?.save)
 

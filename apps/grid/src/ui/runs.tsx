@@ -54,6 +54,8 @@ export const useRuns = (): Runs => useContext(RunsContext)
 
 /** Where the grid puts its selection panel, above the run lines. */
 export const DockSlot = createContext<HTMLElement | null>(null)
+/** Where the toast goes while the dock shows: above everything else in it, so none overlaps. */
+export const ToastSlot = createContext<HTMLElement | null>(null)
 
 const keyOf = (dataset: string, id: number) => `${dataset}:${id}`
 
@@ -191,10 +193,11 @@ function RunLines() {
   )
 }
 
-/** The bottom of the work column: the grid's selection panel on top, the lines of running requests below it. */
-export function Dock({ onSlot }: { onSlot: (slot: HTMLElement | null) => void }): ReactNode {
+/** The bottom of the work column: the toast, then the grid's selection panel, then the lines of running requests. */
+export function Dock({ onSlot, onToast }: { onSlot: (slot: HTMLElement | null) => void; onToast?: (slot: HTMLElement | null) => void }): ReactNode {
   return (
     <div className="nv-dock">
+      <div className="nv-dock__panel" ref={onToast} />
       <div className="nv-dock__panel" ref={onSlot} />
       <RunLines />
     </div>

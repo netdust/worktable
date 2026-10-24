@@ -43,7 +43,7 @@ import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
 import { usePageUndo } from './usePageUndo'
 import { DrawerSlot } from './SidePanel'
-import { Dock, DockSlot, RunsContext, useRunFollower } from './runs'
+import { Dock, DockSlot, RunsContext, ToastSlot, useRunFollower } from './runs'
 import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
 import { insightOf } from './insight'
@@ -406,6 +406,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     readCounts(() => true)
   }, [runs.ended])
   const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null)
+  const [toastSlot, setToastSlot] = useState<HTMLElement | null>(null)
   // A skin with no draft row to type in asks for its new row in the dashboard's quick create.
   const quickAdd = !model?.query && (view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' || Boolean(calendar))
   const writable = view ? served?.writable[view.model] === true : false
@@ -654,6 +655,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     <DrawerSlot.Provider value={drawerSlot}>
     <RunsContext.Provider value={runs}>
     <DockSlot.Provider value={dockSlot}>
+    <ToastSlot.Provider value={toastSlot}>
     <SchemaContext.Provider value={served}>
     <DrawerWriteContext.Provider value={drawerWrite}>
     <div className="nv-app" ref={frame}>
@@ -728,7 +730,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : (
             <Sheet hasView={view !== undefined} result={result} />
           )}
-          <Dock onSlot={setDockSlot} />
+          <Dock onSlot={setDockSlot} onToast={setToastSlot} />
         </section>
         {historyOpen && view && (
           <HistoryPanel key={`${view.key}:${asks}:${windowKey}:${scopeId}`} load={() => readHistory(view, window, scope ?? null, layout)} fields={model?.fields}
@@ -761,6 +763,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     </div>
     </DrawerWriteContext.Provider>
     </SchemaContext.Provider>
+    </ToastSlot.Provider>
     </DockSlot.Provider>
     </RunsContext.Provider>
     </DrawerSlot.Provider>
