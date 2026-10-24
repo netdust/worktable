@@ -1070,7 +1070,8 @@ test.describe('studio-polish, what a person reads', () => {
       await landing(page)
       await expect(tile(page, 'Storing')).toBeVisible()
     } finally {
-      if (!(await views()).some((v) => v.name === 'Storing')) await api.post(`/api/views/${seeded?.id}/restore`, { data: {} })
+      if (!(await views()).some((v) => v.name === 'Storing'))
+        await api.post(`/api/views/${seeded?.id}/restore`, { data: {} })
       seed()
     }
   })
