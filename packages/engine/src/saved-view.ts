@@ -1,5 +1,9 @@
 import { defineDataset } from './declare'
 
+/** What ties a system view to its seed through renames: the seed's name and source when the view was written. */
+export const seedKey = (name: string, source: string | null | undefined): string =>
+  JSON.stringify([name, source ?? null])
+
 export const savedView = defineDataset({
   name: 'saved_view',
   label: 'Saved view',
@@ -40,5 +44,6 @@ export const savedView = defineDataset({
     format: { type: 'text', label: 'Format', default: 'html', options: { html: 'html', ical: 'ical', pdf: 'pdf' } },
     public: { type: 'boolean', label: 'Public', default: false },
     for_owners: { type: 'boolean', label: 'For owners', default: false },
+    seed_key: { type: 'text', label: 'Seed key', nullable: true },
   },
 })

@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { type Actor, type ColumnDecl, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
 import type { AuthEnv } from '../src/auth'
 import { silentMailer } from '../src/mailer'
+import { keySeeded } from '../src/migrate'
 import { viewRoutes } from '../src/views'
 import { contents, type Sent, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
@@ -133,18 +134,32 @@ describe('views denials: another owner (attack 1)', () => {
 })
 
 describe('views denials: forged ownership and audit (attack 2)', () => {
-  const forged = { owner_id: 7, id: 99, deleted_at: '2026-01-01', share_token: 'tok', public: true, scope: 'x' }
+  const forged = {
+    owner_id: 7,
+    id: 99,
+    deleted_at: '2026-01-01',
+    share_token: 'tok',
+    public: true,
+    scope: 'x',
+    seed_key: '["Alles","taak"]',
+  }
 
-  test('a POST cannot set owner, id, deleted_at, share_token, public or scope', async () => {
+  test('a POST cannot set owner, id, deleted_at, share_token, public, scope or seed_key', async () => {
     const res = await request('POST', '/api/views', body({ ...NEW, ...forged }))
     expect(res.status).toBe(201)
     expect(res.body).toMatchObject({ id: 6, owner_id: ME, mine: true })
-    const stored = sqlite.query('SELECT owner_id, deleted_at, share_token, public FROM saved_view WHERE id = 6').get()
-    expect(stored).toEqual({ owner_id: ME, deleted_at: null, share_token: null, public: 0 })
+    const sql = 'SELECT owner_id, deleted_at, share_token, public, seed_key FROM saved_view WHERE id = 6'
+    expect(sqlite.query(sql).get()).toEqual({
+      owner_id: ME,
+      deleted_at: null,
+      share_token: null,
+      public: 0,
+      seed_key: null,
+    })
     expect(sqlite.query('SELECT COUNT(*) AS n FROM saved_view WHERE id = 99').get()).toEqual({ n: 0 })
   })
 
-  test('a PATCH of only forged fields changes nothing', async () => {
+  test('a PATCH of only forged fields, seed_key too, changes nothing', async () => {
     const before = state()
     const res = await request('PATCH', `/api/views/${SEEDED}`, body(forged))
     expect(res.status).toBe(200)
@@ -330,6 +345,8 @@ describe('views', () => {
         )
         .run().lastInsertRowid,
     )
+    // testEngine runs no migrate, so the raw rows are keyed the way a migrate would.
+    keySeeded(fresh, declared)
     const app = testEngine(fresh, declared)
     const { body } = await send(app, await signIn(app))('GET', '/api/views')
     expect(body.views.map((v: { id: number }) => v.id)).toEqual([later, SEEDED, gedeeld, undeclared, onPerStatus])

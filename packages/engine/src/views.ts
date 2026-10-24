@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import type { Context, Hono } from 'hono'
 import { forbid, may, readable } from './access'
 import { type AuthEnv, secret, sha256 } from './auth'
-import { layoutOf } from './dashboard'
+import { layoutOf, tileViews } from './dashboard'
 import type { Actor, DashboardLayout, Domain, SavedViewSeed } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
@@ -12,17 +12,18 @@ import { ApiError, keysProblem, parseRowsParams } from './params'
 import { checkLimits } from './rate-limit'
 import { type Source, sourceOf } from './registry'
 import { matrixOf, readRows } from './rows'
-import { savedView } from './saved-view'
+import { savedView, seedKey } from './saved-view'
 import { tableOf } from './tables'
 import { bodyOf, revise, type Store } from './writes'
 
-export type SavedViewRow = Omit<SavedViewSeed, 'source_type' | 'source' | 'layout'> & {
+export type SavedViewRow = Omit<SavedViewSeed, 'source_type' | 'source' | 'layout' | 'locked'> & {
   id: number
   source_type: 'dataset' | 'query' | null
   source: string | null
   layout: DashboardLayout | null
 }
 export type ViewOut = SavedViewRow & {
+  gone_views?: number[]
   shared: boolean
   public: boolean
   for_owners: boolean
@@ -66,7 +67,7 @@ export function viewOf(raw: Raw): SavedViewRow {
 /** What matches a seeded view to its row: its name and source, a dashboard's source being none. */
 export const viewKey = (name: string, source: string | null | undefined): string => `${name}\u0000${source ?? ''}`
 
-// Seeded views belong to no account: read-only for everyone, copied by a plain POST.
+// Seeded views belong to no account: a human administrator changes an unlocked one, everyone else copies it by a plain POST.
 export const SYSTEM_OWNER = -1
 export const SYSTEM: Actor = { id: SYSTEM_OWNER, role: 'administrator', subject: null }
 
@@ -79,10 +80,22 @@ const humanAdmin = (actor: Actor): boolean => actor.role === 'administrator' && 
 const teamDashboard = (raw: Raw, actor: Actor): boolean =>
   raw.skin === 'dashboard' && raw.shared === 1 && raw.owner_id !== SYSTEM_OWNER && humanAdmin(actor)
 
-function outOf(raw: Raw, actor: Actor): ViewOut {
+// Read-only to everyone: locked by its seed, or no seed any more to say otherwise.
+function lockedSeed(raw: Raw, domain: Domain): boolean {
+  if (raw.owner_id !== SYSTEM_OWNER) return false
+  const seed = domain.views.find((v) => seedKey(v.name, v.source) === raw.seed_key)
+  return seed === undefined || seed.locked === true
+}
+
+const teamSeed = (raw: Raw, actor: Actor, domain: Domain): boolean =>
+  raw.owner_id === SYSTEM_OWNER && humanAdmin(actor) && !lockedSeed(raw, domain)
+
+function outOf(raw: Raw, actor: Actor, domain: Domain): ViewOut {
   const mine = raw.owner_id === actor.id
   const editable =
-    (mine && ((!isPublic(raw) && !isForOwners(raw)) || actor.role === 'administrator')) || teamDashboard(raw, actor)
+    (mine && ((!isPublic(raw) && !isForOwners(raw)) || actor.role === 'administrator')) ||
+    teamDashboard(raw, actor) ||
+    teamSeed(raw, actor, domain)
   return {
     ...viewOf(raw),
     shared: raw.shared === 1,
@@ -222,10 +235,13 @@ function viewRaw(sqlite: Database, id: number, includeDeleted: boolean): Raw | n
   return sqlite.query(`SELECT * FROM saved_view WHERE id = ?${live}`).get(id) as Raw | null
 }
 
-export function ownedView(sqlite: Database, id: number, actor: Actor, includeDeleted = false): Raw {
+export function ownedView(sqlite: Database, domain: Domain, id: number, actor: Actor, includeDeleted = false): Raw {
   const raw = viewRaw(sqlite, id, includeDeleted)
   if (!raw) throw unknownView(id)
-  if (raw.owner_id === SYSTEM_OWNER) throw new ApiError(403, 'read_only_view', `view ${id} is read-only; save a copy`)
+  if (raw.owner_id === SYSTEM_OWNER) {
+    if (!teamSeed(raw, actor, domain)) throw new ApiError(403, 'read_only_view', `view ${id} is read-only; save a copy`)
+    return raw
+  }
   if (raw.owner_id !== actor.id && !teamDashboard(raw, actor)) {
     if (raw.shared === 1 && raw.deleted_at === null)
       throw new ApiError(403, 'not_owner', `view ${id} belongs to someone else`)
@@ -298,6 +314,15 @@ function patchOf(body: Record<string, unknown>): Record<string, unknown> {
   return body
 }
 
+// A dashboard's tiles that name a deleted view; the layout itself stays as stored.
+function withGone(sqlite: Database, out: ViewOut): ViewOut {
+  if (out.skin !== 'dashboard' || !out.layout) return out
+  const named = [...new Set(tileViews(out.layout))]
+  if (named.length === 0) return { ...out, gone_views: [] }
+  const sql = `SELECT id FROM saved_view WHERE deleted_at IS NOT NULL AND id IN (${named.map(() => '?').join(', ')}) ORDER BY id`
+  return { ...out, gone_views: (sqlite.query(sql).all(...named) as { id: number }[]).map((row) => row.id) }
+}
+
 function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
   const sql = 'SELECT * FROM saved_view WHERE deleted_at IS NULL AND (owner_id = ? OR shared = 1) ORDER BY id'
   // A dashboard has no source; it is never listed to an owner (attack 1).
@@ -307,15 +332,14 @@ function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
     return source !== null && readable(actor, source)
   }
   return seedOrdered(domain, (sqlite.query(sql).all(actor.id) as Raw[]).filter(onReadable)).map((raw) =>
-    outOf(raw, actor),
+    withGone(sqlite, outOf(raw, actor, domain)),
   )
 }
 
 // The system's seeded views come first, in the order the domain declares them; every other view follows by id.
 function seedOrdered(domain: Domain, rows: Raw[]): Raw[] {
-  const declared = new Map(domain.views.map((seed, at) => [viewKey(seed.name, seed.source), at]))
-  const at = (raw: Raw) =>
-    raw.owner_id === SYSTEM_OWNER ? declared.get(viewKey(raw.name as string, raw.source as string | null)) : undefined
+  const declared = new Map(domain.views.map((seed, at) => [seedKey(seed.name, seed.source), at]))
+  const at = (raw: Raw) => (raw.owner_id === SYSTEM_OWNER ? declared.get(raw.seed_key as string) : undefined)
   const seeded = rows.filter((raw) => at(raw) !== undefined)
   seeded.sort((a, b) => (at(a) as number) - (at(b) as number))
   return [...seeded, ...rows.filter((raw) => at(raw) === undefined)]
@@ -328,7 +352,7 @@ function changing(actor: Actor): Actor {
 
 export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
   const write = <T>(work: () => T): T => sqlite.transaction(work).immediate()
-  const outById = (id: number, actor: Actor): ViewOut => outOf(ownedView(sqlite, id, actor), actor)
+  const outById = (id: number, actor: Actor): ViewOut => outOf(ownedView(sqlite, domain, id, actor), actor, domain)
 
   app.get('/views', (c) => c.json({ views: listViews(sqlite, domain, c.get('actor')) }))
 
@@ -344,8 +368,10 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
     const id = viewId(c.req.param('id'))
     const patch = patchOf(await bodyOf(c))
     write(() => {
-      const current = ownedView(sqlite, id, actor)
-      const next = stored(viewBody({ ...outOf(current, actor), ...patch }, domain, false, { sqlite, actor }))
+      const current = ownedView(sqlite, domain, id, actor)
+      // Unsharing it would hide it from every list, its administrator's too.
+      if (current.owner_id === SYSTEM_OWNER && Object.hasOwn(patch, 'shared')) throw bad('a seeded view stays shared')
+      const next = stored(viewBody({ ...outOf(current, actor, domain), ...patch }, domain, false, { sqlite, actor }))
       // A view for owners must not gain a hidden column later (attack 13).
       const problem = isForOwners(current) ? forOwnersProblem(domain, { ...current, ...next }) : null
       if (problem) throw problem
@@ -359,14 +385,14 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
     const id = viewId(c.req.param('id'))
     // A delete also revokes the share token and the owners' access, so a restore never brings either back.
     const gone = { deleted_at: new Date().toISOString(), public: 0, share_token: null, for_owners: 0 }
-    write(() => save(sqlite, actor, id, gone, ownedView(sqlite, id, actor)))
+    write(() => save(sqlite, actor, id, gone, ownedView(sqlite, domain, id, actor)))
     return c.json({ id })
   })
 
   app.post('/views/:id/restore', (c) => {
     const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
-    write(() => save(sqlite, actor, id, { deleted_at: null }, ownedView(sqlite, id, actor, true)))
+    write(() => save(sqlite, actor, id, { deleted_at: null }, ownedView(sqlite, domain, id, actor, true)))
     return c.json(outById(id, actor))
   })
 }

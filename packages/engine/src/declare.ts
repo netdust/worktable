@@ -261,6 +261,8 @@ export interface SavedViewSeed {
   group_by: string | null
   visible_fields: string[]
   layout?: DashboardLayout
+  /** Read-only to everyone and brought up to its declaration by the seed; unlocked, it is a team view. */
+  locked?: boolean
 }
 
 export interface Domain {
