@@ -355,10 +355,12 @@ test.describe('studio', () => {
       const waiting = page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
       await expect(waiting).toBeVisible({ timeout: 15_000 })
       // The table's last rows stay reachable under the dock.
-      const padding = await page
-        .locator('.nv-scroll')
-        .evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingBottom))
-      expect(padding).toBeGreaterThanOrEqual(90)
+      const room = await page.evaluate(() => ({
+        dock: (document.querySelector('.nv-dock') as HTMLElement).offsetHeight,
+        padding: Number.parseFloat(getComputedStyle(document.querySelector('.nv-scroll') as HTMLElement).paddingBottom),
+      }))
+      expect(room.padding).toBeGreaterThanOrEqual(room.dock + 16)
+
       await shot(page, 'opdracht-wacht-in-dock')
 
       // From a board, which takes no request to open a record, the link still shows it: in the opdrachten's own table.
@@ -1397,7 +1399,9 @@ test.describe('views-and-actions, the shake-out', () => {
       await expect(cell).toHaveText('')
       await expect(cell.getByRole('switch')).toHaveCount(0)
       await shot(page, 'sla-leeg')
-      await cell.click()
+      // By keyboard: a click on the blank cell already sets it (null-boolean-by-mouse).
+      await row.getByRole('gridcell').filter({ hasText: 'Bakkerij' }).click()
+      await page.keyboard.press('ArrowRight')
       await page.keyboard.press(' ')
       await expect.poll(async () => (await rowOf(api, 'site', 1)).sla).toBe(true)
       await expect(row.getByRole('switch', { name: 'SLA' })).toBeChecked()
