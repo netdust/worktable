@@ -12,6 +12,20 @@ const toggle = () => screen.getByRole('switch', { name: 'Betaald' }) as HTMLInpu
 afterEach(cleanup)
 
 describe('a bool cell', () => {
+  it('shows a null value blank: no switch and no Nee, and a press sets it to true', () => {
+    const onToggle = vi.fn()
+    const empty = { ...row, fields: { ...row.fields, paid: null } }
+    const { container } = renderNl(<BoolCell column={paid} row={empty} onToggle={onToggle} />)
+
+    expect(screen.queryByRole('switch')).toBeNull()
+    expect(container.textContent).toBe('')
+    expect(paid.text(empty)).toBe('')
+
+    fireEvent.click(container.querySelector('.nv-cell__bool') as HTMLElement)
+
+    expect(onToggle).toHaveBeenCalledTimes(1)
+  })
+
   it('shows the stored value as a switch out of the Tab order', () => {
     renderNl(<BoolCell column={paid} row={row} onToggle={vi.fn()} />)
 

@@ -193,8 +193,8 @@ test.describe('studio', () => {
     page,
   }) => {
     const api = page.request
-    await open(page, 'Sites', 'Sites')
-    await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+    await open(page, 'Sites met aandacht', 'Sites')
+    await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
     await page.getByRole('checkbox', { name: 'oud-archief selecteren' }).check()
     const bar = page.getByRole('region', { name: '2 geselecteerd' })
     await expect(bar).toBeVisible()
@@ -211,7 +211,7 @@ test.describe('studio', () => {
     await expect(drawer.getByText('Volgt live')).toBeVisible()
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Niet meer in de registry')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Overgeslagen')
-    await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Niet gestart')
+    await expect(siteLine(drawer, 'testmans-bestel')).toContainText('Niet gestart')
     await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
     await shot(page, 'opdracht-drawer-live')
 
@@ -220,7 +220,7 @@ test.describe('studio', () => {
     expect(await rowOf(api, 'actie', actie)).toMatchObject({ soort: 'gezondheidscheck', status: 'aangevraagd' })
     const links = (await rowsOf(api, 'actie_site', { actie_id: actie })).rows
     expect(links.map((l) => [l.site_id, l.state, l.resultaat]).sort()).toEqual([
-      [1, 'wacht', null],
+      [2, 'wacht', null],
       [5, 'overgeslagen', 'niet in registry'],
     ])
 
@@ -407,7 +407,7 @@ test.describe('studio', () => {
     page,
   }) => {
     const api = page.request
-    await open(page, 'Sites', 'Sites')
+    await open(page, 'Sites met aandacht', 'Sites')
     const before = await newest(api, 'actie')
     await page.getByRole('checkbox', { name: 'oud-archief selecteren' }).check()
     await page

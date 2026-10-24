@@ -7,6 +7,10 @@ interface Props extends CellProps {
 
 /** Flipped in place — a click, Enter or Space — never an editor. */
 export function BoolCell({ column, row, onToggle }: Props) {
+  // A value never given reads blank, not as an off switch; a press gives it its first value, true.
+  if ((column.value(row) ?? null) === null) {
+    return <span className="nv-cell__bool nv-cell__bool--blank" onClick={column.editable ? onToggle : undefined} />
+  }
   return (
     <span className="nv-cell__bool">
       <Switch aria-label={column.label} excludeFromTabOrder className="nv-switch" isSelected={Boolean(column.value(row))}

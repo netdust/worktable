@@ -201,7 +201,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   }
   if (kind === 'time') column.parse = column.fromText = parseTime
   if (kind === 'bool') {
-    column.text = (row) => (row.fields[key] ? t('yes') : t('no'))
+    column.text = (row) => (row.fields[key] === null || row.fields[key] === undefined ? '' : row.fields[key] ? t('yes') : t('no'))
     column.fromText = (text) => ['1', 'true', t('yes').toLowerCase()].includes(text.trim().toLowerCase())
   }
   if (kind === 'number') column.parse = column.fromText = (draft) => (draft.trim() === '' ? '' : Number(draft.replace(',', '.')))

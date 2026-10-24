@@ -857,11 +857,12 @@ describe('long text and bool', () => {
     expect(document.activeElement).toBe(paid)
   })
 
-  it('a click on the switch flips it once', async () => {
+  it('a click on a blank bool cell sets it to true once', async () => {
     renderGrid(calais, { view })
     api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
+    expect(within(cell('Montage', 'paid')).queryByRole('switch')).toBeNull()
     await act(async () => {
-      fireEvent.click(within(cell('Montage', 'paid')).getByRole('switch'))
+      fireEvent.click(cell('Montage', 'paid').querySelector('.nv-cell__bool') as HTMLElement)
     })
 
     expect(api.update).toHaveBeenCalledTimes(1)
