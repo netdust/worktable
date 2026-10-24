@@ -717,8 +717,17 @@ test.describe('step 2', () => {
         await openView(page, 'Personen')
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Personen')
         await row(page, 'Lotte Verhaegen').getByRole('button', { name: 'Openen' }).click()
+        // Over a widened drawer too, the toast is seen: nothing covers it.
+        await page.getByRole('button', { name: 'Volledig openen' }).click()
         await pressInMenu(page, 'Link kopiëren')
-        await expect(page.getByRole('status', { name: 'Link gekopieerd' })).toBeVisible()
+        const toast = page.getByRole('status', { name: 'Link gekopieerd' })
+        await expect(toast).toBeVisible()
+        const box = await toast.boundingBox()
+        const covered = await page.evaluate(
+          ([x, y]) => document.elementFromPoint(x, y)?.closest('.nv-toast') === null,
+          [(box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2],
+        )
+        expect(covered).toBe(false)
         const link = await page.evaluate(() => navigator.clipboard.readText())
         expect(link).toMatch(/^http:\/\/127\.0\.0\.1:5174\/#\/link\/persoon\.1\.[\w-]{43}$/)
 

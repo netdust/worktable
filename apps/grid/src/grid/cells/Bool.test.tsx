@@ -26,6 +26,13 @@ describe('a bool cell', () => {
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
+  it('shows a new-row draft’s empty boolean as an unchecked switch, not blank: blank is only for a stored null', () => {
+    const draft = { ...row, id: -1, fields: { ...row.fields, paid: undefined } }
+    renderNl(<BoolCell column={paid} row={draft} onToggle={vi.fn()} />)
+
+    expect(toggle().checked).toBe(false)
+  })
+
   it('shows the stored value as a switch out of the Tab order', () => {
     renderNl(<BoolCell column={paid} row={row} onToggle={vi.fn()} />)
 

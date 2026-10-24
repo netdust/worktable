@@ -8,6 +8,7 @@ import type { Notice } from './Toast'
 
 const FOLLOWED = 20
 const SHOWN_FOR = 6000
+const OPENING_WAIT = 5000
 
 /** What a follow is for: the action's label, the record it made, and the rows it acted on. */
 export interface Run {
@@ -69,7 +70,8 @@ function stateOf(model: Model, row: Row): { state: string; tone: Tone | undefine
 const phaseOf = (live: boolean, row: Row): Phase => (!live ? 'done' : waiting(row) ? 'waiting' : 'running')
 
 /** Follows the records this browser made in a live state until they leave it, wherever the viewer goes meanwhile. */
-export function useRunFollower(models: Record<string, Model>, host: { notify: (notice: Notice) => void; show: (dataset: string) => void }): Runs {
+/** `show` answers whether a screen can show a record of that dataset (it moves to one that can); false opens nothing. */
+export function useRunFollower(models: Record<string, Model>, host: { notify: (notice: Notice) => void; show: (dataset: string) => boolean }): Runs {
   const [lines, setLines] = useState<Line[]>([])
   const [ended, setEnded] = useState(0)
   const [opening, setOpening] = useState<Opened | null>(null)
@@ -158,9 +160,15 @@ export function useRunFollower(models: Record<string, Model>, host: { notify: (n
   }, [follow])
 
   const open = useCallback((dataset: string, id: number) => {
-    latest.current.host.show(dataset)
-    setOpening({ dataset, id })
+    if (latest.current.host.show(dataset)) setOpening({ dataset, id })
   }, [])
+
+  // A request no screen took is dropped, so it never opens a drawer on some later screen.
+  useEffect(() => {
+    if (!opening) return
+    const timer = setTimeout(() => setOpening(null), OPENING_WAIT)
+    return () => clearTimeout(timer)
+  }, [opening])
 
   useEffect(() => () => {
     for (const stop of loops.current.values()) stop()
@@ -168,22 +176,28 @@ export function useRunFollower(models: Record<string, Model>, host: { notify: (n
   }, [])
 
   const running = useMemo(() => new Set(lines.filter((line) => line.phase === 'running').flatMap((line) => (line.run.acted?.ids ?? []).map((id) => keyOf(line.run.acted?.model ?? '', id)))), [lines])
-  const settled = useCallback(() => setOpening(null), [])
+  const asked = useRef<Opened | null>(null)
+  asked.current = opening
+  // A screen opened the record: the line that asked for it has done its job.
+  const settled = useCallback(() => {
+    if (asked.current) forget(keyOf(asked.current.dataset, asked.current.id))
+    setOpening(null)
+  }, [forget])
   return useMemo(() => ({ follow, created, ended, running, lines, dismiss: forget, open, opening, settled }), [follow, created, ended, running, lines, forget, open, opening, settled])
 }
 
 function RunLines() {
   const { lines, dismiss, open } = useRuns()
-  if (lines.length === 0) return null
+  // Always there, so a screen reader hears a line that arrives in it.
   return (
-    <div className="nv-runs">
+    <div className="nv-runs" aria-live="polite">
       {lines.map((line) => {
         const text = t(line.phase === 'waiting' ? 'runWaiting' : line.phase === 'running' ? 'runBusy' : 'runDone', { action: line.run.label, state: line.state })
         return (
           <section key={line.key} className="nv-run" role="region" aria-label={text} aria-busy={line.phase === 'running'} data-phase={line.phase} data-tone={line.tone}>
             {line.phase === 'running' && <LoaderCircle className="nv-run__spin" size={14} aria-hidden="true" />}
             {line.phase === 'waiting'
-              ? <button type="button" className="nv-run__open" onClick={() => { dismiss(line.key); open(line.run.dataset, line.run.id) }}>{text}</button>
+              ? <button type="button" className="nv-run__open" onClick={() => open(line.run.dataset, line.run.id)}>{text}</button>
               : <span>{text}</span>}
             {line.phase !== 'running' && <button type="button" className="nv-run__close" aria-label={t('dismiss')} onClick={() => dismiss(line.key)}><X size={14} aria-hidden="true" /></button>}
           </section>

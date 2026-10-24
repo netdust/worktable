@@ -195,9 +195,10 @@ function seedView(run: Run, seed: SavedViewSeed): Outcome {
   const label = labelOf(next)
   const unlocked = seed.locked !== true
   if (!current) {
-    // Another owner's shared view of the same name and source stands in for the seed, and is never adopted.
-    const sql = 'SELECT 1 FROM saved_view WHERE name = ? AND source IS ? AND deleted_at IS NULL AND shared = 1'
-    if (sqlite.query(sql).get(seed.name, seed.source ?? null)) return 'present'
+    // Another owner's shared view of the same name and source stands in for the seed, and is never adopted; a renamed seed does not.
+    const sql =
+      'SELECT 1 FROM saved_view WHERE name = ? AND source IS ? AND deleted_at IS NULL AND shared = 1 AND owner_id != ?'
+    if (sqlite.query(sql).get(seed.name, seed.source ?? null, SYSTEM_OWNER)) return 'present'
     addView(run, next, key)
     noteDropped(run, seed, dropped)
     return 'added'

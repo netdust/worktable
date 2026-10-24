@@ -315,15 +315,24 @@ function patchOf(body: Record<string, unknown>): Record<string, unknown> {
 }
 
 // The deleted views a layout's tiles name that this viewer could have seen; the layout itself stays as stored.
-function goneViews(sqlite: Database, layout: DashboardLayout, viewer: Actor): number[] {
+function goneViews(sqlite: Database, domain: Domain, layout: DashboardLayout, viewer: Actor): number[] {
   const named = [...new Set(tileViews(layout))]
   if (named.length === 0) return []
-  const sql = `SELECT id FROM saved_view WHERE deleted_at IS NOT NULL AND (owner_id = ? OR shared = 1) AND id IN (${named.map(() => '?').join(', ')}) ORDER BY id`
-  return (sqlite.query(sql).all(viewer.id, ...named) as { id: number }[]).map((row) => row.id)
+  const sql = `SELECT id, source FROM saved_view WHERE deleted_at IS NOT NULL AND (owner_id = ? OR shared = 1) AND id IN (${named.map(() => '?').join(', ')}) ORDER BY id`
+  const found = sqlite.query(sql).all(viewer.id, ...named) as { id: number; source: string | null }[]
+  // The same rule the list applies: a view on a source this actor cannot read is not theirs to hear about.
+  return found
+    .filter(({ source }) => {
+      const read = source === null ? null : sourceOf(domain, source)
+      return source === null || (read !== null && readable(viewer, read))
+    })
+    .map(({ id }) => id)
 }
 
-function withGone(sqlite: Database, out: ViewOut, viewer: Actor): ViewOut {
-  return out.skin === 'dashboard' && out.layout ? { ...out, gone_views: goneViews(sqlite, out.layout, viewer) } : out
+function withGone(sqlite: Database, domain: Domain, out: ViewOut, viewer: Actor): ViewOut {
+  return out.skin === 'dashboard' && out.layout
+    ? { ...out, gone_views: goneViews(sqlite, domain, out.layout, viewer) }
+    : out
 }
 
 // What a stored layout is checked as when a request does not send one: its tiles on deleted views are not what is being changed.
@@ -353,7 +362,7 @@ function listViews(sqlite: Database, domain: Domain, actor: Actor): ViewOut[] {
     return source !== null && readable(actor, source)
   }
   return seedOrdered(domain, (sqlite.query(sql).all(actor.id) as Raw[]).filter(onReadable)).map((raw) =>
-    withGone(sqlite, outOf(raw, actor, domain), actor),
+    withGone(sqlite, domain, outOf(raw, actor, domain), actor),
   )
 }
 
@@ -374,7 +383,7 @@ function changing(actor: Actor): Actor {
 export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
   const write = <T>(work: () => T): T => sqlite.transaction(work).immediate()
   const outById = (id: number, actor: Actor): ViewOut =>
-    withGone(sqlite, outOf(ownedView(sqlite, domain, id, actor), actor, domain), actor)
+    withGone(sqlite, domain, outOf(ownedView(sqlite, domain, id, actor), actor, domain), actor)
 
   app.get('/views', (c) => c.json({ views: listViews(sqlite, domain, c.get('actor')) }))
 

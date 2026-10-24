@@ -1715,6 +1715,50 @@ describe('a selection action', () => {
     expect(screen.getByRole('region', { name: 'Bundelen · Actief' }).getAttribute('aria-busy')).toBe('true')
   })
 
+  it('does not say a run is done when the record it made could not be read: it says requested, and a model with no live states is not read at all', async () => {
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', live: ['busy'], fields: { phase: { type: 'select', label: 'Fase', required: false, fact: true, options: { busy: 'Bezig' } } } }
+    const plain = { key: 'plain', label: 'Gewoon', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', fields: {} }
+    api.schema.mockResolvedValue({ ...grouped, models: { ...grouped.models, bundle, plain } })
+    api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }, { dataset: 'plain', id: 8 }] })
+    api.rowOf.mockRejectedValue({ code: 'network', message: 'down' })
+    await shell()
+    await tick('Aart')
+
+    await run('Voorjaar')
+
+    expect(await screen.findByRole('status', { name: 'Bundelen aangevraagd.' })).toBeTruthy()
+    expect(api.rowOf.mock.calls.map((call) => call.join(':'))).toEqual(['bundle:7'])
+  })
+
+  it('opens a waiting run’s record from the dock while a board is on screen, and leaves no open pending behind', async () => {
+    const stage = { type: 'select', label: 'Stand', required: false, fact: true, options: { nieuw: 'Nieuw' } }
+    const phase = { type: 'select', label: 'Fase', required: false, fact: true, options: { busy: 'Bezig', wait: 'Voorbereid' } }
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', live: ['busy', 'wait'], fields: { phase } }
+    api.schema.mockResolvedValue({
+      ...grouped,
+      models: { member: { ...grouped.models.member, fields: { stage } }, bundle },
+      writable: { member: true, bundle: true },
+      tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid', 'board'] }, { key: 'bundles', label: 'Bundels', model: 'bundle', types: ['grid'] }],
+      views: [
+        { key: 'members', label: 'Leden', table: 'members', model: 'member' },
+        { key: 'bundles', label: 'Bundels', table: 'bundles', model: 'bundle' },
+        { key: 'bord', label: 'Bord', table: 'members', model: 'member', type: 'board', board: { column: 'stage' } },
+      ],
+    })
+    const at = (state: string, buttons: { to: string; label: string; primary?: true }[] = []) => ({ id: 7, title: 'Voorjaar', status: '', fields: { phase: state }, available: { state, buttons, actions: [] } })
+    api.rowOf.mockResolvedValueOnce(at('busy')).mockResolvedValue(at('wait', [{ to: 'ok', label: 'Bevestigen', primary: true }]))
+    await shell()
+    await tick('Aart')
+    await run('Voorjaar')
+    fireEvent.click(within(typesOf('Leden')).getByRole('button', { name: 'Bord' }))
+    await waitFor(() => expect(document.querySelector('.nv-board')).not.toBeNull())
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bundelen · Voorbereid — openen' }, { timeout: 7000 }))
+
+    expect(await screen.findByRole('complementary', { name: 'Voorjaar' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Bundelen · Voorbereid — openen' })).toBeNull()
+  }, 20_000)
+
   it('is one batch: one notice, one Undo that takes the whole run back, and the view reloads', async () => {
     await shell()
     await tick('Aart', 'Bo', 'Cas')

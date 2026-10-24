@@ -22,7 +22,7 @@ const at = (state: string, buttons: { to: string; label: string; primary?: true 
 const run = (acted: { model: string; ids: number[] } | null = null) => ({ label: 'Gezondheid checken', dataset: 'job', id: 1, acted })
 
 const notify = vi.fn()
-const show = vi.fn()
+const show = vi.fn(() => true)
 let runs!: Runs
 function Harness() {
   runs = useRunFollower({ job, note: plain }, { notify, show })
@@ -54,6 +54,15 @@ describe('following a record an outside process holds', () => {
     expect(line.getAttribute('aria-busy')).toBe('true')
   })
 
+  it('announces its lines politely: the region is there before the first line', () => {
+    const region = document.querySelector('.nv-runs')
+
+    expect(region?.getAttribute('aria-live')).toBe('polite')
+    start(at('busy'))
+    expect(document.querySelectorAll('.nv-runs')).toHaveLength(1)
+    expect(region?.querySelector('[role="region"]')).not.toBeNull()
+  })
+
   it('never starts for a record outside a live state, or of a model with no lifecycle', async () => {
     expect(start(at('done'))).toBe(false)
     act(() => { expect(runs.follow({ ...run(), dataset: 'note' }, at('busy'))).toBe(false) })
@@ -80,7 +89,27 @@ describe('following a record an outside process holds', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gezondheid checken · Voorbereid — openen' }))
     expect(show).toHaveBeenCalledWith('job')
     expect(runs.opening).toEqual({ dataset: 'job', id: 1 })
+    // The line goes only once a screen has opened the record.
+    expect(screen.getByRole('region', { name: 'Gezondheid checken · Voorbereid — openen' })).toBeTruthy()
+    act(() => runs.settled())
+    expect(runs.opening).toBeNull()
     expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('keeps the line and opens nothing where no screen can show the record, and clears an opening nobody takes', async () => {
+    remote.rowOf.mockResolvedValue(at('wait', [confirm]))
+    start(at('busy'))
+    await tick(3100)
+    show.mockReturnValueOnce(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Gezondheid checken · Voorbereid — openen' }))
+    expect(runs.opening).toBeNull()
+    expect(screen.getByRole('region', { name: 'Gezondheid checken · Voorbereid — openen' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Gezondheid checken · Voorbereid — openen' }))
+    expect(runs.opening).toEqual({ dataset: 'job', id: 1 })
+    await tick(5100)
+    expect(runs.opening).toBeNull()
+    expect(screen.getByRole('region', { name: 'Gezondheid checken · Voorbereid — openen' })).toBeTruthy()
   })
 
   it('leaving the live states bumps ended once and shows the final state for 6 s', async () => {

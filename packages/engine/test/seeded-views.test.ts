@@ -427,3 +427,82 @@ describe('a dashboard tile on a deleted view (R10a)', () => {
     expect(tileViews(layoutOf(OVERZICHT))).toEqual([VAST])
   })
 })
+
+describe('what the review asked for beside the plan', () => {
+  const serviceViews = async (role: 'administrator' | 'editor') => {
+    const token = createService(sqlite, `bot-${role}`, role)
+    const res = await app.request('/api/views', {
+      headers: { host: '127.0.0.1:4310', authorization: `Bearer ${token}` },
+    })
+    return ((await res.json()) as { views: Record<string, unknown>[] }).views
+  }
+
+  test('a seed renamed to a missing seed’s name does not stand in for it: the missing one is added and the dashboard still resolves', () => {
+    const later = table('Later', 'taak')
+    const full = declared([table('Open', 'taak'), later, overzicht('Open', 'Later')])
+    const old = fresh(declared([later, overzicht('Later')]))
+    old.run("UPDATE saved_view SET name = 'Open' WHERE name = 'Later'")
+
+    const report = seedMissing(old, full)
+
+    expect(report.views.added).toBe(1)
+    const named = old
+      .query("SELECT seed_key FROM saved_view WHERE name = 'Open' AND deleted_at IS NULL ORDER BY id")
+      .all()
+    expect(named).toEqual([{ seed_key: json(['Later', 'taak']) }, { seed_key: json(['Open', 'taak']) }])
+  })
+
+  test('a human administrator’s restore of a deleted locked, keyless or undeclared system view is refused', async () => {
+    sqlite.run("UPDATE saved_view SET deleted_at = '2026-01-01' WHERE id = ?", [VAST])
+    const keyless = Number(
+      sqlite.run(
+        "INSERT INTO saved_view (name, source_type, source, owner_id, shared, deleted_at) VALUES ('Oud', 'dataset', 'taak', -1, 1, '2026-01-01')",
+      ).lastInsertRowid,
+    )
+    const undeclared = Number(
+      sqlite.run(
+        "INSERT INTO saved_view (name, source_type, source, owner_id, shared, seed_key, deleted_at) VALUES ('Weg', 'dataset', 'taak', -1, 1, ?, '2026-01-01')",
+        [json(['Weg', 'taak'])],
+      ).lastInsertRowid,
+    )
+    const before = rows()
+
+    for (const id of [VAST, keyless, undeclared])
+      expect(code(await admin('POST', `/api/views/${id}/restore`, { body: json({}) })), String(id)).toEqual({
+        status: 403,
+        code: 'read_only_view',
+      })
+
+    expect(rows()).toEqual(before)
+  })
+
+  test('a service account with the administrator role is served an unlocked seed as not editable', async () => {
+    expect(find(await serviceViews('administrator'), OPEN)).toMatchObject({ editable: false })
+    expect(find(await listed(admin), OPEN)).toMatchObject({ editable: true })
+  })
+
+  test('two system rows with one key do no harm: the seed adds none and changes neither', () => {
+    sqlite.run(
+      'INSERT INTO saved_view (name, source_type, source, owner_id, shared, seed_key) SELECT name, source_type, source, owner_id, shared, seed_key FROM saved_view WHERE id = ?',
+      [RAPPORT],
+    )
+    const before = rows()
+
+    const report = seedMissing(sqlite, dom)
+
+    expect(report.views.added).toBe(0)
+    expect(rows()).toEqual(before)
+  })
+
+  test('an administrator’s share of an unlocked seed counts as a person’s change: the seed then leaves it as it is', async () => {
+    expect((await admin('PUT', `/api/views/${RAPPORT}/share-token`)).status).toBe(200)
+    expect((await admin('DELETE', `/api/views/${RAPPORT}/share-token`)).status).toBe(200)
+    const changed = declared(seeds().map((v) => (v.name === 'Rapport' ? { ...v, sort: ['name'] } : v)))
+    const before = row(RAPPORT)
+
+    const report = seedMissing(sqlite, changed)
+
+    expect(seedLines(report).join('\n')).toContain('view "Rapport" (per_project) changed by a person, left alone')
+    expect(row(RAPPORT)).toEqual(before)
+  })
+})

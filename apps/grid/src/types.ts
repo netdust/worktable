@@ -82,6 +82,8 @@ export interface Model {
   title_label: string
   /** The title's own column, which a condition names; absent for a title through a relation. */
   title_field?: string
+  /** Every column the source has, the ones the grid hides too: a saved view may still sort, filter or group on one. */
+  columns?: string[]
   title_readonly: boolean
   /** The title column is not nullable: absent means required. */
   title_required?: boolean

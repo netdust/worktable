@@ -78,9 +78,13 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
   useEffect(() => {
     const asked = runs.opening
     if (!asked) return
-    runs.settled()
+    let current = true
     const view = views.find((v) => v.model === asked.dataset)
-    if (view) rowOf(asked.dataset, asked.id).then((row) => row && setOpened({ row, view }), () => undefined)
+    const shown = view ? rowOf(asked.dataset, asked.id).then((row) => row && setOpened({ row, view }), () => undefined) : Promise.resolve()
+    void shown.then(() => current && runs.settled())
+    return () => {
+      current = false
+    }
   }, [runs.opening])
   const viewOf = (id: number) => views.find((v) => v.id === id)
   const tileOf = (tile: Tile, at: number) => {

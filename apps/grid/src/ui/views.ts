@@ -51,12 +51,12 @@ export function isSaved(view: View): view is SavedView {
 const isMatrixKey = (id: string): boolean => id.startsWith('record:') || id.startsWith('name:')
 
 /**
- * What a layout of this view may name: every field its model has (the sheet may sort, filter or group on one it hides), the view's
- * lookups and rollups, the title, and the engine's own `id` and `position` (a board's manual order) and the model's title column.
+ * What a layout of this view may name: every column its source has, the ones the grid hides too (the engine takes a sort, filter or
+ * group on one), the model's fields and links, the view's lookups and rollups, and the engine's own `id` and `position` (a board's manual order).
  */
 export function knownOf(model: Model, view: View, models: Record<string, Model> = {}): ReadonlySet<string> {
   const ids = columnsFor(model, { ...view, columns: undefined }, false, models).map((column) => column.id)
-  return new Set([...ids, 'id', 'position', ...(model.title_field ? [model.title_field] : [])])
+  return new Set([...ids, ...(model.columns ?? []), 'id', 'position', ...(model.title_field ? [model.title_field] : [])])
 }
 
 /** The known ids of a tile's view, or none to fit against where its model is not served. */

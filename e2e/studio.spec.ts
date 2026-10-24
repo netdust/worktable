@@ -354,9 +354,20 @@ test.describe('studio', () => {
       })
       const waiting = page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
       await expect(waiting).toBeVisible({ timeout: 15_000 })
+      // The table's last rows stay reachable under the dock.
+      const padding = await page
+        .locator('.nv-scroll')
+        .evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingBottom))
+      expect(padding).toBeGreaterThanOrEqual(90)
+      await shot(page, 'opdracht-wacht-in-dock')
+
+      // From a board, which takes no request to open a record, the link still shows it: in the opdrachten's own table.
+      await openView(page, 'Opdrachten per status', 'Opdrachten')
+      await expect(page.locator('.nv-board')).toBeVisible()
       await waiting.click()
       await expect(page.getByRole('complementary', { name: /Bijwerken/ })).toBeVisible()
       await expect(waiting).toHaveCount(0)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Opdrachten')
     } finally {
       await patch('/api/rows/site/1', { gezondheid: winkel }).catch(() => undefined)
       for (const actie of made) {

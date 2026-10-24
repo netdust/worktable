@@ -347,17 +347,21 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   }, [reloads])
 
   // The dock's link asked for a record: this table shows it, in its own drawer or as a related one.
+  // Settled only once the record is on screen: a sheet read again meanwhile starts over, and the next one takes the request.
   useEffect(() => {
     if (!runs.opening) return
-    show(runs.opening)
-    runs.settled()
+    let current = true
+    void Promise.resolve(show(runs.opening)).then(() => current && runs.settled())
+    return () => {
+      current = false
+    }
   }, [runs.opening])
 
   /** What an action asked to open: a record this table holds stays in its own drawer, any other is read and shown as a related one. */
-  function show(opened: Opened | null | void): void {
+  function show(opened: Opened | null | void): Promise<void> | void {
     if (!opened) return
     if (opened.dataset === model.key && state.rows.some((row) => row.id === opened.id)) setDrawer(opened.id)
-    else openRelated(opened.dataset, opened.id)
+    else return openRelated(opened.dataset, opened.id)
   }
 
   /** The ticked rows an action is not marked on: a row with no marks allows every action. */
@@ -365,9 +369,9 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     return state.rows.filter((row) => ticking.selected.has(row.id) && row.available && !row.available.actions.includes(action.name)).length
   }
 
-  function openRelated(target: string, id: number): void {
+  function openRelated(target: string, id: number): Promise<void> {
     const gone = () => onNotice?.(t('recordGone'))
-    rowOf(target, id).then((found) => {
+    return rowOf(target, id).then((found) => {
       const targetModel = models[target]
       if (!found || !targetModel) return gone()
       setDrawer(null)

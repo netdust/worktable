@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { columnsFor } from './grid/columns'
 import { defaults } from './grid/layout'
 import { type EngineSchema, type EngineView, fromStoredView, rowsQuery, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import type { SavedView } from './types'
+import { knownOf, layoutOf, toStored } from './ui/views'
 import { orderOf, show } from './grid/layout'
 
 /** The theatre declarations and seeded views, trimmed to what the adapter reads. */
@@ -412,6 +414,17 @@ describe('a hidden column', () => {
     expect(Object.keys(model.fields)).not.toContain('plaats')
     expect(Object.keys(model.fields)).toContain('soort')
     expect(columnsFor(model, { key: 'a', label: 'a', table: 'activiteit', model: 'activiteit' }, true).map((c) => c.id)).not.toContain('plaats')
+  })
+
+  it('is still a name a layout may use, so the fit keeps a stored sort on it and a Save sends it back', () => {
+    const model = toSchema({ sources: { ...engine.sources, activiteit: hidden } }).models.activiteit
+    const { arrangement } = fromStoredView({ ...planning, sort: ['-plaats', 'start_at'] }, hidden)
+    const saved = { key: '9', id: 9, label: 'Plaats', table: 'activiteit', model: 'activiteit', type: 'grid', starting: false, arrangement, shared: true, owner: { id: -1, name: '' }, mine: false, editable: true } as SavedView
+
+    const fitted = layoutOf(saved, knownOf(model, saved))
+
+    expect(fitted.sort.map((key) => key.id)).toEqual(['plaats', 'start_at'])
+    expect(toStoredView(toStored({ ...fitted, picked: [] }), {}, hidden).sort).toEqual(['-plaats', 'start_at'])
   })
 
   it('round-trips a view that names it: the other fields keep their place and it is not written back', () => {

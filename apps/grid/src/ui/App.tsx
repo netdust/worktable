@@ -400,8 +400,13 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const runs = useRunFollower(models, {
     notify,
     show: (dataset) => {
+      // Only the table and the dashboard take a request to open a record: from any other skin, the table's own view does.
+      if (dashboard || (grid && !calendar && !timeline && !matrix && view?.type !== 'board' && view?.type !== 'gallery')) return true
       const into = tables.find((table) => !table.query && table.views[0]?.model === dataset)
-      if (!(grid || dashboard) && into) openTable(into)
+      const table = into?.views.find((one) => (one.type ?? 'grid') === 'grid') ?? into?.views[0]
+      if (!table) return false
+      setActiveKey(table.key)
+      return true
     },
   })
   useEffect(() => {
@@ -579,12 +584,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
     }
     // A record made in a live state is only requested: an outside process finishes it, and the dock follows.
-    let requested = false
-    for (const record of made) {
-      if (!models[record.dataset]?.lifecycle) continue
-      const row = await rowOf(record.dataset, record.id).catch(() => null)
-      if (row && runs.follow({ label: action.label, dataset: record.dataset, id: record.id, acted }, row)) requested = true
-    }
+    // One that cannot be read is not known to have run, so it is said to be requested too.
+    const reads = await Promise.all(
+      made.filter((record) => models[record.dataset]?.live).map(async (record) => ({ record, row: await rowOf(record.dataset, record.id).catch(() => null) })),
+    )
+    const requested = reads.reduce((any, { record, row }) => (row ? runs.follow({ label: action.label, dataset: record.dataset, id: record.id, acted }, row) : true) || any, false)
     notify({ message: t(requested ? 'actionRequested' : 'actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
   // A button the server marked is the ordinary transition write, expecting the state it was marked against.

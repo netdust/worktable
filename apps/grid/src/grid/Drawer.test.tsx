@@ -446,6 +446,15 @@ describe("the drawer's actions", () => {
     expect(onAction).toHaveBeenCalledExactlyOnceWith(apply, { sjabloon_id: 4 })
   })
 
+  it('puts focus in the inputs panel when it opens: on the first input, not on the close button', async () => {
+    const shift: ModelAction = { name: 'verschuiven', label: 'Verschuiven', input: { dagen: { type: 'integer', label: 'Dagen' } } }
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[shift]} onAction={vi.fn().mockResolvedValue(undefined)} onClose={() => undefined} />)
+
+    await pressAction('Verschuiven')
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Dagen'))
+  })
+
   it('closes the inputs panel from its close button, and gives focus back to the menu button', async () => {
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={vi.fn().mockResolvedValue(undefined)} onClose={() => undefined} />)
     await pressAction('Sjabloon toepassen')

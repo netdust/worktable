@@ -210,6 +210,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     label: source.label,
     title_label: titleLabel(source),
     ...(titleColumn(source) ? { title_field: titleColumn(source) as string } : {}),
+    columns: Object.keys(source.columns),
     title_readonly: !source.writable || Boolean(source.title_via) || isReadonly(source.columns[source.title], source),
     ...(source.columns[source.title]?.nullable ? { title_required: false } : {}),
     ...(source.title_via ? { title_derived: true } : {}),

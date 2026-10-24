@@ -1,5 +1,5 @@
 import { EllipsisVertical, X } from 'lucide-react'
-import { useContext, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { Button, Dialog, Popover } from 'react-aria-components'
 import { recordLink as readLink, rotateRecordLink } from '../api'
 import { errorText, t } from '../i18n'
@@ -28,6 +28,11 @@ export function DrawerTools({ model, row, onDone, actions, onAction, recordLink,
   const [pressing, setPressing] = useState(false)
   const [asking, setAsking] = useState<Asking | null>(null)
   const anchor = useRef<HTMLButtonElement | null>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  // The panel opens under the head: the keyboard follows it to its first input.
+  useEffect(() => {
+    if (asking?.kind === 'action') panel.current?.querySelector<HTMLElement>('input, select, textarea, button:not(.nv-dw-ask__close)')?.focus()
+  }, [asking])
   if (row.id <= 0) return null
   const leave = () => {
     setAsking(null)
@@ -61,7 +66,7 @@ export function DrawerTools({ model, row, onDone, actions, onAction, recordLink,
       {items.length > 0 && <MoreMenu actions={items} label={t('recordActions')} icon={EllipsisVertical} menu={t('recordActions')} trigger={anchor} />}
       {asking?.kind === 'action' && (
         // A panel under the head, not an overlay: the pickers inside it open their own, over the page.
-        <div className="nv-dw-ask nv-dw-ask--panel" onKeyDown={(event) => {
+        <div ref={panel} className="nv-dw-ask nv-dw-ask--panel" onKeyDown={(event) => {
           const open = event.target instanceof Element && event.target.closest('[aria-expanded="true"]')
           if (event.key !== 'Escape' || open) return
           event.stopPropagation()

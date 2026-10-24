@@ -3517,7 +3517,8 @@
   right: 0;
   bottom: 16px;
   left: 0;
-  z-index: 5;
+  /* Over a widened drawer too (z-index 20): a toast is heard and seen wherever it was asked. */
+  z-index: 25;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3629,9 +3630,9 @@
   }
 }
 
-/* The last row stays reachable under the panel. */
-.nv-frame[data-panel] .nv-scroll {
-  padding-bottom: 84px;
+/* The last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
+.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll {
+  padding-bottom: 96px;
 }
 
 .nv-selection__count {
