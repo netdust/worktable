@@ -223,6 +223,7 @@ const strings = {
   share: 'Delen met het team',
   unshare: 'Niet meer delen',
   viewRemoved: 'Weergave verwijderd',
+  viewDeleted: 'Weergave verwijderd',
   copyOf: '{name} (kopie)',
   moveUp: 'Omhoog',
   moveDown: 'Omlaag',

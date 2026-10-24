@@ -4,7 +4,8 @@ import type { Row, View } from '../types'
 
 const remote = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), remove: vi.fn(), rowOf: vi.fn() }))
 vi.mock('../api', () => remote)
-const { useGridStore } = await import('./hooks')
+const { useGridStore, useLayout } = await import('./hooks')
+const { storedLayout } = await import('./layout')
 const { createHistory } = await import('../ui/history')
 
 const view = { key: 'jobs', label: 'Jobs', table: 'jobs', model: 'job', type: 'grid' } as unknown as View
@@ -23,5 +24,19 @@ describe('the grid store’s create', () => {
 
     expect(told).toHaveBeenCalledWith('job', made)
     expect(remote.create).toHaveBeenCalledWith('job', { title: 'Import' })
+  })
+})
+
+describe('the layout of the view on screen', () => {
+  it('writes the browser’s copy back without the ids the view does not know, and sends the sheet the fitted one', () => {
+    const open = { ...view, key: '31' }
+    window.localStorage.setItem('ntdst-views/layout/v2/31', JSON.stringify({ hidden: [], order: [], widths: { title: 120 }, sort: [{ id: 'start_at', desc: false }, { id: 'date', desc: true }], filters: [], group: null }))
+
+    const { result } = renderHook(() => useLayout(open, new Set(['title', 'date'])))
+
+    expect(result.current[0]?.sort).toEqual([{ id: 'date', desc: true }])
+    expect(storedLayout(open)?.sort).toEqual([{ id: 'date', desc: true }])
+    expect(storedLayout(open)?.widths).toEqual({ title: 120 })
+    window.localStorage.clear()
   })
 })

@@ -85,10 +85,11 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
   const viewOf = (id: number) => views.find((v) => v.id === id)
   const tileOf = (tile: Tile, at: number) => {
     const missing = viewsOf(tile).some((id) => !viewOf(id))
-    if (missing) return <section key={at} className="nv-tile nv-tile--none">{t('noAccess')}</section>
+    const deleted = viewsOf(tile).some((id) => dashboard.gone_views?.includes(id))
+    if (missing) return <section key={at} className="nv-tile nv-tile--none">{t(deleted ? 'viewDeleted' : 'noAccess')}</section>
     if (tile.kind === 'stat') {
       const view = viewOf(tile.view) as SavedView
-      return <StatTile key={at} tile={tile} view={view} model={models[view.model]} scope={scope} version={version} onOpen={() => onOpenView(view.key)} />
+      return <StatTile key={at} tile={tile} view={view} model={models[view.model]} models={models} scope={scope} version={version} onOpen={() => onOpenView(view.key)} />
     }
     if (tile.kind === 'list') {
       const view = viewOf(tile.view) as SavedView
@@ -100,13 +101,13 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     if (tile.kind === 'week') {
       const view = viewOf(tile.view) as SavedView
       return (
-        <WeekTile key={at} view={view} model={models[view.model]} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
+        <WeekTile key={at} view={view} model={models[view.model]} models={models} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
           onOpenRow={(row, flags) => setOpened({ row, view, flags })} />
       )
     }
     const done = viewOf(tile.done) as SavedView
     return (
-      <ProgressTile key={at} label={tile.label} done={done} total={viewOf(tile.total) as SavedView} scope={scope} version={version}
+      <ProgressTile key={at} label={tile.label} done={done} total={viewOf(tile.total) as SavedView} models={models} scope={scope} version={version}
         onOpen={() => onOpenView(done.key)} />
     )
   }

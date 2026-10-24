@@ -1026,6 +1026,55 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(page.getByRole('searchbox', { name: 'Zoeken' })).toBeFocused()
   })
 
+  test('delete-a-seeded-view @e2e: an administrator deletes a seeded view, the seed leaves it gone and drops its tile, and a restore brings both back', async ({
+    page,
+  }) => {
+    const api = page.request
+    const views = async () =>
+      ((await (await api.get('/api/views')).json()) as { views: { id: number; name: string; editable: boolean }[] })
+        .views
+    const seeded = (await views()).find((v) => v.name === 'Storing')
+    expect(seeded?.editable, 'a seeded view the administrator may change').toBe(true)
+    const seed = () =>
+      execFileSync(
+        'bun',
+        [
+          'packages/engine/src/serve.ts',
+          '--domain',
+          '@worktable/studio',
+          '--db',
+          'e2e/.tmp/studio.db',
+          '--seed-missing',
+        ],
+        { cwd: process.cwd(), encoding: 'utf8' },
+      )
+    const inRail = page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Storing', exact: true })
+    try {
+      await open(page, 'Sites', 'Sites')
+      await expect(inRail).toHaveCount(1)
+      await page.getByRole('button', { name: 'More actions: Storing' }).click()
+      await page.getByRole('menuitem', { name: 'Verwijderen' }).click()
+      await expect(inRail).toHaveCount(0)
+
+      expect(seed()).toContain('deleted by a person, left alone')
+      await landing(page)
+      await expect(tile(page, 'Storing')).toHaveCount(0)
+      await expect(
+        page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Storing', exact: true }),
+      ).toHaveCount(0)
+      await shot(page, 'overzicht-zonder-storing')
+
+      const restored = await api.post(`/api/views/${seeded?.id}/restore`)
+      expect(restored.status()).toBe(200)
+      seed()
+      await landing(page)
+      await expect(tile(page, 'Storing')).toBeVisible()
+    } finally {
+      if (!(await views()).some((v) => v.name === 'Storing')) await api.post(`/api/views/${seeded?.id}/restore`)
+      seed()
+    }
+  })
+
   test('toggle-cell-fits @e2e: a switch cell holds its switch and its label in the column’s default width, no dot', async ({
     page,
   }) => {

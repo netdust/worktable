@@ -115,6 +115,7 @@ export interface EngineView extends EngineArrangement {
   editable: boolean
   public?: boolean
   for_owners?: boolean
+  gone_views?: number[]
 }
 
 export interface EngineSchema {
@@ -443,6 +444,7 @@ function dashboardOf(view: EngineView): SavedView {
     key: String(view.id), label: view.name, model: '', table: DASHBOARD, type: 'dashboard', types: ['dashboard'],
     layout: view.layout ?? { sections: [], actions: [] }, starting: false, id: view.id, arrangement: NO_ARRANGEMENT, fixed: {},
     shared: view.shared, owner: { id: view.owner_id, name: '' }, mine: view.mine, editable: view.editable,
+    ...(view.gone_views ? { gone_views: view.gone_views } : {}),
   }
 }
 

@@ -260,6 +260,8 @@ export interface SavedView extends View {
   public?: boolean
   /** Shown to the people its rows belong to. */
   for_owners?: boolean
+  /** A dashboard's tiles that name a deleted view, as the engine lists them. */
+  gone_views?: number[]
 }
 
 /** What `POST views` takes: a new view, always of no field. */

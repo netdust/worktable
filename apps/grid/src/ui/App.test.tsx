@@ -19,7 +19,14 @@ const { App } = await import('./App')
 
 const served: Schema = {
   models: {
-    activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: {} },
+    activity: {
+      key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false,
+      fields: {
+        date: { type: 'date', label: 'Datum', required: false, fact: true },
+        kind: { type: 'text', label: 'Soort', required: false, fact: true },
+        place: { type: 'text', label: 'Plaats', required: false, fact: false },
+      },
+    },
     absence: { key: 'absence', label: 'Afwezigheid', title_label: 'Titel', title_readonly: false, fields: {} },
   },
   tables: [

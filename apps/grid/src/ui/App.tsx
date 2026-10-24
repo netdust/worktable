@@ -44,7 +44,7 @@ import { useSavedViews } from './useSavedViews'
 import { usePageUndo } from './usePageUndo'
 import { DrawerSlot } from './SidePanel'
 import { Dock, DockSlot, RunsContext, ToastSlot, useRunFollower } from './runs'
-import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
+import { changed, clearLocal, isSaved, keepLocal, knownOf, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
 import { insightOf } from './insight'
 import { periodOf, stepPeriod, todayPeriod, withPeriod } from './period'
@@ -264,7 +264,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
   const scope: Scope | null | undefined = !scoped ? null : space.status === 'ready' ? space.scope : undefined
   const scopeId = scope === undefined ? undefined : scope?.id ?? null
-  const [stored, storeLayout] = useLayout(view)
+  const known = useMemo(() => {
+    const own = view ? served?.models[view.model] : undefined
+    return view && own ? knownOf(own, view, served?.models) : null
+  }, [view, served])
+  const [stored, storeLayout] = useLayout(view, known)
   // A change the person makes: kept here, and one's own view saves itself. A landing or a link is not that.
   const setLayout = (next: Layout) => {
     storeLayout(next)

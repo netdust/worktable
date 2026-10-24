@@ -24,7 +24,7 @@ const werklijst: Model = {
     status: { type: 'select', label: 'Status', required: false, fact: false, options: { open: 'Open', gedaan: 'Gedaan' }, writes: { dataset: 'taak', field: 'status', key: 'taak_id' } },
   },
 } as unknown as Model
-const models = { werklijst, conflicten: { ...werklijst, key: 'conflicten', fields: {} } } as Record<string, Model>
+const models = { werklijst, conflicten: { ...werklijst, key: 'conflicten', fields: { deadline: { type: 'date', label: 'Deadline', required: false, fact: false } } } } as Record<string, Model>
 const conflicten = view(1, 'Conflicten', 'conflicten', { space: 'scoped' })
 const lijst = view(2, 'Werklijst', 'werklijst')
 const row = (id: number, title: string, taak: number | null): Row => ({ id, title, status: '', fields: { soort: taak ? 'taak' : 'open_slot', taak_id: taak } })
@@ -244,6 +244,30 @@ describe('quick actions', () => {
     cleanup()
     withActions({ ...taak, created_by: 'service' })
     expect(screen.queryByRole('button', { name: 'Nieuwe taak' })).toBeNull()
+  })
+})
+
+describe('a tile on a deleted view', () => {
+  it('reads Weergave verwijderd when the engine lists the view in gone_views, and Geen toegang when the reader just cannot see it', () => {
+    const board = { ...dashboard([stat, list]), gone_views: [2] } as unknown as SavedView
+    render(<Dashboard dashboard={board} views={[conflicten]} models={models} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+
+    expect(screen.getByText('Weergave verwijderd')).toBeTruthy()
+    expect(screen.queryByText('Geen toegang')).toBeNull()
+    cleanup()
+    render(<Dashboard dashboard={dashboard([stat, list])} views={[conflicten]} models={models} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+    expect(screen.getByText('Geen toegang')).toBeTruthy()
+  })
+
+  it('drops a stored sort on a column the list view lacks, and keeps the rest of the layout', async () => {
+    api.rows.mockResolvedValue({ rows: [], total: 0 })
+    const stale = { ...lijst, arrangement: { hidden: [], order: [], widths: [{ id: 'title', width: 200 }], sort: [{ id: 'start_at', desc: false }], filters: [], group: null, picked: [] } } as SavedView
+    render(<Dashboard dashboard={dashboard([list])} views={[conflicten, stale]} models={models} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />)
+
+    await waitFor(() => expect(api.rows).toHaveBeenCalled())
+    const layout = api.rows.mock.calls.at(-1)?.[3] as { sort: unknown[]; widths: Record<string, number> }
+    expect(layout.sort).toEqual([])
+    expect(layout.widths).toEqual({ title: 200 })
   })
 })
 

@@ -1,16 +1,25 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { create, remove, rowOf, update } from '../api'
 import type { Row, View } from '../types'
 import type { History } from '../ui/history'
-import { layoutOf, storeLayout, useStoredRevision } from '../ui/views'
+import { layoutOf, rememberKnown, storeLayout, useStoredRevision } from '../ui/views'
+import { storedLayout } from './layout'
 import { type Layout, storedRevision } from './layout'
 import { createStore, type Store, type StoreState } from './store'
 
 /** The layout of the view on screen: this browser's copy, else the saved one; read again after any other write. */
-export function useLayout(view: View | undefined): [Layout | null, (layout: Layout) => void] {
+export function useLayout(view: View | undefined, known: ReadonlySet<string> | null): [Layout | null, (layout: Layout) => void] {
   const [held, setHeld] = useState<{ key: string; layout: Layout; revision: number } | null>(null)
   const revision = useStoredRevision()
-  const read = useMemo(() => (view ? layoutOf(view) : null), [view, revision])
+  const read = useMemo(() => (view ? layoutOf(view, known) : null), [view, known, revision])
+  // What the sheet drops as unknown is dropped from this browser's copy and from what Save and a copy send, so nothing stale is kept or sent.
+  useEffect(() => {
+    if (!view || !known) return
+    rememberKnown(view, known)
+    const local = storedLayout(view)
+    const fitted = layoutOf(view, known)
+    if (local && JSON.stringify(local) !== JSON.stringify(fitted)) storeLayout(view, fitted)
+  }, [view, known])
   const current = view && held?.key === view.key && held.revision === revision ? held.layout : read
 
   const set = useCallback(
