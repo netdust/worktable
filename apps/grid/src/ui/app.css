@@ -4203,10 +4203,27 @@
   right: 8px;
   z-index: 3;
   min-width: 260px;
+  padding-right: 32px;
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md, 8px);
   background: var(--color-bg-surface);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+#root .nv-dw-ask__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
 }
 
 .nv-dw-ask .nv-action {

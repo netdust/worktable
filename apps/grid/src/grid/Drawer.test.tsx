@@ -446,6 +446,18 @@ describe("the drawer's actions", () => {
     expect(onAction).toHaveBeenCalledExactlyOnceWith(apply, { sjabloon_id: 4 })
   })
 
+  it('closes the inputs panel from its close button, and gives focus back to the menu button', async () => {
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={vi.fn().mockResolvedValue(undefined)} onClose={() => undefined} />)
+    await pressAction('Sjabloon toepassen')
+    const panel = document.querySelector('.nv-dw-ask--panel') as HTMLElement
+    expect(panel).not.toBeNull()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Sluiten' }))
+
+    expect(document.querySelector('.nv-dw-ask--panel')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Acties' }))
+  })
+
   it("says a refusal under the action, in the writer's words", async () => {
     const onAction = vi.fn().mockRejectedValue({ code: 'refused', message: 'Dit sjabloon is al toegepast.' })
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)

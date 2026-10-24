@@ -1,4 +1,4 @@
-import { EllipsisVertical } from 'lucide-react'
+import { EllipsisVertical, X } from 'lucide-react'
 import { useContext, useRef, useState } from 'react'
 import { Button, Dialog, Popover } from 'react-aria-components'
 import { recordLink as readLink, rotateRecordLink } from '../api'
@@ -29,6 +29,10 @@ export function DrawerTools({ model, row, onDone, actions, onAction, recordLink,
   const [asking, setAsking] = useState<Asking | null>(null)
   const anchor = useRef<HTMLButtonElement | null>(null)
   if (row.id <= 0) return null
+  const leave = () => {
+    setAsking(null)
+    anchor.current?.focus()
+  }
   const buttons = write && onDone && model && row.available ? row.available.buttons : []
   const primary = buttons.find((button) => button.primary)
   const press = (to: string) => {
@@ -61,9 +65,9 @@ export function DrawerTools({ model, row, onDone, actions, onAction, recordLink,
           const open = event.target instanceof Element && event.target.closest('[aria-expanded="true"]')
           if (event.key !== 'Escape' || open) return
           event.stopPropagation()
-          setAsking(null)
-          anchor.current?.focus()
+          leave()
         }}>
+          <Button className="nv-dw-ask__close" aria-label={t('close')} onPress={leave}><X size={14} aria-hidden="true" /></Button>
           <ActionInputs action={asking.action} record={{ ...row.fields, id: row.id }} onRun={(input) => (onAction as RunAction)(asking.action, input).then(() => setAsking(null))} />
         </div>
       )}
