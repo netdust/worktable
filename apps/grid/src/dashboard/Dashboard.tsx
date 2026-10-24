@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
 import { useReread } from '../grid/drawerWrite'
+import { rowOf } from '../api'
+import { useRuns } from '../ui/runs'
 import { locale, t } from '../i18n'
 import type { Account, Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
 import { ChipBar } from '../ui/ChipBar'
@@ -64,6 +66,22 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
   }
   // The record is gone (deleted, or out of scope): its drawer closes, if it is still the one on screen.
   const leave = (model: string, id: number) => setOpened((now) => (now && now.view.model === model && now.row.id === id ? null : now))
+  const runs = useRuns()
+  // A followed run ended: the tiles read again, and so does the record open in the drawer.
+  useEffect(() => {
+    if (runs.ended === 0) return
+    refresh()
+    const was = openedNow.current
+    if (was) void reread(was.view.model, was.row.id, follow(was.view.model), () => leave(was.view.model, was.row.id))?.().catch(() => undefined)
+  }, [runs.ended])
+  // The dock's link asked for a record: a drawer from the first view the reader has of its table.
+  useEffect(() => {
+    const asked = runs.opening
+    if (!asked) return
+    runs.settled()
+    const view = views.find((v) => v.model === asked.dataset)
+    if (view) rowOf(asked.dataset, asked.id).then((row) => row && setOpened({ row, view }), () => undefined)
+  }, [runs.opening])
   const viewOf = (id: number) => views.find((v) => v.id === id)
   const tileOf = (tile: Tile, at: number) => {
     const missing = viewsOf(tile).some((id) => !viewOf(id))
@@ -121,7 +139,7 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}
-          onClose={() => setCreating(null)} onCreated={refresh} />
+          onClose={() => setCreating(null)} onCreated={refresh} onCreatedRow={runs.created} />
       )}
     </div>
   )

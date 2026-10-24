@@ -10,7 +10,7 @@ const { DrawerWriteContext } = await import('./drawerWrite')
 
 const model = { key: 'job', label: 'Job', title_label: 'Titel', title_readonly: false, lifecycle: 'state', live: ['busy'], fields: { state: { type: 'select', label: 'Stand', required: false, fact: true, options: { busy: 'Bezig', done: 'Klaar' } } } } as unknown as Model
 const view = { key: 'jobs', label: 'Jobs', table: 'jobs', model: 'job', type: 'board' } as unknown as View
-const at = (state: string): Row => ({ id: 1, title: 'Import', status: '', fields: { state } })
+const at = (state: string, primary = false): Row => ({ id: 1, title: 'Import', status: '', fields: { state }, ...(primary ? { available: { state, buttons: [{ to: 'done', label: 'Bevestigen', primary: true as const }], actions: [] } } : {}) })
 
 // A board-like host: its rows are its own state, and App's `fresh` replaces the row it re-read, as the store does.
 function Board({ rows }: { rows: Row[] }) {
@@ -45,6 +45,18 @@ describe('a drawer opened through the board’s host', () => {
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
     expect(remote.rowOf).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows no busy mark while the record waits on a primary button', () => {
+    remote.rowOf.mockResolvedValue(at('busy', true))
+    function Waiting() {
+      const [rows] = useState([at('busy', true)])
+      const write = { press: () => Promise.resolve(), fresh: () => undefined }
+      return <DrawerWriteContext.Provider value={write}><Board rows={rows} /></DrawerWriteContext.Provider>
+    }
+    render(<Waiting />)
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }))
+    expect(screen.queryByText('Volgt live')).toBeNull()
   })
 
   it('stops polling when the drawer is closed', async () => {

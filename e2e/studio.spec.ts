@@ -47,9 +47,8 @@ async function run(api: Api, action: string, ids: number[]): Promise<{ actie: nu
   }
 }
 
-/** A fresh Bijwerken preview made the way the worker makes one: claim, a voorstel per site, then voorbereid. */
-async function preview(api: Api, ids: number[]): Promise<{ actie: number; links: number[] }> {
-  const made = await run(api, 'bijwerken', ids)
+/** What the worker does to a Bijwerken just requested: claim, a voorstel per site, then voorbereid. */
+async function prepare(made: { actie: number; links: number[] }): Promise<void> {
   const service = await worker()
   const patch = async (path: string, data: Values) => {
     const response = await service.patch(path, { data })
@@ -66,6 +65,12 @@ async function preview(api: Api, ids: number[]): Promise<{ actie: number; links:
   }
   await patch(`/api/rows/actie/${made.actie}`, { status: 'voorbereid', expect: { status: 'voorbereiden' } })
   await service.dispose()
+}
+
+/** A fresh Bijwerken preview made the way the worker makes one. */
+async function preview(api: Api, ids: number[]): Promise<{ actie: number; links: number[] }> {
+  const made = await run(api, 'bijwerken', ids)
+  await prepare(made)
   return made
 }
 
@@ -219,7 +224,7 @@ test.describe('studio', () => {
     ])
 
     await page
-      .getByRole('status', { name: 'Gezondheid checken uitgevoerd.' })
+      .getByRole('status', { name: 'Gezondheid checken aangevraagd.' })
       .getByRole('button', { name: 'Ongedaan maken' })
       .click()
     await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
@@ -246,8 +251,11 @@ test.describe('studio', () => {
 
     const panel = page.getByRole('region', { name: '2 geselecteerd' })
     await expect(panel).toBeVisible()
-    await expect(panel).toHaveCSS('position', 'absolute')
+    await expect(page.locator('.nv-dock').getByRole('region', { name: '2 geselecteerd' })).toBeVisible()
+    await expect(page.locator('.nv-dock')).toHaveCSS('position', 'absolute')
     expect((await rowOf1.boundingBox())?.y).toBe(top)
+    const button = await panel.getByRole('button', { name: 'Smoketest draaien', exact: true }).boundingBox()
+    expect((await panel.boundingBox())?.height).toBeLessThan((button?.height ?? 0) + 28)
     await page.mouse.move(0, 0)
     const lineOf = () =>
       page
@@ -271,10 +279,84 @@ test.describe('studio', () => {
       expect((await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.site_id).sort()).toEqual([1, 2])
     } finally {
       await page
-        .getByRole('status', { name: 'Gezondheid checken uitgevoerd.' })
+        .getByRole('status', { name: 'Gezondheid checken aangevraagd.' })
         .getByRole('button', { name: 'Ongedaan maken' })
         .click()
       await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
+    }
+  })
+
+  test('request-shows-running-then-result @e2e: a requested opdracht shows running in the dock on every page, ends by itself with its result, and waits on Bevestigen with a link', async ({
+    page,
+  }) => {
+    const api = page.request
+    const service = await worker()
+    const winkel = (await rowOf(api, 'site', 1)).gezondheid
+    const made: number[] = []
+    const dashboard = page.locator('.nv-tree__dashboards').getByRole('button', { name: 'Overzicht' })
+    const patch = async (path: string, data: Values) => {
+      const response = await service.patch(path, { data })
+      expect(response.status(), await response.text()).toBe(200)
+    }
+    const request = async (site: string, action: string) => {
+      await page.getByRole('checkbox', { name: `${site} selecteren` }).check()
+      await page
+        .getByRole('region', { name: '1 geselecteerd' })
+        .getByRole('button', { name: action, exact: true })
+        .click()
+    }
+    try {
+      await open(page, 'Sites', 'Sites')
+      await request('testmans-winkel', 'Gezondheid checken')
+      const actie = await newest(api, 'actie')
+      made.push(actie)
+      await expect(page.getByRole('region', { name: 'Gezondheid checken · Aangevraagd' })).toHaveAttribute(
+        'aria-busy',
+        'true',
+      )
+      await expect(page.locator('tr[data-running]')).toHaveCount(1)
+      await shot(page, 'opdracht-loopt-in-dock')
+
+      await dashboard.click()
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overzicht')
+      await expect(statValue(page, 'Storing')).toHaveText(/^\d+$/)
+      const storing = Number(await statValue(page, 'Storing').textContent())
+      await patch('/api/rows/site/1', { gezondheid: 'storing' })
+      await patch(`/api/rows/actie/${actie}`, { status: 'bezig', expect: { status: 'aangevraagd' } })
+      await patch(`/api/rows/actie/${actie}`, { status: 'klaar', expect: { status: 'bezig' } })
+      const done = page.getByRole('region', { name: 'Gezondheid checken · Klaar' })
+      await expect(done).toBeVisible({ timeout: 15_000 })
+      await expect(done).toHaveAttribute('aria-busy', 'false')
+      await expect(statValue(page, 'Storing')).toHaveText(String(storing + 1))
+      await shot(page, 'opdracht-klaar-in-dock')
+      await expect(done).toHaveCount(0, { timeout: 10_000 })
+
+      await open(page, 'Sites', 'Sites')
+      await request('voorbeeld-site', 'Bijwerken')
+      const update = await newest(api, 'actie')
+      made.push(update)
+      const busy = page.getByRole('region', { name: 'Bijwerken · Aangevraagd' })
+      await expect(busy).toHaveAttribute('aria-busy', 'true')
+      await page.waitForTimeout(3500)
+      await expect(busy).toHaveAttribute('aria-busy', 'true')
+
+      await prepare({
+        actie: update,
+        links: (await rowsOf(api, 'actie_site', { actie_id: update })).rows.map((l) => l.id),
+      })
+      const waiting = page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
+      await expect(waiting).toBeVisible({ timeout: 15_000 })
+      await waiting.click()
+      await expect(page.getByRole('complementary', { name: /Bijwerken/ })).toBeVisible()
+      await expect(waiting).toHaveCount(0)
+    } finally {
+      await patch('/api/rows/site/1', { gezondheid: winkel }).catch(() => undefined)
+      for (const actie of made) {
+        for (const link of (await rowsOf(api, 'actie_site', { actie_id: actie })).rows)
+          await api.delete(`/api/rows/actie_site/${link.id}`)
+        await api.delete(`/api/rows/actie/${actie}`)
+      }
+      await service.dispose()
     }
   })
 
@@ -307,7 +389,7 @@ test.describe('studio', () => {
     expect(links.map((l) => l.site_id).sort()).toEqual([first.id, second.id].sort())
 
     await page
-      .getByRole('status', { name: 'Gezondheid checken uitgevoerd.' })
+      .getByRole('status', { name: 'Gezondheid checken aangevraagd.' })
       .getByRole('button', { name: 'Ongedaan maken' })
       .click()
     await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
@@ -351,7 +433,7 @@ test.describe('studio', () => {
     expect(await rowOf(api, 'actie', actie)).toMatchObject({ titel: 'Smoketest · voorbeeld-site', soort: 'smoketest' })
     expect((await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.site_id)).toEqual([3])
     await page
-      .getByRole('status', { name: 'Smoketest draaien uitgevoerd.' })
+      .getByRole('status', { name: 'Smoketest draaien aangevraagd.' })
       .getByRole('button', { name: 'Ongedaan maken' })
       .click()
     await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
@@ -876,7 +958,7 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(card(page, 1)).toBeFocused()
   })
 
-  test('drawer-reads-right @e2e: Bevestigen is the filled button beside a quiet Annuleren, the live mark says Volgt live, and a site’s actions sit at its head', async ({
+  test('drawer-reads-right @e2e: Bevestigen is the filled button beside a quiet Annuleren, no live mark shows while it waits on Bevestigen, and a site’s actions sit at its head', async ({
     page,
   }) => {
     const api = page.request
@@ -886,7 +968,7 @@ test.describe('studio-polish, what a person reads', () => {
       const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
       await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
       await expect(drawer.getByRole('button', { name: 'Annuleren' })).toHaveClass(/nv-button--secondary/)
-      await expect(drawer.getByText('Volgt live')).toBeVisible()
+      await expect(drawer.getByText('Volgt live')).toHaveCount(0)
       await expect(drawer.getByText('Bezig…')).toHaveCount(0)
       await shot(page, 'opdracht-drawer-bevestigen')
 

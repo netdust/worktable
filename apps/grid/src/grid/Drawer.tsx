@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, LoaderCircle, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
@@ -118,7 +118,7 @@ function Head({ row, model, nav, busy, icon: Icon }: { row: Row; model?: Model; 
         {option && model && ' · '}
         {model?.label}
       </span>
-      {busy && <span className="nv-dw-head__busy" role="status"><i aria-hidden="true" />{t('liveBusy')}</span>}
+      {busy && <span className="nv-dw-head__busy" role="status"><LoaderCircle className="nv-run__spin" size={13} aria-hidden="true" />{t('liveBusy')}</span>}
       {nav && <span className="nv-dw-head__pos">{at >= 0 ? t('position', { n: at + 1, m: nav.ids.length }) : '–'}</span>}
       {nav && (
         <>

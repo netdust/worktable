@@ -28,11 +28,19 @@ const idle: StoreState = { rows: [], save: 'saved', error: null, errors: {}, can
 const never = () => () => undefined
 
 /** One store per loaded window of one view; the undo history is the tab's, so it outlives the store. */
-export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void): [Store | null, StoreState] {
+export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void, onCreated?: (dataset: string, row: Row) => void): [Store | null, StoreState] {
   const latest = useRef(reload)
   latest.current = reload
+  const told = useRef(onCreated)
+  told.current = onCreated
+  // One wrap covers a created row and a draft's commit: both go through the api's create.
+  const made = useCallback(async (model: string, data: Record<string, unknown>) => {
+    const saved = await create(model, data)
+    told.current?.(model, saved.row)
+    return saved
+  }, [])
   const store = useMemo(
-    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create, remove, read: rowOf }, history, reload: () => latest.current() }) : null),
+    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create: made, remove, read: rowOf }, history, reload: () => latest.current() }) : null),
     [view, rows, history],
   )
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))

@@ -1,5 +1,6 @@
 import { Button } from 'react-aria-components'
-import { type ClipboardEvent, type CSSProperties, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
+import { type ClipboardEvent, type CSSProperties, type ReactNode, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
 import type { Lookup, Model, ModelAction, Opened, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
@@ -19,6 +20,7 @@ import { SchemaContext } from './drawer/context'
 import { placeWriter } from './drawer/place'
 import { GridFoot } from './GridFoot'
 import { GridHeader, NUMBER_WIDTH, SELECT_WIDTH } from './GridHeader'
+import { DockSlot, useRuns } from '../ui/runs'
 import { SelectionBar, useSelection } from './Selection'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
@@ -126,6 +128,11 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
   const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT)
   const ticking = useSelection(ids)
+  const dock = useContext(DockSlot)
+  // In the work column's dock when there is one; floating over the sheet's foot otherwise.
+  const panelled = (panel: ReactNode) => (dock ? createPortal(panel, dock) : panel)
+  const runs = useRuns()
+  const running = useMemo(() => new Set([...runs.running].filter((key) => key.startsWith(`${model.key}:`)).map((key) => Number(key.slice(model.key.length + 1)))), [runs.running, model.key])
   const selectionActions = onSelection ? selectionOf(model, models) : []
   const selectable = selectionActions.length > 0
   const numberWidth = selectable ? SELECT_WIDTH : NUMBER_WIDTH
@@ -340,6 +347,13 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     }
   }, [reloads])
 
+  // The dock's link asked for a record: this table shows it, in its own drawer or as a related one.
+  useEffect(() => {
+    if (!runs.opening) return
+    show(runs.opening)
+    runs.settled()
+  }, [runs.opening])
+
   /** What an action asked to open: a record this table holds stays in its own drawer, any other is read and shown as a related one. */
   function show(opened: Opened | null | void): void {
     if (!opened) return
@@ -383,19 +397,19 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       </div>
       ) : (
       <>
-      {selectable && onSelection && (
+      {selectable && onSelection && panelled(
         <SelectionBar count={ticking.selected.size} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
           onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then((opened) => {
             ticking.clear()
             show(opened)
-          })} />
+          })} />,
       )}
       <div className="nv-body">
         <div className="nv-scroll">
           <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" data-ticking={ticking.selected.size > 0 ? '' : undefined} style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
             <GridHeader table={table} byId={byId} numberWidth={numberWidth}
               selection={selectable ? { all: ids.length > 0 && ticking.selected.size === ids.length, some: ticking.selected.size > 0, onToggle: ticking.selected.size === ids.length ? ticking.clear : ticking.all } : undefined} />
-            <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+            <GridBody running={running} groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
               selection={selectable ? { has: (id) => ticking.selected.has(id), toggle: ticking.toggle } : undefined}
               emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
             <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />

@@ -1,11 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, SavedView } from '../types'
 
-const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), records: vi.fn(), rowOf: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), create: vi.fn(), update: vi.fn(), records: vi.fn(), rowOf: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
 vi.mock('../api', () => api)
 const { Dashboard } = await import('./Dashboard')
 const { DrawerWriteContext } = await import('../grid/drawerWrite')
+const { RunsContext } = await import('../ui/runs')
+type Runs = import('../ui/runs').Runs
 
 const view = (id: number, label: string, model: string, extra: Partial<SavedView> = {}): SavedView =>
   ({
@@ -240,5 +243,55 @@ describe('quick actions', () => {
     cleanup()
     withActions({ ...taak, created_by: 'service' })
     expect(screen.queryByRole('button', { name: 'Nieuwe taak' })).toBeNull()
+  })
+})
+
+describe('the followed runs', () => {
+  const runs = (extra: Partial<Runs>): Runs => ({ follow: () => false, created: () => undefined, ended: 0, running: new Set(), lines: [], dismiss: () => undefined, open: () => undefined, opening: null, settled: () => undefined, ...extra })
+  const marked = { state: null, buttons: [], actions: [] }
+
+  it('a run’s end re-reads the tiles and the drawer opened from a dashboard tile', async () => {
+    const opened = { ...row(1, 'Rider versturen', 5), available: marked }
+    api.rows.mockResolvedValue({ rows: [opened], total: 1 })
+    api.rowOf.mockResolvedValue({ ...opened, title: 'Rider verstuurd' })
+    const write = { press: vi.fn(() => Promise.resolve()), fresh: vi.fn() }
+    function Host() {
+      const [ended, setEnded] = useState(0)
+      return (
+        <RunsContext.Provider value={runs({ ended })}>
+          <DrawerWriteContext.Provider value={write}>
+            <button type="button" onClick={() => setEnded((n) => n + 1)}>einde</button>
+            <Dashboard dashboard={dashboard([list])} views={[conflicten, lijst]} models={models} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />
+          </DrawerWriteContext.Provider>
+        </RunsContext.Provider>
+      )
+    }
+    render(<Host />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Rider versturen' }))
+    const reads = api.rows.mock.calls.length
+    expect(api.rowOf).not.toHaveBeenCalled()
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'einde' })))
+
+    await waitFor(() => expect(api.rowOf).toHaveBeenCalledWith('werklijst', 1))
+    await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+    expect(write.fresh).toHaveBeenCalled()
+  })
+
+  it('a quick create tells the follower the record it made', async () => {
+    const made = { ...row(7, 'Bellen', null), fields: {} }
+    api.create.mockResolvedValue({ row: made, batch: 'b1' })
+    const created = vi.fn()
+    const taak = { key: 'taak', label: 'Taken', title_label: 'Titel', title_readonly: false, fields: {} } as unknown as Model
+    const layout = { sections: [], actions: [{ create: 'taak', label: 'Nieuwe taak' }] }
+    render(
+      <RunsContext.Provider value={runs({ created })}>
+        <Dashboard dashboard={{ ...dashboard([]), layout } as unknown as SavedView} views={[conflicten, lijst]} models={{ ...models, taak }} tables={[]} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />
+      </RunsContext.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuwe taak' }))
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'Bellen' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Aanmaken' })))
+    expect(created).toHaveBeenCalledWith('taak', made)
   })
 })

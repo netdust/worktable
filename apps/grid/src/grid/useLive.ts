@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ApiError, Model, Row } from '../types'
 
-const EVERY = 3000
-const BACKED_OFF = 15_000
-const ERRORS = 3
-const REFUSED = new Set([401, 403, 404])
+export const EVERY = 3000
+export const BACKED_OFF = 15_000
+export const ERRORS = 3
+export const REFUSED = new Set([401, 403, 404])
+
+/** The viewer holds a primary button on the record: it waits for them, not for an outside process. */
+export const waiting = (row: Row): boolean => row.available?.buttons.some((button) => button.primary) === true
 
 /** An open drawer follows a record while an outside process holds it, and stops at the first of: close, leaving a live state, the record gone, a refusal. */
 export function useLive(model: Model | undefined, row: Row, reread: () => Promise<Row | null>): { busy: boolean } {
@@ -14,7 +17,7 @@ export function useLive(model: Model | undefined, row: Row, reread: () => Promis
   const state = column ? row.fields[column] : undefined
   const [halted, setHalted] = useState(false)
   const inLive = typeof state === 'string' && live?.includes(state) === true
-  const busy = inLive && !halted
+  const busy = inLive && !halted && !waiting(row)
   const again = useRef(reread)
   again.current = reread
   useEffect(() => {

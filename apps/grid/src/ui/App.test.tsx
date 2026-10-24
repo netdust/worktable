@@ -1693,6 +1693,20 @@ describe('a selection action', () => {
     expect(api.runAction).not.toHaveBeenCalled()
   })
 
+  it('says aangevraagd, and follows the dock, when the run made a record in a live state', async () => {
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'stage', live: ['active'], fields: { stage: { type: 'select', label: 'Stand', required: false, fact: true, options: { active: 'Actief', done: 'Klaar' } } } }
+    api.schema.mockResolvedValue({ ...grouped, models: { ...grouped.models, bundle } })
+    api.rowOf.mockResolvedValue({ id: 7, title: 'Voorjaar', status: '', fields: { stage: 'active' } })
+    await shell()
+    await tick('Aart')
+
+    await run('Voorjaar')
+
+    expect(await screen.findByRole('status', { name: 'Bundelen aangevraagd.' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Bundelen uitgevoerd.' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Bundelen · Actief' }).getAttribute('aria-busy')).toBe('true')
+  })
+
   it('is one batch: one notice, one Undo that takes the whole run back, and the view reloads', async () => {
     await shell()
     await tick('Aart', 'Bo', 'Cas')

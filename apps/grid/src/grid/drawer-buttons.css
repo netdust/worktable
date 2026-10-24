@@ -11,7 +11,7 @@
   padding: 0;
 }
 
-/* A record an outside process holds: a small pulsing dot and the word, in the head line. */
+/* A record an outside process holds: a ring that turns and the word, in the head line. */
 .nv-dw-head__busy {
   display: inline-flex;
   align-items: center;
@@ -19,24 +19,4 @@
   margin-left: auto;
   color: var(--color-fg-subtle);
   font-size: 12px;
-}
-
-.nv-dw-head__busy i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: nv-dw-busy 1.2s ease-in-out infinite;
-}
-
-@keyframes nv-dw-busy {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nv-dw-head__busy i {
-    animation: none;
-  }
 }
