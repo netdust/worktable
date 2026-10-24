@@ -1064,13 +1064,13 @@ test.describe('studio-polish, what a person reads', () => {
       ).toHaveCount(0)
       await shot(page, 'overzicht-zonder-storing')
 
-      const restored = await api.post(`/api/views/${seeded?.id}/restore`)
+      const restored = await api.post(`/api/views/${seeded?.id}/restore`, { data: {} })
       expect(restored.status()).toBe(200)
       seed()
       await landing(page)
       await expect(tile(page, 'Storing')).toBeVisible()
     } finally {
-      if (!(await views()).some((v) => v.name === 'Storing')) await api.post(`/api/views/${seeded?.id}/restore`)
+      if (!(await views()).some((v) => v.name === 'Storing')) await api.post(`/api/views/${seeded?.id}/restore`, { data: {} })
       seed()
     }
   })

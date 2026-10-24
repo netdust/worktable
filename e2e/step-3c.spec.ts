@@ -382,7 +382,7 @@ test.describe('step 3c', () => {
       // A changed seeded dashboard is the person's: --seed-missing leaves it, so the layout goes back by hand.
       if (seeded && layout) {
         if (!(await dashboards()).some((v) => v.id === seeded.id))
-          await admin.request.post(`/api/views/${seeded.id}/restore`)
+          await admin.request.post(`/api/views/${seeded.id}/restore`, { data: {} })
         await admin.request.patch(`/api/views/${seeded.id}`, { data: { layout } })
       }
       for (const created of (await dashboards()).filter((v) => !before.some((old) => old.id === v.id)))
