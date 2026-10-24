@@ -84,25 +84,25 @@ test.describe('step 3d', () => {
       // Folded by default: the card's rows are not on the page, yet its looks already apply.
       await expect(page.getByRole('button', { name: 'Bijstellen' })).toHaveAttribute('aria-expanded', 'false')
       await expect(page.getByRole('radiogroup', { name: 'Rasterlijnen' })).toHaveCount(0)
-      await expect(root).toHaveAttribute('data-lines', 'off')
-      expect(await lineWidth()).toBe('0px')
+      await expect(root).toHaveAttribute('data-lines', 'on')
+      expect(await lineWidth()).toBe('1px')
 
       await openLooks(page)
       for (const name of ['Rijhoogte', 'Dagkop', 'Rasterlijnen', 'Zebrarijen', 'Thema'])
         await expect(page.getByRole('radiogroup', { name })).toBeVisible()
       const lines = page.getByRole('radiogroup', { name: 'Rasterlijnen' })
-      await expect(lines.getByRole('radio', { name: 'Uit' })).toBeChecked()
-      await lines.getByRole('radio', { name: 'Aan' }).click()
-      await expect(root).toHaveAttribute('data-lines', 'on')
-      await expect.poll(lineWidth).toBe('1px')
+      await expect(lines.getByRole('radio', { name: 'Aan' })).toBeChecked()
+      await lines.getByRole('radio', { name: 'Uit' }).click()
+      await expect(root).toHaveAttribute('data-lines', 'off')
+      await expect.poll(lineWidth).toBe('0px')
       await shot(page, 'looks-gridlines')
 
       // Re-entry: the choice outlives a reload and a folded card.
       await page.getByRole('button', { name: 'Bijstellen' }).click()
       await page.reload()
       await expect(page.getByRole('button', { name: 'Bijstellen' })).toHaveAttribute('aria-expanded', 'false')
-      await expect(root).toHaveAttribute('data-lines', 'on')
-      await expect.poll(lineWidth).toBe('1px')
+      await expect(root).toHaveAttribute('data-lines', 'off')
+      await expect.poll(lineWidth).toBe('0px')
 
       // A matrix keeps its own lines whatever the choice.
       await openWeek(page, 'Toewijzingen per activiteit', 'Activiteiten', 'plandag', SEED_WEEK)
@@ -110,16 +110,16 @@ test.describe('step 3d', () => {
       const ownLines = () =>
         matrixCell.evaluate((el) => `${getComputedStyle(el).borderLeftWidth} ${getComputedStyle(el).borderRightWidth}`)
       await expect(matrixCell).toBeVisible()
-      await expect(root).toHaveAttribute('data-lines', 'on')
+      await expect(root).toHaveAttribute('data-lines', 'off')
       const withLines = await ownLines()
       expect(withLines).not.toBe('0px 0px')
       await openLooks(page)
-      await page.getByRole('radiogroup', { name: 'Rasterlijnen' }).getByRole('radio', { name: 'Uit' }).click()
-      await expect(root).toHaveAttribute('data-lines', 'off')
+      await page.getByRole('radiogroup', { name: 'Rasterlijnen' }).getByRole('radio', { name: 'Aan' }).click()
+      await expect(root).toHaveAttribute('data-lines', 'on')
       expect(await ownLines()).toBe(withLines)
     } finally {
       await page.evaluate(() => {
-        localStorage.removeItem('ntdst-views/lines')
+        localStorage.removeItem('ntdst-views/lines/v2')
         localStorage.removeItem('ntdst-views/looks-open')
       })
     }

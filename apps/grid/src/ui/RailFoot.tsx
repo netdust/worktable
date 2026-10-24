@@ -55,7 +55,7 @@ export function RailFoot({ signed }: { signed?: Signed }) {
   // Held here, not in the folded rows, so the choices apply while the card is closed.
   const [density, setDensity] = useLook('ntdst-views/density', 'data-density', ['compact', 'normal', 'roomy'] as const, 'normal')
   const [groups, setGroups] = useLook('ntdst-views/groups', 'data-groups', ['band', 'line'] as const, 'band')
-  const [lines, setLines] = useLook('ntdst-views/lines', 'data-lines', ['off', 'on'] as const, 'off')
+  const [lines, setLines] = useLook('ntdst-views/lines/v2', 'data-lines', ['off', 'on'] as const, 'on')
   const [zebra, setZebra] = useLook('ntdst-views/zebra', 'data-zebra', ['off', 'on'] as const, 'off')
   const [theme, setTheme] = useTheme()
   const [open, setOpen] = useState(storedOpen)

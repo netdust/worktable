@@ -376,7 +376,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   return (
     <LinksContext.Provider value={links ?? null}>
     <RelationContext.Provider value={{ models, scope, spaceModel, openRelated }}>
-    <div className="nv-frame">
+    <div className="nv-frame" data-panel={ticking.selected.size > 0 ? '' : undefined}>
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState title={emptyTitle} description={emptyHint ?? ''} />
@@ -392,7 +392,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       )}
       <div className="nv-body">
         <div className="nv-scroll">
-          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" data-ticking={ticking.selected.size > 0 ? '' : undefined} style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
             <GridHeader table={table} byId={byId} numberWidth={numberWidth}
               selection={selectable ? { all: ids.length > 0 && ticking.selected.size === ids.length, some: ticking.selected.size > 0, onToggle: ticking.selected.size === ids.length ? ticking.clear : ticking.all } : undefined} />
             <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}

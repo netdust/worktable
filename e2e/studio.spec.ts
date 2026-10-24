@@ -227,6 +227,57 @@ test.describe('studio', () => {
     await expect(drawer).toHaveCount(0)
   })
 
+  test('tick-and-run-from-the-panel @e2e: the tick box shows on hover, ticking raises the floating panel and moves no row, the panel runs the action, and the column lines show in both themes', async ({
+    page,
+  }) => {
+    const api = page.request
+    await open(page, 'Sites', 'Sites')
+    const box = (site: string) => page.getByRole('checkbox', { name: `${site} selecteren` })
+    const rowOf1 = page.getByRole('row').filter({ has: box('testmans-winkel') })
+    await rowOf1.hover()
+    await expect(box('testmans-winkel')).toHaveCSS('opacity', '1')
+    await expect(box('testmans-bestel')).toHaveCSS('opacity', '0')
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await shot(page, 'sites-hover-dark')
+    const top = (await rowOf1.boundingBox())?.y
+
+    await box('testmans-winkel').check()
+    await box('testmans-bestel').check()
+
+    const panel = page.getByRole('region', { name: '2 geselecteerd' })
+    await expect(panel).toBeVisible()
+    await expect(panel).toHaveCSS('position', 'absolute')
+    expect((await rowOf1.boundingBox())?.y).toBe(top)
+    await page.mouse.move(0, 0)
+    const lineOf = () =>
+      page
+        .locator('th.nv-th:not(.nv-num)')
+        .first()
+        .evaluate((el) => getComputedStyle(el).borderRightColor)
+    await expect.poll(() => lineOf()).toBe('rgb(58, 61, 68)')
+    await shot(page, 'sites-panel-lines-dark')
+    await page.emulateMedia({ colorScheme: 'light' })
+    await expect.poll(() => lineOf()).toBe('rgb(196, 203, 211)')
+    await shot(page, 'sites-panel-lines-light')
+    const before = await newest(api, 'actie')
+
+    await panel.getByRole('button', { name: 'Gezondheid checken', exact: true }).click()
+
+    const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
+    await expect(drawer).toBeVisible()
+    const actie = await newest(api, 'actie')
+    expect(actie).toBeGreaterThan(before)
+    try {
+      expect((await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.site_id).sort()).toEqual([1, 2])
+    } finally {
+      await page
+        .getByRole('status', { name: 'Gezondheid checken uitgevoerd.' })
+        .getByRole('button', { name: 'Ongedaan maken' })
+        .click()
+      await expect.poll(() => exists(api, 'actie', actie)).toBe(false)
+    }
+  })
+
   test('tick-on-a-query-view @e2e: in Sites met aandacht, two ticked sites run Gezondheid checken and the opdracht opens with exactly those two', async ({
     page,
   }) => {

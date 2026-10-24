@@ -131,16 +131,37 @@ describe('selecting rows', () => {
     expect(screen.queryByText('Maximaal 500 tegelijk')).toBeNull()
   }, 60_000)
 
-  it('keeps its strip while nothing is ticked, so a first tick moves no row', () => {
+  it('the panel is absent with nothing ticked and floats with one tick', () => {
     const { container } = sheet()
-    const idle = container.querySelector('.nv-selection')
-    expect(idle).not.toBeNull()
-    expect(idle?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector('.nv-selection')).toBeNull()
 
     fireEvent.click(rowBox('Montage'))
 
-    expect(container.querySelectorAll('.nv-selection')).toHaveLength(1)
-    expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBe(container.querySelector('.nv-selection'))
+    const panel = screen.getByRole('region', { name: '1 geselecteerd' })
+    expect(panel).toBe(container.querySelector('.nv-selection'))
+    expect(panel.classList.contains('nv-selection--floating')).toBe(true)
+  })
+
+  it("a row's tick box sits beside its number in the number cell", () => {
+    const { container } = sheet()
+    const cell = rowBox('Montage').closest('td') as HTMLElement
+    expect(cell.classList.contains('nv-num')).toBe(true)
+    expect(cell.firstElementChild).toBe(rowBox('Montage'))
+    expect(cell.querySelector('span')?.textContent).toMatch(/^\d+$/)
+    expect(container.querySelectorAll('td.nv-num input')).toHaveLength(calais.length)
+  })
+
+  it('a ticked row carries data-ticked, and with any row ticked the table carries data-ticking', () => {
+    const { container } = sheet()
+    const table = container.querySelector('table') as HTMLElement
+    expect(table.hasAttribute('data-ticking')).toBe(false)
+    expect(container.querySelector('tr[data-ticked]')).toBeNull()
+
+    fireEvent.click(rowBox('Montage'))
+
+    expect(table.hasAttribute('data-ticking')).toBe(true)
+    expect(container.querySelectorAll('tr[data-ticked]')).toHaveLength(1)
+    expect(rowBox('Montage').closest('tr')?.hasAttribute('data-ticked')).toBe(true)
   })
 
   it('leaves the row boxes out of the tab order except on the active row; the header box stays in it', () => {

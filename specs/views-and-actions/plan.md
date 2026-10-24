@@ -64,6 +64,15 @@ All findings from the three rounds are folded in below.
 - `Ruling: one bottom dock in the work column holds both the selection panel (table only, on top) and the run lines (every page, below it). The dock is a portal slot, as DrawerSlot is (SidePanel.tsx:24; App.tsx:220,738): Grid portals its SelectionBar into it, and the run lines render there directly. Spec R4's "the floating panel" is this dock — why: two floating panels at one bottom edge collide (round 1 N5, round 2 N5) — cost if wrong: none.`
 - `Ruling: a null boolean cell shows blank, not an off switch and not "Nee", in every domain. Bool.tsx:12 renders no switch, and columns.ts:204 gives '' for null. A press on a blank cell sets true. This also changes a nullable boolean such as studio's SLA when empty — why: R16's updates_core would otherwise read "no core update" (round 1 S8, round 2 S4) — cost if wrong: a few empty switches look empty instead of off.`
 
+**Round 4** (`plan-review-4.md`; rulings from the reviewer):
+
+- `Ruling: Task 5's known is the ids of columnsFor(model, view), plus id, position and model.title_field; matrix keys still pass through. The R11 test also covers "a board's position sort, a -id sort and a title filter survive the fit"; e2e/step-3f.spec.ts:301-312 stays green. At App.tsx:266 useLayout comes before models (:389): read served?.models[view.model] there, or move the memo above it — why: a board's manual order stores sort position (useBoardDrag.ts:244), studio's Opdrachten sort -id (seed.ts:283,291), a title filter stores the title column (filter.ts:41) (B-1) — cost if wrong: none.`
+- `Ruling: the composer-team-dashboard rewrite (step-3c.spec.ts:346-388) does not restore through --seed-missing: its in-place save makes the dashboard touched. Its finally PATCHes back the layout read before the test, and POSTs /api/views/:id/restore if it deleted the Overzicht — why: S-A — cost if wrong: a changed shared theatre database.`
+- `Ruling: the Composer's save leaves out every tile whose view is not in the views it holds; gone_views is only the "Weergave verwijderd" label. The gone-tile test adds: delete a view, open the Composer in the same session, save: accepted — why: a delete in the same session never reloads gone_views (useSavedViews.ts:89, 203-206), and the engine refuses such a tile (dashboard.ts:55-56) (S-B) — cost if wrong: a refused Composer save.`
+- `Ruling: Task 6's move of request-health-check-for-selected-sites to testmans-bestel (site 2) also changes studio.spec.ts:212-215: the expected links follow (note).`
+- `Ruling: a seed_key on a deleted row counts as a match for a seeded dashboard's tile, so a tile whose seeded view a person deleted drops and never falls back to a colleague's same-named view; the name fallback applies only when no row, live or deleted, carries the key (N8 wording).`
+- Notes: no locked field; gone_views on dashboards only; the DrawerSlot is at App.tsx:219, 628, 717; the worker helper is at studio.spec.ts:33-37.
+
 ## Threat model
 
 **Assets:**

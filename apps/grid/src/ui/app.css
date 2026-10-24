@@ -1265,6 +1265,7 @@
 
 /* The sheet: the bar, then the scrolling table with the drawer beside it. */
 .nv-frame {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1668,7 +1669,7 @@
 /* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
-  border-right: 1px solid var(--color-border-subtle);
+  border-right: 1px solid var(--color-border-row);
 }
 
 /* Zebra rows on request (Bijstellen › Zebrarijen). */
@@ -1691,6 +1692,12 @@
 
 .nv-grid:not(.nv-mx) .nv-th.nv-num {
   z-index: 3;
+}
+
+/* With a tick box the cell reads [box][number] from the left, so every box sits at one x. */
+.nv-grid:not(.nv-mx) .nv-num:has(input[type="checkbox"]) {
+  padding: 0 0 0 12px;
+  text-align: left;
 }
 
 .nv-grid__foot td.nv-num {
@@ -3451,7 +3458,7 @@
   position: relative;
 }
 
-/* The ticked rows' bar, one row above the sheet: the count, each action with its inputs inline, and the way out. */
+/* The ticked rows' panel, floating over the foot of the sheet: the count, each action with its inputs inline, and the way out. */
 .nv-selection {
   box-sizing: border-box;
   min-height: 45px;
@@ -3463,6 +3470,23 @@
   border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   font-size: 13px;
+}
+
+.nv-selection--floating {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
+/* The last row stays reachable under the panel. */
+.nv-frame[data-panel] .nv-scroll {
+  padding-bottom: 84px;
 }
 
 .nv-selection__count {
@@ -3497,13 +3521,20 @@
   margin-left: auto;
 }
 
-/* The box sits at the cell's left edge, whatever the number's width: the cell is sticky, so it holds the box. */
+/* The box sits beside the row number and shows on hover, focus, a tick, or while any row is ticked. Opacity, never visibility: the active row's box stays the Tab stop. */
 .nv-grid:not(.nv-mx) .nv-num input[type="checkbox"] {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  margin: 0;
-  transform: translateY(-50%);
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+  opacity: 0;
+}
+
+.nv-grid:not(.nv-mx) tr:hover .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) tr:focus-within .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) tr[data-ticked] .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx)[data-ticking] .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) .nv-th.nv-num:hover input[type="checkbox"],
+.nv-grid:not(.nv-mx) .nv-th.nv-num input[type="checkbox"]:focus-visible {
+  opacity: 1;
 }
 
 #root .nv-action__refused {
