@@ -24,6 +24,7 @@ const organisaties = [
 const sites = [
   {
     naam: 'testmans-winkel',
+    adres: 'https://testmans-winkel.test',
     sla: true,
     organisatie_id: KLANT,
     gezondheid: 'ok',
@@ -36,6 +37,7 @@ const sites = [
   },
   {
     naam: 'testmans-bestel',
+    adres: 'https://testmans-bestel.test',
     sla: true,
     organisatie_id: KLANT,
     gezondheid: 'let_op',
@@ -50,6 +52,7 @@ const sites = [
   },
   {
     naam: 'voorbeeld-site',
+    adres: 'https://voorbeeld-site.test',
     sla: false,
     organisatie_id: INTERN,
     gezondheid: 'ok',
@@ -62,6 +65,7 @@ const sites = [
   },
   {
     naam: 'voorbeeld-blog',
+    adres: 'https://voorbeeld-blog.test',
     sla: false,
     organisatie_id: INTERN,
     gezondheid: 'storing',
@@ -69,7 +73,7 @@ const sites = [
     responstijd_ms: 95,
     laatste_check: ago(3 * HOUR),
   },
-  { naam: 'oud-archief', in_registry: false, organisatie_id: INTERN },
+  { naam: 'oud-archief', adres: 'https://oud-archief.test', in_registry: false, organisatie_id: INTERN },
 ]
 
 const acties = [

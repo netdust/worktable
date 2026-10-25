@@ -308,7 +308,7 @@ test('shift-refused-in-dutch @e2e', async ({ page, browser }) => {
   }
 })
 
-test('inputs-panel-under-the-head @e2e: an action with inputs opens its panel under the drawer head, focused on its first input and with its close button, in light and dark; Escape closes it back onto Acties', async ({
+test('inputs-panel-under-the-row @e2e: an action with inputs opens its panel under the action row, focused on its first input and with its close button, in light and dark; Escape closes it back onto the action’s button', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -317,14 +317,14 @@ test('inputs-panel-under-the-head @e2e: an action with inputs opens its panel un
   await page.locator('tbody tr.nv-tr').first().getByRole('button', { name: 'Openen' }).click()
   const drawer = page.getByRole('complementary')
   await expect(drawer).toBeVisible()
-  const head = drawer.locator('.nv-drawer__head')
+  const actionRow = drawer.locator('.nv-dw-actions__row')
   await pressInMenu(page, ACTION)
   await expect(actionOf(page)).toBeVisible()
   await expect(daysOf(page)).toBeFocused()
-  const panel = page.locator('.nv-dw-ask--panel')
+  const panel = page.locator('.nv-dw-ask--inline')
   const close = panel.getByRole('button', { name: 'Sluiten' })
   await expect(close).toBeInViewport()
-  const [above, under] = [await head.boundingBox(), await panel.boundingBox()]
+  const [above, under] = [await actionRow.boundingBox(), await panel.boundingBox()]
   expect(under?.y ?? 0).toBeGreaterThanOrEqual((above?.y ?? 0) + (above?.height ?? 0) - 1)
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme })
@@ -332,9 +332,16 @@ test('inputs-panel-under-the-head @e2e: an action with inputs opens its panel un
   }
   await page.keyboard.press('Escape')
   await expect(panel).toHaveCount(0)
-  await expect(head.getByRole('button', { name: 'Acties' })).toBeFocused()
+  await expect(buttonOf(drawer, ACTION)).toBeFocused()
   await expect(drawer).toBeVisible()
 })
+
+/** The action's button in the drawer's row, or Meer when the row folded it. */
+const buttonOf = (drawer: Locator, action: string) =>
+  drawer
+    .locator('.nv-dw-actions__row')
+    .getByRole('button', { name: action, exact: true })
+    .or(drawer.locator('.nv-dw-actions__row').getByRole('button', { name: 'Meer' }))
 
 /** The first tourstop's drawer with an action's inputs open under its head; answers the drawer and the record it shows. */
 async function inputsOpen(page: Page, action: string): Promise<{ drawer: Locator; record: string | null }> {
@@ -369,11 +376,11 @@ test('keys-in-the-inputs-panel-stay-there @e2e: a letter typed in the Sjabloon s
   await expect(daysOf(page)).toHaveValue('1')
 })
 
-test('escape-after-the-picker @e2e: Escape closes the Sjabloon picker back into the panel, a second Escape closes the panel onto Acties', async ({
+test('escape-after-the-picker @e2e: Escape closes the Sjabloon picker back into the panel, a second Escape closes the panel onto the action’s button in the row', async ({
   page,
 }) => {
   const { drawer } = await inputsOpen(page, 'Sjabloon toepassen')
-  const panel = page.locator('.nv-dw-ask--panel')
+  const panel = page.locator('.nv-dw-ask--inline')
   await page
     .getByRole('group', { name: 'Sjabloon toepassen' })
     .getByRole('button', { name: /^Sjabloon: / })
@@ -384,7 +391,7 @@ test('escape-after-the-picker @e2e: Escape closes the Sjabloon picker back into 
   await expect(panel).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(panel, 'the second Escape closes the panel').toHaveCount(0)
-  await expect(drawer.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toBeFocused()
+  await expect(buttonOf(drawer, 'Sjabloon toepassen')).toBeFocused()
 })
 
 test('focused-input-shows-its-mark @e2e: the Dagen field the panel focuses shows a focus mark', async ({ page }) => {

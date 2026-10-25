@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import { pressAction, renderNl, typeKeys } from '../test-setup'
+import { pressTool, renderNl, typeKeys } from '../test-setup'
 import type { LinkItem, Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import type { LinkActions } from './cells/Links'
@@ -1191,7 +1191,7 @@ describe('the drawer', () => {
     api.remove.mockResolvedValueOnce({ id: 103 })
     openDrawer('Lunch bistrot')
 
-    await pressAction('Verwijderen')
+    await pressTool('Verwijderen')
     expect(api.remove).not.toHaveBeenCalled()
 
     await act(async () => {
@@ -1205,7 +1205,7 @@ describe('the drawer', () => {
   it('Escape drops the question, and nothing is sent', async () => {
     renderGrid(calais, { model: deletable })
     openDrawer('Lunch bistrot')
-    await pressAction('Verwijderen')
+    await pressTool('Verwijderen')
     fireEvent.keyDown(screen.getByRole('button', { name: 'Zeker?' }), { key: 'Escape' })
 
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Zeker?' })).toBeNull())
@@ -1216,7 +1216,7 @@ describe('the drawer', () => {
   it('a double click does not confirm: Zeker? is armed only by a fresh press', async () => {
     renderGrid(calais, { model: deletable })
     openDrawer('Lunch bistrot')
-    await pressAction('Verwijderen')
+    await pressTool('Verwijderen')
 
     const press = (detail: number) => {
       const button = screen.getByRole('button', { name: 'Zeker?' })
@@ -1235,7 +1235,7 @@ describe('the drawer', () => {
     renderGrid(calais, { model: deletable })
     api.remove.mockReturnValueOnce(new Promise(() => undefined))
     openDrawer('Lunch bistrot')
-    await pressAction('Verwijderen')
+    await pressTool('Verwijderen')
 
     const button = screen.getByRole('button', { name: 'Zeker?' })
     expect(button.closest('[aria-live="polite"]')).not.toBeNull()
@@ -1253,7 +1253,7 @@ describe('the drawer', () => {
     api.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Toewijzingen', count: 2 }] })
     openDrawer('Lunch bistrot')
 
-    await pressAction('Verwijderen')
+    await pressTool('Verwijderen')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
@@ -1365,7 +1365,7 @@ async function addCondition(field: string, value: string) {
     await screen.findByText('18 mei')
 
     fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
-    await pressAction('Verwijderen')
+    await pressTool('Verwijderen')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
@@ -1841,7 +1841,7 @@ describe('a day plan', () => {
   it('colours an option by its tone and the band by its day, its date and its toned facts', () => {
     renderGrid(rows, { model: plan, view })
 
-    expect(cell('Lunch', 'kind').querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--green')
+    expect(cell('Lunch', 'kind').querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--green')
     expect(bands()[0].querySelector('.nv-group__day')?.textContent).toBe('Maandag')
     expect(bands()[0].querySelector('.nv-group__date')?.textContent).toBe('2 november')
     expect(bands()[0].querySelector('.nv-group__fact i')?.className).toBe('nv-tone--rose')

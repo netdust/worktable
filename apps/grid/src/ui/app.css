@@ -1,6 +1,6 @@
 /* The grid's whole look: the rail, toolbar and sheet of the mockup, and the React Aria parts. Every class carries nv-. */
 #root {
-  --row-h: 40px;
+  --row-h: 32px;
   font: 13.5px/1.4 var(--font-sans);
   color: var(--color-fg-default);
   background: var(--color-bg-surface);
@@ -8,15 +8,15 @@
 }
 
 #root[data-density="compact"] {
-  --row-h: 32px;
+  --row-h: 28px;
 }
 
 #root[data-density="normal"] {
-  --row-h: 40px;
+  --row-h: 32px;
 }
 
 #root[data-density="roomy"] {
-  --row-h: 46px;
+  --row-h: 40px;
 }
 
 .nv-app {
@@ -1574,6 +1574,24 @@
   color: var(--color-danger-fg);
 }
 
+/* In a table cell, the drawer's head and its fields a pill is the tinted word alone, as the reference draws it. */
+.nv-grid:not(.nv-mx) .nv-td .nv-pill::before,
+.nv-dw-head__kind .nv-pill::before,
+.nv-drawer__field dd .nv-pill::before {
+  display: none;
+}
+
+.nv-grid:not(.nv-mx) .nv-td .nv-pill,
+.nv-dw-head__kind .nv-pill,
+.nv-drawer__field dd .nv-pill {
+  padding: 2px 10px;
+}
+
+.nv-dw-head__kind .nv-pill,
+.nv-drawer__field dd .nv-pill {
+  font-size: inherit;
+}
+
 .nv-dot {
   display: inline-flex;
   align-items: center;
@@ -1696,7 +1714,7 @@
 /* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
-  border-right: 1px solid var(--color-border-row);
+  border-right: 1px solid color-mix(in srgb, var(--color-border-row) 60%, transparent);
 }
 
 /* Zebra rows on request (Bijstellen › Zebrarijen). */
@@ -1713,7 +1731,7 @@
   width: var(--nv-num-width, 44px);
   padding: 0 10px 0 0;
   color: var(--color-fg-subtle);
-  font: 11.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
@@ -1753,19 +1771,17 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__tabular {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: inherit;
 }
 
 .nv-grid:not(.nv-mx) {
   line-height: 1.4;
 }
 
-/* The prototype's cells: values muted, the title the one strong word, a time's end quiet.
-   The approved prototype drew its table text at the browser's 16px (no doctype); kept on purpose. */
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. One size for every cell of a row. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1773,11 +1789,15 @@
   font-weight: 500;
 }
 
-.nv-grid:not(.nv-mx) .nv-dot {
-  font-size: 12.5px;
+.nv-grid:not(.nv-mx) .nv-dot,
+.nv-grid:not(.nv-mx) .nv-pill,
+.nv-grid:not(.nv-mx) .nv-blank,
+.nv-grid:not(.nv-mx) .nv-cell__muted,
+.nv-grid:not(.nv-mx) .nv-td__error {
+  font-size: inherit;
 }
 
-/* Small marks keep to the middle of a 16px line. */
+/* Small marks keep to the middle of the line. */
 .nv-grid:not(.nv-mx) .nv-dot,
 .nv-grid:not(.nv-mx) .nv-pill,
 .nv-grid:not(.nv-mx) .nv-blank,
@@ -1892,6 +1912,7 @@
 .nv-cell__bool {
   display: inline-flex;
   align-items: center;
+  vertical-align: middle;
 }
 
 /* A never-given boolean: no switch, but a cell-wide target a press sets to true. */
@@ -1922,6 +1943,11 @@
   border-radius: var(--radius-full);
   background: var(--color-bg-muted);
   transition: background-color var(--transition-base);
+}
+
+/* An off switch must stay visible on the row under the pointer, whose hover fill is as pale as the track. */
+.nv-tr:hover .nv-switch:not([data-selected]) .nv-switch__track {
+  background: color-mix(in srgb, var(--color-fg-muted) 24%, var(--color-bg-hover));
 }
 
 .nv-switch[data-selected] .nv-switch__track {
@@ -2433,6 +2459,17 @@
 .nv-grid__foot td.nv-first {
   z-index: 3;
   padding-left: 16px;
+}
+
+/* The table's end: empty scroll space under the last row, with the totals pinned below it at the pane's bottom. */
+.nv-grid:not(.nv-mx) {
+  min-height: 100%;
+}
+
+.nv-grid:not(.nv-mx) tbody::after {
+  content: '';
+  display: block;
+  height: max(160px, calc(var(--nv-dock-h, 0px) + 40px));
 }
 
 /* The matrix: the grid's table, its tokens and its sticky header and first column, with a mark per cell. */
@@ -3642,9 +3679,14 @@
   }
 }
 
-/* The last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
-.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll {
+/* The matrix's last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
+.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll:has(.nv-mx) {
   padding-bottom: calc(var(--nv-dock-h, 80px) + 28px);
+}
+
+/* A table's dock floats above its pinned totals, over the empty end space. */
+.nv-sheet:has(.nv-grid:not(.nv-mx)) .nv-dock {
+  bottom: 56px;
 }
 
 .nv-selection__count {
@@ -4210,17 +4252,33 @@
   outline: none;
 }
 
-.nv-dw-ask--panel {
-  position: absolute;
-  top: 100%;
-  right: 8px;
-  z-index: 3;
-  min-width: 260px;
+.nv-dw-ask--inline {
+  position: relative;
   padding-right: 32px;
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md, 8px);
   background: var(--color-bg-surface);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+.nv-dw-actions {
+  margin: 14px 0;
+}
+
+.nv-dw-actions__row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nv-dw-actions__row > .nv-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.nv-dw-actions .nv-dw-ask {
+  margin-top: 8px;
 }
 
 #root .nv-dw-ask__close {
@@ -4818,6 +4876,10 @@
   padding: 0;
   background: none;
   font-size: inherit;
+}
+
+.nv-grid:not(.nv-mx) .nv-td .nv-names .nv-pill {
+  padding: 0;
 }
 
 .nv-grid .nv-names .nv-pill::before {

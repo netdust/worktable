@@ -14,7 +14,7 @@ import { columnsFor } from './columns'
 import type { Flag, Flags } from '../ui/useFlags'
 import type { WriteLink } from './drawer/Sections'
 import { activity, planning } from './calais.test.data'
-import { pressAction } from '../test-setup'
+import { pressAction, pressTool } from '../test-setup'
 
 const row = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', notes: 'Twee veggie' } })
 const columns = columnsFor(activity, { ...planning, columns: undefined }, false)
@@ -455,16 +455,28 @@ describe("the drawer's actions", () => {
     expect(document.activeElement).toBe(screen.getByLabelText('Dagen'))
   })
 
-  it('closes the inputs panel from its close button, and gives focus back to the menu button', async () => {
+  it('closes the inputs panel from its close button, and gives focus back to the action’s button in the row', async () => {
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={vi.fn().mockResolvedValue(undefined)} onClose={() => undefined} />)
     await pressAction('Sjabloon toepassen')
-    const panel = document.querySelector('.nv-dw-ask--panel') as HTMLElement
+    const panel = document.querySelector('.nv-dw-ask--inline') as HTMLElement
     expect(panel).not.toBeNull()
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Sluiten' }))
 
-    expect(document.querySelector('.nv-dw-ask--panel')).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Acties' }))
+    expect(document.querySelector('.nv-dw-ask--inline')).toBeNull()
+    expect(document.activeElement).toBe(within(document.querySelector('.nv-dw-actions__row') as HTMLElement).getByRole('button', { name: 'Sjabloon toepassen' }))
+  })
+
+  it('closes an open inputs panel when the drawer steps to another record', async () => {
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    const props = { columns: [], actions: [apply], onAction, onClose: () => undefined }
+    const { rerender } = render(<Drawer row={row(3, 'Calais')} {...props} />)
+    await pressAction('Sjabloon toepassen')
+    expect(document.querySelector('.nv-dw-ask--inline')).not.toBeNull()
+
+    rerender(<Drawer row={row(4, 'Dover')} {...props} />)
+
+    expect(document.querySelector('.nv-dw-ask--inline')).toBeNull()
   })
 
   it("says a refusal under the action, in the writer's words", async () => {
@@ -474,7 +486,7 @@ describe("the drawer's actions", () => {
 
     await pickSjabloon()
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Sjabloon toepassen' }))
+      fireEvent.click(within(screen.getByRole('group', { name: 'Sjabloon toepassen' })).getByRole('button', { name: 'Sjabloon toepassen' }))
     })
 
     expect(screen.getByRole('alert').textContent).toBe('Dit sjabloon is al toegepast.')
@@ -563,12 +575,12 @@ describe("a person's link in the drawer", () => {
     render(<Drawer row={row(3, 'Noor Claes')} columns={[]} recordLink="persoon" onSaid={onSaid} onClose={() => undefined} />)
     expect(screen.getByRole('complementary', { name: 'Noor Claes' }).querySelector('.nv-dw-body')?.textContent).not.toContain('Link kopiëren')
 
-    await act(async () => { await pressAction('Link kopiëren') })
+    await act(async () => { await pressTool('Link kopiëren') })
     expect(remote.recordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(LINK)
     expect(onSaid).toHaveBeenLastCalledWith('Link gekopieerd')
 
-    await act(async () => { await pressAction('Nieuwe link') })
+    await act(async () => { await pressTool('Nieuwe link') })
     expect(remote.rotateRecordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(`${LINK}-new`)
     expect(onSaid).toHaveBeenLastCalledWith('Nieuwe link gekopieerd; de vorige werkt niet meer')
@@ -740,5 +752,26 @@ describe('a link item in the drawer', () => {
     render(<Drawer row={staffed} columns={every} model={model} onClose={() => undefined} />)
     expect(screen.getByText('Sien Peeters')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Sien Peeters' })).toBeNull()
+  })
+})
+
+describe('the drawer opens a record\'s address', () => {
+  const field = { type: 'text' as const, label: 'Adres', required: false, fact: false }
+  const addressed = (value: unknown) => ({ ...row(1, 'Plek'), fields: { adres: value } })
+  const served = { ...activity, fields: { ...activity.fields, adres: { ...field, href: true as const } } } as Model
+  const openable = () => screen.queryByRole('link', { name: 'Openen in nieuw tabblad' })
+
+  it('shows the link before the Acties menu, in a new tab that cannot reach back', () => {
+    render(<Drawer row={addressed('https://voorbeeld-site.test')} columns={columns} model={served} onDelete={vi.fn()} onClose={() => undefined} />)
+    const link = openable() as HTMLAnchorElement
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    const tools = link.parentElement as HTMLElement
+    expect([...tools.children].indexOf(link)).toBeLessThan([...tools.children].indexOf(screen.getByRole('button', { name: 'Acties' }).closest('.nv-menu') as Element))
+  })
+
+  it.each(['javascript:alert(1)', 'data:text/html,x', null])('shows none for %p', (value) => {
+    render(<Drawer row={addressed(value)} columns={columns} model={served} onDelete={vi.fn()} onClose={() => undefined} />)
+    expect(openable()).toBeNull()
   })
 })

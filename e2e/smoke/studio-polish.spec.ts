@@ -5,7 +5,7 @@ import { shot } from '../shots'
 // Read-only and without a session: safe on any running studio, Stefan's own included.
 test.use({ baseURL: STUDIO.app, storageState: { cookies: [], origins: [] } })
 
-test('studio row lines: the grid serves a row-line token stronger than the subtle border, before sign-in @smoke', async ({
+test('studio row lines: the grid serves its own row-line token, apart from the subtle border, before sign-in @smoke', async ({
   page,
 }) => {
   const response = await page.goto('/')

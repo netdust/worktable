@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { pressAction, renderNl } from '../test-setup'
+import { actionsOffered, pressAction, renderNl } from '../test-setup'
 import type { Available, Model, ModelAction, Row, View } from '../types'
 import { activity, calais, planning } from './calais.test.data'
 import { Grid } from './Grid'
@@ -193,9 +193,8 @@ describe('selecting rows', () => {
     sheet(calais, { model: { ...activity, actions: [single, gather] } })
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0] as HTMLElement)
-    fireEvent.click(screen.getByRole('button', { name: 'Acties' }))
 
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Bundelen'])
+    expect(await actionsOffered()).toEqual(['Bundelen'])
   })
 
   it('prunes through a re-read of the same sheet, a store that no longer holds the ticked row', async () => {
@@ -352,8 +351,8 @@ describe('the drawer’s actions', () => {
     sheet(withMarks({ 102: marked('name_it') }), { model: { ...activity, actions: [gather, named] } })
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' }).find((b) => b.closest('tr')?.textContent?.includes('Montage'))!)
     const marked104 = await screen.findByRole('complementary', { name: 'Montage' })
-    fireEvent.click(within(marked104).getByRole('button', { name: 'Acties' }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Benoemen'])
+    expect(within(marked104).getByRole('button', { name: 'Benoemen' })).toBeTruthy()
+    expect(await actionsOffered()).toEqual(['Benoemen'])
   })
 })
 

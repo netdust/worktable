@@ -34,19 +34,32 @@ export function typeKeys(text: string): void {
   }
 }
 
-/** The drawer's record actions: opens the Acties menu in the head and presses one item. */
+/** The drawer's action row: its visible buttons in order, then (once Meer is opened) what Meer holds. */
+const rowButtons = () => [...document.querySelectorAll<HTMLElement>('.nv-dw-actions__row > .nv-button')]
+
+/** Presses one of the drawer's record actions: its button in the row, or its item behind Meer. */
 export async function pressAction(name: string | RegExp): Promise<void> {
+  const same = (text: string) => (typeof name === 'string' ? text === name : name.test(text))
+  const button = rowButtons().find((one) => same(one.textContent ?? ''))
+  if (button) return void fireEvent.click(button)
+  fireEvent.click(screen.getByRole('button', { name: 'Meer' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name }))
+}
+
+/** One of the record's own tools in the drawer's head: opens its Acties menu and presses an item (Link kopiëren, Nieuwe link, Verwijderen). */
+export async function pressTool(name: string | RegExp): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'Acties' }))
   fireEvent.click(await screen.findByRole('menuitem', { name }))
 }
 
-/** What the drawer's Acties menu offers, read by opening it and closing it again; empty when there is no menu. */
+/** What the drawer's action row offers, in order: its buttons, then what Meer holds; empty when there is no row. */
 export async function actionsOffered(): Promise<string[]> {
-  const trigger = screen.queryByRole('button', { name: 'Acties' })
-  if (!trigger) return []
-  fireEvent.click(trigger)
-  const offered = (await screen.findAllByRole('menuitem')).map((item) => item.textContent ?? '')
+  const shown = rowButtons().map((one) => one.textContent ?? '')
+  const more = screen.queryByRole('button', { name: 'Meer' })
+  if (!more) return shown
+  fireEvent.click(more)
+  const folded = (await screen.findAllByRole('menuitem')).map((item) => item.textContent ?? '')
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
-  return offered
+  return [...shown, ...folded]
 }

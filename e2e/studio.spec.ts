@@ -4,6 +4,7 @@ import { type APIRequestContext, expect, type Locator, type Page, type Route, re
 import { STUDIO, STUDIO_SERVICE, state } from './auth'
 import { card, lane, orders } from './board'
 import { offered, pressInMenu } from './drawer'
+import { forget } from './forget'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -263,10 +264,10 @@ test.describe('studio', () => {
         .locator('th.nv-th:not(.nv-num)')
         .first()
         .evaluate((el) => getComputedStyle(el).borderRightColor)
-    await expect.poll(() => lineOf()).toBe('rgb(58, 61, 68)')
+    await expect.poll(() => lineOf()).toBe('color(srgb 0.14902 0.156863 0.172549 / 0.6)')
     await shot(page, 'sites-panel-lines-dark')
     await page.emulateMedia({ colorScheme: 'light' })
-    await expect.poll(() => lineOf()).toBe('rgb(196, 203, 211)')
+    await expect.poll(() => lineOf()).toBe('color(srgb 0.913725 0.92549 0.941176 / 0.6)')
     await shot(page, 'sites-panel-lines-light')
     const before = await newest(api, 'actie')
 
@@ -354,12 +355,12 @@ test.describe('studio', () => {
       })
       const waiting = page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
       await expect(waiting).toBeVisible({ timeout: 15_000 })
-      // The table's last rows stay reachable under the dock.
+      // The dock floats above the table's pinned total, over the empty end space.
       const room = await page.evaluate(() => ({
-        dock: (document.querySelector('.nv-dock') as HTMLElement).offsetHeight,
-        padding: Number.parseFloat(getComputedStyle(document.querySelector('.nv-scroll') as HTMLElement).paddingBottom),
+        dock: (document.querySelector('.nv-dock') as HTMLElement).getBoundingClientRect().bottom,
+        foot: (document.querySelector('tfoot') as HTMLElement).getBoundingClientRect().top,
       }))
-      expect(room.padding).toBeGreaterThanOrEqual(room.dock + 16)
+      expect(room.dock).toBeLessThanOrEqual(room.foot)
 
       await shot(page, 'opdracht-wacht-in-dock')
 
@@ -940,7 +941,7 @@ for (const [scale, tag] of [
   test.describe(`studio, row lines at ${tag}%`, () => {
     test.use({ deviceScaleFactor: scale })
 
-    test(`row-lines-at-${tag} @e2e: a table row’s separator is the row-line token, stronger than the subtle border`, async ({
+    test(`row-lines-at-${tag} @e2e: a table row’s separator is the row-line token, apart from the subtle border`, async ({
       page,
     }) => {
       await open(page, 'Sites', 'Sites')
@@ -953,8 +954,8 @@ for (const [scale, tag] of [
           root.getPropertyValue('--color-border-subtle'),
         ]
       })
-      expect(line).toBe('rgb(196, 203, 211)')
-      expect(row.trim()).toBe('#c4cbd3')
+      expect(line).toBe('rgb(233, 236, 240)')
+      expect(row.trim()).toBe('#e9ecf0')
       expect(row.trim()).not.toBe(subtle.trim())
       await shot(page, `rijlijnen-${tag}`)
     })
@@ -976,7 +977,7 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(card(page, 1)).toBeFocused()
   })
 
-  test('drawer-reads-right @e2e: Bevestigen is the filled button in the head with Annuleren in Acties, no live mark shows while it waits on Bevestigen, and a site’s actions sit at its head', async ({
+  test('drawer-reads-right @e2e: Bevestigen is the filled button in the action row with Annuleren beside it, no live mark shows while it waits on Bevestigen, and a site’s actions sit in its row', async ({
     page,
   }) => {
     const api = page.request
@@ -992,7 +993,7 @@ test.describe('studio-polish, what a person reads', () => {
 
       await open(page, 'Sites', 'Sites')
       const site = await drawerOf(page, 'voorbeeld-site')
-      await expect(site.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toBeInViewport()
+      await expect(site.locator('.nv-dw-actions__row')).toBeInViewport()
       expect(await offered(page)).toEqual(
         expect.arrayContaining(['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien']),
       )
@@ -1002,7 +1003,7 @@ test.describe('studio-polish, what a person reads', () => {
     }
   })
 
-  test('drawer-actions-in-the-bar @e2e: an opdracht waiting on Bevestigen shows it in the drawer head, Annuleren sits in Acties, and the body holds no action', async ({
+  test('confirm-from-the-row @e2e: an opdracht waiting on Bevestigen shows it as a filled button under Sites, Annuleren beside it, nothing of either in the head, in light and dark', async ({
     page,
   }) => {
     const api = page.request
@@ -1010,14 +1011,136 @@ test.describe('studio-polish, what a person reads', () => {
     try {
       await open(page, 'Opdrachten', 'Opdrachten')
       const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
-      const head = drawer.locator('.nv-drawer__head')
-      await expect(head.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
-      await expect(drawer.locator('.nv-dw-body').getByRole('button', { name: /Bevestigen|Annuleren/ })).toHaveCount(0)
-      await head.getByRole('button', { name: 'Acties' }).click()
-      await expect(page.getByRole('menuitem', { name: 'Annuleren' })).toBeVisible()
-      await shot(page, 'opdracht-acties-menu')
+      const sites = drawer.getByRole('region', { name: /Sites/ })
+      const row = drawer.locator('.nv-dw-actions__row')
+      const confirm = row.getByRole('button', { name: 'Bevestigen' })
+      await expect(confirm).toBeVisible()
+      await expect(confirm).toHaveClass(/nv-button--primary/)
+      await expect(row.getByRole('button', { name: 'Annuleren' })).not.toHaveClass(/nv-button--primary/)
+      const [above, under] = [await sites.boundingBox(), await row.boundingBox()]
+      expect(under?.y ?? 0).toBeGreaterThanOrEqual((above?.y ?? 0) + (above?.height ?? 0) - 1)
+      expect((await confirm.boundingBox())?.x ?? 0, 'Bevestigen comes first').toBeLessThan(
+        (await row.getByRole('button', { name: 'Annuleren' }).boundingBox())?.x ?? 0,
+      )
+      await expect(
+        drawer.locator('.nv-drawer__head').getByRole('button', { name: /Bevestigen|Annuleren/ }),
+      ).toHaveCount(0)
+      await expect(page.getByRole('menu')).toHaveCount(0)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `opdracht-rij-${scheme === 'light' ? 'licht' : 'donker'}`)
+      }
     } finally {
       await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
+    }
+  })
+
+  test('site-actions-in-the-row @e2e: a site’s actions are one line in its drawer without horizontal overflow, at 392px and widened, and what does not fit is behind Meer', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const site = await drawerOf(page, 'voorbeeld-site')
+    const row = site.locator('.nv-dw-actions__row')
+    const oneLine = async () => {
+      const middles = await row
+        .locator(':scope > *')
+        .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2))
+      expect(Math.max(...middles) - Math.min(...middles), 'one line').toBeLessThan(3)
+      expect(await row.evaluate((el) => el.scrollWidth <= el.clientWidth), 'no overflow').toBe(true)
+      expect(
+        await site.locator('.nv-dw-body').evaluate((el) => el.scrollWidth <= el.clientWidth),
+        'no body overflow',
+      ).toBe(true)
+    }
+    const all = ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien']
+
+    await oneLine()
+    expect(Math.abs(((await site.boundingBox())?.width ?? 0) - 392)).toBeLessThanOrEqual(2)
+    await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(1)
+    expect(await offered(page)).toEqual(all)
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `site-rij-${scheme === 'light' ? 'licht' : 'donker'}`)
+    }
+
+    await site.getByRole('button', { name: 'Volledig openen' }).click()
+    await expect.poll(async () => (await site.boundingBox())?.width ?? 0).toBeGreaterThan(392)
+    await oneLine()
+    await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(0)
+    expect(await offered(page)).toEqual(all)
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `site-rij-breed-${scheme === 'light' ? 'licht' : 'donker'}`)
+    }
+  })
+
+  test('open-the-address @e2e: a site’s drawer head opens its address in a new tab, first of its tools; a site without one shows no icon; no person may rewrite it', async ({
+    page,
+    browser,
+  }) => {
+    const ADDRESS = 'https://voorbeeld-site.test/'
+    const service = await worker()
+    const bare = (await (await service.post('/api/rows/site', { data: { naam: 'e2e-zonder-adres' } })).json()) as Row
+    const editor = await browser.newContext({ storageState: state('studio-editor') })
+    try {
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'voorbeeld-site')
+      const head = site.locator('.nv-drawer__head')
+      const link = head.getByRole('link', { name: 'Openen in nieuw tabblad' })
+      await expect(link).toBeVisible()
+      await expect(link).toHaveAttribute('href', ADDRESS)
+      await expect(link).toHaveAttribute('target', '_blank')
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+      // A site has no record link and no delete, so no ⋮: the icon leads the head's tools, before widen.
+      await expect(head.getByRole('button', { name: 'Acties' })).toHaveCount(0)
+      const [icon, widen] = [
+        await link.boundingBox(),
+        await head.getByRole('button', { name: 'Volledig openen' }).boundingBox(),
+      ]
+      expect((icon?.x ?? 0) + (icon?.width ?? 0), 'the icon sits before widen').toBeLessThanOrEqual(widen?.x ?? 0)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `site-adres-icoon-${scheme === 'light' ? 'licht' : 'donker'}`)
+        if (process.env.SHAKEOUT_SHOTS)
+          await head.screenshot({
+            path: `${process.env.SHAKEOUT_SHOTS}/site-adres-icoon-kop-${scheme === 'light' ? 'licht' : 'donker'}.png`,
+          })
+      }
+
+      // The .test host never resolves: the new tab's request is caught and refused, nothing leaves the machine.
+      let requested = ''
+      await page.context().route(/voorbeeld-site\.test/, (route) => {
+        requested = route.request().url()
+        return route.abort()
+      })
+      const [tab] = await Promise.all([page.context().waitForEvent('page'), link.click()])
+      await expect.poll(() => requested).toBe(ADDRESS)
+      expect(page.context().pages()).toContain(tab)
+      await tab.close()
+      await expect(site).toBeVisible()
+
+      await open(page, 'Sites', 'Sites')
+      const without = await drawerOf(page, 'e2e-zonder-adres')
+      await expect(without.getByRole('button', { name: 'Volledig openen' })).toBeVisible()
+      await expect(without.getByRole('link', { name: 'Openen in nieuw tabblad' })).toHaveCount(0)
+
+      for (const [who, api] of [
+        ['administrator', page.request],
+        ['editor', editor.request],
+      ] as const) {
+        const refused = await api.patch(`${STUDIO.app}/api/rows/site/3`, { data: { adres: 'https://nep-site.test' } })
+        expect({ who, status: refused.status(), code: ((await refused.json()) as Values).code }).toEqual({
+          who,
+          status: 403,
+          code: 'service_only',
+        })
+      }
+      expect((await rowOf(page.request, 'site', 3)).adres).toBe('https://voorbeeld-site.test')
+    } finally {
+      await page.context().unrouteAll()
+      forget(STUDIO, 'site', [bare.id])
+      await service.dispose()
+      await editor.close()
     }
   })
 
@@ -1129,7 +1252,6 @@ test.describe('studio-polish, what a person reads', () => {
 })
 
 test.describe('views-and-actions, the shake-out', () => {
-  const head = (page: Page) => page.getByRole('complementary').locator('.nv-drawer__head')
   const waitingLine = (page: Page) => page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
 
   /** A Bijwerken on voorbeeld-site requested from the Sites panel and prepared as the worker would: its line waits on Bevestigen. */
@@ -1192,8 +1314,8 @@ test.describe('views-and-actions, the shake-out', () => {
           ),
         ])
     for (const [scheme, colour, name] of [
-      ['dark', 'rgb(58, 61, 68)', 'sites-kolomlijnen-donker'],
-      ['light', 'rgb(196, 203, 211)', 'sites-kolomlijnen-licht'],
+      ['dark', 'color(srgb 0.14902 0.156863 0.172549 / 0.6)', 'sites-kolomlijnen-donker'],
+      ['light', 'color(srgb 0.913725 0.92549 0.941176 / 0.6)', 'sites-kolomlijnen-licht'],
     ] as const) {
       await page.emulateMedia({ colorScheme: scheme })
       await expect.poll(lines).toEqual([`${colour} 1px`])
@@ -1201,7 +1323,7 @@ test.describe('views-and-actions, the shake-out', () => {
     }
   })
 
-  test('waiting-line-and-panel-leave-the-last-row @e2e: with a run waiting on Bevestigen and two sites ticked, the table scrolls its last row and its total clear of the dock', async ({
+  test('waiting-line-and-panel-leave-the-last-row @e2e: with a run waiting on Bevestigen and two sites ticked, the table scrolls its last row clear of the dock, with its total pinned below it', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 430 })
@@ -1235,15 +1357,56 @@ test.describe('views-and-actions, the shake-out', () => {
       })
       expect(reached).toBe(true)
       const top = (await panel.boundingBox())?.y ?? 0
-      for (const [name, target] of [
-        ['the last row', last],
-        ['the total', page.locator('tfoot')],
-      ] as const) {
-        const box = await target.boundingBox()
-        expect((box?.y ?? 0) + (box?.height ?? 0), `${name} ends above the panel`).toBeLessThanOrEqual(top)
-      }
+      const row = await last.boundingBox()
+      expect((row?.y ?? 0) + (row?.height ?? 0), 'the last row ends above the panel').toBeLessThanOrEqual(top)
+      const dock = await page.locator('.nv-dock').boundingBox()
+      const foot = await page.locator('tfoot').boundingBox()
+      expect((dock?.y ?? 0) + (dock?.height ?? 0), 'the total is pinned below the dock').toBeLessThanOrEqual(
+        foot?.y ?? 0,
+      )
     } finally {
       await removeRun(page, actie)
+    }
+  })
+
+  test('tall-dock-leaves-the-last-row @e2e: with the selection panel over three waiting lines the table still scrolls its last row clear of the whole dock', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 480 })
+    const api = page.request
+    const made: number[] = []
+    try {
+      await open(page, 'Sites', 'Sites')
+      for (const site of ['voorbeeld-site', 'voorbeeld-blog', 'testmans-bestel']) {
+        await page.getByRole('checkbox', { name: `${site} selecteren` }).check()
+        await page
+          .getByRole('region', { name: '1 geselecteerd' })
+          .getByRole('button', { name: 'Bijwerken', exact: true })
+          .click()
+        const drawer = page.getByRole('complementary', { name: `Bijwerken · ${site}` })
+        await expect(drawer).toBeVisible()
+        const actie = await newest(api, 'actie')
+        made.push(actie)
+        await prepare({ actie, links: (await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.id) })
+        await drawer.getByRole('button', { name: 'Sluiten' }).click()
+        await expect(page.getByRole('complementary')).toHaveCount(0)
+      }
+      await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
+      await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+      await expect(page.getByRole('region', { name: '2 geselecteerd' })).toBeVisible()
+      await expect(page.locator('.nv-dock .nv-run')).toHaveCount(3, { timeout: 15_000 })
+      await expect(page.locator('.nv-dock .nv-toast')).toHaveCount(0, { timeout: 15_000 })
+      await page.locator('.nv-scroll').evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+      const dock = await page.locator('.nv-dock').boundingBox()
+      const last = await page.locator('tbody tr.nv-tr').last().boundingBox()
+      expect((last?.y ?? 0) + (last?.height ?? 0), 'the last row ends above the whole dock').toBeLessThanOrEqual(
+        dock?.y ?? 0,
+      )
+      await shot(page, 'hoge-dock-laatste-rij')
+    } finally {
+      for (const actie of made) await removeRun(page, actie)
     }
   })
 
@@ -1290,30 +1453,29 @@ test.describe('views-and-actions, the shake-out', () => {
     }
   })
 
-  test('acties-menu-by-keyboard @e2e: a site’s Acties opens on Enter, arrows walk it, Escape closes it back onto Acties and a second Escape closes the drawer', async ({
+  test('actions-row-by-keyboard @e2e: a site’s action row is walked with Tab, Meer opens on Enter, arrows walk it, Escape closes it back onto Meer and a second Escape closes the drawer', async ({
     page,
   }) => {
     await open(page, 'Sites', 'Sites')
     await page.getByRole('row').filter({ hasText: 'voorbeeld-site' }).getByRole('button', { name: 'Openen' }).click()
     const drawer = page.getByRole('complementary', { name: 'voorbeeld-site' })
     await expect(drawer).toBeVisible()
-    const acties = head(page).getByRole('button', { name: 'Acties' })
-    await acties.focus()
+    const row = drawer.locator('.nv-dw-actions__row')
+    const more = row.getByRole('button', { name: 'Meer' })
+    await row.getByRole('button', { name: 'Gezondheid checken' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(row.getByRole('button', { name: 'Malware scannen' })).toBeFocused()
+    await more.focus()
     await page.keyboard.press('Enter')
-    const menu = page.getByRole('menu', { name: 'Acties' })
-    await expect(menu.getByRole('menuitem')).toHaveText([
-      'Gezondheid checken',
-      'Malware scannen',
-      'Bijwerken',
-      'Smoketest draaien',
-    ])
-    await expect(page.getByRole('menuitem', { name: 'Gezondheid checken' })).toBeFocused()
+    const menu = page.getByRole('menu', { name: 'Meer' })
+    const folded = menu.getByRole('menuitem')
+    await expect(folded.first()).toBeFocused()
     await page.keyboard.press('ArrowDown')
-    await expect(page.getByRole('menuitem', { name: 'Malware scannen' })).toBeFocused()
+    await expect(folded.nth(1)).toBeFocused()
     await shot(page, 'site-acties-toetsen')
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
-    await expect(acties).toBeFocused()
+    await expect(more).toBeFocused()
     await expect(drawer).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(drawer).toHaveCount(0)
@@ -1464,6 +1626,73 @@ test.describe('views-and-actions, the shake-out', () => {
           await api.delete(`/api/rows/actie_site/${link.id}`)
         await api.delete(`/api/rows/actie/${actie.id}`)
       }
+    }
+  })
+})
+
+test.describe('action-row, the shake-out', () => {
+  const rgb = (css: string) => (css.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number)
+  const lum = (css: string) => {
+    const [r, g, b] = rgb(css).map((v) => {
+      const c = v / 255
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+    return (hi + 0.05) / (lo + 0.05)
+  }
+
+  test('link-names-keep-their-commas @e2e: a links cell reads its names as coloured text, each comma beside its name, no pill padding', async ({
+    page,
+  }) => {
+    await open(page, 'Opdrachten', 'Opdrachten')
+    const names = page.getByRole('row', { name: /Bijwerken · 2 sites/ }).locator('.nv-names')
+    await expect(names.locator('.nv-pill')).toHaveCount(2)
+    const look = await names.evaluate((el) => {
+      const pills = [...el.querySelectorAll<HTMLElement>('.nv-pill')]
+      const comma = document.createRange()
+      const text = [...(pills[1].parentElement?.childNodes ?? [])].find((n) => n.nodeType === 3) as Text
+      comma.setStart(text, 0)
+      comma.setEnd(text, 1)
+      return {
+        padding: pills.map((p) => `${getComputedStyle(p).paddingLeft} ${getComputedStyle(p).paddingRight}`),
+        gap: comma.getBoundingClientRect().left - pills[0].getBoundingClientRect().right,
+      }
+    })
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `opdrachten-sites-namen-${scheme === 'light' ? 'licht' : 'donker'}`)
+    }
+    expect(look.padding).toEqual(['0px 0px', '0px 0px'])
+    expect(look.gap, 'the comma sits against the first name').toBeLessThanOrEqual(2)
+  })
+
+  test('off-switch-shows-on-a-hovered-row @e2e: a switch that is off stays visible on the row under the pointer, in light and dark', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const row = page.getByRole('row', { name: /voorbeeld-site/ })
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.mouse.move(0, 0)
+      await row.locator('.nv-cell__title').hover()
+      const read = await row
+        .locator('.nv-switch__track')
+        .first()
+        .evaluate((track) => {
+          // The theme fades its surfaces: read once every transition has run.
+          return Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))).then(() => ({
+            track: getComputedStyle(track).backgroundColor,
+            cell: getComputedStyle(track.closest('td') as Element).backgroundColor,
+          }))
+        })
+      await shot(page, `sites-schakelaar-hover-${scheme === 'light' ? 'licht' : 'donker'}`)
+      expect(
+        contrast(read.track, read.cell),
+        `${scheme}: the off track ${read.track} on the hovered cell ${read.cell}`,
+      ).toBeGreaterThanOrEqual(1.1)
     }
   })
 })
