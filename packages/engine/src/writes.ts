@@ -125,7 +125,7 @@ function fits(type: ColumnDecl['type'], value: unknown): boolean {
 
 const WEB_ADDRESS = /^https?:\/\/\S+$/i
 
-function isWebAddress(value: unknown): boolean {
+export function isWebAddress(value: unknown): boolean {
   if (typeof value !== 'string' || !WEB_ADDRESS.test(value)) return false
   try {
     return ['http:', 'https:'].includes(new URL(value).protocol)
