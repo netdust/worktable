@@ -21,10 +21,13 @@ Approved by Stefan on 2026-10-25: "nothing missed, approve the spec, write the p
   are still visible in the dark theme, but they no longer compete with the text. Bijstellen › Rasterlijnen still turns
   the column lines off.
   Source: "you overdid it with the grid contrast, the lines can be mure subtle" — Stefan, 2026-10-25, with a screenshot of Sites in the dark theme.
-- **R2 One text size.** Every cell of a table row uses the same font size: text, numbers, dates, versions, labels and
-  switches. Only the row's title may differ in weight, never in size. *My call:* numbers and dates keep their monospace
-  face at that same size.
+  Source (again): "also contrast between lines and background can be lower" — Stefan, 2026-10-25, on the first version of R1–R3. Measured against his reference screenshot: dark row line about 18 above the background, column line about 10.
+- **R2 One text size.** Every cell of a table row uses the same font size (13px) and the same face: text, numbers,
+  dates, versions, labels, pills, switches and the row-number gutter. The title differs in weight and colour, never
+  in size. Numbers, dates and versions use the body face with tabular figures, no monospace. A row is 32px tall in the
+  default density (compact 28px, roomy 40px), the table only; the matrix keeps its own.
   Source: "fontsize in each cell should be the same, not sometimes bigger ( textfields seem bigger )" — Stefan, 2026-10-25.
+  Source (again): "no the grid is not ok, fontsizes per cell are not the same, heres a example screenshot of what looks good ( fontsize and cell height )" — Stefan, 2026-10-25, reference screenshot: one 13px face, 32px rows, pills at text size. This replaces the earlier "my call" that numbers keep a monospace face.
 - **R3 The totals bar stays at the table's end.** "Totaal · N rijen" is never drawn over rows. With rows ticked and the
   selection panel open, the last row and the totals bar can still be scrolled clear of the panel.
   Source: "there's a bar ( totaal 28 ) floating above the actions" — Stefan, 2026-10-25, screenshot.

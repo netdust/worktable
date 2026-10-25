@@ -88,24 +88,36 @@ test.describe('table look', () => {
     }
   })
 
-  test('one-size-in-a-row @e2e: every cell of a row, and the text inside it, has one font size', async ({ page }) => {
+  test('one-size-in-a-row @e2e: every cell of a row, row number and pills included, has one font size and one face, and the row is 32px', async ({
+    page,
+  }) => {
     await page.goto('/')
     await openView(page, 'Sites', 'Sites')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sites')
     await expect(page.locator('.nv-grid tbody tr').first()).toBeVisible()
-    const sizes = await page
+    const look = await page
       .locator('.nv-grid tbody tr')
       .first()
       .evaluate((row) => {
-        const found = new Set<string>()
+        const sizes = new Set<string>()
+        const faces = new Set<string>()
         for (const el of row.querySelectorAll<HTMLElement>('.nv-td, .nv-td *')) {
-          if (el.closest('.nv-open, .nv-num') || el.tagName === 'svg' || el.closest('svg')) continue
-          if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent?.trim()))
-            continue
-          found.add(getComputedStyle(el).fontSize)
+          if (el.closest('.nv-open, svg')) continue
+          if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent?.trim())) continue
+          sizes.add(getComputedStyle(el).fontSize)
+          faces.add(getComputedStyle(el).fontFamily)
         }
-        return [...found]
+        return { sizes: [...sizes], faces: [...faces], height: row.getBoundingClientRect().height }
       })
-    expect(sizes).toEqual(['14px'])
+    expect(look.sizes).toEqual(['13px'])
+    expect(look.faces).toHaveLength(1)
+    expect(look.height).toBe(32)
+
+    const winkel = page.getByRole('row', { name: /testmans-winkel/ })
+    const middle = async (selector: string) => {
+      const at = await winkel.locator(selector).first().boundingBox()
+      return (at?.y ?? 0) + (at?.height ?? 0) / 2
+    }
+    expect(Math.abs((await middle('.nv-cell__muted')) - (await middle('.nv-cell__title')))).toBeLessThanOrEqual(2)
   })
 })

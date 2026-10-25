@@ -1,6 +1,6 @@
 /* The grid's whole look: the rail, toolbar and sheet of the mockup, and the React Aria parts. Every class carries nv-. */
 #root {
-  --row-h: 40px;
+  --row-h: 32px;
   font: 13.5px/1.4 var(--font-sans);
   color: var(--color-fg-default);
   background: var(--color-bg-surface);
@@ -8,15 +8,15 @@
 }
 
 #root[data-density="compact"] {
-  --row-h: 32px;
+  --row-h: 28px;
 }
 
 #root[data-density="normal"] {
-  --row-h: 40px;
+  --row-h: 32px;
 }
 
 #root[data-density="roomy"] {
-  --row-h: 46px;
+  --row-h: 40px;
 }
 
 .nv-app {
@@ -1696,7 +1696,7 @@
 /* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
-  border-right: 1px solid var(--color-border-row);
+  border-right: 1px solid color-mix(in srgb, var(--color-border-row) 60%, transparent);
 }
 
 /* Zebra rows on request (Bijstellen › Zebrarijen). */
@@ -1713,7 +1713,7 @@
   width: var(--nv-num-width, 44px);
   padding: 0 10px 0 0;
   color: var(--color-fg-subtle);
-  font: 11.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
@@ -1753,7 +1753,6 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__tabular {
-  font-family: var(--font-mono);
   font-size: inherit;
 }
 
@@ -1764,7 +1763,7 @@
 /* The prototype's cells: values muted, the title the one strong word, a time's end quiet. One size for every cell of a row. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1895,6 +1894,7 @@
 .nv-cell__bool {
   display: inline-flex;
   align-items: center;
+  vertical-align: middle;
 }
 
 /* A never-given boolean: no switch, but a cell-wide target a press sets to true. */
