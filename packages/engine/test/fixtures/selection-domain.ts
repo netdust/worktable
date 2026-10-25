@@ -210,6 +210,8 @@ const settle: ActionDecl = {
   input: {},
   when: { bundle_phase: 'open' },
   opens: true,
+  head: { icon: 'star' },
+  handoff: true,
   run: (record) => {
     seen.push([record])
     return []

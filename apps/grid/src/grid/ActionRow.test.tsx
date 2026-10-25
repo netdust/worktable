@@ -185,3 +185,10 @@ describe('the action row', () => {
     }
   })
 })
+
+describe('the action row and head actions', () => {
+  it('leaves an action with a head button to the drawer\'s head', () => {
+    const { container } = show(row({ state: 'x', buttons: [], actions: ['kop', 'gewoon'] }), { actions: [{ ...act('kop'), head: { icon: 'log-in' } }, act('gewoon')], onAction: vi.fn() })
+    expect(names(container)).toEqual(['gewoon'])
+  })
+})

@@ -338,6 +338,16 @@ export async function undoBatch(batch: string): Promise<string> {
   return (await request<{ batch_id: string }>('POST', `/batches/${encodeURIComponent(batch)}/undo`, {}, {})).batch_id
 }
 
+/** The link a service handed back for a record this person's write created: read once, then gone. Null while none has come. */
+export async function takeHandoff(dataset: string, id: number): Promise<string | null> {
+  try {
+    return (await request<{ value: string }>('GET', `/handoff/${encodeURIComponent(dataset)}/${id}`)).value
+  } catch (error) {
+    if ((error as ApiError).status === 404) return null
+    throw error
+  }
+}
+
 /** Runs a dataset's declared action on one record, in one batch. */
 export async function runAction(name: string, id: number, input: Record<string, unknown>): Promise<{ batch: string; created: { dataset: string; id: number }[] }> {
   const reply = await request<{ batch_id: string; created: { dataset: string; id: number }[]; notices?: string[] }>('POST', `/actions/${encodeURIComponent(name)}`, {}, { id, input })

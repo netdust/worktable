@@ -81,7 +81,7 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
   const marked = write && onDone && model && row.available ? row.available.buttons : []
   const items: Item[] = [
     ...[...marked].sort((a, b) => Number(Boolean(b.primary)) - Number(Boolean(a.primary))).map((button) => ({ key: `to:${button.to}`, label: button.label, primary: Boolean(button.primary), run: () => press(button.to) })),
-    ...(onAction ? actions.filter((action) => !row.available || row.available.actions.includes(action.name)).map((action) => ({ key: `action:${action.name}`, label: action.label, primary: false, run: () => run(action) })) : []),
+    ...(onAction ? actions.filter((action) => !action.head && (!row.available || row.available.actions.includes(action.name))).map((action) => ({ key: `action:${action.name}`, label: action.label, primary: false, run: () => run(action) })) : []),
   ]
   const hasItems = items.length > 0
   const signature = items.map((item) => item.key).join('|')
