@@ -124,4 +124,64 @@ describe('the action row', () => {
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Meer' }))
   })
+
+  it('gives focus back to the action’s button after a run with inputs succeeded', async () => {
+    const withInput = act('schuif', { dagen: { type: 'integer', label: 'Dagen' } })
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    const { container } = show(row({ state: 'x', buttons: [], actions: ['schuif'] }), { actions: [withInput], onAction })
+    fireEvent.click(screen.getByRole('button', { name: 'schuif' }))
+    const panel = container.querySelector('.nv-dw-ask--inline') as HTMLElement
+    fireEvent.change(within(panel).getByLabelText('Dagen'), { target: { value: '3' } })
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'schuif' }))
+
+    await waitFor(() => expect(container.querySelector('.nv-dw-ask--inline')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'schuif' }))
+  })
+
+  it('moves focus to the row’s first button when the button that was pressed leaves with the new state', async () => {
+    const before: Available = { state: 'x', buttons: buttons(['ja', 'Bevestigen', true], ['nee', 'Annuleren']), actions: [] }
+    const after: Available = { state: 'y', buttons: buttons(['stop', 'Stoppen']), actions: [] }
+    const done = vi.fn()
+    const view = (record: Row) => (
+      <DrawerWriteContext.Provider value={write}>
+        <ActionRow model="actie" row={record} onDone={done} actions={[]} />
+      </DrawerWriteContext.Provider>
+    )
+    press.mockImplementationOnce(() => Promise.resolve())
+    const { rerender } = render(view(row(before)))
+    const confirm = screen.getByRole('button', { name: 'Bevestigen' })
+    confirm.focus()
+    fireEvent.click(confirm)
+    rerender(view(row(after)))
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stoppen' })))
+  })
+
+  it('attaches its resize watch when the first record had no actions and the next one has', () => {
+    const watched: Element[] = []
+    const real = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(element: Element) {
+        watched.push(element)
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+    try {
+      const view = (record: Row) => (
+        <DrawerWriteContext.Provider value={write}>
+          <ActionRow model="actie" row={record} onDone={vi.fn()} actions={[]} />
+        </DrawerWriteContext.Provider>
+      )
+      const { rerender, container } = render(view(row({ state: 'x', buttons: [], actions: [] })))
+      expect(watched).toHaveLength(0)
+
+      rerender(view(row({ state: 'x', buttons: buttons(['ja', 'Bevestigen', true]), actions: [] })))
+
+      expect(watched).toEqual([container.querySelector('.nv-dw-actions__row')])
+    } finally {
+      globalThis.ResizeObserver = real
+    }
+  })
 })

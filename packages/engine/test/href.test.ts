@@ -6,6 +6,7 @@ import {
   type Domain,
   DomainError,
   defineDataset,
+  defineQuery,
   importExport,
   migrate,
   validateDomain,
@@ -122,6 +123,36 @@ describe('validateDomain on href', () => {
   test.each([{ options: { a: 'A' } }, { relation: 'project' }])('refuses href with %p', (extra) => {
     const column = { type: 'text', label: 'W', nullable: true, href: true, ...extra } as ColumnDecl
     expect(() => validateDomain(declared(column))).toThrow(DomainError)
+  })
+
+  test('refuses href on a query column: its values are never checked by a write', () => {
+    const view = defineQuery({
+      name: 'adressen',
+      label: 'Adressen',
+      title: 'name',
+      sql: "SELECT 1 AS id, 'x' AS name, 'https://example.test' AS web",
+      columns: {
+        id: { type: 'integer', label: 'Id' },
+        name: { type: 'text', label: 'Name' },
+        web: { type: 'text', label: 'Web', href: true },
+      },
+    })
+    expect(() => validateDomain({ ...withSite, queries: [view] })).toThrow(DomainError)
+  })
+
+  test('refuses a second href column on one source: the drawer offers one address', () => {
+    const second = defineDataset({
+      name: 'site',
+      label: 'A',
+      title: 'name',
+      custom: false,
+      columns: {
+        name: columns.name,
+        web: columns.web,
+        other: { type: 'text', label: 'Other', nullable: true, href: true },
+      },
+    })
+    expect(() => validateDomain({ ...withSite, datasets: [second] })).toThrow(DomainError)
   })
 
   test('takes href on a text column', () => {

@@ -940,7 +940,7 @@ for (const [scale, tag] of [
   test.describe(`studio, row lines at ${tag}%`, () => {
     test.use({ deviceScaleFactor: scale })
 
-    test(`row-lines-at-${tag} @e2e: a table row’s separator is the row-line token, stronger than the subtle border`, async ({
+    test(`row-lines-at-${tag} @e2e: a table row’s separator is the row-line token, apart from the subtle border`, async ({
       page,
     }) => {
       await open(page, 'Sites', 'Sites')
@@ -1291,6 +1291,47 @@ test.describe('views-and-actions, the shake-out', () => {
       )
     } finally {
       await removeRun(page, actie)
+    }
+  })
+
+  test('tall-dock-leaves-the-last-row @e2e: with the selection panel over three waiting lines the table still scrolls its last row clear of the whole dock', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 480 })
+    const api = page.request
+    const made: number[] = []
+    try {
+      await open(page, 'Sites', 'Sites')
+      for (const site of ['voorbeeld-site', 'voorbeeld-blog', 'testmans-bestel']) {
+        await page.getByRole('checkbox', { name: `${site} selecteren` }).check()
+        await page
+          .getByRole('region', { name: '1 geselecteerd' })
+          .getByRole('button', { name: 'Bijwerken', exact: true })
+          .click()
+        const drawer = page.getByRole('complementary', { name: `Bijwerken · ${site}` })
+        await expect(drawer).toBeVisible()
+        const actie = await newest(api, 'actie')
+        made.push(actie)
+        await prepare({ actie, links: (await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.id) })
+        await drawer.getByRole('button', { name: 'Sluiten' }).click()
+        await expect(page.getByRole('complementary')).toHaveCount(0)
+      }
+      await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
+      await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+      await expect(page.getByRole('region', { name: '2 geselecteerd' })).toBeVisible()
+      await expect(page.locator('.nv-dock .nv-run')).toHaveCount(3, { timeout: 15_000 })
+      await expect(page.locator('.nv-dock .nv-toast')).toHaveCount(0, { timeout: 15_000 })
+      await page.locator('.nv-scroll').evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+      const dock = await page.locator('.nv-dock').boundingBox()
+      const last = await page.locator('tbody tr.nv-tr').last().boundingBox()
+      expect((last?.y ?? 0) + (last?.height ?? 0), 'the last row ends above the whole dock').toBeLessThanOrEqual(
+        dock?.y ?? 0,
+      )
+      await shot(page, 'hoge-dock-laatste-rij')
+    } finally {
+      for (const actie of made) await removeRun(page, actie)
     }
   })
 

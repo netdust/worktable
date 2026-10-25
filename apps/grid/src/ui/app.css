@@ -1574,12 +1574,16 @@
   color: var(--color-danger-fg);
 }
 
-/* Inside a table cell a pill is the tinted word alone, as the reference draws it. */
-.nv-grid:not(.nv-mx) .nv-td .nv-pill::before {
+/* In a table cell, the drawer's head and its fields a pill is the tinted word alone, as the reference draws it. */
+.nv-grid:not(.nv-mx) .nv-td .nv-pill::before,
+.nv-dw-head__kind .nv-pill::before,
+.nv-drawer__field dd .nv-pill::before {
   display: none;
 }
 
-.nv-grid:not(.nv-mx) .nv-td .nv-pill {
+.nv-grid:not(.nv-mx) .nv-td .nv-pill,
+.nv-dw-head__kind .nv-pill,
+.nv-drawer__field dd .nv-pill {
   padding: 2px 10px;
 }
 
@@ -2455,7 +2459,7 @@
 .nv-grid:not(.nv-mx) tbody::after {
   content: '';
   display: block;
-  height: 160px;
+  height: max(160px, calc(var(--nv-dock-h, 0px) + 40px));
 }
 
 /* The matrix: the grid's table, its tokens and its sticky header and first column, with a mark per cell. */

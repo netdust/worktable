@@ -198,7 +198,7 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
     const at = onLink ? choosableOf(flag, row, links, schema) : null
     return at ? [{ label: t('chooseOther'), run: () => choosers.current[at.key]?.choose(at.place) }] : []
   }
-  const actionRow = <ActionRow model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} onSaid={onSaid} />
+  const actionRow = <ActionRow key={`actions:${row.id}`} model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} onSaid={onSaid} />
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
       tools={<><OpenLink row={row} model={model} /><DrawerTools key={row.id} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} /></>}

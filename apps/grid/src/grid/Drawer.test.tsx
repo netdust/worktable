@@ -467,6 +467,18 @@ describe("the drawer's actions", () => {
     expect(document.activeElement).toBe(within(document.querySelector('.nv-dw-actions__row') as HTMLElement).getByRole('button', { name: 'Sjabloon toepassen' }))
   })
 
+  it('closes an open inputs panel when the drawer steps to another record', async () => {
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    const props = { columns: [], actions: [apply], onAction, onClose: () => undefined }
+    const { rerender } = render(<Drawer row={row(3, 'Calais')} {...props} />)
+    await pressAction('Sjabloon toepassen')
+    expect(document.querySelector('.nv-dw-ask--inline')).not.toBeNull()
+
+    rerender(<Drawer row={row(4, 'Dover')} {...props} />)
+
+    expect(document.querySelector('.nv-dw-ask--inline')).toBeNull()
+  })
+
   it("says a refusal under the action, in the writer's words", async () => {
     const onAction = vi.fn().mockRejectedValue({ code: 'refused', message: 'Dit sjabloon is al toegepast.' })
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)

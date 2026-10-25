@@ -98,11 +98,17 @@ function checkLong(source: DatasetDecl | QueryDecl): void {
 }
 
 function checkHref(source: DatasetDecl | QueryDecl): void {
-  for (const [column, decl] of Object.entries(source.columns)) {
-    if (decl.href && (decl.type !== 'text' || decl.options || decl.relation)) {
+  const hrefs = Object.entries(source.columns).filter(([, decl]) => decl.href)
+  for (const [column, decl] of hrefs) {
+    if (decl.type !== 'text' || decl.options || decl.relation) {
       throw new DomainError(source.name, column, `${column} is href but is not a plain text column`)
     }
+    if ('sql' in source)
+      throw new DomainError(source.name, column, `${column} is href on a query, whose values no write checks`)
   }
+  const second = hrefs[1]?.[0]
+  if (second)
+    throw new DomainError(source.name, second, `${second} is a second href column; a source offers one address`)
 }
 
 // The enforced values are judged by equality, so a misspelt one would enforce nothing.
