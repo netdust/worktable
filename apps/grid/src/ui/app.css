@@ -4238,17 +4238,33 @@
   outline: none;
 }
 
-.nv-dw-ask--panel {
-  position: absolute;
-  top: 100%;
-  right: 8px;
-  z-index: 3;
-  min-width: 260px;
+.nv-dw-ask--inline {
+  position: relative;
   padding-right: 32px;
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md, 8px);
   background: var(--color-bg-surface);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+.nv-dw-actions {
+  margin: 14px 0;
+}
+
+.nv-dw-actions__row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nv-dw-actions__row > .nv-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.nv-dw-actions .nv-dw-ask {
+  margin-top: 8px;
 }
 
 #root .nv-dw-ask__close {

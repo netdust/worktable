@@ -976,7 +976,7 @@ test.describe('studio-polish, what a person reads', () => {
     await expect(card(page, 1)).toBeFocused()
   })
 
-  test('drawer-reads-right @e2e: Bevestigen is the filled button in the head with Annuleren in Acties, no live mark shows while it waits on Bevestigen, and a site’s actions sit at its head', async ({
+  test('drawer-reads-right @e2e: Bevestigen is the filled button in the action row with Annuleren beside it, no live mark shows while it waits on Bevestigen, and a site’s actions sit in its row', async ({
     page,
   }) => {
     const api = page.request
@@ -992,7 +992,7 @@ test.describe('studio-polish, what a person reads', () => {
 
       await open(page, 'Sites', 'Sites')
       const site = await drawerOf(page, 'voorbeeld-site')
-      await expect(site.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toBeInViewport()
+      await expect(site.locator('.nv-dw-actions__row')).toBeInViewport()
       expect(await offered(page)).toEqual(
         expect.arrayContaining(['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien']),
       )
@@ -1002,7 +1002,7 @@ test.describe('studio-polish, what a person reads', () => {
     }
   })
 
-  test('drawer-actions-in-the-bar @e2e: an opdracht waiting on Bevestigen shows it in the drawer head, Annuleren sits in Acties, and the body holds no action', async ({
+  test('confirm-from-the-row @e2e: an opdracht waiting on Bevestigen shows it as a filled button under Sites, Annuleren beside it, nothing of either in the head, in light and dark', async ({
     page,
   }) => {
     const api = page.request
@@ -1010,15 +1010,63 @@ test.describe('studio-polish, what a person reads', () => {
     try {
       await open(page, 'Opdrachten', 'Opdrachten')
       const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
-      const head = drawer.locator('.nv-drawer__head')
-      await expect(head.getByRole('button', { name: 'Bevestigen' })).toHaveClass(/nv-button--primary/)
-      await expect(drawer.locator('.nv-dw-body').getByRole('button', { name: /Bevestigen|Annuleren/ })).toHaveCount(0)
-      await head.getByRole('button', { name: 'Acties' }).click()
-      await expect(page.getByRole('menuitem', { name: 'Annuleren' })).toBeVisible()
-      await shot(page, 'opdracht-acties-menu')
+      const sites = drawer.getByRole('region', { name: /Sites/ })
+      const row = drawer.locator('.nv-dw-actions__row')
+      const confirm = row.getByRole('button', { name: 'Bevestigen' })
+      await expect(confirm).toBeVisible()
+      await expect(confirm).toHaveClass(/nv-button--primary/)
+      await expect(row.getByRole('button', { name: 'Annuleren' })).not.toHaveClass(/nv-button--primary/)
+      const [above, under] = [await sites.boundingBox(), await row.boundingBox()]
+      expect(under?.y ?? 0).toBeGreaterThanOrEqual((above?.y ?? 0) + (above?.height ?? 0) - 1)
+      expect((await confirm.boundingBox())?.x ?? 0, 'Bevestigen comes first').toBeLessThan(
+        (await row.getByRole('button', { name: 'Annuleren' }).boundingBox())?.x ?? 0,
+      )
+      await expect(
+        drawer.locator('.nv-drawer__head').getByRole('button', { name: /Bevestigen|Annuleren/ }),
+      ).toHaveCount(0)
+      await expect(page.getByRole('menu')).toHaveCount(0)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `opdracht-rij-${scheme === 'light' ? 'licht' : 'donker'}`)
+      }
     } finally {
       await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
     }
+  })
+
+  test('site-actions-in-the-row @e2e: a site’s actions are one line in its drawer without horizontal overflow, at 392px and widened, and what does not fit is behind Meer', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const site = await drawerOf(page, 'voorbeeld-site')
+    const row = site.locator('.nv-dw-actions__row')
+    const oneLine = async () => {
+      const middles = await row
+        .locator(':scope > *')
+        .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2))
+      expect(Math.max(...middles) - Math.min(...middles), 'one line').toBeLessThan(3)
+      expect(await row.evaluate((el) => el.scrollWidth <= el.clientWidth), 'no overflow').toBe(true)
+      expect(
+        await site.locator('.nv-dw-body').evaluate((el) => el.scrollWidth <= el.clientWidth),
+        'no body overflow',
+      ).toBe(true)
+    }
+    const all = ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien']
+
+    await oneLine()
+    expect(Math.abs(((await site.boundingBox())?.width ?? 0) - 392)).toBeLessThanOrEqual(2)
+    await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(1)
+    expect(await offered(page)).toEqual(all)
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `site-rij-${scheme === 'light' ? 'licht' : 'donker'}`)
+    }
+
+    await site.getByRole('button', { name: 'Volledig openen' }).click()
+    await expect.poll(async () => (await site.boundingBox())?.width ?? 0).toBeGreaterThan(392)
+    await oneLine()
+    await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(0)
+    expect(await offered(page)).toEqual(all)
   })
 
   test('toolbar-at-1280 @e2e: with a drawer open at 1280 px the toolbar keeps its one row', async ({ page }) => {
@@ -1129,7 +1177,6 @@ test.describe('studio-polish, what a person reads', () => {
 })
 
 test.describe('views-and-actions, the shake-out', () => {
-  const head = (page: Page) => page.getByRole('complementary').locator('.nv-drawer__head')
   const waitingLine = (page: Page) => page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
 
   /** A Bijwerken on voorbeeld-site requested from the Sites panel and prepared as the worker would: its line waits on Bevestigen. */
@@ -1290,30 +1337,29 @@ test.describe('views-and-actions, the shake-out', () => {
     }
   })
 
-  test('acties-menu-by-keyboard @e2e: a site’s Acties opens on Enter, arrows walk it, Escape closes it back onto Acties and a second Escape closes the drawer', async ({
+  test('actions-row-by-keyboard @e2e: a site’s action row is walked with Tab, Meer opens on Enter, arrows walk it, Escape closes it back onto Meer and a second Escape closes the drawer', async ({
     page,
   }) => {
     await open(page, 'Sites', 'Sites')
     await page.getByRole('row').filter({ hasText: 'voorbeeld-site' }).getByRole('button', { name: 'Openen' }).click()
     const drawer = page.getByRole('complementary', { name: 'voorbeeld-site' })
     await expect(drawer).toBeVisible()
-    const acties = head(page).getByRole('button', { name: 'Acties' })
-    await acties.focus()
+    const row = drawer.locator('.nv-dw-actions__row')
+    const more = row.getByRole('button', { name: 'Meer' })
+    await row.getByRole('button', { name: 'Gezondheid checken' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(row.getByRole('button', { name: 'Malware scannen' })).toBeFocused()
+    await more.focus()
     await page.keyboard.press('Enter')
-    const menu = page.getByRole('menu', { name: 'Acties' })
-    await expect(menu.getByRole('menuitem')).toHaveText([
-      'Gezondheid checken',
-      'Malware scannen',
-      'Bijwerken',
-      'Smoketest draaien',
-    ])
-    await expect(page.getByRole('menuitem', { name: 'Gezondheid checken' })).toBeFocused()
+    const menu = page.getByRole('menu', { name: 'Meer' })
+    const folded = menu.getByRole('menuitem')
+    await expect(folded.first()).toBeFocused()
     await page.keyboard.press('ArrowDown')
-    await expect(page.getByRole('menuitem', { name: 'Malware scannen' })).toBeFocused()
+    await expect(folded.nth(1)).toBeFocused()
     await shot(page, 'site-acties-toetsen')
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
-    await expect(acties).toBeFocused()
+    await expect(more).toBeFocused()
     await expect(drawer).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(drawer).toHaveCount(0)

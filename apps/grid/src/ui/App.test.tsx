@@ -1864,7 +1864,7 @@ describe("a dataset's action and the tab's undo history", () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sjabloon: —' }))
     fireEvent.click(await screen.findByRole('option', { name: 'speeldag op locatie' }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Sjabloon toepassen' }))
+      fireEvent.click(within(screen.getByRole('group', { name: 'Sjabloon toepassen' })).getByRole('button', { name: 'Sjabloon toepassen' }))
     })
   }
   const grid = async (name: string) => {

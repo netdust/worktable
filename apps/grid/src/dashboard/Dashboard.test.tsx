@@ -182,8 +182,7 @@ describe('a list tile', () => {
       showWith(models)
       fireEvent.click(await screen.findByRole('button', { name: 'Open Rider versturen' }))
       const drawer = screen.getByRole('complementary', { name: 'Rider versturen' })
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Acties' }))
-      expect(await screen.findByRole('menuitem', { name: 'Afronden' })).toBeTruthy()
+      expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
     })
 
     it('over a query does not', async () => {

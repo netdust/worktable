@@ -216,6 +216,7 @@ const strings = {
   colleagueTitle: 'Gedeeld door een collega: maak een kopie om aan te passen',
   moreActions: 'More actions',
   moreActionsShown: 'Meer acties',
+  moreInRow: 'Meer',
   views_shown: 'Weergaven',
   rename: 'Nieuwe naam',
   duplicate: 'Kopie maken',

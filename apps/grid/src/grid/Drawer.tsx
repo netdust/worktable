@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Link2, LoaderCircle, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
+import { type ChangeEvent, type CSSProperties, Fragment, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, removeAttachment, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
 import type { Account, ApiError, Model, ModelAction, Row, View } from '../types'
@@ -21,6 +21,7 @@ import { Display } from './cells'
 import { ToneMark } from './cells/Select'
 import { toneOf } from './cells/tones'
 import { ICON } from './GridHeader'
+import { ActionRow } from './ActionRow'
 import { DrawerTools } from './DrawerTools'
 import { useLive } from './useLive'
 
@@ -196,9 +197,10 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
     const at = onLink ? choosableOf(flag, row, links, schema) : null
     return at ? [{ label: t('chooseOther'), run: () => choosers.current[at.key]?.choose(at.place) }] : []
   }
+  const actionRow = <ActionRow model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} onSaid={onSaid} />
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
-      tools={<DrawerTools key={row.id} model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} />}
+      tools={<DrawerTools key={row.id} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} />}
       head={<Head row={row} model={model} nav={nav} busy={busy} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
@@ -213,9 +215,13 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
       {folded.length > 0 && (more
         ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
         : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
-      {links.map(({ key, link, column }) => (
-        <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
-          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
+      {links.length === 0 && actionRow}
+      {links.map(({ key, link, column }, at) => (
+        <Fragment key={`${row.id}:${column.id}`}>
+          <LinkSection ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
+            schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
+          {at === 0 && actionRow}
+        </Fragment>
       ))}
       {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
