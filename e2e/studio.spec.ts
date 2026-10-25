@@ -1696,3 +1696,109 @@ test.describe('action-row, the shake-out', () => {
     }
   })
 })
+
+test.describe('studio, the login from a site drawer', () => {
+  const ADDRESS = /testmans-winkel\.test/
+  const LINK = 'https://www.testmans-winkel.test/wp-admin/?e2e-login=sentinel-3f9a'
+
+  /** The inloggen actie the click made, once it exists. */
+  async function started(api: Api, before: number): Promise<number> {
+    await expect.poll(() => newest(api, 'actie')).toBeGreaterThan(before)
+    return newest(api, 'actie')
+  }
+
+  /** Undoes the click's batch: the actie and its link are soft-deleted, no id is ever reused. */
+  async function undo(api: Api, actie: number): Promise<void> {
+    const { revisions } = (await (await api.get(`/api/revisions/actie/${actie}`)).json()) as {
+      revisions: { batch_id: string }[]
+    }
+    const batch = revisions[0]?.batch_id
+    expect((await api.post(`/api/batches/${batch}/undo`, { data: {} })).status()).toBe(200)
+  }
+
+  test('login-from-drawer @e2e: the login icon sits after the address icon, a click opens the tab on the worker’s link once, and the link is in no history', async ({
+    page,
+  }) => {
+    const api = page.request
+    const service = await worker()
+    let actie = 0
+    try {
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'testmans-winkel')
+      const head = site.locator('.nv-drawer__head')
+      const login = head.getByRole('button', { name: 'Inloggen' })
+      await expect(login).toBeVisible()
+      await expect(login).toHaveAttribute('title', 'Inloggen')
+      const next = await head
+        .getByRole('link', { name: 'Openen in nieuw tabblad' })
+        .evaluate((a) => a.nextElementSibling?.getAttribute('aria-label'))
+      expect(next, 'the login icon follows the address icon directly').toBe('Inloggen')
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        const name = scheme === 'light' ? 'licht' : 'donker'
+        await shot(page, `site-inloggen-icoon-${name}`)
+        if (process.env.SHAKEOUT_SHOTS)
+          await head.screenshot({ path: `${process.env.SHAKEOUT_SHOTS}/site-inloggen-icoon-kop-${name}.png` })
+      }
+
+      await page
+        .context()
+        .route(ADDRESS, (route) =>
+          route.fulfill({ contentType: 'text/html', body: '<title>wp-admin (e2e)</title><h1>Ingelogd</h1>' }),
+        )
+      const before = await newest(api, 'actie')
+      const [tab] = await Promise.all([page.context().waitForEvent('page'), login.click()])
+      actie = await started(api, before)
+      expect(await rowOf(api, 'actie', actie)).toMatchObject({ soort: 'inloggen', titel: 'Inloggen · testmans-winkel' })
+      expect((await service.put(`/api/handoff/actie/${actie}`, { data: { value: LINK } })).status()).toBe(200)
+      await expect.poll(() => tab.url(), { timeout: 15_000 }).toBe(LINK)
+      await expect(tab.getByRole('heading', { name: 'Ingelogd' })).toBeVisible()
+      await shot(tab, 'site-inloggen-tab')
+
+      expect((await api.get(`/api/handoff/actie/${actie}`)).status(), 'the tab already took it').toBe(404)
+      expect((await service.get(`/api/handoff/actie/${actie}`)).status()).toBe(404)
+      expect((await service.put(`/api/handoff/actie/${actie}`, { data: { value: LINK } })).status()).toBe(409)
+      for (const path of [`/api/revisions/actie/${actie}`, '/api/schema', '/api/rows/actie?limit=500']) {
+        expect(await (await api.get(path)).text(), path).not.toContain('sentinel-3f9a')
+      }
+      await tab.close()
+    } finally {
+      await page.context().unrouteAll()
+      if (actie) await undo(api, actie)
+      await service.dispose()
+    }
+  })
+
+  test('login-times-out @e2e: with no link from the worker the blank tab closes after 30 seconds and says so; a site without the plugin shows no icon', async ({
+    page,
+  }) => {
+    const api = page.request
+    await page.clock.install()
+    let actie = 0
+    try {
+      await open(page, 'Sites', 'Sites')
+      await drawerOf(page, 'testmans-winkel')
+      const before = await newest(api, 'actie')
+      const [tab] = await Promise.all([
+        page.context().waitForEvent('page'),
+        page.getByRole('button', { name: 'Inloggen' }).click(),
+      ])
+      actie = await started(api, before)
+      for (let second = 0; second < 32; second++) {
+        await page.clock.runFor(1000)
+        await page.waitForTimeout(40)
+      }
+      await expect.poll(() => tab.isClosed()).toBe(true)
+      await expect(page.getByText('Geen link ontvangen')).toBeVisible()
+      await shot(page, 'site-inloggen-geen-link')
+
+      await open(page, 'Sites', 'Sites')
+      const without = await drawerOf(page, 'testmans-bestel')
+      await expect(without.getByRole('button', { name: 'Volledig openen' })).toBeVisible()
+      await expect(without.getByRole('button', { name: 'Inloggen' })).toHaveCount(0)
+      await shot(page, 'site-zonder-plugin')
+    } finally {
+      if (actie) await undo(api, actie)
+    }
+  })
+})
