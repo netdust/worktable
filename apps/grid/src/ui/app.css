@@ -1587,6 +1587,11 @@
   padding: 2px 10px;
 }
 
+.nv-dw-head__kind .nv-pill,
+.nv-drawer__field dd .nv-pill {
+  font-size: inherit;
+}
+
 .nv-dot {
   display: inline-flex;
   align-items: center;
@@ -1938,6 +1943,11 @@
   border-radius: var(--radius-full);
   background: var(--color-bg-muted);
   transition: background-color var(--transition-base);
+}
+
+/* An off switch must stay visible on the row under the pointer, whose hover fill is as pale as the track. */
+.nv-tr:hover .nv-switch:not([data-selected]) .nv-switch__track {
+  background: color-mix(in srgb, var(--color-fg-muted) 24%, var(--color-bg-hover));
 }
 
 .nv-switch[data-selected] .nv-switch__track {
@@ -4866,6 +4876,10 @@
   padding: 0;
   background: none;
   font-size: inherit;
+}
+
+.nv-grid:not(.nv-mx) .nv-td .nv-names .nv-pill {
+  padding: 0;
 }
 
 .nv-grid .nv-names .nv-pill::before {
