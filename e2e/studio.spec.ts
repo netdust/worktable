@@ -4,6 +4,7 @@ import { type APIRequestContext, expect, type Locator, type Page, type Route, re
 import { STUDIO, STUDIO_SERVICE, state } from './auth'
 import { card, lane, orders } from './board'
 import { offered, pressInMenu } from './drawer'
+import { forget } from './forget'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -1067,6 +1068,80 @@ test.describe('studio-polish, what a person reads', () => {
     await oneLine()
     await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(0)
     expect(await offered(page)).toEqual(all)
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `site-rij-breed-${scheme === 'light' ? 'licht' : 'donker'}`)
+    }
+  })
+
+  test('open-the-address @e2e: a site’s drawer head opens its address in a new tab, first of its tools; a site without one shows no icon; no person may rewrite it', async ({
+    page,
+    browser,
+  }) => {
+    const ADDRESS = 'https://voorbeeld-site.test/'
+    const service = await worker()
+    const bare = (await (await service.post('/api/rows/site', { data: { naam: 'e2e-zonder-adres' } })).json()) as Row
+    const editor = await browser.newContext({ storageState: state('studio-editor') })
+    try {
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'voorbeeld-site')
+      const head = site.locator('.nv-drawer__head')
+      const link = head.getByRole('link', { name: 'Openen in nieuw tabblad' })
+      await expect(link).toBeVisible()
+      await expect(link).toHaveAttribute('href', ADDRESS)
+      await expect(link).toHaveAttribute('target', '_blank')
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+      // A site has no record link and no delete, so no ⋮: the icon leads the head's tools, before widen.
+      await expect(head.getByRole('button', { name: 'Acties' })).toHaveCount(0)
+      const [icon, widen] = [
+        await link.boundingBox(),
+        await head.getByRole('button', { name: 'Volledig openen' }).boundingBox(),
+      ]
+      expect((icon?.x ?? 0) + (icon?.width ?? 0), 'the icon sits before widen').toBeLessThanOrEqual(widen?.x ?? 0)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `site-adres-icoon-${scheme === 'light' ? 'licht' : 'donker'}`)
+        if (process.env.SHAKEOUT_SHOTS)
+          await head.screenshot({
+            path: `${process.env.SHAKEOUT_SHOTS}/site-adres-icoon-kop-${scheme === 'light' ? 'licht' : 'donker'}.png`,
+          })
+      }
+
+      // The .test host never resolves: the new tab's request is caught and refused, nothing leaves the machine.
+      let requested = ''
+      await page.context().route(/voorbeeld-site\.test/, (route) => {
+        requested = route.request().url()
+        return route.abort()
+      })
+      const [tab] = await Promise.all([page.context().waitForEvent('page'), link.click()])
+      await expect.poll(() => requested).toBe(ADDRESS)
+      expect(page.context().pages()).toContain(tab)
+      await tab.close()
+      await expect(site).toBeVisible()
+
+      await open(page, 'Sites', 'Sites')
+      const without = await drawerOf(page, 'e2e-zonder-adres')
+      await expect(without.getByRole('button', { name: 'Volledig openen' })).toBeVisible()
+      await expect(without.getByRole('link', { name: 'Openen in nieuw tabblad' })).toHaveCount(0)
+
+      for (const [who, api] of [
+        ['administrator', page.request],
+        ['editor', editor.request],
+      ] as const) {
+        const refused = await api.patch(`${STUDIO.app}/api/rows/site/3`, { data: { adres: 'https://nep-site.test' } })
+        expect({ who, status: refused.status(), code: ((await refused.json()) as Values).code }).toEqual({
+          who,
+          status: 403,
+          code: 'service_only',
+        })
+      }
+      expect((await rowOf(page.request, 'site', 3)).adres).toBe('https://voorbeeld-site.test')
+    } finally {
+      await page.context().unrouteAll()
+      forget(STUDIO, 'site', [bare.id])
+      await service.dispose()
+      await editor.close()
+    }
   })
 
   test('toolbar-at-1280 @e2e: with a drawer open at 1280 px the toolbar keeps its one row', async ({ page }) => {
@@ -1551,6 +1626,70 @@ test.describe('views-and-actions, the shake-out', () => {
           await api.delete(`/api/rows/actie_site/${link.id}`)
         await api.delete(`/api/rows/actie/${actie.id}`)
       }
+    }
+  })
+})
+
+test.describe('action-row, the shake-out', () => {
+  const rgb = (css: string) => (css.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number)
+  const lum = (css: string) => {
+    const [r, g, b] = rgb(css).map((v) => {
+      const c = v / 255
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+    return (hi + 0.05) / (lo + 0.05)
+  }
+
+  test('link-names-keep-their-commas @e2e: a links cell reads its names as coloured text, each comma beside its name, no pill padding', async ({
+    page,
+  }) => {
+    await open(page, 'Opdrachten', 'Opdrachten')
+    const names = page.getByRole('row', { name: /Bijwerken · 2 sites/ }).locator('.nv-names')
+    await expect(names.locator('.nv-pill')).toHaveCount(2)
+    const look = await names.evaluate((el) => {
+      const pills = [...el.querySelectorAll<HTMLElement>('.nv-pill')]
+      const comma = document.createRange()
+      const text = [...(pills[1].parentElement?.childNodes ?? [])].find((n) => n.nodeType === 3) as Text
+      comma.setStart(text, 0)
+      comma.setEnd(text, 1)
+      return {
+        padding: pills.map((p) => `${getComputedStyle(p).paddingLeft} ${getComputedStyle(p).paddingRight}`),
+        gap: comma.getBoundingClientRect().left - pills[0].getBoundingClientRect().right,
+      }
+    })
+    await shot(page, 'opdrachten-sites-namen')
+    expect(look.padding).toEqual(['0px 0px', '0px 0px'])
+    expect(look.gap, 'the comma sits against the first name').toBeLessThanOrEqual(2)
+  })
+
+  test('off-switch-shows-on-a-hovered-row @e2e: a switch that is off stays visible on the row under the pointer, in light and dark', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const row = page.getByRole('row', { name: /voorbeeld-site/ })
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.mouse.move(0, 0)
+      await row.locator('.nv-cell__title').hover()
+      const read = await row
+        .locator('.nv-switch__track')
+        .first()
+        .evaluate((track) => {
+          // The theme fades its surfaces: read once every transition has run.
+          return Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))).then(() => ({
+            track: getComputedStyle(track).backgroundColor,
+            cell: getComputedStyle(track.closest('td') as Element).backgroundColor,
+          }))
+        })
+      await shot(page, `sites-schakelaar-hover-${scheme === 'light' ? 'licht' : 'donker'}`)
+      expect(
+        contrast(read.track, read.cell),
+        `${scheme}: the off track ${read.track} on the hovered cell ${read.cell}`,
+      ).toBeGreaterThanOrEqual(1.1)
     }
   })
 })

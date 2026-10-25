@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test'
 import { STUDIO, STUDIO_SERVICE, state } from './auth'
+import { forget } from './forget'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -105,8 +106,34 @@ test.describe('table look', () => {
         await shot(page, `tabel-midden-paneel-${theme(scheme)}`)
       }
     } finally {
-      for (const id of ids) await service.delete(`/api/rows/site/${id}`)
+      // A site is the worker's and is never deleted through the API (405): the test takes its invented rows out again.
+      forget(STUDIO, 'site', ids)
       await service.dispose()
+    }
+  })
+
+  test('totals-pinned-on-a-short-table @e2e: with Sites’ four seeded rows the totals sit at the pane’s bottom, not under the last row', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await openView(page, 'Sites', 'Sites')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sites')
+    await expect(page.locator('.nv-grid tbody tr.nv-tr')).toHaveCount(4)
+    const scroll = page.locator('.nv-scroll')
+    expect(await scroll.evaluate((el) => el.scrollHeight <= el.clientHeight), 'the short table does not scroll').toBe(
+      true,
+    )
+    const bottom = (at: { y: number; height: number } | null) => (at?.y ?? 0) + (at?.height ?? 0)
+    const pane = await scroll.boundingBox()
+    const foot = await box(page, '.nv-grid__foot td')
+    expect(bottom(pane) - bottom(foot), 'the foot’s bottom is the pane’s bottom').toBeGreaterThanOrEqual(0)
+    expect(bottom(pane) - bottom(foot), 'the foot’s bottom is the pane’s bottom').toBeLessThanOrEqual(16)
+    expect((foot?.y ?? 0) - bottom(await page.locator('.nv-grid tbody tr.nv-tr').last().boundingBox())).toBeGreaterThan(
+      100,
+    )
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `tabel-kort-${scheme === 'light' ? 'licht' : 'donker'}`)
     }
   })
 
