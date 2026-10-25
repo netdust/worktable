@@ -1,9 +1,15 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { migrate, seedDomain } from '@worktable/engine'
 import { createService } from '@worktable/engine/src/auth'
 import { signIn, testEngine } from '@worktable/engine/test/sign-in'
 import studio from '../src'
+
+const SERVE = join(import.meta.dir, '../../engine/src/serve.ts')
+const ROOT = join(import.meta.dir, '../../..')
 
 type Body = Record<string, unknown>
 type Send = (method: string, path: string, body?: Body) => Promise<{ status: number; body: Body }>
@@ -88,6 +94,21 @@ describe('actie soorten', () => {
     }
   })
 
+  test('install and maintenance cannot go straight from aangevraagd to bezig, as a service or a person', async () => {
+    for (const action of ['plugin_installeren', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit']) {
+      await selection(admin, action, [WITH])
+      const id = lastActie()
+      for (const who of [worker, admin]) {
+        const skipped = await move(who, id, 'aangevraagd', 'bezig')
+        expect(
+          skipped.status,
+          `${action} by ${who === worker ? 'the worker' : 'an administrator'}`,
+        ).toBeGreaterThanOrEqual(400)
+      }
+      expect(statusOf(id)).toBe('aangevraagd')
+    }
+  })
+
   test('install and maintenance wait at voorbereid until an administrator confirms', async () => {
     for (const action of ['plugin_installeren', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit']) {
       await selection(editor, action, [WITH])
@@ -151,12 +172,73 @@ describe('Inloggen', () => {
     expect((await claude('POST', '/api/rows/actie', body)).status).toBe(403)
   })
 
+  test('is refused 422 condition_not_met on a site that left the registry, as the link would be skipped for ever', async () => {
+    sqlite.run('UPDATE site SET plugin = 1 WHERE id = 5')
+    const before = lastActie()
+    const res = await admin('POST', '/api/actions/inloggen', { id: 5 })
+    expect([res.status, res.body.code]).toEqual([422, 'condition_not_met'])
+    expect(lastActie()).toBe(before)
+  })
+
   test('is refused 422 condition_not_met on a site without the plugin', async () => {
     const before = lastActie()
     const res = await admin('POST', '/api/actions/inloggen', { id: WITHOUT })
     expect(res.status).toBe(422)
     expect(res.body.code).toBe('condition_not_met')
     expect(lastActie()).toBe(before)
+  })
+})
+
+describe('the Studio-plugin view', () => {
+  const FIELDS = [
+    'naam',
+    'plugin',
+    'plugin_versie',
+    'core_bestanden',
+    'admins',
+    'bekende_admins',
+    'cron_achterstand',
+    'php_fouten',
+    'uploadmap_mb',
+    'db_mb',
+    'onderhoudsmodus',
+  ]
+
+  test('is a seeded system view of the registry sites listing the plugin reads, beside an untouched Sites view', async () => {
+    const { views } = (await admin('GET', '/api/views')).body as { views: Body[] }
+    const seeded = views.find((v) => v.name === 'Studio-plugin')
+    expect(seeded).toMatchObject({
+      source: 'site',
+      skin: 'table',
+      filters: { in_registry: true },
+      visible_fields: FIELDS,
+    })
+    const sites = views.find((v) => v.name === 'Sites')
+    expect(sites?.visible_fields).not.toContain('plugin')
+  })
+
+  test('--seed-missing creates it on a database that lacks it, as a system view', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wt-studio-seed-'))
+    const db = join(dir, 'engine.db')
+    const old = new Database(db, { create: true })
+    migrate(old, studio)
+    seedDomain(old, studio)
+    old.run("DELETE FROM saved_view WHERE name = 'Studio-plugin'")
+    old.close()
+    const proc = Bun.spawn(['bun', SERVE, '--domain', '@worktable/studio', '--db', db, '--seed-missing'], {
+      cwd: ROOT,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect(await proc.exited, await new Response(proc.stderr).text()).toBe(0)
+    const check = new Database(db)
+    const [row] = check
+      .query("SELECT owner_id, visible_fields, filters FROM saved_view WHERE name = 'Studio-plugin'")
+      .all() as Body[]
+    check.close()
+    expect(row?.owner_id).toBe(-1)
+    expect(JSON.parse(row?.visible_fields as string)).toEqual(FIELDS)
+    expect(JSON.parse(row?.filters as string)).toEqual({ in_registry: true })
   })
 })
 

@@ -75,7 +75,7 @@ const inloggen: ActionDecl = {
   input: {},
   head: { icon: 'log-in' },
   handoff: true,
-  when: { plugin: true },
+  when: { plugin: true, in_registry: true },
   run: (record) => ({
     creates: [
       {
