@@ -1754,18 +1754,17 @@
 
 .nv-grid:not(.nv-mx) .nv-cell__tabular {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: inherit;
 }
 
 .nv-grid:not(.nv-mx) {
   line-height: 1.4;
 }
 
-/* The prototype's cells: values muted, the title the one strong word, a time's end quiet.
-   The approved prototype drew its table text at the browser's 16px (no doctype); kept on purpose. */
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. One size for every cell of a row. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1773,11 +1772,15 @@
   font-weight: 500;
 }
 
-.nv-grid:not(.nv-mx) .nv-dot {
-  font-size: 12.5px;
+.nv-grid:not(.nv-mx) .nv-dot,
+.nv-grid:not(.nv-mx) .nv-pill,
+.nv-grid:not(.nv-mx) .nv-blank,
+.nv-grid:not(.nv-mx) .nv-cell__muted,
+.nv-grid:not(.nv-mx) .nv-td__error {
+  font-size: inherit;
 }
 
-/* Small marks keep to the middle of a 16px line. */
+/* Small marks keep to the middle of the line. */
 .nv-grid:not(.nv-mx) .nv-dot,
 .nv-grid:not(.nv-mx) .nv-pill,
 .nv-grid:not(.nv-mx) .nv-blank,
@@ -2433,6 +2436,11 @@
 .nv-grid__foot td.nv-first {
   z-index: 3;
   padding-left: 16px;
+}
+
+/* The table's totals sit at its end, never over rows; the first cell keeps its horizontal freeze. */
+.nv-grid:not(.nv-mx) .nv-grid__foot td {
+  bottom: auto;
 }
 
 /* The matrix: the grid's table, its tokens and its sticky header and first column, with a mark per cell. */
