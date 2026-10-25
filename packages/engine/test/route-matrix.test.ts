@@ -255,7 +255,7 @@ const EXPECTED: { method: string; path: string; body?: unknown; type?: string; s
     status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },
   },
   {
-    // Only a service puts; a link is confined before the route is reached.
+    // Only the listed service puts; a link is confined before the route is reached.
     method: 'PUT',
     path: '/api/handoff/note/1',
     body: { value: 'https://matrix.example.test/' },
@@ -287,7 +287,7 @@ describe('the permissions matrix', () => {
     sqlite = freshDb()
     const filesDir = mkdtempSync(join(tmpdir(), 'wt-matrix-files-'))
     writeFileSync(join(filesDir, FILE_HASH), FILE)
-    app = testEngine(sqlite, domain, { filesDir })
+    app = testEngine(sqlite, domain, { filesDir, handoffServices: ['matrix'] })
     for (const role of ['owner', 'editor', 'administrator'] as const) {
       cookies[role] = await signIn(app, role, role === 'owner' ? OWN : null)
     }

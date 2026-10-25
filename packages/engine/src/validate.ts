@@ -661,6 +661,7 @@ function checkHead(name: string, action: ActionDecl | SelectionActionDecl): void
   if (head !== undefined) {
     const icon = (head as { icon?: unknown } | null)?.icon
     if (isSelection(action)) throw new DomainError(name, 'head', 'a selection action has no head button')
+    if (Object.keys(action.input).length > 0) throw new DomainError(name, 'head', 'a head button runs with no input')
     if (typeof icon !== 'string' || !(ICONS as readonly string[]).includes(icon)) {
       throw new DomainError(name, 'head', `head.icon must be one of ${ICONS.join(', ')}`)
     }

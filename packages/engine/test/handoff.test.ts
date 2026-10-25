@@ -1,7 +1,11 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { migrate, seedDomain } from '../src'
 import { createService } from '../src/auth'
+import { startSweep } from '../src/handoff'
 import { domain } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
@@ -15,7 +19,7 @@ beforeEach(() => {
   sqlite = new Database(':memory:')
   migrate(sqlite, domain)
   seedDomain(sqlite, domain)
-  app = testEngine(sqlite, domain)
+  app = testEngine(sqlite, domain, { handoffServices: ['bot', 'rival'] })
 })
 
 async function call(method: string, path: string, headers: Record<string, string> = {}, body?: unknown) {
@@ -37,6 +41,8 @@ const as = (cookie: string) => ({ cookie })
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` })
 const put = (who: Record<string, string>, id: number, body: unknown, dataset = 'note') =>
   call('PUT', `/api/handoff/${dataset}/${id}`, who, body)
+const getFrom = (who: Record<string, string>, id: number, site: string) =>
+  call('GET', `/api/handoff/note/${id}`, { ...who, 'sec-fetch-site': site })
 const get = (who: Record<string, string>, id: number, dataset = 'note') =>
   call('GET', `/api/handoff/${dataset}/${id}`, who)
 
@@ -119,7 +125,7 @@ describe('a handoff', () => {
     expect((await get(creator, id)).body).toEqual({ value: URL_SENTINEL })
   })
 
-  test('a second put by another service is 409', async () => {
+  test('a second put by another listed service is 409', async () => {
     const { id, service } = await setup()
     await put(service, id, { value: URL_SENTINEL })
     const rival = bearer(createService(sqlite, 'rival', 'editor'))
@@ -239,5 +245,129 @@ describe('a handoff', () => {
       expect(res.status).toBe(200)
       expect(res.text).not.toContain('SENTINEL')
     }
+  })
+
+  test('a service not on the list: its first put is 403 handoff_not_allowed and leaves no row', async () => {
+    const { creator, id } = await setup()
+    const rival = bearer(createService(sqlite, 'intruder', 'editor'))
+    const refused = await put(rival, id, { value: URL_SENTINEL })
+    expect(refused.status).toBe(403)
+    expect(refused.body.code).toBe('handoff_not_allowed')
+    expect(sqlite.query('SELECT COUNT(*) AS n FROM handoff').get()).toEqual({ n: 0 })
+    expect((await get(creator, id)).status).toBe(404)
+  })
+
+  test('a refused service learns nothing about the record: a missing one is 403 too', async () => {
+    const rival = bearer(createService(sqlite, 'intruder', 'editor'))
+    expect((await put(rival, 9999, { value: URL_SENTINEL })).status).toBe(403)
+    expect((await put(rival, 1, { value: URL_SENTINEL }, 'nope')).status).toBe(403)
+  })
+
+  test('an engine without the option refuses every service put', async () => {
+    const bare = testEngine(sqlite, domain)
+    const creator = as(await signIn(bare, 'editor'))
+    const made = await bare.request('/api/rows/note', {
+      method: 'POST',
+      headers: { ...HOST, ...creator },
+      body: JSON.stringify({ project_id: 1, tekst: 'x' }),
+    })
+    const id = (await made.json()).id
+    const bot = bearer(createService(sqlite, 'bot', 'administrator'))
+    const res = await bare.request(`/api/handoff/note/${id}`, {
+      method: 'PUT',
+      headers: { ...HOST, ...bot },
+      body: JSON.stringify({ value: URL_SENTINEL }),
+    })
+    expect(res.status).toBe(403)
+    expect(sqlite.query('SELECT COUNT(*) AS n FROM handoff').get()).toEqual({ n: 0 })
+  })
+
+  test.each(['cross-site', 'same-site'])('a %s read is 403 forbidden_site and spends nothing', async (site) => {
+    const { creator, id, service } = await setup()
+    await put(service, id, { value: URL_SENTINEL })
+    const refused = await getFrom(creator, id, site)
+    expect(refused.status).toBe(403)
+    expect(refused.body.code).toBe('forbidden_site')
+    expect(refused.text).not.toContain('SENTINEL')
+    expect((await get(creator, id)).body).toEqual({ value: URL_SENTINEL })
+  })
+
+  test('a same-origin read is served', async () => {
+    const { creator, id, service } = await setup()
+    await put(service, id, { value: URL_SENTINEL })
+    expect((await getFrom(creator, id, 'same-origin')).status).toBe(200)
+  })
+
+  test('a value of 2048 characters is stored, 2049 is 400 bad_url without an echo', async () => {
+    const { id, service } = await setup()
+    const base = 'https://long.example.test/'
+    const refused = await put(service, id, { value: base + 'a'.repeat(2049 - base.length) })
+    expect(refused.status).toBe(400)
+    expect(refused.body.code).toBe('bad_url')
+    expect(refused.text).not.toContain('long.example')
+    expect(sqlite.query('SELECT COUNT(*) AS n FROM handoff').get()).toEqual({ n: 0 })
+    expect((await put(service, id, { value: base + 'a'.repeat(2048 - base.length) })).status).toBe(200)
+  })
+
+  test('without a ttl the value lives 60 seconds', async () => {
+    const { id, service } = await setup()
+    const before = Date.now()
+    await put(service, id, { value: URL_SENTINEL })
+    const row = sqlite.query('SELECT expires_at FROM handoff').get() as { expires_at: string }
+    const lived = Date.parse(row.expires_at) - before
+    expect(lived).toBeGreaterThanOrEqual(60_000)
+    expect(lived).toBeLessThan(62_000)
+  })
+})
+
+describe('the sweep', () => {
+  const expired = (db: Database, value: string) =>
+    db.run(
+      "INSERT INTO handoff (dataset, record_id, value, creator_id, expires_at) VALUES ('note', 1, ?, 1, '2000-01-01T00:00:00.000Z')",
+      [value],
+    )
+
+  test('an engine start clears an expired value with no request made', () => {
+    expired(sqlite, URL_SENTINEL)
+    testEngine(sqlite, domain)
+    const row = sqlite.query('SELECT value, taken_at FROM handoff').get() as { value: unknown; taken_at: unknown }
+    expect(row.value).toBeNull()
+    expect(row.taken_at).toEqual(expect.any(String))
+  })
+
+  test('the interval clears what expires later, on the injected clock', () => {
+    let tick = () => {}
+    let unref = 0
+    let now = Date.parse('2026-01-01T00:00:00.000Z')
+    startSweep(sqlite, {
+      every: 60_000,
+      now: () => now,
+      setIntervalFn: (run, every) => {
+        expect(every).toBe(60_000)
+        tick = run
+        return { unref: () => ++unref }
+      },
+    })
+    sqlite.run(
+      "INSERT INTO handoff (dataset, record_id, value, creator_id, expires_at) VALUES ('note', 1, 'https://later.example.test/', 1, '2026-01-01T00:00:30.000Z')",
+    )
+    tick()
+    expect(sqlite.query('SELECT value FROM handoff').get()).toEqual({ value: 'https://later.example.test/' })
+    now += 60_000
+    tick()
+    expect(sqlite.query('SELECT value FROM handoff').get()).toEqual({ value: null })
+    expect(unref).toBe(1)
+  })
+
+  test('the swept value is gone from the database file itself', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'wt-sweep-')), 'engine.db')
+    const disk = new Database(file, { create: true })
+    migrate(disk, domain)
+    seedDomain(disk, domain)
+    expired(disk, URL_SENTINEL)
+    expect(readFileSync(file).includes(URL_SENTINEL)).toBe(true)
+    testEngine(disk, domain)
+    expect(readFileSync(file).includes(URL_SENTINEL)).toBe(false)
+    disk.close()
   })
 })

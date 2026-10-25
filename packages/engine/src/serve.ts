@@ -37,6 +37,7 @@ const { values } = parseArgs({
     'accept-report': { type: 'boolean', default: false },
     'seed-missing': { type: 'boolean', default: false },
     'link-secret-file': { type: 'string' },
+    'handoff-service': { type: 'string', multiple: true },
   },
 })
 
@@ -262,6 +263,7 @@ const server = Bun.serve({
     linkSecret,
     filesDir,
     filesMaxBytes,
+    handoffServices: values['handoff-service'],
   }).fetch,
 })
 console.log(`engine listening on http://${server.hostname}:${server.port}`)

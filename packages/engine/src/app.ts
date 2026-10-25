@@ -10,7 +10,7 @@ import { type AuthEnv, authRoutes } from './auth'
 import { markOf } from './available'
 import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, FlagsDecl, LinkDecl, OptionsFrom } from './declare'
 import { displayRoutes, displaysOf } from './display'
-import { handoffRoutes } from './handoff'
+import { handoffRoutes, startSweep } from './handoff'
 import { readHistory } from './history'
 import { lookupColumn, lookupsFor, targetOf } from './lookups'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
@@ -236,6 +236,8 @@ export interface EngineOptions {
   filesDir?: string
   /** The cap on the attachment files' total size, soft-deleted files counted; 5 GiB by default. */
   filesMaxBytes?: number
+  /** Names of the service accounts that may PUT a handoff; none by default, so every PUT is refused. */
+  handoffServices?: string[]
 }
 
 const MIN_LINK_SECRET = 32
@@ -260,6 +262,8 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     throw new Error(`filesMaxBytes must be a positive safe integer, not ${filesMaxBytes}`)
   }
   sqlite.run('PRAGMA foreign_keys = ON')
+  sqlite.run('PRAGMA secure_delete = ON')
+  startSweep(sqlite)
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
   const root = new Hono<AuthEnv>()
@@ -293,7 +297,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
   if (linkSecret) recordLinkRoutes(app, store, linkSecret)
   attachmentRoutes(app, store)
-  handoffRoutes(app, store)
+  handoffRoutes(app, store, new Set(options.handoffServices))
 
   app.get('/schema', (c) => {
     const format = c.req.query('format')

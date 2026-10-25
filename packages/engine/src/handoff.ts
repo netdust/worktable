@@ -6,10 +6,13 @@ import type { AuthEnv } from './auth'
 import type { DatasetDecl } from './declare'
 import { ApiError } from './params'
 import { noStoreHeaders } from './public-headers'
+import { siteGuard } from './write-guard'
 import { bodyOf, CREATED, isWebAddress, type Store } from './writes'
 
 const DEFAULT_TTL_S = 60
 const MAX_TTL_S = 120
+const MAX_VALUE_LENGTH = 2048
+const SWEEP_EVERY_MS = 60_000
 
 const unknownRecord = (): ApiError => new ApiError(404, 'unknown_record', 'unknown record')
 const badBody = (message: string): ApiError => new ApiError(400, 'bad_body', message)
@@ -19,6 +22,20 @@ function sweep(sqlite: Database, now: string): void {
   sqlite
     .query('UPDATE handoff SET value = NULL, taken_at = ? WHERE value IS NOT NULL AND expires_at <= ?')
     .run(now, now)
+}
+
+interface SweepClock {
+  every?: number
+  setIntervalFn?: (run: () => void, every: number) => { unref(): unknown }
+  now?: () => number
+}
+
+/** Clears expired values now and then on a timer, so an unread value does not wait for traffic. */
+export function startSweep(sqlite: Database, clock: SweepClock = {}): void {
+  const { every = SWEEP_EVERY_MS, setIntervalFn = setInterval, now = Date.now } = clock
+  const run = () => sweep(sqlite, new Date(now()).toISOString())
+  run()
+  setIntervalFn(run, every).unref()
 }
 
 function targetOf(c: Context<AuthEnv>, store: Store): { dataset: DatasetDecl; id: number } {
@@ -65,7 +82,7 @@ function takeValue(sqlite: Database, w: { dataset: string; id: number; creator: 
 }
 
 /** The value never leaves this module except through the creator's one read. */
-export function handoffRoutes(app: Hono<AuthEnv>, store: Store): void {
+export function handoffRoutes(app: Hono<AuthEnv>, store: Store, services: ReadonlySet<string>): void {
   const { sqlite } = store
   app.use(
     '/handoff/*',
@@ -75,14 +92,22 @@ export function handoffRoutes(app: Hono<AuthEnv>, store: Store): void {
     }),
   )
 
+  const fromOtherSite = siteGuard()
+  app.use('/handoff/*', (c, next) => (c.req.method === 'GET' ? fromOtherSite(c, next) : next()))
+
   app.put('/handoff/:dataset/:id', async (c) => {
-    if (isPerson(c.get('actor'))) serviceOnly('Only a service account puts a handoff')
+    const actor = c.get('actor')
+    if (isPerson(actor)) serviceOnly('Only a service account puts a handoff')
+    if (!actor.name || !services.has(actor.name)) {
+      throw new ApiError(403, 'handoff_not_allowed', 'This service account may not put a handoff')
+    }
     const { dataset, id } = targetOf(c, store)
     liveRecord(store, c, dataset, id)
     const body = await bodyOf(c)
     if (typeof body.value !== 'string') throw badBody('value must be a string')
     const ttl = ttlOf(body.ttl_s)
-    if (!isWebAddress(body.value)) throw new ApiError(400, 'bad_url', 'value must be an http or https address')
+    if (body.value.length > MAX_VALUE_LENGTH || !isWebAddress(body.value))
+      throw new ApiError(400, 'bad_url', 'value must be an http or https address')
     const creator = creatorOf(sqlite, dataset.name, id)
     const now = Date.now()
     const insert = sqlite.transaction(() => {
