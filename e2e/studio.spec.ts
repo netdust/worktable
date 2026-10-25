@@ -1661,7 +1661,10 @@ test.describe('action-row, the shake-out', () => {
         gap: comma.getBoundingClientRect().left - pills[0].getBoundingClientRect().right,
       }
     })
-    await shot(page, 'opdrachten-sites-namen')
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `opdrachten-sites-namen-${scheme === 'light' ? 'licht' : 'donker'}`)
+    }
     expect(look.padding).toEqual(['0px 0px', '0px 0px'])
     expect(look.gap, 'the comma sits against the first name').toBeLessThanOrEqual(2)
   })
