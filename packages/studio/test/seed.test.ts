@@ -217,14 +217,24 @@ describe('Sites met aandacht', () => {
     for (const row of aandacht) expect(sites.find((site) => site.id === row.id)?.naam).toBe(row.naam)
   })
 
-  test('the sites’ selection actions are all unconditional, so all four show on it', async () => {
+  test('the sites’ selection actions are all unconditional, so every one shows on it', async () => {
     const actions = (schema.site as unknown as { actions: { name: string; many?: true; conditional?: true }[] }).actions
     expect(
       actions
         .filter((a) => a.many)
         .map((a) => a.name)
         .sort(),
-    ).toEqual(['bijwerken', 'gezondheidscheck', 'malwarescan', 'smoketest'])
-    expect(actions.filter((a) => a.conditional)).toEqual([])
+    ).toEqual([
+      'bijwerken',
+      'cache_legen',
+      'cron_draaien',
+      'gezondheidscheck',
+      'malwarescan',
+      'onderhoudsmodus_aan',
+      'onderhoudsmodus_uit',
+      'plugin_installeren',
+      'smoketest',
+    ])
+    expect(actions.filter((a) => a.many && a.conditional)).toEqual([])
   })
 })

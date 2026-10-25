@@ -17,7 +17,7 @@ export const HEALTH_COLUMNS = [
   'laatste_check',
 ]
 
-export const STUDIO_COLUMNS = ['organisatie_id', 'sla', 'smoke_urls', 'notities']
+export const STUDIO_COLUMNS = ['organisatie_id', 'sla', 'smoke_urls', 'notities', 'bekende_admins']
 
 const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe site.'
 

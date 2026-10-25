@@ -1,4 +1,5 @@
 import { refuse, type WriteContext, type Writer } from '@worktable/engine'
+import { bevestigd } from '../datasets'
 
 type Values = Record<string, unknown>
 
@@ -29,7 +30,7 @@ const isPerson = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 
 
 function closedMessage(parent: Values): string {
   if (parent.status === 'voorbereid') return FROZEN
-  const confirmed = parent.soort === 'bijwerken' && CONFIRMED_STATUSES.includes(parent.status as string)
+  const confirmed = bevestigd.includes(parent.soort as string) && CONFIRMED_STATUSES.includes(parent.status as string)
   return confirmed ? CONFIRMED : CLOSED
 }
 
@@ -82,9 +83,9 @@ function checkServiceState(current: Values, to: unknown, parent: Values): void {
 }
 
 function checkMayRun(current: Values, parent: Values): void {
-  const bijwerken = parent.soort === 'bijwerken'
-  if (bijwerken && (parent.status !== 'bezig' || current.state !== 'te_bevestigen')) refuse(ONLY_CONFIRMED)
-  if (!bijwerken && parent.status !== 'bezig') refuse(closedMessage(parent))
+  const previewed = bevestigd.includes(parent.soort as string)
+  if (previewed && (parent.status !== 'bezig' || current.state !== 'te_bevestigen')) refuse(ONLY_CONFIRMED)
+  if (!previewed && parent.status !== 'bezig') refuse(closedMessage(parent))
 }
 
 function checkState(current: Values, to: unknown, parent: Values, ctx: WriteContext): void {
