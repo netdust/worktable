@@ -309,9 +309,20 @@ describe('where a handed-back link may go', () => {
     expect(hrefs()).toEqual(['href=http://voorbeeld-site.test/in'])
   })
 
-  it('goes to the same host on https when the row says http, as the ports match', async () => {
+  it('goes to the same host on https when the row says http, as the ports match and https is no downgrade', async () => {
     await handed('https://voorbeeld-site.test/in')
     expect(hrefs()).toEqual(['href=https://voorbeeld-site.test/in'])
+  })
+
+  it.each(['http://voorbeeld-site.test/in', 'http://www.voorbeeld-site.test/in'])('never navigates to the plain http link %p on a site that is https', async (value) => {
+    await handed(value, 'https://voorbeeld-site.test')
+    refused()
+    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
+  })
+
+  it('goes to an https link on a site that is https, also on its www twin', async () => {
+    await handed('https://www.voorbeeld-site.test/in', 'https://voorbeeld-site.test')
+    expect(hrefs()).toEqual(['href=https://www.voorbeeld-site.test/in'])
   })
 
   it('compares hosts without regard to case', async () => {

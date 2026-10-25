@@ -14,10 +14,11 @@ function createdOf(reply: unknown): Opened | null {
   return typeof dataset === 'string' && Number.isSafeInteger(id) ? { dataset, id: id as number } : null
 }
 
-/** The same site: host without a leading `www.` and port alike; the scheme may differ, as a site often redirects to its https twin. */
-function sameSite(a: URL, b: URL): boolean {
+/** The same site: host without a leading `www.` and port alike; an https site takes only an https link, as the link carries a token. */
+function sameSite(link: URL, site: URL): boolean {
   const bare = (url: URL) => url.hostname.replace(/^www\./, '')
-  return bare(a) === bare(b) && a.port === b.port
+  const downgrade = site.protocol === 'https:' && link.protocol !== 'https:'
+  return !downgrade && bare(link) === bare(site) && link.port === site.port
 }
 
 function closeTab(tab: Window): void {
