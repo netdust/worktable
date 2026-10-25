@@ -89,13 +89,13 @@ const inloggen: ActionDecl = {
 
 export const actions: Record<string, SelectionActionDecl | ActionDecl> = {
   inloggen,
+  gezondheidscheck: make('gezondheidscheck', 'Gezondheid checken'),
+  malwarescan: make('malwarescan', 'Malware scannen'),
+  bijwerken: make('bijwerken', 'Bijwerken'),
+  smoketest: make('smoketest', 'Smoketest draaien'),
   plugin_installeren: make('plugin_installeren', 'Studio-plugin installeren'),
   cache_legen: makePlugin('cache_legen', 'Cache legen'),
   cron_draaien: makePlugin('cron_draaien', 'Cron draaien'),
   onderhoudsmodus_aan: makePlugin('onderhoudsmodus_aan', 'Onderhoudsmodus aan'),
   onderhoudsmodus_uit: makePlugin('onderhoudsmodus_uit', 'Onderhoudsmodus uit'),
-  gezondheidscheck: make('gezondheidscheck', 'Gezondheid checken'),
-  malwarescan: make('malwarescan', 'Malware scannen'),
-  bijwerken: make('bijwerken', 'Bijwerken'),
-  smoketest: make('smoketest', 'Smoketest draaien'),
 }

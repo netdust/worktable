@@ -257,7 +257,8 @@ test.describe('studio', () => {
     await expect(page.locator('.nv-dock')).toHaveCSS('position', 'absolute')
     expect((await rowOf1.boundingBox())?.y).toBe(top)
     const button = await panel.getByRole('button', { name: 'Smoketest draaien', exact: true }).boundingBox()
-    expect((await panel.boundingBox())?.height).toBeLessThan((button?.height ?? 0) + 28)
+    // Nine actions wrap onto a second line; the panel stays a low strip, never a tall block.
+    expect((await panel.boundingBox())?.height).toBeLessThan((button?.height ?? 0) * 2 + 28)
     await page.mouse.move(0, 0)
     const lineOf = () =>
       page
@@ -1052,12 +1053,24 @@ test.describe('studio-polish, what a person reads', () => {
         'no body overflow',
       ).toBe(true)
     }
-    const all = ['Gezondheid checken', 'Malware scannen', 'Bijwerken', 'Smoketest draaien']
+    const all = [
+      'Gezondheid checken',
+      'Malware scannen',
+      'Bijwerken',
+      'Smoketest draaien',
+      'Studio-plugin installeren',
+      'Cache legen',
+      'Cron draaien',
+      'Onderhoudsmodus aan',
+      'Onderhoudsmodus uit',
+    ]
 
     await oneLine()
     expect(Math.abs(((await site.boundingBox())?.width ?? 0) - 392)).toBeLessThanOrEqual(2)
     await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(1)
     expect(await offered(page)).toEqual(all)
+    const inline = () => row.locator(':scope > .nv-button').count()
+    const narrow = await inline()
     for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme })
       await shot(page, `site-rij-${scheme === 'light' ? 'licht' : 'donker'}`)
@@ -1066,7 +1079,8 @@ test.describe('studio-polish, what a person reads', () => {
     await site.getByRole('button', { name: 'Volledig openen' }).click()
     await expect.poll(async () => (await site.boundingBox())?.width ?? 0).toBeGreaterThan(392)
     await oneLine()
-    await expect(row.getByRole('button', { name: 'Meer' })).toHaveCount(0)
+    // Nine actions no longer all fit even widened: more sit in the row than at 392, the rest stay behind Meer.
+    expect(await inline()).toBeGreaterThan(narrow)
     expect(await offered(page)).toEqual(all)
     for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme })
