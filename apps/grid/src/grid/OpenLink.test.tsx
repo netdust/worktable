@@ -16,7 +16,7 @@ describe('the record\'s open link', () => {
     expect(link()?.getAttribute('href')).toBe('https://voorbeeld-site.test/')
     expect(link()?.getAttribute('target')).toBe('_blank')
     expect(link()?.getAttribute('rel')).toBe('noopener noreferrer')
-    expect(link()?.getAttribute('title')).toBe('https://voorbeeld-site.test')
+    expect(link()?.getAttribute('title')).toBe('https://voorbeeld-site.test/')
   })
 
   it('opens an http address too', () => {

@@ -21,7 +21,7 @@ export function OpenLink({ row, model }: { row: Row; model?: Model }) {
   const url = row.id > 0 && column ? webAddress(row.fields[column]) : null
   if (!url) return null
   return (
-    <a className="nv-more" href={url.href} title={String(row.fields[column as string])} target="_blank" rel="noopener noreferrer" aria-label={t('openLink')}>
+    <a className="nv-more" href={url.href} title={url.href} target="_blank" rel="noopener noreferrer" aria-label={t('openLink')}>
       <ExternalLink size={16} aria-hidden="true" />
     </a>
   )

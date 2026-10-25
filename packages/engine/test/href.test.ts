@@ -150,6 +150,7 @@ describe('the other write paths go through the same check', () => {
   test('an import refuses a bad address and stores no row', () => {
     const { db, result } = importInto('javascript:alert(1)')
     expect(result.refused).toHaveLength(1)
+    expect(result.refused[0].message).toMatch(/must be an absolute http or https address/)
     expect(contents(db, 'site')).toEqual([])
   })
 
@@ -162,7 +163,7 @@ describe('the other write paths go through the same check', () => {
     const db = new Database(':memory:')
     const domain = make((insert) => insert('vast', [{ name: 'x', web: 'data:text/html,x' }]))
     migrate(db, domain)
-    expect(() => seedMissing(db, domain)).toThrow()
+    expect(() => seedMissing(db, domain)).toThrow(/must be an absolute http or https address/)
     expect(contents(db, 'vast')).toEqual([])
   })
 })
