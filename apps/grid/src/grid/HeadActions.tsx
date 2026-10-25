@@ -14,11 +14,10 @@ function createdOf(reply: unknown): Opened | null {
   return typeof dataset === 'string' && Number.isSafeInteger(id) ? { dataset, id: id as number } : null
 }
 
-/** The same site: host without a leading `www.` and port alike; an https site takes only an https link, as the link carries a token. */
+/** The same site, over https only whatever the row says, as the link carries a login token: host without a leading `www.` and port alike. */
 function sameSite(link: URL, site: URL): boolean {
   const bare = (url: URL) => url.hostname.replace(/^www\./, '')
-  const downgrade = site.protocol === 'https:' && link.protocol !== 'https:'
-  return !downgrade && bare(link) === bare(site) && link.port === site.port
+  return link.protocol === 'https:' && bare(link) === bare(site) && link.port === site.port
 }
 
 function closeTab(tab: Window): void {
@@ -55,6 +54,8 @@ export function HeadActions({ row, model, actions, onAction, onSaid }: Props) {
     let over = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let deadline: ReturnType<typeof setTimeout> | undefined
+    let asking = false
+    let late = false
     const stop = () => {
       over = true
       clearTimeout(timer)
@@ -78,6 +79,7 @@ export function HeadActions({ row, model, actions, onAction, onSaid }: Props) {
       if (!sameSite(target, site)) return abandon(t('loginOtherSite'))
       stop()
       try {
+        tab.document.write('<meta name="referrer" content="no-referrer">')
         tab.opener = null
         tab.location.href = target.href
       } catch {
@@ -86,16 +88,21 @@ export function HeadActions({ row, model, actions, onAction, onSaid }: Props) {
       }
     }
     const poll = ({ dataset, id }: Opened) => {
-      deadline = setTimeout(() => abandon(t('loginNoLink')), GIVE_UP)
+      deadline = setTimeout(() => (asking ? (late = true) : abandon(t('loginNoLink'))), GIVE_UP)
       const next = () => {
         timer = setTimeout(async () => {
           if (tab.closed) return stop()
+          asking = true
           try {
             const value = await takeHandoff(dataset, id)
+            asking = false
             if (over) return
-            if (value === null) return next()
-            arrive(value)
+            if (tab.closed) return stop()
+            if (value !== null) return arrive(value)
+            if (late) return abandon(t('loginNoLink'))
+            next()
           } catch {
+            asking = false
             abandon(t('loginFailed'))
           }
         }, POLL)

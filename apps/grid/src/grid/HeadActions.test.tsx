@@ -16,13 +16,13 @@ const { Drawer } = await import('./Drawer')
 
 const field = (extra: Partial<Field> = {}): Field => ({ type: 'text', label: 'Adres', required: false, fact: false, ...extra })
 const model = { key: 'plek', label: 'Plekken', fields: { adres: field({ href: true }), naam: field() } } as unknown as Model
-const SITE = 'http://voorbeeld-site.test'
+const SITE = 'https://voorbeeld-site.test'
 const inloggen: ModelAction = { name: 'inloggen', label: 'Inloggen', input: {}, head: { icon: 'log-in' }, handoff: true }
 const plain: ModelAction = { name: 'wissen', label: 'Wissen', input: {}, head: { icon: 'log-in' } }
 const quiet: ModelAction = { name: 'stil', label: 'Stil', input: {} }
 const row = (adres: unknown, actions: string[] = ['inloggen', 'wissen', 'stil']): Row => ({ id: 3, title: 'Plek', status: '', fields: { adres }, available: { state: '', buttons: [], actions } })
 
-interface Tab { closed: boolean; close: () => void; log: string[]; opener: unknown; location: { href: string } }
+interface Tab { closed: boolean; close: () => void; log: string[]; opener: unknown; location: { href: string }; document: { write: (html: string) => void } }
 let tab: Tab | null
 let open: ReturnType<typeof vi.spyOn>
 
@@ -31,6 +31,7 @@ function fakeTab(): Tab {
   const made: Tab = {
     closed: false, log,
     close: vi.fn(() => { made.closed = true }),
+    document: { write: (html: string) => { log.push(`write=${html}`) } },
     set opener(value: unknown) { log.push(`opener=${String(value)}`) },
     get opener() { return {} },
     location: { set href(value: string) { log.push(`href=${value}`) }, get href() { return '' } },
@@ -146,7 +147,7 @@ describe('running a head action that hands back a link', () => {
     finish({ dataset: 'actie', id: 9 })
     remote.takeHandoff.mockImplementation(() => Promise.resolve(`${SITE}/in`))
     await settle(1000)
-    expect(tab?.log).toEqual(['opener=null', `href=${SITE}/in`])
+    expect(tab?.log).toEqual(['write=<meta name="referrer" content="no-referrer">', 'opener=null', `href=${SITE}/in`])
   })
 
   it('closes the tab and says nothing was received after 30 seconds', async () => {
@@ -161,6 +162,65 @@ describe('running a head action that hands back a link', () => {
     const calls = remote.takeHandoff.mock.calls.length
     await settle(5000)
     expect(remote.takeHandoff.mock.calls.length).toBe(calls)
+  })
+
+  it('still navigates a value that arrives after the deadline from a request already in flight', async () => {
+    let arrive!: (value: string | null) => void
+    show(row(SITE))
+    click()
+    finish({ dataset: 'actie', id: 9 })
+    remote.takeHandoff.mockImplementation(() => new Promise((resolve) => { arrive = resolve }))
+    await settle(1000)
+    await settle(30000)
+    expect(tab?.closed).toBe(false)
+    arrive(`${SITE}/in`)
+    await settle()
+    expect(hrefs()).toEqual([`href=${SITE}/in`])
+    expect(remote.takeHandoff).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a late value when the drawer went away meanwhile', async () => {
+    let arrive!: (value: string | null) => void
+    const { unmount } = show(row(SITE))
+    click()
+    finish({ dataset: 'actie', id: 9 })
+    remote.takeHandoff.mockImplementation(() => new Promise((resolve) => { arrive = resolve }))
+    await settle(1000)
+    await settle(30000)
+    unmount()
+    arrive(`${SITE}/in`)
+    await settle()
+    expect(hrefs()).toEqual([])
+    expect(tab?.closed).toBe(true)
+  })
+
+  it('drops a late value when the person closed the tab', async () => {
+    let arrive!: (value: string | null) => void
+    show(row(SITE))
+    click()
+    finish({ dataset: 'actie', id: 9 })
+    remote.takeHandoff.mockImplementation(() => new Promise((resolve) => { arrive = resolve }))
+    await settle(1000)
+    await settle(30000)
+    ;(tab as Tab).closed = true
+    arrive(`${SITE}/in`)
+    await settle()
+    expect(hrefs()).toEqual([])
+  })
+
+  it('closes the tab with no link received when the in-flight request after the deadline finds nothing, and asks no more', async () => {
+    let arrive!: (value: string | null) => void
+    show(row(SITE))
+    click()
+    finish({ dataset: 'actie', id: 9 })
+    remote.takeHandoff.mockImplementation(() => new Promise((resolve) => { arrive = resolve }))
+    await settle(1000)
+    await settle(30000)
+    arrive(null)
+    await settle(5000)
+    expect(tab?.closed).toBe(true)
+    expect(onSaid).toHaveBeenCalledWith('Geen link ontvangen')
+    expect(remote.takeHandoff).toHaveBeenCalledTimes(1)
   })
 
   it('closes the tab when the run fails, and reports it as an action row does', async () => {
@@ -274,47 +334,53 @@ describe('where a handed-back link may go', () => {
   })
 
   it('never navigates to another site', async () => {
-    await handed('http://kwaadaardig.test/in')
+    await handed('https://kwaadaardig.test/in')
     refused()
     expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
   })
 
-  it.each(['http://voorbeeld-site.test.kwaadaardig.test/in', 'http://xvoorbeeld-site.test/in', 'http://wwwvoorbeeld-site.test/in', 'http://www.www.voorbeeld-site.test/in'])('never navigates to the look-alike host %p', async (value) => {
+  it.each(['https://voorbeeld-site.test.kwaadaardig.test/in', 'https://xvoorbeeld-site.test/in', 'https://wwwvoorbeeld-site.test/in', 'https://www.www.voorbeeld-site.test/in'])('never navigates to the look-alike host %p', async (value) => {
     await handed(value)
     refused()
   })
 
   it('never navigates to a subdomain of the site', async () => {
-    await handed('http://blog.voorbeeld-site.test/in')
+    await handed('https://blog.voorbeeld-site.test/in')
     refused()
   })
 
   it('never navigates to the same host on another port', async () => {
-    await handed('http://voorbeeld-site.test:8080/in')
+    await handed('https://voorbeeld-site.test:8080/in')
     refused()
   })
 
   it('never navigates to a link whose host hides behind a login name', async () => {
-    await handed('http://voorbeeld-site.test@kwaadaardig.test/in')
+    await handed('https://voorbeeld-site.test@kwaadaardig.test/in')
     refused()
   })
 
   it('goes to the www twin of the row\'s host', async () => {
-    await handed('http://www.voorbeeld-site.test/in')
-    expect(hrefs()).toEqual(['href=http://www.voorbeeld-site.test/in'])
+    await handed('https://www.voorbeeld-site.test/in')
+    expect(hrefs()).toEqual(['href=https://www.voorbeeld-site.test/in'])
   })
 
   it('goes to the bare host when the row has the www twin', async () => {
-    await handed('http://voorbeeld-site.test/in', 'http://www.voorbeeld-site.test')
-    expect(hrefs()).toEqual(['href=http://voorbeeld-site.test/in'])
-  })
-
-  it('goes to the same host on https when the row says http, as the ports match and https is no downgrade', async () => {
-    await handed('https://voorbeeld-site.test/in')
+    await handed('https://voorbeeld-site.test/in', 'https://www.voorbeeld-site.test')
     expect(hrefs()).toEqual(['href=https://voorbeeld-site.test/in'])
   })
 
-  it.each(['http://voorbeeld-site.test/in', 'http://www.voorbeeld-site.test/in'])('never navigates to the plain http link %p on a site that is https', async (value) => {
+  it('goes to an https link on an http row: same host, https, equal ports', async () => {
+    await handed('https://voorbeeld-site.test/in', 'http://voorbeeld-site.test')
+    expect(hrefs()).toEqual(['href=https://voorbeeld-site.test/in'])
+  })
+
+  it.each(['http://voorbeeld-site.test/in', 'http://www.voorbeeld-site.test/in'])('never navigates to the plain http link %p, on an http row or an https one', async (value) => {
+    await handed(value, 'http://voorbeeld-site.test')
+    refused()
+    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
+    cleanup()
+    onSaid.mockReset()
+    tab = fakeTab()
     await handed(value, 'https://voorbeeld-site.test')
     refused()
     expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
@@ -326,12 +392,12 @@ describe('where a handed-back link may go', () => {
   })
 
   it('compares hosts without regard to case', async () => {
-    await handed('http://VOORBEELD-site.test/in')
-    expect(hrefs()).toEqual(['href=http://voorbeeld-site.test/in'])
+    await handed('https://VOORBEELD-site.test/in')
+    expect(hrefs()).toEqual(['href=https://voorbeeld-site.test/in'])
   })
 
   it('goes to a host and port the row names too', async () => {
-    await handed('http://voorbeeld-site.test:8080/in', 'http://voorbeeld-site.test:8080')
+    await handed('https://voorbeeld-site.test:8080/in', 'https://voorbeeld-site.test:8080')
     expect(hrefs()).toHaveLength(1)
   })
 
@@ -339,7 +405,7 @@ describe('where a handed-back link may go', () => {
     const logged = vi.spyOn(console, 'log')
     const warned = vi.spyOn(console, 'warn')
     const errored = vi.spyOn(console, 'error')
-    await handed('http://kwaadaardig.test/in?token=geheim')
+    await handed('https://kwaadaardig.test/in?token=geheim')
     expect(body()).not.toContain('geheim')
     expect(JSON.stringify(onSaid.mock.calls)).not.toContain('geheim')
     for (const spy of [logged, warned, errored]) expect(JSON.stringify(spy.mock.calls)).not.toContain('geheim')
