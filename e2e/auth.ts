@@ -63,6 +63,8 @@ function cli(at: Instance, args: string[], what: string): string {
 
 // A real service account (kind service), not a person with its role: what the studio worker and Claude sign in as.
 export const STUDIO_SERVICE = 'e2e/.tmp/studio-service-token'
+// The studio worker's own account, the only one the engine lets hand a login link back and write a site's address.
+export const STUDIO_WORKER = 'e2e/.tmp/studio-worker-token'
 
 /** Creates a service account; the CLI prints its token once, kept mode 0600 in `file`. */
 export function createServiceToken(at: Instance, name: string, role: string, file: string): void {

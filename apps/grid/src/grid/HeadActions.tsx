@@ -79,7 +79,6 @@ export function HeadActions({ row, model, actions, onAction, onSaid }: Props) {
       if (!sameSite(target, site)) return abandon(t('loginOtherSite'))
       stop()
       try {
-        tab.document.write('<meta name="referrer" content="no-referrer">')
         tab.opener = null
         tab.location.href = target.href
       } catch {

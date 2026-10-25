@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { type APIRequestContext, expect, type Locator, type Page, type Route, request, test } from '@playwright/test'
-import { STUDIO, STUDIO_SERVICE, state } from './auth'
+import { STUDIO, STUDIO_SERVICE, STUDIO_WORKER, state } from './auth'
 import { card, lane, orders } from './board'
 import { offered, pressInMenu } from './drawer'
 import { forget } from './forget'
@@ -31,12 +31,17 @@ const rowOf = async (api: Api, source: string, id: number) =>
 const newest = async (api: Api, source: string) => Math.max(0, ...(await rowsOf(api, source)).rows.map((r) => r.id))
 const exists = async (api: Api, source: string, id: number) => (await rowsOf(api, source)).rows.some((r) => r.id === id)
 
-/** The studio worker's account: a real service token (kind service), straight to the engine, as the worker calls it. */
-const worker = () =>
+const asService = (token: string) =>
   request.newContext({
     baseURL: ENGINE,
-    extraHTTPHeaders: { Authorization: `Bearer ${readFileSync(STUDIO_SERVICE, 'utf8').trim()}` },
+    extraHTTPHeaders: { Authorization: `Bearer ${readFileSync(token, 'utf8').trim()}` },
   })
+
+/** The studio worker's account: a real service token (kind service), straight to the engine, as the worker calls it. */
+const worker = () => asService(STUDIO_WORKER)
+
+/** Claude's account: a service too, but not the worker. */
+const claude = () => asService(STUDIO_SERVICE)
 
 /** Runs an action on sites as the signed-in person; answers the opdracht it made and its links. */
 async function run(api: Api, action: string, ids: number[]): Promise<{ actie: number; links: number[] }> {
@@ -1755,18 +1760,25 @@ test.describe('studio, the login from a site drawer', () => {
           await head.screenshot({ path: `${process.env.SHAKEOUT_SHOTS}/site-inloggen-icoon-kop-${name}.png` })
       }
 
-      await page
-        .context()
-        .route(ADDRESS, (route) =>
-          route.fulfill({ contentType: 'text/html', body: '<title>wp-admin (e2e)</title><h1>Ingelogd</h1>' }),
-        )
+      let referer: string | undefined = 'not seen'
+      await page.context().route(ADDRESS, (route) => {
+        referer = route.request().headers().referer
+        return route.fulfill({ contentType: 'text/html', body: '<title>wp-admin (e2e)</title><h1>Ingelogd</h1>' })
+      })
       const before = await newest(api, 'actie')
       const [tab] = await Promise.all([page.context().waitForEvent('page'), login.click()])
       actie = await started(api, before)
       expect(await rowOf(api, 'actie', actie)).toMatchObject({ soort: 'inloggen', titel: 'Inloggen · testmans-winkel' })
+      const other = await claude()
+      const planted = await other.put(`/api/handoff/actie/${actie}`, {
+        data: { value: 'https://www.testmans-winkel.test/planted' },
+      })
+      expect(planted.status(), 'only the worker hands a link back').toBe(403)
+      await other.dispose()
       expect((await service.put(`/api/handoff/actie/${actie}`, { data: { value: LINK } })).status()).toBe(200)
       await expect.poll(() => tab.url(), { timeout: 15_000 }).toBe(LINK)
       await expect(tab.getByRole('heading', { name: 'Ingelogd' })).toBeVisible()
+      expect(referer, 'the client site never learns where the studio is').toBeUndefined()
       await shot(tab, 'site-inloggen-tab')
 
       expect((await api.get(`/api/handoff/actie/${actie}`)).status(), 'the tab already took it').toBe(404)

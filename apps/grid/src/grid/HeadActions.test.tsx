@@ -22,7 +22,7 @@ const plain: ModelAction = { name: 'wissen', label: 'Wissen', input: {}, head: {
 const quiet: ModelAction = { name: 'stil', label: 'Stil', input: {} }
 const row = (adres: unknown, actions: string[] = ['inloggen', 'wissen', 'stil']): Row => ({ id: 3, title: 'Plek', status: '', fields: { adres }, available: { state: '', buttons: [], actions } })
 
-interface Tab { closed: boolean; close: () => void; log: string[]; opener: unknown; location: { href: string }; document: { write: (html: string) => void } }
+interface Tab { closed: boolean; close: () => void; log: string[]; opener: unknown; location: { href: string } }
 let tab: Tab | null
 let open: ReturnType<typeof vi.spyOn>
 
@@ -31,7 +31,6 @@ function fakeTab(): Tab {
   const made: Tab = {
     closed: false, log,
     close: vi.fn(() => { made.closed = true }),
-    document: { write: (html: string) => { log.push(`write=${html}`) } },
     set opener(value: unknown) { log.push(`opener=${String(value)}`) },
     get opener() { return {} },
     location: { set href(value: string) { log.push(`href=${value}`) }, get href() { return '' } },
@@ -147,7 +146,7 @@ describe('running a head action that hands back a link', () => {
     finish({ dataset: 'actie', id: 9 })
     remote.takeHandoff.mockImplementation(() => Promise.resolve(`${SITE}/in`))
     await settle(1000)
-    expect(tab?.log).toEqual(['write=<meta name="referrer" content="no-referrer">', 'opener=null', `href=${SITE}/in`])
+    expect(tab?.log).toEqual(['opener=null', `href=${SITE}/in`])
   })
 
   it('closes the tab and says nothing was received after 30 seconds', async () => {

@@ -9,6 +9,7 @@ import {
   SELECTION,
   STUDIO,
   STUDIO_SERVICE,
+  STUDIO_WORKER,
   signIn,
   state,
   THEATRE,
@@ -40,6 +41,7 @@ export default async function globalSetup(): Promise<void> {
       await signedIn(name, STUDIO, account)
     }
     createServiceToken(STUDIO, 'claude', 'editor', STUDIO_SERVICE)
+    createServiceToken(STUDIO, 'worker', 'editor', STUDIO_WORKER)
     createAccount(SELECTION, ACCOUNTS.selection.email, ACCOUNTS.selection.role)
     await signedIn('selection-editor', SELECTION, ACCOUNTS.selection)
     createAccount(SELECTION, ACCOUNTS.selectionAdmin.email, ACCOUNTS.selectionAdmin.role)
