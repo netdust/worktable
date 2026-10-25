@@ -61,6 +61,8 @@ export interface ColumnDecl {
    * Judged on the keys the caller sends, so a writer must not fill it on a person's write: that batch's undo would be refused.
    */
   written_by?: 'service'
+  /** A text holding an absolute http(s) address the record's drawer offers to open; a write of anything else is refused `bad_url`. */
+  href?: true
   /** What the grid's foot adds up: a sum (the default) or nothing; integer and real columns only. */
   footer?: 'sum' | 'none'
 }

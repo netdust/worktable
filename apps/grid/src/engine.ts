@@ -21,6 +21,7 @@ export interface EngineColumn {
   options_from?: OptionsFrom
   badge?: Tone
   footer?: 'sum' | 'none'
+  href?: true
   /** A text edited as long text, its own block in the drawer. */
   long?: true
 }
@@ -179,6 +180,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(declared.options_from ? { options_from: declared.options_from } : {}),
     ...(declared.badge ? { badge: declared.badge } : {}),
     ...(declared.footer ? { footer: declared.footer } : {}),
+    ...(declared.href ? { href: true as const } : {}),
   }
 }
 

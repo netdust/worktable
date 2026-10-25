@@ -50,6 +50,7 @@ export const site = defineDataset({
     naam: { type: 'text', label: 'Naam', ...worker },
     in_registry: { type: 'boolean', label: 'In registry', default: true, ...worker },
     organisatie_id: relation('Organisatie', 'organisatie'),
+    adres: { type: 'text', label: 'Adres', nullable: true, href: true, ...worker },
     sla: vlag('SLA'),
     smoke_urls: long("Extra smoke-URL's"),
     notities: long('Notities'),

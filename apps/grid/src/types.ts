@@ -43,6 +43,8 @@ export interface Field {
   badge?: Tone
   /** What a number column's foot says: its sum, or nothing. */
   footer?: 'sum' | 'none'
+  /** A text holding a web address the record's drawer offers to open. */
+  href?: true
 }
 
 export interface Link {

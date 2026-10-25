@@ -123,6 +123,17 @@ function fits(type: ColumnDecl['type'], value: unknown): boolean {
   return typeof value === 'string'
 }
 
+const WEB_ADDRESS = /^https?:\/\/\S+$/i
+
+function isWebAddress(value: unknown): boolean {
+  if (typeof value !== 'string' || !WEB_ADDRESS.test(value)) return false
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}
+
 // Base 62 and never ending in 0: no rank sorts between "V" and "V0" (threat 3).
 const RANK = /^[0-9A-Za-z]{0,254}[1-9A-Za-z]$/
 
@@ -137,6 +148,9 @@ export function checkValues(dataset: DatasetDecl, values: Values, nulls = true):
     if (!column) throw badValue(key, 'is not a declared column')
     if (nulls && value === null && !column.nullable) throw badValue(key, 'may not be null')
     if (value !== null && !fits(column.type, value)) throw badValue(key, `must be ${column.type}`)
+    if (column.href && value !== null && !isWebAddress(value)) {
+      throw new ApiError(400, 'bad_url', `"${key}" must be an absolute http or https address`)
+    }
   }
 }
 

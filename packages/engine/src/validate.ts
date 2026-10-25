@@ -97,6 +97,14 @@ function checkLong(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+function checkHref(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.href && (decl.type !== 'text' || decl.options || decl.relation)) {
+      throw new DomainError(source.name, column, `${column} is href but is not a plain text column`)
+    }
+  }
+}
+
 // The enforced values are judged by equality, so a misspelt one would enforce nothing.
 function checkEnforced(source: DatasetDecl | QueryDecl): void {
   const refuse = (bad: string, message: string) => new DomainError(source.name, bad, message)
@@ -756,6 +764,7 @@ export function validateDomain(domain: Domain): void {
     checkHidden(source)
     checkTones(source)
     checkLong(source)
+    checkHref(source)
     checkEnforced(source)
     checkFooter(source)
     checkCalendar(source)

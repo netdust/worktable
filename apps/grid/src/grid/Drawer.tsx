@@ -23,6 +23,7 @@ import { toneOf } from './cells/tones'
 import { ICON } from './GridHeader'
 import { ActionRow } from './ActionRow'
 import { DrawerTools } from './DrawerTools'
+import { OpenLink } from './OpenLink'
 import { useLive } from './useLive'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
@@ -200,7 +201,7 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
   const actionRow = <ActionRow model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} onSaid={onSaid} />
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
-      tools={<DrawerTools key={row.id} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} />}
+      tools={<><OpenLink row={row} model={model} /><DrawerTools key={row.id} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} /></>}
       head={<Head row={row} model={model} nav={nav} busy={busy} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>

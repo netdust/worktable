@@ -83,6 +83,7 @@ const strings = {
   excel: 'Excel',
   calendar: 'Agenda (.ics)',
   copyLink: 'Link kopiëren',
+  openLink: 'Openen in nieuw tabblad',
   linkCopied: 'Link gekopieerd',
   linkViewGone: 'De gedeelde weergave is er niet voor jou; je ziet {view} zonder de filters van de link.',
   publish: 'Publiceren',

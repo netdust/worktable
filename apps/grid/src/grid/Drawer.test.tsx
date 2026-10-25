@@ -742,3 +742,24 @@ describe('a link item in the drawer', () => {
     expect(screen.queryByRole('button', { name: 'Sien Peeters' })).toBeNull()
   })
 })
+
+describe('the drawer opens a record\'s address', () => {
+  const field = { type: 'text' as const, label: 'Adres', required: false, fact: false }
+  const addressed = (value: unknown) => ({ ...row(1, 'Plek'), fields: { adres: value } })
+  const served = { ...activity, fields: { ...activity.fields, adres: { ...field, href: true as const } } } as Model
+  const openable = () => screen.queryByRole('link', { name: 'Openen in nieuw tabblad' })
+
+  it('shows the link before the Acties menu, in a new tab that cannot reach back', () => {
+    render(<Drawer row={addressed('https://voorbeeld-site.test')} columns={columns} model={served} onDelete={vi.fn()} onClose={() => undefined} />)
+    const link = openable() as HTMLAnchorElement
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    const tools = link.parentElement as HTMLElement
+    expect([...tools.children].indexOf(link)).toBeLessThan([...tools.children].indexOf(screen.getByRole('button', { name: 'Acties' }).closest('.nv-menu') as Element))
+  })
+
+  it.each(['javascript:alert(1)', 'data:text/html,x', null])('shows none for %p', (value) => {
+    render(<Drawer row={addressed(value)} columns={columns} model={served} onDelete={vi.fn()} onClose={() => undefined} />)
+    expect(openable()).toBeNull()
+  })
+})
