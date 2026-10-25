@@ -263,10 +263,10 @@ test.describe('studio', () => {
         .locator('th.nv-th:not(.nv-num)')
         .first()
         .evaluate((el) => getComputedStyle(el).borderRightColor)
-    await expect.poll(() => lineOf()).toBe('rgb(58, 61, 68)')
+    await expect.poll(() => lineOf()).toBe('color(srgb 0.14902 0.156863 0.172549 / 0.6)')
     await shot(page, 'sites-panel-lines-dark')
     await page.emulateMedia({ colorScheme: 'light' })
-    await expect.poll(() => lineOf()).toBe('rgb(196, 203, 211)')
+    await expect.poll(() => lineOf()).toBe('color(srgb 0.913725 0.92549 0.941176 / 0.6)')
     await shot(page, 'sites-panel-lines-light')
     const before = await newest(api, 'actie')
 
@@ -354,12 +354,12 @@ test.describe('studio', () => {
       })
       const waiting = page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
       await expect(waiting).toBeVisible({ timeout: 15_000 })
-      // The table's last rows stay reachable under the dock.
+      // The dock floats above the table's pinned total, over the empty end space.
       const room = await page.evaluate(() => ({
-        dock: (document.querySelector('.nv-dock') as HTMLElement).offsetHeight,
-        padding: Number.parseFloat(getComputedStyle(document.querySelector('.nv-scroll') as HTMLElement).paddingBottom),
+        dock: (document.querySelector('.nv-dock') as HTMLElement).getBoundingClientRect().bottom,
+        foot: (document.querySelector('tfoot') as HTMLElement).getBoundingClientRect().top,
       }))
-      expect(room.padding).toBeGreaterThanOrEqual(room.dock + 16)
+      expect(room.dock).toBeLessThanOrEqual(room.foot)
 
       await shot(page, 'opdracht-wacht-in-dock')
 
@@ -953,8 +953,8 @@ for (const [scale, tag] of [
           root.getPropertyValue('--color-border-subtle'),
         ]
       })
-      expect(line).toBe('rgb(196, 203, 211)')
-      expect(row.trim()).toBe('#c4cbd3')
+      expect(line).toBe('rgb(233, 236, 240)')
+      expect(row.trim()).toBe('#e9ecf0')
       expect(row.trim()).not.toBe(subtle.trim())
       await shot(page, `rijlijnen-${tag}`)
     })
@@ -1192,8 +1192,8 @@ test.describe('views-and-actions, the shake-out', () => {
           ),
         ])
     for (const [scheme, colour, name] of [
-      ['dark', 'rgb(58, 61, 68)', 'sites-kolomlijnen-donker'],
-      ['light', 'rgb(196, 203, 211)', 'sites-kolomlijnen-licht'],
+      ['dark', 'color(srgb 0.14902 0.156863 0.172549 / 0.6)', 'sites-kolomlijnen-donker'],
+      ['light', 'color(srgb 0.913725 0.92549 0.941176 / 0.6)', 'sites-kolomlijnen-licht'],
     ] as const) {
       await page.emulateMedia({ colorScheme: scheme })
       await expect.poll(lines).toEqual([`${colour} 1px`])
@@ -1201,7 +1201,7 @@ test.describe('views-and-actions, the shake-out', () => {
     }
   })
 
-  test('waiting-line-and-panel-leave-the-last-row @e2e: with a run waiting on Bevestigen and two sites ticked, the table scrolls its last row and its total clear of the dock', async ({
+  test('waiting-line-and-panel-leave-the-last-row @e2e: with a run waiting on Bevestigen and two sites ticked, the table scrolls its last row clear of the dock, with its total pinned below it', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 430 })
@@ -1235,13 +1235,13 @@ test.describe('views-and-actions, the shake-out', () => {
       })
       expect(reached).toBe(true)
       const top = (await panel.boundingBox())?.y ?? 0
-      for (const [name, target] of [
-        ['the last row', last],
-        ['the total', page.locator('tfoot')],
-      ] as const) {
-        const box = await target.boundingBox()
-        expect((box?.y ?? 0) + (box?.height ?? 0), `${name} ends above the panel`).toBeLessThanOrEqual(top)
-      }
+      const row = await last.boundingBox()
+      expect((row?.y ?? 0) + (row?.height ?? 0), 'the last row ends above the panel').toBeLessThanOrEqual(top)
+      const dock = await page.locator('.nv-dock').boundingBox()
+      const foot = await page.locator('tfoot').boundingBox()
+      expect((dock?.y ?? 0) + (dock?.height ?? 0), 'the total is pinned below the dock').toBeLessThanOrEqual(
+        foot?.y ?? 0,
+      )
     } finally {
       await removeRun(page, actie)
     }

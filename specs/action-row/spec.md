@@ -28,9 +28,13 @@ Approved by Stefan on 2026-10-25: "nothing missed, approve the spec, write the p
   default density (compact 28px, roomy 40px), the table only; the matrix keeps its own.
   Source: "fontsize in each cell should be the same, not sometimes bigger ( textfields seem bigger )" — Stefan, 2026-10-25.
   Source (again): "no the grid is not ok, fontsizes per cell are not the same, heres a example screenshot of what looks good ( fontsize and cell height )" — Stefan, 2026-10-25, reference screenshot: one 13px face, 32px rows, pills at text size. This replaces the earlier "my call" that numbers keep a monospace face.
-- **R3 The totals bar stays at the table's end.** "Totaal · N rijen" is never drawn over rows. With rows ticked and the
-  selection panel open, the last row and the totals bar can still be scrolled clear of the panel.
+- **R3 The totals bar is pinned at the bottom of the table.** "Totaal · N rijen" sits below the rows at the bottom of the
+  table pane and is never drawn over rows. Under the last row there is empty scroll space, and the selection panel
+  floats over the grid above the totals, in that space; rows scroll visibly under it, and the last row can be scrolled
+  clear of it. The grid's viewport does not shrink when rows are ticked. The matrix keeps its own foot.
   Source: "there's a bar ( totaal 28 ) floating above the actions" — Stefan, 2026-10-25, screenshot.
+  Source (again): "why is the action panel not hovering? it pushes the up the grid bottom and that's weird, just have it hover over de the grid at the bottom" — Stefan, 2026-10-25, on the first redo of R1–R3.
+  Source (again): "this is how nocodb ends its grid, we can do the same" — Stefan, 2026-10-25, NocoDB screenshot: empty scroll space under the last row, floating controls above a footer pinned at the pane's bottom.
 
 **The drawer.**
 - **R4 The actions are a row in the drawer's body.** A record's lifecycle buttons and declared actions leave the

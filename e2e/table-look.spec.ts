@@ -43,7 +43,7 @@ const scrollEnd = (page: Page) =>
   })
 
 test.describe('table look', () => {
-  test('totals-clear-of-the-panel @e2e: the totals row sits at the table’s end, and with two rows ticked it scrolls clear of the selection panel', async ({
+  test('totals-clear-of-the-panel @e2e: the totals are pinned at the pane’s bottom, the selection panel floats above them over the rows, and the last row scrolls clear of the panel', async ({
     page,
   }) => {
     const service = await worker()
@@ -53,34 +53,56 @@ test.describe('table look', () => {
       const scroll = page.locator('.nv-scroll')
       expect(await scroll.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
 
-      const row = page.locator('.nv-grid tbody tr').last()
-      const above = async () => ({ last: await row.boundingBox(), foot: await box(page, '.nv-grid__foot td') })
+      const lastRow = page.locator('.nv-grid tbody tr').last()
+      const bottom = (at: { y: number; height: number } | null) => (at?.y ?? 0) + (at?.height ?? 0)
+      const pinned = async () => {
+        const pane = await scroll.boundingBox()
+        const foot = await box(page, '.nv-grid__foot td')
+        expect(bottom(pane) - bottom(foot)).toBeGreaterThanOrEqual(0)
+        expect(bottom(pane) - bottom(foot)).toBeLessThanOrEqual(16)
+        return foot
+      }
+      const theme = (scheme: string) => (scheme === 'light' ? 'licht' : 'donker')
+
       await scroll.evaluate((el) => {
         el.scrollTop = 0
       })
-      const top = await above()
-      expect(top.foot?.y ?? 0).toBeGreaterThanOrEqual((top.last?.y ?? 0) + (top.last?.height ?? 0) - 1)
+      await pinned()
+      const before = await scroll.boundingBox()
 
       await scrollEnd(page)
-      const last = await page.locator('.nv-grid tbody tr').last().boundingBox()
-      const foot = await box(page, '.nv-grid__foot td')
-      expect(foot?.y ?? 0).toBeGreaterThanOrEqual((last?.y ?? 0) + (last?.height ?? 0) - 1)
-
-      for (const scheme of ['light', 'dark'] as const) {
-        await page.emulateMedia({ colorScheme: scheme })
-        await shot(page, `tabel-einde-${scheme === 'light' ? 'licht' : 'donker'}`)
-      }
+      const foot = await pinned()
+      expect((foot?.y ?? 0) - bottom(await lastRow.boundingBox())).toBeGreaterThanOrEqual(100)
 
       await page.getByRole('checkbox', { name: `${named(1)} selecteren` }).check()
       await page.getByRole('checkbox', { name: `${named(2)} selecteren` }).check()
       await expect(page.locator('.nv-selection')).toBeVisible()
+      expect((await scroll.boundingBox())?.height).toBe(before?.height)
       await scrollEnd(page)
-      const clear = await box(page, '.nv-grid__foot td')
       const panel = await box(page, '.nv-selection')
-      expect((clear?.y ?? 0) + (clear?.height ?? 0)).toBeLessThanOrEqual((panel?.y ?? 0) + 1)
+      expect(bottom(panel)).toBeLessThanOrEqual((await pinned())?.y ?? 0)
+      expect(panel?.y ?? 0).toBeGreaterThan(before?.y ?? 0)
+      expect(bottom(await lastRow.boundingBox())).toBeLessThanOrEqual(panel?.y ?? 0)
       for (const scheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme: scheme })
-        await shot(page, `tabel-einde-paneel-${scheme === 'light' ? 'licht' : 'donker'}`)
+        await shot(page, `tabel-einde-paneel-${theme(scheme)}`)
+      }
+
+      await scroll.evaluate((el) => {
+        el.scrollTop = el.scrollHeight / 8
+      })
+      const mid = await box(page, '.nv-selection')
+      const under = await page
+        .locator('.nv-grid tbody tr')
+        .evaluateAll(
+          (rows, line) =>
+            rows.some((r) => r.getBoundingClientRect().top < line && r.getBoundingClientRect().bottom > line),
+          (mid?.y ?? 0) + 20,
+        )
+      expect(under).toBe(true)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `tabel-midden-paneel-${theme(scheme)}`)
       }
     } finally {
       for (const id of ids) await service.delete(`/api/rows/site/${id}`)

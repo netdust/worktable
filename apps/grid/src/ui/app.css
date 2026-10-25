@@ -2438,9 +2438,15 @@
   padding-left: 16px;
 }
 
-/* The table's totals sit at its end, never over rows; the first cell keeps its horizontal freeze. */
-.nv-grid:not(.nv-mx) .nv-grid__foot td {
-  bottom: auto;
+/* The table's end: empty scroll space under the last row, with the totals pinned below it at the pane's bottom. */
+.nv-grid:not(.nv-mx) {
+  min-height: 100%;
+}
+
+.nv-grid:not(.nv-mx) tbody::after {
+  content: '';
+  display: block;
+  height: 160px;
 }
 
 /* The matrix: the grid's table, its tokens and its sticky header and first column, with a mark per cell. */
@@ -3650,9 +3656,14 @@
   }
 }
 
-/* The last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
-.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll {
+/* The matrix's last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
+.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll:has(.nv-mx) {
   padding-bottom: calc(var(--nv-dock-h, 80px) + 28px);
+}
+
+/* A table's dock floats above its pinned totals, over the empty end space. */
+.nv-sheet:has(.nv-grid:not(.nv-mx)) .nv-dock {
+  bottom: 56px;
 }
 
 .nv-selection__count {
