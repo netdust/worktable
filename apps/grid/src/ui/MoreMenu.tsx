@@ -10,6 +10,7 @@ export interface Action {
   run: () => void
   /** Why it is off: the item is disabled and says so under its label. */
   blocked?: string
+  tone?: 'danger'
 }
 
 type Placement = 'bottom-start' | 'bottom-end'
@@ -59,7 +60,7 @@ function Items({ actions, label }: { actions: Action[]; label: string }) {
   return (
     <Menu className="nv-menu__list" ref={list} aria-label={label} aria-labelledby="">
       {actions.map((action) => (
-        <MenuItem key={action.label} id={action.label} className="nv-menu__item" textValue={action.label}
+        <MenuItem key={action.label} id={action.label} className={action.tone === 'danger' ? 'nv-menu__item nv-menu__item--danger' : 'nv-menu__item'} textValue={action.label}
           isDisabled={Boolean(action.blocked)} onAction={action.run}>
           {action.label}
           {action.blocked && <span className="nv-menu__reason">{action.blocked}</span>}

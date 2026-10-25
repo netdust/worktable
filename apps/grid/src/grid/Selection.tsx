@@ -37,7 +37,7 @@ export function useSelection(rowIds: number[]): Selection {
   }
 }
 
-/** Above the grid while rows are ticked: the count, one button per selection action, and the way out. */
+/** A panel floating over the foot of the sheet while rows are ticked: the count, one button per selection action, and the way out. */
 export function SelectionBar({ count, actions, misfits, onRun, onClear }: {
   count: number
   actions: ModelAction[]
@@ -48,14 +48,13 @@ export function SelectionBar({ count, actions, misfits, onRun, onClear }: {
 }) {
   const [busy, setBusy] = useState(false)
   const over = count > MAX_SELECTION
-  // The strip stays while nothing is ticked: a bar that mounts on the first tick would push every row down.
-  if (count === 0) return <div className="nv-selection" aria-hidden="true" />
+  if (count === 0) return null
   const run = (action: ModelAction, input: Record<string, unknown>) => {
     setBusy(true)
     return onRun(action, input).finally(() => setBusy(false))
   }
   return (
-    <div className="nv-selection" role="region" aria-label={t('selectedCount', { n: count })}>
+    <div className="nv-selection nv-selection--floating" role="region" aria-label={t('selectedCount', { n: count })}>
       <span className="nv-selection__count">{t('selectedCount', { n: count })}</span>
       {actions.map((action) => {
         const misfit = misfits?.(action) ?? 0

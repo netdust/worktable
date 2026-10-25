@@ -223,6 +223,7 @@ const strings = {
   share: 'Delen met het team',
   unshare: 'Niet meer delen',
   viewRemoved: 'Weergave verwijderd',
+  viewDeleted: 'Weergave verwijderd',
   copyOf: '{name} (kopie)',
   moveUp: 'Omhoog',
   moveDown: 'Omlaag',
@@ -270,6 +271,12 @@ const strings = {
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
+  actionRequested: '{action} aangevraagd.',
+  createdRequested: '{title} aangevraagd.',
+  runBusy: '{action} · {state}',
+  runWaiting: '{action} · {state} — openen',
+  runDone: '{action} · {state}',
+  runsMore: '+{n} eerdere verzoeken',
   buttonDone: '{button} gedaan.',
   liveBusy: 'Volgt live',
   selectionMisfit: 'Past niet op {n} rijen',
@@ -287,6 +294,7 @@ const strings = {
   exportModel: 'Exporteren',
   modelName: 'Nieuwe naam voor {model}',
   iconFor: 'Icoon voor {model}',
+  recordActions: 'Acties',
   adminOnly: 'Alleen een beheerder kan dit wijzigen',
   exportOpenView: 'Open eerst een weergave van dit model',
   exportNotReady: 'De weergave laadt nog',
@@ -393,6 +401,7 @@ const strings = {
   transitionNotAllowed: 'Deze statuswijziging is niet toegestaan.',
   noConnection: 'Geen verbinding met de server. Probeer het opnieuw.',
   serviceOnly: 'Dit wordt automatisch bijgehouden en kan je niet zelf wijzigen.',
+  serviceOnlyCreate: 'Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.',
   transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
   undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
   redoSkipped: 'Opnieuw doen kan hier niet',
@@ -441,8 +450,8 @@ const ENGINE_CODES: Record<string, StringKey> = {
 }
 
 /** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */
-export function errorText(code: string, message: string): string {
-  const own = Object.hasOwn(ENGINE_CODES, code) ? t(ENGINE_CODES[code]) : message
+export function errorText(code: string, message: string, creating = false): string {
+  const own = creating && code === 'service_only' ? t('serviceOnlyCreate') : Object.hasOwn(ENGINE_CODES, code) ? t(ENGINE_CODES[code]) : message
   return refusals[ERROR + code] ?? own
 }
 

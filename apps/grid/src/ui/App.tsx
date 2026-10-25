@@ -43,7 +43,8 @@ import { downloadIcs, toIcs } from '../export/ics'
 import { useSavedViews } from './useSavedViews'
 import { usePageUndo } from './usePageUndo'
 import { DrawerSlot } from './SidePanel'
-import { changed, clearLocal, isSaved, keepLocal, localOf, lockOf, useStoredRevision } from './views'
+import { Dock, DockSlot, RunsContext, ToastSlot, useRunFollower } from './runs'
+import { changed, clearLocal, isSaved, keepLocal, knownOf, localOf, lockOf, useStoredRevision } from './views'
 import { useFillViewport } from './viewport'
 import { insightOf } from './insight'
 import { periodOf, stepPeriod, todayPeriod, withPeriod } from './period'
@@ -263,7 +264,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // undefined: the space is still loading; null: this view is not scoped, or every record is selected.
   const scope: Scope | null | undefined = !scoped ? null : space.status === 'ready' ? space.scope : undefined
   const scopeId = scope === undefined ? undefined : scope?.id ?? null
-  const [stored, storeLayout] = useLayout(view)
+  const known = useMemo(() => {
+    const own = view ? served?.models[view.model] : undefined
+    return view && own ? knownOf(own, view, served?.models) : null
+  }, [view, served])
+  const [stored, storeLayout] = useLayout(view, known)
   // A change the person makes: kept here, and one's own view saves itself. A landing or a link is not that.
   const setLayout = (next: Layout) => {
     storeLayout(next)
@@ -348,12 +353,15 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // Each dataset's records, beside its name in the rail: one count read per table, as the page loads.
   const [counts, setCounts] = useState<Record<string, number>>({})
   const countKey = tables.filter((table) => !table.query).map((table) => table.key).join(',')
-  useEffect(() => {
-    let live = true
+  const readCounts = (current: () => boolean) => {
     for (const table of tables.filter((each) => !each.query)) {
       const model = table.views[0]?.model
-      if (model) recordCount(model).then((n) => live && setCounts((was) => ({ ...was, [table.key]: n })), () => undefined)
+      if (model) recordCount(model).then((n) => current() && setCounts((was) => ({ ...was, [table.key]: n })), () => undefined)
     }
+  }
+  useEffect(() => {
+    let live = true
+    readCounts(() => live)
     return () => {
       live = false
     }
@@ -388,6 +396,26 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
   const model = view ? models[view.model] : undefined
+  // Records made in a live state are followed from here, so the follow outlives a change of view.
+  const runs = useRunFollower(models, {
+    notify,
+    show: (dataset) => {
+      // Only the table and the dashboard take a request to open a record: from any other skin, the table's own view does.
+      if (dashboard || (grid && !calendar && !timeline && !matrix && view?.type !== 'board' && view?.type !== 'gallery')) return true
+      const into = tables.find((table) => !table.query && table.views[0]?.model === dataset)
+      const table = into?.views.find((one) => (one.type ?? 'grid') === 'grid') ?? into?.views[0]
+      if (!table) return false
+      setActiveKey(table.key)
+      return true
+    },
+  })
+  useEffect(() => {
+    if (runs.ended === 0) return
+    reloadView()
+    readCounts(() => true)
+  }, [runs.ended])
+  const [dockSlot, setDockSlot] = useState<HTMLElement | null>(null)
+  const [toastSlot, setToastSlot] = useState<HTMLElement | null>(null)
   // A skin with no draft row to type in asks for its new row in the dashboard's quick create.
   const quickAdd = !model?.query && (view?.type === 'board' || view?.type === 'timeline' || view?.type === 'gallery' || Boolean(calendar))
   const writable = view ? served?.writable[view.model] === true : false
@@ -395,7 +423,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
-  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView)
+  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView, runs.created)
   const live = useRef(store)
   live.current = store
   const viewNow = useRef(view)
@@ -435,11 +463,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // A query's new row goes to the dataset it creates in; the query then reads again, and one undo takes the row back.
   const createThrough = (dataset: string, fields: Record<string, unknown>) =>
     createRow(dataset, fields).then(
-      ({ batch }) => {
+      ({ batch, row }) => {
         history.push({ batch: Promise.resolve(batch), model: dataset, id: null })
+        runs.created(dataset, row)
         reloadView()
       },
-      (error: ApiError) => notify({ message: errorText(error.code, error.message) }),
+      (error: ApiError) => notify({ message: errorText(error.code, error.message, true) }),
     )
 
   // A dashboard's title line: the space it reads and this week, as the prototype's.
@@ -546,7 +575,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     } } })
   }
   // One undo entry for everything the action made; the notice's Undo is the toolbar's while that entry is the last.
-  const finished = (batch: string, action: ModelAction) => {
+  const finished = async (batch: string, action: ModelAction, made: { dataset: string; id: number }[], acted: { model: string; ids: number[] } | null) => {
     if (!view) return
     const entry = { batch: Promise.resolve(batch), model: view.model, id: null }
     history.push(entry)
@@ -554,7 +583,13 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     const undo = () => {
       if (history.last() === entry) void (live.current?.undo() ?? history.undo().then(reloadView, () => undefined))
     }
-    notify({ message: t('actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
+    // A record made in a live state is only requested: an outside process finishes it, and the dock follows.
+    // One that cannot be read is not known to have run, so it is said to be requested too.
+    const reads = await Promise.all(
+      made.filter((record) => models[record.dataset]?.live).map(async (record) => ({ record, row: await rowOf(record.dataset, record.id).catch(() => null) })),
+    )
+    const requested = reads.reduce((any, { record, row }) => (row ? runs.follow({ label: action.label, dataset: record.dataset, id: record.id, acted }, row) : true) || any, false)
+    notify({ message: t(requested ? 'actionRequested' : 'actionDone', { action: action.label }), action: { label: t('undo'), run: undo } })
   }
   // A button the server marked is the ordinary transition write, expecting the state it was marked against.
   const drawerWrite: DrawerWrite = {
@@ -593,7 +628,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     if (!view) return null
     try {
       const done = await runAction(action.name, row.id, input)
-      finished(done.batch, action)
+      void finished(done.batch, action, done.created, { model: view.model, ids: [row.id] })
       return opening(action, done.created, { dataset: view.model, id: row.id })
     } catch (error) {
       // The row moved out of the action's condition since the sheet loaded: read again, so the drawer stops offering it.
@@ -605,7 +640,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     if (!view) return null
     try {
       const done = await runSelection(action.name, ids, input)
-      finished(done.batch, action)
+      void finished(done.batch, action, done.created, { model: view.model, ids })
       return opening(action, done.created, null)
     } catch (error) {
       // A row that left since the sheet loaded refuses the whole run: read again, and the selection drops it.
@@ -626,6 +661,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   return (
     <DrawerSlot.Provider value={drawerSlot}>
+    <RunsContext.Provider value={runs}>
+    <DockSlot.Provider value={dockSlot}>
+    <ToastSlot.Provider value={toastSlot}>
     <SchemaContext.Provider value={served}>
     <DrawerWriteContext.Provider value={drawerWrite}>
     <div className="nv-app" ref={frame}>
@@ -700,6 +738,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : (
             <Sheet hasView={view !== undefined} result={result} />
           )}
+          <Dock onSlot={setDockSlot} onToast={setToastSlot} />
         </section>
         {historyOpen && view && (
           <HistoryPanel key={`${view.key}:${asks}:${windowKey}:${scopeId}`} load={() => readHistory(view, window, scope ?? null, layout)} fields={model?.fields}
@@ -717,7 +756,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
       {quick && (target ?? model) && (
         <QuickCreate label={newLabel(target ?? model)} model={(target ?? model) as Model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
-          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)}
+          window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreatedRow={runs.created}
           onCreated={(batch) => {
             if (target && batch) history.push({ batch: Promise.resolve(batch), model: target.key, id: null })
             setQuick(null)
@@ -732,6 +771,9 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     </div>
     </DrawerWriteContext.Provider>
     </SchemaContext.Provider>
+    </ToastSlot.Provider>
+    </DockSlot.Provider>
+    </RunsContext.Provider>
     </DrawerSlot.Provider>
   )
 }

@@ -8,7 +8,7 @@ import { FlagMark } from '../ui/Flag'
 import { toneColor } from '../ui/tone'
 import { type Flags, useFlags } from '../ui/useFlags'
 import { formatWindow, iso, parse, weekOf } from '../ui/Window'
-import { layoutOf } from '../ui/views'
+import { knownFor, layoutOf } from '../ui/views'
 import { scopeFor } from './tiles'
 
 const weekday = (date: Date) => new Intl.DateTimeFormat(document.documentElement.lang || 'nl', { weekday: 'short' }).format(date)
@@ -21,14 +21,14 @@ const dayHead = (day: string) => {
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 
 /** This week of a calendar view in seven days, today marked; an event opens its row. */
-export function WeekTile({ view, model, scope, version, onOpen, onOpenRow }: {
-  view: SavedView; model?: Model; scope: Scope | null; version: number; onOpen: () => void; onOpenRow: (row: Row, flags: Flags | null) => void
+export function WeekTile({ view, model, models, scope, version, onOpen, onOpenRow }: {
+  view: SavedView; model?: Model; models: Record<string, Model>; scope: Scope | null; version: number; onOpen: () => void; onOpenRow: (row: Row, flags: Flags | null) => void
 }) {
   const week = weekOf(new Date())
   const [found, setFound] = useState<Row[]>([])
   useEffect(() => {
     let live = true
-    readRows(view, week, scopeFor(view, scope), layoutOf(view)).then((r) => live && setFound(r.rows), () => live && setFound([]))
+    readRows(view, week, scopeFor(view, scope), layoutOf(view, knownFor(view, models))).then((r) => live && setFound(r.rows), () => live && setFound([]))
     return () => {
       live = false
     }

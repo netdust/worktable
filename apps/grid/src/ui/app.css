@@ -409,6 +409,11 @@
   min-height: 0;
 }
 
+/* The work column is what the toolbar measures against: a drawer beside it narrows it, the window does not. */
+.nv-main {
+  container: nvmain / inline-size;
+}
+
 /* When the name and the end do not both fit (a drawer open on a narrow screen), the end takes a second row. */
 .nv-toolbar {
   display: flex;
@@ -747,6 +752,7 @@
 }
 
 .nv-sheet {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1021,6 +1027,27 @@
   min-width: 136px;
 }
 
+#root .nv-search .nv-search__toggle {
+  display: none;
+}
+
+/* A narrow work column, a drawer open beside it: the search is an icon until asked for. */
+@container nvmain (max-width: 700px) {
+  .nv-search:not([data-open]) {
+    flex: none;
+    min-width: 0;
+  }
+
+  #root .nv-search:not([data-open]) .nv-search__field {
+    display: none;
+  }
+
+  #root .nv-search:not([data-open]) .nv-search__toggle.nv-more {
+    display: inline-flex;
+    height: 36px;
+  }
+}
+
 /* The placeholder must read whole beside the ⌘K hint. */
 #root .nv-search__field {
   display: flex;
@@ -1265,6 +1292,7 @@
 
 /* The sheet: the bar, then the scrolling table with the drawer beside it. */
 .nv-frame {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1668,7 +1696,7 @@
 /* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
-  border-right: 1px solid var(--color-border-subtle);
+  border-right: 1px solid var(--color-border-row);
 }
 
 /* Zebra rows on request (Bijstellen › Zebrarijen). */
@@ -1691,6 +1719,12 @@
 
 .nv-grid:not(.nv-mx) .nv-th.nv-num {
   z-index: 3;
+}
+
+/* With a tick box the cell reads [box][number] from the left, so every box sits at one x. */
+.nv-grid:not(.nv-mx) .nv-num:has(input[type="checkbox"]) {
+  padding: 0 0 0 12px;
+  text-align: left;
 }
 
 .nv-grid__foot td.nv-num {
@@ -1858,6 +1892,14 @@
 .nv-cell__bool {
   display: inline-flex;
   align-items: center;
+}
+
+/* A never-given boolean: no switch, but a cell-wide target a press sets to true. */
+.nv-cell__bool--blank {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  cursor: pointer;
 }
 
 .nv-switch {
@@ -3451,7 +3493,7 @@
   position: relative;
 }
 
-/* The ticked rows' bar, one row above the sheet: the count, each action with its inputs inline, and the way out. */
+/* The ticked rows' panel, floating over the foot of the sheet: the count, each action with its inputs inline, and the way out. */
 .nv-selection {
   box-sizing: border-box;
   min-height: 45px;
@@ -3463,6 +3505,146 @@
   border-bottom: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   font-size: 13px;
+}
+
+.nv-selection--floating {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
+/* The work column's dock: the selection panel on top, the lines of running requests below it. Nothing in it shifts a row. */
+.nv-dock {
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  /* Over a widened drawer too (z-index 20): a toast is heard and seen wherever it was asked. */
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.nv-dock__panel {
+  display: contents;
+}
+
+.nv-dock .nv-toast {
+  position: static;
+  transform: none;
+  pointer-events: auto;
+}
+
+.nv-dock .nv-selection--floating {
+  position: static;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  transform: none;
+  pointer-events: auto;
+}
+
+.nv-runs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+}
+
+.nv-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 6px 10px 6px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+  color: var(--color-fg-default);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.nv-run[data-tone="bad"] {
+  color: var(--color-danger-fg);
+}
+
+.nv-run--more {
+  color: var(--color-fg-subtle);
+}
+
+.nv-run__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nv-run__close {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+/* A request an outside process holds: a ring that turns, a still dot when motion is off. */
+.nv-run__spin {
+  flex: none;
+  animation: nv-run-turn 1s linear infinite;
+}
+
+@keyframes nv-run-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-run__spin {
+    animation: none;
+  }
+}
+
+/* The row an action acted on, while it runs: a ring beside its number. */
+.nv-grid:not(.nv-mx) tr[data-running] .nv-num > span::after {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  content: "";
+  animation: nv-run-turn 1s linear infinite;
+  vertical-align: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-grid:not(.nv-mx) tr[data-running] .nv-num > span::after {
+    border-top-color: currentColor;
+    animation: none;
+  }
+}
+
+/* The last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
+.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll {
+  padding-bottom: calc(var(--nv-dock-h, 80px) + 28px);
 }
 
 .nv-selection__count {
@@ -3497,13 +3679,20 @@
   margin-left: auto;
 }
 
-/* The box sits at the cell's left edge, whatever the number's width: the cell is sticky, so it holds the box. */
+/* The box sits beside the row number and shows on hover, focus, a tick, or while any row is ticked. Opacity, never visibility: the active row's box stays the Tab stop. */
 .nv-grid:not(.nv-mx) .nv-num input[type="checkbox"] {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  margin: 0;
-  transform: translateY(-50%);
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+  opacity: 0;
+}
+
+.nv-grid:not(.nv-mx) tr:hover .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) tr:focus-within .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) tr[data-ticked] .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx)[data-ticking] .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) .nv-th.nv-num:hover input[type="checkbox"],
+.nv-grid:not(.nv-mx) .nv-th.nv-num input[type="checkbox"]:focus-visible {
+  opacity: 1;
 }
 
 #root .nv-action__refused {
@@ -4010,6 +4199,62 @@
   background: var(--color-bg-canvas);
 }
 
+
+.nv-menu__item--danger {
+  color: var(--color-danger-fg);
+}
+
+/* Popovers a drawer's menu opens: an action's inputs, the second press of a delete. */
+.nv-dw-ask {
+  padding: 8px;
+  outline: none;
+}
+
+.nv-dw-ask--panel {
+  position: absolute;
+  top: 100%;
+  right: 8px;
+  z-index: 3;
+  min-width: 260px;
+  padding-right: 32px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+#root .nv-dw-ask__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+#root .nv-dw-ask .nv-fb__text {
+  width: 180px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+}
+
+#root .nv-dw-ask .nv-fb__text:focus-visible {
+  border-color: var(--color-fg-default);
+  outline: 2px solid var(--color-fg-default);
+  outline-offset: -1px;
+}
+
+.nv-dw-ask .nv-action {
+  padding: 4px;
+}
 
 .nv-menu__item[data-disabled] {
   opacity: 0.6;

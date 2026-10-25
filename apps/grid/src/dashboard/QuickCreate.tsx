@@ -73,7 +73,7 @@ export function askedOf(model: Model, made: NewRow, scope: Scope | null): string
 }
 
 /** A create on one dataset from the dashboard's header: the columns it needs, the space filled in, the writer judging it. */
-export function QuickCreate({ label, model, tables, scope, window = null, preset = {}, onClose, onCreated }: {
+export function QuickCreate({ label, model, tables, scope, window = null, preset = {}, onClose, onCreated, onCreatedRow }: {
   label: string; model: Model; tables: TableDef[]; scope: Scope | null
   /** The days on screen: a date starts on today when it is among them, else on their first. */
   window?: DateWindow | null
@@ -82,6 +82,8 @@ export function QuickCreate({ label, model, tables, scope, window = null, preset
   onClose: () => void
   /** Told the create's batch, for a place that keeps its own undo. */
   onCreated: (batch: string | null) => void
+  /** Told the record it made, for the places that follow what an outside process holds. */
+  onCreatedRow?: (dataset: string, row: Row) => void
 }) {
   const made = madeFrom(model, tables, window, scope)
   const titleField: Field = { type: 'text', label: model.title_label, required: true, fact: false }
@@ -95,13 +97,14 @@ export function QuickCreate({ label, model, tables, scope, window = null, preset
     setBusy(true)
     setRefusal(null)
     create(model.key, { ...values, ...preset }).then(
-      ({ batch }) => {
+      ({ batch, row }) => {
+        onCreatedRow?.(model.key, row)
         onCreated(batch)
         onClose()
       },
       (error: ApiError) => {
         setBusy(false)
-        setRefusal(errorText(error.code, error.message))
+        setRefusal(errorText(error.code, error.message, true))
       },
     )
   }

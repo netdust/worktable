@@ -2,10 +2,10 @@ import type { Database } from 'bun:sqlite'
 import { chmodSync, rmSync, writeFileSync } from 'node:fs'
 import { seededLayout } from './dashboard'
 import { datasetDdl, viewDdl } from './ddl'
-import type { DatasetDecl, Domain, QueryDecl } from './declare'
+import type { DatasetDecl, Domain, QueryDecl, SavedViewSeed } from './declare'
 import { engineTables, MIGRATIONS } from './engine-tables'
 import { MigrationError } from './migration-error'
-import { savedView } from './saved-view'
+import { savedView, seedKey } from './saved-view'
 import { applyChange, type Change, planChange } from './schema-diff'
 import { validateDomain } from './validate'
 import { SYSTEM, SYSTEM_OWNER, viewKey } from './views'
@@ -104,7 +104,22 @@ export function migrate(sqlite: Database, domain: Domain): void {
   } finally {
     sqlite.run('PRAGMA foreign_keys = ON')
   }
-  sqlite.transaction(() => adoptUnowned(sqlite, domain))()
+  sqlite.transaction(() => {
+    adoptUnowned(sqlite, domain)
+    keySeeded(sqlite, domain)
+  })()
+}
+
+/** Gives a live system view the key of the seed whose name and source it has; writes no revision. */
+export function keySeeded(sqlite: Database, domain: Domain): number {
+  const sql =
+    'UPDATE saved_view SET seed_key = ? WHERE owner_id = ? AND seed_key IS NULL AND deleted_at IS NULL AND name = ? AND source IS ?'
+  let keyed = 0
+  for (const seed of domain.views) {
+    const key = seedKey(seed.name, seed.source)
+    keyed += sqlite.query(sql).run(key, SYSTEM_OWNER, seed.name, seed.source ?? null).changes
+  }
+  return keyed
 }
 
 function moveView(sqlite: Database, id: number, owner: number, now: string): void {
@@ -143,18 +158,36 @@ function insertRows(sqlite: Database, table: string, rows: Record<string, unknow
   }
 }
 
+// The stored columns are picked by name: a seed's own fields (locked) never become columns.
+function systemRow(seed: SavedViewSeed, layout?: SavedViewSeed['layout']): Record<string, unknown> {
+  const { name, source_type, source, skin, filters, sort, group_by, visible_fields } = seed
+  return {
+    name,
+    source_type: source_type ?? null,
+    source: source ?? null,
+    skin,
+    filters,
+    sort,
+    group_by,
+    visible_fields,
+    ...(layout ? { layout } : {}),
+    owner_id: SYSTEM_OWNER,
+    shared: true,
+    seed_key: seedKey(name, source),
+  }
+}
+
 export function seedDomain(sqlite: Database, domain: Domain): void {
   sqlite.transaction(() => {
     domain.seed((dataset, rows) => insertRows(sqlite, dataset, rows))
-    const system = { owner_id: SYSTEM_OWNER, shared: true }
     // A dashboard's tiles name seeded views, so it goes in after them.
     insertRows(
       sqlite,
       'saved_view',
-      domain.views.filter((v) => v.skin !== 'dashboard').map((v) => ({ ...v, ...system })),
+      domain.views.filter((v) => v.skin !== 'dashboard').map((v) => systemRow(v)),
     )
     for (const seed of domain.views.filter((v) => v.skin === 'dashboard')) {
-      insertRows(sqlite, 'saved_view', [{ ...seed, layout: seededLayout(sqlite, domain, seed, SYSTEM), ...system }])
+      insertRows(sqlite, 'saved_view', [systemRow(seed, seededLayout(sqlite, domain, seed, SYSTEM))])
     }
   })()
 }

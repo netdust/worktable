@@ -4,7 +4,7 @@ import { Display } from '../grid/cells'
 import { type Column, columnsFor } from '../grid/columns'
 import { errorText, t } from '../i18n'
 import type { ApiError, Model, Row, SavedView, Scope, Tile } from '../types'
-import { layoutOf } from '../ui/views'
+import { knownFor, layoutOf } from '../ui/views'
 import { iso } from '../ui/Window'
 import { whenOf } from '../ui/when'
 import { scopeFor } from './tiles'
@@ -55,7 +55,7 @@ export function ListTile({ tile, view, model, models, scope, version, onOpen, on
   const [refusal, setRefusal] = useState<string | null>(null)
   useEffect(() => {
     let live = true
-    readRows(view, {}, scopeFor(view, scope), layoutOf(view), tile.rows).then(
+    readRows(view, {}, scopeFor(view, scope), layoutOf(view, knownFor(view, models)), tile.rows).then(
       (r) => live && setFound({ rows: r.rows.slice(0, tile.rows), total: r.total }),
       () => live && setFound({ rows: [], total: 0 }),
     )

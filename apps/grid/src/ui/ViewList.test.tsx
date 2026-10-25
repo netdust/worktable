@@ -116,6 +116,17 @@ describe("a view's actions", () => {
     expect(choices('Bezetting Jan')).toEqual(['Kopie maken', 'Naam wijzigen', 'Verwijderen'])
   })
 
+  it('offers rename and delete on a seeded view the administrator may change, and only a copy where it is locked', () => {
+    const open = saved(50, 'Open', { shared: true, mine: false, editable: true, owner: { id: -1, name: '' } })
+    const locked = saved(51, 'Vast', { shared: true, mine: false, editable: false, owner: { id: -1, name: '' } })
+    render(<ViewList table={{ ...table, views: [open, locked] }} active="planning" onSelect={() => undefined} actions={actions()} />)
+
+    expect(choices('Open')).toEqual(['Kopie maken', 'Naam wijzigen', 'Verwijderen'])
+    cleanup()
+    render(<ViewList table={{ ...table, views: [open, locked] }} active="planning" onSelect={() => undefined} actions={actions()} />)
+    expect(choices('Vast')).toEqual(['Kopie maken'])
+  })
+
   it('offers no move up on the first view of the list and no move down on the last', () => {
     const first: Table = { ...table, views: [own, tabel, sharedOwn] }
     render(<ViewList table={first} active="planning" onSelect={() => undefined} actions={actions()} />)

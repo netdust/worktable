@@ -1,7 +1,7 @@
-import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, LoaderCircle, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
-import { type Attachment, attachmentsOf, fileUrl, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
+import { type Attachment, attachmentsOf, fileUrl, removeAttachment, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
 import type { Account, ApiError, Model, ModelAction, Row, View } from '../types'
 import { iconNamed } from '../ui/icons'
@@ -19,8 +19,7 @@ import { SidePanel } from '../ui/SidePanel'
 import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
-import { ActionInputs } from './ActionInputs'
-import { DrawerButtons } from './DrawerButtons'
+import { DrawerTools } from './DrawerTools'
 import { useLive } from './useLive'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
@@ -33,6 +32,10 @@ interface Props {
   onClose: () => void
   /** What edits the record, under its fields. */
   editor?: ReactNode
+  /** Deletes the record: Verwijderen in the head's menu, asked twice. */
+  onDelete?: () => Promise<void>
+  /** Says something short, as a toast: the record link was copied. */
+  onSaid?: (message: string) => void
   /** Writes a long text edited in its block; without it, the drawer reads only. */
   onWrite?: WriteField
   /** Writes who holds a place of one of the record's links, in the link's own dataset; without it no place is chosen again. */
@@ -118,7 +121,7 @@ function Head({ row, model, nav, busy, icon: Icon }: { row: Row; model?: Model; 
         {option && model && ' · '}
         {model?.label}
       </span>
-      {busy && <span className="nv-dw-head__busy" role="status"><i aria-hidden="true" />{t('liveBusy')}</span>}
+      {busy && <span className="nv-dw-head__busy" role="status"><LoaderCircle className="nv-run__spin" size={13} aria-hidden="true" />{t('liveBusy')}</span>}
       {nav && <span className="nv-dw-head__pos">{at >= 0 ? t('position', { n: at + 1, m: nav.ids.length }) : '–'}</span>}
       {nav && (
         <>
@@ -168,7 +171,7 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, onDone, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrite, onLink, actions = [], onAction, onDone, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
   const { busy } = useLive(onDone ? model : undefined, row, onDone ?? (() => Promise.resolve(null)))
@@ -193,6 +196,7 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
   }
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
+      tools={<DrawerTools key={row.id} model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} />}
       head={<Head row={row} model={model} nav={nav} busy={busy} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
       <div className="nv-dw-body">
       <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
@@ -202,8 +206,6 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
         </p>
       )}
       {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
-      {onDone && model && row.id > 0 && <DrawerButtons model={model.key} id={row.id} available={row.available} onDone={onDone} />}
-      {onAction && actions.filter((action) => !row.available || row.available.actions.includes(action.name)).map((action) => <ActionInputs key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
       {lines && <dl className="nv-drawer__fields">{lines}</dl>}
       {shown.length > 0 && <Props props={shown} row={row} />}
       {folded.length > 0 && (more
@@ -217,29 +219,10 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
       {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
       {sections}
       {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} row={row} />}
-      {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
       {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
       {editor && <div className="nv-drawer__editor">{editor}</div>}
       </div>
     </SidePanel>
-  )
-}
-
-/** Copies the record's link for its person, or a new one that stops the old. */
-function RecordLink({ dataset, id }: { dataset: string; id: number }) {
-  const [said, setSaid] = useState('')
-  const copy = (read: Promise<string>, done: string) => {
-    read.then((link) => navigator.clipboard.writeText(link)).then(
-      () => setSaid(done),
-      () => setSaid(t('recordLinkFailed')),
-    )
-  }
-  return (
-    <div className="nv-action" role="group" aria-label={t('copyLink')}>
-      <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(readLink(dataset, id), t('linkCopied'))}>{t('copyLink')}</Button>
-      <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(rotateRecordLink(dataset, id), t('recordLinkRotated'))}>{t('recordLinkNew')}</Button>
-      <p className="nv-action__said" role="status">{said}</p>
-    </div>
   )
 }
 

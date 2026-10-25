@@ -3,10 +3,11 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { seededLayout } from './dashboard'
 import type { DatasetDecl, Domain, SavedViewSeed } from './declare'
 import { silentMailer } from './mailer'
+import { keySeeded } from './migrate'
 import { ApiError } from './params'
 import { sourceOf } from './registry'
-import { savedView } from './saved-view'
-import { SYSTEM, SYSTEM_OWNER, viewKey } from './views'
+import { savedView, seedKey } from './saved-view'
+import { SYSTEM, SYSTEM_OWNER } from './views'
 import { contextOf, create, encodeAll, recordBatch, revise, type Store, valuesOf, writableOf } from './writes'
 
 type Row = Record<string, unknown>
@@ -88,7 +89,7 @@ function seedDataset(run: Run, name: string, rows: Row[]): DatasetOutcome {
   return { inserted, present: rows.length - inserted }
 }
 
-function storedView(run: Run, seed: SavedViewSeed): Stored {
+function storedView(run: Run, seed: SavedViewSeed, dropped: string[]): Stored {
   const json = JSON.stringify
   return {
     name: seed.name,
@@ -99,14 +100,14 @@ function storedView(run: Run, seed: SavedViewSeed): Stored {
     sort: json(seed.sort),
     group_by: seed.group_by,
     visible_fields: json(seed.visible_fields),
-    layout: seed.skin === 'dashboard' ? json(dashboardLayout(run, seed)) : null,
+    layout: seed.skin === 'dashboard' ? json(dashboardLayout(run, seed, dropped)) : null,
     shared: 1,
   }
 }
 
-function dashboardLayout(run: Run, seed: SavedViewSeed) {
+function dashboardLayout(run: Run, seed: SavedViewSeed, dropped: string[]) {
   try {
-    return seededLayout(run.store.sqlite, run.store.domain, seed, SYSTEM)
+    return seededLayout(run.store.sqlite, run.store.domain, seed, SYSTEM, dropped)
   } catch (err) {
     throw new SeedRefused((err as Error).message)
   }
@@ -114,15 +115,22 @@ function dashboardLayout(run: Run, seed: SavedViewSeed) {
 
 const labelOf = (view: Stored): string => `view "${view.name}"${view.source === null ? '' : ` (${view.source})`}`
 
-function addView(run: Run, next: Stored): void {
+/** A person touched a seeded view when a revision of it names an actor other than the system owner. */
+export function touched(sqlite: Database, id: number): boolean {
+  const sql = "SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ? AND actor_id IS NOT ? LIMIT 1"
+  return sqlite.query(sql).get(id, SYSTEM_OWNER) !== null
+}
+
+function addView(run: Run, next: Stored, key: string): void {
   const { sqlite } = run.store
-  const row = { ...next, owner_id: SYSTEM_OWNER }
+  const row = { ...next, owner_id: SYSTEM_OWNER, seed_key: key }
   const keys = Object.keys(row)
   const sql = `INSERT INTO saved_view (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`
   const id = Number(sqlite.query(sql).run(...Object.values(row)).lastInsertRowid)
   const raw = sqlite.query('SELECT * FROM saved_view WHERE id = ?').get(id) as Stored
   const changes = Object.keys(savedView.columns)
-    .map((key): Change => [key, null, raw[key] ?? null])
+    .filter((column) => column !== 'seed_key')
+    .map((column): Change => [column, null, raw[column] ?? null])
     .filter(([, , value]) => value !== null)
   revise(sqlite, savedView, id, changes, run.now, SYSTEM_OWNER, run.batch)
   run.written++
@@ -157,40 +165,86 @@ function updateView(run: Run, current: Stored, next: Stored): boolean {
   return true
 }
 
+function restoreView(run: Run, view: Stored): void {
+  const id = view.id as number
+  run.store.sqlite.query('UPDATE saved_view SET deleted_at = NULL, updated_at = ? WHERE id = ?').run(run.now, id)
+  revise(
+    run.store.sqlite,
+    savedView,
+    id,
+    [['deleted_at', view.deleted_at ?? null, null]],
+    run.now,
+    SYSTEM_OWNER,
+    run.batch,
+  )
+  run.written++
+}
+
+type Outcome = 'added' | 'updated' | 'present'
+
+// One seed against the system rows that carry its key, live or deleted.
+function seedView(run: Run, seed: SavedViewSeed): Outcome {
+  const { sqlite } = run.store
+  const dropped: string[] = []
+  const next = storedView(run, seed, dropped)
+  const key = seedKey(seed.name, seed.source)
+  const owned = sqlite
+    .query('SELECT * FROM saved_view WHERE seed_key = ? AND owner_id = ? ORDER BY deleted_at IS NOT NULL, id')
+    .all(key, SYSTEM_OWNER) as Stored[]
+  const current = owned[0]
+  const label = labelOf(next)
+  const unlocked = seed.locked !== true
+  if (!current) {
+    // Another owner's shared view of the same name and source stands in for the seed, and is never adopted; a renamed seed does not.
+    const sql =
+      'SELECT 1 FROM saved_view WHERE name = ? AND source IS ? AND deleted_at IS NULL AND shared = 1 AND owner_id != ?'
+    if (sqlite.query(sql).get(seed.name, seed.source ?? null, SYSTEM_OWNER)) return 'present'
+    addView(run, next, key)
+    noteDropped(run, seed, dropped)
+    return 'added'
+  }
+  if (unlocked && touched(sqlite, current.id as number)) {
+    run.named.push(`${label} ${current.deleted_at === null ? 'changed' : 'deleted'} by a person, left alone`)
+    return 'present'
+  }
+  if (current.deleted_at !== null) restoreView(run, current)
+  const restored = current.deleted_at !== null
+  if (restored) run.named.push(`${label} restored`)
+  const changed = updateView(run, { ...current, deleted_at: null }, next)
+  if (changed) noteDropped(run, seed, dropped)
+  return restored || changed ? 'updated' : 'present'
+}
+
+const noteDropped = (run: Run, seed: SavedViewSeed, dropped: string[]): void => {
+  for (const view of new Set(dropped))
+    run.named.push(`dashboard "${seed.name}": tile on deleted view "${view}" dropped`)
+}
+
 function seedViews(run: Run): SeedReport['views'] {
   const counts = { added: 0, updated: 0, present: 0 }
-  const sql = 'SELECT * FROM saved_view WHERE name = ? AND source IS ? AND deleted_at IS NULL ORDER BY id'
   // A dashboard's tiles name seeded views, so every other view is in place first.
   const views = run.store.domain.views
   const ordered = [...views.filter((v) => v.skin !== 'dashboard'), ...views.filter((v) => v.skin === 'dashboard')]
-  for (const seed of ordered) {
-    const next = storedView(run, seed)
-    // A user's private view never blocks the seeded one; only a system-owned or shared view counts.
-    const live = (run.store.sqlite.query(sql).all(seed.name, seed.source ?? null) as Stored[]).filter(
-      (view) => view.owner_id === SYSTEM_OWNER || view.shared === 1,
-    )
-    const system = live.find((view) => view.owner_id === SYSTEM_OWNER)
-    if (live.length === 0) {
-      addView(run, next)
-      counts.added++
-    } else if (system && updateView(run, system, next)) counts.updated++
-    else counts.present++
-  }
+  for (const seed of ordered) counts[seedView(run, seed)]++
   removeUndeclared(run)
   nameOrphans(run)
   return counts
 }
 
-// A system view whose name and source no seed declares any more (a renamed seed) is removed; a published one stays.
+// A system view whose seed is no longer declared is removed, unless a person touched it or an administrator published it.
 function removeUndeclared(run: Run): void {
-  const declared = new Set(run.store.domain.views.map((seed) => viewKey(seed.name, seed.source)))
+  const declared = new Set(run.store.domain.views.map((seed) => seedKey(seed.name, seed.source)))
   const sql = 'SELECT * FROM saved_view WHERE owner_id = ? AND deleted_at IS NULL ORDER BY id'
   for (const view of run.store.sqlite.query(sql).all(SYSTEM_OWNER) as Stored[]) {
-    if (declared.has(viewKey(String(view.name), view.source as string | null))) continue
+    if (declared.has(view.seed_key as string)) continue
     const label = labelOf(view)
     const published = leftAlone(view)
     if (published) {
       run.named.push(`${label} ${published}, left alone`)
+      continue
+    }
+    if (touched(run.store.sqlite, view.id as number)) {
+      run.named.push(`${label} changed by a person, left alone`)
       continue
     }
     run.store.sqlite
@@ -234,6 +288,7 @@ export function seedMissing(sqlite: Database, domain: Domain): SeedReport {
     .transaction((): SeedReport => {
       const datasets: Record<string, DatasetOutcome> = {}
       for (const [name, rows] of seedRows(domain)) datasets[name] = seedDataset(run, name, rows)
+      keySeeded(sqlite, domain)
       const views = seedViews(run)
       if (run.written === 0) return { datasets, views, named: run.named, batch: null }
       recordBatch(sqlite, run.batch, SYSTEM_OWNER, 'seed', run.now)

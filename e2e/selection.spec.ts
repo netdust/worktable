@@ -1,4 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
+import { offered, pressInMenu } from './drawer'
+import { shot } from './shots'
 import { modelNode, openView } from './tree'
 
 const APP = 'http://127.0.0.1:5177'
@@ -76,6 +78,7 @@ test('select-all-in-view @e2e: the header box takes the filtered rows, and the p
 test('run-from-drawer @e2e: the open record alone, and the parent holds exactly that one', async ({ page }) => {
   await open(page, 'All members', 'Members')
   await page.getByRole('row', { name: /Bob/ }).getByRole('button', { name: 'Openen' }).click()
+  await pressInMenu(page, 'Gather')
   const group = page.getByRole('group', { name: 'Gather' })
   await group.getByRole('textbox', { name: 'Name' }).fill('Solo')
   await group.getByRole('button', { name: 'Gather', exact: true }).click()
@@ -164,6 +167,7 @@ test('bar-reserves-its-strip @e2e: the bar reserves its strip: no row moves on t
   expect(await top()).toBe(before)
   await tick(page, 'Bob')
   expect(await top()).toBe(before)
+  await shot(page, 'selectie-paneel-fixture')
   await page.getByRole('button', { name: 'Selectie wissen' }).click()
   await expect(page.getByRole('region', { name: /geselecteerd/ })).toHaveCount(0)
   expect(await top()).toBe(before)
@@ -260,7 +264,7 @@ test('stale-id-run @e2e: a ticked row gone before the run gives the Dutch notice
 test('drawer-escape @e2e: Escape closes the drawer that carries the run', async ({ page }) => {
   await open(page, 'All members', 'Members')
   await page.getByRole('row', { name: /Bob/ }).getByRole('button', { name: 'Openen' }).click()
-  await expect(page.getByRole('group', { name: 'Gather' })).toBeVisible()
+  await expect.poll(() => offered(page)).toContain('Gather')
   await page.keyboard.press('Escape')
   await expect(page.getByRole('complementary')).toHaveCount(0)
 })

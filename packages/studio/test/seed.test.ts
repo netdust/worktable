@@ -170,6 +170,25 @@ describe('the sites', () => {
     for (const column of declared) expect(served).toContain(column)
   })
 
+  test('studio seeds no view named Alle sites', () => {
+    expect(views.map((v) => v.name)).not.toContain('Alle sites')
+  })
+
+  test('Sites lists only the sites still in the registry', () => {
+    expect(viewNamed('Sites')).toMatchObject({ source: 'site', skin: 'table', filters: { in_registry: true } })
+  })
+
+  test('the Sites in orde tile takes its total from Sites', () => {
+    const progress = tiles().find((t) => t.kind === 'progress') as Tile
+    expect(progress.total).toBe(viewNamed('Sites').id)
+    expect(progress.done).toBe(viewNamed('Sites in orde').id)
+  })
+
+  test('no studio view seed is locked', async () => {
+    const { views: seeded } = await import('../src/seed')
+    expect(seeded.filter((v) => v.locked)).toEqual([])
+  })
+
   test('SLA-sites names the SLA sites still in the registry', () => {
     expect(viewNamed('SLA-sites')).toMatchObject({ source: 'site', filters: { sla: true, in_registry: true } })
   })

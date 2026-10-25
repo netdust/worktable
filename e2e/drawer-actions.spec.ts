@@ -1,4 +1,5 @@
 import { expect, type Page, request, test } from '@playwright/test'
+import { offered, pressInMenu } from './drawer'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -24,23 +25,23 @@ test('press-a-button @e2e: a declared transition is a button, the drawer shows t
   page,
 }) => {
   await open(page, 'All members', 'Members')
-  const drawer = await drawerOf(page, 'Ann')
-  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0)
-  await expect(drawer.getByRole('button', { name: 'Reopen' })).toHaveCount(0)
+  await drawerOf(page, 'Ann')
+  await expect.poll(() => offered(page)).toContain('Start')
+  await expect.poll(() => offered(page)).not.toContain('Finish')
+  await expect.poll(() => offered(page)).not.toContain('Reopen')
   await shot(page, 'drawer-buttons')
 
-  await drawer.getByRole('button', { name: 'Start', exact: true }).click()
+  await pressInMenu(page, 'Start')
 
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toHaveCount(0)
-  await expect(drawer.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
+  await expect.poll(() => offered(page)).toContain('Finish')
+  await expect.poll(() => offered(page)).not.toContain('Start')
+  await expect.poll(() => offered(page)).not.toContain('Back')
   const notice = page.getByRole('status', { name: 'Start gedaan.' })
   await expect(notice).toHaveCount(1)
 
   await notice.getByRole('button', { name: 'Ongedaan maken' }).click()
-  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0)
+  await expect.poll(() => offered(page)).toContain('Start')
+  await expect.poll(() => offered(page)).not.toContain('Finish')
 })
 
 test('link-item-button @e2e: a link item offers its record’s button and detail, and the list shows its new state', async ({
@@ -85,15 +86,15 @@ test('drawer-follows-an-outside-change @e2e: with the drawer open, a second acco
   await move('active', 'new')
   await open(page, 'All members', 'Members')
   const drawer = await drawerOf(page, 'Di')
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+  await expect.poll(() => offered(page)).toContain('Finish')
   await expect(drawer.getByText('Volgt live')).toBeVisible()
   await shot(page, 'drawer-live')
 
   await move('done', 'active')
 
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0, { timeout: 5000 })
+  await expect.poll(() => offered(page), { timeout: 5000 }).not.toContain('Finish')
   await expect(drawer.getByText('Volgt live')).toHaveCount(0)
-  await expect(drawer.getByRole('button', { name: 'Park', exact: true })).toBeVisible()
+  await expect.poll(() => offered(page)).toContain('Park')
   await outside.dispose()
 })
 
@@ -114,18 +115,18 @@ test('dashboard-row-opens-drawer @e2e: a list row opens its record on the dashbo
     .first()
     .getByRole('button', { name: /^Open / })
     .click()
-  const drawer = page.getByRole('complementary')
-  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
+  await expect(page.getByRole('complementary')).toBeVisible()
+  await expect.poll(() => offered(page)).toContain('Start')
   await shot(page, 'dashboard-row-drawer')
-  await drawer.getByRole('button', { name: 'Start', exact: true }).click()
+  await pressInMenu(page, 'Start')
 
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+  await expect.poll(() => offered(page)).toContain('Finish')
   await expect.poll(total).toBe(before - 1)
   await page
     .getByRole('status', { name: /gedaan\./ })
     .getByRole('button', { name: 'Ongedaan maken' })
     .click()
-  await expect(drawer.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
+  await expect.poll(() => offered(page)).toContain('Start')
   await expect.poll(total).toBe(before)
 })
 
@@ -173,8 +174,8 @@ test('press-then-close-then-undo @e2e: Undo from the notice after the dashboard 
     .getByRole('button', { name: /^Open / })
     .click()
   const drawer = page.getByRole('complementary')
-  await drawer.getByRole('button', { name: 'Start', exact: true }).click()
-  await expect(drawer.getByRole('button', { name: 'Finish', exact: true })).toBeVisible()
+  await pressInMenu(page, 'Start')
+  await expect.poll(() => offered(page)).toContain('Finish')
   const notice = page.getByRole('status', { name: /gedaan\./ })
   await drawer.getByRole('button', { name: 'Sluiten' }).click()
   await expect(page.getByRole('complementary')).toHaveCount(0)
@@ -198,8 +199,8 @@ test('press-in-related-drawer-then-close-then-undo @e2e: Undo after a related dr
     .getByRole('button', { name: 'Bob' })
     .click()
   const related = page.getByRole('complementary', { name: /Related pen/ })
-  await related.getByRole('button', { name: 'Confirm' }).click()
-  await expect(related.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+  await pressInMenu(page, 'Confirm')
+  await expect(page.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toHaveCount(0)
   const notice = page.getByRole('status', { name: /gedaan\./ })
   await related.getByRole('button', { name: 'Sluiten' }).click()
   await page.keyboard.press('Escape')

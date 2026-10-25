@@ -34,6 +34,8 @@ interface Props {
   emptyText: string | null
   /** The row boxes of a selectable table. */
   selection?: { has: (id: number) => boolean; toggle: (id: number) => void }
+  /** Rows an action acted on that an outside process is still working on. */
+  running?: ReadonlySet<number>
 }
 
 function GridCell({ row, column, cell, keys, error, actions }: {
@@ -128,7 +130,7 @@ function Band({ group, columns, open, onFold }: { group: Group; columns: Column[
   )
 }
 
-export function GridBody({ groups, shut, onFold, columns, keys, errors, actions, emptyText, selection }: Props) {
+export function GridBody({ groups, shut, onFold, columns, keys, errors, actions, emptyText, selection, running }: Props) {
   let index = 0
   return (
     <tbody>
@@ -143,7 +145,7 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
           {!shut.has(group.key) && group.rows.map((row) => {
             const r = index++
             return (
-              <tr key={row.id} data-title={row.title} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
+              <tr key={row.id} data-title={row.title} data-ticked={selection?.has(row.id) ? '' : undefined} data-running={running?.has(row.id) ? '' : undefined} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
                 {selection && row.id !== DRAFT ? (
                   <td className="nv-td nv-num">
                     <input type="checkbox" tabIndex={keys.active?.row === r ? 0 : -1} aria-label={t('selectRow', { title: row.title })} checked={selection.has(row.id)} onChange={() => selection.toggle(row.id)} />

@@ -156,15 +156,18 @@ export interface Kept {
   widths?: Record<string, number>
   picked?: number[]
   hidden?: string[]
+  /** The ids a layout of this view may name, as its sheet last knew them: a stale one is left out of what is saved. */
+  known?: string[]
 }
 
 function parseKept(raw: unknown): Kept | null {
   if (typeof raw !== 'object' || raw === null) return null
-  const { widths, picked, hidden } = raw as Record<string, unknown>
+  const { widths, picked, hidden, known } = raw as Record<string, unknown>
   const ok =
     (widths === undefined || (typeof widths === 'object' && widths !== null && Object.values(widths).every((w) => typeof w === 'number')))
     && (picked === undefined || (Array.isArray(picked) && picked.every((id) => typeof id === 'number')))
     && (hidden === undefined || isStrings(hidden))
+    && (known === undefined || isStrings(known))
   return ok ? (raw as Kept) : null
 }
 

@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, SavedView, TableDef } from '../types'
 import { iso, weekOf } from '../ui/Window'
+import { pressAction } from '../test-setup'
 
 const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), create: vi.fn(), records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn(), rowOf: vi.fn() }))
 vi.mock('../api', () => api)
@@ -83,15 +84,16 @@ describe("the dashboard's drawer buttons", () => {
     fireEvent.click(await screen.findByRole('button', { name: /De Kersentuin/ }))
     const drawer = screen.getByRole('complementary', { name: 'De Kersentuin' })
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Afronden' }))
+    await pressAction('Afronden')
     expect(write.press).toHaveBeenCalledOnce()
     const [model, id, , to, onDone] = (write.press.mock.calls[0] as unknown) as [string, number, unknown, string, () => void]
     expect([model, id, to]).toEqual(['productie_dag', 11, 'klaar'])
     const reads = api.rows.mock.calls.length
     await act(async () => onDone())
 
-    expect(await within(drawer).findByRole('button', { name: 'Weg' })).toBeTruthy()
-    expect(within(drawer).queryByRole('button', { name: 'Afronden' })).toBeNull()
+    await waitFor(() => expect(write.fresh).toHaveBeenCalled())
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Acties' }))
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Weg'])
     expect(api.rows.mock.calls.length).toBeGreaterThan(reads)
     expect(write.fresh).toHaveBeenCalledWith('productie_dag', expect.objectContaining({ id: 11 }))
   })

@@ -343,17 +343,22 @@ test.describe('step 3c', () => {
       await api.delete(`/api/rows/speelreeks/${reeks}`)
     }
   })
-  test('composer-team-dashboard @e2e', async ({ browser, page }) => {
+  test('composer-team-dashboard @e2e: an administrator edits the seeded dashboard in place, may delete it, and an editor reads the same', async ({
+    browser,
+    page,
+  }) => {
     const admin = await browser.newContext({ storageState: state('admin') })
     const a = await admin.newPage()
-    const dashboards = async () => (await viewsOf(admin.request)).filter((v) => v.skin === 'dashboard').map((v) => v.id)
+    const dashboards = async () => (await viewsOf(admin.request)).filter((v) => v.skin === 'dashboard')
     const before = await dashboards()
+    const seeded = before[0]
+    const layout = seeded?.layout
     try {
       await landing(a)
       const rail = a.getByRole('navigation', { name: 'Views' }).getByRole('group', { name: 'Dashboard', exact: true })
-      // The system dashboard is never deleted from the rail.
       await expect(rail.getByRole('treeitem')).toHaveCount(1)
-      await expect(rail.getByRole('button', { name: 'Dashboard verwijderen' })).toHaveCount(0)
+      // The seeded dashboard is the team's: its administrator may delete it, which the seed then respects.
+      await expect(rail.getByRole('button', { name: 'Dashboard verwijderen' })).toHaveCount(1)
 
       await a.getByRole('button', { name: 'Bewerken' }).click()
       const nu = a.getByRole('group', { name: 'Sectie Nu', exact: true })
@@ -368,21 +373,20 @@ test.describe('step 3c', () => {
       await a.getByRole('button', { name: 'Opslaan' }).click()
       await expect(stat(a, 'e2e tegel')).toBeVisible()
 
-      // The administrator's save is the team's copy: an editor lands on it.
-      const copy = (await viewsOf(admin.request)).find((v) => v.skin === 'dashboard' && !before.includes(v.id))
-      expect(copy?.name).toBe('Overzicht')
+      // In place: no copy, and an editor lands on the same dashboard.
+      expect((await dashboards()).map((v) => v.id)).toEqual(before.map((v) => v.id))
       await landing(page)
       await expect(stat(page, 'e2e tegel')).toBeVisible()
-
-      await expect(rail.getByRole('treeitem')).toHaveCount(2)
-      await rail.getByRole('button', { name: 'Dashboard verwijderen' }).click()
-      await expect.poll(dashboards).toEqual(before)
-      await landing(page)
-      await expect(stat(page, 'Conflicten')).toBeVisible()
-      await expect(stat(page, 'e2e tegel')).toHaveCount(0)
+      await expect(rail.getByRole('treeitem')).toHaveCount(1)
     } finally {
-      for (const id of (await dashboards()).filter((id) => !before.includes(id)))
-        await admin.request.delete(`/api/views/${id}`)
+      // A changed seeded dashboard is the person's: --seed-missing leaves it, so the layout goes back by hand.
+      if (seeded && layout) {
+        if (!(await dashboards()).some((v) => v.id === seeded.id))
+          await admin.request.post(`/api/views/${seeded.id}/restore`, { data: {} })
+        await admin.request.patch(`/api/views/${seeded.id}`, { data: { layout } })
+      }
+      for (const created of (await dashboards()).filter((v) => !before.some((old) => old.id === v.id)))
+        await admin.request.delete(`/api/views/${created.id}`)
       await admin.close()
     }
   })

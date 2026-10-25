@@ -1,16 +1,25 @@
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { create, remove, rowOf, update } from '../api'
 import type { Row, View } from '../types'
 import type { History } from '../ui/history'
-import { layoutOf, storeLayout, useStoredRevision } from '../ui/views'
+import { layoutOf, rememberKnown, storeLayout, useStoredRevision } from '../ui/views'
+import { storedLayout } from './layout'
 import { type Layout, storedRevision } from './layout'
 import { createStore, type Store, type StoreState } from './store'
 
 /** The layout of the view on screen: this browser's copy, else the saved one; read again after any other write. */
-export function useLayout(view: View | undefined): [Layout | null, (layout: Layout) => void] {
+export function useLayout(view: View | undefined, known: ReadonlySet<string> | null): [Layout | null, (layout: Layout) => void] {
   const [held, setHeld] = useState<{ key: string; layout: Layout; revision: number } | null>(null)
   const revision = useStoredRevision()
-  const read = useMemo(() => (view ? layoutOf(view) : null), [view, revision])
+  const read = useMemo(() => (view ? layoutOf(view, known) : null), [view, known, revision])
+  // What the sheet drops as unknown is dropped from this browser's copy and from what Save and a copy send, so nothing stale is kept or sent.
+  useEffect(() => {
+    if (!view || !known) return
+    rememberKnown(view, known)
+    const local = storedLayout(view)
+    const fitted = layoutOf(view, known)
+    if (local && JSON.stringify(local) !== JSON.stringify(fitted)) storeLayout(view, fitted)
+  }, [view, known])
   const current = view && held?.key === view.key && held.revision === revision ? held.layout : read
 
   const set = useCallback(
@@ -28,11 +37,19 @@ const idle: StoreState = { rows: [], save: 'saved', error: null, errors: {}, can
 const never = () => () => undefined
 
 /** One store per loaded window of one view; the undo history is the tab's, so it outlives the store. */
-export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void): [Store | null, StoreState] {
+export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void, onCreated?: (dataset: string, row: Row) => void): [Store | null, StoreState] {
   const latest = useRef(reload)
   latest.current = reload
+  const told = useRef(onCreated)
+  told.current = onCreated
+  // One wrap covers a created row and a draft's commit: both go through the api's create.
+  const made = useCallback(async (model: string, data: Record<string, unknown>) => {
+    const saved = await create(model, data)
+    told.current?.(model, saved.row)
+    return saved
+  }, [])
   const store = useMemo(
-    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create, remove, read: rowOf }, history, reload: () => latest.current() }) : null),
+    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create: made, remove, read: rowOf }, history, reload: () => latest.current() }) : null),
     [view, rows, history],
   )
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))

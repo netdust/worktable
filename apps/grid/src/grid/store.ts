@@ -139,7 +139,7 @@ function toError(change: Change, error: unknown): CellError {
   const { code, message, by } = (error ?? {}) as Partial<ApiError>
   const known = String(code ?? 'unknown')
   const said = known === 'in_use' && by?.length ? inUse(by) : String(message ?? error)
-  return { id: change.id, field: change.field, code: known, message: errorText(known, said) }
+  return { id: change.id, field: change.field, code: known, message: errorText(known, said, change.id === DRAFT) }
 }
 
 export function createStore({ model, rows, api, history = createHistory(api.undo ?? noUndo), reload = () => undefined }: Options): Store {

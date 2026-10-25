@@ -82,6 +82,8 @@ export interface Model {
   title_label: string
   /** The title's own column, which a condition names; absent for a title through a relation. */
   title_field?: string
+  /** Every column the source has, the ones the grid hides too: a saved view may still sort, filter or group on one. */
+  columns?: string[]
   title_readonly: boolean
   /** The title column is not nullable: absent means required. */
   title_required?: boolean
@@ -260,6 +262,8 @@ export interface SavedView extends View {
   public?: boolean
   /** Shown to the people its rows belong to. */
   for_owners?: boolean
+  /** A dashboard's tiles that name a deleted view, as the engine lists them. */
+  gone_views?: number[]
 }
 
 /** What `POST views` takes: a new view, always of no field. */

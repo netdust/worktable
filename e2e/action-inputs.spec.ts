@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { pressInMenu } from './drawer'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -159,6 +160,7 @@ const undoOf = (page: Page) =>
 
 async function openDrawer(page: Page, naam: string) {
   await named(page, naam).getByRole('button', { name: 'Openen' }).click()
+  await pressInMenu(page, ACTION)
   await expect(actionOf(page)).toBeVisible()
 }
 
@@ -304,4 +306,96 @@ test('shift-refused-in-dutch @e2e', async ({ page, browser }) => {
   } finally {
     await cleanUp(api, made)
   }
+})
+
+test('inputs-panel-under-the-head @e2e: an action with inputs opens its panel under the drawer head, focused on its first input and with its close button, in light and dark; Escape closes it back onto Acties', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await openView(page, 'Tourstops', 'Tourstops')
+  await page.locator('tbody tr.nv-tr').first().getByRole('button', { name: 'Openen' }).click()
+  const drawer = page.getByRole('complementary')
+  await expect(drawer).toBeVisible()
+  const head = drawer.locator('.nv-drawer__head')
+  await pressInMenu(page, ACTION)
+  await expect(actionOf(page)).toBeVisible()
+  await expect(daysOf(page)).toBeFocused()
+  const panel = page.locator('.nv-dw-ask--panel')
+  const close = panel.getByRole('button', { name: 'Sluiten' })
+  await expect(close).toBeInViewport()
+  const [above, under] = [await head.boundingBox(), await panel.boundingBox()]
+  expect(under?.y ?? 0).toBeGreaterThanOrEqual((above?.y ?? 0) + (above?.height ?? 0) - 1)
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await shot(page, `invoerpaneel-${scheme === 'light' ? 'licht' : 'donker'}`)
+  }
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await expect(head.getByRole('button', { name: 'Acties' })).toBeFocused()
+  await expect(drawer).toBeVisible()
+})
+
+/** The first tourstop's drawer with an action's inputs open under its head; answers the drawer and the record it shows. */
+async function inputsOpen(page: Page, action: string): Promise<{ drawer: Locator; record: string | null }> {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await openView(page, 'Tourstops', 'Tourstops')
+  await page.locator('tbody tr.nv-tr').first().getByRole('button', { name: 'Openen' }).click()
+  const drawer = page.getByRole('complementary')
+  await expect(drawer).toBeVisible()
+  await pressInMenu(page, action)
+  await expect(page.getByRole('group', { name: action })).toBeVisible()
+  return { drawer, record: await drawer.getAttribute('aria-label') }
+}
+
+test('keys-in-the-inputs-panel-stay-there @e2e: a letter typed in the Sjabloon search and ↓ in Dagen edit the input, never step the drawer to the next tourstop', async ({
+  page,
+}) => {
+  const picked = await inputsOpen(page, 'Sjabloon toepassen')
+  await page
+    .getByRole('group', { name: 'Sjabloon toepassen' })
+    .getByRole('button', { name: /^Sjabloon: / })
+    .click()
+  const search = page.getByRole('combobox', { name: 'Sjabloon' })
+  await search.pressSequentially('j')
+  await expect(picked.drawer, 'the drawer keeps its tourstop').toHaveAttribute('aria-label', picked.record ?? '')
+  await expect(search).toHaveValue('j')
+
+  const shifted = await inputsOpen(page, ACTION)
+  await daysOf(page).fill('2')
+  await page.keyboard.press('ArrowDown')
+  await expect(shifted.drawer, 'the drawer keeps its tourstop').toHaveAttribute('aria-label', shifted.record ?? '')
+  await expect(daysOf(page)).toHaveValue('1')
+})
+
+test('escape-after-the-picker @e2e: Escape closes the Sjabloon picker back into the panel, a second Escape closes the panel onto Acties', async ({
+  page,
+}) => {
+  const { drawer } = await inputsOpen(page, 'Sjabloon toepassen')
+  const panel = page.locator('.nv-dw-ask--panel')
+  await page
+    .getByRole('group', { name: 'Sjabloon toepassen' })
+    .getByRole('button', { name: /^Sjabloon: / })
+    .click()
+  await expect(page.getByRole('combobox', { name: 'Sjabloon' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('combobox', { name: 'Sjabloon' })).toHaveCount(0)
+  await expect(panel).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(panel, 'the second Escape closes the panel').toHaveCount(0)
+  await expect(drawer.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toBeFocused()
+})
+
+test('focused-input-shows-its-mark @e2e: the Dagen field the panel focuses shows a focus mark', async ({ page }) => {
+  await inputsOpen(page, ACTION)
+  await expect(daysOf(page)).toBeFocused()
+  const mark = await daysOf(page).evaluate((el) => {
+    const style = getComputedStyle(el)
+    return { outline: style.outlineStyle, shadow: style.boxShadow, border: style.borderTopWidth }
+  })
+  expect(
+    mark.outline !== 'none' || mark.shadow !== 'none' || mark.border !== '0px',
+    `a focus mark on the field: ${JSON.stringify(mark)}`,
+  ).toBe(true)
 })

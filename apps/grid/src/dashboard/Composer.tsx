@@ -52,15 +52,17 @@ function settable(view: SavedView | undefined, models: Record<string, Model>): {
   })
 }
 
+const viewsOfTile = (tile: Tile): number[] => (tile.kind === 'progress' ? [tile.done, tile.total] : [tile.view])
+
 const tileName = (tile: Tile, label: (id: number) => string) =>
   tile.kind === 'progress' ? `${t(`tile.${tile.kind}`)}: ${label(tile.done)} / ${label(tile.total)}` : `${t(`tile.${tile.kind}`)}: ${label(tile.view)}`
 
 /** One section in edit mode: its name, its tiles in order, and a tile to add. */
-function SectionEditor({ section, views, models, onChange, onMove, onRemove }: {
-  section: Section; views: SavedView[]; models: Record<string, Model>
+function SectionEditor({ section, views, models, gone, onChange, onMove, onRemove }: {
+  section: Section; views: SavedView[]; models: Record<string, Model>; gone: (tile: Tile) => boolean
   onChange: (next: Section) => void; onMove: (by: number) => void; onRemove: () => void
 }) {
-  const label = (id: number) => views.find((v) => v.id === id)?.label ?? `#${id}`
+  const label = (id: number) => views.find((v) => v.id === id)?.label ?? t('viewDeleted')
   const tiles = section.tiles
   return (
     <fieldset className="nv-compose__section" role="group" aria-label={t('sectionNamed', { name: section.label })}>
@@ -73,7 +75,7 @@ function SectionEditor({ section, views, models, onChange, onMove, onRemove }: {
       <ol className="nv-compose__tiles">
         {tiles.map((tile, at) => (
           <li key={at} className="nv-compose__row">
-            <span>{tileName(tile, label)}</span>
+            <span>{gone(tile) ? `${t(`tile.${tile.kind}`)}: ${t('viewDeleted')}` : tileName(tile, label)}</span>
             <button type="button" className="nv-bar__button" aria-label={t('up')} onClick={() => onChange({ ...section, tiles: move(tiles, at, -1) })}>↑</button>
             <button type="button" className="nv-bar__button" aria-label={t('down')} onClick={() => onChange({ ...section, tiles: move(tiles, at, 1) })}>↓</button>
             <button type="button" className="nv-bar__button" aria-label={t('removeTile')} onClick={() => onChange({ ...section, tiles: tiles.filter((_, i) => i !== at) })}>✕</button>
@@ -188,14 +190,18 @@ export function Composer({ dashboard, views, models, role, onDone, onSaved }: {
   const [layout, setLayout] = useState<DashboardLayout>(dashboard.layout ?? { sections: [], actions: [] })
   const [refusal, setRefusal] = useState<string | null>(null)
   const sections = layout.sections
+  // A tile whose view this dashboard no longer holds is one the engine would refuse: the save leaves it out.
+  const held = new Set(views.map((v) => v.id))
+  const gone = (tile: Tile) => viewsOfTile(tile).some((id) => !held.has(id) || dashboard.gone_views?.includes(id))
   const setSections = (next: DashboardLayout['sections']) => setLayout({ ...layout, sections: next })
   const save = () => {
     setRefusal(null)
     const team = role === 'administrator' ? views.find((v) => v.type === 'dashboard' && v.shared && v.editable) : undefined
     const target = dashboard.editable ? dashboard : team
+    const kept = { ...layout, sections: sections.map((section) => ({ ...section, tiles: section.tiles.filter((tile) => !gone(tile)) })) }
     const saved = target
-      ? updateView(target, { layout })
-      : createView({ name: dashboard.label, table: dashboard.table, type: 'dashboard', field: null, shared: role === 'administrator', arrangement: dashboard.arrangement, layout })
+      ? updateView(target, { layout: kept })
+      : createView({ name: dashboard.label, table: dashboard.table, type: 'dashboard', field: null, shared: role === 'administrator', arrangement: dashboard.arrangement, layout: kept })
     saved.then((view) => {
       onSaved(view)
       onDone()
@@ -204,7 +210,7 @@ export function Composer({ dashboard, views, models, role, onDone, onSaved }: {
   return (
     <div className="nv-compose">
       {sections.map((section, at) => (
-        <SectionEditor key={at} section={section} views={views.filter((v) => v.type !== 'dashboard')} models={models}
+        <SectionEditor key={at} section={section} views={views.filter((v) => v.type !== 'dashboard')} models={models} gone={gone}
           onChange={(next) => setSections(sections.map((s, i) => (i === at ? next : s)))}
           onMove={(by) => setSections(move(sections, at, by))} onRemove={() => setSections(sections.filter((_, i) => i !== at))} />
       ))}

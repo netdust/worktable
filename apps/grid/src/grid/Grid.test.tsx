@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import { renderNl, typeKeys } from '../test-setup'
+import { pressAction, renderNl, typeKeys } from '../test-setup'
 import type { LinkItem, Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import type { LinkActions } from './cells/Links'
@@ -857,11 +857,12 @@ describe('long text and bool', () => {
     expect(document.activeElement).toBe(paid)
   })
 
-  it('a click on the switch flips it once', async () => {
+  it('a click on a blank bool cell sets it to true once', async () => {
     renderGrid(calais, { view })
     api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
+    expect(within(cell('Montage', 'paid')).queryByRole('switch')).toBeNull()
     await act(async () => {
-      fireEvent.click(within(cell('Montage', 'paid')).getByRole('switch'))
+      fireEvent.click(cell('Montage', 'paid').querySelector('.nv-cell__bool') as HTMLElement)
     })
 
     expect(api.update).toHaveBeenCalledTimes(1)
@@ -1174,77 +1175,75 @@ describe('the drawer', () => {
     })
   })
 
-  it('offers Verwijderen only for a deletable model', () => {
+  it('offers Verwijderen, last in the Acties menu, only for a deletable model', async () => {
     renderGrid()
-    expect(within(openDrawer('Lunch bistrot')).queryByRole('button', { name: 'Verwijderen' })).toBeNull()
+    expect(within(openDrawer('Lunch bistrot')).queryByRole('button', { name: 'Acties' })).toBeNull()
     cleanup()
 
     renderGrid(calais, { model: deletable })
-    expect(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
+    fireEvent.click(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Acties' }))
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.at(-1)?.textContent).toBe('Verwijderen')
   })
 
-  it('asks Zeker? on the first press and sends nothing; the second press deletes and the row leaves', async () => {
+  it('asks Zeker? after Verwijderen and sends nothing; the second press deletes and the row leaves', async () => {
     renderGrid(calais, { model: deletable })
     api.remove.mockResolvedValueOnce({ id: 103 })
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await pressAction('Verwijderen')
     expect(api.remove).not.toHaveBeenCalled()
 
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
     expect(api.remove).toHaveBeenCalledWith('activity', 103)
     expect(screen.queryByRole('complementary')).toBeNull()
     expect(screen.getAllByRole('row').some((r) => r.dataset.title === 'Lunch bistrot')).toBe(false)
   })
 
-  it('leaving the drawer resets Zeker? to Verwijderen', () => {
+  it('Escape drops the question, and nothing is sent', async () => {
     renderGrid(calais, { model: deletable })
-    fireEvent.click(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Verwijderen' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sluiten' }))
+    openDrawer('Lunch bistrot')
+    await pressAction('Verwijderen')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Zeker?' }), { key: 'Escape' })
 
-    const again = openDrawer('Lunch bistrot')
-    expect(within(again).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
-    expect(within(again).queryByRole('button', { name: 'Zeker?' })).toBeNull()
-
-    fireEvent.click(within(again).getByRole('button', { name: 'Verwijderen' }))
-    const other = openDrawer('Montage')
-    expect(within(other).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Zeker?' })).toBeNull())
+    expect(screen.getByRole('complementary', { name: 'Lunch bistrot' })).toBeTruthy()
     expect(api.remove).not.toHaveBeenCalled()
   })
 
   it('a double click does not confirm: Zeker? is armed only by a fresh press', async () => {
     renderGrid(calais, { model: deletable })
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
+    await pressAction('Verwijderen')
 
-    const press = (name: string, detail: number) => {
-      const button = within(drawer).getByRole('button', { name })
+    const press = (detail: number) => {
+      const button = screen.getByRole('button', { name: 'Zeker?' })
       fireEvent.mouseDown(button, { detail })
       fireEvent.click(button)
     }
-    press('Verwijderen', 1)
-    press('Zeker?', 2)
+    press(2)
     expect(api.remove).not.toHaveBeenCalled()
 
     api.remove.mockResolvedValueOnce({ id: 103 })
-    await act(async () => press('Zeker?', 1))
+    await act(async () => press(1))
     expect(api.remove).toHaveBeenCalledTimes(1)
   })
 
   it('sends one DELETE however often Zeker? is pressed while it is in flight, and announces the swap', async () => {
     renderGrid(calais, { model: deletable })
     api.remove.mockReturnValueOnce(new Promise(() => undefined))
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
+    await pressAction('Verwijderen')
 
-    const button = within(drawer).getByRole('button', { name: 'Verwijderen' })
+    const button = screen.getByRole('button', { name: 'Zeker?' })
     expect(button.closest('[aria-live="polite"]')).not.toBeNull()
-    fireEvent.click(button)
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(button)
     })
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
 
     expect(api.remove).toHaveBeenCalledTimes(1)
   })
@@ -1252,11 +1251,11 @@ describe('the drawer', () => {
   it('keeps the row and its drawer when the delete is refused', async () => {
     const { store } = renderGrid(calais, { model: deletable })
     api.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Toewijzingen', count: 2 }] })
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await pressAction('Verwijderen')
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
 
     expect(screen.getByRole('complementary', { name: 'Lunch bistrot' })).toBeTruthy()
@@ -1366,10 +1365,9 @@ async function addCondition(field: string, value: string) {
     await screen.findByText('18 mei')
 
     fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
-    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await pressAction('Verwijderen')
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
 
     // The drawer's own header is a banner too: the toolbar is found by its class.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { t } from '../i18n'
-import type { SavedView, Scope } from '../types'
+import type { Model, SavedView, Scope } from '../types'
 import { statOf } from './tiles'
 
 /** "48 van 57" with its first number large, as the prototype. */
@@ -9,13 +9,13 @@ function Split({ text, lead }: { text: string; lead: string }) {
 }
 
 /** A count against a total from two views: slots filled of slots open. */
-export function ProgressTile({ label, done, total, scope, version, onOpen }: {
-  label: string; done: SavedView; total: SavedView; scope: Scope | null; version: number; onOpen: () => void
+export function ProgressTile({ label, done, total, models, scope, version, onOpen }: {
+  label: string; done: SavedView; total: SavedView; models: Record<string, Model>; scope: Scope | null; version: number; onOpen: () => void
 }) {
   const [counts, setCounts] = useState<[number, number] | null>(null)
   useEffect(() => {
     let live = true
-    Promise.all([statOf(done, scope, 'count'), statOf(total, scope, 'count')]).then(
+    Promise.all([statOf(done, scope, 'count', models), statOf(total, scope, 'count', models)]).then(
       ([d, all]) => live && setCounts([d ?? 0, all ?? 0]),
       () => live && setCounts(null),
     )

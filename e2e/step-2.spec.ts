@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type APIRequestContext, type Browser, expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
+import { pressInMenu } from './drawer'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -205,6 +206,7 @@ test.describe('step 2', () => {
       await openView(page, 'Tourstops')
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tourstops')
       await row(page, naam).getByRole('button', { name: 'Openen' }).click()
+      await pressInMenu(page, 'Sjabloon toepassen')
       const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
       await action.getByRole('button', { name: /^Sjabloon: / }).click()
       await page.getByRole('combobox', { name: 'Sjabloon' }).fill('plaatsen')
@@ -715,9 +717,18 @@ test.describe('step 2', () => {
         await openView(page, 'Personen')
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Personen')
         await row(page, 'Lotte Verhaegen').getByRole('button', { name: 'Openen' }).click()
-        const group = page.getByRole('group', { name: 'Link kopiëren' })
-        await group.getByRole('button', { name: 'Link kopiëren' }).click()
-        await expect(group.getByRole('status')).toHaveText('Link gekopieerd')
+        // Over a widened drawer too, the toast is seen: nothing covers it.
+        await page.getByRole('button', { name: 'Volledig openen' }).click()
+        await pressInMenu(page, 'Link kopiëren')
+        const toast = page.getByRole('status', { name: 'Link gekopieerd' })
+        await expect(toast).toBeVisible()
+        const box = await toast.boundingBox()
+        const covered = await page.evaluate(
+          ([x, y]) => document.elementFromPoint(x, y)?.closest('.nv-toast') === null,
+          [(box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2],
+        )
+        expect(covered).toBe(false)
+        await shot(page, 'toast-over-brede-lade')
         const link = await page.evaluate(() => navigator.clipboard.readText())
         expect(link).toMatch(/^http:\/\/127\.0\.0\.1:5174\/#\/link\/persoon\.1\.[\w-]{43}$/)
 

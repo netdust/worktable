@@ -61,6 +61,23 @@ describe('the composer', () => {
     ])
   })
 
+  it('labels a tile on a deleted view, and its save leaves that tile out, whether the engine said so or the view left this session', async () => {
+    api.updateView.mockResolvedValue({ key: '9' })
+    const board = dashboard({ editable: true, mine: true, owner: { id: 4, name: '' }, gone_views: [2] } as Partial<SavedView>)
+    show(board, 'administrator', [])
+    fireEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+    expect(screen.getAllByText(/Weergave verwijderd/).length).toBeGreaterThan(0)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Opslaan' })))
+    expect(api.updateView.mock.calls[0][1].layout.sections[0].tiles).toEqual([{ kind: 'stat', view: 1, measure: 'count' }])
+    cleanup()
+    api.updateView.mockClear()
+    // A view deleted in this session is no longer in the views the dashboard holds, and gone_views was never reloaded.
+    render(<Dashboard dashboard={dashboard({ editable: true, mine: true, owner: { id: 4, name: '' } })} views={[conflicten]} models={models} tables={[]} scope={null} role="administrator" onOpenView={() => undefined} onSaved={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Opslaan' })))
+    expect(api.updateView.mock.calls[0][1].layout.sections[0].tiles).toEqual([{ kind: 'stat', view: 1, measure: 'count' }])
+  })
+
   it('on the system dashboard an administrator saves a shared copy, an editor a private one', async () => {
     api.createView.mockResolvedValue({ key: '10' })
     const onSaved = show(dashboard())

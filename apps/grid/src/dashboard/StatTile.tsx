@@ -17,14 +17,14 @@ function periodWord(view: SavedView): string {
 }
 
 /** One number from a view, toned, with its change against the previous period; its title opens the view. */
-export function StatTile({ tile, view, model, scope, version, onOpen }: {
-  tile: Stat; view: SavedView; model?: Model; scope: Scope | null; version: number; onOpen: () => void
+export function StatTile({ tile, view, model, models, scope, version, onOpen }: {
+  tile: Stat; view: SavedView; model?: Model; models: Record<string, Model>; scope: Scope | null; version: number; onOpen: () => void
 }) {
   const [value, setValue] = useState<number | null>(null)
   const [before, setBefore] = useState<number | null>(null)
   useEffect(() => {
     let live = true
-    Promise.all([statOf(view, scope, tile.measure), statOf(view, scope, tile.measure, true)]).then(
+    Promise.all([statOf(view, scope, tile.measure, models), statOf(view, scope, tile.measure, models, true)]).then(
       ([now, then]) => {
         if (!live) return
         setValue(now)

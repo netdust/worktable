@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderNl } from '../test-setup'
+import { pressAction, renderNl } from '../test-setup'
 import type { Available, Model, ModelAction, Row, View } from '../types'
 import { activity, calais, planning } from './calais.test.data'
 import { Grid } from './Grid'
@@ -131,16 +131,37 @@ describe('selecting rows', () => {
     expect(screen.queryByText('Maximaal 500 tegelijk')).toBeNull()
   }, 60_000)
 
-  it('keeps its strip while nothing is ticked, so a first tick moves no row', () => {
+  it('the panel is absent with nothing ticked and floats with one tick', () => {
     const { container } = sheet()
-    const idle = container.querySelector('.nv-selection')
-    expect(idle).not.toBeNull()
-    expect(idle?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector('.nv-selection')).toBeNull()
 
     fireEvent.click(rowBox('Montage'))
 
-    expect(container.querySelectorAll('.nv-selection')).toHaveLength(1)
-    expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBe(container.querySelector('.nv-selection'))
+    const panel = screen.getByRole('region', { name: '1 geselecteerd' })
+    expect(panel).toBe(container.querySelector('.nv-selection'))
+    expect(panel.classList.contains('nv-selection--floating')).toBe(true)
+  })
+
+  it("a row's tick box sits beside its number in the number cell", () => {
+    const { container } = sheet()
+    const cell = rowBox('Montage').closest('td') as HTMLElement
+    expect(cell.classList.contains('nv-num')).toBe(true)
+    expect(cell.firstElementChild).toBe(rowBox('Montage'))
+    expect(cell.querySelector('span')?.textContent).toMatch(/^\d+$/)
+    expect(container.querySelectorAll('td.nv-num input')).toHaveLength(calais.length)
+  })
+
+  it('a ticked row carries data-ticked, and with any row ticked the table carries data-ticking', () => {
+    const { container } = sheet()
+    const table = container.querySelector('table') as HTMLElement
+    expect(table.hasAttribute('data-ticking')).toBe(false)
+    expect(container.querySelector('tr[data-ticked]')).toBeNull()
+
+    fireEvent.click(rowBox('Montage'))
+
+    expect(table.hasAttribute('data-ticking')).toBe(true)
+    expect(container.querySelectorAll('tr[data-ticked]')).toHaveLength(1)
+    expect(rowBox('Montage').closest('tr')?.hasAttribute('data-ticked')).toBe(true)
   })
 
   it('leaves the row boxes out of the tab order except on the active row; the header box stays in it', () => {
@@ -167,14 +188,14 @@ describe('selecting rows', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull())
   })
 
-  it("offers the drawer only the actions whose handler exists", () => {
+  it("offers the drawer's menu only the actions whose handler exists", async () => {
     const single: ModelAction = { name: 'once', label: 'Eenmalig', input: {} }
     sheet(calais, { model: { ...activity, actions: [single, gather] } })
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0] as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: 'Acties' }))
 
-    expect(screen.getByRole('group', { name: 'Bundelen' })).toBeTruthy()
-    expect(screen.queryByRole('group', { name: 'Eenmalig' })).toBeNull()
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Bundelen'])
   })
 
   it('prunes through a re-read of the same sheet, a store that no longer holds the ticked row', async () => {
@@ -251,9 +272,9 @@ describe('an action that opens its result', () => {
     const onSelection = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
     sheet(calais, { model: opening, models, onSelection })
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
-    const drawer = await screen.findByRole('complementary')
+    await screen.findByRole('complementary')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Bundelen' }))
+    await pressAction('Bundelen')
 
     expect(await screen.findByRole('complementary', { name: 'Le Grenier, Calais' })).toBeTruthy()
   })
@@ -262,9 +283,9 @@ describe('an action that opens its result', () => {
     const onSelection = vi.fn(() => Promise.resolve({ dataset: 'activity', id: 102 }))
     sheet(calais, { model: opening, models, onSelection })
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
-    const drawer = await screen.findByRole('complementary')
+    await screen.findByRole('complementary')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Bundelen' }))
+    await pressAction('Bundelen')
 
     expect(await screen.findByRole('complementary', { name: 'Montage' })).toBeTruthy()
     expect(remote.rowOf).not.toHaveBeenCalled()
@@ -331,8 +352,8 @@ describe('the drawer’s actions', () => {
     sheet(withMarks({ 102: marked('name_it') }), { model: { ...activity, actions: [gather, named] } })
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' }).find((b) => b.closest('tr')?.textContent?.includes('Montage'))!)
     const marked104 = await screen.findByRole('complementary', { name: 'Montage' })
-    expect(within(marked104).queryByRole('group', { name: 'Bundelen' })).toBeNull()
-    expect(within(marked104).getByRole('group', { name: 'Benoemen' })).toBeTruthy()
+    fireEvent.click(within(marked104).getByRole('button', { name: 'Acties' }))
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Benoemen'])
   })
 })
 

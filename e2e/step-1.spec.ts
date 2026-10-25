@@ -1,6 +1,8 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
+import { pressInMenu } from './drawer'
 import { fillDate } from './segments'
+import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
 // The tourstop made in the grid starts today and spans at most 31 days, so this week moves with today.
@@ -191,6 +193,7 @@ async function createInGrid(page: Page, naam: string, start: string, eind: strin
 /** The drawer's action: the Sjabloon picked, then the button; answers the action's reply. */
 async function applyInDrawer(page: Page, naam: string) {
   await named(page, naam).getByRole('button', { name: 'Openen' }).click()
+  await pressInMenu(page, 'Sjabloon toepassen')
   const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
   await action.getByRole('button', { name: /^Sjabloon: / }).click()
   await page.getByRole('combobox', { name: 'Sjabloon' }).fill('speeldag')
@@ -221,6 +224,7 @@ test('apply-template @e2e', async ({ page }) => {
   expect(slotIds).toHaveLength(8)
   expect(reply.created).toHaveLength(36)
   await expect(page.getByText(`Sjabloon toepassen uitgevoerd.`)).toBeVisible()
+  await shot(page, 'sjabloon-toegepast')
 
   // The 28 activities, as the server holds them: every day the pattern, at its times, the venue left to inherit.
   const made = await rowsOf<Values>(page.request, 'activiteit', { speelreeks_id: reeks?.id })
@@ -338,6 +342,7 @@ test('apply-double-submit @e2e', async ({ page }) => {
   await page.goto('/')
   await pick(page, 'Tourstops')
   await named(page, naam).getByRole('button', { name: 'Openen' }).click()
+  await pressInMenu(page, 'Sjabloon toepassen')
   const action = page.getByRole('group', { name: 'Sjabloon toepassen' })
   await action.getByRole('button', { name: /^Sjabloon: / }).click()
   await page.getByRole('combobox', { name: 'Sjabloon' }).fill('speeldag')

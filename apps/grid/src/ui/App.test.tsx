@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { actionsOffered, pressAction } from '../test-setup'
 import { errorText, setStrings } from '../i18n'
 import type { SavedView, Schema, View } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
@@ -18,7 +19,14 @@ const { App } = await import('./App')
 
 const served: Schema = {
   models: {
-    activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: {} },
+    activity: {
+      key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false,
+      fields: {
+        date: { type: 'date', label: 'Datum', required: false, fact: true },
+        kind: { type: 'text', label: 'Soort', required: false, fact: true },
+        place: { type: 'text', label: 'Plaats', required: false, fact: false },
+      },
+    },
     absence: { key: 'absence', label: 'Afwezigheid', title_label: 'Titel', title_readonly: false, fields: {} },
   },
   tables: [
@@ -1693,6 +1701,64 @@ describe('a selection action', () => {
     expect(api.runAction).not.toHaveBeenCalled()
   })
 
+  it('says aangevraagd, and follows the dock, when the run made a record in a live state', async () => {
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'stage', live: ['active'], fields: { stage: { type: 'select', label: 'Stand', required: false, fact: true, options: { active: 'Actief', done: 'Klaar' } } } }
+    api.schema.mockResolvedValue({ ...grouped, models: { ...grouped.models, bundle } })
+    api.rowOf.mockResolvedValue({ id: 7, title: 'Voorjaar', status: '', fields: { stage: 'active' } })
+    await shell()
+    await tick('Aart')
+
+    await run('Voorjaar')
+
+    expect(await screen.findByRole('status', { name: 'Bundelen aangevraagd.' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Bundelen uitgevoerd.' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Bundelen · Actief' }).getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('does not say a run is done when the record it made could not be read: it says requested, and a model with no live states is not read at all', async () => {
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', live: ['busy'], fields: { phase: { type: 'select', label: 'Fase', required: false, fact: true, options: { busy: 'Bezig' } } } }
+    const plain = { key: 'plain', label: 'Gewoon', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', fields: {} }
+    api.schema.mockResolvedValue({ ...grouped, models: { ...grouped.models, bundle, plain } })
+    api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }, { dataset: 'plain', id: 8 }] })
+    api.rowOf.mockRejectedValue({ code: 'network', message: 'down' })
+    await shell()
+    await tick('Aart')
+
+    await run('Voorjaar')
+
+    expect(await screen.findByRole('status', { name: 'Bundelen aangevraagd.' })).toBeTruthy()
+    expect(api.rowOf.mock.calls.map((call) => call.join(':'))).toEqual(['bundle:7'])
+  })
+
+  it('opens a waiting run’s record from the dock while a board is on screen, and leaves no open pending behind', async () => {
+    const stage = { type: 'select', label: 'Stand', required: false, fact: true, options: { nieuw: 'Nieuw' } }
+    const phase = { type: 'select', label: 'Fase', required: false, fact: true, options: { busy: 'Bezig', wait: 'Voorbereid' } }
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', live: ['busy', 'wait'], fields: { phase } }
+    api.schema.mockResolvedValue({
+      ...grouped,
+      models: { member: { ...grouped.models.member, fields: { stage } }, bundle },
+      writable: { member: true, bundle: true },
+      tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid', 'board'] }, { key: 'bundles', label: 'Bundels', model: 'bundle', types: ['grid'] }],
+      views: [
+        { key: 'members', label: 'Leden', table: 'members', model: 'member' },
+        { key: 'bundles', label: 'Bundels', table: 'bundles', model: 'bundle' },
+        { key: 'bord', label: 'Bord', table: 'members', model: 'member', type: 'board', board: { column: 'stage' } },
+      ],
+    })
+    const at = (state: string, buttons: { to: string; label: string; primary?: true }[] = []) => ({ id: 7, title: 'Voorjaar', status: '', fields: { phase: state }, available: { state, buttons, actions: [] } })
+    api.rowOf.mockResolvedValueOnce(at('busy')).mockResolvedValue(at('wait', [{ to: 'ok', label: 'Bevestigen', primary: true }]))
+    await shell()
+    await tick('Aart')
+    await run('Voorjaar')
+    fireEvent.click(within(typesOf('Leden')).getByRole('button', { name: 'Bord' }))
+    await waitFor(() => expect(document.querySelector('.nv-board')).not.toBeNull())
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bundelen · Voorbereid — openen' }, { timeout: 7000 }))
+
+    expect(await screen.findByRole('complementary', { name: 'Voorjaar' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Bundelen · Voorbereid — openen' })).toBeNull()
+  }, 20_000)
+
   it('is one batch: one notice, one Undo that takes the whole run back, and the view reloads', async () => {
     await shell()
     await tick('Aart', 'Bo', 'Cas')
@@ -1714,7 +1780,8 @@ describe('a selection action', () => {
     await shell()
     await screen.findByRole('grid', { name: 'Leden' })
     fireEvent.click((await screen.findAllByRole('button', { name: 'Openen' }))[1])
-    const group = await screen.findByRole('group', { name: 'Bundelen' })
+    await pressAction('Bundelen')
+    const group = screen.getByRole('group', { name: 'Bundelen' })
 
     fireEvent.change(within(group).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Solo' } })
     await act(async () => {
@@ -1793,6 +1860,7 @@ describe("a dataset's action and the tab's undo history", () => {
 
   async function applyTemplate() {
     fireEvent.click(await screen.findByRole('button', { name: 'Openen' }))
+    await pressAction('Sjabloon toepassen')
     fireEvent.click(screen.getByRole('button', { name: 'Sjabloon: —' }))
     fireEvent.click(await screen.findByRole('option', { name: 'speeldag op locatie' }))
     await act(async () => {
@@ -1808,12 +1876,12 @@ describe("a dataset's action and the tab's undo history", () => {
   it('shows the action on a Speelreeks row only', async () => {
     await shell()
     fireEvent.click(await screen.findByRole('button', { name: 'Openen' }))
-    expect(screen.getByRole('group', { name: 'Sjabloon toepassen' })).toBeTruthy()
+    expect(await actionsOffered()).toContain('Sjabloon toepassen')
 
     fireEvent.click(tableEntry('Dagplanning'))
     await grid('Dagplanning')
     fireEvent.click(await screen.findByRole('button', { name: 'Openen' }))
-    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+    expect(await actionsOffered()).not.toContain('Sjabloon toepassen')
   })
 
   it('an applied action becomes one undo entry, and the view reloads; its notice undoes it on the server', async () => {
@@ -2586,15 +2654,15 @@ describe('a drawer button', () => {
 
   it('writes the transition expecting the marked state, re-reads, and makes one Undo entry', async () => {
     api.rowOf.mockResolvedValue(at('active', ['done', 'Afronden']))
-    const drawer = await openDrawer()
+    await openDrawer()
 
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+      await pressAction('Starten')
     })
 
     expect(api.update).toHaveBeenCalledExactlyOnceWith('member', 1, { stage: 'active' }, undefined, { stage: 'open' })
-    expect(await within(drawer).findByRole('button', { name: 'Afronden' })).toBeTruthy()
-    expect(within(drawer).queryByRole('button', { name: 'Starten' })).toBeNull()
+    await waitFor(async () => expect(await actionsOffered()).toContain('Afronden'))
+    expect(await actionsOffered()).not.toContain('Starten')
     const notice = await screen.findByRole('status', { name: 'Starten gedaan.' })
     await act(async () => {
       fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
@@ -2605,14 +2673,14 @@ describe('a drawer button', () => {
   it('shows a refusal as a notice and leaves the row as it was', async () => {
     api.update.mockRejectedValue({ code: 'transition_lost', message: 'moved on' })
     api.rowOf.mockResolvedValue(at('open', ['active', 'Starten']))
-    const drawer = await openDrawer()
+    await openDrawer()
 
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+      await pressAction('Starten')
     })
 
     expect((await screen.findByRole('status', { name: /./ })).getAttribute('aria-label')).toBe(errorText('transition_lost', 'moved on'))
-    expect(within(drawer).getByRole('button', { name: 'Starten' })).toBeTruthy()
+    expect(await actionsOffered()).toContain('Starten')
     expect(api.undoBatch).not.toHaveBeenCalled()
   })
 
@@ -2626,9 +2694,9 @@ describe('a drawer button', () => {
     api.rowOf.mockResolvedValue(own('active', ['done', 'Afronden']))
     const drawer = await openDrawer()
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+      await pressAction('Starten')
     })
-    await within(drawer).findByRole('button', { name: 'Afronden' })
+    await waitFor(async () => expect(await actionsOffered()).toContain('Afronden'))
     api.update.mockResolvedValue({ row: { ...own('active', ['done', 'Afronden']), fields: { stage: 'active', colour: null } }, batch: 'b-2' })
 
     const cell = await screen.findByRole('gridcell', { name: /Rood/ })
@@ -2636,7 +2704,7 @@ describe('a drawer button', () => {
     fireEvent.keyDown(cell, { key: 'Delete' })
 
     await waitFor(() => expect(within(drawer).queryByText('Rood')).toBeNull())
-    expect(within(drawer).getByRole('button', { name: 'Afronden' })).toBeTruthy()
+    expect(await actionsOffered()).toContain('Afronden')
   })
 
   it("a press in the board's and the calendar's drawer shows the new state and its next button", async () => {
@@ -2654,14 +2722,14 @@ describe('a drawer button', () => {
       window.location.hash = `view=${view.key}`
       render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: /Aart/ }))
-      const drawer = await screen.findByRole('complementary', { name: 'Aart' })
+      await screen.findByRole('complementary', { name: 'Aart' })
 
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+        await pressAction('Starten')
       })
 
-      expect(await within(drawer).findByRole('button', { name: 'Afronden' }), kind).toBeTruthy()
-      expect(within(drawer).queryByRole('button', { name: 'Starten' })).toBeNull()
+      await waitFor(async () => expect(await actionsOffered(), kind).toContain('Afronden'))
+      expect(await actionsOffered()).not.toContain('Starten')
       cleanup()
     }
     window.location.hash = ''
@@ -2693,15 +2761,15 @@ describe('a drawer button', () => {
     }
 
     it('a press writes on that record, shows its next state, and leaves the table’s row with the same id as it was', async () => {
-      const drawer = await related()
+      await related()
       api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
 
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+        await pressAction('Dichtzetten')
       })
 
       expect(api.update).toHaveBeenCalledExactlyOnceWith('bundle', 1, { phase: 'closed' }, undefined, { phase: 'open' })
-      expect(await within(drawer).findByRole('button', { name: 'Heropenen' })).toBeTruthy()
+      await waitFor(async () => expect(await actionsOffered()).toContain('Heropenen'))
       expect(screen.getByRole('row', { name: /Aart/ })).toBeTruthy()
       expect(within(screen.getByRole('grid', { name: 'Leden' })).queryByText('Alpha', { selector: '.nv-cell__text' })).toBeTruthy()
     })
@@ -2711,7 +2779,7 @@ describe('a drawer button', () => {
       let answer: (row: unknown) => void = () => undefined
       api.rowOf.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+        await pressAction('Dichtzetten')
       })
 
       fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
@@ -2725,9 +2793,9 @@ describe('a drawer button', () => {
       api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
       api.undoBatch.mockResolvedValue('u-7')
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+        await pressAction('Dichtzetten')
       })
-      await within(drawer).findByRole('button', { name: 'Heropenen' })
+      await waitFor(async () => expect(await actionsOffered()).toContain('Heropenen'))
       fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
 
       const notice = await screen.findByRole('status', { name: 'Dichtzetten gedaan.' })
@@ -2740,13 +2808,13 @@ describe('a drawer button', () => {
     })
 
     it('Undo re-reads that drawer', async () => {
-      const drawer = await related()
+      await related()
       api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
       api.undoBatch.mockResolvedValue('u-7')
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Dichtzetten' }))
+        await pressAction('Dichtzetten')
       })
-      await within(drawer).findByRole('button', { name: 'Heropenen' })
+      await waitFor(async () => expect(await actionsOffered()).toContain('Heropenen'))
       api.rowOf.mockResolvedValue(bundle('open', ['closed', 'Dichtzetten']))
 
       const notice = await screen.findByRole('status', { name: 'Dichtzetten gedaan.' })
@@ -2755,7 +2823,7 @@ describe('a drawer button', () => {
       })
 
       expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-7')
-      expect(await within(drawer).findByRole('button', { name: 'Dichtzetten' })).toBeTruthy()
+      await waitFor(async () => expect(await actionsOffered()).toContain('Dichtzetten'))
     })
   })
 
@@ -2777,9 +2845,9 @@ describe('a drawer button', () => {
       window.location.hash = '#view=9'
       await shell()
       fireEvent.click(await screen.findByRole('button', { name: 'Open Aart' }))
-      const drawer = await screen.findByRole('complementary', { name: 'Aart' })
+      await screen.findByRole('complementary', { name: 'Aart' })
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Starten' }))
+        await pressAction('Starten')
       })
 
       const notice = await screen.findByRole('status', { name: 'Starten gedaan.' })
@@ -2811,17 +2879,17 @@ describe('a drawer button', () => {
       api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
       api.runAction.mockResolvedValue({ batch: 'b-2', created: [] })
       api.rowOf.mockResolvedValue({ id: 7, title: 'Voorjaar', status: '', fields: {} })
-      const drawer = await openDrawer()
+      await openDrawer()
 
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Afhandelen' }))
+        await pressAction('Afhandelen')
       })
       expect(api.runAction).toHaveBeenCalledOnce()
       expect(api.rowOf).not.toHaveBeenCalled()
       expect(screen.getByRole('complementary', { name: 'Aart' })).toBeTruthy()
 
       await act(async () => {
-        fireEvent.click(within(screen.getByRole('complementary', { name: 'Aart' })).getByRole('button', { name: 'Bundelen' }))
+        await pressAction('Bundelen')
       })
       expect(await screen.findByRole('complementary', { name: 'Voorjaar' })).toBeTruthy()
       expect(api.rowOf).toHaveBeenCalledWith('bundle', 7)
@@ -2831,10 +2899,10 @@ describe('a drawer button', () => {
       api.schema.mockResolvedValue(opening)
       api.rows.mockResolvedValue({ rows: [{ ...at('open'), available: { ...marks('open'), actions: ['settle', 'gather', 'tidy'] } }], total: 1 })
       api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
-      const drawer = await openDrawer()
+      await openDrawer()
 
       await act(async () => {
-        fireEvent.click(within(drawer).getByRole('button', { name: 'Opruimen' }))
+        await pressAction('Opruimen')
       })
 
       await screen.findByRole('status', { name: 'Opruimen uitgevoerd.' })

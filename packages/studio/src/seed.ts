@@ -188,6 +188,7 @@ export const views: SavedViewSeed[] = [
     source_type: 'dataset',
     source: 'site',
     skin: 'table',
+    filters: IN_REGISTRY,
     sort: ['naam'],
     visible_fields: [
       'naam',
@@ -229,15 +230,6 @@ export const views: SavedViewSeed[] = [
     source: 'site',
     skin: 'table',
     filters: { sla: true, ...IN_REGISTRY },
-    sort: ['naam'],
-    visible_fields: SITE_FIELDS,
-  }),
-  view({
-    name: 'Alle sites',
-    source_type: 'dataset',
-    source: 'site',
-    skin: 'table',
-    filters: IN_REGISTRY,
     sort: ['naam'],
     visible_fields: SITE_FIELDS,
   }),
@@ -393,7 +385,7 @@ export const views: SavedViewSeed[] = [
         {
           label: 'Nu',
           tiles: [
-            { kind: 'progress', done: 'Sites in orde', total: 'Alle sites', label: 'Sites in orde' },
+            { kind: 'progress', done: 'Sites in orde', total: 'Sites', label: 'Sites in orde' },
             { kind: 'stat', view: 'Storing', measure: 'count', tone: { above: 0, tone: 'bad' } },
             { kind: 'stat', view: 'Let op', measure: 'count', tone: { above: 0, tone: 'warn' } },
             {

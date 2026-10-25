@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { SavedView, View } from '../types'
+import type { Model, SavedView, View } from '../types'
 import { savePicked, storedPicked } from '../matrix/columns'
-import { arrangementOf, changed, clearIfSent, clearLocal, copyKept, forget, lastIn, layoutOf, listFor, localOf, moved, stepped, storeLayout, toStored } from './views'
+import { arrangementOf, changed, clearIfSent, clearLocal, copyKept, currentOf, forget, knownOf, lastIn, layoutOf, listFor, localOf, lockOf, moved, rememberKnown, stepped, storeLayout, toStored } from './views'
 import type { Table } from './tables'
 
 const tabel: View = { key: 'planning', label: 'Tabel', model: 'activity', table: 'planning', sort: ['date', '-start'], group: 'date', starting: true }
@@ -80,13 +80,13 @@ describe('the local copy', () => {
   it('is what the sheet shows, and the saved one again once cleared', () => {
     local('42', { ...arrangementOf(calais), group: 'date' })
     picked('42', [9, 11])
-    expect(layoutOf(calais).group).toBe('date')
+    expect(layoutOf(calais, null).group).toBe('date')
 
     clearLocal(calais)
 
     expect(localOf(calais)).toBeNull()
-    expect(layoutOf(calais).group).toBeNull()
-    expect(layoutOf(calais).widths).toEqual({ title: 220 })
+    expect(layoutOf(calais, null).group).toBeNull()
+    expect(layoutOf(calais, null).widths).toEqual({ title: 220 })
     expect(arrangementOf(calais).picked).toEqual([9, 11])
   })
 })
@@ -109,7 +109,7 @@ describe('what stays in this browser', () => {
 
     expect(localOf(reread)).toBeNull()
     expect(changed(reread)).toBe(false)
-    expect(layoutOf(reread)).toMatchObject({ widths: { place: 90 }, hidden: ['record:7'], group: 'date' })
+    expect(layoutOf(reread, null)).toMatchObject({ widths: { place: 90 }, hidden: ['record:7'], group: 'date' })
     expect(arrangementOf(reread).picked).toEqual([9])
   })
 
@@ -119,7 +119,7 @@ describe('what stays in this browser', () => {
 
     clearIfSent(served, sent)
 
-    expect(layoutOf(served).filters).toEqual([...stored.filters, { field: 'status', op: 'in', values: [] }])
+    expect(layoutOf(served, null).filters).toEqual([...stored.filters, { field: 'status', op: 'in', values: [] }])
   })
 
   it('is copied to a view saved as new, and gone with a view deleted for good', () => {
@@ -130,9 +130,9 @@ describe('what stays in this browser', () => {
     copyKept(served, created)
     forget(served)
 
-    expect(layoutOf(created).widths).toEqual({ place: 90 })
+    expect(layoutOf(created, null).widths).toEqual({ place: 90 })
     expect(storedPicked(created)).toEqual([9])
-    expect(layoutOf(served).widths).toEqual({})
+    expect(layoutOf(served, null).widths).toEqual({})
     expect(storedPicked(served)).toBeNull()
   })
 })
@@ -221,5 +221,55 @@ describe('the view a table opens on', () => {
     const query: View = { key: 'dag', label: 'Dag', model: 'per_dag', table: 'per_dag', of: 'planning', query: true }
 
     expect(lastIn({ ...table, views: [...table.views, query] }, { planning: 'dag' })?.key).toBe('dag')
+  })
+})
+
+describe('a layout fitted to the columns its view has', () => {
+  const known = new Set(['title', 'date', 'status'])
+  const stale: SavedView = {
+    ...calais, key: '77', id: 77, type: 'grid', editable: true,
+    arrangement: {
+      hidden: ['gone', 'record:5'], order: ['status', 'gone', 'date'], widths: [{ id: 'gone', width: 90 }, { id: 'date', width: 120 }],
+      sort: [{ id: 'start_at', desc: false }, { id: 'date', desc: true }], filters: [{ field: 'start_at', op: 'in', values: ['1'] }, { field: 'status', op: 'in', values: ['open'] }],
+      group: 'gone', picked: [],
+    },
+  }
+
+  it('drops a sort, filter, group, hidden and order id the view lacks, and keeps the rest, widths and matrix keys', () => {
+    expect(layoutOf(stale, known)).toMatchObject({
+      hidden: ['record:5'], order: ['status', 'date'], sort: [{ id: 'date', desc: true }], filters: [{ field: 'status', op: 'in', values: ['open'] }], group: null,
+      widths: { gone: 90, date: 120 },
+    })
+  })
+
+  it('fits the browser’s own copy the same way', () => {
+    local('77', { hidden: [], order: [], widths: {}, sort: [{ id: 'start_at', desc: false }], filters: [], group: null })
+
+    expect(layoutOf(stale, known).sort).toEqual([])
+  })
+
+  it('knows every field the model has, hidden by the view or not, and also id, position and the title column, so a board’s order and a title filter survive', () => {
+    const model = { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_field: 'name', title_readonly: false, fields: { status: { type: 'text', label: 'Status', required: false, fact: false }, notes: { type: 'text', label: 'Notities', required: false, fact: false } } } as unknown as Model
+    const ids = knownOf(model, { ...stale, columns: ['status'] })
+
+    expect([...ids]).toEqual(expect.arrayContaining(['title', 'status', 'notes', 'id', 'position', 'name']))
+    expect(ids.has('start_at')).toBe(false)
+  })
+
+  it('shows no changed mark for a stale saved sort once the view knows its columns, and Save and a copy send no stale key', () => {
+    rememberKnown(stale, known)
+    storeLayout(stale, layoutOf(stale, known))
+
+    expect(changed(stale)).toBe(false)
+    expect(toStored(currentOf(stale)).sort).toEqual([{ id: 'date', desc: true }])
+    expect(toStored(arrangementOf(stale)).filters).toEqual([{ field: 'status', op: 'in', values: ['open'] }])
+  })
+})
+
+describe('the lock mark', () => {
+  it('shows on a locked seeded view, and on none an administrator may change', () => {
+    const seeded = { ...calais, owner: { id: -1, name: '' }, mine: false }
+    expect(lockOf({ ...seeded, editable: false } as SavedView)).toBe('standard')
+    expect(lockOf({ ...seeded, editable: true } as SavedView)).toBeNull()
   })
 })

@@ -11,11 +11,22 @@ const tables = groupTables([
   { key: 'bezetting', label: 'Matrix', model: 'activity', type: 'matrix', table: 'planning', table_label: 'Planning' },
   { key: 'afwezigheden', label: 'Tabel', model: 'absence', table: 'afwezigheden', table_label: 'Afwezigheden' },
 ])
-const options = () => screen.queryAllByRole('button').map((b) => b.textContent)
+const options = () => screen.queryAllByRole('button').filter((b) => !b.classList.contains('nv-search__toggle')).map((b) => b.textContent)
 
 afterEach(cleanup)
 
 describe('the search', () => {
+  it('opens its field from the icon a narrow toolbar shows, and puts the cursor in it', () => {
+    render(<Search query="" onQuery={() => undefined} tables={tables} onJump={() => undefined} />)
+    const holder = document.querySelector('.nv-search') as HTMLElement
+    expect(holder.hasAttribute('data-open')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoeken' }))
+
+    expect(holder.hasAttribute('data-open')).toBe(true)
+    expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Zoeken' }))
+  })
+
   it('names a view of a table with two views as table · view', () => {
     render(<Search query="planning" onQuery={() => undefined} tables={tables} onJump={() => undefined} />)
 
