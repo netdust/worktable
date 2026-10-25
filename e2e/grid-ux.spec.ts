@@ -508,10 +508,10 @@ test('planning-details @e2e', async ({ page }) => {
   await expect(named(page, 'Overnachting').first().locator('.nv-blank')).toHaveText('zonder tijd')
 
   // R10.3: Maaltijd in its colour, status pills toned.
-  const soort = lunch.locator('td').nth(3).locator('.nv-dot')
+  const soort = lunch.locator('td').nth(3).locator('.nv-pill')
   await expect(soort).toHaveText('Maaltijd')
-  expect(await soort.evaluate((el) => getComputedStyle(el, '::before').backgroundColor)).toBe('rgb(47, 138, 87)')
-  await expect(lunch.locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
+  expect(await soort.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(47, 138, 87)')
+  await expect(lunch.locator('.nv-pill--warn')).toHaveCount(1)
 
   // R10.7: the scope chip.
   await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveText('Productie is Nachtwacht')

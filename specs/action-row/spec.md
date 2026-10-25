@@ -28,6 +28,10 @@ Approved by Stefan on 2026-10-25: "nothing missed, approve the spec, write the p
   default density (compact 28px, roomy 40px), the table only; the matrix keeps its own.
   Source: "fontsize in each cell should be the same, not sometimes bigger ( textfields seem bigger )" — Stefan, 2026-10-25.
   Source (again): "no the grid is not ok, fontsizes per cell are not the same, heres a example screenshot of what looks good ( fontsize and cell height )" — Stefan, 2026-10-25, reference screenshot: one 13px face, 32px rows, pills at text size. This replaces the earlier "my call" that numbers keep a monospace face.
+- **R2a Coloured pills.** Every choice column whose options carry a colour shows them as tinted pills, at the cell's
+  text size and weight 500, in the table and in the drawer's head; a column whose options carry no colour stays plain
+  text. A kind with an icon keeps its icon.
+  Source: "if we don't have colored pills yet, yes, start building and add them" — Stefan, 2026-10-25, answering the proposal to show every choice column that way, from his reference screenshot's Status and Bron pills.
 - **R3 The totals bar is pinned at the bottom of the table.** "Totaal · N rijen" sits below the rows at the bottom of the
   table pane and is never drawn over rows. Under the last row there is empty scroll space, and the selection panel
   floats over the grid above the totals, in that space; rows scroll visibly under it, and the last row can be scrolled

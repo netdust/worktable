@@ -18,6 +18,8 @@ import { Pick } from '../ui/Pick'
 import { SidePanel } from '../ui/SidePanel'
 import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
+import { ToneMark } from './cells/Select'
+import { toneOf } from './cells/tones'
 import { ICON } from './GridHeader'
 import { DrawerTools } from './DrawerTools'
 import { useLive } from './useLive'
@@ -117,7 +119,7 @@ function Head({ row, model, nav, busy, icon: Icon }: { row: Row; model?: Model; 
     <div className="nv-dw-head">
       <span className="nv-dw-head__kind">
         {!option && Icon && <Icon size={13} aria-hidden="true" />}
-        {option && <span className="nv-dot" style={{ '--tone': toneColor(model?.fields[kind as string]?.tones?.[value]) } as CSSProperties}>{option}</span>}
+        {option && <ToneMark tone={toneOf(value, model?.fields[kind as string]?.tones)} text={option} />}
         {option && model && ' · '}
         {model?.label}
       </span>

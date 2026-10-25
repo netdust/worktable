@@ -1841,7 +1841,7 @@ describe('a day plan', () => {
   it('colours an option by its tone and the band by its day, its date and its toned facts', () => {
     renderGrid(rows, { model: plan, view })
 
-    expect(cell('Lunch', 'kind').querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--green')
+    expect(cell('Lunch', 'kind').querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--green')
     expect(bands()[0].querySelector('.nv-group__day')?.textContent).toBe('Maandag')
     expect(bands()[0].querySelector('.nv-group__date')?.textContent).toBe('2 november')
     expect(bands()[0].querySelector('.nv-group__fact i')?.className).toBe('nv-tone--rose')

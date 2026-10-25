@@ -1574,6 +1574,15 @@
   color: var(--color-danger-fg);
 }
 
+/* Inside a table cell a pill is the tinted word alone, as the reference draws it. */
+.nv-grid:not(.nv-mx) .nv-td .nv-pill::before {
+  display: none;
+}
+
+.nv-grid:not(.nv-mx) .nv-td .nv-pill {
+  padding: 2px 10px;
+}
+
 .nv-dot {
   display: inline-flex;
   align-items: center;
