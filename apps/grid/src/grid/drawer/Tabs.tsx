@@ -7,29 +7,53 @@ import type { Pane } from './panes'
 import './tabs.css'
 
 const MOST = 3
-/** The head's title keeps at least this much room; below it, an icon moves into `…`. */
+/** The head's title keeps at least this much room; the icons get what is left, then `…`. */
 const TITLE_ROOM = 96
-const ICON = 30
+/** The bar's own widths, as tabs.css draws them: an icon, the lines between and around them, `…` after its gap, the bar's margins. */
+const TAB = 28
+const MORE = 2 + 24
+const MARGINS = 8
 
 const only = (keys: Set<Key> | 'all', onChange: (key: string) => void) => {
   const [key] = keys === 'all' ? [] : [...keys]
   if (key !== undefined) onChange(String(key))
 }
 
-/** How many icons the head line has room for: one fewer while the title beside it is squeezed, one more once it has room to spare. */
-function useRoom(bar: RefObject<HTMLDivElement | null>): number {
+/** The most icons, up to three, that fit in `slack` px beside `…` whenever a pane is left over for it. */
+export function iconsFor(slack: number, panes: number): number {
+  for (let n = Math.min(MOST, panes); n > 0; n--) {
+    const group = n * TAB + (n - 1) + 2
+    if (group + (n < panes ? MORE : 0) <= slack) return n
+  }
+  return 0
+}
+
+/** What the head line leaves the bar: its width less its padding, the title's room and every other button with its gap. */
+function slackOf(head: HTMLElement, bar: HTMLElement, title: HTMLElement): number {
+  const style = getComputedStyle(head)
+  const gap = Number.parseFloat(style.columnGap) || 0
+  const others = [...head.children].filter((el) => el !== bar && el !== title)
+  const taken = others.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0) + gap * (head.children.length - 1)
+  const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+  return head.clientWidth - padding - taken - TITLE_ROOM - MARGINS
+}
+
+/** How many icons the head line has room for, measured before paint and again whenever the line or its title changes size. */
+function useRoom(bar: RefObject<HTMLDivElement | null>, panes: number): number {
   const [room, setRoom] = useState(MOST)
   useLayoutEffect(() => {
-    const title = bar.current?.closest('header')?.querySelector<HTMLElement>('.nv-dw-title')
-    if (!title) return
-    // Only the observer measures: a page without layout (a test) keeps every icon.
-    const watch = new ResizeObserver(() => {
-      const width = title.getBoundingClientRect().width
-      setRoom((was) => (width < TITLE_ROOM ? Math.max(0, was - 1) : width >= TITLE_ROOM + ICON ? Math.min(MOST, was + 1) : was))
-    })
+    const head = bar.current?.closest('header')
+    const title = head?.querySelector<HTMLElement>('.nv-dw-title')
+    if (!head || !title || !bar.current) return
+    const own = bar.current
+    // A page without layout (a test) measures nothing and keeps every icon.
+    const measure = () => head.clientWidth > 0 && setRoom(iconsFor(slackOf(head, own, title), panes))
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(head)
     watch.observe(title)
     return () => watch.disconnect()
-  }, [bar])
+  }, [bar, panes])
   return room
 }
 
@@ -39,7 +63,7 @@ function useRoom(bar: RefObject<HTMLDivElement | null>): number {
  */
 export function DrawerTabs({ panes, current, onChange }: { panes: Pane[]; current: string; onChange: (key: string) => void }) {
   const bar = useRef<HTMLDivElement>(null)
-  const room = useRoom(bar)
+  const room = useRoom(bar, panes.length)
   const shown = panes.slice(0, room)
   const rest = panes.slice(room)
   return (

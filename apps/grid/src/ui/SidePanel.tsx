@@ -12,9 +12,9 @@ interface Props {
   focusOnOpen?: boolean
   /** What the panel shows: focus moves to it again when this changes, not when the label does. */
   focusKey?: string | number
-  /** The head line in place of the title: the drawer's kind, position and steps. */
+  /** The head line's title in place of the label's: a record drawer's own heading. */
   head?: ReactNode
-  /** Buttons after the head line, before the widen and close buttons: a drawer's record actions. */
+  /** Buttons after the head line, before the widen and close buttons: a drawer's record buttons, steps and tabs. */
   tools?: ReactNode
   /** The panel widens over the work column, and Escape or the same button takes it back. */
   expandable?: boolean

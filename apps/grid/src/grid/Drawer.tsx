@@ -62,7 +62,7 @@ interface Props {
   /** The view it opened from, and that view's layout: which fields it lists. */
   view?: View
   layout?: Layout | null
-  /** The view's rows in their order: "3 van 12", and ↑ ↓ to the row before or after. */
+  /** The view's rows in their order: ↑ ↓ and j k to the row before or after. */
   nav?: { ids: number[]; onStep: (id: number) => void }
   /** The flags the view's skin read: the record's own show as bands, its people's on their names. */
   flags?: Flags | null
@@ -181,6 +181,8 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
   // The dashboard keeps one drawer across models: a record is its model and id.
   const opened = `${model?.key}:${row.id}`
   const [chosen, setChosen] = useState({ opened, key: 'fields' })
+  // Another record opens on Gegevens, and so does a return to one whose other tab was open.
+  if (chosen.opened !== opened) setChosen({ opened, key: 'fields' })
   const pane = chosen.opened === opened && panes.some((p) => p.key === chosen.key) ? chosen.key : 'fields'
   const show = (key: string) => setChosen({ opened, key })
   const raised = model && flags && row.id > 0 ? flags.marksOf(model.key, row.id) : []
@@ -188,17 +190,19 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
   // The band asks the link section to choose for the place its flag marks: the choosing is the section's.
   const choosers = useRef<Record<string, Chooser | null>>({})
   // A link in a closed tab chooses once its tab has opened.
-  const pending = useRef<{ key: string; place: number } | null>(null)
+  const pending = useRef<{ opened: string; key: string; place: number } | null>(null)
   useEffect(() => {
-    const chooser = pending.current && choosers.current[pending.current.key]
-    if (!chooser || !pending.current) return
-    chooser.choose(pending.current.place)
+    const asked = pending.current
+    if (asked && asked.opened !== opened) pending.current = null
+    const chooser = asked && asked.opened === opened && choosers.current[asked.key]
+    if (!chooser) return
+    chooser.choose(asked.place)
     pending.current = null
   })
   const choose = ({ key, place }: { key: string; place: number }) => {
     const chooser = choosers.current[key]
     if (chooser) return chooser.choose(place)
-    pending.current = { key, place }
+    pending.current = { opened, key, place }
     const at = links.findIndex((l) => l.key === key)
     show(at > 0 ? `link:${links[at].column.id}` : 'fields')
   }

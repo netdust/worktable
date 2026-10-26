@@ -340,7 +340,6 @@ const strings = {
   fewerFields: 'Minder velden',
   expand: 'Volledig openen',
   narrow: 'Terug naar de zijkant',
-  position: '{n} van {m}',
   kindBoard: 'Bord',
   later: 'later',
   newViewOf: 'Nieuwe {kind}weergave',
@@ -492,7 +491,7 @@ export function undoText(error: Partial<ApiError>): string {
   return errorText(code, said)
 }
 
-/** The engine's 409 `by` as one sentence: "Nog in gebruik door Taken (3) en Klanten (1)." */
+/** The engine's 409 `by` as one sentence: "Nog in gebruik door Kisten (3) en Dozen (1)." */
 export function inUse(by: { label: string; count: number }[]): string {
   const named = by.map(({ label, count }) => `${label} (${count})`)
   const last = named.pop() ?? ''

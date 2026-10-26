@@ -888,6 +888,16 @@ describe("the drawer's tabs", () => {
     expect(checked()).toBe('Gegevens')
   })
 
+  it('opens on Gegevens again when the drawer steps back to a record whose other tab was open', async () => {
+    const update = open()
+    tab('Notities')
+    update({ row: record(2) })
+    expect(checked()).toBe('Gegevens')
+    update({ row: record(1) })
+    expect(checked()).toBe('Gegevens')
+    expect(region('Notities')).toBeNull()
+  })
+
   it('reads the history again when its tab opens after the record changed', async () => {
     const update = open()
     await fromMore('Geschiedenis')
