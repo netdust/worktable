@@ -38,8 +38,10 @@ export function useSelection(rowIds: number[]): Selection {
 }
 
 /** A panel floating over the foot of the sheet while rows are ticked: the count, one button per selection action, and the way out. */
-export function SelectionBar({ count, actions, misfits, onRun, onClear }: {
+export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }: {
   count: number
+  /** The ticked ids: another set of rows clears a refusal shown under an action. */
+  picked?: string
   actions: ModelAction[]
   /** How many ticked rows an action does not apply to, by the marks the server put on them. */
   misfits?: (action: ModelAction) => number
@@ -60,7 +62,7 @@ export function SelectionBar({ count, actions, misfits, onRun, onClear }: {
         const misfit = misfits?.(action) ?? 0
         return (
           <Fragment key={action.name}>
-            <ActionInputs action={action} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} />
+            <ActionInputs action={action} staleOn={picked} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} />
             {misfit > 0 && <span className="nv-selection__max" title={action.label}>{t('selectionMisfit', { n: misfit })}</span>}
           </Fragment>
         )

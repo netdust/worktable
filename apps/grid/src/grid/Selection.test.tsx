@@ -116,6 +116,19 @@ describe('selecting rows', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull())
   })
 
+  it('a refusal under an action goes when the ticked rows change', async () => {
+    const onSelection = vi.fn(() => Promise.reject({ code: 'unprocessable', message: 'Geen van deze rijen past.' }))
+    sheet(calais, { onSelection })
+    fireEvent.click(boxes()[1])
+    fireEvent.click(boxes()[2])
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    expect(await screen.findByText('Geen van deze rijen past.')).toBeTruthy()
+
+    fireEvent.click(boxes()[2])
+    fireEvent.click(boxes()[3])
+    await waitFor(() => expect(screen.queryByText('Geen van deze rijen past.')).toBeNull())
+  })
+
   it('500 runs; 501 disables the buttons with Maximaal 500 tegelijk', () => {
     const many = Array.from({ length: 501 }, (_, i): Row => ({ id: i + 1, title: `Rij ${i + 1}`, status: '', fields: {} }))
     sheet(many, { view: { ...planning, columns: ['title'], lookups: {}, rollups: {}, group: undefined, sort: [] } })

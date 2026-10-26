@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { optionsFrom } from '../api'
 import { errorText, t } from '../i18n'
 import type { ActionInput, ApiError, ModelAction, OptionsFrom, Row } from '../types'
@@ -42,7 +42,7 @@ const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
   Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
 
 /** Keyed by its record, so another row starts with nothing picked. The bar has no one record: its inputs pick by id, never `options_from`. */
-export function ActionInputs({ action, record, disabled = false, onRun }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; onRun: (input: Record<string, unknown>) => Promise<unknown> }) {
+export function ActionInputs({ action, record, disabled = false, staleOn, onRun }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; staleOn?: string; onRun: (input: Record<string, unknown>) => Promise<unknown> }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
   const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
@@ -54,6 +54,8 @@ export function ActionInputs({ action, record, disabled = false, onRun }: { acti
     openers.current[key]?.focus()
   }
   const [sending, setSending] = useState<Sending>({ status: 'idle' })
+  // A refusal belongs to what was asked: when what it was asked of changes, it goes.
+  useEffect(() => setSending((was) => (was.status === 'refused' ? { status: 'idle' } : was)), [staleOn])
   const valueOf = ([key, input]: [string, ActionInput]) => ('relation' in input ? picked[key]?.id : typed[key])
   const ready = inputs.every((entry) => {
     const [, input] = entry
