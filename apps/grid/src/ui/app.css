@@ -5303,6 +5303,7 @@
 
 /* A month fills the view's height: its week rows stretch, as the week's hour area does. */
 .nv-cal__body--month {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -5310,7 +5311,6 @@
 
 .nv-cal__body--month .nv-cal--month {
   flex: 1;
-  height: 100%;
 }
 
 .nv-cal__legend {
@@ -5510,7 +5510,8 @@
   font-weight: 600;
 }
 
-.nv-cal--month td {
+/* A month day never grows its week: what does not fit is clipped, the count already says it. */
+.nv-cal__cell {
   overflow: hidden;
 }
 
@@ -5527,6 +5528,9 @@
   font-size: 12px;
   font-weight: 500;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 

@@ -46,7 +46,9 @@ const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 /** A month day's line height and the room its date takes, in pixels: a day holds what fits below its date. */
 export const LINE_PX = 22
-const DATE_PX = 28
+const DATE_PX = 32
+// A month cell's vertical padding and border, outside the block that clips its day.
+const CELL_PAD = 11
 /** What a month day holds before its height is measured, as in jsdom. */
 export const FALLBACK_FIT = 4
 export const fitOf = (rowHeight: number) => Math.max(1, Math.floor((rowHeight - DATE_PX) / LINE_PX))
@@ -70,6 +72,9 @@ function dayHead(day: string): string {
   const weekday = new Intl.DateTimeFormat(document.documentElement.lang || 'nl', { weekday: 'short' }).format(date)
   return `${weekday} ${date.getDate()}`
 }
+
+const dayLong = (day: string) =>
+  new Intl.DateTimeFormat(document.documentElement.lang || 'nl', { weekday: 'long', day: 'numeric', month: 'long' }).format(parse(day) ?? new Date())
 
 function Event({ event, laneTitle, named = false, short = false, bar, where, style, marks, onOpen }: {
   event: Placed; laneTitle?: string; named?: boolean; short?: boolean; bar?: Bar; where?: string; style: CSSProperties; marks: MarksOf; onOpen: (row: Row) => void
@@ -208,13 +213,19 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
   useLayoutEffect(() => {
     const body = table.current?.parentElement
     const head = table.current?.tHead
-    if (!body || !head) return
-    const measure = () => setRowHeight(body.clientHeight > 0 ? (body.clientHeight - head.offsetHeight) / weeks.length : null)
+    if (!body || !head || !table.current) return
+    const own = table.current
+    // Below the legend, if a lane draws one: the table starts where it starts.
+    const measure = () => {
+      const room = body.clientHeight - own.offsetTop - head.offsetHeight
+      setRowHeight(room > 0 ? room / weeks.length : null)
+    }
     measure()
     const watch = new ResizeObserver(measure)
     watch.observe(body)
     return () => watch.disconnect()
-  }, [weeks.length])
+    // A legend that comes or goes moves the table, not the body.
+  }, [weeks.length, lanes.length])
   const fit = rowHeight === null ? FALLBACK_FIT : fitOf(rowHeight)
   return (
     <table ref={table} className="nv-cal nv-cal--month">
@@ -226,9 +237,11 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
           <tr key={week[0]} style={{ height: rowHeight === null ? `${100 / weeks.length}%` : `${rowHeight}px` }}>
             {week.map((day) => (
               <td key={day} className={[day < month.from || day > month.to ? 'nv-cal__out' : '', day === iso(new Date()) ? 'nv-cal__today' : ''].filter(Boolean).join(' ') || undefined}>
-                <span className="nv-cal__date">{parse(day)?.getDate()}</span>
-                <Day day={day} events={events.filter((e) => e.day === day).sort(byStart)} fit={fit}
-                  line={(e, open) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} marks={marks} onOpen={open} />} onOpen={onOpen} />
+                <div className="nv-cal__cell" style={rowHeight === null ? undefined : { height: `${rowHeight - CELL_PAD}px` }}>
+                  <span className="nv-cal__date">{parse(day)?.getDate()}</span>
+                  <Day day={day} events={events.filter((e) => e.day === day).sort(byStart)} fit={fit}
+                    line={(e, open) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} marks={marks} onOpen={open} />} onOpen={onOpen} />
+                </div>
               </td>
             ))}
           </tr>
@@ -255,8 +268,8 @@ function Day({ day, events, fit, line, onOpen }: {
       <DialogTrigger isOpen={all} onOpenChange={setAll}>
         <Button className="nv-cal__more">{t('calMore', { n: events.length - shown.length })}</Button>
         <Popover className="nv-bar__panel nv-cal__day" placement="bottom start" offset={4}>
-          <Dialog className="nv-bar__dialog" aria-label={dayHead(day)}>
-            <span className="nv-cal__dayhead">{dayHead(day)}</span>
+          <Dialog className="nv-bar__dialog" aria-label={dayLong(day)}>
+            <span className="nv-cal__dayhead">{dayLong(day)}</span>
             {events.map((e) => line(e, pick))}
           </Dialog>
         </Popover>

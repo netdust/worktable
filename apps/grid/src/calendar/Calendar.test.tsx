@@ -178,8 +178,8 @@ describe('the calendar', () => {
   })
 
   it('a day fits as many lines as its share of the height holds below its date, at least one', () => {
-    expect(fitOf(28 + 5 * LINE_PX)).toBe(5)
-    expect(fitOf(28 + 5 * LINE_PX - 1)).toBe(4)
+    expect(fitOf(32 + 5 * LINE_PX)).toBe(5)
+    expect(fitOf(32 + 5 * LINE_PX - 1)).toBe(4)
     expect(fitOf(10)).toBe(1)
   })
 
