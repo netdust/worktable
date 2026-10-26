@@ -243,6 +243,13 @@ describe('the write reply and the schema', () => {
     expect(sources.bundle.links.entries.detail).toBe('note')
     const opens = (name: string) => sources.member.actions.find((a: { name: string }) => a.name === name).opens
     expect([opens('settle'), opens('sweep'), opens('touch')]).toEqual([true, true, undefined])
+    const action = (name: string) => sources.member.actions.find((a: { name: string }) => a.name === name)
+    expect([action('settle').head, action('settle').handoff]).toEqual([{ icon: 'star' }, true])
+    expect([action('sweep').head, action('sweep').handoff, action('touch').head]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ])
     const own = (await owner('GET', '/api/schema')).body.sources.bundle.links
     expect([own.entries.detail, own.memos.detail]).toEqual(['note', undefined])
   })
@@ -332,6 +339,26 @@ describe('validateDomain: drawer declarations', () => {
 
   test('opens that is not true is refused', () => {
     expect(refusal(withAction('settle', { opens: false })).bad).toBe('opens')
+  })
+
+  test('head and handoff on a selection action are refused', () => {
+    expect(refusal(withAction('sweep', { head: { icon: 'star' } })).bad).toBe('head')
+    expect(refusal(withAction('sweep', { handoff: true })).bad).toBe('handoff')
+  })
+
+  test('an unknown head icon, or a head without an icon, is refused', () => {
+    expect(refusal(withAction('settle', { head: { icon: 'ghost' } })).bad).toBe('head')
+    expect(refusal(withAction('settle', { head: {} })).bad).toBe('head')
+  })
+
+  test('a head on an action with inputs is refused', () => {
+    const input = { n: { type: 'integer' as const, label: 'N', min: 1, max: 5 } }
+    expect(refusal(withAction('settle', { head: { icon: 'star' }, input })).bad).toBe('head')
+  })
+
+  test('a handoff that is not true is refused, and a good head and handoff are accepted', () => {
+    expect(refusal(withAction('settle', { handoff: false })).bad).toBe('handoff')
+    expect(() => validateDomain(withAction('settle', { head: { icon: 'star' }, handoff: true }))).not.toThrow()
   })
 
   test('a column or lookup named available is refused', () => {

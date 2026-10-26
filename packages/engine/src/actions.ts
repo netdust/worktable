@@ -8,6 +8,7 @@ import {
   type Actor,
   type DatasetDecl,
   type Domain,
+  type Icon,
   type InputValue,
   isSelection,
   MAX_INPUT_TEXT,
@@ -191,10 +192,14 @@ export function runAction(store: Store, name: string, body: Values, actor: Actor
     : runSingle(store, name, action, body, actor)
 }
 
-export type ServedAction = { name: string; many?: true; opens?: true; conditional?: true } & Pick<
-  ActionDecl,
-  'label' | 'input'
->
+export type ServedAction = {
+  name: string
+  many?: true
+  opens?: true
+  conditional?: true
+  head?: { icon: Icon }
+  handoff?: true
+} & Pick<ActionDecl, 'label' | 'input'>
 
 export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
   return Object.entries(domain.actions ?? {})
@@ -206,5 +211,7 @@ export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
       ...(isSelection(action) ? { many: true as const } : {}),
       ...(action.opens ? { opens: true as const } : {}),
       ...(action.when ? { conditional: true as const } : {}),
+      ...(!isSelection(action) && action.head ? { head: action.head } : {}),
+      ...(!isSelection(action) && action.handoff ? { handoff: true as const } : {}),
     }))
 }

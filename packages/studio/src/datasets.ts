@@ -14,7 +14,16 @@ export const soorten = {
   malwarescan: 'Malwarescan',
   bijwerken: 'Bijwerken',
   smoketest: 'Smoketest',
+  plugin_installeren: 'Studio-plugin installeren',
+  inloggen: 'Inloggen',
+  cache_legen: 'Cache legen',
+  cron_draaien: 'Cron draaien',
+  onderhoudsmodus_aan: 'Onderhoudsmodus aan',
+  onderhoudsmodus_uit: 'Onderhoudsmodus uit',
 }
+
+/** Soorten that show a preview and wait for Bevestigen before the worker changes a site. */
+export const bevestigd: string[] = ['bijwerken', 'plugin_installeren', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit']
 
 export const gezondheden = {
   options: { ok: 'In orde', let_op: 'Let op', storing: 'Storing', onbekend: 'Onbekend' },
@@ -64,6 +73,24 @@ export const site = defineDataset({
     updates_core: { type: 'boolean', label: 'Update core', default: false, nullable: true, ...worker },
     tls_dagen: { type: 'integer', label: 'TLS (dagen)', nullable: true, footer: 'none', ...worker },
     laatste_check: { type: 'datetime', label: 'Laatste check', nullable: true, ...worker },
+    plugin: { type: 'boolean', label: 'Studio-plugin', default: false, ...worker },
+    plugin_versie: { ...text('Plugin-versie'), ...worker },
+    db_versie: { ...text('Database-versie'), ...worker },
+    admins: { ...long('Beheerders'), ...worker },
+    bekende_admins: long('Bekende beheerders'),
+    core_bestanden: {
+      type: 'text',
+      label: 'Core-bestanden',
+      nullable: true,
+      options: { ok: 'In orde', afwijkend: 'Afwijkend', onbekend: 'Onbekend' },
+      tones: { ok: 'ok', afwijkend: 'bad', onbekend: 'grey' },
+      ...worker,
+    },
+    cron_achterstand: { type: 'integer', label: 'Cron-achterstand (min)', nullable: true, footer: 'none', ...worker },
+    php_fouten: { type: 'integer', label: 'PHP-fouten', nullable: true, footer: 'none', ...worker },
+    uploadmap_mb: { type: 'integer', label: 'Uploadmap (MB)', nullable: true, footer: 'none', ...worker },
+    db_mb: { type: 'integer', label: 'Database (MB)', nullable: true, footer: 'none', ...worker },
+    onderhoudsmodus: { type: 'boolean', label: 'Onderhoudsmodus', default: false, nullable: true, ...worker },
   },
   indexes: [['naam'], ['organisatie_id']],
 })

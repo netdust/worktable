@@ -52,7 +52,7 @@ export default defineConfig({
       command:
         'bun packages/engine/src/serve.ts --domain @worktable/studio --db e2e/.tmp/studio.db --port 4313 --fresh' +
         ' --outbox e2e/.tmp/outbox-studio --files-dir e2e/.tmp/files-studio --app-url http://127.0.0.1:5176' +
-        ' --cookie-name wt_session_studio_e2e',
+        ' --cookie-name wt_session_studio_e2e --handoff-service worker',
       wait: { stdout: /engine listening/ },
       reuseExistingServer: false,
       timeout: 120_000,

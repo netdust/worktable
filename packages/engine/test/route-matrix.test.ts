@@ -255,6 +255,19 @@ const EXPECTED: { method: string; path: string; body?: unknown; type?: string; s
     status: { none: 401, owner: 200, editor: 200, administrator: 200, link: 403, service: 200 },
   },
   {
+    // Only the listed service puts; a link is confined before the route is reached.
+    method: 'PUT',
+    path: '/api/handoff/note/1',
+    body: { value: 'https://matrix.example.test/' },
+    status: { none: 401, owner: 403, editor: 403, administrator: 403, link: 403, service: 200 },
+  },
+  {
+    // Only the creator account reads; every other caller gets the one 404.
+    method: 'GET',
+    path: '/api/handoff/note/1',
+    status: { none: 401, owner: 404, editor: 404, administrator: 404, link: 403, service: 404 },
+  },
+  {
     method: 'GET',
     path: `/api/public/views/${PUBLIC_TOKEN}`,
     status: { none: 200, owner: 200, editor: 200, administrator: 200, link: 200, service: 200 },
@@ -274,7 +287,7 @@ describe('the permissions matrix', () => {
     sqlite = freshDb()
     const filesDir = mkdtempSync(join(tmpdir(), 'wt-matrix-files-'))
     writeFileSync(join(filesDir, FILE_HASH), FILE)
-    app = testEngine(sqlite, domain, { filesDir })
+    app = testEngine(sqlite, domain, { filesDir, handoffServices: ['matrix'] })
     for (const role of ['owner', 'editor', 'administrator'] as const) {
       cookies[role] = await signIn(app, role, role === 'owner' ? OWN : null)
     }
@@ -306,7 +319,8 @@ describe('the permissions matrix', () => {
           )
           sqlite.run(
             `INSERT INTO revision (entity, record_id, field, old, new, actor_id, at, batch_id)
-             VALUES ('note', 1, 'tekst', '"oud"', '"eerste"', ${account}, 'x', 'matrix-own'),
+             VALUES ('note', 1, 'id', NULL, '1', ${account}, 'x', 'matrix-created'),
+                    ('note', 1, 'tekst', '"oud"', '"eerste"', ${account}, 'x', 'matrix-own'),
                     ('note', 1, 'tekst', '"oud"', '"eerste"', 999, 'x', 'matrix-other')`,
           )
           // One file on project 1, uploaded by the signed-in account.

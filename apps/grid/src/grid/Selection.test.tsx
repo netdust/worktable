@@ -9,7 +9,7 @@ import { defaults } from './layout'
 import { createStore } from './store'
 
 const remote = vi.hoisted(() => ({
-  rowOf: vi.fn(), optionsFrom: vi.fn(), attachmentsOf: vi.fn(), recordHistory: vi.fn(() => Promise.resolve([])), recordCount: vi.fn(() => Promise.resolve(0)),
+  rowOf: vi.fn(), optionsFrom: vi.fn(), attachmentsOf: vi.fn(), recordHistory: vi.fn(() => Promise.resolve([])), recordCount: vi.fn(() => Promise.resolve(0)), takeHandoff: vi.fn(() => Promise.resolve(null)),
 }))
 vi.mock('../api', () => remote)
 
@@ -114,6 +114,19 @@ describe('selecting rows', () => {
 
     await waitFor(() => expect(onSelection).toHaveBeenCalledExactlyOnceWith(gather, [102, 104], {}))
     await waitFor(() => expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull())
+  })
+
+  it('a refusal under an action goes when the ticked rows change', async () => {
+    const onSelection = vi.fn(() => Promise.reject({ code: 'unprocessable', message: 'Geen van deze rijen past.' }))
+    sheet(calais, { onSelection })
+    fireEvent.click(boxes()[1])
+    fireEvent.click(boxes()[2])
+    fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    expect(await screen.findByText('Geen van deze rijen past.')).toBeTruthy()
+
+    fireEvent.click(boxes()[2])
+    fireEvent.click(boxes()[3])
+    await waitFor(() => expect(screen.queryByText('Geen van deze rijen past.')).toBeNull())
   })
 
   it('500 runs; 501 disables the buttons with Maximaal 500 tegelijk', () => {
@@ -391,5 +404,27 @@ describe('a selectable query view', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
     const drawer = screen.getByRole('complementary')
     expect(within(drawer).queryByRole('button', { name: 'Bundelen' })).toBeNull()
+  })
+})
+
+describe('a head action that hands a link back', () => {
+  const login: ModelAction = { name: 'login', label: 'Inloggen', input: {}, head: { icon: 'log-in' }, handoff: true }
+  const model = { ...activity, actions: [login], fields: { ...activity.fields, adres: { type: 'text', label: 'Adres', required: false, fact: false, href: true } } } as unknown as Model
+  const rows = calais.map((row) => ({ ...row, fields: { ...row.fields, adres: 'https://voorbeeld-site.test' }, available: { state: '', buttons: [], actions: ['login'] } }))
+
+  it('hands the created record to the head button and opens no drawer for it', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => ({ closed: false, close: vi.fn() }) as unknown as Window)
+    remote.rowOf.mockReset()
+    const onAction = vi.fn(() => Promise.resolve({ dataset: 'organisation', id: 12 }))
+    sheet(rows, { model, onAction })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Openen' })[0])
+    await screen.findByRole('complementary', { name: 'Auto Pavel + Sien' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inloggen' }))
+
+    await waitFor(() => expect(onAction).toHaveBeenCalled())
+    expect(screen.getByRole('complementary', { name: 'Auto Pavel + Sien' })).toBeTruthy()
+    expect(remote.rowOf).not.toHaveBeenCalled()
+    open.mockRestore()
   })
 })

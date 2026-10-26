@@ -1,7 +1,11 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { openLooks } from './editor'
 import { shot } from './shots'
-import { modelNode, openView } from './tree'
+import { modelNode, openWeek } from './tree'
+
+// The seed's activities sit in this week; the engine reads "this week" from its own clock, so the page names the week.
+const SEED_WEEK = '2026-10-12'
+const inSeedWeek = (page: Page, view: string) => openWeek(page, view, 'Activiteiten', 'plandag', SEED_WEEK)
 
 // The text colour where an element sits; a new element has no transition, so this is the settled value.
 function inkAt(target: Locator): Promise<string> {
@@ -48,7 +52,7 @@ for (const theme of ['Licht', 'Donker'] as const) {
     await setTheme(page, theme)
     try {
       // The grid's cell cursor: the same thin line in the text colour, inside the cell.
-      await openView(page, 'Planning', 'Activiteiten')
+      await inSeedWeek(page, 'Planning')
       const first = page.locator('tbody tr.nv-tr').first().locator('td').nth(2)
       await first.click()
       await page.keyboard.press('ArrowRight')
@@ -64,7 +68,7 @@ for (const theme of ['Licht', 'Donker'] as const) {
       await shot(page, name('toolbar-chip'))
 
       // A board card lifted by the keyboard keeps the mark while it moves; Escape puts it back.
-      await openView(page, 'Per status', 'Activiteiten')
+      await inSeedWeek(page, 'Per status')
       const card = page.locator('.nv-board__list [data-card]').first()
       await keyboardFocus(page, card)
       await page.keyboard.press('Space')
@@ -73,7 +77,7 @@ for (const theme of ['Licht', 'Donker'] as const) {
       await page.keyboard.press('Escape')
 
       // A control in the record drawer.
-      await openView(page, 'Planning', 'Activiteiten')
+      await inSeedWeek(page, 'Planning')
       const row = page.locator('tbody tr.nv-tr').first()
       await row.hover()
       await row.getByRole('button', { name: 'Openen' }).click()

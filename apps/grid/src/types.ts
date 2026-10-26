@@ -136,6 +136,10 @@ export interface ModelAction {
   opens?: true
   /** Applies to a record only while a condition holds: a query's rows carry no marks to say whether it does. */
   conditional?: true
+  /** Sits in the drawer's head as an icon-only button, beside the open link. */
+  head?: { icon: string }
+  /** Its run makes a service hand back an address, which the grid opens in a new tab. */
+  handoff?: true
 }
 
 /** A record an action asks the grid to open. */

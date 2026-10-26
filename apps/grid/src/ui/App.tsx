@@ -629,6 +629,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     try {
       const done = await runAction(action.name, row.id, input)
       void finished(done.batch, action, done.created, { model: view.model, ids: [row.id] })
+      // A handoff action answers the record it created, for the head button to read the link from; the grid never opens it.
+      if (action.handoff) return done.created[0] ?? null
       return opening(action, done.created, { dataset: view.model, id: row.id })
     } catch (error) {
       // The row moved out of the action's condition since the sheet loaded: read again, so the drawer stops offering it.

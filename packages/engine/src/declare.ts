@@ -17,6 +17,7 @@ export const ICONS = [
   'flag',
   'user',
   'query',
+  'log-in',
 ] as const
 export type Icon = (typeof ICONS)[number]
 
@@ -288,6 +289,8 @@ export interface Actor {
   subject: { dataset: string; id: number } | null
   /** Who signs in: a person by mail (`user`, the default), an agent by Bearer, or a record's link. */
   kind?: 'user' | 'service' | 'link'
+  /** A service account's name. */
+  name?: string
 }
 
 /** What a hook asks the engine to do; `link` is null while no token was minted. */
@@ -384,6 +387,10 @@ export interface ActionDecl {
   input: Record<string, ActionInput>
   /** The grid opens the first record the run created, else the record it ran on. */
   opens?: true
+  /** A button with this icon in the drawer's head, beside the record's address; the label is its name. */
+  head?: { icon: Icon }
+  /** With `head`: after the run the grid reads the handoff of the record the run created and opens it in the tab the click opened. */
+  handoff?: true
   /** A record that does not match is refused 422 `condition_not_met` before `run`. */
   when?: Condition
   run(record: Values, input: Record<string, InputValue>, ctx: WriteContext): ActionResult

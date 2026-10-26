@@ -14,6 +14,7 @@ let sqlite: Database
 let admin: Send
 let editor: Send
 let worker: Send
+let claude: Send
 
 const sender =
   (auth: Record<string, string>): Send =>
@@ -34,6 +35,7 @@ beforeEach(async () => {
   admin = sender({ cookie: await signIn(app, 'administrator') })
   editor = sender({ cookie: await signIn(app, 'editor') })
   worker = sender({ authorization: `Bearer ${createService(sqlite, 'worker', 'editor')}` })
+  claude = sender({ authorization: `Bearer ${createService(sqlite, 'claude', 'editor')}` })
 })
 
 const address = (id: number) =>
@@ -53,6 +55,21 @@ describe('a site keeps its address', () => {
     const res = await who()('PATCH', '/api/rows/site/1', { adres: 'https://nep-site.test' })
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 403, code: 'service_only' })
     expect(address(1)).toBe(before)
+  })
+
+  test('claude, a service but not the worker, cannot rewrite it, nor start a site with one: 403, the address stays', async () => {
+    const before = address(1)
+    const update = await claude('PATCH', '/api/rows/site/1', { adres: 'https://nep-site.test' })
+    expect({ status: update.status, code: update.body.code }).toEqual({ status: 403, code: 'forbidden' })
+    expect(address(1)).toBe(before)
+    const create = await claude('POST', '/api/rows/site', { naam: 'nep-site', adres: 'https://nep-site.test' })
+    expect(create.status).toBe(403)
+    expect(sqlite.query("SELECT id FROM site WHERE naam = 'nep-site'").all()).toEqual([])
+  })
+
+  test('claude still writes the columns it may, and a site without an address', async () => {
+    expect((await claude('PATCH', '/api/rows/site/1', { wp_versie: '6.9.0' })).status).toBe(200)
+    expect((await claude('POST', '/api/rows/site', { naam: 'zonder-adres' })).status).toBe(201)
   })
 
   test('the worker writes a good address and is refused a bad one', async () => {

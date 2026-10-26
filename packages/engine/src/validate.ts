@@ -1,6 +1,7 @@
 import { ROLES } from './auth-tables'
 import { POSITION } from './ddl'
 import {
+  type ActionDecl,
   type ActionInput,
   type ColumnDecl,
   type Condition,
@@ -11,6 +12,7 @@ import {
   isSelection,
   type OptionsFrom,
   type QueryDecl,
+  type SelectionActionDecl,
   TONES,
 } from './declare'
 import { reservedNames } from './engine-tables'
@@ -654,6 +656,21 @@ function checkInput(action: string, key: string, input: ActionInput, datasets: S
   if ((input.min as number) > (input.max as number)) throw at('has min above max')
 }
 
+function checkHead(name: string, action: ActionDecl | SelectionActionDecl): void {
+  const { head, handoff } = action as { head?: unknown; handoff?: unknown }
+  if (head !== undefined) {
+    const icon = (head as { icon?: unknown } | null)?.icon
+    if (isSelection(action)) throw new DomainError(name, 'head', 'a selection action has no head button')
+    if (Object.keys(action.input).length > 0) throw new DomainError(name, 'head', 'a head button runs with no input')
+    if (typeof icon !== 'string' || !(ICONS as readonly string[]).includes(icon)) {
+      throw new DomainError(name, 'head', `head.icon must be one of ${ICONS.join(', ')}`)
+    }
+  }
+  if (handoff === undefined) return
+  if (handoff !== true) throw new DomainError(name, 'handoff', 'handoff must be true, and absent otherwise')
+  if (isSelection(action)) throw new DomainError(name, 'handoff', 'a selection action has no handoff')
+}
+
 function checkActions(domain: Domain): void {
   const datasets = new Set(domain.datasets.map((d) => d.name))
   for (const [name, action] of Object.entries(domain.actions ?? {})) {
@@ -665,6 +682,7 @@ function checkActions(domain: Domain): void {
       throw new DomainError(name, 'many', 'many must be true on a selection action, and absent otherwise')
     if (action.opens !== undefined && action.opens !== true)
       throw new DomainError(name, 'opens', 'opens must be true, and absent otherwise')
+    checkHead(name, action)
     if (action.when !== undefined) {
       checkCondition(
         domain,

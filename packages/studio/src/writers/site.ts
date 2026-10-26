@@ -17,11 +17,19 @@ export const HEALTH_COLUMNS = [
   'laatste_check',
 ]
 
-export const STUDIO_COLUMNS = ['organisatie_id', 'sla', 'smoke_urls', 'notities']
+export const STUDIO_COLUMNS = ['organisatie_id', 'sla', 'smoke_urls', 'notities', 'bekende_admins']
 
 const SLA_OWN = 'De SLA is van studio: de worker zet ze alleen bij een nieuwe site.'
 
 const isUser = (ctx: WriteContext): boolean => (ctx.actor.kind ?? 'user') === 'user'
+
+const WORKER = 'worker'
+const ADDRESS_OWN = 'Het adres schrijft alleen de worker: een login gaat naar het adres dat het toont.'
+
+// The login link may only open on the site's own address, so no other service may move it.
+function checkAddress(values: Values, ctx: WriteContext): void {
+  if (Object.hasOwn(values, 'adres') && ctx.actor.kind === 'service' && ctx.actor.name !== WORKER) forbid(ADDRESS_OWN)
+}
 
 function checkUnique(ctx: WriteContext, values: Values): void {
   if (typeof values.naam === 'string' && ctx.exists('site', { naam: values.naam })) {
@@ -37,6 +45,7 @@ function checkNameKept(values: Values, current: Values): void {
 export const siteWriter: Writer = {
   create(values, ctx) {
     if (isUser(ctx)) forbid('Sites komen uit de registry.')
+    checkAddress(values, ctx)
     checkUnique(ctx, values)
     return values
   },
@@ -49,6 +58,7 @@ export const siteWriter: Writer = {
       return values
     }
     if (Object.hasOwn(values, 'sla')) forbid(SLA_OWN)
+    checkAddress(values, ctx)
     checkNameKept(values, ctx.current as Values)
     return values
   },

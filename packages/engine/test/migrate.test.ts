@@ -108,6 +108,7 @@ describe('migrate', () => {
       'auth_session',
       'batch',
       'bestelling',
+      'handoff',
       'klant',
       'magic_link',
       'per_klant',

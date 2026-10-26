@@ -401,7 +401,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       ) : (
       <>
       {selectable && onSelection && panelled(
-        <SelectionBar count={ticking.selected.size} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
+        <SelectionBar count={ticking.selected.size} picked={ticking.selected} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
           onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then((opened) => {
             ticking.clear()
             show(opened)
@@ -424,7 +424,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id, undefined, () => setDrawer((now) => (now === open.id ? null : now)))}
-          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then(show) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
+          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then((opened) => (action.handoff ? opened : show(opened))) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           onDelete={model.deletable ? () => store.remove(open.id) : undefined} onSaid={onNotice} />}
       </div>

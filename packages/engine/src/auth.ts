@@ -50,6 +50,7 @@ const actorOf = (row: AccountRow): Actor => ({
   role: row.role,
   subject: row.subject_dataset === null ? null : { dataset: row.subject_dataset, id: row.subject_id as number },
   kind: row.kind,
+  ...(row.kind === 'service' && row.name ? { name: row.name } : {}),
 })
 
 function accountOut(row: AccountRow) {
