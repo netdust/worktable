@@ -5,7 +5,7 @@ import { SchemaContext } from '../grid/drawer/context'
 import { defaults } from '../grid/layout'
 
 vi.mock('../api', () => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn(), rows: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
-const { Calendar, HOUR_PX } = await import('./Calendar')
+const { Calendar, HOUR_PX, FALLBACK_FIT, LINE_PX, fitOf } = await import('./Calendar')
 const api = await import('../api')
 
 const CAL: CalendarDef = { day: 'plandag', start: 'start_at', end: 'eind_at', lanes: ['persoon_id'] }
@@ -157,6 +157,30 @@ describe('the calendar', () => {
   it('a month shows each event on its day, named with its lane', () => {
     shown({ shown: { from: '2026-10-01', to: '2026-10-31' } })
     expect(screen.getByRole('button', { name: /Noor Claes · vergadering Antwerpen/ })).toBeTruthy()
+  })
+
+  it('a month day holds what fits and puts the rest behind "+N meer", which lists the whole day', () => {
+    const busy = Array.from({ length: 9 }, (_, at) => row(10 + at, `afspraak ${at + 1}`, '2026-10-20', null, [1, 'Lotte Verhaegen']))
+    shown({ rows: busy, lane: null, shown: { from: '2026-10-01', to: '2026-10-31' } })
+    const day = screen.getByRole('button', { name: /^afspraak 1$/ }).closest('td') as HTMLElement
+    expect(within(day).getAllByRole('button', { name: /^afspraak/ })).toHaveLength(FALLBACK_FIT - 1)
+    fireEvent.click(within(day).getByRole('button', { name: `+${9 - (FALLBACK_FIT - 1)} meer` }))
+    const all = screen.getByRole('dialog')
+    expect(within(all).getAllByRole('button', { name: /^afspraak/ })).toHaveLength(9)
+    fireEvent.click(within(all).getByRole('button', { name: 'afspraak 9' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'afspraak 9' })).toBeTruthy()
+  })
+
+  it('a month day that fits shows every row and no "meer"', () => {
+    shown({ shown: { from: '2026-10-01', to: '2026-10-31' } })
+    expect(screen.queryByRole('button', { name: /meer$/ })).toBeNull()
+  })
+
+  it('a day fits as many lines as its share of the height holds below its date, at least one', () => {
+    expect(fitOf(32 + 5 * LINE_PX)).toBe(5)
+    expect(fitOf(32 + 5 * LINE_PX - 1)).toBe(4)
+    expect(fitOf(10)).toBe(1)
   })
 
   it('a month from a Sunday the 1st shows six whole weeks, the 1st last in the first and the 30th first in the last', () => {

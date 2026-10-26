@@ -108,6 +108,7 @@
 }
 
 .nv-model {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -5295,6 +5296,7 @@
 
 /* A month fills the view's height: its week rows stretch, as the week's hour area does. */
 .nv-cal__body--month {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -5302,7 +5304,6 @@
 
 .nv-cal__body--month .nv-cal--month {
   flex: 1;
-  height: 100%;
 }
 
 .nv-cal__legend {
@@ -5502,9 +5503,70 @@
   font-weight: 600;
 }
 
-.nv-cal--month td {
-  height: auto;
-  min-height: 96px;
+/* A month day never grows its week: what does not fit is clipped, the count already says it. */
+.nv-cal__cell {
+  overflow: hidden;
+}
+
+/* The rest of a full day, as one more line. */
+#root .nv-cal__more {
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 1px 4px;
+  border: 0;
+  background: none;
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+#root .nv-cal__more:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+/* A whole day, over the month: its rows as the cell draws them. */
+.nv-cal__day {
+  width: 280px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.nv-cal__day .nv-cal__event {
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: none;
+}
+
+.nv-cal__day .nv-cal__event::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--tone, var(--color-accent-default));
+}
+
+.nv-cal__day .nv-cal__event:hover {
+  background: var(--color-bg-hover);
+}
+
+.nv-cal__dayhead {
+  display: block;
+  padding: 2px 6px 6px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .nv-cal__out {
@@ -6792,9 +6854,11 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 /* A dataset's record count beside its name, as the prototype's rail. */
+/* At the line's right edge, over the tools' spot: they show only on hover, when the count leaves. */
 .nv-model__count {
-  margin-left: auto;
-  padding-right: 6px;
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
   color: var(--color-fg-subtle);
   font: 11px var(--font-mono);
 }
