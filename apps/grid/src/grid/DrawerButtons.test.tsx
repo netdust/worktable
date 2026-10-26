@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Available, LinkItem, Model, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
-import { actionsOffered, pressAction } from '../test-setup'
+import { actionsOffered, openTab, pressAction } from '../test-setup'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),
   records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), optionsFrom: vi.fn(),
@@ -188,6 +188,7 @@ describe('the drawer’s history after the state changed', () => {
     const stateful = row(available(['klaar', 'Afronden']))
     const view = (r: Row) => <DrawerWriteContext.Provider value={write}><Drawer row={r} columns={columns} model={model} onDone={vi.fn()} onClose={() => undefined} /></DrawerWriteContext.Provider>
     const { rerender } = render(view(stateful))
+    await openTab('Geschiedenis')
     await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(1))
     rerender(view({ ...stateful, fields: { ...stateful.fields, status: 'bevestigd' } }))
     await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(2))

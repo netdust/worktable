@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Link2, LoaderCircle, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
-import { type ChangeEvent, type CSSProperties, Fragment, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
+import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, removeAttachment, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
 import type { Account, ApiError, Model, ModelAction, Row, View } from '../types'
@@ -26,6 +26,8 @@ import { DrawerTools } from './DrawerTools'
 import { HeadActions } from './HeadActions'
 import { OpenLink } from './OpenLink'
 import { useLive } from './useLive'
+import { panesOf } from './drawer/panes'
+import { DrawerTabs } from './drawer/Tabs'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
 export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<unknown>
@@ -189,48 +191,76 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
   const tones = useTones(schema?.models ?? {}, space && !ownSub ? schema?.space?.model : undefined)
   const spaceTone = space && tones?.get(Number(firstId(space.value(row))))
   const links = linkedOf(columns, model)
-  const longs = columns.filter((c) => c.kind === 'longtext')
+  const writer = (c: Column) => (model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite)
+  // A read-only empty long text shows nothing, so it makes no Notities tab.
+  const longs = columns.filter((c) => c.kind === 'longtext' && (writer(c) || c.edit(row)))
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
+  const history = Boolean(model && !model.query && row.id > 0)
+  const panes = panesOf({ longs, links, inbound, history, files: Boolean(attachments), schema })
+  // The dashboard keeps one drawer across models: a record is its model and id.
+  const opened = `${model?.key}:${row.id}`
+  const [chosen, setChosen] = useState({ opened, key: 'fields' })
+  const pane = chosen.opened === opened && panes.some((p) => p.key === chosen.key) ? chosen.key : 'fields'
+  const show = (key: string) => setChosen({ opened, key })
   const raised = model && flags && row.id > 0 ? flags.marksOf(model.key, row.id) : []
   const bands = bandKeys(raised)
   // The band asks the link section to choose for the place its flag marks: the choosing is the section's.
   const choosers = useRef<Record<string, Chooser | null>>({})
+  // A link in a closed tab chooses once its tab has opened.
+  const pending = useRef<{ key: string; place: number } | null>(null)
+  useEffect(() => {
+    const chooser = pending.current && choosers.current[pending.current.key]
+    if (!chooser || !pending.current) return
+    chooser.choose(pending.current.place)
+    pending.current = null
+  })
+  const choose = ({ key, place }: { key: string; place: number }) => {
+    const chooser = choosers.current[key]
+    if (chooser) return chooser.choose(place)
+    pending.current = { key, place }
+    const at = links.findIndex((l) => l.key === key)
+    show(at > 0 ? `link:${links[at].column.id}` : 'fields')
+  }
   const chooseOther = (flag: Flag): AlertAction[] => {
     const at = onLink ? choosableOf(flag, row, links, schema) : null
-    return at ? [{ label: t('chooseOther'), run: () => choosers.current[at.key]?.choose(at.place) }] : []
+    return at ? [{ label: t('chooseOther'), run: () => choose(at) }] : []
   }
   const actionRow = <ActionRow key={`actions:${row.id}`} model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} onSaid={onSaid} />
+  const linkSection = ({ key, link, column }: (typeof links)[number]) => (
+    <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
+      schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
+  )
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
       tools={<><OpenLink row={row} model={model} /><HeadActions key={`head-${row.id}`} row={row} model={model} actions={actions} onAction={onAction} onSaid={onSaid} /><DrawerTools key={`tools-${row.id}`} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} /></>}
       head={<Head row={row} model={model} nav={nav} busy={busy} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
+      {panes.length > 1 && <DrawerTabs panes={panes} current={pane} onChange={show} />}
       <div className="nv-dw-body">
-      <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
-      {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
-        <p className="nv-dw-sub">
-          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
-        </p>
+      {pane === 'fields' && (
+        <>
+          <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
+          {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
+            <p className="nv-dw-sub">
+              {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
+            </p>
+          )}
+          {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
+          {lines && <dl className="nv-drawer__fields">{lines}</dl>}
+          {shown.length > 0 && <Props props={shown} row={row} />}
+          {folded.length > 0 && (more
+            ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
+            : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
+          {links.length > 0 && linkSection(links[0])}
+          {actionRow}
+          {sections}
+          {editor && <div className="nv-drawer__editor">{editor}</div>}
+        </>
       )}
-      {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
-      {lines && <dl className="nv-drawer__fields">{lines}</dl>}
-      {shown.length > 0 && <Props props={shown} row={row} />}
-      {folded.length > 0 && (more
-        ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
-        : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
-      {links.length === 0 && actionRow}
-      {links.map(({ key, link, column }, at) => (
-        <Fragment key={`${row.id}:${column.id}`}>
-          <LinkSection ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
-            schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
-          {at === 0 && actionRow}
-        </Fragment>
-      ))}
-      {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
-      {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
-      {sections}
-      {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} row={row} />}
-      {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {editor && <div className="nv-drawer__editor">{editor}</div>}
+      {pane === 'notes' && longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={writer(c)} />)}
+      {links.slice(1).map((l) => pane === `link:${l.column.id}` && linkSection(l))}
+      {inbound.map((i) => pane === `inbound:${i.model}:${i.field}` && <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
+      {pane === 'history' && model && <HistorySection key={row.id} model={model} id={row.id} row={row} />}
+      {pane === 'files' && attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
       </div>
     </SidePanel>
   )

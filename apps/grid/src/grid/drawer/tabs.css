@@ -1,0 +1,70 @@
+/* The drawer's pane icons, on the head's surface with a line under it. */
+.nv-dw-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+}
+
+.nv-dw-tabs__group {
+  display: flex;
+  gap: 2px;
+}
+
+#root .nv-dw-tab {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+#root .nv-dw-tab[data-hovered] {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+#root .nv-dw-tab[data-selected],
+#root .nv-dw-tab[data-current] {
+  background: var(--color-bg-selected);
+  color: var(--color-fg-default);
+}
+
+#root .nv-dw-tab[data-focus-visible] {
+  outline: 1px solid var(--color-fg-default);
+  outline-offset: -1px;
+}
+
+.nv-dw-tabs__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nv-dw-tabs__item[data-selected] {
+  font-weight: 600;
+}
+
+.nv-dw-tip {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-inverse);
+  color: var(--color-fg-on-inverse);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* A pane that opens on a section needs no rule under the bar's own line. */
+.nv-dw-tabs + .nv-dw-body > .nv-dw-sec:first-child,
+.nv-dw-tabs + .nv-dw-body > .nv-files:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

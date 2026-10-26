@@ -18,7 +18,7 @@ history, attachments), never from a dataset name, so every domain's drawer gets 
 
 **First working version:** Task 1, a Sites drawer in the studio with the tab bar and its panes, light and dark.
 
-**Tech Stack:** React 19, react-aria-components 1.22 (`Tabs`, `TabList`, `Tab`, `TabPanel`, `MenuTrigger`), Vitest +
+**Tech Stack:** React 19, react-aria-components 1.22 (`Toolbar`, `ToggleButtonGroup`, `ToggleButton`, `Tooltip`, `MenuTrigger`), Vitest +
 Testing Library (jsdom), Playwright e2e.
 
 **Spec:** none written; Stefan's words in the session of 2026-10-26 are the requirements:
@@ -54,8 +54,10 @@ Testing Library (jsdom), Playwright e2e.
   one `<Drawer>` across models. A re-read of the same record keeps the open tab. When the open pane's key is not
   among the record's panes, Gegevens shows.
 - Switching tabs never loses a note being typed: a `Note` draft is saved before its pane unmounts.
-- Keyboard: the tab bar is a react-aria `TabList` (arrow keys move, Enter/Space select); the `…` menu is a
-  react-aria `Menu`, and picking an entry shows that pane, with the `…` button marked as holding the current tab.
+- Keyboard: the tab bar is a react-aria `Toolbar` named `Onderdelen` holding a single-select `ToggleButtonGroup`
+  (radios; arrow keys move across the whole bar, Enter/Space select, Tab enters and leaves it); the `…` menu is a
+  single-select react-aria `Menu` beside the group, and picking an entry shows that pane, checked in the menu, with
+  the `…` button carrying `data-current` (no `aria-pressed` on a menu button).
   The drawer's existing head keys (`onHeadKey`: up/down between records) keep working.
 - Light and dark: tokens only, no new colours; the tab bar takes the drawer head's surface and a 1px line under it.
 - Every e2e and gate run under the machine lock: `flock /home/ntdst/.cache/worktable-e2e.lock ...`.
