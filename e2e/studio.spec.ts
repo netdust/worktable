@@ -4,6 +4,7 @@ import { type APIRequestContext, expect, type Locator, type Page, type Route, re
 import { STUDIO, STUDIO_SERVICE, STUDIO_WORKER, state } from './auth'
 import { card, lane, orders } from './board'
 import { offered, pressInMenu } from './drawer'
+import { openLooks } from './editor'
 import { forget } from './forget'
 import { shot } from './shots'
 import { openView } from './tree'
@@ -1826,5 +1827,243 @@ test.describe('studio, the login from a site drawer', () => {
     } finally {
       if (actie) await undo(api, actie)
     }
+  })
+})
+
+test.describe('plugin-actions, the shake-out', () => {
+  async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
+    await openLooks(page)
+    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: theme }).click()
+    await expect(page.locator('#root')).toHaveAttribute('data-theme', theme === 'Donker' ? 'dark' : 'light')
+    await page.getByRole('button', { name: 'Bijstellen' }).click()
+  }
+
+  const THEMES = [
+    ['Licht', 'licht'],
+    ['Donker', 'donker'],
+  ] as const
+
+  /** Takes an opdracht a flow made out again: its site lines first, as a person deletes no opdracht with sites. */
+  async function remove(api: Api, actie: number): Promise<void> {
+    for (const link of (await rowsOf(api, 'actie_site', { actie_id: actie })).rows)
+      await api.delete(`/api/rows/actie_site/${link.id}`)
+    await api.delete(`/api/rows/actie/${actie}`)
+    if (await exists(api, 'actie', actie)) forget(STUDIO, 'actie', [actie])
+  }
+
+  test('install-asks-bevestigen @e2e: Studio-plugin installeren on a site without the plugin is not blocked, waits on Bevestigen after the worker’s preview, and only Stefan confirms it', async ({
+    page,
+    browser,
+  }) => {
+    const api = page.request
+    const service = await worker()
+    const editor = await browser.newContext({ storageState: state('studio-editor') })
+    let actie = 0
+    try {
+      await open(page, 'Sites', 'Sites')
+      const without = await drawerOf(page, 'testmans-bestel')
+      await expect(without.getByRole('link', { name: 'Openen in nieuw tabblad' })).toBeVisible()
+      await expect(without.getByRole('button', { name: 'Inloggen' })).toHaveCount(0)
+      for (const [theme, name] of THEMES) {
+        await setTheme(page, theme)
+        await shot(page, `site-zonder-plugin-${name}`)
+      }
+      await without.getByRole('button', { name: 'Sluiten' }).click()
+
+      await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
+      const bar = page.getByRole('region', { name: '1 geselecteerd' })
+      const install = bar.getByRole('button', { name: 'Studio-plugin installeren', exact: true })
+      await expect(install, 'a site without the plugin may get it').toBeEnabled()
+      await expect(bar.getByText(/Past niet op/)).toHaveCount(0)
+      const before = await newest(api, 'actie')
+      await install.click()
+
+      const drawer = page.getByRole('complementary', { name: 'Studio-plugin installeren · testmans-bestel' })
+      await expect(drawer).toBeVisible()
+      actie = await newest(api, 'actie')
+      expect(actie).toBeGreaterThan(before)
+      expect(await rowOf(api, 'actie', actie)).toMatchObject({ soort: 'plugin_installeren', status: 'aangevraagd' })
+      await expect(siteLine(drawer, 'testmans-bestel')).toContainText('Niet gestart')
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0)
+      const links = (await rowsOf(api, 'actie_site', { actie_id: actie })).rows
+      expect(links.map((l) => [l.site_id, l.state])).toEqual([[2, 'wacht']])
+
+      const skip = await service.patch(`/api/rows/actie/${actie}`, {
+        data: { status: 'bezig', expect: { status: 'aangevraagd' } },
+      })
+      expect(skip.status(), 'an install never runs before Bevestigen').toBe(422)
+      expect((await rowOf(api, 'actie', actie)).status).toBe('aangevraagd')
+
+      const patch = async (path: string, data: Values) => {
+        const response = await service.patch(path, { data })
+        expect(response.status(), await response.text()).toBe(200)
+      }
+      await patch(`/api/rows/actie/${actie}`, { status: 'voorbereiden', expect: { status: 'aangevraagd' } })
+      await patch(`/api/rows/actie_site/${links[0]?.id}`, {
+        state: 'te_bevestigen',
+        voorstel: JSON.stringify({ plugin: { slug: 'netdust-studio', to: '1.0.0' } }),
+        samenvatting: 'Studio-plugin 1.0.0 installeren',
+        expect: { state: 'wacht' },
+      })
+      await patch(`/api/rows/actie/${actie}`, { status: 'voorbereid', expect: { status: 'voorbereiden' } })
+
+      const confirm = drawer.locator('.nv-dw-actions__row').getByRole('button', { name: 'Bevestigen' })
+      await expect(confirm).toBeVisible({ timeout: 15_000 })
+      await expect(confirm).toHaveClass(/nv-button--primary/)
+      await expect(siteLine(drawer, 'testmans-bestel')).toContainText('Studio-plugin 1.0.0 installeren')
+      for (const [theme, name] of THEMES) {
+        await setTheme(page, theme)
+        await shot(page, `installeren-te-bevestigen-${name}`)
+      }
+
+      const refused = await editor.request.patch(`${STUDIO.app}/api/rows/actie/${actie}`, {
+        data: { status: 'bevestigd', expect: { status: 'voorbereid' } },
+      })
+      expect(refused.status(), 'an editor never confirms an install').toBeGreaterThanOrEqual(400)
+      expect((await rowOf(api, 'actie', actie)).status).toBe('voorbereid')
+
+      await confirm.click()
+      await expect(drawer.getByText('Bevestigd', { exact: true })).toBeVisible()
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0)
+      await expect.poll(async () => (await rowOf(api, 'actie', actie)).status).toBe('bevestigd')
+    } finally {
+      if (actie) await remove(api, actie)
+      await service.dispose()
+      await editor.close()
+    }
+  })
+
+  test('cache-runs-straight-away @e2e: Cache legen from the Studio-plugin view runs with no Bevestigen, a site without the plugin is skipped, and a selection with none is refused', async ({
+    page,
+  }) => {
+    const api = page.request
+    const service = await worker()
+    let actie = 0
+    try {
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'testmans-winkel')
+      const head = site.locator('.nv-drawer__head')
+      await expect(head.getByRole('button', { name: 'Inloggen' })).toBeVisible()
+      for (const [theme, name] of THEMES) {
+        await setTheme(page, theme)
+        await shot(page, `site-met-plugin-kop-${name}`)
+        await site.locator('.nv-dw-actions__row').getByRole('button', { name: 'Meer' }).click()
+        const menu = page.getByRole('menu', { name: 'Meer' })
+        for (const label of [
+          'Studio-plugin installeren',
+          'Cache legen',
+          'Cron draaien',
+          'Onderhoudsmodus aan',
+          'Onderhoudsmodus uit',
+        ])
+          await expect(menu.getByRole('menuitem', { name: label, exact: true })).toBeVisible()
+        await shot(page, `site-acties-meer-${name}`)
+        await page.keyboard.press('Escape')
+        await expect(menu).toHaveCount(0)
+      }
+
+      await open(page, 'Studio-plugin', 'Sites')
+      for (const label of ['Studio-plugin', 'Plugin-versie', 'Core-bestanden', 'Cron-achterstand'])
+        await expect(page.getByRole('columnheader', { name: new RegExp(label) })).toBeVisible()
+      for (const [theme, name] of THEMES) {
+        await setTheme(page, theme)
+        await shot(page, `studio-plugin-kolommen-${name}`)
+      }
+
+      const before = await newest(api, 'actie')
+      await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
+      await page.getByRole('checkbox', { name: 'voorbeeld-blog selecteren' }).check()
+      await page
+        .getByRole('region', { name: '2 geselecteerd' })
+        .getByRole('button', { name: 'Cache legen', exact: true })
+        .click()
+      await expect(page.getByText('Geen van deze sites heeft de studio-plugin.').first()).toBeVisible()
+      await expect(page.getByRole('complementary')).toHaveCount(0)
+      expect(await newest(api, 'actie'), 'no opdracht when no site has the plugin').toBe(before)
+      await page.getByRole('checkbox', { name: 'voorbeeld-blog selecteren' }).uncheck()
+
+      await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+      const bar = page.getByRole('region', { name: '2 geselecteerd' })
+      for (const [theme, name] of THEMES) {
+        await setTheme(page, theme)
+        await page.mouse.move(0, 0)
+        await shot(page, `studio-plugin-selectie-${name}`)
+      }
+      await bar.getByRole('button', { name: 'Cache legen', exact: true }).click()
+
+      const drawer = page.getByRole('complementary', { name: 'Cache legen · 2 sites' })
+      await expect(drawer).toBeVisible()
+      actie = await newest(api, 'actie')
+      expect(actie).toBeGreaterThan(before)
+      expect(await rowOf(api, 'actie', actie)).toMatchObject({ soort: 'cache_legen', status: 'aangevraagd' })
+      await expect(siteLine(drawer, 'testmans-bestel')).toContainText('Geen studio-plugin')
+      await expect(siteLine(drawer, 'testmans-bestel')).toContainText('Overgeslagen')
+      await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Niet gestart')
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0)
+      const links = (await rowsOf(api, 'actie_site', { actie_id: actie })).rows
+      expect(links.map((l) => [l.site_id, l.state, l.resultaat]).sort()).toEqual([
+        [1, 'wacht', null],
+        [2, 'overgeslagen', 'geen plugin'],
+      ])
+
+      const patch = async (path: string, data: Values) => {
+        const response = await service.patch(path, { data })
+        expect(response.status(), await response.text()).toBe(200)
+      }
+      const winkel = links.find((l) => l.site_id === 1)?.id
+      await patch(`/api/rows/actie/${actie}`, { status: 'bezig', expect: { status: 'aangevraagd' } })
+      await patch(`/api/rows/actie_site/${winkel}`, { state: 'bezig', expect: { state: 'wacht' } })
+      await patch(`/api/rows/actie_site/${winkel}`, {
+        state: 'klaar',
+        resultaat: 'cache geleegd',
+        expect: { state: 'bezig' },
+      })
+      await patch(`/api/rows/actie/${actie}`, { status: 'klaar', expect: { status: 'bezig' } })
+      await expect(drawer.getByText('Klaar', { exact: true }).first()).toBeVisible({ timeout: 15_000 })
+      await expect(siteLine(drawer, 'testmans-winkel')).toContainText('Klaar')
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toHaveCount(0)
+      await shot(page, 'cache-legen-klaar')
+    } finally {
+      if (actie) await remove(api, actie)
+      await service.dispose()
+    }
+  })
+
+  test('refusal-clears-on-a-new-selection @e2e: a selection refused for having no plugin site no longer reads refused once a site with the plugin is ticked', async ({
+    page,
+  }) => {
+    const api = page.request
+    const before = await newest(api, 'actie')
+    await open(page, 'Studio-plugin', 'Sites')
+    const box = (site: string) => page.getByRole('checkbox', { name: `${site} selecteren` })
+    await box('testmans-bestel').check()
+    await box('voorbeeld-blog').check()
+    await page
+      .getByRole('region', { name: '2 geselecteerd' })
+      .getByRole('button', { name: 'Cache legen', exact: true })
+      .click()
+    const refusal = page.getByText('Geen van deze sites heeft de studio-plugin.')
+    await expect(refusal.first()).toBeVisible()
+    expect(await newest(api, 'actie')).toBe(before)
+
+    await box('voorbeeld-blog').uncheck()
+    await box('testmans-winkel').check()
+    await expect(page.getByRole('region', { name: '2 geselecteerd' })).toBeVisible()
+    await expect(refusal, 'testmans-winkel has the plugin: the old refusal no longer holds').toHaveCount(0)
+  })
+
+  test('drawer-head-keys-unique @e2e: opening a site drawer renders its head tools without a duplicate React key', async ({
+    page,
+  }) => {
+    const duplicates: string[] = []
+    page.on('console', (message) => {
+      if (message.text().includes('two children with the same key')) duplicates.push(message.text())
+    })
+    await open(page, 'Sites', 'Sites')
+    const site = await drawerOf(page, 'testmans-winkel')
+    await expect(site.locator('.nv-drawer__head').getByRole('button', { name: 'Inloggen' })).toBeVisible()
+    await site.getByRole('button', { name: 'Volgende' }).click()
+    await expect(page.getByRole('complementary', { name: 'voorbeeld-blog' })).toBeVisible()
+    expect(duplicates, 'the drawer head gives each tool its own key').toEqual([])
   })
 })
