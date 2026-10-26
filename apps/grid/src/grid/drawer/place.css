@@ -36,6 +36,7 @@
 .nv-dw-list li.nv-dw-place {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
   column-gap: 0;
   row-gap: 2px;
 }

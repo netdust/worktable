@@ -325,3 +325,121 @@ test('transport-failures-run @e2e: a dropped request, a 500 and a lost session e
   await touch.click()
   await expect(page.getByRole('form', { name: 'Aanmelden' })).toBeVisible()
 })
+
+const bar = (page: Page, n = 1) => page.getByRole('region', { name: `${n} geselecteerd` })
+
+/** Whether the panel's actions run past their box, or the panel past the dock: what a missed re-measure looks like. */
+const overflows = (page: Page) =>
+  page.evaluate(() => {
+    const actions = document.querySelector<HTMLElement>('.nv-selection__actions')
+    const panel = document.querySelector<HTMLElement>('.nv-selection')?.getBoundingClientRect()
+    const dock = document.querySelector<HTMLElement>('.nv-dock')?.getBoundingClientRect()
+    if (!actions || !panel || !dock) return true
+    return actions.scrollWidth > actions.clientWidth + 1 || panel.right > dock.right + 1
+  })
+
+test('bar-folded-input-action @e2e: a folded action with an input opens its panel with the keyboard in it, Escape gives Meer back, it refuses and it runs; clearing the selection closes it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 720 })
+  await open(page, 'All members', 'Members')
+  await tick(page, 'Ann')
+  const more = bar(page).getByRole('button', { name: 'Meer' })
+  await expect(more).toBeVisible()
+  await expect(bar(page).getByRole('group', { name: 'Gather' }), 'Gather waits behind Meer').toHaveCount(0)
+  const ask = async () => {
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Gather', exact: true }).click()
+    await expect(page.getByRole('textbox', { name: 'Name' })).toBeFocused()
+  }
+
+  await ask()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveCount(0)
+  await expect(more).toBeFocused()
+
+  await ask()
+  await bar(page).getByRole('button', { name: 'Selectie wissen' }).click()
+  await tick(page, 'Ann')
+  await expect(more).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Name' }), 'a new selection starts with the panel closed').toHaveCount(
+    0,
+  )
+
+  await ask()
+  await page.getByRole('textbox', { name: 'Name' }).fill('refused')
+  await bar(page).getByRole('group', { name: 'Gather' }).getByRole('button', { name: 'Gather', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('that note is refused')
+  await shot(page, 'selectie-gevouwen-invoer')
+  try {
+    await page.getByRole('textbox', { name: 'Name' }).fill('Opgevouwen')
+    await bar(page).getByRole('group', { name: 'Gather' }).getByRole('button', { name: 'Gather', exact: true }).click()
+    await page
+      .getByRole('status', { name: 'Gather uitgevoerd.' })
+      .getByRole('button', { name: 'Ongedaan maken' })
+      .click()
+    await expect
+      .poll(async () => (await rows<{ name: string }>(page, 'bundle')).filter((b) => b.name === 'Opgevouwen').length)
+      .toBe(0)
+  } finally {
+    for (const made of (await rows<{ id: number; name: string }>(page, 'bundle')).filter(
+      (b) => b.name === 'Opgevouwen',
+    ))
+      await page.request.delete(`/api/rows/bundle/${made.id}`)
+  }
+})
+
+test('bar-refits-on-resize @e2e: a narrower window folds more actions behind Meer, and nothing runs past the panel', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 720 })
+  await open(page, 'All members', 'Members')
+  await tick(page, 'Ann')
+  const items = bar(page).locator('.nv-selection__item')
+  await expect(items.first()).toBeVisible()
+  const wide = await items.count()
+
+  await page.setViewportSize({ width: 760, height: 720 })
+
+  await expect.poll(() => items.count()).toBeLessThan(wide)
+  await expect(bar(page).getByRole('button', { name: 'Meer' })).toBeVisible()
+  expect(await overflows(page)).toBe(false)
+})
+
+test('bar-picked-value-refits @e2e: a picker in the panel shows whole, and a picked record that widens its button folds the line again', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 720 })
+  await open(page, 'All members', 'Members')
+  await tick(page, 'Ann')
+  const pick = bar(page).getByRole('button', { name: /^Bundle: / })
+  await expect(pick).toBeVisible()
+  // Narrow the window until the panel has under 10px to spare, so a longer label no longer fits.
+  const spare = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>('.nv-selection')?.getBoundingClientRect()
+    const dock = document.querySelector<HTMLElement>('.nv-dock')?.getBoundingClientRect()
+    return panel && dock ? dock.width - 32 - panel.width : 0
+  })
+  await page.setViewportSize({ width: Math.round(1600 - spare + 8), height: 720 })
+  await expect(pick).toBeVisible()
+  expect(await overflows(page)).toBe(false)
+
+  await pick.click()
+  const search = page.getByRole('combobox', { name: 'Bundle' })
+  await expect(search).toBeFocused()
+  const hit = await search.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el
+  })
+  expect(hit, 'the search box is not clipped by the panel').toBe(true)
+  await search.fill('Beta')
+  await page.getByRole('option', { name: 'Beta' }).click()
+  await expect(
+    bar(page)
+      .getByRole('button', { name: 'Bundle: Beta' })
+      .or(bar(page).getByRole('button', { name: 'Meer' }))
+      .first(),
+  ).toBeVisible()
+
+  await expect.poll(() => overflows(page)).toBe(false)
+})

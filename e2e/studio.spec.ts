@@ -223,6 +223,7 @@ test.describe('studio', () => {
     const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
     await expect(drawer).toBeVisible()
     await expect(drawer.getByText('Aangevraagd', { exact: true })).toBeVisible()
+    await expect(drawer.getByRole('status').filter({ hasText: 'Volgt live' })).toBeVisible()
     await expect(drawer.getByRole('status').filter({ hasText: 'Volgt live' })).toHaveText('Volgt live')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Niet meer in de registry')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Overgeslagen')
@@ -860,6 +861,36 @@ test.describe('studio', () => {
     } finally {
       await page.emulateMedia({ colorScheme: 'light' })
       await api.delete(`/api/rows/actie/${made.actie}`)
+    }
+  })
+
+  test('drawer-site-line-buttons-centred @e2e: a site line with its own buttons keeps the name and the button labels on one centre line', async ({
+    page,
+  }) => {
+    const api = page.request
+    const { actie } = await preview(api, [3])
+    try {
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
+      const line = siteLine(drawer, 'voorbeeld-site')
+      const button = line.getByRole('button', { name: 'Niet nu' })
+      await expect(button).toBeVisible()
+      // The text's own box, not its element's: a stretched grid cell has its centre wherever its text is not.
+      const middle = (el: Element) => {
+        const text = [el, ...el.querySelectorAll('*')]
+          .flatMap((n) => [...n.childNodes])
+          .find((c) => c.nodeType === 3 && c.textContent?.trim())
+        const range = document.createRange()
+        if (text) range.selectNodeContents(text)
+        const r = range.getBoundingClientRect()
+        return r.y + r.height / 2
+      }
+      const name = await line.getByText('voorbeeld-site', { exact: true }).evaluate(middle)
+      const label = await button.evaluate(middle)
+      expect(Math.abs(name - label)).toBeLessThanOrEqual(2)
+      await shot(page, 'opdracht-regel-knoppen')
+    } finally {
+      await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
     }
   })
 

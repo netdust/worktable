@@ -1,10 +1,10 @@
-import { X } from 'lucide-react'
 import { type RefObject, useContext, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from 'react-aria-components'
 import { errorText, t } from '../i18n'
 import type { ApiError, ModelAction, Row } from '../types'
 import { type Action, MoreMenu } from '../ui/MoreMenu'
 import { ActionInputs } from './ActionInputs'
+import { AskPanel } from './AskPanel'
 import { DrawerWriteContext } from './drawerWrite'
 import { type Measure, measureLine, useFitting } from './fit'
 import type { RunAction } from './Drawer'
@@ -15,8 +15,6 @@ interface Item {
   primary: boolean
   run: () => void
 }
-
-export { fitting } from './fit'
 
 interface Props {
   model: string | undefined
@@ -34,7 +32,6 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
   const [pressing, setPressing] = useState(false)
   const [asking, setAsking] = useState<ModelAction | null>(null)
   const line = useRef<HTMLDivElement>(null)
-  const panel = useRef<HTMLDivElement>(null)
   const buttons = useRef(new Map<string, HTMLElement>())
   const more = useRef<HTMLButtonElement | null>(null)
   const back = useRef<string | null>(null)
@@ -72,11 +69,6 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
     const drawer = line.current?.closest('aside')?.querySelector<HTMLElement>('.nv-drawer__close')
     ;(buttons.current.get(key) ?? first ?? drawer)?.focus()
   })
-  // The inputs panel opens under the row: the keyboard follows it to its first input.
-  useLayoutEffect(() => {
-    if (asking) panel.current?.querySelector<HTMLElement>('input, select, textarea, button:not(.nv-dw-ask__close)')?.focus()
-  }, [asking])
-
   if (row.id <= 0 || items.length === 0) return null
   const visible = shown === null ? items.length : shown
   const folded = items.slice(visible)
@@ -97,20 +89,12 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
         {folded.length > 0 && <MoreMenu actions={menu} label={t('moreInRow')} menu={t('moreInRow')} trigger={more as RefObject<HTMLButtonElement | null>} />}
       </div>
       {asking && (
-        <div ref={panel} className="nv-dw-ask nv-dw-ask--inline" onKeyDown={(event) => {
-          // Typing here is typing here: the drawer's keys (↑ ↓ j k step to another record) never see it.
-          if (event.key !== 'Escape') return event.stopPropagation()
-          const open = event.target instanceof Element && event.target.closest('[aria-expanded="true"]')
-          if (open) return
-          event.stopPropagation()
-          leave()
-        }}>
-          <Button className="nv-dw-ask__close" aria-label={t('close')} onPress={leave}><X size={14} aria-hidden="true" /></Button>
+        <AskPanel key={asking.name} className="nv-dw-ask nv-dw-ask--inline" onLeave={leave}>
           <ActionInputs action={asking} record={{ ...row.fields, id: row.id }} onRun={(input) => (onAction as RunAction)(asking, input).then(() => {
             back.current = `action:${asking.name}`
             setAsking(null)
           })} />
-        </div>
+        </AskPanel>
       )}
     </div>
   )

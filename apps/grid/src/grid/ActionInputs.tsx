@@ -42,7 +42,7 @@ const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
   Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
 
 /** Keyed by its record, so another row starts with nothing picked. The bar has no one record: its inputs pick by id, never `options_from`. */
-export function ActionInputs({ action, record, disabled = false, staleOn, onRun }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; staleOn?: number; onRun: (input: Record<string, unknown>) => Promise<unknown> }) {
+export function ActionInputs({ action, record, disabled = false, staleOn, onRun, onPicked }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; staleOn?: number; onRun: (input: Record<string, unknown>) => Promise<unknown>; /** A pick changes its button's label: what holds the inputs may need to measure again. */ onPicked?: (key: string, title: string) => void }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
   const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
@@ -81,6 +81,7 @@ export function ActionInputs({ action, record, disabled = false, staleOn, onRun 
               candidates={input.options_from && record ? () => optionsFrom(input.options_from as OptionsFrom, record) : undefined}
               onPick={(record) => {
                 setPicked((was) => ({ ...was, [key]: record }))
+                onPicked?.(key, record.title)
                 closePicker(key)
               }} />
           )}

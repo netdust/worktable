@@ -290,6 +290,7 @@ const strings = {
   conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
   selectedCount: '{n} geselecteerd',
   selectionClear: 'Selectie wissen',
+  selectionBusy: 'Er loopt al een actie',
   selectionMax: 'Maximaal {max} tegelijk',
   selectAll: 'Alle rijen selecteren',
   selectRow: '{title} selecteren',

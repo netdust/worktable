@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Available, ModelAction, Row } from '../types'
-import { ActionRow, fitting } from './ActionRow'
+import { ActionRow } from './ActionRow'
+import { fitting } from './fit'
 import { DrawerWriteContext } from './drawerWrite'
 
 const remote = vi.hoisted(() => ({ records: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), optionsFrom: vi.fn() }))
