@@ -216,7 +216,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   const { via } = field
   if (via) {
     column.via = (row) => (row.inherited?.includes(key) ? via : '')
-    column.width = INHERITED_WIDTH
+    column.width = Math.max(column.width, INHERITED_WIDTH)
   }
   if (kind === 'links') {
     column.editable = writable

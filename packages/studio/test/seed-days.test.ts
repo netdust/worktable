@@ -4,7 +4,8 @@ import { daysAgo } from '../src/time'
 const zone = process.env.TZ
 
 afterEach(() => {
-  process.env.TZ = zone
+  // bun test runs in UTC with TZ unset; assigning undefined would store the string "undefined" and keep Brussels.
+  process.env.TZ = zone ?? 'UTC'
 })
 
 test('yesterday is the calendar day before, even on the day the clocks go back', () => {

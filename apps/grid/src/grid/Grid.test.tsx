@@ -14,6 +14,7 @@ import { barOf } from '../ui/bar'
 import { createHistory } from '../ui/history'
 import { ChipBar } from '../ui/ChipBar'
 import type { Shown } from '../ui/Toolbar'
+import { RunsContext, type Runs } from '../ui/runs'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
@@ -29,7 +30,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: Shown | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: Shown | null) => void; runs?: Runs } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -49,7 +50,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     }
     const model = options.model ?? activity
     const view = options.view ?? planning
-    return (
+    const sheet = (
       <>
         <ChipBar {...barOf({ view, model, layout, onLayout: change, scope: options.scopeChip ?? null, filters: options.filters, told, period: null })} />
         <Grid model={model} view={view} store={store} writable layout={layout} onLayout={change} title={options.title}
@@ -57,6 +58,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
           cut={options.cut} onShown={shown} models={options.models} onNotice={options.onNotice} scope={options.scope ?? null} />
       </>
     )
+    return options.runs ? <RunsContext.Provider value={options.runs}>{sheet}</RunsContext.Provider> : sheet
   }
   return { store, ...renderNl(<Harness />) }
 }
@@ -992,6 +994,19 @@ describe('the group bands', () => {
 })
 
 describe('the drawer', () => {
+  it('tells the dock which record it shows, and lets go once that row leaves the sheet', async () => {
+    const viewing = vi.fn()
+    const runs = { follow: () => false, created: () => undefined, ended: 0, running: new Set<string>(), lines: [], dismiss: () => undefined, open: () => undefined, opening: null, settled: () => undefined, viewing, viewed: null } as Runs
+    const { store } = renderGrid(calais, { runs })
+    const row = calais.find((r) => r.title === 'Lunch bistrot')!
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
+    expect(viewing).toHaveBeenLastCalledWith('activity', row.id)
+    api.remove.mockResolvedValue(undefined as never)
+    await act(() => store.remove(row.id))
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(viewing).toHaveBeenLastCalledWith(null, undefined)
+  })
+
   it("shows one row's every field, the long ones too, and closes", () => {
     const noted = { ...calais[2], fields: { ...calais[2].fields, notes: 'Twee veggie\nEén glutenvrij' } }
     renderGrid([noted])
