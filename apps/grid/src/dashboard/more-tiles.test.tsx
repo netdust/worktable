@@ -7,6 +7,7 @@ import { actionsOffered, pressAction } from '../test-setup'
 const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), create: vi.fn(), records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn(), rowOf: vi.fn() }))
 vi.mock('../api', () => api)
 const { Dashboard } = await import('./Dashboard')
+const { TILE_FIT } = await import('./WeekTile')
 const { DrawerWriteContext } = await import('../grid/drawerWrite')
 
 const base = (id: number, label: string, model: string, extra: Partial<SavedView> = {}): SavedView =>
@@ -66,6 +67,23 @@ describe('the week strip', () => {
     expect(api.rows.mock.calls[0][1]).toEqual(weekOf(new Date()))
     fireEvent.click(within(strip).getByRole('button', { name: /De Kersentuin/ }))
     expect(screen.getByRole('complementary', { name: 'De Kersentuin' })).toBeTruthy()
+  })
+
+  it('a full day shows a few rows and the rest behind "+N meer", which lists the whole day and opens a row', async () => {
+    const today = iso(new Date())
+    const busy: Row[] = Array.from({ length: 12 }, (_, at) => ({ id: 20 + at, title: `afspraak ${at + 1}`, status: '', fields: { plandag: today, productie_id: 1 } }))
+    api.rows.mockResolvedValue({ rows: busy, total: 12 })
+    show([{ kind: 'week', view: 3 }])
+    const strip = screen.getByRole('region', { name: 'Bedrijfsweek' })
+    const day = within(strip).getByRole('group', { current: 'date' })
+    await within(day).findByRole('button', { name: /^afspraak 1$/ })
+    expect(within(day).getAllByRole('button', { name: /^afspraak/ })).toHaveLength(TILE_FIT - 1)
+    fireEvent.click(within(day).getByRole('button', { name: `+${12 - (TILE_FIT - 1)} meer` }))
+    const all = screen.getByRole('dialog')
+    expect(within(all).getAllByRole('button', { name: /^afspraak/ })).toHaveLength(12)
+    fireEvent.click(within(all).getByRole('button', { name: 'afspraak 12' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'afspraak 12' })).toBeTruthy()
   })
 })
 
