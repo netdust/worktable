@@ -1,29 +1,39 @@
-/* The drawer's pane icons, on the head's surface with a line under it. */
+/* A record's head line holds a dozen buttons beside its title: they sit close, the tabs set apart. */
+.nv-drawer__head:has(> .nv-dw-title) {
+  gap: 2px;
+}
+
+/* The drawer's pane icons in its head line: one bordered group, the open pane filled, then `…`. */
 .nv-dw-tabs {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 2px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-surface);
+  margin: 0 4px;
 }
 
 .nv-dw-tabs__group {
   display: flex;
-  gap: 2px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
 }
 
 #root .nv-dw-tab {
   display: grid;
   place-items: center;
   width: 28px;
-  height: 28px;
+  height: 24px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: none;
   color: var(--color-fg-muted);
   cursor: pointer;
+}
+
+#root .nv-dw-tab + .nv-dw-tab {
+  border-left: 1px solid var(--color-border-default);
 }
 
 #root .nv-dw-tab[data-hovered] {
@@ -32,14 +42,14 @@
 }
 
 #root .nv-dw-tab[data-selected],
-#root .nv-dw-tab[data-current] {
+#root .nv-dw-tabs__more[data-current] {
   background: var(--color-bg-selected);
   color: var(--color-fg-default);
 }
 
 #root .nv-dw-tab[data-focus-visible] {
   outline: 1px solid var(--color-fg-default);
-  outline-offset: -1px;
+  outline-offset: -2px;
 }
 
 .nv-dw-tabs__item {
@@ -61,9 +71,9 @@
   line-height: 16px;
 }
 
-/* A pane that opens on a section needs no rule under the bar's own line. */
-.nv-dw-tabs + .nv-dw-body > .nv-dw-sec:first-child,
-.nv-dw-tabs + .nv-dw-body > .nv-files:first-child {
+/* A pane that opens on a section needs no rule under the head's own line. */
+.nv-dw-body > .nv-dw-sec:first-child,
+.nv-dw-body > .nv-files:first-child {
   margin-top: 0;
   padding-top: 0;
   border-top: 0;

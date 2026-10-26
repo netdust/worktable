@@ -25,12 +25,14 @@ describe('the drawer as the prototypes draw it', () => {
   const model = { ...activity, fields: { ...activity.fields } } as Model
   const rows = [row(1, 'Lunch bistrot'), row(2, 'Montage'), row(3, 'Diner')]
 
-  it('heads with its dataset, its place in the view, and steps with the buttons and with j and k', () => {
+  it('heads with its title, no dataset or place in the view, and steps with the buttons and with j and k', () => {
     const onStep = vi.fn()
     render(<Drawer row={rows[0]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep }} onClose={() => undefined} />)
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    expect(drawer.querySelector('.nv-dw-head__kind')?.textContent).toContain(model.label)
-    expect(drawer.querySelector('.nv-dw-head__pos')?.textContent).toBe('1 van 3')
+    const head = drawer.querySelector('header')!
+    expect(within(head).getByRole('heading', { name: 'Lunch bistrot' })).toBeTruthy()
+    expect(head.textContent).not.toContain(model.label)
+    expect(head.textContent).not.toContain('1 van 3')
     expect(within(drawer).getByRole('button', { name: 'Vorige' }).hasAttribute('disabled')).toBe(true)
     fireEvent.click(within(drawer).getByRole('button', { name: 'Volgende' }))
     expect(onStep).toHaveBeenLastCalledWith(2)
@@ -41,13 +43,15 @@ describe('the drawer as the prototypes draw it', () => {
     expect(onStep).not.toHaveBeenCalled()
   })
 
-  it('puts the dataset\'s rail icon before its name where the record has no kind', () => {
-    const bare = { ...model, fields: {} } as Model
-    const schema = { models: { [bare.key]: bare }, tables: [{ key: bare.key, label: bare.label, model: bare.key, icon: 'users' }], views: [] } as unknown as Schema
-    render(<SchemaContext.Provider value={schema}><Drawer row={rows[0]} columns={columns} model={bare} onClose={() => undefined} /></SchemaContext.Provider>)
-    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('.nv-dw-head__kind')!
-    expect(head.querySelector('svg.lucide-users')).not.toBeNull()
-    expect(head.textContent).toBe(bare.label)
+  it('lines its head up as title, record buttons, steps, tabs, widen and close, the title kept on every tab', async () => {
+    render(<Drawer row={rows[0]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep: vi.fn() }} onClose={() => undefined} onDelete={() => Promise.resolve()} />)
+    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('header')!
+    const names = () => [...head.querySelectorAll('h2, button, [role="toolbar"]')].map((el) => el.tagName === 'H2' ? `title:${el.textContent}` : el.getAttribute('role') === 'toolbar' ? 'tabs' : el.getAttribute('aria-label'))
+    const line = ['title:Lunch bistrot', 'Acties', 'Vorige', 'Volgende', 'tabs', 'Gegevens', 'Notities', 'Geschiedenis', 'Volledig openen', 'Sluiten']
+    expect(names()).toEqual(line)
+    await openTab('Notities')
+    expect(names()).toEqual(line)
+    expect(screen.queryByRole('heading', { name: 'Lunch bistrot', level: 2 })?.closest('header')).toBe(head)
   })
 
   it('steps with j and k from anywhere in its head, the close button the grid focuses too', () => {
@@ -60,13 +64,13 @@ describe('the drawer as the prototypes draw it', () => {
     expect(onStep).toHaveBeenLastCalledWith(1)
   })
 
-  it('says "–" and steps nowhere once its row left the view, and shows no position without one', () => {
+  it('steps nowhere once its row left the view, and shows no steps without one', () => {
     const { rerender } = render(<Drawer row={row(9, 'Weg')} columns={columns} model={model} nav={{ ids: [1, 2], onStep: vi.fn() }} onClose={() => undefined} />)
     const drawer = screen.getByRole('complementary', { name: 'Weg' })
-    expect(drawer.querySelector('.nv-dw-head__pos')?.textContent).toBe('–')
+    expect(within(drawer).getByRole('button', { name: 'Vorige' }).hasAttribute('disabled')).toBe(true)
     expect(within(drawer).getByRole('button', { name: 'Volgende' }).hasAttribute('disabled')).toBe(true)
     rerender(<Drawer row={row(9, 'Weg')} columns={columns} model={model} onClose={() => undefined} />)
-    expect(screen.getByRole('complementary', { name: 'Weg' }).querySelector('.nv-dw-head__pos')).toBeNull()
+    expect(within(screen.getByRole('complementary', { name: 'Weg' })).queryByRole('button', { name: 'Volgende' })).toBeNull()
   })
 
   it('reads a record\'s history, and none of a query\'s row, which the engine keeps none of', async () => {

@@ -1576,18 +1576,15 @@
 
 /* In a table cell, the drawer's head and its fields a pill is the tinted word alone, as the reference draws it. */
 .nv-grid:not(.nv-mx) .nv-td .nv-pill::before,
-.nv-dw-head__kind .nv-pill::before,
 .nv-drawer__field dd .nv-pill::before {
   display: none;
 }
 
 .nv-grid:not(.nv-mx) .nv-td .nv-pill,
-.nv-dw-head__kind .nv-pill,
 .nv-drawer__field dd .nv-pill {
   padding: 2px 10px;
 }
 
-.nv-dw-head__kind .nv-pill,
 .nv-drawer__field dd .nv-pill {
   font-size: inherit;
 }
@@ -2942,30 +2939,21 @@
   padding: 0;
 }
 
-/* The prototypes' drawer: a head line, the title, its relations, the fields, then sections. */
-.nv-dw-head {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
-}
-
-.nv-dw-head__kind {
-  display: inline-flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+/* The prototypes' drawer: the title and its buttons on one line, then its relations, the fields, then sections. */
+#root .nv-drawer__title.nv-dw-title {
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.nv-dw-head__pos {
-  font: 11px var(--font-mono);
+.nv-dw-head__busy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-fg-subtle);
+  font-size: 12px;
 }
 
 #root .nv-drawer__tool {
@@ -2994,15 +2982,6 @@
 
 .nv-dw-body {
   padding: 16px 16px 24px;
-}
-
-#root .nv-dw-title {
-  margin: 0 0 4px;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
 }
 
 .nv-dw-sub {
