@@ -49,7 +49,7 @@ type ToneOf = (lane: number | null, row?: Row) => CSSProperties
 /** The flags on an event's row. */
 type MarksOf = (row: Row) => Flag[]
 
-/** Laned, an event takes its lane's colour, the lane record's own tone where it has one; unlaned, the tone of its first toned option, as the prototype tints by soort. */
+/** Laned, an event takes its lane's colour, the lane record's own tone where it has one; unlaned, the tone of its first toned option, as the prototype tints by kind. */
 function lanePalette(lanes: Lane[], toned: Column | undefined, tones: Map<number, Tone> | null | undefined): ToneOf {
   return (lane, row) => {
     if (toned && row)

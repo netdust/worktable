@@ -67,7 +67,7 @@ export function SelectEditor({ column, row, editing, onDraft, onCommit, onLeave 
     onDraft(list[at][0])
   }
 
-  // A letter jumps to the first option starting with it, as the field contract says; React Aria's typeahead would search on from the focused option and join letters.
+  // A letter jumps to the first option starting with it, as the field's spec says; React Aria's typeahead would search on from the focused option and join letters.
   const jump = (event: KeyboardEvent) => {
     if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey || !/\S/.test(event.key)) return
     event.preventDefault()

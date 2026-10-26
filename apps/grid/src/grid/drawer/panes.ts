@@ -28,7 +28,7 @@ export interface PaneInput {
 const tableIcon = (schema: Schema | null, found: (table: Schema['tables'][number]) => boolean): LucideIcon =>
   iconNamed(schema?.tables.find(found)?.icon) ?? Table2
 
-/** The drawer's tabs in order: Gegevens, Notities, every link but the first, the rows pointing here, Geschiedenis, Bijlagen. */
+/** The drawer's tabs in order: fields, notes, every link but the first, the rows pointing here, history, files. */
 export function panesOf({ longs, links, inbound, history, files, schema }: PaneInput): Pane[] {
   const panes: Pane[] = [{ key: 'fields', kind: 'fields', label: t('tabFields'), icon: List }]
   if (longs.length > 0) panes.push({ key: 'notes', kind: 'notes', label: t('tabNotes'), icon: NotebookPen })

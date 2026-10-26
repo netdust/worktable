@@ -335,7 +335,7 @@ describe('where a handed-back link may go', () => {
   it('never navigates to another site', async () => {
     await handed('https://kwaadaardig.test/in')
     refused()
-    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
+    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij dit adres')
   })
 
   it.each(['https://voorbeeld-site.test.kwaadaardig.test/in', 'https://xvoorbeeld-site.test/in', 'https://wwwvoorbeeld-site.test/in', 'https://www.www.voorbeeld-site.test/in'])('never navigates to the look-alike host %p', async (value) => {
@@ -376,13 +376,13 @@ describe('where a handed-back link may go', () => {
   it.each(['http://voorbeeld-site.test/in', 'http://www.voorbeeld-site.test/in'])('never navigates to the plain http link %p, on an http row or an https one', async (value) => {
     await handed(value, 'http://voorbeeld-site.test')
     refused()
-    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
+    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij dit adres')
     cleanup()
     onSaid.mockReset()
     tab = fakeTab()
     await handed(value, 'https://voorbeeld-site.test')
     refused()
-    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij deze site')
+    expect(onSaid).toHaveBeenCalledWith('De link hoort niet bij dit adres')
   })
 
   it('goes to an https link on a site that is https, also on its www twin', async () => {

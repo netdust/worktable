@@ -24,7 +24,7 @@ export function Section({ ref, title, count, action, children }: { ref?: Ref<HTM
 /** Writes a field the drawer edits, on the row it showed. */
 export type WriteField = (row: Row, column: Column, value: unknown) => void
 
-/** A long text as the prototype's Notities: a paragraph; pressed, its field in its place, as the matrix cell edits its note. Read only and empty, no block. */
+/** A long text as the prototype's notes: a paragraph; pressed, its field in its place, as the matrix cell edits its note. Read only and empty, no block. */
 export function LongSection({ column, row, onWrite }: { column: Column; row: Row; onWrite?: WriteField }) {
   const text = column.edit(row)
   if (!onWrite && !text) return null

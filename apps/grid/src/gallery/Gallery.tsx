@@ -24,7 +24,7 @@ const batchesOf = (ids: number[]): number[][] => Array.from({ length: Math.ceil(
 
 const noToggle = () => undefined
 
-/** What a card without a picture shows: "OG" for "opbouw Gent", "Pr" for a one-word title. */
+/** What a card without a picture shows: "OG" for "open Gent", "Pr" for a one-word title. */
 function mark(title: string): string {
   const words = title.trim().split(/\s+/)
   return words.length > 1 ? (words[0][0] + words[1][0]).toLocaleUpperCase() : words[0].slice(0, 2)

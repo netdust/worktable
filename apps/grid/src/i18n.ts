@@ -87,7 +87,7 @@ const strings = {
   loginBlocked: 'Het nieuwe tabblad werd geblokkeerd',
   loginFailed: 'Inloggen is mislukt',
   loginNoLink: 'Geen link ontvangen',
-  loginOtherSite: 'De link hoort niet bij deze site',
+  loginOtherSite: 'De link hoort niet bij dit adres',
   linkCopied: 'Link gekopieerd',
   linkViewGone: 'De gedeelde weergave is er niet voor jou; je ziet {view} zonder de filters van de link.',
   publish: 'Publiceren',
@@ -138,7 +138,7 @@ const strings = {
   openSlots: 'Open plaatsen: {count}',
   fillSlot: 'Open plek invullen',
   fillPickRole: 'Kies eerst een rol',
-  fillPickPerson: 'Kies een persoon',
+  fillPickPerson: 'Kies iemand',
   candidatesNone: 'Geen kandidaten',
   candidatesAll: 'Iedereen tonen',
   dashboard: 'Dashboard',
@@ -492,7 +492,7 @@ export function undoText(error: Partial<ApiError>): string {
   return errorText(code, said)
 }
 
-/** The engine's 409 `by` as one sentence: "Nog in gebruik door Activiteiten (3) en Personen (1)." */
+/** The engine's 409 `by` as one sentence: "Nog in gebruik door Taken (3) en Klanten (1)." */
 export function inUse(by: { label: string; count: number }[]): string {
   const named = by.map(({ label, count }) => `${label} (${count})`)
   const last = named.pop() ?? ''

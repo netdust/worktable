@@ -111,7 +111,7 @@ function StatusLine({ view, models, cell, store, row, column, asking = 0 }: { vi
   )
 }
 
-/** The note as a line: "Geen notitie" until pressed, then its field, as the record drawer edits a long text. */
+/** The note as a line: its empty words until pressed, then its field, as the record drawer edits a long text. */
 function NoteLine({ note, disabled, onSave }: { note: string; disabled: boolean; onSave: (note: string) => void }) {
   return (
     <Line icon={StickyNote} label={t('noteLabel')}>

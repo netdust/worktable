@@ -53,13 +53,13 @@ export function HeadActions({ row, model, actions, onAction, onSaid }: Props) {
     if (!tab) return say(t('loginBlocked'))
     let over = false
     let timer: ReturnType<typeof setTimeout> | undefined
-    let deadline: ReturnType<typeof setTimeout> | undefined
+    let expiry: ReturnType<typeof setTimeout> | undefined
     let asking = false
     let late = false
     const stop = () => {
       over = true
       clearTimeout(timer)
-      clearTimeout(deadline)
+      clearTimeout(expiry)
       cancel.current = null
     }
     const abandon = (message: string) => {
@@ -87,7 +87,7 @@ export function HeadActions({ row, model, actions, onAction, onSaid }: Props) {
       }
     }
     const poll = ({ dataset, id }: Opened) => {
-      deadline = setTimeout(() => (asking ? (late = true) : abandon(t('loginNoLink'))), GIVE_UP)
+      expiry = setTimeout(() => (asking ? (late = true) : abandon(t('loginNoLink'))), GIVE_UP)
       const next = () => {
         timer = setTimeout(async () => {
           if (tab.closed) return stop()

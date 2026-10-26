@@ -20,7 +20,7 @@ interface Props {
   period?: Filter
 }
 
-/** A condition in words: "Status is Optie of Bevestigd", "Plandag deze week". */
+/** A condition in words: "Status is Optie of Bevestigd", "Start deze week". */
 export function said(condition: Filter, field: FilterField | undefined): string {
   const label = field?.label ?? condition.field
   const name = (value: string) => field?.options.find(([key]) => key === value)?.[1] ?? (field?.relation ? `#${value}` : value)

@@ -173,7 +173,7 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
   const spaceTone = space && tones?.get(Number(firstId(space.value(row))))
   const links = linkedOf(columns, model)
   const writer = (c: Column) => (model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite)
-  // A read-only empty long text shows nothing, so it makes no Notities tab.
+  // A read-only empty long text shows nothing, so it makes no notes tab.
   const longs = columns.filter((c) => c.kind === 'longtext' && (writer(c) || c.edit(row)))
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
   const history = Boolean(model && !model.query && row.id > 0)
