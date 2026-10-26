@@ -36,7 +36,7 @@ export function PlaceRow({ item, link, role, flags, choosing, onDone }: { item: 
   const stated = item.state !== null && (!isOpen(item) || link.state?.tones[item.state] === 'bad')
   const places = isOpen(item) ? (item.places ?? 1) : 1
   return (
-    <li className={flaggedClass(flags)}>
+    <li className={['nv-dw-place', flaggedClass(flags)].filter(Boolean).join(' ')}>
       <Face id={isOpen(item) ? null : (item.target ?? item.id)} name={item.title} />
       {choosing
         ? <RelationPicker model={link.target_dataset} label={choosing.label} candidates={choosing.candidates} hide={(record) => record.id === item.target}

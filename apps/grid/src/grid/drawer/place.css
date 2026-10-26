@@ -31,3 +31,45 @@
 .nv-dw-list__open:focus-visible {
   text-decoration: underline;
 }
+
+/* A place reads in two lines: the name with its state or flag and buttons at the right, then what is said of it at the line's full width. */
+.nv-dw-list li.nv-dw-place {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 0;
+  row-gap: 2px;
+}
+
+.nv-dw-place > .nv-avatar {
+  grid-row: 1;
+  grid-column: 1;
+  margin-right: 10px;
+}
+
+.nv-dw-place > .nv-dw-list__main {
+  display: contents;
+}
+
+.nv-dw-place > .nv-dw-list__main > span,
+.nv-dw-place > .nv-picker {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.nv-dw-place > .nv-dw-list__main > small {
+  grid-column: 2 / -1;
+}
+
+.nv-dw-place > .nv-pill,
+.nv-dw-place > .nv-flag {
+  grid-row: 1;
+  grid-column: 3;
+  margin-left: 10px;
+}
+
+.nv-dw-place > .nv-dw-buttons {
+  grid-row: 1;
+  grid-column: 4;
+  margin-left: 10px;
+}
