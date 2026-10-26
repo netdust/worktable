@@ -2,8 +2,14 @@ import type { SavedViewSeed } from '@worktable/engine'
 import { localDay, localTime } from './time'
 
 const HOUR = 3_600_000
-const DAY = 24 * HOUR
 const ago = (ms: number) => localTime(new Date(Date.now() - ms))
+
+/** Calendar days back at the same clock time: a DST day is 23 or 25 hours, so "yesterday" is never 24 hours ago. */
+function daysAgo(days: number): string {
+  const at = new Date()
+  at.setDate(at.getDate() - days)
+  return localTime(at)
+}
 
 /** A day of this week, Monday 0, at the given hour: the agenda never runs out of fixtures. */
 function thisWeek(day: number, hour = 0): Date {
@@ -33,7 +39,7 @@ const sites = [
     wp_versie: '6.8.3',
     php_versie: '8.3',
     tls_dagen: 61,
-    laatste_check: ago(DAY),
+    laatste_check: daysAgo(1),
     plugin: true,
     plugin_versie: '1.0.0',
     db_versie: '12',
@@ -59,7 +65,7 @@ const sites = [
     updates_plugins: 4,
     updates_core: true,
     tls_dagen: 12,
-    laatste_check: ago(DAY),
+    laatste_check: daysAgo(1),
   },
   {
     naam: 'voorbeeld-site',
@@ -72,7 +78,7 @@ const sites = [
     wp_versie: '6.8.3',
     php_versie: '8.3',
     tls_dagen: 74,
-    laatste_check: ago(2 * DAY),
+    laatste_check: daysAgo(2),
     plugin: true,
     plugin_versie: '1.0.0',
     db_versie: '12',
@@ -156,7 +162,7 @@ const werkpakketten = [
     fase: 'geblokkeerd',
     laatste_stap: 'Testbestelling loopt vast op de betaalstap',
     geblokkeerd_door: 'Wacht op een testsleutel van de klant',
-    bijgewerkt: ago(2 * DAY),
+    bijgewerkt: daysAgo(2),
     organisatie_id: KLANT,
   },
   {
@@ -167,7 +173,7 @@ const werkpakketten = [
     fase: 'plan',
     laatste_stap: 'Spec goedgekeurd',
     volgende_stap: 'Plan schrijven',
-    bijgewerkt: ago(5 * DAY),
+    bijgewerkt: daysAgo(5),
     organisatie_id: KLANT,
   },
 ]

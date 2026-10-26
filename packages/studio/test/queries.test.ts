@@ -102,13 +102,12 @@ describe('sites met aandacht', () => {
 })
 
 describe('op tafel', () => {
-  // Sunday of this week, local: the last day op tafel reaches.
-  const sunday = () => {
-    const at = new Date()
-    at.setDate(at.getDate() + ((7 - at.getDay()) % 7))
-    return localDay(at)
-  }
-  const dayAfter = (day: string) => localDay(new Date(new Date(`${day}T12:00:00`).getTime() + DAY))
+  // Asked of SQLite, whose local day the query uses: bun test runs JavaScript in UTC, so near midnight the two differ.
+  const sqliteDay = (day: string, modifier: string) =>
+    (sqlite.query('SELECT date(?, ?) AS day').get(day, modifier) as { day: string }).day
+  // Sunday of this week: the last day op tafel reaches.
+  const sunday = () => sqliteDay(sqliteDay('now', 'localtime'), 'weekday 0')
+  const dayAfter = (day: string) => sqliteDay(day, '+1 day')
   const titles = async () => (await rows('op_tafel')).map((r) => r.titel)
 
   test('op_tafel holds open tasks due this week or earlier, and no task without a deadline', async () => {
