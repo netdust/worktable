@@ -1,5 +1,5 @@
 import { Button } from 'react-aria-components'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { t } from '../i18n'
 import type { ModelAction } from '../types'
 import { ActionInputs } from './ActionInputs'
@@ -37,11 +37,22 @@ export function useSelection(rowIds: number[]): Selection {
   }
 }
 
+/** Counts the times a row joined the ticked set; a row leaving it counts nothing. */
+function useJoined(picked?: ReadonlySet<number>): number {
+  const [joined, setJoined] = useState(0)
+  const seen = useRef<ReadonlySet<number>>(new Set())
+  useEffect(() => {
+    if (picked && [...picked].some((id) => !seen.current.has(id))) setJoined((n) => n + 1)
+    seen.current = picked ?? new Set()
+  }, [picked])
+  return joined
+}
+
 /** A panel floating over the foot of the sheet while rows are ticked: the count, one button per selection action, and the way out. */
 export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }: {
   count: number
-  /** The ticked ids: another set of rows clears a refusal shown under an action. */
-  picked?: string
+  /** The ticked ids: a refusal holds for fewer rows, and goes when another row joins. */
+  picked?: ReadonlySet<number>
   actions: ModelAction[]
   /** How many ticked rows an action does not apply to, by the marks the server put on them. */
   misfits?: (action: ModelAction) => number
@@ -49,6 +60,7 @@ export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }
   onClear: () => void
 }) {
   const [busy, setBusy] = useState(false)
+  const joined = useJoined(picked)
   const over = count > MAX_SELECTION
   if (count === 0) return null
   const run = (action: ModelAction, input: Record<string, unknown>) => {
@@ -62,7 +74,7 @@ export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }
         const misfit = misfits?.(action) ?? 0
         return (
           <Fragment key={action.name}>
-            <ActionInputs action={action} staleOn={picked} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} />
+            <ActionInputs action={action} staleOn={joined} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} />
             {misfit > 0 && <span className="nv-selection__max" title={action.label}>{t('selectionMisfit', { n: misfit })}</span>}
           </Fragment>
         )

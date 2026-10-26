@@ -401,7 +401,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       ) : (
       <>
       {selectable && onSelection && panelled(
-        <SelectionBar count={ticking.selected.size} picked={[...ticking.selected].sort((a, b) => a - b).join()} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
+        <SelectionBar count={ticking.selected.size} picked={ticking.selected} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
           onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then((opened) => {
             ticking.clear()
             show(opened)
