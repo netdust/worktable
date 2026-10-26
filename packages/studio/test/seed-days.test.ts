@@ -17,9 +17,11 @@ test('a check seeded as yesterday lands on yesterday, even on the day the clocks
   const sqlite = new Database(':memory:')
   migrate(sqlite, studio)
   seedDomain(sqlite, studio)
-  const days = (sqlite.query('SELECT laatste_check FROM site WHERE laatste_check IS NOT NULL').all() as {
-    laatste_check: string
-  }[]).map((r) => r.laatste_check.slice(0, 10))
+  const days = (
+    sqlite.query('SELECT laatste_check FROM site WHERE laatste_check IS NOT NULL').all() as {
+      laatste_check: string
+    }[]
+  ).map((r) => r.laatste_check.slice(0, 10))
   expect(days).toContain('2026-10-24')
   expect(days).toContain('2026-10-23')
 })
