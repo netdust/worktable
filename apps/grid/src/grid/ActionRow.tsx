@@ -6,10 +6,8 @@ import type { ApiError, ModelAction, Row } from '../types'
 import { type Action, MoreMenu } from '../ui/MoreMenu'
 import { ActionInputs } from './ActionInputs'
 import { DrawerWriteContext } from './drawerWrite'
+import { type Measure, measureLine, useFitting } from './fit'
 import type { RunAction } from './Drawer'
-
-const GAP = 8
-const MORE = 40
 
 interface Item {
   key: string
@@ -18,31 +16,7 @@ interface Item {
   run: () => void
 }
 
-interface Measure {
-  room: number
-  widths: number[]
-}
-
-/** Reads the row's room and each button's width from the layout; tests hand in their own. */
-function measureRow(row: HTMLElement): Measure {
-  const buttons = [...row.querySelectorAll<HTMLElement>(':scope > .nv-button')]
-  return { room: row.clientWidth, widths: buttons.map((button) => button.offsetWidth) }
-}
-
-/** How many of the buttons fit before the row needs a Meer menu; the first, a primary, never folds. */
-export function fitting({ room, widths }: Measure, primary: boolean): number {
-  if (room === 0) return widths.length
-  const all = widths.reduce((sum, width) => sum + width, 0) + GAP * (widths.length - 1)
-  if (all <= room) return widths.length
-  let used = MORE
-  let shown = 0
-  for (const width of widths) {
-    if (used + GAP + width > room && !(primary && shown === 0)) break
-    used += GAP + width
-    shown += 1
-  }
-  return shown
-}
+export { fitting } from './fit'
 
 interface Props {
   model: string | undefined
@@ -55,11 +29,10 @@ interface Props {
 }
 
 /** A record's lifecycle buttons and declared actions as one line in the drawer's body: the primary filled and first, the rest quiet, what does not fit behind Meer. */
-export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measure = measureRow }: Props) {
+export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measure = measureLine }: Props) {
   const write = useContext(DrawerWriteContext)
   const [pressing, setPressing] = useState(false)
   const [asking, setAsking] = useState<ModelAction | null>(null)
-  const [shown, setShown] = useState<number | null>(null)
   const line = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const buttons = useRef(new Map<string, HTMLElement>())
@@ -87,23 +60,7 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
   const signature = items.map((item) => item.key).join('|')
 
   // The first pass shows every button to read its width; the second keeps what fits.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the buttons change with the record or its marks, and with nothing else.
-  useLayoutEffect(() => setShown(null), [signature, row.id])
-  useLayoutEffect(() => {
-    if (shown !== null || !line.current) return
-    setShown(fitting(measure(line.current), items[0]?.primary ?? false))
-  }, [shown, items, measure])
-  useLayoutEffect(() => {
-    const element = line.current
-    if (!element || typeof ResizeObserver === 'undefined') return
-    let width = element.clientWidth
-    const watch = new ResizeObserver(() => {
-      if (element.clientWidth !== width) setShown(null)
-      width = element.clientWidth
-    })
-    watch.observe(element)
-    return () => watch.disconnect()
-  }, [hasItems])
+  const shown = useFitting({ line, signature: `${signature}#${row.id}`, primary: items[0]?.primary ?? false, measure, present: hasItems })
   // Focus the keyboard had on a button or the panel that has since gone goes to the action's button, else the row's first, else the drawer's close button.
   useLayoutEffect(() => {
     if (back.current === null || asking) return

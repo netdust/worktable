@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Link2, LoaderCircle, type LucideIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
 import { type Attachment, attachmentsOf, fileUrl, removeAttachment, uploadAttachment } from '../api'
@@ -219,7 +219,7 @@ export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrit
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
       head={<h2 className="nv-drawer__title nv-dw-title" title={row.title || undefined}>{row.title || t('untitled')}</h2>}
       tools={<>
-        {busy && <span className="nv-dw-head__busy" role="status"><LoaderCircle className="nv-run__spin" size={13} aria-hidden="true" />{t('liveBusy')}</span>}
+        {busy && <span className="nv-dw-head__busy" role="status"><span className="nv-sr">{t('liveBusy')}</span></span>}
         <OpenLink row={row} model={model} />
         <HeadActions key={`head-${row.id}`} row={row} model={model} actions={actions} onAction={onAction} onSaid={onSaid} />
         <DrawerTools key={`tools-${row.id}`} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} />

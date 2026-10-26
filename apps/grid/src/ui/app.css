@@ -2948,13 +2948,44 @@
   text-overflow: ellipsis;
 }
 
+/* A record an outside process holds: a thin line running along the head's foot, the words for a reader only. */
 .nv-dw-head__busy {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nv-dw-head__busy::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  background: var(--color-accent-default);
+  content: "";
+  animation: nv-dw-busy 1.4s ease-in-out infinite;
+}
+
+@keyframes nv-dw-busy {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-dw-head__busy::before {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
 }
 
 #root .nv-drawer__tool {
@@ -3518,7 +3549,7 @@
   box-sizing: border-box;
   min-height: 45px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px 16px;
   padding: 8px 18px;
@@ -3565,7 +3596,8 @@
 }
 
 .nv-dock .nv-selection--floating {
-  position: static;
+  position: relative;
+  inset: auto;
   width: max-content;
   max-width: calc(100% - 32px);
   transform: none;
@@ -3701,7 +3733,47 @@
 }
 
 .nv-selection > .nv-button {
+  flex: none;
   margin-left: auto;
+}
+
+.nv-selection > .nv-selection__count,
+.nv-selection > .nv-selection__max {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The actions keep to one line: what does not fit waits behind Meer, measured as the drawer's action row is. */
+.nv-selection__actions {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nv-selection__item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* A folded action that asks for input opens its inputs above the panel. */
+.nv-selection__ask {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
 }
 
 /* The box sits beside the row number and shows on hover, focus, a tick, or while any row is ticked. Opacity, never visibility: the active row's box stays the Tab stop. */

@@ -215,7 +215,7 @@ test.describe('studio', () => {
     const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · 2 sites' })
     await expect(drawer).toBeVisible()
     await expect(drawer.getByText('Aangevraagd', { exact: true })).toBeVisible()
-    await expect(drawer.getByText('Volgt live')).toBeVisible()
+    await expect(drawer.getByRole('status').filter({ hasText: 'Volgt live' })).toHaveText('Volgt live')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Niet meer in de registry')
     await expect(siteLine(drawer, 'oud-archief')).toContainText('Overgeslagen')
     await expect(siteLine(drawer, 'testmans-bestel')).toContainText('Niet gestart')
@@ -815,6 +815,106 @@ test.describe('studio', () => {
     } finally {
       await api.delete(`/api/rows/actie/${made.actie}`)
     }
+  })
+
+  test('drawer-site-line-room @e2e: a site line keeps its state chip on the name’s line and its detail below at the line’s full width', async ({
+    page,
+  }) => {
+    const api = page.request
+    const site = (await rowsOf(api, 'site', { naam: 'testmans-winkel' })).rows[0]
+    const made = await run(api, 'malwarescan', [site.id])
+    try {
+      const service = await worker()
+      const long = 'Map mu-plugins ligt niet binnen de site, de scan sloeg deze site daarom over en schreef niets weg'
+      const patched = await service.patch(`/api/rows/actie_site/${made.links[0]}`, {
+        data: { state: 'overgeslagen', samenvatting: long, resultaat: long, expect: { state: 'wacht' } },
+      })
+      expect(patched.status(), await patched.text()).toBe(200)
+      await service.dispose()
+      const title = (await rowOf(api, 'actie', made.actie)).titel as string
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, title)
+      const line = siteLine(drawer, 'testmans-winkel')
+      const name = line.getByText('testmans-winkel', { exact: true })
+      const chip = line.locator('.nv-pill')
+      const detail = line.getByText(long)
+      await expect(chip).toHaveText('Overgeslagen')
+      const [n, c, d] = await Promise.all([name.boundingBox(), chip.boundingBox(), detail.boundingBox()])
+      if (!n || !c || !d) throw new Error('a part of the site line has no box')
+      // The chip shares the name's line; the detail starts under the name and runs on under the chip.
+      expect(Math.abs(c.y + c.height / 2 - (n.y + n.height / 2))).toBeLessThan(4)
+      expect(d.y).toBeGreaterThanOrEqual(n.y + n.height - 1)
+      expect(d.x + d.width).toBeGreaterThan(c.x + c.width / 2)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `opdracht-regel-chip-${scheme}`)
+      }
+    } finally {
+      await page.emulateMedia({ colorScheme: 'light' })
+      await api.delete(`/api/rows/actie/${made.actie}`)
+    }
+  })
+
+  test('drawer-busy-line @e2e: a live drawer shows a thin line along its head’s foot, says Volgt live only to a reader, and leaves the head row to the title and tools', async ({
+    page,
+  }) => {
+    const api = page.request
+    const before = await newest(api, 'actie')
+    await open(page, 'Sites', 'Sites')
+    await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+    await page
+      .getByRole('region', { name: '1 geselecteerd' })
+      .getByRole('button', { name: 'Gezondheid checken', exact: true })
+      .click()
+    const actie = () => newest(api, 'actie')
+    await expect.poll(actie).toBeGreaterThan(before)
+    try {
+      const drawer = page.getByRole('complementary', { name: 'Gezondheidscheck · testmans-winkel' })
+      await expect(drawer).toBeVisible()
+      const status = drawer.getByRole('status').filter({ hasText: 'Volgt live' })
+      await expect(status).toHaveText('Volgt live')
+      expect((await drawer.getByText('Volgt live').boundingBox())?.width ?? 0).toBeLessThanOrEqual(1)
+      const head = await drawer.locator('.nv-drawer__head').boundingBox()
+      const line = await status.boundingBox()
+      if (!head || !line) throw new Error('the head or its busy line has no box')
+      expect(line.height).toBeLessThanOrEqual(3)
+      expect(Math.abs(line.y + line.height - (head.y + head.height))).toBeLessThanOrEqual(2)
+      expect(line.width).toBeGreaterThan(head.width - 2)
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        await shot(page, `opdracht-volgt-live-${scheme}`)
+      }
+    } finally {
+      await page.emulateMedia({ colorScheme: 'light' })
+      await api.delete(`/api/rows/actie/${await actie()}`)
+    }
+  })
+
+  test('selection-bar-one-line @e2e: one ticked site shows the panel on one line, the actions that do not fit behind Meer, and Selectie wissen at the right edge', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
+    const bar = page.getByRole('region', { name: '1 geselecteerd' })
+    await expect(bar).toBeVisible()
+    const clear = bar.getByRole('button', { name: 'Selectie wissen' })
+    const [panel, wissen] = await Promise.all([bar.boundingBox(), clear.boundingBox()])
+    if (!panel || !wissen) throw new Error('the panel or Selectie wissen has no box')
+    expect(panel.height).toBeLessThan(wissen.height + 24)
+    expect(panel.x + panel.width - (wissen.x + wissen.width)).toBeLessThan(24)
+    const shown = await bar.locator('.nv-selection__item').count()
+    const more = bar.getByRole('button', { name: 'Meer' })
+    const folded = (await more.count()) > 0
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await shot(page, `selectie-een-regel-${scheme}`)
+    }
+    await page.emulateMedia({ colorScheme: 'light' })
+    expect(folded).toBe(true)
+    await more.click()
+    const items = await page.getByRole('menuitem').allTextContents()
+    expect(shown + items.length).toBe(9)
+    await page.keyboard.press('Escape')
   })
 
   test('op-tafel @e2e: Op tafel lists the open tasks due this week, and the dashboard’s Gedaan makes a line leave', async ({

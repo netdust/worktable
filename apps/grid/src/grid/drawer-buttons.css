@@ -10,13 +10,3 @@
   flex: none;
   padding: 0;
 }
-
-/* A record an outside process holds: a ring that turns and the word, in the head line. */
-.nv-dw-head__busy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
-}
