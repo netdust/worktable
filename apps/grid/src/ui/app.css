@@ -3761,6 +3761,21 @@
   white-space: nowrap;
 }
 
+/* A refusal floats above the panel, so it neither widens an action nor pushes one behind Meer. */
+#root .nv-selection .nv-action__refused {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  white-space: normal;
+}
+
 /* A folded action that asks for input opens its inputs above the panel. */
 .nv-selection__ask {
   position: absolute;

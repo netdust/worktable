@@ -130,6 +130,14 @@ async function drawerOf(page: Page, title: string): Promise<Locator> {
   return drawer
 }
 
+/** Runs a selection action from the panel: its button, or its item behind Meer when it did not fit. */
+async function pressInBar(page: Page, bar: Locator, label: string): Promise<void> {
+  const button = bar.getByRole('button', { name: label, exact: true })
+  if ((await button.count()) > 0) return button.click()
+  await bar.getByRole('button', { name: 'Meer' }).click()
+  await page.getByRole('menuitem', { name: label, exact: true }).click()
+}
+
 const siteLine = (drawer: Locator, site: string) =>
   drawer.getByRole('region', { name: /Sites/ }).getByRole('listitem').filter({ hasText: site })
 
@@ -2226,10 +2234,7 @@ test.describe('plugin-actions, the shake-out', () => {
       const before = await newest(api, 'actie')
       await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
       await page.getByRole('checkbox', { name: 'voorbeeld-blog selecteren' }).check()
-      await page
-        .getByRole('region', { name: '2 geselecteerd' })
-        .getByRole('button', { name: 'Cache legen', exact: true })
-        .click()
+      await pressInBar(page, page.getByRole('region', { name: '2 geselecteerd' }), 'Cache legen')
       await expect(page.getByText('Geen van deze sites heeft de studio-plugin.').first()).toBeVisible()
       await expect(page.getByRole('complementary')).toHaveCount(0)
       expect(await newest(api, 'actie'), 'no opdracht when no site has the plugin').toBe(before)
@@ -2242,7 +2247,7 @@ test.describe('plugin-actions, the shake-out', () => {
         await page.mouse.move(0, 0)
         await shot(page, `studio-plugin-selectie-${name}`)
       }
-      await bar.getByRole('button', { name: 'Cache legen', exact: true }).click()
+      await pressInBar(page, bar, 'Cache legen')
 
       const drawer = page.getByRole('complementary', { name: 'Cache legen · 2 sites' })
       await expect(drawer).toBeVisible()
@@ -2291,10 +2296,7 @@ test.describe('plugin-actions, the shake-out', () => {
     const box = (site: string) => page.getByRole('checkbox', { name: `${site} selecteren` })
     await box('testmans-bestel').check()
     await box('voorbeeld-blog').check()
-    await page
-      .getByRole('region', { name: '2 geselecteerd' })
-      .getByRole('button', { name: 'Cache legen', exact: true })
-      .click()
+    await pressInBar(page, page.getByRole('region', { name: '2 geselecteerd' }), 'Cache legen')
     const refusal = page.getByText('Geen van deze sites heeft de studio-plugin.')
     await expect(refusal.first()).toBeVisible()
     expect(await newest(api, 'actie')).toBe(before)

@@ -107,7 +107,7 @@ export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }
         {folded.length > 0 && <MoreMenu actions={folded} label={t('moreInRow')} menu={t('moreInRow')} placement="bottom-end" />}
       </div>
       {over && <span className="nv-selection__max" role="alert">{t('selectionMax', { max: MAX_SELECTION })}</span>}
-      {refused && <span className="nv-selection__max" role="alert">{refused}</span>}
+      {refused && <p className="nv-action__refused" role="alert">{refused}</p>}
       <Button className="nv-button nv-button--secondary nv-button--sm" onPress={onClear}>{t('selectionClear')}</Button>
       {asking && (
         <div className="nv-selection__ask" onKeyDown={(event) => {
