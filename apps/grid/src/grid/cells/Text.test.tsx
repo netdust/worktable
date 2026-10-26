@@ -4,7 +4,7 @@ import { renderNl } from '../../test-setup'
 import { activity, calais, planning } from '../calais.test.data'
 import { columnsFor } from '../columns'
 import type { EditorProps } from './props'
-import { LongTextEditor } from './Text'
+import { LongTextEditor, TextCell } from './Text'
 
 const column = columnsFor(activity, { ...planning, columns: ['title', 'notes'] }).find((c) => c.id === 'notes')!
 
@@ -71,5 +71,13 @@ describe('the long text editor', () => {
 
     expect(props.onLeave).toHaveBeenCalledTimes(1)
     outside.remove()
+  })
+})
+
+describe('a long text in its cell', () => {
+  it('shows its lines on one row, kept apart, so two lines never read as one', () => {
+    const row = { ...calais[1], fields: { ...calais[1].fields, notes: 'beheer · 2026-10-20\nredactie · nooit' } }
+    renderNl(<TextCell column={column} row={row} />)
+    expect(document.querySelector('.nv-cell__text')?.textContent).toBe('beheer · 2026-10-20, redactie · nooit')
   })
 })

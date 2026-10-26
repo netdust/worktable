@@ -45,11 +45,15 @@ export interface Runs {
   open(dataset: string, id: number): void
   opening: Opened | null
   settled(): void
+  /** The record a drawer shows now, or null: its waiting line hides meanwhile, since the drawer already offers it. */
+  viewing(dataset: string | null, id?: number): void
+  viewed: string | null
 }
 
 const idle: Runs = {
   follow: () => false, created: () => undefined, ended: 0, running: new Set(), lines: [],
   dismiss: () => undefined, open: () => undefined, opening: null, settled: () => undefined,
+  viewing: () => undefined, viewed: null,
 }
 
 export const RunsContext = createContext<Runs>(idle)
@@ -77,6 +81,7 @@ export function useRunFollower(models: Record<string, Model>, host: { notify: (n
   const [lines, setLines] = useState<Line[]>([])
   const [ended, setEnded] = useState(0)
   const [opening, setOpening] = useState<Opened | null>(null)
+  const [viewed, setViewed] = useState<string | null>(null)
   const loops = useRef(new Map<string, () => void>())
   const latest = useRef({ models, host })
   latest.current = { models, host }
@@ -185,11 +190,13 @@ export function useRunFollower(models: Record<string, Model>, host: { notify: (n
     if (asked.current) forget(keyOf(asked.current.dataset, asked.current.id))
     setOpening(null)
   }, [forget])
-  return useMemo(() => ({ follow, created, ended, running, lines, dismiss: forget, open, opening, settled }), [follow, created, ended, running, lines, forget, open, opening, settled])
+  const viewing = useCallback((dataset: string | null, id?: number) => setViewed(dataset && id !== undefined ? keyOf(dataset, id) : null), [])
+  return useMemo(() => ({ follow, created, ended, running, lines, dismiss: forget, open, opening, settled, viewing, viewed }), [follow, created, ended, running, lines, forget, open, opening, settled, viewing, viewed])
 }
 
 function RunLines() {
-  const { lines, dismiss, open } = useRuns()
+  const { lines: all, dismiss, open, viewed } = useRuns()
+  const lines = all.filter((line) => !(line.phase === 'waiting' && line.key === viewed))
   const shown = lines.slice(-VISIBLE)
   const more = lines.length - shown.length
   // Always there, so a screen reader hears a line that arrives in it.

@@ -357,6 +357,12 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     }
   }, [runs.opening])
 
+  // A record shown in a drawer needs no dock line pointing at it.
+  const viewedKey = related ? related.model.key : drawer !== null ? model.key : null
+  const viewedId = related ? related.row.id : (drawer ?? undefined)
+  useEffect(() => runs.viewing(viewedKey, viewedId), [viewedKey, viewedId])
+  useEffect(() => () => runs.viewing(null), [])
+
   /** What an action asked to open: a record this table holds stays in its own drawer, any other is read and shown as a related one. */
   function show(opened: Opened | null | void): Promise<void> | void {
     if (!opened) return

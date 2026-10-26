@@ -96,6 +96,20 @@ describe('following a record an outside process holds', () => {
     expect(screen.queryByRole('region')).toBeNull()
   })
 
+  it('hides a waiting line while its record is open in a drawer, and shows it again once the drawer closes', async () => {
+    remote.rowOf.mockResolvedValue(at('wait', [confirm, cancel]))
+    start(at('busy'))
+    await tick(3100)
+    const name = 'Gezondheid checken · Voorbereid — openen'
+    expect(screen.getByRole('region', { name })).toBeTruthy()
+    act(() => runs.viewing('job', 1))
+    expect(screen.queryByRole('region', { name })).toBeNull()
+    act(() => runs.viewing('job', 2))
+    expect(screen.getByRole('region', { name })).toBeTruthy()
+    act(() => runs.viewing(null))
+    expect(screen.getByRole('region', { name })).toBeTruthy()
+  })
+
   it('keeps the line and opens nothing where no screen can show the record, and clears an opening nobody takes', async () => {
     remote.rowOf.mockResolvedValue(at('wait', [confirm]))
     start(at('busy'))

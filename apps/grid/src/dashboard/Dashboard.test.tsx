@@ -271,7 +271,7 @@ describe('a tile on a deleted view', () => {
 })
 
 describe('the followed runs', () => {
-  const runs = (extra: Partial<Runs>): Runs => ({ follow: () => false, created: () => undefined, ended: 0, running: new Set(), lines: [], dismiss: () => undefined, open: () => undefined, opening: null, settled: () => undefined, ...extra })
+  const runs = (extra: Partial<Runs>): Runs => ({ follow: () => false, created: () => undefined, ended: 0, running: new Set(), lines: [], dismiss: () => undefined, open: () => undefined, opening: null, settled: () => undefined, viewing: () => undefined, viewed: null, ...extra })
   const marked = { state: null, buttons: [], actions: [] }
 
   it('a run’s end re-reads the tiles and the drawer opened from a dashboard tile', async () => {
