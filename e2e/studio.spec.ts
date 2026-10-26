@@ -2082,6 +2082,9 @@ test.describe('drawer-tabs, the shake-out', () => {
   const head = (drawer: Locator) => drawer.locator('header')
   const bar = (drawer: Locator) => drawer.getByRole('toolbar', { name: 'Onderdelen' })
   const checked = (drawer: Locator) => bar(drawer).locator('[role="radio"][aria-checked="true"]')
+  const icons = (drawer: Locator) => bar(drawer).getByRole('radio')
+  const more = (drawer: Locator) => bar(drawer).getByRole('button', { name: 'Meer tabbladen' })
+  const focusedName = (page: Page) => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '')
 
   async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
     await openLooks(page)
@@ -2090,55 +2093,173 @@ test.describe('drawer-tabs, the shake-out', () => {
     await page.getByRole('button', { name: 'Bijstellen' }).click()
   }
 
-  test('drawer-opens-on-fields @e2e: a site drawer opens on its fields and actions, its title and tabs on the head line', async ({
+  /** One screenshot per theme, Licht last again; `show` puts back what the theme switch closed. */
+  async function shotBoth(page: Page, name: string, show?: () => Promise<void>) {
+    try {
+      for (const [theme, tag] of [
+        ['Licht', 'licht'],
+        ['Donker', 'donker'],
+      ] as const) {
+        await setTheme(page, theme)
+        if (show) await show()
+        await shot(page, `${name}-${tag}`)
+        if (show) await page.keyboard.press('Escape')
+      }
+    } finally {
+      await setTheme(page, 'Licht')
+    }
+  }
+
+  test('drawer-opens-on-fields @e2e: a site drawer opens on its fields and actions, its title and tabs on the head line; two icons at 392 px beside the address and Inloggen, three widened', async ({
     page,
   }) => {
     await open(page, 'Sites', 'Sites')
     const site = await drawerOf(page, 'voorbeeld-site')
     await expect(head(site).getByRole('heading', { name: 'voorbeeld-site' })).toBeVisible()
     await expect(head(site)).not.toContainText(/\d+ van \d+/)
+    await expect(head(site)).not.toContainText('Sites')
     await expect(checked(site)).toHaveAccessibleName('Gegevens')
     await expect(site.locator('.nv-drawer__fields').first()).toBeVisible()
     await expect(site.locator('.nv-dw-actions__row')).toBeInViewport()
     expect(await offered(page)).toEqual(expect.arrayContaining(['Gezondheid checken']))
     await expect(site.getByRole('region', { name: 'Notities' })).toHaveCount(0)
     await expect(site.getByRole('region', { name: 'Geschiedenis' })).toHaveCount(0)
-    await shot(page, 'drawer-tabs-gegevens')
+
+    // Stefan's ruling: on a 392 px drawer with the address and Inloggen, two icons; the title keeps its 96 px.
+    await expect(head(site).getByRole('link', { name: 'Openen in nieuw tabblad' })).toBeVisible()
+    await expect(head(site).getByRole('button', { name: 'Inloggen' })).toBeVisible()
+    await expect(icons(site)).toHaveCount(2)
+    expect((await head(site).locator('.nv-dw-title').boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(96)
+    await expect(more(site)).toBeVisible()
+    await shotBoth(page, 'drawer-tabs-gegevens')
+
+    await site.getByRole('button', { name: 'Volledig openen' }).click()
+    await expect.poll(async () => (await site.boundingBox())?.width ?? 0).toBeGreaterThan(392)
+    await expect(icons(site)).toHaveCount(3)
+    await expect(checked(site)).toHaveAccessibleName('Gegevens')
+    await shotBoth(page, 'drawer-tabs-breed')
   })
 
-  test('notes-in-their-tab @e2e: the long texts read in the Notities tab, the fields out of the way', async ({
+  test('notes-in-their-tab @e2e: the long texts read in the Notities tab, the fields out of the way; an edit is kept when the person clicks back to Gegevens', async ({
     page,
   }) => {
     await open(page, 'Sites', 'Sites')
     const site = await drawerOf(page, 'voorbeeld-site')
     await openTab(page, 'Notities')
     await expect(checked(site)).toHaveAccessibleName('Notities')
-    await expect(site.getByRole('region', { name: 'Notities' })).toBeVisible()
+    const notes = site.getByRole('region', { name: 'Notities' })
+    await expect(notes).toBeVisible()
     await expect(site.getByRole('region', { name: 'Beheerders', exact: true })).toBeVisible()
     await expect(site.locator('.nv-drawer__fields')).toHaveCount(0)
     await expect(head(site).getByRole('heading', { name: 'voorbeeld-site' })).toBeVisible()
-    await shot(page, 'drawer-tabs-notities')
+    await shotBoth(page, 'drawer-tabs-notities')
+
+    // Mid-flow: a note still being typed is saved when the tab changes under it, not lost with its pane.
+    const before = (await rowOf(page.request, 'site', 3)).notities ?? null
+    try {
+      await notes.getByRole('button', { name: /notities/i }).click()
+      await page.keyboard.type('e2e notitie bij het wisselen')
+      await bar(site).getByRole('radio', { name: 'Gegevens' }).click()
+      await expect(site.locator('.nv-drawer__fields').first()).toBeVisible()
+      await expect
+        .poll(async () => (await rowOf(page.request, 'site', 3)).notities)
+        .toBe('e2e notitie bij het wisselen')
+      await openTab(page, 'Notities')
+      await expect(notes).toContainText('e2e notitie bij het wisselen')
+    } finally {
+      const restored = await page.request.patch('/api/rows/site/3', { data: { notities: before } })
+      expect(restored.status(), await restored.text()).toBe(200)
+    }
   })
 
-  test('more-menu-holds-the-rest @e2e: Meer tabbladen lists the other panes; one chosen shows, and another record opens on Gegevens', async ({
+  test('more-menu-holds-the-rest @e2e: Meer tabbladen lists the other panes; one chosen shows and marks …; another record opens on Gegevens, and so does stepping back with j and k', async ({
     page,
   }) => {
     await open(page, 'Sites', 'Sites')
     const site = await drawerOf(page, 'voorbeeld-site')
-    await bar(site).getByRole('button', { name: 'Meer tabbladen' }).click()
+    await more(site).click()
     const menu = page.getByRole('menu', { name: 'Meer tabbladen' })
     await expect(menu.getByRole('menuitemradio', { name: 'Geschiedenis' })).toBeVisible()
     await expect(menu.getByRole('menuitemradio', { name: 'Bijlagen' })).toBeVisible()
-    await shot(page, 'drawer-tabs-meer')
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(
+      page.getByRole('complementary', { name: 'voorbeeld-site' }),
+      'Escape in the menu closes only the menu',
+    ).toBeVisible()
+    await shotBoth(page, 'drawer-tabs-meer', () => more(site).click())
+    await more(site).click()
     await menu.getByRole('menuitemradio', { name: 'Geschiedenis' }).click()
     await expect(site.getByRole('region', { name: 'Geschiedenis' })).toBeVisible()
-    await expect(bar(site).getByRole('button', { name: 'Meer tabbladen' })).toHaveAttribute('data-current', 'true')
+    await expect(more(site)).toHaveAttribute('data-current', 'true')
     await expect(checked(site)).toHaveCount(0)
+    await shotBoth(page, 'drawer-tabs-geschiedenis')
 
     await head(site).getByRole('button', { name: 'Vorige' }).click()
     const other = page.getByRole('complementary').last()
     await expect(head(other).getByRole('heading')).not.toHaveText('voorbeeld-site')
     await expect(checked(other)).toHaveAccessibleName('Gegevens')
+    await expect(more(other)).not.toHaveAttribute('data-current', 'true')
+
+    // Re-entry: j back to the record whose Geschiedenis was open, and it reads Gegevens again; k and j once more.
+    await head(other).getByRole('button', { name: 'Sluiten' }).focus()
+    await page.keyboard.press('j')
+    const back = page.getByRole('complementary', { name: 'voorbeeld-site' })
+    await expect(back).toBeVisible()
+    await expect(checked(back)).toHaveAccessibleName('Gegevens')
+    await expect(more(back)).not.toHaveAttribute('data-current', 'true')
+    await expect(back.getByRole('region', { name: 'Geschiedenis' })).toHaveCount(0)
+    await openTab(page, 'Notities')
+    await head(back).getByRole('button', { name: 'Sluiten' }).focus()
+    await page.keyboard.press('k')
+    await expect(head(page.getByRole('complementary').last()).getByRole('heading')).not.toHaveText('voorbeeld-site')
+    await page.keyboard.press('j')
+    await expect(page.getByRole('complementary', { name: 'voorbeeld-site' })).toBeVisible()
+    await expect(checked(back)).toHaveAccessibleName('Gegevens')
+  })
+
+  test('drawer-tabs-by-keyboard @e2e: Tab enters the bar on the open pane, arrows walk it, Enter and Space choose, … opens on Enter and gives focus back marked', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    // testmans-winkel has a next record, so Volgende takes focus.
+    const site = await drawerOf(page, 'testmans-winkel')
+    await head(site).getByRole('button', { name: 'Volgende' }).focus()
+    await page.keyboard.press('Tab')
+    expect(await focusedName(page), 'Tab lands on the open pane').toBe('Gegevens')
+    await page.keyboard.press('ArrowRight')
+    expect(await focusedName(page)).toBe('Notities')
+    await expect(checked(site), 'an arrow moves focus, it does not choose').toHaveAccessibleName('Gegevens')
+    await page.keyboard.press('Enter')
+    await expect(checked(site)).toHaveAccessibleName('Notities')
+    await expect(site.getByRole('region', { name: 'Notities' })).toBeVisible()
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('Space')
+    await expect(checked(site)).toHaveAccessibleName('Gegevens')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    expect(await focusedName(page)).toBe('Meer tabbladen')
+    await page.keyboard.press('Enter')
+    const menu = page.getByRole('menu', { name: 'Meer tabbladen' })
+    await expect(menu).toBeVisible()
+    await page.keyboard.press('ArrowDown')
+    const target = await page.evaluate(() => document.activeElement?.textContent ?? '')
+    await page.keyboard.press('Enter')
+    await expect(menu).toHaveCount(0)
+    expect(await focusedName(page), 'focus returns to …').toBe('Meer tabbladen')
+    await expect(more(site)).toHaveAttribute('data-current', 'true')
+    await expect(site.getByRole('region', { name: target.trim() })).toBeVisible()
+    await shot(page, 'drawer-tabs-toetsenbord')
+    // Shift+Tab from widen enters the bar on its last stop, …; the bar is one tab stop.
+    await head(site).getByRole('button', { name: 'Volledig openen' }).focus()
+    await page.keyboard.press('Shift+Tab')
+    expect(await focusedName(page)).toBe('Meer tabbladen')
+    await page.keyboard.press('Shift+Tab')
+    expect(await focusedName(page)).toBe('Volgende')
+    await head(site).getByRole('button', { name: 'Volgende' }).focus()
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab')
+    expect(await focusedName(page), 'one Tab leaves the bar').toBe('Volledig openen')
   })
 
   test.describe('at 1280 by 720', () => {
