@@ -361,7 +361,12 @@ test.describe('studio', () => {
         links: (await rowsOf(api, 'actie_site', { actie_id: update })).rows.map((l) => l.id),
       })
       const waiting = page.getByRole('button', { name: 'Bijwerken · Voorbereid — openen' })
-      await expect(waiting).toBeVisible({ timeout: 15_000 })
+      // The opdracht's drawer, opened by Bijwerken, offers Bevestigen itself: the dock line waits until it closes.
+      const drawer = page.getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })
+      await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toBeVisible({ timeout: 15_000 })
+      await expect(waiting).toHaveCount(0)
+      await drawer.getByRole('button', { name: 'Sluiten' }).click()
+      await expect(waiting).toBeVisible()
       // The dock floats above the table's pinned total, over the empty end space.
       const room = await page.evaluate(() => ({
         dock: (document.querySelector('.nv-dock') as HTMLElement).getBoundingClientRect().bottom,
@@ -1286,8 +1291,17 @@ test.describe('views-and-actions, the shake-out', () => {
     await expect(page.getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })).toBeVisible()
     const actie = await newest(api, 'actie')
     await prepare({ actie, links: (await rowsOf(api, 'actie_site', { actie_id: actie })).rows.map((l) => l.id) })
-    await expect(waitingLine(page)).toBeVisible({ timeout: 15_000 })
+    await closeWaitingDrawer(page)
     return actie
+  }
+
+  /** The opdracht's own drawer offers Bevestigen, so its dock line hides; closing the drawer brings the line back. */
+  async function closeWaitingDrawer(page: Page): Promise<void> {
+    const drawer = page.getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })
+    await expect(drawer.getByRole('button', { name: 'Bevestigen' })).toBeVisible({ timeout: 15_000 })
+    await expect(waitingLine(page)).toHaveCount(0)
+    await drawer.getByRole('button', { name: 'Sluiten' }).click()
+    await expect(waitingLine(page)).toBeVisible()
   }
 
   /** A prepared opdracht keeps its site lines and so cannot be deleted: it is cancelled, as Stefan would. */
@@ -1350,10 +1364,6 @@ test.describe('views-and-actions, the shake-out', () => {
     let actie: number | undefined
     try {
       actie = await waitingRun(page)
-      await page
-        .getByRole('complementary', { name: 'Bijwerken · voorbeeld-site' })
-        .getByRole('button', { name: 'Sluiten' })
-        .click()
       await expect(page.getByRole('complementary')).toHaveCount(0)
       await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
       await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
