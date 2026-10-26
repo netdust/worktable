@@ -1,6 +1,7 @@
 import { CalendarDays } from 'lucide-react'
 import { type CSSProperties, useContext, useEffect, useState } from 'react'
 import { rows as readRows } from '../api'
+import { Day } from '../calendar/Day'
 import { placeEvents } from '../calendar/layout'
 import { SchemaContext } from '../grid/drawer/context'
 import type { Model, Row, SavedView, Scope } from '../types'
@@ -17,6 +18,9 @@ const dayHead = (day: string) => {
   const date = parse(day) ?? new Date()
   return `${weekday(date)} ${date.getDate()}`
 }
+
+/** A day of the strip holds this many lines: a full day keeps the tile as tall as a quiet week. */
+export const TILE_FIT = 5
 
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 
@@ -55,13 +59,14 @@ export function WeekTile({ view, model, models, scope, version, onOpen, onOpenRo
             <div key={day} role="group" aria-label={dayHead(day)} aria-current={day === today ? 'date' : undefined}
               className={`nv-week-tile__day${day === today ? ' nv-week-tile__day--today' : ''}`}>
               <span className="nv-week-tile__head"><span className="nv-week-tile__dn">{weekday(date)}</span><span className="nv-week-tile__num">{date.getDate()}</span></span>
-              {events.filter((e) => e.day === day).map((e) => (
-                <button key={e.row.id} type="button" className="nv-week-tile__bar" style={toneOf(e.row)} title={e.row.title} onClick={() => onOpenRow(e.row, flags)}>
-                  <FlagMark flags={flags?.marksOf(view.model, e.row.id) ?? []} bare />
-                  {!e.allDay && <span className="nv-week-tile__time">{hhmm(e.from)}</span>}
-                  <span className="nv-week-tile__title">{e.row.title}</span>
-                </button>
-              ))}
+              <Day day={day} events={events.filter((e) => e.day === day)} fit={TILE_FIT} onOpen={(row) => onOpenRow(row, flags)}
+                line={(e, open) => (
+                  <button key={e.row.id} type="button" className="nv-week-tile__bar" style={toneOf(e.row)} title={e.row.title} onClick={() => open(e.row)}>
+                    <FlagMark flags={flags?.marksOf(view.model, e.row.id) ?? []} bare />
+                    {!e.allDay && <span className="nv-week-tile__time">{hhmm(e.from)}</span>}
+                    <span className="nv-week-tile__title">{e.row.title}</span>
+                  </button>
+                )} />
             </div>
           )
         })}

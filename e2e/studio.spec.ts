@@ -741,6 +741,40 @@ test.describe('studio', () => {
     await expect(row.getByRole('button', { name: 'Meer voor Taken' })).toBeVisible()
   })
 
+  test('dashboard-week-full-day @e2e: the dashboard week holds a few rows per day, the rest behind +N meer, and keeps its height', async ({
+    page,
+  }) => {
+    const api = page.request
+    await landing(page)
+    const week = tile(page, 'Agenda')
+    const quiet = (await week.boundingBox())?.height ?? 0
+    const ids: number[] = []
+    try {
+      for (let at = 1; at <= 12; at++) {
+        const made = await api.post('/api/rows/agendapunt', { data: { titel: `e2e volle week ${at}`, datum: today() } })
+        expect(made.status(), await made.text()).toBe(201)
+        ids.push(((await made.json()) as { id: number }).id)
+      }
+      await landing(page)
+      const day = week.getByRole('group', { current: 'date' })
+      const more = day.getByRole('button', { name: /^\+\d+ meer$/ })
+      await expect(more).toBeVisible()
+      const busy = (await week.boundingBox())?.height ?? 0
+      expect(busy - quiet).toBeLessThanOrEqual(5 * 24)
+      await shot(page, 'dashboard-week-vol')
+      await more.click()
+      const all = page.getByRole('dialog')
+      for (let at = 1; at <= 12; at++)
+        await expect(all.getByRole('button', { name: `e2e volle week ${at}`, exact: true })).toBeVisible()
+      await shot(page, 'dashboard-week-dag')
+      await all.getByRole('button', { name: 'e2e volle week 12', exact: true }).click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(page.getByRole('complementary', { name: 'e2e volle week 12' })).toBeVisible()
+    } finally {
+      for (const id of ids) await api.delete(`/api/rows/agendapunt/${id}`)
+    }
+  })
+
   test('op-tafel @e2e: Op tafel lists the open tasks due this week, and the dashboard’s Gedaan makes a line leave', async ({
     page,
   }) => {

@@ -1,5 +1,4 @@
-import { type CSSProperties, type ReactElement, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, Dialog, DialogTrigger, Popover } from 'react-aria-components'
+import { type CSSProperties, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Drawer } from '../grid/Drawer'
 import { useReread } from '../grid/drawerWrite'
 import { SchemaContext } from '../grid/drawer/context'
@@ -15,6 +14,7 @@ import { FlagMark } from '../ui/Flag'
 import { type Flag, flaggedOf, useFlags } from '../ui/useFlags'
 import { useTones } from '../ui/useTones'
 import { isMonth, iso, isoWeek, parse } from '../ui/Window'
+import { Day } from './Day'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
 interface Props {
@@ -72,9 +72,6 @@ function dayHead(day: string): string {
   const weekday = new Intl.DateTimeFormat(document.documentElement.lang || 'nl', { weekday: 'short' }).format(date)
   return `${weekday} ${date.getDate()}`
 }
-
-const dayLong = (day: string) =>
-  new Intl.DateTimeFormat(document.documentElement.lang || 'nl', { weekday: 'long', day: 'numeric', month: 'long' }).format(parse(day) ?? new Date())
 
 function Event({ event, laneTitle, named = false, short = false, bar, where, style, marks, onOpen }: {
   event: Placed; laneTitle?: string; named?: boolean; short?: boolean; bar?: Bar; where?: string; style: CSSProperties; marks: MarksOf; onOpen: (row: Row) => void
@@ -248,33 +245,6 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
         ))}
       </tbody>
     </table>
-  )
-}
-
-/** A month day's rows: what fits, then "+N meer" opening the whole day, where a row opens as it does in the cell. */
-function Day({ day, events, fit, line, onOpen }: {
-  day: string; events: Placed[]; fit: number; line: (event: Placed, open: (row: Row) => void) => ReactElement; onOpen: (row: Row) => void
-}) {
-  const [all, setAll] = useState(false)
-  if (events.length <= fit) return <>{events.map((e) => line(e, onOpen))}</>
-  const shown = events.slice(0, fit - 1)
-  const pick = (row: Row) => {
-    setAll(false)
-    onOpen(row)
-  }
-  return (
-    <>
-      {shown.map((e) => line(e, onOpen))}
-      <DialogTrigger isOpen={all} onOpenChange={setAll}>
-        <Button className="nv-cal__more">{t('calMore', { n: events.length - shown.length })}</Button>
-        <Popover className="nv-bar__panel nv-cal__day" placement="bottom start" offset={4}>
-          <Dialog className="nv-bar__dialog" aria-label={dayLong(day)}>
-            <span className="nv-cal__dayhead">{dayLong(day)}</span>
-            {events.map((e) => line(e, pick))}
-          </Dialog>
-        </Popover>
-      </DialogTrigger>
-    </>
   )
 }
 

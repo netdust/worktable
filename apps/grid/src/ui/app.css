@@ -6087,7 +6087,8 @@ table.nv-cal--month .nv-cal__event:hover {
   font-weight: 600;
 }
 
-#root .nv-week-tile__bar {
+#root .nv-week-tile__bar,
+.nv-cal__day .nv-week-tile__bar {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -6105,7 +6106,8 @@ table.nv-cal--month .nv-cal__event:hover {
   cursor: pointer;
 }
 
-#root .nv-week-tile__bar:hover {
+#root .nv-week-tile__bar:hover,
+.nv-cal__day .nv-week-tile__bar:hover {
   background: color-mix(in srgb, var(--c) 26%, var(--color-bg-surface));
 }
 
@@ -6113,6 +6115,12 @@ table.nv-cal--month .nv-cal__event:hover {
   flex: none;
   color: var(--color-fg-muted);
   font: 11px var(--font-mono);
+}
+
+/* The whole day over the tile: one line per row, full width. */
+.nv-cal__day .nv-week-tile__bar {
+  width: 100%;
+  margin: 2px 0;
 }
 
 .nv-week-tile__title {
