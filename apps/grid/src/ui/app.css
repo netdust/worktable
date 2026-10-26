@@ -3100,9 +3100,12 @@
 
 .nv-dw-list__main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
   min-width: 0;
   font-size: 13px;
+  /* A long path or address in a line wraps inside the drawer. */
+  overflow-wrap: anywhere;
 }
 
 .nv-dw-list__main small {
@@ -6037,7 +6040,8 @@ table.nv-cal--month .nv-cal__event:hover {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  min-height: 112px;
+  /* Room for its head and the lines a day holds, so a full day and a quiet one are as tall. */
+  min-height: calc(46px + var(--fit, 4) * 26px);
   padding: 0 4px 8px;
   border-left: 1px solid var(--color-border-subtle);
 }

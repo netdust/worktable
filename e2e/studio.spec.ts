@@ -741,26 +741,33 @@ test.describe('studio', () => {
     await expect(row.getByRole('button', { name: 'Meer voor Taken' })).toBeVisible()
   })
 
-  test('dashboard-week-full-day @e2e: the dashboard week holds a few rows per day, the rest behind +N meer, and keeps its height', async ({
+  test('dashboard-week-full-day @e2e: the dashboard week holds a few rows per day, the rest behind +N meer, and a full day leaves the tile as tall as a quiet one', async ({
     page,
   }) => {
     const api = page.request
     await landing(page)
     const week = tile(page, 'Agenda')
+    await expect(week.locator('.nv-week-tile__bar').first()).toBeVisible()
     const quiet = (await week.boundingBox())?.height ?? 0
     const ids: number[] = []
+    const add = async (at: number) => {
+      const made = await api.post('/api/rows/agendapunt', { data: { titel: `e2e volle week ${at}`, datum: today() } })
+      expect(made.status(), await made.text()).toBe(201)
+      ids.push(((await made.json()) as { id: number }).id)
+    }
     try {
-      for (let at = 1; at <= 12; at++) {
-        const made = await api.post('/api/rows/agendapunt', { data: { titel: `e2e volle week ${at}`, datum: today() } })
-        expect(made.status(), await made.text()).toBe(201)
-        ids.push(((await made.json()) as { id: number }).id)
-      }
+      for (let at = 1; at <= 12; at++) await add(at)
       await landing(page)
       const day = week.getByRole('group', { current: 'date' })
       const more = day.getByRole('button', { name: /^\+\d+ meer$/ })
       await expect(more).toBeVisible()
       const busy = (await week.boundingBox())?.height ?? 0
-      expect(busy - quiet).toBeLessThanOrEqual(5 * 24)
+      expect(Math.abs(busy - quiet)).toBeLessThanOrEqual(1)
+      const hidden = Number((await more.textContent())?.match(/\d+/)?.[0])
+      await add(13)
+      await landing(page)
+      await expect(day.getByRole('button', { name: `+${hidden + 1} meer` })).toBeVisible()
+      expect(Math.abs(((await week.boundingBox())?.height ?? 0) - busy)).toBeLessThanOrEqual(1)
       await shot(page, 'dashboard-week-vol')
       await more.click()
       const all = page.getByRole('dialog')
@@ -772,6 +779,41 @@ test.describe('studio', () => {
       await expect(page.getByRole('complementary', { name: 'e2e volle week 12' })).toBeVisible()
     } finally {
       for (const id of ids) await api.delete(`/api/rows/agendapunt/${id}`)
+    }
+  })
+
+  test('drawer-line-wraps @e2e: a site line with a long path wraps inside the opdracht drawer, nothing scrolls sideways', async ({
+    page,
+  }) => {
+    const api = page.request
+    const site = (await rowsOf(api, 'site', { naam: 'testmans-winkel' })).rows[0]
+    const made = await run(api, 'malwarescan', [site.id])
+    try {
+      const service = await worker()
+      const long = `Map mu-plugins ligt niet binnen de site (/data/sites/web/${'sintpieterscollegebrussels'.repeat(3)}/www/./wp-content/mu-plugins)`
+      const patched = await service.patch(`/api/rows/actie_site/${made.links[0]}`, {
+        data: { state: 'overgeslagen', samenvatting: long, resultaat: long, expect: { state: 'wacht' } },
+      })
+      expect(patched.status(), await patched.text()).toBe(200)
+      await service.dispose()
+      const title = (await rowOf(api, 'actie', made.actie)).titel as string
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, title)
+      await expect(siteLine(drawer, 'testmans-winkel')).toContainText('wp-content/mu-plugins')
+      const edge = await drawer.boundingBox()
+      const line = await siteLine(drawer, 'testmans-winkel').boundingBox()
+      expect(edge && line && line.x + line.width <= edge.x + edge.width).toBe(true)
+      // No box in the drawer scrolls sideways; a title cut with an ellipsis is fine.
+      const scrolls = await drawer.evaluate(
+        (el) =>
+          [el, ...el.querySelectorAll('*')].filter(
+            (n) => ['auto', 'scroll'].includes(getComputedStyle(n).overflowX) && n.scrollWidth > n.clientWidth + 1,
+          ).length,
+      )
+      expect(scrolls).toBe(0)
+      await shot(page, 'opdracht-lange-regel')
+    } finally {
+      await api.delete(`/api/rows/actie/${made.actie}`)
     }
   })
 

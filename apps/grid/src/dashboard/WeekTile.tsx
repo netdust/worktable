@@ -19,7 +19,8 @@ const dayHead = (day: string) => {
   return `${weekday(date)} ${date.getDate()}`
 }
 
-/** A day of the strip holds this many lines: a full day keeps the tile as tall as a quiet week. */
+/** A day of the strip holds this many lines, the "+N meer" one included; every day has room for them, so a full day
+ * keeps the tile as tall as a quiet week. Fixed, not measured: the tile has no height of its own to share. */
 export const TILE_FIT = 5
 
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
@@ -52,7 +53,7 @@ export function WeekTile({ view, model, models, scope, version, onOpen, onOpenRo
         <span className="nv-tile__muted">{span}</span>
         <button type="button" className="nv-tile__title nv-tile__link" onClick={onOpen}>{view.label}</button>
       </header>
-      <div className="nv-week-tile__days">
+      <div className="nv-week-tile__days" style={{ '--fit': TILE_FIT } as CSSProperties}>
         {days.map((day) => {
           const date = parse(day) ?? new Date()
           return (
