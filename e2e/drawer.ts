@@ -30,3 +30,13 @@ export async function offered(page: Page): Promise<string[]> {
   await expect(menu(page, 'Meer')).toHaveCount(0)
   return [...shown, ...folded]
 }
+
+/** Shows one of the open drawer's tabs: its icon in the head, or its entry under Meer tabbladen. */
+export async function openTab(page: Page, name: string): Promise<void> {
+  const bar = page.getByRole('complementary').last().getByRole('toolbar', { name: 'Onderdelen' })
+  const icon = bar.getByRole('radio', { name, exact: true })
+  if ((await icon.count()) > 0) return icon.click()
+  await bar.getByRole('button', { name: 'Meer tabbladen' }).click()
+  await page.getByRole('menuitemradio', { name, exact: true }).click()
+  await expect(page.getByRole('menu', { name: 'Meer tabbladen' })).toHaveCount(0)
+}

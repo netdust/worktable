@@ -1,5 +1,5 @@
 import { expect, type Page, request, test } from '@playwright/test'
-import { offered, pressInMenu } from './drawer'
+import { offered, openTab, pressInMenu } from './drawer'
 import { shot } from './shots'
 import { openView } from './tree'
 
@@ -49,6 +49,7 @@ test('link-item-button @e2e: a link item offers its record’s button and detail
 }) => {
   await open(page, 'All bundles', 'Bundles')
   const drawer = await drawerOf(page, 'Alpha')
+  await openTab(page, 'Entries')
   const entries = drawer.getByRole('region', { name: /Entries/ })
   await expect(entries.getByText('Bring a pen')).toBeVisible()
   await expect(entries.getByRole('button', { name: 'Decline' })).toBeVisible()
@@ -194,6 +195,7 @@ test('press-in-related-drawer-then-close-then-undo @e2e: Undo after a related dr
   expect(made.status()).toBe(201)
   await open(page, 'All bundles', 'Bundles')
   const drawer = await drawerOf(page, 'Alpha')
+  await openTab(page, 'Entries')
   await drawer
     .getByRole('region', { name: /Entries/ })
     .getByRole('button', { name: 'Bob' })

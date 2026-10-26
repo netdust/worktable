@@ -110,7 +110,9 @@ test('link-opens-record @e2e: a link item opens its record to read, and the link
     .click()
   await page.getByRole('complementary', { name: 'Linked' }).getByRole('button', { name: 'Bob' }).click()
   const record = page.getByRole('complementary', { name: 'Linked' })
-  await expect(record.getByText('Ties')).toBeVisible()
+  // The tie's own record, read: its title in the head and its Bundle field, no dataset label.
+  await expect(record.locator('header').getByRole('heading', { name: 'Linked' })).toBeVisible()
+  await expect(record.getByRole('term').filter({ hasText: 'Bundle' })).toBeVisible()
   await expect(record.getByRole('definition').filter({ hasText: 'Bob' })).toBeVisible()
   await expect(record.getByText('Linked', { exact: true })).toHaveCount(3)
   await expect(page.getByRole('textbox')).toHaveCount(0)

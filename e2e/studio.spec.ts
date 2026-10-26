@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { type APIRequestContext, expect, type Locator, type Page, type Route, request, test } from '@playwright/test'
 import { STUDIO, STUDIO_SERVICE, STUDIO_WORKER, state } from './auth'
 import { card, lane, orders } from './board'
-import { offered, pressInMenu } from './drawer'
+import { offered, openTab, pressInMenu } from './drawer'
 import { openLooks } from './editor'
 import { forget } from './forget'
 import { shot } from './shots'
@@ -2075,5 +2075,97 @@ test.describe('plugin-actions, the shake-out', () => {
     await site.getByRole('button', { name: 'Volgende' }).click()
     await expect(page.getByRole('complementary', { name: 'voorbeeld-blog' })).toBeVisible()
     expect(duplicates, 'the drawer head gives each tool its own key').toEqual([])
+  })
+})
+
+test.describe('drawer-tabs, the shake-out', () => {
+  const head = (drawer: Locator) => drawer.locator('header')
+  const bar = (drawer: Locator) => drawer.getByRole('toolbar', { name: 'Onderdelen' })
+  const checked = (drawer: Locator) => bar(drawer).locator('[role="radio"][aria-checked="true"]')
+
+  async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
+    await openLooks(page)
+    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: theme }).click()
+    await expect(page.locator('#root')).toHaveAttribute('data-theme', theme === 'Donker' ? 'dark' : 'light')
+    await page.getByRole('button', { name: 'Bijstellen' }).click()
+  }
+
+  test('drawer-opens-on-fields @e2e: a site drawer opens on its fields and actions, its title and tabs on the head line', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const site = await drawerOf(page, 'voorbeeld-site')
+    await expect(head(site).getByRole('heading', { name: 'voorbeeld-site' })).toBeVisible()
+    await expect(head(site)).not.toContainText(/\d+ van \d+/)
+    await expect(checked(site)).toHaveAccessibleName('Gegevens')
+    await expect(site.locator('.nv-drawer__fields').first()).toBeVisible()
+    await expect(site.locator('.nv-dw-actions__row')).toBeInViewport()
+    expect(await offered(page)).toEqual(expect.arrayContaining(['Gezondheid checken']))
+    await expect(site.getByRole('region', { name: 'Notities' })).toHaveCount(0)
+    await expect(site.getByRole('region', { name: 'Geschiedenis' })).toHaveCount(0)
+    await shot(page, 'drawer-tabs-gegevens')
+  })
+
+  test('notes-in-their-tab @e2e: the long texts read in the Notities tab, the fields out of the way', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const site = await drawerOf(page, 'voorbeeld-site')
+    await openTab(page, 'Notities')
+    await expect(checked(site)).toHaveAccessibleName('Notities')
+    await expect(site.getByRole('region', { name: 'Notities' })).toBeVisible()
+    await expect(site.getByRole('region', { name: 'Beheerders', exact: true })).toBeVisible()
+    await expect(site.locator('.nv-drawer__fields')).toHaveCount(0)
+    await expect(head(site).getByRole('heading', { name: 'voorbeeld-site' })).toBeVisible()
+    await shot(page, 'drawer-tabs-notities')
+  })
+
+  test('more-menu-holds-the-rest @e2e: Meer tabbladen lists the other panes; one chosen shows, and another record opens on Gegevens', async ({
+    page,
+  }) => {
+    await open(page, 'Sites', 'Sites')
+    const site = await drawerOf(page, 'voorbeeld-site')
+    await bar(site).getByRole('button', { name: 'Meer tabbladen' }).click()
+    const menu = page.getByRole('menu', { name: 'Meer tabbladen' })
+    await expect(menu.getByRole('menuitemradio', { name: 'Geschiedenis' })).toBeVisible()
+    await expect(menu.getByRole('menuitemradio', { name: 'Bijlagen' })).toBeVisible()
+    await shot(page, 'drawer-tabs-meer')
+    await menu.getByRole('menuitemradio', { name: 'Geschiedenis' }).click()
+    await expect(site.getByRole('region', { name: 'Geschiedenis' })).toBeVisible()
+    await expect(bar(site).getByRole('button', { name: 'Meer tabbladen' })).toHaveAttribute('data-current', 'true')
+    await expect(checked(site)).toHaveCount(0)
+
+    await head(site).getByRole('button', { name: 'Vorige' }).click()
+    const other = page.getByRole('complementary').last()
+    await expect(head(other).getByRole('heading')).not.toHaveText('voorbeeld-site')
+    await expect(checked(other)).toHaveAccessibleName('Gegevens')
+  })
+
+  test.describe('at 1280 by 720', () => {
+    test.use({ viewport: { width: 1280, height: 720 } })
+
+    test('drawer-tabs-at-1280 @e2e: the head line fits, one row, nothing scrolls sideways, light and dark', async ({
+      page,
+    }) => {
+      await open(page, 'Sites', 'Sites')
+      const site = await drawerOf(page, 'testmans-winkel')
+      try {
+        for (const [theme, name] of [
+          ['Licht', 'licht'],
+          ['Donker', 'donker'],
+        ] as const) {
+          await setTheme(page, theme)
+          const line = await head(site).boundingBox()
+          expect(line?.height ?? 0).toBeLessThan(60)
+          await expect(bar(site)).toBeInViewport({ ratio: 1 })
+          await expect(head(site).getByRole('button', { name: 'Sluiten' })).toBeInViewport({ ratio: 1 })
+          expect(await site.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+          expect(await head(site).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+          await shot(page, `drawer-tabs-1280-${name}`)
+        }
+      } finally {
+        await setTheme(page, 'Licht')
+      }
+    })
   })
 })
