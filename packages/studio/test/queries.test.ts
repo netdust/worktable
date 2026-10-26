@@ -42,7 +42,8 @@ async function rows(source: string): Promise<Row[]> {
 
 const checked = (site: number, at: string | null, gezondheid = 'ok') =>
   sqlite.query('UPDATE site SET laatste_check = ?, gezondheid = ? WHERE id = ?').run(at, gezondheid, site)
-const daysAgo = (days: number) => localTime(new Date(Date.now() - days * DAY))
+// Whole 24-hour blocks back: these checks sit far from any day line, unlike the seed's calendar days.
+const blocksAgo = (days: number) => localTime(new Date(Date.now() - days * DAY))
 const reden = async (site: number) => (await rows('sites_aandacht')).find((r) => r.id === site)?.reden ?? null
 const inOrde = async () => (await rows('sites_in_orde')).map((r) => r.id)
 
@@ -54,31 +55,31 @@ function insert(table: string, values: Row): number {
 
 describe('sites met aandacht', () => {
   test('an old check is attention, even when ok', async () => {
-    checked(VOORBEELD_SITE, daysAgo(9))
+    checked(VOORBEELD_SITE, blocksAgo(9))
     expect(await reden(VOORBEELD_SITE)).toBe('oud')
-    checked(VOORBEELD_SITE, daysAgo(7))
+    checked(VOORBEELD_SITE, blocksAgo(7))
     expect(await reden(VOORBEELD_SITE)).toBeNull()
     checked(VOORBEELD_SITE, null)
     expect(await reden(VOORBEELD_SITE)).toBe('nooit')
   })
 
   test('not in the registry is attention, and leaves Sites in orde', async () => {
-    checked(OUD_ARCHIEF, daysAgo(1))
+    checked(OUD_ARCHIEF, blocksAgo(1))
     expect(await reden(OUD_ARCHIEF)).toBe('weg')
     expect(await inOrde()).not.toContain(OUD_ARCHIEF)
   })
 
   test('an old check leaves Sites in orde', async () => {
-    checked(VOORBEELD_SITE, daysAgo(1))
+    checked(VOORBEELD_SITE, blocksAgo(1))
     expect(await inOrde()).toContain(VOORBEELD_SITE)
-    checked(VOORBEELD_SITE, daysAgo(9))
+    checked(VOORBEELD_SITE, blocksAgo(9))
     expect(await inOrde()).not.toContain(VOORBEELD_SITE)
   })
 
   // A tile shows its first five rows: a broken site must never sit below a retired one.
   test('the worst comes first: storing, let op, never checked, old, gone', async () => {
     checked(TESTMANS_WINKEL, null)
-    checked(VOORBEELD_SITE, daysAgo(9))
+    checked(VOORBEELD_SITE, blocksAgo(9))
     const lines = await rows('sites_aandacht')
     const ernst = Object.fromEntries(lines.map((r) => [r.reden, r.ernst]))
     expect(ernst).toEqual({ storing: 1, let_op: 2, nooit: 3, oud: 4, weg: 5 })
@@ -87,9 +88,9 @@ describe('sites met aandacht', () => {
   })
 
   test('never checked means no check at all', async () => {
-    checked(VOORBEELD_SITE, daysAgo(1), 'onbekend')
+    checked(VOORBEELD_SITE, blocksAgo(1), 'onbekend')
     expect(await reden(VOORBEELD_SITE)).toBe('onbekend')
-    checked(VOORBEELD_SITE, daysAgo(9), 'onbekend')
+    checked(VOORBEELD_SITE, blocksAgo(9), 'onbekend')
     expect(await reden(VOORBEELD_SITE)).toBe('oud')
     checked(VOORBEELD_SITE, null, 'onbekend')
     expect(await reden(VOORBEELD_SITE)).toBe('nooit')
@@ -102,13 +103,12 @@ describe('sites met aandacht', () => {
 })
 
 describe('op tafel', () => {
-  // Sunday of this week, local: the last day op tafel reaches.
-  const sunday = () => {
-    const at = new Date()
-    at.setDate(at.getDate() + ((7 - at.getDay()) % 7))
-    return localDay(at)
-  }
-  const dayAfter = (day: string) => localDay(new Date(new Date(`${day}T12:00:00`).getTime() + DAY))
+  // Asked of SQLite, whose local day the query uses: bun test runs JavaScript in UTC, so near midnight the two differ.
+  const sqliteDay = (day: string, modifier: string) =>
+    (sqlite.query('SELECT date(?, ?) AS day').get(day, modifier) as { day: string }).day
+  // Sunday of this week: the last day op tafel reaches.
+  const sunday = () => sqliteDay(sqliteDay('now', 'localtime'), 'weekday 0')
+  const dayAfter = (day: string) => sqliteDay(day, '+1 day')
   const titles = async () => (await rows('op_tafel')).map((r) => r.titel)
 
   test('op_tafel holds open tasks due this week or earlier, and no task without a deadline', async () => {

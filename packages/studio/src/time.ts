@@ -7,3 +7,10 @@ export function localTime(at: Date = new Date()): string {
 }
 
 export const localDay = (at: Date = new Date()): string => localTime(at).slice(0, 10)
+
+/** Calendar days back at the same clock time: a DST day is 23 or 25 hours, so "yesterday" is never 24 hours ago. */
+export function daysAgo(days: number, from: Date = new Date()): string {
+  const at = new Date(from)
+  at.setDate(at.getDate() - days)
+  return localTime(at)
+}

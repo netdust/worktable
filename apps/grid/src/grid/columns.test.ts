@@ -194,7 +194,7 @@ describe('columnsFor', () => {
 })
 
 describe('inDays', () => {
-  const field = (type: 'date' | 'datetime' | 'text', label: string) => ({ type, label, required: false, fact: false })
+  const field = (type: 'date' | 'datetime' | 'text' | 'bool' | 'select', label: string) => ({ type, label, required: false, fact: false })
   const plan: Model = {
     key: 'plan', label: 'Plan', title_label: 'Naam', title_readonly: false,
     fields: { day: field('date', 'Dag'), from: field('datetime', 'Start'), until: field('datetime', 'Einde'), note: field('text', 'Notitie') },
@@ -210,6 +210,14 @@ describe('inDays', () => {
     expect(column.range?.(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: '2026-11-02T14:00' }))).toEqual({ start: '13:00', end: '–14:00' })
     expect(column.text(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: '2026-11-02T14:00' }))).toBe('13:00–14:00')
     expect(column.text(row({ day: '2026-11-02', from: '2026-11-02T13:00', until: null }))).toBe('13:00')
+  })
+
+  it('starts a column wide enough for its header, so a long label is not cut off, and leaves a short one at its kind’s width', () => {
+    const wide = { ...plan, fields: { ...plan.fields, tool: field('bool', 'Studio-plugin'), state: field('select', 'Core-bestanden'), ok: field('bool', 'SLA') } }
+    const width = (id: string) => columnsFor(wide, { key: 'p', label: 'p', table: 'plan', model: 'plan', columns: [id] }).find((c) => c.id === id)?.width ?? 0
+    expect(width('tool')).toBeGreaterThanOrEqual(7 * 'Studio-plugin'.length + 44)
+    expect(width('state')).toBeGreaterThanOrEqual(7 * 'Core-bestanden'.length + 44)
+    expect(width('ok')).toBe(108)
   })
 
   it('gives the Tijd column room for a date, a start and an end: 184px of text, 24px padding and 8px of slack', () => {

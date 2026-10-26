@@ -381,6 +381,12 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
 
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
 
+  // A record shown in a drawer needs no dock line pointing at it: read from the drawer on screen, not the id asked for.
+  const viewedKey = related ? related.model.key : open ? model.key : null
+  const viewedId = related ? related.row.id : open?.id
+  useEffect(() => runs.viewing(viewedKey, viewedId), [viewedKey, viewedId])
+  useEffect(() => () => runs.viewing(null), [])
+
   // Kept here, not in the drawer: an undo after the drawer closed and opened again must reach the open one.
   const filesOf = (of: Model, id: number) =>
     of.attachments && id !== DRAFT ? { ...of.attachments, dataset: of.key, version: `${filesVersions[`${of.key}:${id}`] ?? 0}:${reloads}` } : undefined

@@ -67,6 +67,9 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
   // The record is gone (deleted, or out of scope): its drawer closes, if it is still the one on screen.
   const leave = (model: string, id: number) => setOpened((now) => (now && now.view.model === model && now.row.id === id ? null : now))
   const runs = useRuns()
+  // A record shown in a drawer needs no dock line pointing at it.
+  useEffect(() => runs.viewing(opened?.view.model ?? null, opened?.row.id), [opened?.view.model, opened?.row.id])
+  useEffect(() => () => runs.viewing(null), [])
   // A followed run ended: the tiles read again, and so does the record open in the drawer.
   useEffect(() => {
     if (runs.ended === 0) return
