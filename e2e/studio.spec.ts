@@ -674,6 +674,53 @@ test.describe('studio', () => {
     }
   })
 
+  test('agenda-month-full-day @e2e: a full day keeps its cell, the rest behind +N meer; every week row is as tall as the others', async ({
+    page,
+  }) => {
+    const api = page.request
+    const ids: number[] = []
+    try {
+      for (let at = 1; at <= 12; at++) {
+        const made = await api.post('/api/rows/agendapunt', { data: { titel: `e2e drukke dag ${at}`, datum: today() } })
+        expect(made.status(), await made.text()).toBe(201)
+        ids.push(((await made.json()) as { id: number }).id)
+      }
+      await open(page, 'Agenda', 'Agenda')
+      await page.getByRole('radiogroup', { name: 'Periode' }).getByRole('radio', { name: 'Maand' }).click()
+      const cell = page.locator('table.nv-cal--month td.nv-cal__today')
+      const more = cell.getByRole('button', { name: /^\+\d+ meer$/ })
+      await expect(more).toBeVisible()
+      const heights = await page.locator('table.nv-cal--month tbody tr').evaluateAll((rows) => rows.map((r) => Math.round(r.getBoundingClientRect().height)))
+      expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1)
+      const body = await page.locator('.nv-cal__body--month').boundingBox()
+      const table = await page.locator('table.nv-cal--month').boundingBox()
+      expect(table && body && table.height <= body.height + 1).toBe(true)
+      await shot(page, 'agenda-maand-vol')
+      await more.click()
+      const day = page.getByRole('dialog')
+      for (let at = 1; at <= 12; at++) await expect(day.getByRole('button', { name: `e2e drukke dag ${at}`, exact: true })).toBeVisible()
+      await shot(page, 'agenda-maand-dag')
+      await day.getByRole('button', { name: 'e2e drukke dag 12', exact: true }).click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(page.getByRole('complementary', { name: 'e2e drukke dag 12' })).toBeVisible()
+    } finally {
+      for (const id of ids) await api.delete(`/api/rows/agendapunt/${id}`)
+    }
+  })
+
+  test('rail-count-at-the-edge @e2e: the count sits at the right edge of its rail line and gives way to its tools on hover', async ({ page }) => {
+    await page.goto('/')
+    const row = page.locator('.nv-model').filter({ has: page.getByRole('button', { name: 'Taken', exact: true }) })
+    const count = row.locator('.nv-model__count')
+    await expect(count).toBeVisible()
+    const edge = await row.boundingBox()
+    const at = await count.boundingBox()
+    expect(edge && at && edge.x + edge.width - (at.x + at.width)).toBeLessThanOrEqual(12)
+    await row.hover()
+    await expect(count).toHaveCount(0)
+    await expect(row.getByRole('button', { name: 'Meer voor Taken' })).toBeVisible()
+  })
+
   test('op-tafel @e2e: Op tafel lists the open tasks due this week, and the dashboard’s Gedaan makes a line leave', async ({
     page,
   }) => {

@@ -1,4 +1,5 @@
-import { type CSSProperties, useContext, useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, type ReactElement, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Button, Dialog, DialogTrigger, Popover } from 'react-aria-components'
 import { Drawer } from '../grid/Drawer'
 import { useReread } from '../grid/drawerWrite'
 import { SchemaContext } from '../grid/drawer/context'
@@ -43,6 +44,12 @@ const TWO_LINES = 40
 const THREE_LINES = 58
 const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+/** A month day's line height and the room its date takes, in pixels: a day holds what fits below its date. */
+export const LINE_PX = 22
+const DATE_PX = 28
+/** What a month day holds before its height is measured, as in jsdom. */
+export const FALLBACK_FIT = 4
+export const fitOf = (rowHeight: number) => Math.max(1, Math.floor((rowHeight - DATE_PX) / LINE_PX))
 const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) || a.from - b.from
 
 type ToneOf = (lane: number | null, row?: Row) => CSSProperties
@@ -195,25 +202,66 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
   month: DateWindow; weeks: string[][]; lanes: Lane[]; events: Placed[]; toneOf: ToneOf; marks: MarksOf; onOpen: (row: Row) => void
 }) {
   const titleOf = (id: number | null) => lanes.find((lane) => lane.id === id)?.title || undefined
+  const table = useRef<HTMLTableElement>(null)
+  // Every week gets an equal share of the body's height, whatever its days hold.
+  const [rowHeight, setRowHeight] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const body = table.current?.parentElement
+    const head = table.current?.tHead
+    if (!body || !head) return
+    const measure = () => setRowHeight(body.clientHeight > 0 ? (body.clientHeight - head.offsetHeight) / weeks.length : null)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(body)
+    return () => watch.disconnect()
+  }, [weeks.length])
+  const fit = rowHeight === null ? FALLBACK_FIT : fitOf(rowHeight)
   return (
-    <table className="nv-cal nv-cal--month">
+    <table ref={table} className="nv-cal nv-cal--month">
       <thead>
         <tr>{weeks[0]?.map((day) => <th key={day} scope="col">{dayHead(day).split(' ')[0]}</th>)}</tr>
       </thead>
       <tbody>
         {weeks.map((week) => (
-          <tr key={week[0]} style={{ height: `${100 / weeks.length}%` }}>
+          <tr key={week[0]} style={{ height: rowHeight === null ? `${100 / weeks.length}%` : `${rowHeight}px` }}>
             {week.map((day) => (
               <td key={day} className={[day < month.from || day > month.to ? 'nv-cal__out' : '', day === iso(new Date()) ? 'nv-cal__today' : ''].filter(Boolean).join(' ') || undefined}>
                 <span className="nv-cal__date">{parse(day)?.getDate()}</span>
-                {events.filter((e) => e.day === day).sort(byStart)
-                  .map((e) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} marks={marks} onOpen={onOpen} />)}
+                <Day day={day} events={events.filter((e) => e.day === day).sort(byStart)} fit={fit}
+                  line={(e, open) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} marks={marks} onOpen={open} />} onOpen={onOpen} />
               </td>
             ))}
           </tr>
         ))}
       </tbody>
     </table>
+  )
+}
+
+/** A month day's rows: what fits, then "+N meer" opening the whole day, where a row opens as it does in the cell. */
+function Day({ day, events, fit, line, onOpen }: {
+  day: string; events: Placed[]; fit: number; line: (event: Placed, open: (row: Row) => void) => ReactElement; onOpen: (row: Row) => void
+}) {
+  const [all, setAll] = useState(false)
+  if (events.length <= fit) return <>{events.map((e) => line(e, onOpen))}</>
+  const shown = events.slice(0, fit - 1)
+  const pick = (row: Row) => {
+    setAll(false)
+    onOpen(row)
+  }
+  return (
+    <>
+      {shown.map((e) => line(e, onOpen))}
+      <DialogTrigger isOpen={all} onOpenChange={setAll}>
+        <Button className="nv-cal__more">{t('calMore', { n: events.length - shown.length })}</Button>
+        <Popover className="nv-bar__panel nv-cal__day" placement="bottom start" offset={4}>
+          <Dialog className="nv-bar__dialog" aria-label={dayHead(day)}>
+            <span className="nv-cal__dayhead">{dayHead(day)}</span>
+            {events.map((e) => line(e, pick))}
+          </Dialog>
+        </Popover>
+      </DialogTrigger>
+    </>
   )
 }
 

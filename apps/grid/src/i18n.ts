@@ -415,6 +415,7 @@ const strings = {
   tabFields: 'Gegevens',
   tabNotes: 'Notities',
   tabMore: 'Meer tabbladen',
+  calMore: '+{n} meer',
   attachmentsNone: 'Nog geen bijlagen',
   attachmentKind: 'Soort',
   attachmentAdd: 'Bestand toevoegen',
