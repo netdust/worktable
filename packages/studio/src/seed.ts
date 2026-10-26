@@ -1,15 +1,8 @@
 import type { SavedViewSeed } from '@worktable/engine'
-import { localDay, localTime } from './time'
+import { daysAgo, localDay, localTime } from './time'
 
 const HOUR = 3_600_000
 const ago = (ms: number) => localTime(new Date(Date.now() - ms))
-
-/** Calendar days back at the same clock time: a DST day is 23 or 25 hours, so "yesterday" is never 24 hours ago. */
-function daysAgo(days: number): string {
-  const at = new Date()
-  at.setDate(at.getDate() - days)
-  return localTime(at)
-}
 
 /** A day of this week, Monday 0, at the given hour: the agenda never runs out of fixtures. */
 function thisWeek(day: number, hour = 0): Date {
