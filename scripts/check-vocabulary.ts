@@ -24,6 +24,10 @@ const repo = resolve(import.meta.dir, '..')
 const { values } = parseArgs({
   options: {
     root: { type: 'string', default: join(repo, 'packages', 'engine') },
+    // A root's own generic words, beside the shared list: the grid's Dutch interface words stay out of the engine's.
+    allow: { type: 'string' },
+    // Tests and fixtures are skipped where they hold the invented domains on purpose (the grid's).
+    'skip-tests': { type: 'boolean', default: false },
     domain: {
       type: 'string',
       multiple: true,
@@ -38,10 +42,20 @@ const wordsOf = (text: string): string[] =>
     .toLowerCase()
     .split(/[^a-z]+/)
 
+const listed = (file: string): string[] =>
+  readFileSync(file, 'utf8')
+    .split('\n')
+    .map((line) => line.replace(/#.*/, '').trim())
+    .filter(Boolean)
+
 function allowed(): Set<string> {
-  const lines = readFileSync(join(import.meta.dir, 'vocabulary-allow.txt'), 'utf8').split('\n')
-  return new Set(lines.map((line) => line.replace(/#.*/, '').trim()).filter(Boolean))
+  return new Set([
+    ...listed(join(import.meta.dir, 'vocabulary-allow.txt')),
+    ...(values.allow ? listed(values.allow) : []),
+  ])
 }
+
+const isTest = (name: string): boolean => /\.(test|fixture)[.-]/.test(name) || name === 'test-setup.ts'
 
 // The spec's sources only: dataset, query and column names, split on `_`.
 async function vocabulary(): Promise<Set<string>> {
@@ -57,7 +71,7 @@ async function vocabulary(): Promise<Set<string>> {
 
 function filesUnder(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules') return []
+    if (name === 'node_modules' || (values['skip-tests'] && isTest(name))) return []
     const path = join(dir, name)
     return statSync(path).isDirectory() ? filesUnder(path) : [path]
   })

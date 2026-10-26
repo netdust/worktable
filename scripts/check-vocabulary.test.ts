@@ -53,3 +53,48 @@ describe('check-vocabulary', () => {
     expect((await run(rootWith({}))).code).toBe(0)
   })
 })
+
+describe('check-vocabulary over the grid', () => {
+  const grid = (root: string) => [
+    '--root',
+    root,
+    '--allow',
+    join(import.meta.dir, 'vocabulary-allow-grid.txt'),
+    '--skip-tests',
+  ]
+  async function runWith(args: string[]) {
+    const proc = Bun.spawn(['bun', script, ...args], { stdout: 'pipe', stderr: 'pipe' })
+    const code = await proc.exited
+    return { code, out: (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text()) }
+  }
+
+  test("a domain's word planted in a grid source fails, as bun run check runs it", async () => {
+    const { code, out } = await runWith(grid(rootWith({ 'Panel.tsx': "const onderhoud = 'x'\n" })))
+    expect(code).toBe(1)
+    expect(out).toContain('Panel.tsx:1  onderhoud')
+  })
+
+  test('tests and fixtures are not scanned: they hold the invented domains on purpose', async () => {
+    const files = {
+      'a.test.tsx': 'const persoon = 1\n',
+      'b.test.data.ts': 'const persoon = 1\n',
+      'c.fixture.json': '{"persoon": 1}\n',
+      'test-setup.ts': '// persoon\n',
+      'd.test-support.ts': '// persoon\n',
+    }
+    expect((await runWith(grid(rootWith(files)))).code).toBe(0)
+    expect((await runWith(['--root', rootWith(files)])).code).toBe(1)
+  })
+
+  test("the grid's own allow list passes its generic words, the engine's list does not", async () => {
+    const root = rootWith({ 'i18n.ts': "const label = 'Naam'\n" })
+    expect((await runWith(grid(root))).code).toBe(0)
+    expect((await runWith(['--root', root])).code).toBe(1)
+  })
+
+  test('apps/grid/src holds no domain word', async () => {
+    const { code, out } = await runWith(grid(join(import.meta.dir, '..', 'apps', 'grid', 'src')))
+    expect(out).toContain('holds no domain word')
+    expect(code).toBe(0)
+  })
+})

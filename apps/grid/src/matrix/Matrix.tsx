@@ -356,7 +356,7 @@ export function Matrix({ view, title, models, rows: windowRows, away, titles, em
       const drawer = bodyRef.current?.querySelector('.nv-drawer')
         ?? document.querySelector('.nv-drawer-slot .nv-dw-status, .nv-drawer-slot .nv-panel')?.closest('.nv-drawer')
       // A cell's status is open by now, its checked choice taking the keyboard; a row label's drawer takes it on its head.
-      return void (drawer?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]') ?? drawer?.querySelector<HTMLElement>('.nv-drawer__head button'))?.focus()
+      return void (drawer?.querySelector<HTMLElement>('.nv-dw-body [role="radio"][tabindex="0"]') ?? drawer?.querySelector<HTMLElement>('.nv-drawer__close'))?.focus()
     }
     if (!moved.current || !here) return
     moved.current = false

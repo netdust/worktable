@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { lane } from './board'
+import { openTab } from './drawer'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
 
@@ -210,11 +211,11 @@ test.describe('step 3e: the drawer as the prototypes draw it', () => {
       const drawer = page.getByRole('complementary', { name: 'e2e lade eerst' })
       await expect(drawer).toBeVisible()
 
-      // The head: kind · dataset, the place in the view, the steps.
-      await expect(drawer.locator('.nv-dw-head__kind')).toHaveText(/Repetitie\s*·\s*Activiteiten/)
-      await expect(drawer.locator('.nv-dw-head__pos')).toHaveText('1 van 2')
-      // The title, the space in the subline, the fields with one Tijd and the day in full.
-      await expect(drawer.getByRole('heading', { level: 2 })).toHaveText('e2e lade eerst')
+      // The head: the title, the steps, the tabs; no dataset or place in the view.
+      await expect(drawer.locator('header').getByRole('heading', { level: 2 })).toHaveText('e2e lade eerst')
+      await expect(drawer.locator('header')).not.toContainText(/\d+ van \d+/)
+      await expect(drawer.getByRole('button', { name: 'Vorige' })).toBeDisabled()
+      // The space in the subline, the fields with one Tijd and the day in full.
       await expect(drawer.locator('.nv-dw-sub')).toContainText('Nachtwacht')
       const field = (label: string) =>
         drawer
@@ -223,10 +224,12 @@ test.describe('step 3e: the drawer as the prototypes draw it', () => {
       await expect(field('Tijd')).toHaveText('10:00–12:00')
       await expect(field('Plandag')).toHaveText('di 10 okt 2028')
       await expect(drawer.getByRole('button', { name: /^\+ \d+ andere velden$/ })).toBeVisible()
-      // The sections: the people, the history.
+      // The sections: the people with the fields, the history in its tab.
       await expect(drawer.getByRole('region', { name: 'Mensen' })).toBeVisible()
-      await expect(drawer.getByRole('region', { name: 'Geschiedenis' })).toBeVisible()
       await shot(page, 'drawer-anatomy')
+      await openTab(page, 'Geschiedenis')
+      await expect(drawer.getByRole('region', { name: 'Geschiedenis' })).toBeVisible()
+      await openTab(page, 'Gegevens')
 
       // The fold: the other fields unfold under the list.
       const listed = await drawer.locator('.nv-drawer__field').count()
@@ -237,14 +240,14 @@ test.describe('step 3e: the drawer as the prototypes draw it', () => {
       const second = page.getByRole('complementary', { name: 'e2e lade tweede' })
       await drawer.getByRole('button', { name: 'Sluiten' }).focus()
       await page.keyboard.press('j')
-      await expect(second.locator('.nv-dw-head__pos')).toHaveText('2 van 2')
+      await expect(second.getByRole('button', { name: 'Volgende' })).toBeDisabled()
       await second.getByRole('button', { name: 'Sluiten' }).focus()
       await page.keyboard.press('ArrowUp')
-      await expect(drawer.locator('.nv-dw-head__pos')).toHaveText('1 van 2')
+      await expect(drawer.getByRole('button', { name: 'Vorige' })).toBeDisabled()
 
       // ↓ steps to the next row of the view; expand widens over the work and Escape gives it back.
       await drawer.getByRole('button', { name: 'Volgende' }).click()
-      await expect(second.locator('.nv-dw-head__pos')).toHaveText('2 van 2')
+      await expect(second.getByRole('button', { name: 'Volgende' })).toBeDisabled()
       await second.getByRole('button', { name: 'Volledig openen' }).click()
       await expect(second).toHaveClass(/nv-drawer--wide/)
       await page.keyboard.press('Escape')

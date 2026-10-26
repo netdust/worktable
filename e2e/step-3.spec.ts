@@ -155,7 +155,7 @@ test.describe('step 3', () => {
 
       await picker.getByRole('button', { name: 'Iedereen tonen' }).click()
       await expect(picker.getByRole('button', { name: 'Noor Claes', exact: true })).toBeVisible()
-      await picker.getByRole('searchbox', { name: 'Kies een persoon' }).fill('Bram')
+      await picker.getByRole('searchbox', { name: 'Kies iemand' }).fill('Bram')
       const filled = page.waitForResponse(
         (res) => res.request().method() === 'POST' && res.url().endsWith('/api/actions/vul_slot'),
       )

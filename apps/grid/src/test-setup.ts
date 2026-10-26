@@ -1,4 +1,4 @@
-import { configure, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect } from 'vitest'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { Providers } from './ui/Providers'
@@ -62,4 +62,13 @@ export async function actionsOffered(): Promise<string[]> {
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
   return [...shown, ...folded]
+}
+
+/** Shows one of the drawer's tabs: its icon in the bar, or its entry under Meer tabbladen. */
+export async function openTab(name: string): Promise<void> {
+  const bar = screen.getByRole('toolbar', { name: 'Onderdelen' })
+  const icon = within(bar).queryByRole('radio', { name })
+  if (icon) return void fireEvent.click(icon)
+  fireEvent.click(within(bar).getByRole('button', { name: 'Meer tabbladen' }))
+  fireEvent.click(await screen.findByRole('menuitemradio', { name }))
 }

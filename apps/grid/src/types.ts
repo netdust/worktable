@@ -103,7 +103,7 @@ export interface Model {
   selectable?: string
   /** A query whose `+ Nieuw` creates a row in this model. */
   creates?: string
-  /** The words of `+ Nieuw` ("Nieuwe activiteit"), while the model keeps its declared name. */
+  /** The words of `+ Nieuw` ("Nieuwe kist"), while the model keeps its declared name. */
   new_label?: string
   /** What the drawer offers to run on one of its records. */
   actions?: ModelAction[]

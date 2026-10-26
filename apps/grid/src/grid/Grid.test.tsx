@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import { pressTool, renderNl, typeKeys } from '../test-setup'
+import { openTab, pressTool, renderNl, typeKeys } from '../test-setup'
 import type { LinkItem, Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import type { LinkActions } from './cells/Links'
@@ -1007,14 +1007,15 @@ describe('the drawer', () => {
     expect(viewing).toHaveBeenLastCalledWith(null, undefined)
   })
 
-  it("shows one row's every field, the long ones too, and closes", () => {
+  it("shows one row's every field, the long ones too, and closes", async () => {
     const noted = { ...calais[2], fields: { ...calais[2].fields, notes: 'Twee veggie\nEén glutenvrij' } }
     renderGrid([noted])
 
     fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
 
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    expect(within(drawer).getByText('Notities')).toBeTruthy()
+    await openTab('Notities')
+    expect(within(within(drawer).getByRole('region', { name: 'Notities' })).getByText('Notities')).toBeTruthy()
     expect(within(drawer).getByText(/Twee veggie/).textContent).toBe('Twee veggie\nEén glutenvrij')
     fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
     expect(screen.queryByRole('complementary')).toBeNull()
@@ -1029,7 +1030,9 @@ describe('the drawer', () => {
   it('writes the long text edited in its block as the sheet writes a cell, and paints it at once', async () => {
     renderGrid()
     api.update.mockReturnValue(new Promise(() => undefined))
-    const notes = within(within(openDrawer('Montage')).getByRole('region', { name: 'Notities' }))
+    const drawer = openDrawer('Montage')
+    await openTab('Notities')
+    const notes = within(within(drawer).getByRole('region', { name: 'Notities' }))
 
     fireEvent.click(notes.getByRole('button'))
     const area = screen.getByRole('textbox', { name: 'Notities' })
@@ -1048,7 +1051,9 @@ describe('the drawer', () => {
     remote.attachmentsOf.mockResolvedValueOnce([rider]).mockResolvedValueOnce([rider])
     remote.removeAttachment.mockResolvedValueOnce('b-del')
     api.undo.mockResolvedValueOnce('u-del')
-    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const drawer = openDrawer('Montage')
+    await openTab('Bijlagen')
+    const files = within(within(drawer).getByRole('region', { name: 'Bijlagen' }))
 
     const remove = await files.findByRole('button', { name: 'rider.pdf verwijderen' })
     await act(async () => fireEvent.click(remove))
@@ -1075,12 +1080,16 @@ describe('the drawer', () => {
       stored = [rider]
       return Promise.resolve('u-del')
     })
-    const first = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const opened = openDrawer('Montage')
+    await openTab('Bijlagen')
+    const first = within(within(opened).getByRole('region', { name: 'Bijlagen' }))
     const remove = await first.findByRole('button', { name: 'rider.pdf verwijderen' })
     await act(async () => fireEvent.click(remove))
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Montage' })).getByRole('button', { name: 'Sluiten' }))
 
-    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const reopened = openDrawer('Montage')
+    await openTab('Bijlagen')
+    const files = within(within(reopened).getByRole('region', { name: 'Bijlagen' }))
     await files.findByText('Nog geen bijlagen')
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
@@ -1361,6 +1370,7 @@ async function addCondition(field: string, value: string) {
     render(<App />)
     await screen.findByText('18 mei')
     fireEvent.click(within(cell('Montage', 'title')).getByRole('button', { name: 'Openen' }))
+    await openTab('Bijlagen')
     const files = within(screen.getByRole('region', { name: 'Bijlagen' }))
     await files.findByText('Nog geen bijlagen')
 

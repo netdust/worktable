@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaults } from '../grid/layout'
 import type { Model, Row, View } from '../types'
+import { openTab } from '../test-setup'
 import { createMatrixStore, type MatrixApi, type MatrixStore } from './store'
 
 vi.mock('../api', () => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
@@ -106,18 +107,20 @@ describe('the cell drawer is the record drawer', () => {
     document.documentElement.lang = ''
   })
 
-  it('reads alert, fields, the rest of the day, who could stand in, and the history last, on the drawer\'s own edge', async () => {
+  it('reads alert, fields, the rest of the day and who could stand in on Gegevens, and the history in its own tab, on the drawer\'s own edge', async () => {
     const { panel, at } = setup()
     fireEvent.click(at(/Montage/, 'record:5'))
     const aside = panel()!
-    await within(aside).findByRole('region', { name: 'Geschiedenis' })
     expect(aside.querySelector('.nv-drawer__editor')).toBeNull()
-    const order = [...aside.querySelectorAll('.nv-dw-alert, .nv-drawer__fields, .nv-dw-sec')].map((el) =>
+    const order = () => [...aside.querySelectorAll('.nv-dw-alert, .nv-drawer__fields, .nv-dw-sec')].map((el) =>
       el.classList.contains('nv-dw-alert') ? 'alert' : el.classList.contains('nv-drawer__fields') ? 'fields' : (el.getAttribute('aria-label') ?? ''))
-    expect(order[0]).toBe('alert')
-    expect(order[1]).toBe('fields')
-    expect(order.at(-1)).toBe('Geschiedenis')
-    expect(order.findIndex((label) => label.startsWith('Ook op'))).toBeLessThan(order.indexOf('Geschiedenis'))
+    expect(order()[0]).toBe('alert')
+    expect(order()[1]).toBe('fields')
+    expect(order().some((label) => label.startsWith('Ook op'))).toBe(true)
+    expect(order()).not.toContain('Geschiedenis')
+    await openTab('Geschiedenis')
+    await within(aside).findByRole('region', { name: 'Geschiedenis' })
+    expect(order()).toEqual(['Geschiedenis'])
   })
 
   it('names its lines by the join\'s own field labels, no word of its own', () => {
