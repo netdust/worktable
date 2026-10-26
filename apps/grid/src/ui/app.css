@@ -108,6 +108,7 @@
 }
 
 .nv-model {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -167,14 +168,6 @@
   gap: 2px;
   opacity: 0;
   transition: opacity 120ms ease;
-}
-
-/* At rest the hidden tools take no room, so the count sits at the right edge. */
-.nv-model:not([data-hot]):not(:focus-within):not(:has([aria-expanded="true"])) .nv-model__tools {
-  position: absolute;
-  width: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 
 .nv-model[data-hot] .nv-model__tools,
@@ -6861,9 +6854,11 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 /* A dataset's record count beside its name, as the prototype's rail. */
+/* At the line's right edge, over the tools' spot: they show only on hover, when the count leaves. */
 .nv-model__count {
-  margin-left: auto;
-  padding-right: 6px;
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
   color: var(--color-fg-subtle);
   font: 11px var(--font-mono);
 }

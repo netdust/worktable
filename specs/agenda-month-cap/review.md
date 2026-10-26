@@ -25,3 +25,9 @@ None.
 9. Simplicity: the `line` render prop stays; it keeps Day free of Event's props.
 
 Findings: 0 Blocking · 3 Should fix · 6 Note
+
+## After the review
+The first gate after the fix pass failed three e2e flows: tree-scrolls-in-rail, select-and-picker-fit and
+autosave-own-view. The rail fix had taken the hidden tools out of the flow, which made the page scroll and left the
+tools unclickable at rest. The count now overlays the tools' spot at the line's right edge instead (`position:
+absolute`, no pointer events), and the tools stay where they were. All three flows pass again.
