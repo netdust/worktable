@@ -690,7 +690,9 @@ test.describe('studio', () => {
       const cell = page.locator('table.nv-cal--month td.nv-cal__today')
       const more = cell.getByRole('button', { name: /^\+\d+ meer$/ })
       await expect(more).toBeVisible()
-      const heights = await page.locator('table.nv-cal--month tbody tr').evaluateAll((rows) => rows.map((r) => Math.round(r.getBoundingClientRect().height)))
+      const heights = await page
+        .locator('table.nv-cal--month tbody tr')
+        .evaluateAll((rows) => rows.map((r) => Math.round(r.getBoundingClientRect().height)))
       expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1)
       const body = await page.locator('.nv-cal__body--month').boundingBox()
       const table = await page.locator('table.nv-cal--month').boundingBox()
@@ -698,7 +700,8 @@ test.describe('studio', () => {
       await shot(page, 'agenda-maand-vol')
       await more.click()
       const day = page.getByRole('dialog')
-      for (let at = 1; at <= 12; at++) await expect(day.getByRole('button', { name: `e2e drukke dag ${at}`, exact: true })).toBeVisible()
+      for (let at = 1; at <= 12; at++)
+        await expect(day.getByRole('button', { name: `e2e drukke dag ${at}`, exact: true })).toBeVisible()
       await shot(page, 'agenda-maand-dag')
       await day.getByRole('button', { name: 'e2e drukke dag 12', exact: true }).click()
       await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -708,7 +711,9 @@ test.describe('studio', () => {
     }
   })
 
-  test('rail-count-at-the-edge @e2e: the count sits at the right edge of its rail line and gives way to its tools on hover', async ({ page }) => {
+  test('rail-count-at-the-edge @e2e: the count sits at the right edge of its rail line and gives way to its tools on hover', async ({
+    page,
+  }) => {
     await page.goto('/')
     const row = page.locator('.nv-model').filter({ has: page.getByRole('button', { name: 'Taken', exact: true }) })
     const count = row.locator('.nv-model__count')
