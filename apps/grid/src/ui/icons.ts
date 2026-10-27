@@ -1,4 +1,4 @@
-import { Box, Calendar, CircleCheck, Clock, DatabaseSearch, Film, Flag, List, LogIn, type LucideIcon, MapPin, Star, Table, Tag, User, Users } from 'lucide-react'
+import { Box, Calendar, CircleCheck, Clock, DatabaseSearch, Film, Flag, List, LogIn, type LucideIcon, MapPin, Star, Table, Tag, Undo2, User, Users } from 'lucide-react'
 
 /** The engine's icon set, each name as the tree draws it and as the picker names it. */
 export const ICONS: { name: string; icon: LucideIcon; label: string }[] = [
@@ -17,6 +17,7 @@ export const ICONS: { name: string; icon: LucideIcon; label: string }[] = [
   { name: 'user', icon: User, label: 'Gebruiker' },
   { name: 'query', icon: DatabaseSearch, label: 'Zoekvraag' },
   { name: 'log-in', icon: LogIn, label: 'Inloggen' },
+  { name: 'undo', icon: Undo2, label: 'Terug' },
 ]
 
 export const iconNamed = (name: string | undefined): LucideIcon | undefined => ICONS.find((i) => i.name === name)?.icon

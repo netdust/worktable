@@ -2,6 +2,7 @@ import { type RefObject, useContext, useLayoutEffect, useRef, useState } from 'r
 import { Button } from 'react-aria-components'
 import { errorText, t } from '../i18n'
 import type { ApiError, ModelAction, Row } from '../types'
+import { iconNamed } from '../ui/icons'
 import { type Action, MoreMenu } from '../ui/MoreMenu'
 import { ActionInputs } from './ActionInputs'
 import { AskPanel } from './AskPanel'
@@ -13,6 +14,7 @@ interface Item {
   key: string
   label: string
   primary: boolean
+  icon?: string
   run: () => void
 }
 
@@ -50,7 +52,7 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
   }
   const marked = write && onDone && model && row.available ? row.available.buttons : []
   const items: Item[] = [
-    ...[...marked].sort((a, b) => Number(Boolean(b.primary)) - Number(Boolean(a.primary))).map((button) => ({ key: `to:${button.to}`, label: button.label, primary: Boolean(button.primary), run: () => press(button.to) })),
+    ...[...marked].sort((a, b) => Number(Boolean(b.primary)) - Number(Boolean(a.primary))).map((button) => ({ key: `to:${button.to}`, label: button.label, primary: Boolean(button.primary), icon: button.icon, run: () => press(button.to) })),
     ...(onAction ? actions.filter((action) => !action.head && (!row.available || row.available.actions.includes(action.name))).map((action) => ({ key: `action:${action.name}`, label: action.label, primary: false, run: () => run(action) })) : []),
   ]
   const hasItems = items.length > 0
@@ -82,10 +84,14 @@ export function ActionRow({ model, row, onDone, actions, onAction, onSaid, measu
   return (
     <div className="nv-dw-actions">
       <div className="nv-dw-actions__row" ref={line}>
-        {items.slice(0, visible).map((item) => (
-          <Button key={item.key} ref={(element) => { if (element) buttons.current.set(item.key, element); else buttons.current.delete(item.key) }}
-            className={`nv-button nv-button--${item.primary ? 'primary' : 'secondary'} nv-button--sm`} isDisabled={pressing} onPress={item.run}>{item.label}</Button>
-        ))}
+        {items.slice(0, visible).map((item) => {
+          const keep = (element: HTMLElement | null) => { if (element) buttons.current.set(item.key, element); else buttons.current.delete(item.key) }
+          const look = `nv-button nv-button--${item.primary ? 'primary' : 'secondary'} nv-button--sm`
+          const Icon = iconNamed(item.icon)
+          return Icon
+            ? <button key={item.key} ref={keep} type="button" className={`${look} nv-button--icon`} aria-label={item.label} title={item.label} disabled={pressing} onClick={item.run}><Icon size={14} aria-hidden="true" /></button>
+            : <Button key={item.key} ref={keep} className={look} isDisabled={pressing} onPress={item.run}>{item.label}</Button>
+        })}
         {folded.length > 0 && <MoreMenu actions={menu} label={t('moreInRow')} menu={t('moreInRow')} trigger={more as RefObject<HTMLButtonElement | null>} />}
       </div>
       {asking && (

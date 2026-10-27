@@ -250,6 +250,21 @@ describe('an action the rows do not all allow', () => {
     expect(screen.queryByText(/Past niet op/)).toBeNull()
   })
 
+  it('that skips misfits is hidden while every ticked row misfits, and shown unblocked once one fits', () => {
+    const cull: ModelAction = { name: 'cull', label: 'Opruimen', many: true, conditional: true, skips: true, input: {} }
+    sheet(withMarks({ 101: marked('gather', 'cull'), 102: marked('gather'), 104: marked('gather') }), { model: { ...activity, actions: [gather, cull] } })
+    fireEvent.click(rowBox('Montage'))
+    fireEvent.click(rowBox('Repetitie'))
+    const bar = screen.getByRole('region', { name: '2 geselecteerd' })
+    expect(within(bar).queryByRole('button', { name: 'Opruimen' })).toBeNull()
+    expect(within(bar).queryByText(/Past niet op/)).toBeNull()
+
+    fireEvent.click(rowBox('Auto Pavel + Sien'))
+    const mixed = screen.getByRole('region', { name: '3 geselecteerd' })
+    expect(within(mixed).getByRole('button', { name: 'Opruimen' })).toHaveProperty('disabled', false)
+    expect(within(mixed).queryByText(/Past niet op/)).toBeNull()
+  })
+
   it('stays enabled on rows that carry no marks: a source without conditions allows every action', () => {
     sheet()
     fireEvent.click(rowBox('Montage'))
@@ -386,6 +401,17 @@ describe('a selectable query view', () => {
 
     sheet(calais, { model: { ...query, selectable: undefined }, models })
     expect(boxes()).toHaveLength(0)
+  })
+
+  it('offers its dataset’s action that skips misfits, and a run on which none fits reads in words', async () => {
+    const cull: ModelAction = { name: 'cull', label: 'Opruimen', many: true, conditional: true, skips: true, input: {} }
+    const onSelection = vi.fn(() => Promise.reject({ code: 'condition_not_met', message: 'no record meets the condition of "cull"' }))
+    sheet(calais, { model: query, models: { dataset: { ...dataset, actions: [gather, when, cull] } }, onSelection })
+    fireEvent.click(rowBox('Lunch bistrot'))
+    const bar = screen.getByRole('region', { name: /geselecteerd/ })
+    fireEvent.click(within(bar).getByRole('button', { name: 'Opruimen' }))
+    expect(await within(bar).findByText('Geen van deze rijen komt in aanmerking.')).toBeTruthy()
+    expect(within(bar).queryByText(/condition/)).toBeNull()
   })
 
   it('runs the ticked rows as the dataset’s records: one run with the query rows’ ids', async () => {

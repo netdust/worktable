@@ -5,6 +5,8 @@ import { errorText, t } from '../i18n'
 import type { ActionInput, ApiError, ModelAction, OptionsFrom, Row } from '../types'
 import { RelationPicker } from './cells/RelationPicker'
 
+const refusalText = (error: ApiError) => errorText(error.code, error.message)
+
 type Sending = { status: 'idle' } | { status: 'sent' } | { status: 'refused'; message: string }
 
 type Typed = Exclude<ActionInput, { relation: string }>
@@ -42,7 +44,7 @@ const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
   Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
 
 /** Keyed by its record, so another row starts with nothing picked. The bar has no one record: its inputs pick by id, never `options_from`. */
-export function ActionInputs({ action, record, disabled = false, staleOn, onRun, onPicked }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; staleOn?: number; onRun: (input: Record<string, unknown>) => Promise<unknown>; /** A pick changes its button's label: what holds the inputs may need to measure again. */ onPicked?: (key: string, title: string) => void }) {
+export function ActionInputs({ action, record, disabled = false, staleOn, onRun, onPicked, refusalOf = refusalText }: { action: ModelAction; record?: Record<string, unknown>; disabled?: boolean; staleOn?: number; onRun: (input: Record<string, unknown>) => Promise<unknown>; /** A pick changes its button's label: what holds the inputs may need to measure again. */ onPicked?: (key: string, title: string) => void; refusalOf?: (error: ApiError) => string }) {
   const inputs = Object.entries(action.input)
   const [picked, setPicked] = useState<Record<string, Row>>({})
   const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
@@ -67,7 +69,7 @@ export function ActionInputs({ action, record, disabled = false, staleOn, onRun,
     const given = inputs.filter((entry) => valueOf(entry) !== undefined).map((entry) => [entry[0], valueOf(entry)])
     onRun(Object.fromEntries(given)).then(
       () => setSending({ status: 'idle' }),
-      (error: ApiError) => setSending({ status: 'refused', message: errorText(error.code, error.message) }),
+      (error: ApiError) => setSending({ status: 'refused', message: refusalOf(error) }),
     )
   }
 
