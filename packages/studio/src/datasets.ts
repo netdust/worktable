@@ -208,6 +208,7 @@ export const actieSite = defineDataset({
         to: 'overgeslagen',
         roles: both,
         button: 'Niet nu',
+        icon: 'clock',
         when: { actie_status: 'voorbereid' },
       },
       {
@@ -215,6 +216,7 @@ export const actieSite = defineDataset({
         to: 'te_bevestigen',
         roles: both,
         button: 'Toch wel',
+        icon: 'undo',
         when: { actie_status: 'voorbereid', resultaat: null },
       },
       { from: ['bezig'], to: 'klaar', roles: both },
