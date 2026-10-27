@@ -85,10 +85,10 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-/** A table's selection actions; a selectable query's are its dataset's, the ones that apply to every record. */
+/** A table's selection actions; a selectable query's are its dataset's that apply to every record or skip what does not fit. */
 function selectionOf(model: Model, models: Record<string, Model>): ModelAction[] {
   if (!model.selectable) return model.actions?.filter((a) => a.many) ?? []
-  return models[model.selectable]?.actions?.filter((a) => a.many && !a.conditional) ?? []
+  return models[model.selectable]?.actions?.filter((a) => a.many && (!a.conditional || a.skips)) ?? []
 }
 
 export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, onSelection, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
@@ -365,9 +365,13 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   }
 
   /** The ticked rows an action is not marked on: a row with no marks allows every action. */
-  function misfits(action: ModelAction): number {
+  function unmarked(action: ModelAction): number {
     return state.rows.filter((row) => ticking.selected.has(row.id) && row.available && !row.available.actions.includes(action.name)).length
   }
+
+  /** An action that skips misfits blocks on none of them. */
+  const misfits = (action: ModelAction): number => (action.skips ? 0 : unmarked(action))
+  const barActions = selectionActions.filter((action) => !action.skips || unmarked(action) < ticking.selected.size)
 
   function openRelated(target: string, id: number): Promise<void> {
     const gone = () => onNotice?.(t('recordGone'))
@@ -407,7 +411,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
       ) : (
       <>
       {selectable && onSelection && panelled(
-        <SelectionBar count={ticking.selected.size} picked={ticking.selected} actions={selectionActions} onClear={ticking.clear} misfits={misfits}
+        <SelectionBar count={ticking.selected.size} picked={ticking.selected} actions={barActions} onClear={ticking.clear} misfits={misfits}
           onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then((opened) => {
             ticking.clear()
             show(opened)

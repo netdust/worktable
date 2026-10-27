@@ -74,7 +74,7 @@ export interface LinkItem {
 /** What the server marks on a row or link item: the buttons and actions that apply to this viewer now. `state` is what a press sends as `expect`. */
 export interface Available {
   state: string | null
-  buttons: { to: string; label: string; primary?: true }[]
+  buttons: { to: string; label: string; primary?: true; icon?: string }[]
   actions: string[]
 }
 
@@ -136,6 +136,8 @@ export interface ModelAction {
   opens?: true
   /** Applies to a record only while a condition holds: a query's rows carry no marks to say whether it does. */
   conditional?: true
+  /** With `conditional`: runs on the ticked rows that fit and skips the rest, so it is offered once one fits. */
+  skips?: true
   /** Sits in the drawer's head as an icon-only button, beside the open link. */
   head?: { icon: string }
   /** Its run makes a service hand back an address, which the grid opens in a new tab. */

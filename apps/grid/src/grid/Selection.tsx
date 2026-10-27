@@ -51,6 +51,10 @@ function useJoined(picked?: ReadonlySet<number>): number {
   return joined
 }
 
+/** An action that skips misfits is refused its condition only when none of the ticked rows fits. */
+const refusalOf = (action: ModelAction) => (error: ApiError): string =>
+  action.skips && error.code === 'condition_not_met' ? t('selectionNoneFits') : errorText(error.code, error.message)
+
 const measureActions = (line: HTMLElement) => measureLine(line, ':scope > .nv-selection__item')
 const roomOf = (line: HTMLElement) => line.closest<HTMLElement>('.nv-dock, .nv-frame') ?? line
 
@@ -94,7 +98,7 @@ export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }
   const runFolded = (action: ModelAction) => {
     if (busy) return
     if (Object.keys(action.input).length > 0) return setAsking(action)
-    run(action, {}).catch((error: ApiError) => setRefused(errorText(error.code, error.message)))
+    run(action, {}).catch((error: ApiError) => setRefused(refusalOf(action)(error)))
   }
   const visible = shown === null ? actions.length : shown
   const folded: Action[] = actions.slice(visible).map((action) => {
@@ -114,7 +118,7 @@ export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }
           const misfit = misfitOf(action)
           return (
             <span key={action.name} className="nv-selection__item">
-              <ActionInputs action={action} staleOn={joined} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} onPicked={pickedIn(action)} />
+              <ActionInputs action={action} staleOn={joined} disabled={over || busy || misfit > 0} onRun={(input) => run(action, input)} onPicked={pickedIn(action)} refusalOf={refusalOf(action)} />
               {misfit > 0 && <span className="nv-selection__max" title={action.label}>{t('selectionMisfit', { n: misfit })}</span>}
             </span>
           )
@@ -123,7 +127,7 @@ export function SelectionBar({ count, picked, actions, misfits, onRun, onClear }
       </div>
       {asking && (
         <AskPanel key={asking.name} className="nv-selection__ask" onLeave={leave}>
-          <ActionInputs action={asking} staleOn={joined} disabled={over || busy || misfitOf(asking) > 0} onRun={(input) => run(asking, input).then(() => setAsking(null))} onPicked={pickedIn(asking)} />
+          <ActionInputs action={asking} staleOn={joined} disabled={over || busy || misfitOf(asking) > 0} onRun={(input) => run(asking, input).then(() => setAsking(null))} onPicked={pickedIn(asking)} refusalOf={refusalOf(asking)} />
         </AskPanel>
       )}
       {over && <span className="nv-selection__max" role="alert">{t('selectionMax', { max: MAX_SELECTION })}</span>}

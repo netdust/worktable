@@ -17,7 +17,7 @@ type Source = {
   of?: string
   creates?: string
 }
-type Available = { buttons: { label: string }[] }
+type Available = { buttons: { label: string; icon?: string }[] }
 type Link = { state?: string; detail?: string | null; available?: Available }
 type View = { id: number; name: string; source: string | null; skin: string; filters: Body; layout?: Layout }
 type Tile = { kind: string; view?: number; done?: number; total?: number; set?: Body }
@@ -203,6 +203,7 @@ describe('the seeded opdracht', () => {
     expect(pending).toHaveLength(2)
     for (const item of pending) {
       expect(labels(item.available)).toEqual(['Niet nu'])
+      expect(item.available?.buttons[0]?.icon).toBe('clock')
       expect(item.detail).toBeTruthy()
     }
     expect(pending.map((l) => l.detail)).toContain('1 plugin: cache-plugin 1.9.0 → 1.9.2')
@@ -217,8 +218,10 @@ describe('Sites met aandacht', () => {
     for (const row of aandacht) expect(sites.find((site) => site.id === row.id)?.naam).toBe(row.naam)
   })
 
-  test('the sites’ selection actions are all unconditional, so every one shows on it', async () => {
-    const actions = (schema.site as unknown as { actions: { name: string; many?: true; conditional?: true }[] }).actions
+  test('the sites’ selection actions are unconditional or skip what does not fit, so every one shows on it', async () => {
+    const actions = (
+      schema.site as unknown as { actions: { name: string; many?: true; conditional?: true; skips?: true }[] }
+    ).actions
     expect(
       actions
         .filter((a) => a.many)
@@ -235,6 +238,12 @@ describe('Sites met aandacht', () => {
       'plugin_installeren',
       'smoketest',
     ])
-    expect(actions.filter((a) => a.many && a.conditional)).toEqual([])
+    expect(
+      actions
+        .filter((a) => a.many && a.conditional)
+        .map((a) => a.name)
+        .sort(),
+    ).toEqual(['cache_legen', 'cron_draaien', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit'])
+    expect(actions.filter((a) => a.many && a.conditional && !a.skips)).toEqual([])
   })
 })

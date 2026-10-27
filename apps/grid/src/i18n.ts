@@ -286,6 +286,7 @@ const strings = {
   buttonDone: '{button} gedaan.',
   liveBusy: 'Volgt live',
   selectionMisfit: 'Past niet op {n} rijen',
+  selectionNoneFits: 'Geen van deze rijen komt in aanmerking.',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
   selectedCount: '{n} geselecteerd',

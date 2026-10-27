@@ -73,6 +73,27 @@ describe('the drawer’s buttons', () => {
     expect(press).toHaveBeenCalledExactlyOnceWith('tie', 9, item.available, 'skip', onDone)
   })
 
+  it('draws a link item button that declares an icon as the icon alone, named and titled by its label, and presses it', () => {
+    press.mockClear()
+    const marks: Available = { state: 'open', buttons: [{ to: 'skip', label: 'Niet nu', icon: 'clock' }], actions: [] }
+    const item: LinkItem = { id: 9, target: 4, title: 'Ann', state: 'open', available: marks }
+    const link = { item: 'Lid', dataset: 'tie', key: 'activity_id', target: 'member_id', target_dataset: 'member' }
+    const withLink: Model = { ...model, fields: { ...model.fields, members: { type: 'links', label: 'Leden', link } as unknown as Model['fields'][string] } }
+    const cols = columnsFor(withLink, { ...planning, columns: undefined }, false)
+    const onDone = vi.fn()
+    const schema = { models: { tie: { key: 'tie', label: 'Tie', fields: {} } }, tables: [], views: [] } as unknown as Schema
+    render(<SchemaContext.Provider value={schema}><DrawerWriteContext.Provider value={write}>
+      <Drawer row={row(undefined, [item])} columns={cols} model={withLink} onDone={onDone} onClose={() => undefined} />
+    </DrawerWriteContext.Provider></SchemaContext.Provider>)
+
+    const button = screen.getByRole('button', { name: 'Niet nu' })
+    expect(button.textContent).toBe('')
+    expect(button.getAttribute('title')).toBe('Niet nu')
+    expect(button.querySelector('svg')).toBeTruthy()
+    fireEvent.click(button)
+    expect(press).toHaveBeenCalledExactlyOnceWith('tie', 9, marks, 'skip', onDone)
+  })
+
   it('presses one at a time while a press is in flight, so a double click is one press', async () => {
     let answer: () => void = () => undefined
     press.mockClear()

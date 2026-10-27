@@ -268,12 +268,11 @@ describe('the selection actions', () => {
     }
   })
 
-  test('with no plugin site at all, all but the install are refused', async () => {
+  test('with no plugin site at all, all but the install are refused 422 condition_not_met', async () => {
     for (const name of ['cache_legen', 'cron_draaien', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit']) {
       const before = lastActie()
       const res = await selection(admin, name, [WITHOUT, 4])
-      expect(res.status).toBe(422)
-      expect(JSON.stringify(res.body)).toContain('Geen van deze sites heeft de studio-plugin.')
+      expect([res.status, res.body.code]).toEqual([422, 'condition_not_met'])
       expect(lastActie()).toBe(before)
     }
     expect((await selection(admin, 'plugin_installeren', [WITHOUT, 4])).status).toBe(201)
@@ -287,19 +286,42 @@ describe('the selection actions', () => {
     ])
   })
 
-  test('the actions are served as selection actions without a when', async () => {
+  test('a plugin site gone from the registry is skipped with its own reason in a mixed run', async () => {
+    sqlite.run('UPDATE site SET plugin = 1 WHERE id = 5')
+    expect((await selection(admin, 'cache_legen', [WITH, 5])).status).toBe(201)
+    expect(linksOf(lastActie()).map((l) => [l.site_id, l.state, l.samenvatting])).toEqual([
+      [1, 'wacht', null],
+      [5, 'overgeslagen', 'Niet meer in de registry'],
+    ])
+  })
+
+  test('the install is served without a when; the four plugin actions with a when that skips', async () => {
     const schema = await admin('GET', '/api/schema')
     const site = (schema.body.sources as Record<string, { actions: Body[] }>).site
+    const install = site?.actions.find((a) => a.name === 'plugin_installeren')
+    expect(install).toMatchObject({ label: 'Studio-plugin installeren', many: true, opens: true })
+    expect([install?.conditional, install?.skips]).toEqual([undefined, undefined])
     for (const [name, label] of [
-      ['plugin_installeren', 'Studio-plugin installeren'],
       ['cache_legen', 'Cache legen'],
       ['cron_draaien', 'Cron draaien'],
       ['onderhoudsmodus_aan', 'Onderhoudsmodus aan'],
       ['onderhoudsmodus_uit', 'Onderhoudsmodus uit'],
     ]) {
       const served = site?.actions.find((a) => a.name === name)
-      expect(served).toMatchObject({ label, many: true, opens: true })
-      expect(served?.conditional).toBeUndefined()
+      expect(served).toMatchObject({ label, many: true, opens: true, conditional: true, skips: true })
     }
+  })
+
+  test('a site is marked for the plugin actions only while it has the plugin and is in the registry', async () => {
+    const plugin = ['cache_legen', 'cron_draaien', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit']
+    const marked = async (id: number) => {
+      const { rows: sites } = (await admin('GET', '/api/rows/site')).body as { rows: Body[] }
+      const site = sites.find((s) => s.id === id) as { available: { actions: string[] } }
+      return plugin.filter((name) => site.available.actions.includes(name))
+    }
+    expect(await marked(WITH)).toEqual(plugin)
+    expect(await marked(WITHOUT)).toEqual([])
+    sqlite.run('UPDATE site SET plugin = 1 WHERE id = 5')
+    expect(await marked(5)).toEqual([])
   })
 })

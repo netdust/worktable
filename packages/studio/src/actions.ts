@@ -9,7 +9,6 @@ const GONE = 'Niet meer in de registry'
 const ALL_GONE = 'Geen van deze sites staat nog in de registry.'
 const NO_PLUGIN = 'geen plugin'
 const WITHOUT_PLUGIN = 'Geen studio-plugin'
-const NONE_WITH_PLUGIN = 'Geen van deze sites heeft de studio-plugin.'
 
 const titelOf = (soort: Soort, records: Values[]): string =>
   `${soorten[soort]} · ${records.length === 1 ? records[0]?.naam : `${records.length} sites`}`
@@ -26,26 +25,24 @@ const linkOf = (actie: number, record: Values, needsPlugin = false): ActionCreat
   values: { actie_id: actie, site_id: record.id, ...skipOf(record, needsPlugin) },
 })
 
-/** An action of the studio plugin: a site without it is skipped, and a selection with none is refused. */
+/** An action of the studio plugin: offered where a site has it, a site without it is skipped, and the engine refuses a selection with none. */
 const makePlugin = (soort: Soort, label: string): SelectionActionDecl => ({
   label,
   on: 'site',
   many: true,
   opens: true,
   input: {},
-  run: (records) => {
-    if (records.every((record) => record.in_registry === false)) refuse(ALL_GONE)
-    if (records.every((record) => record.in_registry === false || record.plugin !== true)) refuse(NONE_WITH_PLUGIN)
-    return {
-      creates: [
-        {
-          dataset: 'actie',
-          values: { soort, titel: titelOf(soort, records) },
-          children: (id) => records.map((record) => linkOf(id, record, true)),
-        },
-      ],
-    }
-  },
+  when: { plugin: true, in_registry: true },
+  skip: true,
+  run: (records) => ({
+    creates: [
+      {
+        dataset: 'actie',
+        values: { soort, titel: titelOf(soort, records) },
+        children: (id) => records.map((record) => linkOf(id, record, true)),
+      },
+    ],
+  }),
 })
 
 const make = (soort: Soort, label: string): SelectionActionDecl => ({

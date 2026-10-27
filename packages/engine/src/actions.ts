@@ -112,6 +112,13 @@ function readRecord(store: Store, dataset: string, id: number, actor: Actor): Va
 }
 
 // Judged on the record as the caller reads it, lookups included, so the grid's mark and this refusal agree.
+function fits(store: Store, name: string, action: ActionDecl | SelectionActionDecl, id: number, actor: Actor) {
+  if (!action.when) return true
+  const source = visibleSource(store.domain, action.on, actor) as DatasetDecl
+  const row = rowOf(store, source, id, scopeOf(actor, source))
+  return availableOf(store.domain, source, row, actor)?.actions.includes(name) ?? false
+}
+
 function assertCondition(
   store: Store,
   name: string,
@@ -119,11 +126,22 @@ function assertCondition(
   id: number,
   actor: Actor,
 ) {
-  if (!action.when) return
-  const source = visibleSource(store.domain, action.on, actor) as DatasetDecl
-  const row = rowOf(store, source, id, scopeOf(actor, source))
-  if (!availableOf(store.domain, source, row, actor)?.actions.includes(name)) {
+  if (!fits(store, name, action, id, actor)) {
     throw new ApiError(422, 'condition_not_met', `record ${id} does not meet the condition of "${name}"`)
+  }
+}
+
+function assertSelectionCondition(
+  store: Store,
+  name: string,
+  action: SelectionActionDecl,
+  ids: number[],
+  actor: Actor,
+) {
+  if (!action.skip) {
+    for (const id of ids) assertCondition(store, name, action, id, actor)
+  } else if (!ids.some((id) => fits(store, name, action, id, actor))) {
+    throw new ApiError(422, 'condition_not_met', `no record meets the condition of "${name}"`)
   }
 }
 
@@ -178,7 +196,7 @@ function runSelection(store: Store, name: string, action: SelectionActionDecl, b
   const given = inputOf(action, body)
   return execute(store, actor, () => {
     const records = ids.map((id) => readRecord(store, action.on, id, actor))
-    for (const id of ids) assertCondition(store, name, action, id, actor)
+    assertSelectionCondition(store, name, action, ids, actor)
     const input = inputsRead(store, action, given, actor)
     return action.run(records, input, contextOf(store, actor, null))
   })
@@ -197,6 +215,7 @@ export type ServedAction = {
   many?: true
   opens?: true
   conditional?: true
+  skips?: true
   head?: { icon: Icon }
   handoff?: true
 } & Pick<ActionDecl, 'label' | 'input'>
@@ -211,6 +230,7 @@ export function actionsOn(domain: Domain, dataset: string): ServedAction[] {
       ...(isSelection(action) ? { many: true as const } : {}),
       ...(action.opens ? { opens: true as const } : {}),
       ...(action.when ? { conditional: true as const } : {}),
+      ...(isSelection(action) && action.skip ? { skips: true as const } : {}),
       ...(!isSelection(action) && action.head ? { head: action.head } : {}),
       ...(!isSelection(action) && action.handoff ? { handoff: true as const } : {}),
     }))

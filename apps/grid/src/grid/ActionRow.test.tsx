@@ -35,6 +35,16 @@ describe('the action row', () => {
     expect(screen.getByRole('button', { name: 'Annuleren' }).className).not.toContain('nv-button--primary')
   })
 
+  it('draws a button that declares an icon as the icon alone, named and titled by its label', () => {
+    press.mockClear()
+    show(row({ state: 'x', buttons: [{ to: 'weg', label: 'Niet nu', icon: 'clock' }], actions: [] }))
+    const button = screen.getByRole('button', { name: 'Niet nu' })
+    expect([button.textContent, button.getAttribute('title')]).toEqual(['', 'Niet nu'])
+    expect(button.querySelector('svg')).toBeTruthy()
+    fireEvent.click(button)
+    expect(press).toHaveBeenCalledTimes(1)
+  })
+
   it('shows the buttons in their declared order, all quiet, when none is primary, then the declared actions', () => {
     const { container } = show(row({ state: 'x', buttons: buttons(['a', 'Eerst'], ['b', 'Tweede']), actions: ['bundel'] }), { actions: [act('bundel')], onAction: vi.fn() })
 

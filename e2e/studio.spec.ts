@@ -138,6 +138,18 @@ async function pressInBar(page: Page, bar: Locator, label: string): Promise<void
   await page.getByRole('menuitem', { name: label, exact: true }).click()
 }
 
+/** Whether the panel offers a selection action: as its button, or as an item behind Meer. */
+async function inBar(page: Page, bar: Locator, label: string): Promise<boolean> {
+  if ((await bar.getByRole('button', { name: label, exact: true }).count()) > 0) return true
+  const more = bar.getByRole('button', { name: 'Meer' })
+  if ((await more.count()) === 0) return false
+  await more.click()
+  const found = (await page.getByRole('menuitem', { name: label, exact: true }).count()) > 0
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu', { name: 'Meer' })).toHaveCount(0)
+  return found
+}
+
 const siteLine = (drawer: Locator, site: string) =>
   drawer.getByRole('region', { name: /Sites/ }).getByRole('listitem').filter({ hasText: site })
 
@@ -864,7 +876,7 @@ test.describe('studio', () => {
     }
   })
 
-  test('drawer-site-line-buttons-centred @e2e: a site line with its own buttons keeps the name and the button labels on one centre line', async ({
+  test('drawer-site-line-buttons-centred @e2e: a site line with its own buttons keeps the name and the buttons, icons now, on one centre line', async ({
     page,
   }) => {
     const api = page.request
@@ -886,7 +898,10 @@ test.describe('studio', () => {
         return r.y + r.height / 2
       }
       const name = await line.getByText('voorbeeld-site', { exact: true }).evaluate(middle)
-      const label = await button.evaluate(middle)
+      const label = await button.locator('svg').evaluate((el) => {
+        const r = el.getBoundingClientRect()
+        return r.y + r.height / 2
+      })
       expect(Math.abs(name - label)).toBeLessThanOrEqual(2)
       await shot(page, 'opdracht-regel-knoppen')
     } finally {
@@ -2225,7 +2240,7 @@ test.describe('plugin-actions, the shake-out', () => {
     }
   })
 
-  test('cache-runs-straight-away @e2e: Cache legen from the Studio-plugin view runs with no Bevestigen, a site without the plugin is skipped, and a selection with none is refused', async ({
+  test('cache-runs-straight-away @e2e: Cache legen from the Studio-plugin view runs with no Bevestigen, a site without the plugin is skipped, and a selection with none is not offered it', async ({
     page,
   }) => {
     const api = page.request
@@ -2265,14 +2280,16 @@ test.describe('plugin-actions, the shake-out', () => {
       const before = await newest(api, 'actie')
       await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
       await page.getByRole('checkbox', { name: 'voorbeeld-blog selecteren' }).check()
-      await pressInBar(page, page.getByRole('region', { name: '2 geselecteerd' }), 'Cache legen')
-      await expect(page.getByText('Geen van deze sites heeft de studio-plugin.').first()).toBeVisible()
-      await expect(page.getByRole('complementary')).toHaveCount(0)
+      const none = page.getByRole('region', { name: '2 geselecteerd' })
+      await expect(none.getByText('Studio-plugin installeren')).toBeVisible()
+      expect(await inBar(page, none, 'Cache legen'), 'no site has the plugin: Cache legen is not offered').toBe(false)
       expect(await newest(api, 'actie'), 'no opdracht when no site has the plugin').toBe(before)
       await page.getByRole('checkbox', { name: 'voorbeeld-blog selecteren' }).uncheck()
 
       await page.getByRole('checkbox', { name: 'testmans-winkel selecteren' }).check()
       const bar = page.getByRole('region', { name: '2 geselecteerd' })
+      expect(await inBar(page, bar, 'Cache legen'), 'one ticked site has the plugin').toBe(true)
+      await expect(bar.getByText(/Past niet op/)).toHaveCount(0)
       for (const [theme, name] of THEMES) {
         await setTheme(page, theme)
         await page.mouse.move(0, 0)
@@ -2318,24 +2335,114 @@ test.describe('plugin-actions, the shake-out', () => {
     }
   })
 
-  test('refusal-clears-on-a-new-selection @e2e: a selection refused for having no plugin site no longer reads refused once a site with the plugin is ticked', async ({
+  test('plugin-action-offered-once-a-plugin-site-is-ticked @e2e: a selection with no plugin site is not offered the plugin actions, and is once a site with the plugin is ticked', async ({
+    page,
+  }) => {
+    await open(page, 'Studio-plugin', 'Sites')
+    const box = (site: string) => page.getByRole('checkbox', { name: `${site} selecteren` })
+    const plugin = ['Cache legen', 'Cron draaien', 'Onderhoudsmodus aan', 'Onderhoudsmodus uit']
+    await box('testmans-bestel').check()
+    await box('voorbeeld-blog').check()
+    const none = page.getByRole('region', { name: '2 geselecteerd' })
+    await expect(none).toBeVisible()
+    for (const label of plugin) expect(await inBar(page, none, label), `${label} on no plugin site`).toBe(false)
+
+    await box('voorbeeld-blog').uncheck()
+    await box('testmans-winkel').check()
+    const mixed = page.getByRole('region', { name: '2 geselecteerd' })
+    for (const label of plugin) expect(await inBar(page, mixed, label), `${label} on a mixed selection`).toBe(true)
+    await expect(mixed.getByText(/Past niet op/)).toHaveCount(0)
+  })
+
+  test('cache-refused-in-words-on-a-query @e2e: in Sites met aandacht Cache legen is offered, and on a selection with no plugin site it is refused in Dutch and makes no opdracht', async ({
     page,
   }) => {
     const api = page.request
     const before = await newest(api, 'actie')
-    await open(page, 'Studio-plugin', 'Sites')
+    await open(page, 'Sites met aandacht', 'Sites')
+    await page.getByRole('checkbox', { name: 'testmans-bestel selecteren' }).check()
+    await page.getByRole('checkbox', { name: 'voorbeeld-blog selecteren' }).check()
+    const bar = page.getByRole('region', { name: '2 geselecteerd' })
+    await pressInBar(page, bar, 'Cache legen')
+    await expect(bar.getByText('Geen van deze rijen komt in aanmerking.')).toBeVisible()
+    await expect(bar.getByText(/condition/)).toHaveCount(0)
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+    expect(await newest(api, 'actie'), 'no opdracht when no site has the plugin').toBe(before)
+  })
+
+  test('refusal-clears-on-a-new-selection @e2e: in Sites met aandacht a Cache legen refused for having no plugin site no longer reads refused once another site is ticked', async ({
+    page,
+  }) => {
+    await open(page, 'Sites met aandacht', 'Sites')
     const box = (site: string) => page.getByRole('checkbox', { name: `${site} selecteren` })
     await box('testmans-bestel').check()
-    await box('voorbeeld-blog').check()
-    await pressInBar(page, page.getByRole('region', { name: '2 geselecteerd' }), 'Cache legen')
-    const refusal = page.getByText('Geen van deze sites heeft de studio-plugin.')
-    await expect(refusal.first()).toBeVisible()
-    expect(await newest(api, 'actie')).toBe(before)
+    await pressInBar(page, page.getByRole('region', { name: '1 geselecteerd' }), 'Cache legen')
+    const refusal = page.getByText('Geen van deze rijen komt in aanmerking.')
+    await expect(refusal).toBeVisible()
 
-    await box('voorbeeld-blog').uncheck()
-    await box('testmans-winkel').check()
+    await box('voorbeeld-blog').check()
     await expect(page.getByRole('region', { name: '2 geselecteerd' })).toBeVisible()
-    await expect(refusal, 'testmans-winkel has the plugin: the old refusal no longer holds').toHaveCount(0)
+    await expect(refusal, 'the refusal held for the selection it was asked of').toHaveCount(0)
+  })
+
+  test('site-drawer-plugin-actions-by-site @e2e: a site drawer without the plugin offers none of the plugin actions, one with the plugin offers them all', async ({
+    page,
+  }) => {
+    const plugin = ['Cache legen', 'Cron draaien', 'Onderhoudsmodus aan', 'Onderhoudsmodus uit']
+    await open(page, 'Sites', 'Sites')
+    const without = await drawerOf(page, 'testmans-bestel')
+    const offeredWithout = await offered(page)
+    expect(offeredWithout).toContain('Studio-plugin installeren')
+    for (const label of plugin) expect(offeredWithout).not.toContain(label)
+    try {
+      for (const [theme, name] of THEMES) {
+        await setTheme(page, theme)
+        await shot(page, `site-zonder-plugin-acties-${name}`)
+      }
+    } finally {
+      await setTheme(page, 'Licht')
+    }
+    await without.getByRole('button', { name: 'Sluiten' }).click()
+
+    await drawerOf(page, 'testmans-winkel')
+    expect(await offered(page)).toEqual(expect.arrayContaining(plugin))
+  })
+
+  test('niet-nu-is-an-icon @e2e: a site line’s Niet nu is an icon button named and titled Niet nu that skips the site, and Toch wel, an icon too, brings it back', async ({
+    page,
+  }) => {
+    const api = page.request
+    const { actie } = await preview(api, [3])
+    try {
+      await open(page, 'Opdrachten', 'Opdrachten')
+      const drawer = await drawerOf(page, 'Bijwerken · voorbeeld-site')
+      const line = siteLine(drawer, 'voorbeeld-site')
+      const skip = line.getByRole('button', { name: 'Niet nu', exact: true })
+      await expect(skip).toBeVisible()
+      await expect(skip).toHaveAttribute('title', 'Niet nu')
+      await expect(skip).toHaveText('')
+      await expect(skip.locator('svg')).toHaveCount(1)
+      try {
+        for (const [theme, name] of THEMES) {
+          await setTheme(page, theme)
+          await shot(page, `opdracht-niet-nu-icoon-${name}`)
+        }
+      } finally {
+        await setTheme(page, 'Licht')
+      }
+
+      await line.getByRole('button', { name: 'Niet nu', exact: true }).click()
+      await expect(line).toContainText('Overgeslagen')
+      const back = line.getByRole('button', { name: 'Toch wel', exact: true })
+      await expect(back).toHaveAttribute('title', 'Toch wel')
+      await expect(back).toHaveText('')
+      await expect(back.locator('svg')).toHaveClass(/undo/)
+      await back.click()
+      await expect(line).toContainText('Preview klaar')
+      await expect(line.getByRole('button', { name: 'Niet nu', exact: true })).toBeVisible()
+    } finally {
+      await api.patch(`/api/rows/actie/${actie}`, { data: { status: 'geannuleerd' } })
+    }
   })
 
   test('drawer-head-keys-unique @e2e: opening a site drawer renders its head tools without a duplicate React key', async ({

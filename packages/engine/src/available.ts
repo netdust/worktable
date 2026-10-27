@@ -1,9 +1,9 @@
-import type { Actor, Condition, Domain } from './declare'
+import type { Actor, Condition, Domain, Icon } from './declare'
 import type { Source } from './registry'
 
 export interface Available {
   state: string | null
-  buttons: { to: string; label: string; primary?: true }[]
+  buttons: { to: string; label: string; primary?: true; icon?: Icon }[]
   actions: string[]
 }
 
@@ -38,7 +38,14 @@ function buttonsOf(source: Source, state: string | null, row: Row, actor: Actor)
     const leaves = t.from === '*' || t.from.includes(state)
     const shown = t.button !== undefined && leaves && t.to !== state
     return shown && t.roles.includes(actor.role) && matches(t.when, row)
-      ? [{ to: t.to, label: t.button as string, ...(t.primary ? { primary: true as const } : {}) }]
+      ? [
+          {
+            to: t.to,
+            label: t.button as string,
+            ...(t.primary ? { primary: true as const } : {}),
+            ...(t.icon ? { icon: t.icon } : {}),
+          },
+        ]
       : []
   })
 }

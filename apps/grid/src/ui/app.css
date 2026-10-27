@@ -7021,3 +7021,8 @@ table.nv-cal--month .nv-cal__event:hover {
   flex: 1;
   min-width: 0;
 }
+
+/* A button drawn as its icon alone: square, its label the name and tooltip. */
+.nv-button--sm.nv-button--icon {
+  padding: 6px;
+}
