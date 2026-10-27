@@ -392,3 +392,114 @@ describe('what a link read selects', () => {
     expect(Object.keys(linkSelect(unmarked, plain, 'all'))).not.toContain('bundle_phase')
   })
 })
+
+describe('a selection action that skips what does not fit', () => {
+  const memberDecl = domain.datasets.find((d) => d.name === 'member') as DatasetDecl
+  const sweep = domain.actions?.sweep as SelectionActionDecl
+  const lifecycle = memberDecl.lifecycle as LifecycleDecl
+  const iconed = {
+    ...memberDecl,
+    lifecycle: {
+      ...lifecycle,
+      transitions: lifecycle.transitions.map((t) => (t.button === 'Park' ? { ...t, icon: 'flag' as const } : t)),
+    },
+  } as DatasetDecl
+  const skipping: Domain = {
+    ...domain,
+    datasets: domain.datasets.map((d) => (d.name === 'member' ? iconed : d)),
+    actions: { ...domain.actions, cull: { ...sweep, label: 'Cull', skip: true } as SelectionActionDecl },
+  }
+  let as: Request
+
+  beforeEach(async () => {
+    const db = new Database(':memory:')
+    migrate(db, skipping)
+    seedDomain(db, skipping)
+    sqlite = db
+    const app = testEngine(db, skipping)
+    as = send(app, await signIn(app))
+  })
+
+  test('a mixed selection runs, and run gets every record, the misfits included', async () => {
+    const res = await run(as, 'cull', { ids: [1, 3, 4], input: {} })
+    expect(res.status, JSON.stringify(res.body)).toBe(201)
+    expect(seen[0]?.map((r) => r.id)).toEqual([1, 3, 4])
+  })
+
+  test('a selection with no record that fits is refused 422 and run is never called', async () => {
+    await denied(() => run(as, 'cull', { ids: [3, 5], input: {} }), 422, 'condition_not_met')
+    expect(seen).toEqual([])
+  })
+
+  test('an action without skip still refuses the mixed selection', async () => {
+    await denied(() => run(as, 'sweep', { ids: [1, 3], input: {} }), 422, 'condition_not_met')
+  })
+
+  test('/schema serves skips beside conditional, only on the action that declares it', async () => {
+    const { sources } = (await as('GET', '/api/schema')).body
+    const action = (name: string) => sources.member.actions.find((a: { name: string }) => a.name === name)
+    expect([action('cull').conditional, action('cull').skips]).toEqual([true, true])
+    expect(action('sweep').skips).toBeUndefined()
+  })
+
+  test("a button's icon is served in the marks, and only on the button that declares one", async () => {
+    const row = (await rowsOf(as, 'member')).find((r) => r.id === 1)
+    expect(row?.available?.buttons).toEqual([
+      { to: 'active', label: 'Start' },
+      { to: 'parked', label: 'Park', icon: 'flag' },
+    ])
+  })
+})
+
+describe('validateDomain: skip and icon', () => {
+  const refusal = (d: Domain): DomainError => {
+    try {
+      validateDomain(d)
+    } catch (error) {
+      if (error instanceof DomainError) return error
+      throw error
+    }
+    throw new Error('validateDomain accepted the domain')
+  }
+  const withAction = (name: string, extra: object): Domain => ({
+    ...domain,
+    actions: { ...domain.actions, [name]: { ...domain.actions?.[name], ...extra } as ActionDecl | SelectionActionDecl },
+  })
+  const member = domain.datasets.find((d) => d.name === 'member') as DatasetDecl
+  const withTransition = (extra: object): Domain => ({
+    ...domain,
+    datasets: domain.datasets.map((d) =>
+      d === member
+        ? ({
+            ...member,
+            lifecycle: {
+              ...(member.lifecycle as LifecycleDecl),
+              transitions: [{ from: '*', to: 'parked', roles: ['editor'], ...extra }],
+            },
+          } as DatasetDecl)
+        : d,
+    ),
+  })
+
+  test('skip on a selection action with a when is accepted', () => {
+    expect(() => validateDomain(withAction('sweep', { skip: true }))).not.toThrow()
+  })
+
+  test('skip without a when is refused', () => {
+    expect(refusal(withAction('touch', { skip: true })).bad).toBe('skip')
+  })
+
+  test('skip on a single-record action is refused', () => {
+    expect(refusal(withAction('settle', { skip: true })).bad).toBe('skip')
+  })
+
+  test('skip that is not true is refused', () => {
+    expect(refusal(withAction('sweep', { skip: false })).bad).toBe('skip')
+  })
+
+  test('an icon on a button is accepted; without a button, or outside the icons, it is refused', () => {
+    expect(() => validateDomain(withTransition({ button: 'Park', icon: 'flag' }))).not.toThrow()
+    expect(refusal(withTransition({ icon: 'flag' })).bad).toBe('parked')
+    expect(refusal(withTransition({ button: 'Park', icon: 'ghost' })).bad).toBe('parked')
+  })
+})

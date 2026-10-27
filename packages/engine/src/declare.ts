@@ -18,6 +18,7 @@ export const ICONS = [
   'user',
   'query',
   'log-in',
+  'undo',
 ] as const
 export type Icon = (typeof ICONS)[number]
 
@@ -323,6 +324,8 @@ export interface LifecycleDecl {
     button?: string
     /** The button the drawer shows filled; only with `button`. */
     primary?: true
+    /** The drawer draws the button as this icon alone; `button` stays its name and tooltip. */
+    icon?: Icon
     when?: Condition
   }[]
   /** The states in which an outside process is busy with the record or picks it up next. */
@@ -404,6 +407,8 @@ export interface SelectionActionDecl {
   input: Record<string, ActionInput>
   opens?: true
   when?: Condition
+  /** With `when`: refused only when no record matches; every record still goes to `run`, which decides what a misfit gets. */
+  skip?: true
   run(records: Values[], input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
 

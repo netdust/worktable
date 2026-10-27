@@ -550,7 +550,7 @@ function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
   if (dataset.columns[lifecycle.column]?.written_by && lifecycle.transitions.some((t) => t.button !== undefined)) {
     throw at(lifecycle.column, `column "${lifecycle.column}" is written_by a service, so it has no button transitions`)
   }
-  for (const { from, to, roles, label, button, primary, when } of lifecycle.transitions) {
+  for (const { from, to, roles, label, button, primary, icon, when } of lifecycle.transitions) {
     if (from !== '*') for (const key of from) checkOption('from', key)
     checkOption('to', to)
     if (label !== undefined && (typeof label !== 'string' || label.trim() === '')) {
@@ -560,6 +560,10 @@ function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
       throw at(to, `button of the transition to "${to}" must be a non-empty string`)
     }
     if (primary && button === undefined) throw at(to, `primary of the transition to "${to}" needs a button`)
+    if (icon !== undefined && button === undefined) throw at(to, `icon of the transition to "${to}" needs a button`)
+    if (icon !== undefined && !(ICONS as readonly string[]).includes(icon)) {
+      throw at(to, `icon of the transition to "${to}" must be one of ${ICONS.join(', ')}`)
+    }
     if (when !== undefined) checkCondition(domain, dataset, `transition to "${to}"`, when)
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
@@ -671,6 +675,14 @@ function checkHead(name: string, action: ActionDecl | SelectionActionDecl): void
   if (isSelection(action)) throw new DomainError(name, 'handoff', 'a selection action has no handoff')
 }
 
+function checkSkip(name: string, action: ActionDecl | SelectionActionDecl): void {
+  const { skip } = action as { skip?: unknown }
+  if (skip === undefined) return
+  if (skip !== true) throw new DomainError(name, 'skip', 'skip must be true, and absent otherwise')
+  if (!isSelection(action)) throw new DomainError(name, 'skip', 'a single-record action has no skip')
+  if (action.when === undefined) throw new DomainError(name, 'skip', 'skip needs a when')
+}
+
 function checkActions(domain: Domain): void {
   const datasets = new Set(domain.datasets.map((d) => d.name))
   for (const [name, action] of Object.entries(domain.actions ?? {})) {
@@ -683,6 +695,7 @@ function checkActions(domain: Domain): void {
     if (action.opens !== undefined && action.opens !== true)
       throw new DomainError(name, 'opens', 'opens must be true, and absent otherwise')
     checkHead(name, action)
+    checkSkip(name, action)
     if (action.when !== undefined) {
       checkCondition(
         domain,
