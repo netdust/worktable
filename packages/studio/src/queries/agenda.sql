@@ -11,4 +11,4 @@ WHERE x.deleted_at IS NULL AND x.gepland_op IS NOT NULL AND x.status != 'geannul
 UNION ALL
 SELECT 3000000000000 + t.id, t.titel, t.deadline, NULL, NULL, 'taak', t.organisatie_id, NULL, NULL, t.id
 FROM taak t
-WHERE t.deleted_at IS NULL AND t.status = 'open' AND t.deadline IS NOT NULL
+WHERE t.deleted_at IS NULL AND t.status IN ('open', 'bezig', 'geblokkeerd') AND t.deadline IS NOT NULL
