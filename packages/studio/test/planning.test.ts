@@ -129,6 +129,52 @@ describe('tasks', () => {
   })
 })
 
+describe('plan steps', () => {
+  const step = (werkpakket_id: number, stap: string, values: Body = {}) =>
+    claude('POST', '/api/rows/taak', { titel: stap, werkpakket_id, stap, wie: 'claude', ...values })
+
+  test('a plan step names one task per feature', async () => {
+    const a = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s1' })).body.id as number
+    const b = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s2' })).body.id as number
+    expect((await step(a, 'Task 1')).status).toBe(201)
+    await refused(() => step(a, 'Task 1'), 'Deze feature heeft al een taak voor deze plan-stap.')
+    expect((await step(b, 'Task 1')).status).toBe(201)
+    const second = (await step(a, 'Task 2')).body.id as number
+    await refused(
+      () => claude('PATCH', `/api/rows/taak/${second}`, { stap: 'Task 1' }),
+      'Deze feature heeft al een taak voor deze plan-stap.',
+    )
+    expect((await claude('PATCH', `/api/rows/taak/${second}`, { status: 'bezig', stap: 'Task 2' })).status).toBe(200)
+  })
+
+  test('a deleted step frees its label', async () => {
+    const id = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s3' })).body.id as number
+    const first = (await step(id, 'Task 1')).body.id as number
+    expect((await admin('DELETE', `/api/rows/taak/${first}`)).status).toBe(200)
+    expect((await step(id, 'Task 1')).status).toBe(201)
+  })
+
+  test('voortgang counts done and skipped steps at each write of the feature', async () => {
+    const id = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s4' })).body.id as number
+    expect(row('werkpakket', id).voortgang).toBeNull()
+    const ids: number[] = []
+    for (const label of ['Task 1', 'Task 2', 'Task 3', 'Task 4']) ids.push((await step(id, label)).body.id as number)
+    await claude('PATCH', `/api/rows/taak/${ids[0]}`, { status: 'gedaan' })
+    await claude('PATCH', `/api/rows/taak/${ids[1]}`, { status: 'overgeslagen' })
+    await claude('PATCH', `/api/rows/taak/${ids[2]}`, { status: 'geblokkeerd' })
+    expect((await claude('PATCH', `/api/rows/werkpakket/${id}`, { laatste_stap: 'Task 2 overgeslagen' })).status).toBe(
+      200,
+    )
+    expect(row('werkpakket', id).voortgang).toBe('2/4')
+  })
+
+  test('nobody writes voortgang by hand', async () => {
+    const id = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s5' })).body.id as number
+    await claude('PATCH', `/api/rows/werkpakket/${id}`, { voortgang: '9/9', laatste_stap: 'x' })
+    expect(row('werkpakket', id).voortgang).toBeNull()
+  })
+})
+
 describe('every record has a name', () => {
   test('titles and names are required', async () => {
     const cases: [string, Body, string][] = [

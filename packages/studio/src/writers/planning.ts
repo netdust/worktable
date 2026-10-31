@@ -44,14 +44,26 @@ function clientOf(values: Values, ctx: WriteContext): unknown {
 }
 
 const TAAK = 'Een taak heeft een titel.'
+const ONE_STEP = 'Deze feature heeft al een taak voor deze plan-stap.'
+
+// A plan step's label names one task per feature, so an agent's re-sync finds its row instead of adding one.
+function checkOneStep(values: Values, ctx: WriteContext): void {
+  const current = (ctx.current as Values | null) ?? {}
+  const stap = values.stap ?? current.stap
+  const werkpakket_id = values.werkpakket_id ?? current.werkpakket_id
+  if (blank(stap) || absent(werkpakket_id)) return
+  if (ctx.exists('taak', { werkpakket_id, stap }, current.id as number | undefined)) refuse(ONE_STEP)
+}
 
 export const taakWriter: Writer = {
   create(values, ctx) {
     checkNamed(values, 'titel', TAAK, true)
+    checkOneStep(values, ctx)
     return absent(values.organisatie_id) ? { ...values, organisatie_id: clientOf(values, ctx) } : values
   },
-  update(values) {
+  update(values, ctx) {
     checkNamed(values, 'titel', TAAK, false)
+    checkOneStep(values, ctx)
     return values
   },
   delete() {},
@@ -92,11 +104,22 @@ function checkOneFeature(values: Values, ctx: WriteContext): void {
   if (ctx.exists('werkpakket', { repo, branch }, current.id as number | undefined)) refuse(ONE_FEATURE)
 }
 
+const FINISHED = new Set(['gedaan', 'overgeslagen'])
+
+// Done and skipped plan steps over all of them, counted at each write of the feature; none without steps.
+function progressOf(ctx: WriteContext): string | null {
+  const id = (ctx.current as Values | null)?.id
+  if (absent(id)) return null
+  const steps = ctx.findAll('taak', { werkpakket_id: id })
+  if (steps.length === 0) return null
+  return `${steps.filter((step) => FINISHED.has(step.status as string)).length}/${steps.length}`
+}
+
 function featureOf(values: Values, ctx: WriteContext, creating: boolean): Values {
   checkNamed(values, 'naam', FEATURE, creating)
   const own = fromProject(values, ctx)
   checkOneFeature(own, ctx)
-  return { ...own, bijgewerkt: localTime() }
+  return { ...own, bijgewerkt: localTime(), voortgang: progressOf(ctx) }
 }
 
 export const werkpakketWriter: Writer = {

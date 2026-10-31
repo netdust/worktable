@@ -304,6 +304,7 @@ export const werkpakket = defineDataset({
     volgende_stap: text('Volgende stap'),
     geblokkeerd_door: text('Geblokkeerd door'),
     bijgewerkt: { type: 'datetime', label: 'Bijgewerkt', nullable: true, readonly: true },
+    voortgang: { type: 'text', label: 'Voortgang', nullable: true, readonly: true },
     organisatie_id: relation('Organisatie', 'organisatie'),
   },
   lookups: { project: { label: 'Project', via: 'project_id', field: 'naam' } },
@@ -325,9 +326,16 @@ export const taak = defineDataset({
       type: 'text',
       label: 'Status',
       default: 'open',
-      options: { open: 'Open', gedaan: 'Gedaan' },
-      tones: { gedaan: 'ok' },
+      options: {
+        open: 'Open',
+        bezig: 'Bezig',
+        geblokkeerd: 'Geblokkeerd',
+        gedaan: 'Gedaan',
+        overgeslagen: 'Overgeslagen',
+      },
+      tones: { bezig: 'sky', geblokkeerd: 'bad', gedaan: 'ok', overgeslagen: 'grey' },
     },
+    stap: text('Plan-stap'),
     deadline: { type: 'date', label: 'Deadline', nullable: true },
     wie: { type: 'text', label: 'Wie', nullable: true, options: { stefan: 'Stefan', claude: 'Claude' } },
     notities: long('Notities'),
@@ -337,7 +345,7 @@ export const taak = defineDataset({
     site_id: relation('Site', 'site'),
     actie_id: relation('Actie', 'actie'),
   },
-  indexes: [['deadline'], ['status']],
+  indexes: [['deadline'], ['status'], ['werkpakket_id', 'stap']],
 })
 
 export const agendapunt = defineDataset({

@@ -111,15 +111,18 @@ describe('op tafel', () => {
   const dayAfter = (day: string) => sqliteDay(day, '+1 day')
   const titles = async () => (await rows('op_tafel')).map((r) => r.titel)
 
-  test('op_tafel holds open tasks due this week or earlier, and no task without a deadline', async () => {
+  test('op_tafel holds unfinished tasks due this week or earlier, and no task without a deadline', async () => {
     insert('taak', { titel: 'Achterstallig', deadline: localDay(new Date(Date.now() - 9 * DAY)) })
     insert('taak', { titel: 'Zondag', deadline: sunday() })
     insert('taak', { titel: 'Volgende week', deadline: dayAfter(sunday()) })
     insert('taak', { titel: 'Zonder deadline' })
     insert('taak', { titel: 'Al gedaan', deadline: localDay(), status: 'gedaan' })
+    insert('taak', { titel: 'Overgeslagen', deadline: localDay(), status: 'overgeslagen' })
+    insert('taak', { titel: 'Bezig', deadline: localDay(), status: 'bezig' })
+    insert('taak', { titel: 'Geblokkeerd', deadline: localDay(), status: 'geblokkeerd' })
     const listed = await titles()
-    expect(listed).toEqual(expect.arrayContaining(['Achterstallig', 'Zondag']))
-    for (const absent of ['Volgende week', 'Zonder deadline', 'Al gedaan', 'Dashboard-plan nalezen'])
+    expect(listed).toEqual(expect.arrayContaining(['Achterstallig', 'Zondag', 'Bezig', 'Geblokkeerd']))
+    for (const absent of ['Volgende week', 'Zonder deadline', 'Al gedaan', 'Overgeslagen', 'Dashboard-plan nalezen'])
       expect(listed).not.toContain(absent)
   })
 

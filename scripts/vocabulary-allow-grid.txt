@@ -18,6 +18,7 @@ wie # who: an assignment's holder, a history line's actor
 wat # what: a history line's change
 plaats # a place of a link (have/need), and the pin icon's name
 plaatsen # places of a link
+voortgang # progress: the dashboard's progress tile
 rol # the role a link place asks for
 kandidaten # a place's candidates
 actie # a declared action on a record
