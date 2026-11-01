@@ -267,14 +267,32 @@ function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): Matr
   return { table: away.dataset, model: away.dataset, column_field: away.across, label_field: away.label, date_field, end_field: away.end, ...(away.where ? { where: away.where } : {}) }
 }
 
-/** The skins a source declares a need for; every source has the grid, and a calendar source a timeline too. */
+/** The skins a source's columns allow: every source has the grid, a date a calendar and a timeline, an options column a board. */
 function typesOf(source: EngineSource): ViewType[] {
   return [
     'grid',
-    ...(source.calendar ? (['calendar', 'timeline'] as const) : []),
-    ...(source.board ? (['board'] as const) : []),
+    ...(calendarNeed(source) ? (['calendar', 'timeline'] as const) : []),
+    ...(boardNeed(source) ? (['board'] as const) : []),
     ...(source.gallery ? (['gallery'] as const) : []),
   ]
+}
+
+const shown = (source: EngineSource) => Object.entries(source.columns).filter(([, column]) => !column.hidden)
+
+/** The declared calendar, else one on the declared date or the first date column: rows on a day, no lanes declared. */
+function calendarNeed(source: EngineSource): CalendarDef | undefined {
+  if (source.calendar) return calendarOf(source.calendar)
+  const dates = shown(source).filter(([, column]) => column.type === 'date' || column.type === 'datetime').map(([key]) => key)
+  const day = source.date && dates.includes(source.date) ? source.date : dates[0]
+  return day === undefined ? undefined : { day, start: null, end: null, lanes: [] }
+}
+
+/** The declared board, else one on the first options column; a lifecycle column's moves are transitions, so no drag there. */
+function boardNeed(source: EngineSource): EngineSource['board'] {
+  if (source.board) return source.board
+  const column = shown(source).find(([, c]) => c.options !== undefined)?.[0]
+  if (column === undefined) return undefined
+  return source.lifecycle?.column === column ? { column, drag: false } : { column }
 }
 
 function calendarOf({ day, start, end, lanes, spans }: NonNullable<EngineSource['calendar']>): CalendarDef {
@@ -293,8 +311,8 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: typesOf(source),
-    ...(source.calendar ? { calendar: calendarOf(source.calendar) } : {}),
-    ...(source.board ? { board: source.board } : {}),
+    ...(calendarNeed(source) ? { calendar: calendarNeed(source) } : {}),
+    ...(boardNeed(source) ? { board: boardNeed(source) } : {}),
     ...(source.gallery ? { gallery: source.gallery } : {}),
   }
   const joined = source.matrix_join ? sources[source.matrix_join] : undefined

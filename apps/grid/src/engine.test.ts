@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { columnsFor } from './grid/columns'
 import { defaults } from './grid/layout'
-import { type EngineSchema, type EngineView, fromStoredView, rowsQuery, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import { type EngineColumn, type EngineSchema, type EngineSource, type EngineView, fromStoredView, rowsQuery, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
 import type { SavedView } from './types'
 import { knownOf, layoutOf, toStored } from './ui/views'
 import { orderOf, show } from './grid/layout'
@@ -224,7 +224,7 @@ describe('toSchema', () => {
     const schema = toSchema(engine)
 
     expect(schema.tables.map((t) => t.key)).toEqual(['productie', 'activiteit', 'productie_dag'])
-    expect(schema.tables[1]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] })
+    expect(schema.tables[1]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag' })
     expect(schema.views).toEqual([])
     expect(schema.writable).toEqual({ productie: false, activiteit: false, productie_dag: false })
   })
@@ -612,14 +612,14 @@ describe('the matrix and titles through a relation', () => {
     const table = toSchema(theatre).tables.find((t) => t.key === 'activiteit')
 
     expect(table).toMatchObject({
-      types: ['grid', 'matrix'],
+      types: ['grid', 'calendar', 'timeline', 'board', 'matrix'],
       join: {
         model: 'toewijzing', row_field: 'activiteit_id', column_field: 'persoon_id', name_field: 'naam', cell_field: 'state', note_field: 'notitie',
         keys: { u: 'uitgenodigd', b: 'bevestigd' }, marks: { uitgenodigd: '?', bevestigd: '✓' }, count: 'bevestigd',
       },
       away: { table: 'beschikbaarheid', model: 'beschikbaarheid', column_field: 'persoon_id', label_field: 'reden', date_field: 'start_at', end_field: 'eind_at' },
     })
-    expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')).toMatchObject({ types: ['grid'] })
+    expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')?.types).not.toContain('matrix')
   })
 
   it("gives the join the lifecycle column /schema serves on the join dataset, and none without one", () => {
@@ -786,5 +786,41 @@ describe('lookups', () => {
   it('kindOf types a relation lookup as a choice', () => {
     const { arrangement } = fromStoredView({ ...stored, filters: { locatie: 7 } }, act)
     expect(arrangement.filters).toEqual([{ field: 'locatie', op: 'in', values: ['7'] }])
+  })
+})
+
+describe("the skins a source's columns allow", () => {
+  const source = (columns: Record<string, EngineColumn>, extra: Partial<EngineSource> = {}): EngineSource =>
+    ({ kind: 'dataset', label: 'Taken', title: 'titel', date: null, columns, ...extra }) as unknown as EngineSource
+  const tableOf = (s: EngineSource) => toSchema({ sources: { taak: s }, views: [] } as unknown as EngineSchema).tables[0]
+  const titel: EngineColumn = { type: 'text', label: 'Titel' }
+  const status: EngineColumn = { type: 'text', label: 'Status', options: { open: 'Open', gedaan: 'Gedaan' } }
+
+  it('offers only the grid to a source with neither a date nor an options column', () => {
+    expect(tableOf(source({ titel })).types).toEqual(['grid'])
+  })
+
+  it('offers a board on the first options column, with drag, when none is declared', () => {
+    const table = tableOf(source({ titel, status }))
+    expect(table.types).toEqual(['grid', 'board'])
+    expect(table.board).toEqual({ column: 'status' })
+  })
+
+  it("takes no drag on a board over the lifecycle's column: its moves are transitions", () => {
+    expect(tableOf(source({ titel, status }, { lifecycle: { column: 'status' } })).board).toEqual({ column: 'status', drag: false })
+  })
+
+  it('offers a calendar and a timeline on the declared date, else the first date column, with no lanes', () => {
+    const columns = { titel, start: { type: 'datetime', label: 'Start' } as EngineColumn, deadline: { type: 'date', label: 'Deadline' } as EngineColumn }
+    expect(tableOf(source(columns)).calendar).toEqual({ day: 'start', start: null, end: null, lanes: [] })
+    const declared = tableOf(source(columns, { date: 'deadline' }))
+    expect(declared.types).toEqual(['grid', 'calendar', 'timeline'])
+    expect(declared.calendar).toEqual({ day: 'deadline', start: null, end: null, lanes: [] })
+  })
+
+  it('leaves a hidden column out, and a declared need wins', () => {
+    expect(tableOf(source({ titel, geheim: { ...status, hidden: true } })).types).toEqual(['grid'])
+    const declared = tableOf(source({ titel, status, soort: status }, { board: { column: 'soort', drag: false } }))
+    expect(declared.board).toEqual({ column: 'soort', drag: false })
   })
 })
