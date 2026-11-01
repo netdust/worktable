@@ -195,25 +195,30 @@ test('press-in-related-drawer-then-close-then-undo @e2e: Undo after a related dr
 }) => {
   const made = await page.request.post('/api/rows/entry', { data: { bundle_id: 1, member_id: 2, note: 'Related pen' } })
   expect(made.status()).toBe(201)
-  await open(page, 'All bundles', 'Bundles')
-  const drawer = await drawerOf(page, 'Alpha')
-  await openTab(page, 'Entries')
-  await drawer
-    .getByRole('region', { name: /Entries/ })
-    .getByRole('button', { name: 'Bob' })
-    .click()
-  const related = page.getByRole('complementary', { name: /Related pen/ })
-  await pressInMenu(page, 'Confirm')
-  await expect(page.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toHaveCount(0)
-  const notice = page.getByRole('status', { name: /gedaan\./ })
-  await related.getByRole('button', { name: 'Sluiten' }).click()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('complementary')).toHaveCount(0)
+  const { id } = (await made.json()) as { id: number }
+  try {
+    await open(page, 'All bundles', 'Bundles')
+    const drawer = await drawerOf(page, 'Alpha')
+    await openTab(page, 'Entries')
+    await drawer
+      .getByRole('region', { name: /Entries/ })
+      .getByRole('button', { name: 'Bob' })
+      .click()
+    const related = page.getByRole('complementary', { name: /Related pen/ })
+    await pressInMenu(page, 'Confirm')
+    await expect(page.locator('.nv-drawer__head').getByRole('button', { name: 'Acties' })).toHaveCount(0)
+    const notice = page.getByRole('status', { name: /gedaan\./ })
+    await related.getByRole('button', { name: 'Sluiten' }).click()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('complementary')).toHaveCount(0)
 
-  await notice.getByRole('button', { name: 'Ongedaan maken' }).click()
+    await notice.getByRole('button', { name: 'Ongedaan maken' }).click()
 
-  await page.waitForTimeout(1500)
-  await expect(page.getByRole('complementary')).toHaveCount(0)
+    await page.waitForTimeout(1500)
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+  } finally {
+    await page.request.delete(`/api/rows/entry/${id}`)
+  }
 })
 
 test('undo-closes-the-opened-record @e2e: Undo of the run takes the record it made away, and its drawer closes with it', async ({
