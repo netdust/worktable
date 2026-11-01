@@ -8,6 +8,7 @@ export interface Table {
   /** The kinds of view it can be shown as. */
   types: ViewType[]
   query?: boolean
+  listed?: false
   icon?: string
   views: View[]
 }
@@ -31,6 +32,7 @@ export function groupTables(tables: TableDef[], views: View[]): Table[] {
     space: table.space === 'scoped' ? 'scoped' : 'global',
     types: table.types,
     ...(table.query ? { query: true } : {}),
+    ...(table.listed === false ? { listed: false as const } : {}),
     ...(table.icon ? { icon: table.icon } : {}),
     views: views.filter((view) => view.table === table.key || tables.some((query) => query.of === table.key && query.key === view.table)),
   }))
@@ -43,7 +45,7 @@ export function sectionsOf(tables: Table[], served: Schema['sections'] = []): Se
     .map((section) => ({ label: section.label, tables: section.sources.flatMap((key) => byKey.get(key) ?? []) }))
     .filter((section) => section.tables.length > 0)
   const placed = new Set(listed.flatMap((section) => section.tables))
-  const rest = tables.filter((table) => !placed.has(table))
+  const rest = tables.filter((table) => !placed.has(table) && table.listed !== false)
   return rest.length > 0 ? [...listed, { label: null, tables: rest }] : listed
 }
 

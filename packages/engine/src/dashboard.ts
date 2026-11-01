@@ -13,6 +13,7 @@ import {
 import { hasField } from './lookups'
 import { ApiError } from './params'
 import { type Source, sourceOf, writerOf } from './registry'
+import { seedKey } from './saved-view'
 
 const MAX_SECTIONS = 6
 const MAX_TILES = 12
@@ -144,6 +145,12 @@ function progressOf(ctx: Ctx, value: unknown): Tile {
   return { kind: 'progress', done, total, label: labelOf(t.label, 'a tile') }
 }
 
+/** The ids of the views a layout's tiles name. */
+export const tileViews = (layout: DashboardLayout): number[] =>
+  layout.sections
+    .flatMap((s) => s.tiles.flatMap((t) => (t.kind === 'progress' ? [t.done, t.total] : [t.view])))
+    .filter((view): view is number => typeof view === 'number')
+
 const TILES: Record<string, (ctx: Ctx, value: unknown) => Tile> = {
   stat: statOf,
   list: listTileOf,
@@ -185,10 +192,10 @@ export function layoutOf(domain: Domain, sqlite: Database, raw: unknown, actor: 
   }
 }
 
-/** A seed's view names to the ids they were seeded under; null for a name two seeds share. */
-export type SeededIds = Map<string, number | null>
+/** A seed's view names to the ids they were seeded under; null for a name two seeds share, "gone" for one a person deleted. */
+export type SeededIds = Map<string, number | null | 'gone'>
 
-const refOf = (ids: SeededIds, ref: string | number): number => {
+const refOf = (ids: SeededIds, ref: string | number): number | 'gone' => {
   if (typeof ref === 'number') return ref
   const id = ids.get(ref)
   if (id === undefined) throw new Error(`a dashboard tile names unknown view "${ref}"`)
@@ -196,21 +203,34 @@ const refOf = (ids: SeededIds, ref: string | number): number => {
   return id
 }
 
-function resolvedTile(tile: Tile, ids: SeededIds): Tile {
-  if (tile.kind === 'progress') return { ...tile, done: refOf(ids, tile.done), total: refOf(ids, tile.total) }
-  return { ...tile, view: refOf(ids, tile.view) }
+// A tile on a gone view is dropped, and the view's name goes to `dropped`.
+function resolvedTile(tile: Tile, ids: SeededIds, dropped: string[]): Tile | null {
+  const refs = tile.kind === 'progress' ? [tile.done, tile.total] : [tile.view]
+  const found = refs.map((ref) => refOf(ids, ref))
+  const gone = refs.filter((_, at) => found[at] === 'gone')
+  if (gone.length > 0) {
+    dropped.push(...gone.map(String))
+    return null
+  }
+  if (tile.kind === 'progress') return { ...tile, done: found[0] as number, total: found[1] as number }
+  return { ...tile, view: found[0] as number }
 }
 
-export function resolveSeedLayout(layout: DashboardLayout, ids: SeededIds): DashboardLayout {
+export function resolveSeedLayout(layout: DashboardLayout, ids: SeededIds, dropped: string[] = []): DashboardLayout {
+  const resolve = (tile: Tile) => resolvedTile(tile, ids, dropped)
   return {
     ...layout,
-    sections: layout.sections.map((s) => ({ ...s, tiles: s.tiles.map((tile) => resolvedTile(tile, ids)) })),
+    sections: layout.sections.map((s) => ({ ...s, tiles: s.tiles.map(resolve).filter((t): t is Tile => t !== null) })),
   }
 }
 
+const KEYED =
+  'SELECT id, deleted_at FROM saved_view WHERE seed_key = ? AND owner_id = ? ORDER BY deleted_at IS NOT NULL, id'
 const SEEDED_ID = `SELECT id FROM saved_view WHERE name = ? AND source IS ? AND deleted_at IS NULL
-                   AND (owner_id = ? OR shared = 1) ORDER BY owner_id = ? DESC, id LIMIT 1`
+                   AND owner_id != ? AND shared = 1 ORDER BY id LIMIT 1`
 
+// A seeded view is found by its key, a deleted one included; a colleague's shared view of the same name and source
+// stands in only when no row carries the key.
 function seededIds(sqlite: Database, domain: Domain, system: Actor): SeededIds {
   const ids: SeededIds = new Map()
   for (const seed of domain.views.filter((v) => v.skin !== 'dashboard')) {
@@ -218,19 +238,36 @@ function seededIds(sqlite: Database, domain: Domain, system: Actor): SeededIds {
       ids.set(seed.name, null)
       continue
     }
-    const row = sqlite.query(SEEDED_ID).get(seed.name, seed.source ?? null, system.id, system.id) as {
+    const keyed = sqlite.query(KEYED).get(seedKey(seed.name, seed.source), system.id) as {
       id: number
+      deleted_at: string | null
     } | null
-    if (row) ids.set(seed.name, row.id)
+    if (keyed) {
+      ids.set(seed.name, keyed.deleted_at === null ? keyed.id : 'gone')
+      continue
+    }
+    const other = sqlite.query(SEEDED_ID).get(seed.name, seed.source ?? null, system.id) as { id: number } | null
+    if (other) ids.set(seed.name, other.id)
   }
   return ids
 }
 
 /** A dashboard seed's layout as stored, its views by id; throws naming the dashboard and what is wrong. */
-export function seededLayout(sqlite: Database, domain: Domain, seed: SavedViewSeed, system: Actor): DashboardLayout {
+export function seededLayout(
+  sqlite: Database,
+  domain: Domain,
+  seed: SavedViewSeed,
+  system: Actor,
+  dropped: string[] = [],
+): DashboardLayout {
   try {
-    const resolved = resolveSeedLayout(seed.layout ?? { sections: [], actions: [] }, seededIds(sqlite, domain, system))
-    return layoutOf(domain, sqlite, resolved, system)
+    const ids = seededIds(sqlite, domain, system)
+    return layoutOf(
+      domain,
+      sqlite,
+      resolveSeedLayout(seed.layout ?? { sections: [], actions: [] }, ids, dropped),
+      system,
+    )
   } catch (err) {
     throw new Error(`dashboard "${seed.name}": ${(err as Error).message}`)
   }

@@ -1,17 +1,22 @@
 import { ROLES } from './auth-tables'
 import { POSITION } from './ddl'
 import {
+  type ActionDecl,
   type ActionInput,
   type ColumnDecl,
+  type Condition,
   type DatasetDecl,
   type Domain,
   ICONS,
   type InputType,
+  isSelection,
   type OptionsFrom,
   type QueryDecl,
+  type SelectionActionDecl,
   TONES,
 } from './declare'
 import { reservedNames } from './engine-tables'
+import { lookupOf } from './lookups'
 import { sourceOf, sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
@@ -94,6 +99,49 @@ function checkLong(source: DatasetDecl | QueryDecl): void {
   }
 }
 
+function checkHref(source: DatasetDecl | QueryDecl): void {
+  const hrefs = Object.entries(source.columns).filter(([, decl]) => decl.href)
+  for (const [column, decl] of hrefs) {
+    if (decl.type !== 'text' || decl.options || decl.relation) {
+      throw new DomainError(source.name, column, `${column} is href but is not a plain text column`)
+    }
+    if ('sql' in source)
+      throw new DomainError(source.name, column, `${column} is href on a query, whose values no write checks`)
+  }
+  const second = hrefs[1]?.[0]
+  if (second)
+    throw new DomainError(source.name, second, `${second} is a second href column; a source offers one address`)
+}
+
+// The enforced values are judged by equality, so a misspelt one would enforce nothing.
+function checkEnforced(source: DatasetDecl | QueryDecl): void {
+  const refuse = (bad: string, message: string) => new DomainError(source.name, bad, message)
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.written_by !== undefined && decl.written_by !== 'service') {
+      throw refuse(column, `${column} is written_by "${String(decl.written_by)}", which is not "service"`)
+    }
+    if (decl.written_by && column === source.owners?.owner) {
+      throw refuse(column, `${column} is the owner column, so it is not written_by a service`)
+    }
+  }
+  if (source.kind !== 'dataset') return
+  if (source.created_by !== undefined && source.created_by !== 'service') {
+    throw refuse('created_by', `created_by is "${String(source.created_by)}", which is not "service"`)
+  }
+  const deletedBy = source.attachments?.deleted_by
+  if (deletedBy !== undefined && deletedBy !== 'person') {
+    throw refuse('deleted_by', `deleted_by is "${String(deletedBy)}", which is not "person"`)
+  }
+}
+
+function checkFooter(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (decl.footer !== undefined && decl.type !== 'integer' && decl.type !== 'real') {
+      throw new DomainError(source.name, column, `${column} has a footer but is not an integer or real column`)
+    }
+  }
+}
+
 // The calendar reads the rows route's date window, so its day is the source's date.
 function checkCalendar(source: DatasetDecl | QueryDecl): void {
   const cal = source.calendar
@@ -145,20 +193,29 @@ function checkNewLabel(dataset: DatasetDecl): void {
 function checkCreates(domain: Domain, query: QueryDecl): void {
   const dataset = query.creates
   if (dataset === undefined) return
-  if (!domain.datasets.some((d) => d.name === dataset) || !writerOf(domain, dataset)?.create) {
+  const target = domain.datasets.find((d) => d.name === dataset)
+  if (!target || !writerOf(domain, dataset)?.create) {
     throw new DomainError(
       query.name,
       dataset,
       `creates "${dataset}", which is not a dataset with a writer that creates`,
     )
   }
+  if (target.created_by) {
+    throw new DomainError(query.name, dataset, `creates "${dataset}", which only a service account creates`)
+  }
 }
 
 function checkOf(domain: Domain, query: QueryDecl): void {
   const dataset = query.of
-  if (dataset !== undefined && !domain.datasets.some((d) => d.name === dataset)) {
-    throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
+  if (dataset === undefined) {
+    if (query.selectable) throw new DomainError(query.name, 'selectable', 'selectable needs of')
+    return
   }
+  const found = domain.datasets.find((d) => d.name === dataset)
+  if (!found) throw new DomainError(query.name, dataset, `of "${dataset}", which is not a dataset`)
+  if (found.listed === false)
+    throw new DomainError(query.name, dataset, `of "${dataset}", which is declared listed: false`)
 }
 
 // A flag marks records by id, so each mark is a dataset and an integer column; its tone reads every row's option.
@@ -203,6 +260,7 @@ function checkOwnerWritable(dataset: DatasetDecl): void {
       new DomainError(dataset.name, column, `${column} ${why}, so it is not owner_writable`)
     if (decl.type === 'json') throw refuse('is json')
     if (decl.readonly) throw refuse('is readonly')
+    if (decl.written_by) throw refuse('is written_by a service')
     // checkRelations only proves the target exists, so a link could point its row at a record it cannot read.
     if (decl.relation) throw refuse('is a relation')
     if (column === dataset.owners?.owner) throw refuse('is the owner column')
@@ -228,6 +286,7 @@ const OVERWRITTEN = [
   ['revision', 'the write reply'],
   ['links', "the row's link rows"],
   ['inherited', "the row's inherited lookups"],
+  ['available', "the row's buttons and actions"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -269,6 +328,8 @@ function checkLinks(domain: Domain, source: DatasetDecl | QueryDecl): void {
     if (link.state !== undefined && !linked.columns[link.state]?.options) {
       throw at(link.state, `state "${link.state}" is not an options column`)
     }
+    if (link.detail !== undefined && !Object.hasOwn(linked.columns, link.detail))
+      throw at(link.detail, `detail "${link.detail}" is not a column of "${linked.name}"`)
     const count = link.count === undefined ? undefined : linked.columns[link.count]
     if (link.count !== undefined && (count?.type !== 'integer' || count.relation))
       throw at(link.count, `count "${link.count}" is not an integer column that is no relation`)
@@ -288,6 +349,7 @@ const LOOKUP_RESERVED = new Set([
   'title',
   'links',
   'revision',
+  'available',
   'notices',
   'expect',
 ])
@@ -327,7 +389,9 @@ function checkLookups(domain: Domain, dataset: DatasetDecl): void {
       throw at(lookup.own, `own "${lookup.own}" is not a column of the field's type and relation`)
     }
     // A write through the lookup is renamed to own, so own must be a column any editor may clear.
-    if (own.readonly || !own.nullable) throw at(lookup.own, `own "${lookup.own}" is readonly or not nullable`)
+    if (own.readonly || own.written_by || !own.nullable) {
+      throw at(lookup.own, `own "${lookup.own}" is readonly, written_by a service or not nullable`)
+    }
     if (lookup.own === dataset.lifecycle?.column || lookup.own === dataset.record_link?.email) {
       throw at(lookup.own, `own "${lookup.own}" is guarded by the engine`)
     }
@@ -346,6 +410,9 @@ function checkWrites(
   if (!Object.hasOwn(target.columns, writes.field))
     throw at(writes.field, `writes to undeclared field "${writes.field}"`)
   if (target.columns[writes.field]?.readonly) throw at(writes.field, `writes to readonly field "${writes.field}"`)
+  if (target.columns[writes.field]?.written_by) {
+    throw at(writes.field, `writes to field "${writes.field}", which only a service account writes`)
+  }
   if (!declared(query, writes.key)) throw at(writes.key, `has key "${writes.key}", not a column of the query`)
   if (!writerOf(domain, writes.dataset)?.update) {
     throw at(writes.dataset, `writes to "${writes.dataset}", which has no writer with update`)
@@ -401,6 +468,7 @@ function checkOpen(
   }
   const action = domain.actions && Object.hasOwn(domain.actions, open.fill) ? domain.actions[open.fill] : undefined
   if (!action) throw at(open.fill, `open fill "${open.fill}" is not a declared action`)
+  if (isSelection(action)) throw at(open.fill, `open fill "${open.fill}" is a selection action, which fills one place`)
   if (action.on !== join.name)
     throw at(open.fill, `open fill "${open.fill}" acts on "${action.on}", not "${join.name}"`)
   const across = join.columns[m.across]?.relation
@@ -440,7 +508,37 @@ function checkAway(
   }
 }
 
-function checkLifecycle(dataset: DatasetDecl): void {
+const isScalar = (v: unknown): boolean => v === null || ['string', 'number', 'boolean'].includes(typeof v)
+
+const isInList = (v: unknown): v is { $in: unknown[] } =>
+  typeof v === 'object' && v !== null && Object.keys(v).join() === '$in' && Array.isArray((v as { $in: unknown }).$in)
+
+// Equality and `$in` only, on a column or lookup the source serves.
+function checkCondition(domain: Domain, source: DatasetDecl, what: string, when: Condition): void {
+  const at = (bad: string, message: string) => new DomainError(source.name, bad, `${what}: when ${message}`)
+  if (typeof when !== 'object' || when === null || Array.isArray(when)) throw at(what, 'must be an object')
+  for (const [key, want] of Object.entries(when)) {
+    if (!Object.hasOwn(source.columns, key) && !lookupOf(source, key)) {
+      throw at(key, `names "${key}", which is no column or lookup of "${source.name}"`)
+    }
+    const list = isScalar(want) ? [want] : isInList(want) ? want.$in : null
+    if (!list?.every(isScalar)) throw at(key, `value of "${key}" must be a scalar or { $in: [scalars] }`)
+    const options = optionsOf(domain, source, key)
+    const stray =
+      options && list.find((value) => value !== null && !(typeof value === 'string' && Object.hasOwn(options, value)))
+    if (stray !== undefined) throw at(key, `value ${JSON.stringify(stray)} of "${key}" is not one of its options`)
+  }
+}
+
+// The options of a column, or of the column a lookup reads from its target, when it has any.
+function optionsOf(domain: Domain, source: DatasetDecl, key: string): Record<string, string> | undefined {
+  const lookup = lookupOf(source, key)
+  if (!lookup) return source.columns[key]?.options
+  const target = domain.datasets.find((d) => d.name === source.columns[lookup.via]?.relation)
+  return target?.columns[lookup.field]?.options
+}
+
+function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
   const lifecycle = dataset.lifecycle
   if (!lifecycle) return
   const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `lifecycle ${message}`)
@@ -449,14 +547,27 @@ function checkLifecycle(dataset: DatasetDecl): void {
   const checkOption = (what: string, key: string) => {
     if (!Object.hasOwn(options, key)) throw at(key, `${what} "${key}" is not an option of "${lifecycle.column}"`)
   }
-  for (const { from, to, roles, label } of lifecycle.transitions) {
+  if (dataset.columns[lifecycle.column]?.written_by && lifecycle.transitions.some((t) => t.button !== undefined)) {
+    throw at(lifecycle.column, `column "${lifecycle.column}" is written_by a service, so it has no button transitions`)
+  }
+  for (const { from, to, roles, label, button, primary, icon, when } of lifecycle.transitions) {
     if (from !== '*') for (const key of from) checkOption('from', key)
     checkOption('to', to)
     if (label !== undefined && (typeof label !== 'string' || label.trim() === '')) {
       throw at(to, `label of the transition to "${to}" must be a non-empty string`)
     }
+    if (button !== undefined && (typeof button !== 'string' || button.trim() === '')) {
+      throw at(to, `button of the transition to "${to}" must be a non-empty string`)
+    }
+    if (primary && button === undefined) throw at(to, `primary of the transition to "${to}" needs a button`)
+    if (icon !== undefined && button === undefined) throw at(to, `icon of the transition to "${to}" needs a button`)
+    if (icon !== undefined && !(ICONS as readonly string[]).includes(icon)) {
+      throw at(to, `icon of the transition to "${to}" must be one of ${ICONS.join(', ')}`)
+    }
+    if (when !== undefined) checkCondition(domain, dataset, `transition to "${to}"`, when)
     for (const role of roles) if (!Object.hasOwn(ROLES, role)) throw at(role, `role "${role}" is not a role`)
   }
+  for (const key of lifecycle.live ?? []) checkOption('live state', key)
   for (const key of Object.keys(lifecycle.hooks ?? {})) checkOption('hook', key)
   for (const column of lifecycle.token_projection ?? []) {
     checkColumn(dataset, 'token_projection column', column)
@@ -549,6 +660,29 @@ function checkInput(action: string, key: string, input: ActionInput, datasets: S
   if ((input.min as number) > (input.max as number)) throw at('has min above max')
 }
 
+function checkHead(name: string, action: ActionDecl | SelectionActionDecl): void {
+  const { head, handoff } = action as { head?: unknown; handoff?: unknown }
+  if (head !== undefined) {
+    const icon = (head as { icon?: unknown } | null)?.icon
+    if (isSelection(action)) throw new DomainError(name, 'head', 'a selection action has no head button')
+    if (Object.keys(action.input).length > 0) throw new DomainError(name, 'head', 'a head button runs with no input')
+    if (typeof icon !== 'string' || !(ICONS as readonly string[]).includes(icon)) {
+      throw new DomainError(name, 'head', `head.icon must be one of ${ICONS.join(', ')}`)
+    }
+  }
+  if (handoff === undefined) return
+  if (handoff !== true) throw new DomainError(name, 'handoff', 'handoff must be true, and absent otherwise')
+  if (isSelection(action)) throw new DomainError(name, 'handoff', 'a selection action has no handoff')
+}
+
+function checkSkip(name: string, action: ActionDecl | SelectionActionDecl): void {
+  const { skip } = action as { skip?: unknown }
+  if (skip === undefined) return
+  if (skip !== true) throw new DomainError(name, 'skip', 'skip must be true, and absent otherwise')
+  if (!isSelection(action)) throw new DomainError(name, 'skip', 'a single-record action has no skip')
+  if (action.when === undefined) throw new DomainError(name, 'skip', 'skip needs a when')
+}
+
 function checkActions(domain: Domain): void {
   const datasets = new Set(domain.datasets.map((d) => d.name))
   for (const [name, action] of Object.entries(domain.actions ?? {})) {
@@ -556,9 +690,25 @@ function checkActions(domain: Domain): void {
     if (!datasets.has(action.on) || !writerOf(domain, action.on)) {
       throw new DomainError(name, action.on, `action on "${action.on}", which is not a dataset with a writer`)
     }
+    if ('many' in action && action.many !== true)
+      throw new DomainError(name, 'many', 'many must be true on a selection action, and absent otherwise')
+    if (action.opens !== undefined && action.opens !== true)
+      throw new DomainError(name, 'opens', 'opens must be true, and absent otherwise')
+    checkHead(name, action)
+    checkSkip(name, action)
+    if (action.when !== undefined) {
+      checkCondition(
+        domain,
+        domain.datasets.find((d) => d.name === action.on) as DatasetDecl,
+        `action ${name}`,
+        action.when,
+      )
+    }
     for (const [key, input] of Object.entries(action.input)) {
       checkInput(name, key, input, datasets)
       if (!('relation' in input) || !input.options_from) continue
+      if (isSelection(action))
+        throw new DomainError(name, key, `input ${key} of a selection action takes no options_from`)
       const on = domain.datasets.find((d) => d.name === action.on) as DatasetDecl
       const at = (message: string) => new DomainError(name, key, `input ${key} ${message}`)
       checkOptionsFrom(domain, on, at, input.options_from, input.relation)
@@ -609,6 +759,9 @@ function checkSections(domain: Domain): void {
       if (source.kind === 'query' && source.of !== undefined) {
         throw new DomainError(label, name, `section lists query "${name}", which sits under "${source.of}"`)
       }
+      if (source.kind === 'dataset' && source.listed === false) {
+        throw new DomainError(label, name, `section lists "${name}", which is declared listed: false`)
+      }
       if (seen.has(name)) throw new DomainError(label, name, `"${name}" is listed in more than one place`)
       seen.add(name)
     }
@@ -648,6 +801,9 @@ export function validateDomain(domain: Domain): void {
     checkHidden(source)
     checkTones(source)
     checkLong(source)
+    checkHref(source)
+    checkEnforced(source)
+    checkFooter(source)
     checkCalendar(source)
     checkBoard(source)
     checkIcon(source)
@@ -679,7 +835,7 @@ export function validateDomain(domain: Domain): void {
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkTone(dataset)
-    checkLifecycle(dataset)
+    checkLifecycle(domain, dataset)
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
     checkAttachments(dataset)

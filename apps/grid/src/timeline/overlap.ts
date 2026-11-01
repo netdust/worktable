@@ -13,7 +13,7 @@ export const timesOf = (start: string, end: string | null): Times => (r) => {
 
 /**
  * Each row of a lane that overlaps another, with the rows it overlaps; a cancelled row neither overlaps nor is overlapped.
- * Two rows with times overlap when their times do, or they start together, as conflicten.sql decides; else when they share a day.
+ * Two rows with times overlap when their times do, or they start together, as a domain's overlap query decides; else when they share a day.
  */
 export function overlapsOf(rows: Row[], lane: (r: Row) => string, from: (r: Row) => number, to: (r: Row) => number, cancelled: (r: Row) => boolean, times: Times = () => null): Map<number, Row[]> {
   const live = rows.filter((r) => !cancelled(r))

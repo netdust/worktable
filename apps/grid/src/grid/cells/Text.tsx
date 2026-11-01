@@ -4,7 +4,8 @@ import { Pop } from '../../ui/Pop'
 import type { CellProps, EditorProps } from './props'
 
 export function TextCell({ column, row }: CellProps) {
-  const text = column.text(row)
+  // A cell is one row: a long text's lines are kept apart by a comma, never run together.
+  const text = column.kind === 'longtext' ? column.text(row).split('\n').map((line) => line.trim()).filter(Boolean).join(', ') : column.text(row)
   return <span className={column.kind === 'title' ? 'nv-cell__title' : 'nv-cell__text'}>{text}</span>
 }
 

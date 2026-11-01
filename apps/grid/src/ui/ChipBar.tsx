@@ -24,7 +24,7 @@ export interface PeriodSlot {
 }
 
 export interface ChipBarProps {
-  /** The space's chip ("Productie is Nachtwacht"); null where the view is not narrowed. */
+  /** The space's chip ("Klant is Bakkerij Noord"); null where the view is not narrowed. */
   scope?: string | null
   /** The view's condition chips and the Filter button. */
   filters?: ReactNode

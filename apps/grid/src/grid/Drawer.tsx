@@ -1,17 +1,16 @@
 import { ChevronDown, ChevronUp, Link2, type LucideIcon, X } from 'lucide-react'
 import { Button } from 'react-aria-components'
 import { type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react'
-import { type Attachment, attachmentsOf, fileUrl, optionsFrom, recordLink as readLink, removeAttachment, rotateRecordLink, uploadAttachment } from '../api'
+import { type Attachment, attachmentsOf, fileUrl, removeAttachment, uploadAttachment } from '../api'
 import { errorText, fileSize, locale, type StringKey, t } from '../i18n'
-import type { Account, ActionInput, ApiError, Model, ModelAction, OptionsFrom, Row, View } from '../types'
-import { iconNamed } from '../ui/icons'
+import type { Account, ApiError, Model, ModelAction, Row, View } from '../types'
 import { toneColor } from '../ui/tone'
 import { useTones } from '../ui/useTones'
 import { whenOf } from '../ui/when'
 import type { Flag, Flags } from '../ui/useFlags'
 import { Alert, type AlertAction } from './drawer/Alert'
 import { SchemaContext } from './drawer/context'
-import { choosableOf, dayLabel, inboundOf, kindOf, linkedOf, type Prop, propsOf } from './drawer/derive'
+import { choosableOf, dayLabel, inboundOf, linkedOf, type Prop, propsOf } from './drawer/derive'
 import { type Chooser, HistorySection, InboundSection, LinkSection, LongSection, type WriteField, type WriteLink } from './drawer/Sections'
 import type { Layout } from './layout'
 import { Pick } from '../ui/Pick'
@@ -19,10 +18,16 @@ import { SidePanel } from '../ui/SidePanel'
 import { type Column, firstId, linksOf } from './columns'
 import { Display } from './cells'
 import { ICON } from './GridHeader'
-import { RelationPicker } from './cells/RelationPicker'
+import { ActionRow } from './ActionRow'
+import { DrawerTools } from './DrawerTools'
+import { HeadActions } from './HeadActions'
+import { OpenLink } from './OpenLink'
+import { useLive } from './useLive'
+import { panesOf } from './drawer/panes'
+import { DrawerTabs } from './drawer/Tabs'
 
 /** Runs a declared action on the open record, with the records its inputs picked. */
-export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<void>
+export type RunAction = (action: ModelAction, input: Record<string, unknown>) => Promise<unknown>
 
 interface Props {
   row: Row
@@ -31,6 +36,10 @@ interface Props {
   onClose: () => void
   /** What edits the record, under its fields. */
   editor?: ReactNode
+  /** Deletes the record: Verwijderen in the head's menu, asked twice. */
+  onDelete?: () => Promise<void>
+  /** Says something short, as a toast: the record link was copied. */
+  onSaid?: (message: string) => void
   /** Writes a long text edited in its block; without it, the drawer reads only. */
   onWrite?: WriteField
   /** Writes who holds a place of one of the record's links, in the link's own dataset; without it no place is chosen again. */
@@ -38,6 +47,8 @@ interface Props {
   /** The model's declared actions, each a button with a picker per input. */
   actions?: ModelAction[]
   onAction?: RunAction
+  /** Re-reads the record: a drawer given it shows the buttons the server marked, on the record and on its link items. */
+  onDone?: () => Promise<Row | null>
   /** False leaves focus where it was: the matrix keeps typing in its cell. */
   focusOnOpen?: boolean
   /** The dataset whose record link the drawer copies and renews; an administrator's. */
@@ -51,7 +62,7 @@ interface Props {
   /** The view it opened from, and that view's layout: which fields it lists. */
   view?: View
   layout?: Layout | null
-  /** The view's rows in their order: "3 van 12", and ↑ ↓ to the row before or after. */
+  /** The view's rows in their order: ↑ ↓ and j k to the row before or after. */
   nav?: { ids: number[]; onStep: (id: number) => void }
   /** The flags the view's skin read: the record's own show as bands, its people's on their names. */
   flags?: Flags | null
@@ -99,29 +110,14 @@ const headKey = (nav: Props['nav'], row: Row) => (event: KeyboardEvent<HTMLEleme
   stepIn(nav, row, by)
 }
 
-/** The head line: what kind of record this is · its dataset; where it is in the view; the steps to its neighbours. */
-function Head({ row, model, nav, icon: Icon }: { row: Row; model?: Model; nav?: Props['nav']; icon?: LucideIcon }) {
-  const kind = model ? kindOf(model) : null
-  const value = kind ? String(row.fields[kind] ?? '') : ''
-  const option = kind && model?.fields[kind]?.options?.[value]
-  const at = nav ? nav.ids.indexOf(row.id) : -1
-  const step = (by: 1 | -1) => stepIn(nav, row, by)
+/** The steps to the row before and after in the view. */
+function Steps({ row, nav }: { row: Row; nav: NonNullable<Props['nav']> }) {
+  const at = nav.ids.indexOf(row.id)
   return (
-    <div className="nv-dw-head">
-      <span className="nv-dw-head__kind">
-        {!option && Icon && <Icon size={13} aria-hidden="true" />}
-        {option && <span className="nv-dot" style={{ '--tone': toneColor(model?.fields[kind as string]?.tones?.[value]) } as CSSProperties}>{option}</span>}
-        {option && model && ' · '}
-        {model?.label}
-      </span>
-      {nav && <span className="nv-dw-head__pos">{at >= 0 ? t('position', { n: at + 1, m: nav.ids.length }) : '–'}</span>}
-      {nav && (
-        <>
-          <Button className="nv-drawer__tool" aria-label={t('previous')} isDisabled={at <= 0} onPress={() => step(-1)}><ChevronUp size={15} aria-hidden="true" /></Button>
-          <Button className="nv-drawer__tool" aria-label={t('next')} isDisabled={at < 0 || at >= nav.ids.length - 1} onPress={() => step(1)}><ChevronDown size={15} aria-hidden="true" /></Button>
-        </>
-      )}
-    </div>
+    <>
+      <Button className="nv-drawer__tool" aria-label={t('previous')} isDisabled={at <= 0} onPress={() => stepIn(nav, row, -1)}><ChevronUp size={15} aria-hidden="true" /></Button>
+      <Button className="nv-drawer__tool" aria-label={t('next')} isDisabled={at < 0 || at >= nav.ids.length - 1} onPress={() => stepIn(nav, row, 1)}><ChevronDown size={15} aria-hidden="true" /></Button>
+    </>
   )
 }
 
@@ -163,9 +159,10 @@ function Props({ props, row }: { props: Prop[]; row: Row }) {
 }
 
 /** One record read whole, beside the sheet — not a modal: the grid stays live. As the prototypes draw it: head, title, its relations, fields, sections. */
-export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions = [], onAction, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
+export function Drawer({ row, columns, onClose, editor, onDelete, onSaid, onWrite, onLink, actions = [], onAction, onDone, focusOnOpen = true, recordLink, attachments, onBatch = () => undefined, model, view, layout, nav, flags = null, sub: ownSub, alert, lines, sections }: Props) {
   const schema = useContext(SchemaContext)
   const [more, setMore] = useState(false)
+  const { busy } = useLive(onDone ? model : undefined, row, onDone ?? (() => Promise.resolve(null)))
   // The start and end pair the table declares for a calendar, whichever view the drawer opened from.
   const cal = view?.calendar ?? (model ? schema?.tables.find((table) => table.model === model.key && table.calendar)?.calendar : undefined)
   const dateField = view?.date_field ?? schema?.tables.find((table) => table.model === model?.key)?.date_field ?? null
@@ -175,64 +172,87 @@ export function Drawer({ row, columns, onClose, editor, onWrite, onLink, actions
   const tones = useTones(schema?.models ?? {}, space && !ownSub ? schema?.space?.model : undefined)
   const spaceTone = space && tones?.get(Number(firstId(space.value(row))))
   const links = linkedOf(columns, model)
-  const longs = columns.filter((c) => c.kind === 'longtext')
+  const writer = (c: Column) => (model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite)
+  // A read-only empty long text shows nothing, so it makes no notes tab.
+  const longs = columns.filter((c) => c.kind === 'longtext' && (writer(c) || c.edit(row)))
   const inbound = model && schema && row.id > 0 ? inboundOf(schema, model.key) : []
+  const history = Boolean(model && !model.query && row.id > 0)
+  const panes = panesOf({ longs, links, inbound, history, files: Boolean(attachments), schema })
+  // The dashboard keeps one drawer across models: a record is its model and id.
+  const opened = `${model?.key}:${row.id}`
+  const [chosen, setChosen] = useState({ opened, key: 'fields' })
+  // Another record opens on Gegevens, and so does a return to one whose other tab was open.
+  if (chosen.opened !== opened) setChosen({ opened, key: 'fields' })
+  const pane = chosen.opened === opened && panes.some((p) => p.key === chosen.key) ? chosen.key : 'fields'
+  const show = (key: string) => setChosen({ opened, key })
   const raised = model && flags && row.id > 0 ? flags.marksOf(model.key, row.id) : []
   const bands = bandKeys(raised)
   // The band asks the link section to choose for the place its flag marks: the choosing is the section's.
   const choosers = useRef<Record<string, Chooser | null>>({})
+  // A link in a closed tab chooses once its tab has opened.
+  const pending = useRef<{ opened: string; key: string; place: number } | null>(null)
+  useEffect(() => {
+    const asked = pending.current
+    if (asked && asked.opened !== opened) pending.current = null
+    const chooser = asked && asked.opened === opened && choosers.current[asked.key]
+    if (!chooser) return
+    chooser.choose(asked.place)
+    pending.current = null
+  })
+  const choose = ({ key, place }: { key: string; place: number }) => {
+    const chooser = choosers.current[key]
+    if (chooser) return chooser.choose(place)
+    pending.current = { opened, key, place }
+    const at = links.findIndex((l) => l.key === key)
+    show(at > 0 ? `link:${links[at].column.id}` : 'fields')
+  }
   const chooseOther = (flag: Flag): AlertAction[] => {
     const at = onLink ? choosableOf(flag, row, links, schema) : null
-    return at ? [{ label: t('chooseOther'), run: () => choosers.current[at.key]?.choose(at.place) }] : []
+    return at ? [{ label: t('chooseOther'), run: () => choose(at) }] : []
   }
+  const actionRow = <ActionRow key={`actions:${row.id}`} model={model?.key} row={row} onDone={onDone} actions={actions} onAction={onAction} onSaid={onSaid} />
+  const linkSection = ({ key, link, column }: (typeof links)[number]) => (
+    <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
+      schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} onDone={row.id > 0 ? onDone : undefined} />
+  )
   return (
     <SidePanel label={row.title} focusKey={row.id} onClose={onClose} focusOnOpen={focusOnOpen} expandable onHeadKey={headKey(nav, row)}
-      head={<Head row={row} model={model} nav={nav} icon={iconNamed(schema?.tables.find((table) => table.model === model?.key)?.icon)} />}>
+      head={<h2 className="nv-drawer__title nv-dw-title" title={row.title || undefined}>{row.title || t('untitled')}</h2>}
+      tools={<>
+        {busy && <span className="nv-dw-head__busy" role="status"><span className="nv-sr">{t('liveBusy')}</span></span>}
+        <OpenLink row={row} model={model} />
+        <HeadActions key={`head-${row.id}`} row={row} model={model} actions={actions} onAction={onAction} onSaid={onSaid} />
+        <DrawerTools key={`tools-${row.id}`} row={row} recordLink={recordLink} onDelete={onDelete} onSaid={onSaid} />
+        {nav && <Steps row={row} nav={nav} />}
+        {panes.length > 1 && <DrawerTabs panes={panes} current={pane} onChange={show} />}
+      </>}>
       <div className="nv-dw-body">
-      <h2 className="nv-dw-title">{row.title || t('untitled')}</h2>
-      {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
-        <p className="nv-dw-sub">
-          {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
-        </p>
+      {pane === 'fields' && (
+        <>
+          {ownSub ? <p className="nv-dw-sub">{ownSub}</p> : sub.length > 0 && (
+            <p className="nv-dw-sub">
+              {sub.map((c) => <span key={c.id} className={c === space ? 'nv-dw-sub__space' : 'nv-dw-sub__of'}>{c === space ? <i aria-hidden="true" style={spaceTone ? ({ '--c': toneColor(spaceTone) } as CSSProperties) : undefined} /> : <Link2 size={13} aria-hidden="true" />}{c.text(row)}</span>)}
+            </p>
+          )}
+          {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
+          {lines && <dl className="nv-drawer__fields">{lines}</dl>}
+          {shown.length > 0 && <Props props={shown} row={row} />}
+          {folded.length > 0 && (more
+            ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
+            : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
+          {links.length > 0 && linkSection(links[0])}
+          {actionRow}
+          {sections}
+          {editor && <div className="nv-drawer__editor">{editor}</div>}
+        </>
       )}
-      {alert ?? raised.map((flag, at) => <Alert key={`${row.id}:${bands[at]}`} title={flag.label} text={flag.text} warn={flag.tone !== 'bad'} actions={chooseOther(flag)} dismiss={t('dismiss')} />)}
-      {lines && <dl className="nv-drawer__fields">{lines}</dl>}
-      {shown.length > 0 && <Props props={shown} row={row} />}
-      {folded.length > 0 && (more
-        ? <><Props props={folded} row={row} /><button type="button" className="nv-dw-more" onClick={() => setMore(false)}>{t('fewerFields')}</button></>
-        : <button type="button" className="nv-dw-more" onClick={() => setMore(true)}>{t('moreFields', { n: folded.length })}</button>)}
-      {links.map(({ key, link, column }) => (
-        <LinkSection key={`${row.id}:${column.id}`} ref={(chooser) => { choosers.current[key] = chooser }} label={column.label} link={link} items={linksOf(row, key)}
-          schema={schema} id={row.id} flagsOf={flags ? (id) => flags.marksOf(link.dataset, id) : undefined} onLink={onLink} />
-      ))}
-      {longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={model?.fields[c.field ?? c.id]?.readonly ? undefined : onWrite} />)}
-      {inbound.map((i) => <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
-      {sections}
-      {model && !model.query && row.id > 0 && <HistorySection key={row.id} model={model} id={row.id} />}
-      {recordLink && <RecordLink key={`${recordLink}:${row.id}`} dataset={recordLink} id={row.id} />}
-      {attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
-      {onAction && actions.map((action) => <Action key={`${row.id}:${action.name}`} action={action} record={{ ...row.fields, id: row.id }} onRun={(input) => onAction(action, input)} />)}
-      {editor && <div className="nv-drawer__editor">{editor}</div>}
+      {pane === 'notes' && longs.map((c) => <LongSection key={`${row.id}:${c.id}`} column={c} row={row} onWrite={writer(c)} />)}
+      {links.slice(1).map((l) => pane === `link:${l.column.id}` && linkSection(l))}
+      {inbound.map((i) => pane === `inbound:${i.model}:${i.field}` && <InboundSection key={`${i.model}:${i.field}`} inbound={i} id={row.id} schema={schema} />)}
+      {pane === 'history' && model && <HistorySection key={row.id} model={model} id={row.id} row={row} />}
+      {pane === 'files' && attachments && <Attachments key={`${attachments.dataset}:${row.id}`} files={attachments} id={row.id} onBatch={onBatch} />}
       </div>
     </SidePanel>
-  )
-}
-
-/** Copies the record's link for its person, or a new one that stops the old. */
-function RecordLink({ dataset, id }: { dataset: string; id: number }) {
-  const [said, setSaid] = useState('')
-  const copy = (read: Promise<string>, done: string) => {
-    read.then((link) => navigator.clipboard.writeText(link)).then(
-      () => setSaid(done),
-      () => setSaid(t('recordLinkFailed')),
-    )
-  }
-  return (
-    <div className="nv-action" role="group" aria-label={t('copyLink')}>
-      <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(readLink(dataset, id), t('linkCopied'))}>{t('copyLink')}</Button>
-      <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => copy(rotateRecordLink(dataset, id), t('recordLinkRotated'))}>{t('recordLinkNew')}</Button>
-      <p className="nv-action__said" role="status">{said}</p>
-    </div>
   )
 }
 
@@ -317,86 +337,5 @@ function Attachments({ files: { dataset, kinds, max_mb, writable, version }, id,
       </div>}
       {refused && <p className="nv-action__refused" role="alert">{refused}</p>}
     </section>
-  )
-}
-
-type Sending = { status: 'idle' } | { status: 'sent' } | { status: 'refused'; message: string }
-
-type Typed = Exclude<ActionInput, { relation: string }>
-
-/** As the engine checks it, so the run button waits for a value it would take. */
-function typedValid(input: Typed, value: unknown): boolean {
-  if (value === undefined || value === '') return input.required === false
-  if (input.type !== 'integer') return true
-  const n = value as number
-  return Number.isSafeInteger(n) && (input.min === undefined || n >= input.min) && (input.max === undefined || n <= input.max)
-}
-
-function TypedInput({ input, value, onChange }: { input: Typed; value: unknown; onChange: (value: unknown) => void }) {
-  if (input.type === 'boolean') {
-    return (
-      <label className="nv-action__input nv-action__check">
-        <input type="checkbox" checked={value === true} onChange={(event) => onChange(event.target.checked)} />
-        {input.label}
-      </label>
-    )
-  }
-  const kind = input.type === 'integer' ? 'number' : input.type
-  const read = (raw: string): unknown => (raw === '' ? undefined : input.type === 'integer' ? Number(raw) : raw)
-  return (
-    <label className="nv-action__input">
-      <span>{input.label}</span>
-      <input className="nv-fb__text" type={kind} aria-label={input.label} min={input.min} max={input.max} maxLength={input.type === 'text' ? 500 : undefined}
-        value={value === undefined ? '' : String(value)} onChange={(event) => onChange(read(event.target.value))} />
-    </label>
-  )
-}
-
-/** A required yes/no starts as no, as its box shows; an optional one stays out until ticked. */
-const unticked = (inputs: [string, ActionInput][]): Record<string, unknown> =>
-  Object.fromEntries(inputs.filter(([, input]) => 'type' in input && input.type === 'boolean' && input.required !== false).map(([key]) => [key, false]))
-
-/** Keyed by its record, so another row starts with nothing picked. */
-function Action({ action, record, onRun }: { action: ModelAction; record: Record<string, unknown>; onRun: (input: Record<string, unknown>) => Promise<void> }) {
-  const inputs = Object.entries(action.input)
-  const [picked, setPicked] = useState<Record<string, Row>>({})
-  const [typed, setTyped] = useState<Record<string, unknown>>(() => unticked(inputs))
-  const [open, setOpen] = useState<string | null>(null)
-  const [sending, setSending] = useState<Sending>({ status: 'idle' })
-  const valueOf = ([key, input]: [string, ActionInput]) => ('relation' in input ? picked[key]?.id : typed[key])
-  const ready = inputs.every((entry) => {
-    const [, input] = entry
-    return 'relation' in input ? picked[entry[0]] !== undefined : typedValid(input, typed[entry[0]])
-  })
-
-  const run = () => {
-    setSending({ status: 'sent' })
-    const given = inputs.filter((entry) => valueOf(entry) !== undefined).map((entry) => [entry[0], valueOf(entry)])
-    onRun(Object.fromEntries(given)).then(
-      () => setSending({ status: 'idle' }),
-      (error: ApiError) => setSending({ status: 'refused', message: errorText(error.code, error.message) }),
-    )
-  }
-
-  return (
-    <div className="nv-action" role="group" aria-label={action.label}>
-      {inputs.map(([key, input]) => 'relation' in input ? (
-        <div key={key} className="nv-action__input">
-          <Button className="nv-button nv-button--secondary nv-button--sm" onPress={() => setOpen(key)}>{`${input.label}: ${picked[key]?.title ?? t('empty')}`}</Button>
-          {open === key && (
-            <RelationPicker model={input.relation} label={input.label} onCancel={() => setOpen(null)}
-              candidates={input.options_from ? () => optionsFrom(input.options_from as OptionsFrom, record) : undefined}
-              onPick={(record) => {
-                setPicked((was) => ({ ...was, [key]: record }))
-                setOpen(null)
-              }} />
-          )}
-        </div>
-      ) : (
-        <TypedInput key={key} input={input} value={typed[key]} onChange={(value) => setTyped((was) => ({ ...was, [key]: value }))} />
-      ))}
-      <Button className="nv-button nv-button--primary nv-button--sm" isDisabled={!ready || sending.status === 'sent'} onPress={run}>{action.label}</Button>
-      {sending.status === 'refused' && <p className="nv-action__refused" role="alert">{sending.message}</p>}
-    </div>
   )
 }

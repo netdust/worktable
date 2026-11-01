@@ -1,12 +1,13 @@
-import { Button } from 'react-aria-components'
-import { type ClipboardEvent, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
+import { type ClipboardEvent, type CSSProperties, type ReactNode, type KeyboardEvent, type RefObject, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { t } from '../i18n'
-import type { Lookup, Model, Row, Scope, View } from '../types'
+import type { Lookup, Model, ModelAction, Opened, Row, Scope, View } from '../types'
 import { type LinkActions, LinksContext } from './cells/Links'
 import { RelationContext, relatedOf } from './cells/Relation'
 import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { rowOf } from '../api'
 import { Drawer, type RunAction } from './Drawer'
+import { useReread } from './drawerWrite'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
@@ -17,10 +18,13 @@ import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { SchemaContext } from './drawer/context'
 import { placeWriter } from './drawer/place'
 import { GridFoot } from './GridFoot'
-import { GridHeader, NUMBER_WIDTH } from './GridHeader'
+import { GridHeader, NUMBER_WIDTH, SELECT_WIDTH } from './GridHeader'
+import { DockSlot, useRuns } from '../ui/runs'
+import { SelectionBar, useSelection } from './Selection'
 import { type Cell, type Effect, initial, type Input, type KeyState, reduce, type Sheet } from './keys'
 import type { Layout } from './layout'
 import { DRAFT, type Store } from './store'
+import { type Insight, insightOf } from '../ui/insight'
 import { useGridTable } from './useTable'
 
 /** What the grid shows, read when it is exported: the visible columns in order and the sorted, grouped rows. */
@@ -47,14 +51,16 @@ export interface GridProps {
   snapshot?: RefObject<(() => OnScreen) | null>
   /** Told what is on screen, for the title line's summary. */
   /** What the title line and the chip row say: the rows, the groups, and the columns Kolommen offers. */
-  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[]; flagged?: Shown['flagged'] } | null) => void
+  onShown?: (shown: { rows: number; groups: number | null; cut: boolean; menu: Column[]; flagged?: Shown['flagged']; insight?: Insight[] } | null) => void
   /** Every declared model, for the relation pickers' targets. */
   models?: Record<string, Model>
   /** The selected space: a picker lists its records first where a model relates to `spaceModel`. */
   scope?: Scope | null
   spaceModel?: string | null
   /** Runs one of the model's actions on a record; without it the drawer offers none. */
-  onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<void>
+  onAction?: (row: Row, ...run: Parameters<RunAction>) => Promise<Opened | null | void>
+  /** Runs a selection action once on the ticked rows; without it the table has no checkboxes. */
+  onSelection?: (action: ModelAction, ids: number[], input: Record<string, unknown>) => Promise<Opened | null | void>
   /** The last row as loaded when the read limit held rows back: its group's facts may be short. */
   cut?: Row | null
   /** Adds and removes a `links` cell's rows; without it a links cell only shows its tags. */
@@ -79,7 +85,13 @@ function firstLine(text: string): string {
   return text.split(/\r?\n/)[0].split('\t')[0]
 }
 
-export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
+/** A table's selection actions; a selectable query's are its dataset's that apply to every record or skip what does not fit. */
+function selectionOf(model: Model, models: Record<string, Model>): ModelAction[] {
+  if (!model.selectable) return model.actions?.filter((a) => a.many) ?? []
+  return models[model.selectable]?.actions?.filter((a) => a.many && (!a.conditional || a.skips)) ?? []
+}
+
+export function Grid({ model, view, title, store, writable, layout, onLayout, query, emptyTitle, emptyHint, snapshot, onShown, models = NO_MODELS, scope = null, spaceModel = null, onAction, onSelection, cut = null, links, onNotice, recordLink, reloads = 0 }: GridProps) {
   const state = useSyncExternalStore(store.subscribe, store.getState)
   // The fields a draft still needs are shown while it does, even where the view shows them only as a lookup or not at all.
   const wanted = useMemo(() => (state.rows.some((r) => r.id === DRAFT) ? state.needs : []), [state.rows, state.needs])
@@ -113,6 +125,16 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // A group holding the draft stays open: the row being written must stay in reach.
   const shut = new Set(groups.filter((g) => folded.has(g.key) && !g.rows.some((r) => r.id === DRAFT)).map((g) => g.key))
   const ordered = groups.flatMap((g) => (shut.has(g.key) ? [] : g.rows))
+  const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT)
+  const ticking = useSelection(ids)
+  const dock = useContext(DockSlot)
+  // In the work column's dock when there is one; floating over the sheet's foot otherwise.
+  const panelled = (panel: ReactNode) => (dock ? createPortal(panel, dock) : panel)
+  const runs = useRuns()
+  const running = useMemo(() => new Set([...runs.running].filter((key) => key.startsWith(`${model.key}:`)).map((key) => Number(key.slice(model.key.length + 1)))), [runs.running, model.key])
+  const selectionActions = onSelection ? selectionOf(model, models) : []
+  const selectable = selectionActions.length > 0
+  const numberWidth = selectable ? SELECT_WIDTH : NUMBER_WIDTH
 
   const sorted = table.getRowModel().rows
   useEffect(() => {
@@ -124,12 +146,13 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   })
 
   const shownRows = total(groups)
+  const insightKey = JSON.stringify(insightOf(model, shown))
   const shownGroups = by ? groups.length : null
   const flags = useFlags(useContext(SchemaContext), scope, windowOfRows(state.rows, view.date_field), model.key, state.rows)
   const flagged = flaggedOf(flags, model.key, shown)
   useEffect(() => {
-    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns, flagged })
-  }, [shownRows, shownGroups, cut, columns, flagged?.count])
+    onShown?.({ rows: shownRows, groups: shownGroups, cut: cut !== null, menu: columns, flagged, insight: insightOf(model, shown) })
+  }, [shownRows, shownGroups, cut, columns, flagged?.count, insightKey])
   useEffect(() => () => onShown?.(null), [])
 
   const [keys, setKeys] = useState<KeyState>(initial)
@@ -139,6 +162,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   // Focus moves to a cell only after the grid itself moved it; a search filtering rows must keep its focus.
   const moved = useRef(false)
   const [drawer, setDrawer] = useState<number | null>(null)
+  const reread = useReread()
   const [filesVersions, setFilesVersions] = useState<Record<string, number>>({})
   const [related, setRelated] = useState<{ row: Row; columns: Column[]; model: Model } | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
@@ -307,9 +331,51 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     event.preventDefault()
   }
 
-  function openRelated(target: string, id: number): void {
+  /** A re-read lands only on the related drawer it was made for; a record that is gone closes it. */
+  function followRelated(of: string, row: Row | null, id = row?.id): void {
+    setRelated((was) => (was && was.model.key === of && was.row.id === id ? (row ? { ...was, row } : null) : was))
+  }
+
+  // The view was read again, as after an Undo of the run that opened this record: the drawer shows what is there now, or closes.
+  useEffect(() => {
+    if (!related || reloads === 0) return
+    let current = true
+    rowOf(related.model.key, related.row.id).then((found) => current && followRelated(related.model.key, found, related.row.id), () => undefined)
+    return () => {
+      current = false
+    }
+  }, [reloads])
+
+  // The dock's link asked for a record: this table shows it, in its own drawer or as a related one.
+  // Settled only once the record is on screen: a sheet read again meanwhile starts over, and the next one takes the request.
+  useEffect(() => {
+    if (!runs.opening) return
+    let current = true
+    void Promise.resolve(show(runs.opening)).then(() => current && runs.settled())
+    return () => {
+      current = false
+    }
+  }, [runs.opening])
+
+  /** What an action asked to open: a record this table holds stays in its own drawer, any other is read and shown as a related one. */
+  function show(opened: Opened | null | void): Promise<void> | void {
+    if (!opened) return
+    if (opened.dataset === model.key && state.rows.some((row) => row.id === opened.id)) setDrawer(opened.id)
+    else return openRelated(opened.dataset, opened.id)
+  }
+
+  /** The ticked rows an action is not marked on: a row with no marks allows every action. */
+  function unmarked(action: ModelAction): number {
+    return state.rows.filter((row) => ticking.selected.has(row.id) && row.available && !row.available.actions.includes(action.name)).length
+  }
+
+  /** An action that skips misfits blocks on none of them. */
+  const misfits = (action: ModelAction): number => (action.skips ? 0 : unmarked(action))
+  const barActions = selectionActions.filter((action) => !action.skips || unmarked(action) < ticking.selected.size)
+
+  function openRelated(target: string, id: number): Promise<void> {
     const gone = () => onNotice?.(t('recordGone'))
-    rowOf(target, id).then((found) => {
+    return rowOf(target, id).then((found) => {
       const targetModel = models[target]
       if (!found || !targetModel) return gone()
       setDrawer(null)
@@ -318,6 +384,12 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   }
 
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
+
+  // A record shown in a drawer needs no dock line pointing at it: read from the drawer on screen, not the id asked for.
+  const viewedKey = related ? related.model.key : open ? model.key : null
+  const viewedId = related ? related.row.id : open?.id
+  useEffect(() => runs.viewing(viewedKey, viewedId), [viewedKey, viewedId])
+  useEffect(() => () => runs.viewing(null), [])
 
   // Kept here, not in the drawer: an undo after the drawer closed and opened again must reach the open one.
   const filesOf = (of: Model, id: number) =>
@@ -331,55 +403,45 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   return (
     <LinksContext.Provider value={links ?? null}>
     <RelationContext.Provider value={{ models, scope, spaceModel, openRelated }}>
-    <div className="nv-frame">
+    <div className="nv-frame" data-panel={ticking.selected.size > 0 ? '' : undefined}>
       {state.rows.length === 0 ? (
       <div className="nv-center">
         <EmptyState title={emptyTitle} description={emptyHint ?? ''} />
       </div>
       ) : (
+      <>
+      {selectable && onSelection && panelled(
+        <SelectionBar count={ticking.selected.size} picked={ticking.selected} actions={barActions} onClear={ticking.clear} misfits={misfits}
+          onRun={(action, input) => onSelection(action, ids.filter((id) => ticking.selected.has(id)), input).then((opened) => {
+            ticking.clear()
+            show(opened)
+          })} />,
+      )}
       <div className="nv-body">
         <div className="nv-scroll">
-          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" style={{ width: table.getTotalSize() + NUMBER_WIDTH }} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
-            <GridHeader table={table} byId={byId} />
-            <GridBody groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+          <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" data-ticking={ticking.selected.size > 0 ? '' : undefined} style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+            <GridHeader table={table} byId={byId} numberWidth={numberWidth}
+              selection={selectable ? { all: ids.length > 0 && ticking.selected.size === ids.length, some: ticking.selected.size > 0, onToggle: ticking.selected.size === ids.length ? ticking.clear : ticking.all } : undefined} />
+            <GridBody running={running} groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+              selection={selectable ? { has: (id) => ticking.selected.has(id), toggle: ticking.toggle } : undefined}
               emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
             <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
-          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)} />}
-        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions} model={model} view={view} layout={layout} flags={flags}
+          attachments={filesOf(related.model, related.row.id)} onBatch={batchOn(related.model, related.row.id)}
+          onDone={reread(related.model.key, related.row.id, (row) => followRelated(related.model.key, row), () => followRelated(related.model.key, null, related.row.id))} />}
+        {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
-          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)}
-          onAction={onAction && open.id !== DRAFT ? (action, input) => onAction(open, action, input) : undefined} onWrite={writable ? apply : undefined}
+          attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id, undefined, () => setDrawer((now) => (now === open.id ? null : now)))}
+          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then((opened) => (action.handoff ? opened : show(opened))) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
-          editor={model.deletable ? <DeleteRow key={open.id} onDelete={() => store.remove(open.id)} /> : undefined} />}
+          onDelete={model.deletable ? () => store.remove(open.id) : undefined} onSaid={onNotice} />}
       </div>
+      </>
       )}
     </div>
     </RelationContext.Provider>
     </LinksContext.Provider>
-  )
-}
-
-/** Two presses: Verwijderen, then Zeker?. Keyed by its row, so leaving the drawer starts it over. */
-function DeleteRow({ onDelete }: { onDelete: () => Promise<void> }) {
-  const [step, setStep] = useState<'ask' | 'sure' | 'sent'>('ask')
-  const clicks = useRef(0)
-  const press = () => {
-    // A double click's second click is not a confirmation.
-    const double = clicks.current > 1
-    clicks.current = 0
-    if (step === 'ask') return setStep('sure')
-    if (step !== 'sure' || double) return
-    setStep('sent')
-    void onDelete().finally(() => setStep('ask'))
-  }
-  return (
-    <div aria-live="polite" onMouseDownCapture={(event) => { clicks.current = event.detail }}>
-      <Button className="nv-button nv-button--destructive nv-button--sm" isDisabled={step === 'sent'} onPress={press}>
-        {t(step === 'ask' ? 'delete' : 'deleteConfirm')}
-      </Button>
-    </div>
   )
 }

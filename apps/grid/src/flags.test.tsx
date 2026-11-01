@@ -168,7 +168,7 @@ describe("a flag on the dashboard's week", () => {
       calendar: { day: 'plandag', start: null, end: null, lanes: [] }, arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] },
     } as unknown as SavedView
     api.rows.mockImplementation(async (read: View) => ({ rows: read.model === 'meldingen' ? [flagged] : [act(7, 'Repetitie', week.from), act(8, 'Opbouw', week.from)], total: 2 }))
-    inSchema({ activiteit }, <WeekTile view={view} model={activiteit} scope={null} version={0} onOpen={() => undefined} onOpenRow={() => undefined} />)
+    inSchema({ activiteit }, <WeekTile view={view} model={activiteit} models={{}} scope={null} version={0} onOpen={() => undefined} onOpenRow={() => undefined} />)
 
     const event = await screen.findByRole('button', { name: /Repetitie/ })
     expect(await within(event).findByRole('img', { name: `Conflict: ${TEXT}` })).toBeTruthy()

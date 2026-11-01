@@ -1,6 +1,6 @@
 /* The grid's whole look: the rail, toolbar and sheet of the mockup, and the React Aria parts. Every class carries nv-. */
 #root {
-  --row-h: 40px;
+  --row-h: 32px;
   font: 13.5px/1.4 var(--font-sans);
   color: var(--color-fg-default);
   background: var(--color-bg-surface);
@@ -8,15 +8,15 @@
 }
 
 #root[data-density="compact"] {
-  --row-h: 32px;
+  --row-h: 28px;
 }
 
 #root[data-density="normal"] {
-  --row-h: 40px;
+  --row-h: 32px;
 }
 
 #root[data-density="roomy"] {
-  --row-h: 46px;
+  --row-h: 40px;
 }
 
 .nv-app {
@@ -108,6 +108,7 @@
 }
 
 .nv-model {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -409,6 +410,11 @@
   min-height: 0;
 }
 
+/* The work column is what the toolbar measures against: a drawer beside it narrows it, the window does not. */
+.nv-main {
+  container: nvmain / inline-size;
+}
+
 /* When the name and the end do not both fit (a drawer open on a narrow screen), the end takes a second row. */
 .nv-toolbar {
   display: flex;
@@ -497,7 +503,7 @@
 
 .nv-toolbar > .nv-toolbar__end {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
   align-items: center;
   gap: 8px;
@@ -747,6 +753,7 @@
 }
 
 .nv-sheet {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -855,7 +862,21 @@
   flex: none;
 }
 
+/* Its words add nothing to the toolbar's width: it takes what the line leaves and cuts the rest. */
+/* The end group then takes the line's rest, and the name no longer grows into it. */
+.nv-toolbar:has(.nv-save--error) > .nv-toolbar__name {
+  flex-grow: 0;
+}
+
+.nv-toolbar > .nv-toolbar__end:has(.nv-save--error) {
+  flex-grow: 1;
+  justify-content: flex-end;
+}
+
 .nv-save--error {
+  flex: 1 1 0;
+  contain: inline-size;
+  max-width: 60ch;
   color: var(--color-danger-fg);
   font-weight: 500;
 }
@@ -1005,6 +1026,27 @@
   position: relative;
   flex: 0 1 226px;
   min-width: 136px;
+}
+
+#root .nv-search .nv-search__toggle {
+  display: none;
+}
+
+/* A narrow work column, a drawer open beside it: the search is an icon until asked for. */
+@container nvmain (max-width: 700px) {
+  .nv-search:not([data-open]) {
+    flex: none;
+    min-width: 0;
+  }
+
+  #root .nv-search:not([data-open]) .nv-search__field {
+    display: none;
+  }
+
+  #root .nv-search:not([data-open]) .nv-search__toggle.nv-more {
+    display: inline-flex;
+    height: 36px;
+  }
 }
 
 /* The placeholder must read whole beside the ⌘K hint. */
@@ -1251,6 +1293,7 @@
 
 /* The sheet: the bar, then the scrolling table with the drawer beside it. */
 .nv-frame {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1532,6 +1575,21 @@
   color: var(--color-danger-fg);
 }
 
+/* In a table cell, the drawer's head and its fields a pill is the tinted word alone, as the reference draws it. */
+.nv-grid:not(.nv-mx) .nv-td .nv-pill::before,
+.nv-drawer__field dd .nv-pill::before {
+  display: none;
+}
+
+.nv-grid:not(.nv-mx) .nv-td .nv-pill,
+.nv-drawer__field dd .nv-pill {
+  padding: 2px 10px;
+}
+
+.nv-drawer__field dd .nv-pill {
+  font-size: inherit;
+}
+
 .nv-dot {
   display: inline-flex;
   align-items: center;
@@ -1636,7 +1694,7 @@
   height: 34px;
   padding: 0 10px;
   overflow: hidden;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-row);
   background: var(--color-bg-surface);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1654,7 +1712,7 @@
 /* Vertical lines only when the viewer asks for them (Bijstellen › Rasterlijnen). */
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-td,
 #root[data-lines="on"] .nv-grid:not(.nv-mx) .nv-th {
-  border-right: 1px solid var(--color-border-subtle);
+  border-right: 1px solid color-mix(in srgb, var(--color-border-row) 60%, transparent);
 }
 
 /* Zebra rows on request (Bijstellen › Zebrarijen). */
@@ -1668,15 +1726,21 @@
   left: 0;
   z-index: 1;
   box-sizing: border-box;
-  width: 44px;
+  width: var(--nv-num-width, 44px);
   padding: 0 10px 0 0;
   color: var(--color-fg-subtle);
-  font: 11.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
 .nv-grid:not(.nv-mx) .nv-th.nv-num {
   z-index: 3;
+}
+
+/* With a tick box the cell reads [box][number] from the left, so every box sits at one x. */
+.nv-grid:not(.nv-mx) .nv-num:has(input[type="checkbox"]) {
+  padding: 0 0 0 12px;
+  text-align: left;
 }
 
 .nv-grid__foot td.nv-num {
@@ -1685,7 +1749,7 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-first {
-  left: 44px;
+  left: var(--nv-num-width, 44px);
   padding-left: 12px;
 }
 
@@ -1705,19 +1769,17 @@
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__tabular {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: inherit;
 }
 
 .nv-grid:not(.nv-mx) {
   line-height: 1.4;
 }
 
-/* The prototype's cells: values muted, the title the one strong word, a time's end quiet.
-   The approved prototype drew its table text at the browser's 16px (no doctype); kept on purpose. */
+/* The prototype's cells: values muted, the title the one strong word, a time's end quiet. One size for every cell of a row. */
 .nv-grid:not(.nv-mx) .nv-td {
   color: var(--color-fg-muted);
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .nv-grid:not(.nv-mx) .nv-cell__title {
@@ -1725,11 +1787,15 @@
   font-weight: 500;
 }
 
-.nv-grid:not(.nv-mx) .nv-dot {
-  font-size: 12.5px;
+.nv-grid:not(.nv-mx) .nv-dot,
+.nv-grid:not(.nv-mx) .nv-pill,
+.nv-grid:not(.nv-mx) .nv-blank,
+.nv-grid:not(.nv-mx) .nv-cell__muted,
+.nv-grid:not(.nv-mx) .nv-td__error {
+  font-size: inherit;
 }
 
-/* Small marks keep to the middle of a 16px line. */
+/* Small marks keep to the middle of the line. */
 .nv-grid:not(.nv-mx) .nv-dot,
 .nv-grid:not(.nv-mx) .nv-pill,
 .nv-grid:not(.nv-mx) .nv-blank,
@@ -1844,6 +1910,15 @@
 .nv-cell__bool {
   display: inline-flex;
   align-items: center;
+  vertical-align: middle;
+}
+
+/* A never-given boolean: no switch, but a cell-wide target a press sets to true. */
+.nv-cell__bool--blank {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  cursor: pointer;
 }
 
 .nv-switch {
@@ -1866,6 +1941,11 @@
   border-radius: var(--radius-full);
   background: var(--color-bg-muted);
   transition: background-color var(--transition-base);
+}
+
+/* An off switch must stay visible on the row under the pointer, whose hover fill is as pale as the track. */
+.nv-tr:hover .nv-switch:not([data-selected]) .nv-switch__track {
+  background: color-mix(in srgb, var(--color-fg-muted) 24%, var(--color-bg-hover));
 }
 
 .nv-switch[data-selected] .nv-switch__track {
@@ -2379,6 +2459,17 @@
   padding-left: 16px;
 }
 
+/* The table's end: empty scroll space under the last row, with the totals pinned below it at the pane's bottom. */
+.nv-grid:not(.nv-mx) {
+  min-height: 100%;
+}
+
+.nv-grid:not(.nv-mx) tbody::after {
+  content: '';
+  display: block;
+  height: max(160px, calc(var(--nv-dock-h, 0px) + 40px));
+}
+
 /* The matrix: the grid's table, its tokens and its sticky header and first column, with a mark per cell. */
 /* Its columns keep their widths: the side panel opening must not move a cell under the pointer. */
 .nv-grid.nv-mx {
@@ -2849,30 +2940,52 @@
   padding: 0;
 }
 
-/* The prototypes' drawer: a head line, the title, its relations, the fields, then sections. */
-.nv-dw-head {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--color-fg-subtle);
-  font-size: 12px;
-}
-
-.nv-dw-head__kind {
-  display: inline-flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+/* The prototypes' drawer: the title and its buttons on one line, then its relations, the fields, then sections. */
+#root .nv-drawer__title.nv-dw-title {
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.nv-dw-head__pos {
-  font: 11px var(--font-mono);
+/* A record an outside process holds: a thin line running along the head's foot, the words for a reader only. */
+.nv-dw-head__busy {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nv-dw-head__busy::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  background: var(--color-accent-default);
+  content: "";
+  animation: nv-dw-busy 1.4s ease-in-out infinite;
+}
+
+@keyframes nv-dw-busy {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-dw-head__busy::before {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
 }
 
 #root .nv-drawer__tool {
@@ -2901,15 +3014,6 @@
 
 .nv-dw-body {
   padding: 16px 16px 24px;
-}
-
-#root .nv-dw-title {
-  margin: 0 0 4px;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
 }
 
 .nv-dw-sub {
@@ -3027,9 +3131,12 @@
 
 .nv-dw-list__main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
   min-width: 0;
   font-size: 13px;
+  /* A long path or address in a line wraps inside the drawer. */
+  overflow-wrap: anywhere;
 }
 
 .nv-dw-list__main small {
@@ -3435,6 +3542,267 @@
 
 .nv-action__input {
   position: relative;
+}
+
+/* The ticked rows' panel, floating over the foot of the sheet: the count, each action with its inputs inline, and the way out. */
+.nv-selection {
+  box-sizing: border-box;
+  min-height: 45px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  font-size: 13px;
+}
+
+.nv-selection--floating {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
+/* The work column's dock: the selection panel on top, the lines of running requests below it. Nothing in it shifts a row. */
+.nv-dock {
+  position: absolute;
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  /* Over a widened drawer too (z-index 20): a toast is heard and seen wherever it was asked. */
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.nv-dock__panel {
+  display: contents;
+}
+
+.nv-dock .nv-toast {
+  position: static;
+  transform: none;
+  pointer-events: auto;
+}
+
+.nv-dock .nv-selection--floating {
+  position: relative;
+  inset: auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  transform: none;
+  pointer-events: auto;
+}
+
+.nv-runs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+}
+
+.nv-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 6px 10px 6px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+  color: var(--color-fg-default);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.nv-run[data-tone="bad"] {
+  color: var(--color-danger-fg);
+}
+
+.nv-run--more {
+  color: var(--color-fg-subtle);
+}
+
+.nv-run__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-default);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nv-run__close {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+/* A request an outside process holds: a ring that turns, a still dot when motion is off. */
+.nv-run__spin {
+  flex: none;
+  animation: nv-run-turn 1s linear infinite;
+}
+
+@keyframes nv-run-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-run__spin {
+    animation: none;
+  }
+}
+
+/* The row an action acted on, while it runs: a ring beside its number. */
+.nv-grid:not(.nv-mx) tr[data-running] .nv-num > span::after {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  content: "";
+  animation: nv-run-turn 1s linear infinite;
+  vertical-align: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-grid:not(.nv-mx) tr[data-running] .nv-num > span::after {
+    border-top-color: currentColor;
+    animation: none;
+  }
+}
+
+/* The matrix's last row stays reachable under whatever the dock holds: the panel, a run line, the toast. */
+.nv-sheet:has(.nv-selection, .nv-run, .nv-toast) .nv-scroll:has(.nv-mx) {
+  padding-bottom: calc(var(--nv-dock-h, 80px) + 28px);
+}
+
+/* A table's dock floats above its pinned totals, over the empty end space. */
+.nv-sheet:has(.nv-grid:not(.nv-mx)) .nv-dock {
+  bottom: 56px;
+}
+
+.nv-selection__count {
+  font-weight: 600;
+}
+
+.nv-selection .nv-action {
+  flex-direction: row;
+  align-items: center;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.nv-selection .nv-action__input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#root .nv-selection .nv-fb__text {
+  width: 180px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+}
+
+#root .nv-selection__max {
+  color: var(--color-danger-fg);
+}
+
+.nv-selection > .nv-button {
+  flex: none;
+  margin-left: auto;
+}
+
+.nv-selection > .nv-selection__count,
+.nv-selection > .nv-selection__max {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The actions keep to one line: what does not fit waits behind Meer, measured as the drawer's action row is. */
+.nv-selection__actions {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nv-selection__item {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* A refusal floats above the panel, so it neither widens an action nor pushes one behind Meer. */
+#root .nv-selection .nv-action__refused {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  white-space: normal;
+}
+
+/* A folded action that asks for input opens its inputs above the panel. */
+.nv-selection__ask {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+
+/* The box sits beside the row number and shows on hover, focus, a tick, or while any row is ticked. Opacity, never visibility: the active row's box stays the Tab stop. */
+.nv-grid:not(.nv-mx) .nv-num input[type="checkbox"] {
+  margin: 0 8px 0 0;
+  vertical-align: middle;
+  opacity: 0;
+}
+
+.nv-grid:not(.nv-mx) tr:hover .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) tr:focus-within .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) tr[data-ticked] .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx)[data-ticking] .nv-num input[type="checkbox"],
+.nv-grid:not(.nv-mx) .nv-th.nv-num:hover input[type="checkbox"],
+.nv-grid:not(.nv-mx) .nv-th.nv-num input[type="checkbox"]:focus-visible {
+  opacity: 1;
 }
 
 #root .nv-action__refused {
@@ -3941,6 +4309,78 @@
   background: var(--color-bg-canvas);
 }
 
+
+.nv-menu__item--danger {
+  color: var(--color-danger-fg);
+}
+
+/* Popovers a drawer's menu opens: an action's inputs, the second press of a delete. */
+.nv-dw-ask {
+  padding: 8px;
+  outline: none;
+}
+
+.nv-dw-ask--inline {
+  position: relative;
+  padding-right: 32px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface);
+}
+
+.nv-dw-actions {
+  margin: 14px 0;
+}
+
+.nv-dw-actions__row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nv-dw-actions__row > .nv-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.nv-dw-actions .nv-dw-ask {
+  margin-top: 8px;
+}
+
+#root .nv-dw-ask__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-fg-subtle);
+  cursor: pointer;
+}
+
+#root .nv-dw-ask .nv-fb__text {
+  width: 180px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+}
+
+#root .nv-dw-ask .nv-fb__text:focus-visible {
+  border-color: var(--color-fg-default);
+  outline: 2px solid var(--color-fg-default);
+  outline-offset: -1px;
+}
+
+.nv-dw-ask .nv-action {
+  padding: 4px;
+}
 
 .nv-menu__item[data-disabled] {
   opacity: 0.6;
@@ -4506,6 +4946,10 @@
   font-size: inherit;
 }
 
+.nv-grid:not(.nv-mx) .nv-td .nv-names .nv-pill {
+  padding: 0;
+}
+
 .nv-grid .nv-names .nv-pill::before {
   content: none;
 }
@@ -4940,6 +5384,7 @@
 
 /* A month fills the view's height: its week rows stretch, as the week's hour area does. */
 .nv-cal__body--month {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -4947,7 +5392,6 @@
 
 .nv-cal__body--month .nv-cal--month {
   flex: 1;
-  height: 100%;
 }
 
 .nv-cal__legend {
@@ -5147,9 +5591,70 @@
   font-weight: 600;
 }
 
-.nv-cal--month td {
-  height: auto;
-  min-height: 96px;
+/* A month day never grows its week: what does not fit is clipped, the count already says it. */
+.nv-cal__cell {
+  overflow: hidden;
+}
+
+/* The rest of a full day, as one more line. */
+#root .nv-cal__more {
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 1px 4px;
+  border: 0;
+  background: none;
+  color: var(--color-fg-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+#root .nv-cal__more:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-fg-default);
+}
+
+/* A whole day, over the month: its rows as the cell draws them. */
+.nv-cal__day {
+  width: 280px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.nv-cal__day .nv-cal__event {
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: none;
+}
+
+.nv-cal__day .nv-cal__event::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--tone, var(--color-accent-default));
+}
+
+.nv-cal__day .nv-cal__event:hover {
+  background: var(--color-bg-hover);
+}
+
+.nv-cal__dayhead {
+  display: block;
+  padding: 2px 6px 6px;
+  color: var(--color-fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .nv-cal__out {
@@ -5301,6 +5806,7 @@ table.nv-cal--month .nv-cal__event:hover {
 
 /* The dashboard: sections of tiles, each a number, a list or a strip over a saved view (design/dashboard-prototype.html). */
 .nv-dash {
+  container-type: inline-size;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -5525,6 +6031,13 @@ table.nv-cal--month .nv-cal__event:hover {
   font: 12.5px var(--font-mono);
 }
 
+.nv-list__on {
+  display: block;
+  color: var(--color-fg-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .nv-list__kind {
   flex: none;
   width: 128px;
@@ -5541,6 +6054,21 @@ table.nv-cal--month .nv-cal__event:hover {
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The title opens its record: text first, a button only in how it answers. */
+.nv-list__open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nv-list__open:hover {
+  text-decoration: underline;
 }
 
 .nv-list__cell {
@@ -5597,7 +6125,8 @@ table.nv-cal--month .nv-cal__event:hover {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  min-height: 112px;
+  /* Room for its head and the lines a day holds, so a full day and a quiet one are as tall. */
+  min-height: calc(46px + var(--fit, 4) * 26px);
   padding: 0 4px 8px;
   border-left: 1px solid var(--color-border-subtle);
 }
@@ -5647,7 +6176,8 @@ table.nv-cal--month .nv-cal__event:hover {
   font-weight: 600;
 }
 
-#root .nv-week-tile__bar {
+#root .nv-week-tile__bar,
+.nv-cal__day .nv-week-tile__bar {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -5665,7 +6195,8 @@ table.nv-cal--month .nv-cal__event:hover {
   cursor: pointer;
 }
 
-#root .nv-week-tile__bar:hover {
+#root .nv-week-tile__bar:hover,
+.nv-cal__day .nv-week-tile__bar:hover {
   background: color-mix(in srgb, var(--c) 26%, var(--color-bg-surface));
 }
 
@@ -5673,6 +6204,12 @@ table.nv-cal--month .nv-cal__event:hover {
   flex: none;
   color: var(--color-fg-muted);
   font: 11px var(--font-mono);
+}
+
+/* The whole day over the tile: one line per row, full width. */
+.nv-cal__day .nv-week-tile__bar {
+  width: 100%;
+  margin: 2px 0;
 }
 
 .nv-week-tile__title {
@@ -5766,6 +6303,13 @@ table.nv-cal--month .nv-cal__event:hover {
   height: 36px;
   border-style: dashed;
   color: var(--color-fg-muted);
+}
+
+/* A narrow dashboard (a drawer open on a laptop) puts today under the week, so neither loses its titles. */
+@container (max-width: 900px) {
+  .nv-dash__tiles:has(> .nv-week-tile) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Beside the week, a row's kind is its dot. */
@@ -6407,9 +6951,11 @@ table.nv-cal--month .nv-cal__event:hover {
 }
 
 /* A dataset's record count beside its name, as the prototype's rail. */
+/* At the line's right edge, over the tools' spot: they show only on hover, when the count leaves. */
 .nv-model__count {
-  margin-left: auto;
-  padding-right: 6px;
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
   color: var(--color-fg-subtle);
   font: 11px var(--font-mono);
 }
@@ -6474,4 +7020,9 @@ table.nv-cal--month .nv-cal__event:hover {
 .nv-links .nv-names {
   flex: 1;
   min-width: 0;
+}
+
+/* A button drawn as its icon alone: square, its label the name and tooltip. */
+.nv-button--sm.nv-button--icon {
+  padding: 6px;
 }

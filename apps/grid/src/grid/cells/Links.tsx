@@ -42,7 +42,7 @@ export function LinksCell({ column, row }: CellProps) {
   const { have, need } = crewOf(items, column.link)
   return (
     <span className="nv-links">
-    {need > 0 && (
+    {need > 0 && column.link?.meter !== false && (
       <span className="nv-crew" aria-label={t('crewOf', { have, need })}>
         <span className="nv-crew__meter" aria-hidden="true"><b style={{ width: `${(have / need) * 100}%` }} /></span>
         {have}/{need}

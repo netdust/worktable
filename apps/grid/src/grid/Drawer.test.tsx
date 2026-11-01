@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, ModelAction, Row, Schema } from '../types'
 import { SchemaContext } from './drawer/context'
+import { RelationContext } from './cells/Relation'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn((): Promise<unknown[]> => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
   records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), optionsFrom: vi.fn(),
@@ -13,6 +14,7 @@ import { columnsFor } from './columns'
 import type { Flag, Flags } from '../ui/useFlags'
 import type { WriteLink } from './drawer/Sections'
 import { activity, planning } from './calais.test.data'
+import { actionsOffered, openTab, pressAction, pressTool } from '../test-setup'
 
 const row = (id: number, title: string): Row => ({ id, title, status: 'publish', fields: { date: '2026-05-18', notes: 'Twee veggie' } })
 const columns = columnsFor(activity, { ...planning, columns: undefined }, false)
@@ -23,12 +25,14 @@ describe('the drawer as the prototypes draw it', () => {
   const model = { ...activity, fields: { ...activity.fields } } as Model
   const rows = [row(1, 'Lunch bistrot'), row(2, 'Montage'), row(3, 'Diner')]
 
-  it('heads with its dataset, its place in the view, and steps with the buttons and with j and k', () => {
+  it('heads with its title, no dataset or place in the view, and steps with the buttons and with j and k', () => {
     const onStep = vi.fn()
     render(<Drawer row={rows[0]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep }} onClose={() => undefined} />)
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    expect(drawer.querySelector('.nv-dw-head__kind')?.textContent).toContain(model.label)
-    expect(drawer.querySelector('.nv-dw-head__pos')?.textContent).toBe('1 van 3')
+    const head = drawer.querySelector('header')!
+    expect(within(head).getByRole('heading', { name: 'Lunch bistrot' })).toBeTruthy()
+    expect(head.textContent).not.toContain(model.label)
+    expect(head.textContent).not.toContain('1 van 3')
     expect(within(drawer).getByRole('button', { name: 'Vorige' }).hasAttribute('disabled')).toBe(true)
     fireEvent.click(within(drawer).getByRole('button', { name: 'Volgende' }))
     expect(onStep).toHaveBeenLastCalledWith(2)
@@ -39,13 +43,15 @@ describe('the drawer as the prototypes draw it', () => {
     expect(onStep).not.toHaveBeenCalled()
   })
 
-  it('puts the dataset\'s rail icon before its name where the record has no kind', () => {
-    const bare = { ...model, fields: {} } as Model
-    const schema = { models: { [bare.key]: bare }, tables: [{ key: bare.key, label: bare.label, model: bare.key, icon: 'users' }], views: [] } as unknown as Schema
-    render(<SchemaContext.Provider value={schema}><Drawer row={rows[0]} columns={columns} model={bare} onClose={() => undefined} /></SchemaContext.Provider>)
-    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('.nv-dw-head__kind')!
-    expect(head.querySelector('svg.lucide-users')).not.toBeNull()
-    expect(head.textContent).toBe(bare.label)
+  it('lines its head up as title, record buttons, steps, tabs, widen and close, the title kept on every tab', async () => {
+    render(<Drawer row={rows[0]} columns={columns} model={model} nav={{ ids: rows.map((r) => r.id), onStep: vi.fn() }} onClose={() => undefined} onDelete={() => Promise.resolve()} />)
+    const head = screen.getByRole('complementary', { name: 'Lunch bistrot' }).querySelector('header')!
+    const names = () => [...head.querySelectorAll('h2, button, [role="toolbar"]')].map((el) => el.tagName === 'H2' ? `title:${el.textContent}` : el.getAttribute('role') === 'toolbar' ? 'tabs' : el.getAttribute('aria-label'))
+    const line = ['title:Lunch bistrot', 'Acties', 'Vorige', 'Volgende', 'tabs', 'Gegevens', 'Notities', 'Geschiedenis', 'Volledig openen', 'Sluiten']
+    expect(names()).toEqual(line)
+    await openTab('Notities')
+    expect(names()).toEqual(line)
+    expect(screen.queryByRole('heading', { name: 'Lunch bistrot', level: 2 })?.closest('header')).toBe(head)
   })
 
   it('steps with j and k from anywhere in its head, the close button the grid focuses too', () => {
@@ -58,23 +64,25 @@ describe('the drawer as the prototypes draw it', () => {
     expect(onStep).toHaveBeenLastCalledWith(1)
   })
 
-  it('says "–" and steps nowhere once its row left the view, and shows no position without one', () => {
+  it('steps nowhere once its row left the view, and shows no steps without one', () => {
     const { rerender } = render(<Drawer row={row(9, 'Weg')} columns={columns} model={model} nav={{ ids: [1, 2], onStep: vi.fn() }} onClose={() => undefined} />)
     const drawer = screen.getByRole('complementary', { name: 'Weg' })
-    expect(drawer.querySelector('.nv-dw-head__pos')?.textContent).toBe('–')
+    expect(within(drawer).getByRole('button', { name: 'Vorige' }).hasAttribute('disabled')).toBe(true)
     expect(within(drawer).getByRole('button', { name: 'Volgende' }).hasAttribute('disabled')).toBe(true)
     rerender(<Drawer row={row(9, 'Weg')} columns={columns} model={model} onClose={() => undefined} />)
-    expect(screen.getByRole('complementary', { name: 'Weg' }).querySelector('.nv-dw-head__pos')).toBeNull()
+    expect(within(screen.getByRole('complementary', { name: 'Weg' })).queryByRole('button', { name: 'Volgende' })).toBeNull()
   })
 
   it('reads a record\'s history, and none of a query\'s row, which the engine keeps none of', async () => {
     remote.recordHistory.mockResolvedValueOnce([{ batch: 'b1', at: '2026-10-12T16:20:00Z', by: 'account', actor: 'noor@lantaarn.test', undoable: false, others: 0, batch_kind: null, created: false, record: { id: 1, title: 'Lunch bistrot' }, changes: [{ field: 'notes', label: 'Notities', old: '', new: 'Twee veggie' }] }])
     const { rerender } = render(<Drawer row={rows[0]} columns={columns} model={model} onClose={() => undefined} />)
+    await openTab('Geschiedenis')
     const history = await screen.findByRole('region', { name: 'Geschiedenis' })
     expect(history.textContent).toContain('noor zette notities op Twee veggie')
     expect(remote.recordHistory).toHaveBeenLastCalledWith(model.key, 1)
     rerender(<Drawer row={rows[0]} columns={columns} model={{ ...model, query: true }} onClose={() => undefined} />)
     expect(screen.queryByRole('region', { name: 'Geschiedenis' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Geschiedenis' })).toBeNull()
   })
 
   it('widens over the work and comes back with Escape, before Escape closes it', () => {
@@ -108,19 +116,20 @@ describe('the drawer as the prototypes draw it', () => {
 })
 
 describe('the drawer', () => {
-  it('reads a record whole without an editor, as the grid has it', () => {
+  it('reads a record whole without an editor, as the grid has it', async () => {
     const { container } = render(<Drawer row={row(1, 'Lunch bistrot')} columns={columns} onClose={() => undefined} />)
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
 
     expect(within(drawer).getByRole('heading', { name: 'Lunch bistrot' })).toBeTruthy()
-    expect(within(drawer).getByText('Twee veggie')).toBeTruthy()
-    // The filled fields show; the empty ones fold under one quiet line that unfolds them. The long text is a block of its own.
+    // The filled fields show; the empty ones fold under one quiet line that unfolds them. The long text is a block of its own, in its tab.
     const filled = container.querySelectorAll('.nv-drawer__field').length
     const fold = within(drawer).getByRole('button', { name: /^\+ \d+ andere velden$/ })
     fireEvent.click(fold)
     expect(container.querySelectorAll('.nv-drawer__field').length).toBe(columns.length - 2)
     expect(filled).toBeLessThan(columns.length - 2)
     expect(container.querySelector('.nv-drawer__editor')).toBeNull()
+    await openTab('Notities')
+    expect(within(drawer).getByText('Twee veggie')).toBeTruthy()
   })
 
   it('renders an editor under the fields', () => {
@@ -196,36 +205,44 @@ describe('a long text in the drawer', () => {
   const block = () => screen.getByRole('region', { name: 'Notities' })
   const area = () => screen.queryByRole('textbox', { name: 'Notities' }) as HTMLTextAreaElement | null
 
-  it('shows the text as its own section after the people, titled by its label, and as no field line', () => {
+  it('shows the people with the fields, the text as its own section in the Notities tab, titled by its label, and as no field line', async () => {
     const { container } = render(<Drawer row={noted('Zaal open om 19:30.\nParkeren op de laadkade.')} columns={every} model={model} onClose={() => undefined} />)
-    const sections = [...container.querySelectorAll('section.nv-dw-sec')].map((s) => s.getAttribute('aria-label'))
+    const sections = () => [...container.querySelectorAll('section.nv-dw-sec')].map((s) => s.getAttribute('aria-label'))
 
-    expect(sections.indexOf('Notities')).toBe(sections.indexOf('Mensen') + 1)
-    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Zaal open om 19:30.\nParkeren op de laadkade.')
+    expect(sections()).toContain('Mensen')
+    expect(sections()).not.toContain('Notities')
     fireEvent.click(screen.getByRole('button', { name: /^\+ \d+ andere velden$/ }))
     expect([...container.querySelectorAll('.nv-drawer__field dt')].map((dt) => dt.textContent)).not.toContain('Notities')
+    await openTab('Notities')
+    expect(sections()).toEqual(['Notities'])
+    expect(block().querySelector('.nv-dw-long')?.textContent).toBe('Zaal open om 19:30.\nParkeren op de laadkade.')
   })
 
-  it('reads only without a way to write, or on a readonly field: no button, and no block at all while it is empty', () => {
+  it('reads only without a way to write, or on a readonly field: no button, and no block at all while it is empty', async () => {
     const readonly = { ...model, fields: { ...model.fields, notes: { ...model.fields.notes, readonly: true } } } as Model
     const { rerender } = render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} />)
+    await openTab('Notities')
     expect(within(block()).queryByRole('button')).toBeNull()
     rerender(<Drawer row={noted('Twee veggie')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
     expect(within(block()).queryByRole('button')).toBeNull()
     rerender(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} />)
     expect(screen.queryByRole('region', { name: 'Notities' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Notities' })).toBeNull()
     rerender(<Drawer row={noted('')} columns={every} model={readonly} onClose={() => undefined} onWrite={vi.fn()} />)
     expect(screen.queryByRole('region', { name: 'Notities' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Notities' })).toBeNull()
   })
 
-  it('keeps an empty block where it can be written, so a first note can be added', () => {
+  it('keeps an empty block where it can be written, so a first note can be added', async () => {
     render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={vi.fn()} />)
+    await openTab('Notities')
     expect(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' })).toBeTruthy()
   })
 
   it('asks for a first text where it is empty, opens its field in its place, and writes on Cmd+Enter, not on Enter', async () => {
     const onWrite = vi.fn()
     render(<Drawer row={noted('')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
+    await openTab('Notities')
 
     fireEvent.click(within(block()).getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }))
     expect(block().contains(area())).toBe(true)
@@ -245,6 +262,7 @@ describe('a long text in the drawer', () => {
   it('writes on leaving for elsewhere, and nothing when the text is as it was', async () => {
     const onWrite = vi.fn()
     render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={() => undefined} onWrite={onWrite} />)
+    await openTab('Notities')
     const outside = document.body.appendChild(document.createElement('button'))
 
     fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
@@ -262,10 +280,11 @@ describe('a long text in the drawer', () => {
     outside.remove()
   })
 
-  it('Escape leaves the edit without a write, and the drawer stays open', () => {
+  it('Escape leaves the edit without a write, and the drawer stays open', async () => {
     const onWrite = vi.fn()
     const onClose = vi.fn()
     render(<Drawer row={noted('Twee veggie')} columns={every} model={model} onClose={onClose} onWrite={onWrite} />)
+    await openTab('Notities')
 
     fireEvent.click(within(block()).getByRole('button', { name: 'Twee veggie' }))
     fireEvent.change(area()!, { target: { value: 'weg' } })
@@ -428,6 +447,8 @@ describe("the drawer's actions", () => {
   it('shows a button per action with a picker per input, run only once each input is picked', async () => {
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)
+    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+    await pressAction('Sjabloon toepassen')
     const group = screen.getByRole('group', { name: 'Sjabloon toepassen' })
     const run = within(group).getByRole('button', { name: 'Sjabloon toepassen' })
     expect(run.hasAttribute('disabled')).toBe(true)
@@ -442,13 +463,47 @@ describe("the drawer's actions", () => {
     expect(onAction).toHaveBeenCalledExactlyOnceWith(apply, { sjabloon_id: 4 })
   })
 
+  it('puts focus in the inputs panel when it opens: on the first input, not on the close button', async () => {
+    const shift: ModelAction = { name: 'verschuiven', label: 'Verschuiven', input: { dagen: { type: 'integer', label: 'Dagen' } } }
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[shift]} onAction={vi.fn().mockResolvedValue(undefined)} onClose={() => undefined} />)
+
+    await pressAction('Verschuiven')
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Dagen'))
+  })
+
+  it('closes the inputs panel from its close button, and gives focus back to the action’s button in the row', async () => {
+    render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={vi.fn().mockResolvedValue(undefined)} onClose={() => undefined} />)
+    await pressAction('Sjabloon toepassen')
+    const panel = document.querySelector('.nv-dw-ask--inline') as HTMLElement
+    expect(panel).not.toBeNull()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Sluiten' }))
+
+    expect(document.querySelector('.nv-dw-ask--inline')).toBeNull()
+    expect(document.activeElement).toBe(within(document.querySelector('.nv-dw-actions__row') as HTMLElement).getByRole('button', { name: 'Sjabloon toepassen' }))
+  })
+
+  it('closes an open inputs panel when the drawer steps to another record', async () => {
+    const onAction = vi.fn().mockResolvedValue(undefined)
+    const props = { columns: [], actions: [apply], onAction, onClose: () => undefined }
+    const { rerender } = render(<Drawer row={row(3, 'Calais')} {...props} />)
+    await pressAction('Sjabloon toepassen')
+    expect(document.querySelector('.nv-dw-ask--inline')).not.toBeNull()
+
+    rerender(<Drawer row={row(4, 'Dover')} {...props} />)
+
+    expect(document.querySelector('.nv-dw-ask--inline')).toBeNull()
+  })
+
   it("says a refusal under the action, in the writer's words", async () => {
     const onAction = vi.fn().mockRejectedValue({ code: 'refused', message: 'Dit sjabloon is al toegepast.' })
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onAction={onAction} onClose={() => undefined} />)
+    await pressAction('Sjabloon toepassen')
 
     await pickSjabloon()
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Sjabloon toepassen' }))
+      fireEvent.click(within(screen.getByRole('group', { name: 'Sjabloon toepassen' })).getByRole('button', { name: 'Sjabloon toepassen' }))
     })
 
     expect(screen.getByRole('alert').textContent).toBe('Dit sjabloon is al toegepast.')
@@ -463,6 +518,7 @@ describe("the drawer's actions", () => {
   it('takes a typed input as a field, sends it as its value, and leaves an optional one out', async () => {
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[shift]} onAction={onAction} onClose={() => undefined} />)
+    await pressAction('Tourstop verschuiven')
     const group = screen.getByRole('group', { name: 'Tourstop verschuiven' })
     const run = within(group).getByRole('button', { name: 'Tourstop verschuiven' })
     expect(run.hasAttribute('disabled')).toBe(true)
@@ -475,9 +531,13 @@ describe("the drawer's actions", () => {
     })
     expect(onAction).toHaveBeenCalledExactlyOnceWith(shift, { dagen: -3 })
 
-    fireEvent.click(within(group).getByLabelText('Stil'))
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Tourstop verschuiven' })).toBeNull())
+    await pressAction('Tourstop verschuiven')
+    const again = screen.getByRole('group', { name: 'Tourstop verschuiven' })
+    fireEvent.change(within(again).getByLabelText('Dagen'), { target: { value: '-3' } })
+    fireEvent.click(within(again).getByLabelText('Stil'))
     await act(async () => {
-      fireEvent.click(run)
+      fireEvent.click(within(again).getByRole('button', { name: 'Tourstop verschuiven' }))
     })
     expect(onAction).toHaveBeenLastCalledWith(shift, { dagen: -3, stil: true })
   })
@@ -486,6 +546,7 @@ describe("the drawer's actions", () => {
     const confirm: ModelAction = { name: 'bevestigen', label: 'Bevestigen', input: { mail: { type: 'boolean', label: 'Mail sturen' } } }
     const onAction = vi.fn().mockResolvedValue(undefined)
     render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[confirm]} onAction={onAction} onClose={() => undefined} />)
+    await pressAction('Bevestigen')
     const group = screen.getByRole('group', { name: 'Bevestigen' })
     expect((within(group).getByLabelText('Mail sturen') as HTMLInputElement).checked).toBe(false)
     const run = within(group).getByRole('button', { name: 'Bevestigen' })
@@ -498,10 +559,10 @@ describe("the drawer's actions", () => {
 
   it('offers no action without a way to run it, nor on a model that declares none', () => {
     const { rerender } = render(<Drawer row={row(3, 'Calais')} columns={[]} actions={[apply]} onClose={() => undefined} />)
-    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
 
     rerender(<Drawer row={row(3, 'Calais')} columns={[]} onAction={vi.fn()} onClose={() => undefined} />)
-    expect(screen.queryByRole('button', { name: 'Sjabloon toepassen' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
   })
 })
 
@@ -518,8 +579,8 @@ describe("a person's link in the drawer", () => {
 
   it('shows no link controls without a linked dataset', () => {
     render(<Drawer row={row(3, 'Noor Claes')} columns={[]} onClose={() => undefined} />)
-    expect(screen.queryByRole('button', { name: 'Link kopiëren' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Nieuwe link' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acties' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Link kopiëren' })).toBeNull()
   })
 
   it('"Link kopiëren" reads the current link and copies it; "Nieuwe link" rotates and copies the new one', async () => {
@@ -527,17 +588,19 @@ describe("a person's link in the drawer", () => {
     Object.assign(navigator, { clipboard: { writeText } })
     remote.recordLink.mockResolvedValue(LINK)
     remote.rotateRecordLink.mockResolvedValue(`${LINK}-new`)
-    render(<Drawer row={row(3, 'Noor Claes')} columns={[]} recordLink="persoon" onClose={() => undefined} />)
+    const onSaid = vi.fn()
+    render(<Drawer row={row(3, 'Noor Claes')} columns={[]} recordLink="persoon" onSaid={onSaid} onClose={() => undefined} />)
+    expect(screen.getByRole('complementary', { name: 'Noor Claes' }).querySelector('.nv-dw-body')?.textContent).not.toContain('Link kopiëren')
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Link kopiëren' })))
+    await act(async () => { await pressTool('Link kopiëren') })
     expect(remote.recordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(LINK)
-    expect(screen.getByRole('status').textContent).toBe('Link gekopieerd')
+    expect(onSaid).toHaveBeenLastCalledWith('Link gekopieerd')
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Nieuwe link' })))
+    await act(async () => { await pressTool('Nieuwe link') })
     expect(remote.rotateRecordLink).toHaveBeenCalledExactlyOnceWith('persoon', 3)
     expect(writeText).toHaveBeenLastCalledWith(`${LINK}-new`)
-    expect(screen.getByRole('status').textContent).toBe('Nieuwe link gekopieerd; de vorige werkt niet meer')
+    expect(onSaid).toHaveBeenLastCalledWith('Nieuwe link gekopieerd; de vorige werkt niet meer')
   })
 })
 
@@ -549,6 +612,7 @@ describe("a record's files in the drawer", () => {
 
   async function shown(props: Partial<Parameters<typeof Drawer>[0]> = {}) {
     render(<Drawer row={row(1, 'Montage')} columns={[]} attachments={files} onBatch={vi.fn()} onClose={() => undefined} {...props} />)
+    await openTab('Bijlagen')
     return within(await screen.findByRole('region', { name: 'Bijlagen' }))
   }
   const choose = async (file: File) => {
@@ -601,6 +665,7 @@ describe("a record's files in the drawer", () => {
   it('reads the list again when its version moves', async () => {
     remote.attachmentsOf.mockResolvedValueOnce([photo]).mockResolvedValueOnce([rider, photo])
     const { rerender } = render(<Drawer row={row(1, 'Montage')} columns={[]} attachments={files} onClose={() => undefined} />)
+    await openTab('Bijlagen')
     const section = within(await screen.findByRole('region', { name: 'Bijlagen' }))
     await section.findByRole('link', { name: 'zaal.jpg' })
 
@@ -671,5 +736,222 @@ describe("a record's files in the drawer", () => {
     render(<Drawer row={row(1, 'Montage')} columns={[]} onClose={() => undefined} />)
     expect(screen.queryByRole('region', { name: 'Bijlagen' })).toBeNull()
     expect(remote.attachmentsOf).not.toHaveBeenCalled()
+  })
+})
+
+describe('a link item in the drawer', () => {
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const model = { ...activity, fields: { ...activity.fields, people } } as Model
+  const every = columnsFor(model, { ...planning, columns: undefined }, false)
+  const crew = [{ id: 11, target: 5, title: 'Sien Peeters', state: null }, { id: 12, target: null, title: '', state: null }]
+  const staffed: Row = { id: 1, title: 'Lunch bistrot', status: 'publish', fields: { date: '2026-05-18', people: crew } }
+
+  it("opens the link's own record, read-only, through openRelated", () => {
+    const openRelated = vi.fn()
+    render(<RelationContext.Provider value={{ models: {}, scope: null, spaceModel: null, openRelated }}>
+      <Drawer row={staffed} columns={every} model={model} onClose={() => undefined} />
+    </RelationContext.Provider>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Sien Peeters' }))
+
+    expect(openRelated).toHaveBeenCalledExactlyOnceWith('assignment', 11)
+    expect(within(screen.getByRole('region', { name: 'Mensen' })).getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('shows an item without a title as plain text, never as a nameless button', () => {
+    const nameless: Row = { ...staffed, fields: { ...staffed.fields, people: [{ id: 13, target: 8, title: '', state: null }] } }
+    render(<RelationContext.Provider value={{ models: {}, scope: null, spaceModel: null, openRelated: vi.fn() }}>
+      <Drawer row={nameless} columns={every} model={model} onClose={() => undefined} />
+    </RelationContext.Provider>)
+
+    expect(within(screen.getByRole('region', { name: 'Mensen' })).queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('stays plain text where no grid can open a record', () => {
+    render(<Drawer row={staffed} columns={every} model={model} onClose={() => undefined} />)
+    expect(screen.getByText('Sien Peeters')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Sien Peeters' })).toBeNull()
+  })
+})
+
+describe('the drawer opens a record\'s address', () => {
+  const field = { type: 'text' as const, label: 'Adres', required: false, fact: false }
+  const addressed = (value: unknown) => ({ ...row(1, 'Plek'), fields: { adres: value } })
+  const served = { ...activity, fields: { ...activity.fields, adres: { ...field, href: true as const } } } as Model
+  const openable = () => screen.queryByRole('link', { name: 'Openen in nieuw tabblad' })
+
+  it('shows the link before the Acties menu, in a new tab that cannot reach back', () => {
+    render(<Drawer row={addressed('https://voorbeeld-site.test')} columns={columns} model={served} onDelete={vi.fn()} onClose={() => undefined} />)
+    const link = openable() as HTMLAnchorElement
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    const tools = link.parentElement as HTMLElement
+    expect([...tools.children].indexOf(link)).toBeLessThan([...tools.children].indexOf(screen.getByRole('button', { name: 'Acties' }).closest('.nv-menu') as Element))
+  })
+
+  it.each(['javascript:alert(1)', 'data:text/html,x', null])('shows none for %p', (value) => {
+    render(<Drawer row={addressed(value)} columns={columns} model={served} onDelete={vi.fn()} onClose={() => undefined} />)
+    expect(openable()).toBeNull()
+  })
+})
+
+describe("the drawer's tabs", () => {
+  const crew = [{ id: 11, target: 5, title: 'Sien Peeters', state: null }]
+  const people = { type: 'links', label: 'Mensen', required: false, fact: false, link: { item: 'Toewijzing', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const helpers = { type: 'links', label: 'Helpers', required: false, fact: false, link: { item: 'Hulp', dataset: 'helping', key: 'activity_id', target: 'person_id', target_dataset: 'person' } }
+  const tabbed = { ...activity, fields: { ...activity.fields, people } } as Model
+  const pointing = { key: 'beurt', label: 'Beurten', title_label: 'Titel', title_readonly: false, fields: { activity_id: { type: 'relation', label: 'Activiteit', required: false, fact: false, relation: { model: 'activity', multiple: false } } } } as unknown as Model
+  const schemaFor = (model: Model, extra: Partial<Schema> = {}) => ({
+    models: { activity: model, beurt: pointing, klus: { ...pointing, key: 'klus', label: 'Klussen' } },
+    tables: [
+      { key: 'planning', label: 'Planning', model: 'activity' },
+      { key: 'beurten', label: 'Beurten', model: 'beurt', date_field: 'op' },
+      { key: 'klussen', label: 'Klussen', model: 'klus', date_field: 'op' },
+    ],
+    views: [], writable: {}, ...extra,
+  }) as unknown as Schema
+  const schema = schemaFor(tabbed)
+  const go: ModelAction = { name: 'doorsturen', label: 'Doorsturen', input: {} }
+  const every = columnsFor(tabbed, { ...planning, columns: undefined }, false)
+  const record = (id = 1, notes = 'Twee veggie'): Row => ({ id, title: 'Lunch bistrot', status: 'publish', fields: { date: '2026-05-18', notes, people: crew } })
+  const open = (props: Partial<Parameters<typeof Drawer>[0]> = {}, value: Schema = schema) => {
+    const view = (more: Partial<Parameters<typeof Drawer>[0]> = {}) => (
+      <SchemaContext.Provider value={value}><Drawer row={record()} columns={every} model={tabbed} actions={[go]} onAction={vi.fn()} onClose={() => undefined} {...props} {...more} /></SchemaContext.Provider>
+    )
+    const { rerender } = render(view())
+    return (more: Partial<Parameters<typeof Drawer>[0]>) => rerender(view(more))
+  }
+  const bar = () => screen.queryByRole('toolbar', { name: 'Onderdelen' })
+  const radios = () => within(bar()!).getAllByRole('radio')
+  // Read from the elements: an open combobox hides the rest of the drawer from a screen reader's roles.
+  const checked = () => document.querySelector('.nv-dw-tabs [role="radio"][aria-checked="true"]')?.getAttribute('aria-label')
+  const tab = (name: string) => fireEvent.click(within(bar()!).getByRole('radio', { name }))
+  const more = () => within(bar()!).getByRole('button', { name: 'Meer tabbladen' })
+  const fromMore = async (name: string) => {
+    fireEvent.click(more())
+    fireEvent.click(await screen.findByRole('menuitemradio', { name }))
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  }
+  const region = (name: string) => screen.queryByRole('region', { name })
+
+  afterEach(() => vi.clearAllMocks())
+
+  it('opens on Gegevens: the fields, the first link and the actions, nothing that moved', async () => {
+    open()
+    expect(checked()).toBe('Gegevens')
+    expect(document.querySelector('.nv-drawer__fields')).not.toBeNull()
+    expect(region('Mensen')).not.toBeNull()
+    expect(await actionsOffered()).toEqual(['Doorsturen'])
+    expect(region('Notities')).toBeNull()
+    expect(region('Geschiedenis')).toBeNull()
+    expect(remote.recordHistory).not.toHaveBeenCalled()
+  })
+
+  it('shows three icons named by their pane, and the rest under Meer tabbladen, Geschiedenis among them', async () => {
+    open()
+    expect(radios().map((r) => r.getAttribute('aria-label'))).toEqual(['Gegevens', 'Notities', 'Beurten'])
+    fireEvent.click(more())
+    expect((await screen.findAllByRole('menuitemradio')).map((item) => item.textContent)).toEqual(['Klussen', 'Geschiedenis'])
+  })
+
+  it('shows a pane chosen from Meer tabbladen, checks it there, marks the … button, and keeps the icons reachable by Tab', async () => {
+    open()
+    await fromMore('Geschiedenis')
+    expect(await screen.findByRole('region', { name: 'Geschiedenis' })).toBeTruthy()
+    expect(document.querySelector('.nv-drawer__fields')).toBeNull()
+    expect(checked()).toBeUndefined()
+    expect(more().hasAttribute('data-current')).toBe(true)
+    expect(radios().every((r) => r.tabIndex === 0)).toBe(true)
+    fireEvent.click(more())
+    expect((await screen.findByRole('menuitemradio', { name: 'Geschiedenis' })).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('shows the notes in their own tab, a section still and no field line', () => {
+    open()
+    tab('Notities')
+    expect(region('Notities')?.querySelector('.nv-dw-long')?.textContent).toBe('Twee veggie')
+    expect(document.querySelector('.nv-drawer__fields')).toBeNull()
+    tab('Gegevens')
+    expect(more()).toBeTruthy()
+    expect(region('Notities')).toBeNull()
+  })
+
+  it('returns to Gegevens on another record, or the same id of another model, and keeps the tab on a re-read', () => {
+    const update = open()
+    tab('Notities')
+    update({ row: record(1, 'Drie veggie') })
+    expect(checked()).toBe('Notities')
+    update({ row: record(2) })
+    expect(checked()).toBe('Gegevens')
+    tab('Notities')
+    update({ row: record(2), model: { ...tabbed, key: 'other' } as Model })
+    expect(checked()).toBe('Gegevens')
+  })
+
+  it('opens on Gegevens again when the drawer steps back to a record whose other tab was open', async () => {
+    const update = open()
+    tab('Notities')
+    update({ row: record(2) })
+    expect(checked()).toBe('Gegevens')
+    update({ row: record(1) })
+    expect(checked()).toBe('Gegevens')
+    expect(region('Notities')).toBeNull()
+  })
+
+  it('reads the history again when its tab opens after the record changed', async () => {
+    const update = open()
+    await fromMore('Geschiedenis')
+    await screen.findByRole('region', { name: 'Geschiedenis' })
+    tab('Gegevens')
+    const reads = remote.recordHistory.mock.calls.length
+    update({ row: record(1, 'Drie veggie') })
+    expect(remote.recordHistory.mock.calls.length).toBe(reads)
+    await fromMore('Geschiedenis')
+    await screen.findByRole('region', { name: 'Geschiedenis' })
+    expect(remote.recordHistory.mock.calls.length).toBe(reads + 1)
+  })
+
+  it('shows no bar on a record with only fields, and no Notities tab on a read-only drawer whose long text is empty', () => {
+    render(<Drawer row={row(1, 'Lunch bistrot')} columns={[]} onClose={() => undefined} />)
+    expect(bar()).toBeNull()
+    cleanup()
+    open({ row: { ...record(), id: -1, fields: { date: '2026-05-18', notes: '', people: crew } } })
+    expect(bar()).toBeNull()
+    cleanup()
+    open({ row: record(1, '') })
+    expect(radios().map((r) => r.getAttribute('aria-label'))).toEqual(['Gegevens', 'Beurten', 'Klussen'])
+  })
+
+  it('saves a note being typed when another tab is chosen', async () => {
+    const onWrite = vi.fn()
+    open({ onWrite })
+    tab('Notities')
+    fireEvent.click(within(region('Notities')!).getByRole('button'))
+    const area = screen.getByRole('textbox', { name: 'Notities' })
+    fireEvent.change(area, { target: { value: 'Drie veggie' } })
+    await waitFor(() => expect(document.activeElement).toBe(area))
+    const gegevens = within(bar()!).getByRole('radio', { name: 'Gegevens' })
+    act(() => gegevens.focus())
+    fireEvent.click(gegevens)
+    expect(onWrite).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ field: 'notes' }), 'Drie veggie')
+    expect(checked()).toBe('Gegevens')
+  })
+
+  it("shows a flagged later link's tab and starts the choice there", async () => {
+    remote.optionsFrom.mockResolvedValueOnce([])
+    const twice = { ...tabbed, fields: { ...tabbed.fields, helpers } } as Model
+    const from = { source: 'candidates', match: { helping_id: 'id' }, value: 'person_id' }
+    const helping = { key: 'helping', label: 'Hulp', title_label: 'Titel', title_readonly: true, fields: { person_id: { type: 'relation', label: 'Persoon', required: false, fact: true, relation: { model: 'person', multiple: false }, options_from: from } } } as unknown as Model
+    const value = schemaFor(twice, { writable: { helping: true } })
+    value.models.helping = helping
+    const flagged: Flag = { text: 'Sien staat dubbel.', tone: 'bad', label: 'Melding', marks: { activity: 1, helping: 21 } }
+    const flags: Flags = { marksOf: (dataset, id) => (flagged.marks[dataset] === id ? [flagged] : []), count: () => 0, source: 'meldingen', label: 'Meldingen' }
+    const both = { ...record(), fields: { ...record().fields, helpers: [{ id: 21, target: 5, title: 'Sien Peeters', state: null }] } }
+    open({ row: both, model: twice, columns: columnsFor(twice, { ...planning, columns: undefined }, false), flags, onLink: vi.fn() }, value)
+    expect(region('Helpers')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Iemand anders kiezen' }))
+    expect(checked()).toBe('Helpers')
+    expect(await within(region('Helpers')!).findByRole('combobox', { name: 'Persoon' })).toBeTruthy()
   })
 })

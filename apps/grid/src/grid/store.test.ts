@@ -179,6 +179,20 @@ describe('undo and redo, by batch on the server', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
+  it('has a write pending for a record from its paint until the server answers, and for no other', async () => {
+    const { api, store } = setup()
+    const answer = deferred<Saved>()
+    api.update.mockReturnValueOnce(answer.promise)
+
+    const written = store.apply({ id: 103, field: 'kind', value: 'show' } as never)
+    expect(store.isPending(103)).toBe(true)
+    expect(store.isPending(102)).toBe(false)
+
+    answer.resolve(ok(show, 'b-edit'))
+    await written
+    expect(store.isPending(103)).toBe(false)
+  })
+
   it('a redo answered not_undoable (an undone invite) drops the redo entry and says redo cannot be done here', async () => {
     const { api, store } = setup()
     api.update.mockResolvedValueOnce(ok(show, 'b-edit'))
@@ -409,6 +423,23 @@ describe('a new row', () => {
     expect(errors.map((e) => [e.field, e.message])).toEqual([['person', 'Already on this activity.']])
     expect(store.getState().error?.message).toBe('Already on this activity.')
     expect(store.getState().rows[0]).toMatchObject({ id: -1, fields: { activity: [102], person: [5] } })
+  })
+
+  it('a create refused service_only says it cannot be added, a draft’s commit too; an edit keeps its own words', async () => {
+    const { api, store } = setup()
+    const refused = { code: 'service_only', message: 'Only a service writes it.' }
+    api.create.mockRejectedValue(refused)
+    api.update.mockRejectedValueOnce(refused)
+
+    await store.create({ title: 'Nieuw' })
+    expect(store.getState().error?.message).toBe('Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.')
+
+    store.draft({ date: '2026-05-18' }, ['title'], [])
+    await store.apply({ id: -1, field: 'title', value: 'Nieuw' })
+    expect(store.getState().error?.message).toBe('Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.')
+
+    await store.apply({ id: calais[0].id, field: 'title', value: 'Anders' })
+    expect(store.getState().errors[`${calais[0].id}:title`]?.message).toContain('wijzigen')
   })
 
   it('a refusal of an empty field asks for that field again first', async () => {

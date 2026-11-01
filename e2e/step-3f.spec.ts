@@ -1,6 +1,7 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import { state, THEATRE } from './auth'
 import { card, glide, lane, lift, listening, orders, said } from './board'
+import { openTab } from './drawer'
 import { openLooks } from './editor'
 import { shot } from './shots'
 import { openView, openWeek } from './tree'
@@ -799,13 +800,16 @@ test.describe('step 3f: a long text is its own block in the drawer', () => {
       const drawer = await drawerOf()
       const block = drawer.getByRole('region', { name: 'Notities' })
 
-      // Its own section right after the people, and no field line of that name, folded or not.
-      const sections = await drawer
-        .locator('section.nv-dw-sec')
-        .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
-      expect(sections.indexOf('Notities')).toBe(sections.indexOf('Mensen') + 1)
+      // The people with the fields, no field line of that name, folded or not; its own section in the Notities tab.
+      const sections = () =>
+        drawer.locator('section.nv-dw-sec').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+      expect(await sections()).toContain('Mensen')
+      expect(await sections()).not.toContain('Notities')
       await drawer.getByRole('button', { name: /^\+ \d+ andere velden$/ }).click()
       await expect(drawer.locator('.nv-drawer__field dt', { hasText: /^Notities$/ })).toHaveCount(0)
+      await openTab(page, 'Notities')
+      expect(await sections()).toContain('Notities')
+      expect(await sections()).not.toContain('Mensen')
 
       // Empty, it asks; pressed, its field opens in its place; Ctrl+Enter writes.
       await block.getByRole('button', { name: 'Nog geen notities. Klik om er een toe te voegen.' }).click()
@@ -830,6 +834,7 @@ test.describe('step 3f: a long text is its own block in the drawer', () => {
 
       // After a reload the drawer reads it back.
       const again = await drawerOf()
+      await openTab(page, 'Notities')
       await expect(again.getByRole('region', { name: 'Notities' }).locator('.nv-dw-long')).toHaveText(note)
     } finally {
       await made.remove()

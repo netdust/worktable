@@ -78,12 +78,16 @@ const strings = {
   densityNormal: 'Normaal',
   densityRoomy: 'Ruim',
   needsFields: 'Heeft {fields} nodig: maak het aan vanuit het record',
-  pickFirst: 'Kies eerst {fields}',
   export: 'Exporteren',
   shareMenu: 'Exporteren / delen',
   excel: 'Excel',
   calendar: 'Agenda (.ics)',
   copyLink: 'Link kopiëren',
+  openLink: 'Openen in nieuw tabblad',
+  loginBlocked: 'Het nieuwe tabblad werd geblokkeerd',
+  loginFailed: 'Inloggen is mislukt',
+  loginNoLink: 'Geen link ontvangen',
+  loginOtherSite: 'De link hoort niet bij dit adres',
   linkCopied: 'Link gekopieerd',
   linkViewGone: 'De gedeelde weergave is er niet voor jou; je ziet {view} zonder de filters van de link.',
   publish: 'Publiceren',
@@ -134,7 +138,7 @@ const strings = {
   openSlots: 'Open plaatsen: {count}',
   fillSlot: 'Open plek invullen',
   fillPickRole: 'Kies eerst een rol',
-  fillPickPerson: 'Kies een persoon',
+  fillPickPerson: 'Kies iemand',
   candidatesNone: 'Geen kandidaten',
   candidatesAll: 'Iedereen tonen',
   dashboard: 'Dashboard',
@@ -217,6 +221,7 @@ const strings = {
   colleagueTitle: 'Gedeeld door een collega: maak een kopie om aan te passen',
   moreActions: 'More actions',
   moreActionsShown: 'Meer acties',
+  moreInRow: 'Meer',
   views_shown: 'Weergaven',
   rename: 'Nieuwe naam',
   duplicate: 'Kopie maken',
@@ -224,6 +229,7 @@ const strings = {
   share: 'Delen met het team',
   unshare: 'Niet meer delen',
   viewRemoved: 'Weergave verwijderd',
+  viewDeleted: 'Weergave verwijderd',
   copyOf: '{name} (kopie)',
   moveUp: 'Omhoog',
   moveDown: 'Omlaag',
@@ -271,6 +277,24 @@ const strings = {
   alreadyUndone: 'Dit is al ongedaan gemaakt.',
   notUndoable: 'Dit kan niet ongedaan gemaakt worden.',
   actionDone: '{action} uitgevoerd.',
+  actionRequested: '{action} aangevraagd.',
+  createdRequested: '{title} aangevraagd.',
+  runBusy: '{action} · {state}',
+  runWaiting: '{action} · {state} — openen',
+  runDone: '{action} · {state}',
+  runsMore: '+{n} eerdere verzoeken',
+  buttonDone: '{button} gedaan.',
+  liveBusy: 'Volgt live',
+  selectionMisfit: 'Past niet op {n} rijen',
+  selectionNoneFits: 'Geen van deze rijen komt in aanmerking.',
+  recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
+  conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
+  selectedCount: '{n} geselecteerd',
+  selectionClear: 'Selectie wissen',
+  selectionBusy: 'Er loopt al een actie',
+  selectionMax: 'Maximaal {max} tegelijk',
+  selectAll: 'Alle rijen selecteren',
+  selectRow: '{title} selecteren',
   addViewTo: 'Weergave toevoegen aan {model}',
   moreFor: 'Meer voor {model}',
   renameModel: 'Naam wijzigen',
@@ -278,6 +302,7 @@ const strings = {
   exportModel: 'Exporteren',
   modelName: 'Nieuwe naam voor {model}',
   iconFor: 'Icoon voor {model}',
+  recordActions: 'Acties',
   adminOnly: 'Alleen een beheerder kan dit wijzigen',
   exportOpenView: 'Open eerst een weergave van dit model',
   exportNotReady: 'De weergave laadt nog',
@@ -317,7 +342,6 @@ const strings = {
   fewerFields: 'Minder velden',
   expand: 'Volledig openen',
   narrow: 'Terug naar de zijkant',
-  position: '{n} van {m}',
   kindBoard: 'Bord',
   later: 'later',
   newViewOf: 'Nieuwe {kind}weergave',
@@ -382,10 +406,18 @@ const strings = {
   historyAlsoOne: 'Dit maakt ook 1 andere wijziging ongedaan',
   historyAlso: 'Dit maakt ook {n} andere wijzigingen ongedaan',
   transitionNotAllowed: 'Deze statuswijziging is niet toegestaan.',
+  noConnection: 'Geen verbinding met de server. Probeer het opnieuw.',
+  serviceOnly: 'Dit wordt automatisch bijgehouden en kan je niet zelf wijzigen.',
+  serviceOnlyCreate: 'Dit wordt automatisch aangemaakt; je kan het niet zelf toevoegen.',
   transitionLost: 'De status is intussen gewijzigd. De cel toont nu wat er staat.',
   undoDeleteSkipped: 'Verwijderen kan niet ongedaan gemaakt worden',
   redoSkipped: 'Opnieuw doen kan hier niet',
   attachments: 'Bijlagen',
+  tabBar: 'Onderdelen',
+  tabFields: 'Gegevens',
+  tabNotes: 'Notities',
+  tabMore: 'Meer tabbladen',
+  calMore: '+{n} meer',
   attachmentsNone: 'Nog geen bijlagen',
   attachmentKind: 'Soort',
   attachmentAdd: 'Bestand toevoegen',
@@ -423,12 +455,15 @@ export function setStrings(given: Record<string, unknown> | undefined): void {
 // The engine says these in English: it knows no domain words.
 const ENGINE_CODES: Record<string, StringKey> = {
   transition_not_allowed: 'transitionNotAllowed',
+  service_only: 'serviceOnly',
   transition_lost: 'transitionLost',
+  unknown_record: 'recordGoneRun',
+  condition_not_met: 'conditionNotMet',
 }
 
 /** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */
-export function errorText(code: string, message: string): string {
-  const own = Object.hasOwn(ENGINE_CODES, code) ? t(ENGINE_CODES[code]) : message
+export function errorText(code: string, message: string, creating = false): string {
+  const own = creating && code === 'service_only' ? t('serviceOnlyCreate') : Object.hasOwn(ENGINE_CODES, code) ? t(ENGINE_CODES[code]) : message
   return refusals[ERROR + code] ?? own
 }
 
@@ -459,7 +494,7 @@ export function undoText(error: Partial<ApiError>): string {
   return errorText(code, said)
 }
 
-/** The engine's 409 `by` as one sentence: "Nog in gebruik door Activiteiten (3) en Personen (1)." */
+/** The engine's 409 `by` as one sentence: "Nog in gebruik door Kisten (3) en Dozen (1)." */
 export function inUse(by: { label: string; count: number }[]): string {
   const named = by.map(({ label, count }) => `${label} (${count})`)
   const last = named.pop() ?? ''

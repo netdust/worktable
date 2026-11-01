@@ -12,6 +12,8 @@ afterEach(cleanup)
 
 const model = { key: 'item', fields: { status: { options: { open: 'Open', klaar: 'Klaar' } } } } as unknown as Model
 
+const rowAt = (status: string): Row => ({ id: 1, title: 'Eén', status: '', fields: { status } })
+
 const entry = (changes: HistoryEntry['changes']): HistoryEntry => ({
   batch: 'b1',
   at: '2026-10-12T16:20:00Z',
@@ -28,7 +30,7 @@ const entry = (changes: HistoryEntry['changes']): HistoryEntry => ({
 describe('the drawer’s Geschiedenis', () => {
   it('says a move as "verplaatst", never "zette … op" a rank', async () => {
     remote.recordHistory.mockResolvedValueOnce([entry([{ field: 'position', label: 'Position', moved: true }])])
-    render(<HistorySection model={model} id={1} />)
+    render(<HistorySection model={model} id={1} row={rowAt('open')} />)
 
     const history = await screen.findByRole('region', { name: 'Geschiedenis' })
     expect(history.textContent).toContain('noor verplaatst')
@@ -38,9 +40,25 @@ describe('the drawer’s Geschiedenis', () => {
   it('still says what a change set, before the move of its batch', async () => {
     const moved = { field: 'position', label: 'Position', moved: true as const }
     remote.recordHistory.mockResolvedValueOnce([entry([{ field: 'status', label: 'Status', old: 'open', new: 'klaar' }, moved])])
-    render(<HistorySection model={model} id={1} />)
+    render(<HistorySection model={model} id={1} row={rowAt('open')} />)
 
     expect((await screen.findByRole('region', { name: 'Geschiedenis' })).textContent).toContain('noor zette status op Klaar')
+  })
+})
+
+describe('the drawer’s Geschiedenis, read again', () => {
+  it('reads again when the record’s content changed, and not for the same content', async () => {
+    remote.recordHistory.mockReset()
+    remote.recordHistory.mockResolvedValue([])
+    const { rerender } = render(<HistorySection model={model} id={1} row={rowAt('open')} />)
+    await screen.findByRole('region', { name: 'Geschiedenis' })
+    expect(remote.recordHistory).toHaveBeenCalledTimes(1)
+
+    rerender(<HistorySection model={model} id={1} row={rowAt('open')} />)
+    expect(remote.recordHistory).toHaveBeenCalledTimes(1)
+
+    rerender(<HistorySection model={model} id={1} row={rowAt('klaar')} />)
+    await waitFor(() => expect(remote.recordHistory).toHaveBeenCalledTimes(2))
   })
 })
 

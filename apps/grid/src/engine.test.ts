@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { columnsFor } from './grid/columns'
 import { defaults } from './grid/layout'
-import { type EngineSchema, type EngineView, fromStoredView, rowsQuery, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import { type EngineColumn, type EngineSchema, type EngineSource, type EngineView, fromStoredView, rowsQuery, toEngineData, toRow, toSavedViews, toSchema, toStoredView } from './engine'
+import type { SavedView } from './types'
+import { knownOf, layoutOf, toStored } from './ui/views'
 import { orderOf, show } from './grid/layout'
 
 /** The theatre declarations and seeded views, trimmed to what the adapter reads. */
@@ -50,6 +52,26 @@ const views: EngineView[] = [
     filters: {}, sort: ['-productie'], group_by: null, visible_fields: ['productie', 'plandag'], ...owned,
   },
 ]
+
+describe('toSchema: what a person is offered', () => {
+  const link = { label: 'Sites', item: 'Site', dataset: 'tie', key: 'job_id', target: 'unit_id', target_dataset: 'unit', meter: false as const }
+  const sources: EngineSchema['sources'] = {
+    unit: { kind: 'dataset', label: 'Units', title: 'name', date: null, created_by: 'service', board: { column: 'health', drag: false },
+      columns: { name: { type: 'text', label: 'Naam' }, health: { type: 'text', label: 'Gezondheid', options: { ok: 'Ok' } }, code: { type: 'integer', label: 'Code', footer: 'none' } } },
+    job: { kind: 'dataset', label: 'Jobs', title: 'name', date: null, lifecycle: { column: 'status', buttons: true }, links: { units: link },
+      columns: { name: { type: 'text', label: 'Naam' }, status: { type: 'text', label: 'Status', options: { a: 'A' } } } },
+  }
+
+  it('maps created_by, footer, board drag, lifecycle buttons and the link meter', () => {
+    const schema = toSchema({ sources })
+    expect(schema.models.unit.created_by).toBe('service')
+    expect(schema.models.unit.fields.code.footer).toBe('none')
+    expect(schema.tables.find((t) => t.key === 'unit')?.board).toEqual({ column: 'health', drag: false })
+    expect(schema.models.job.lifecycle_buttons).toBe(true)
+    expect(schema.models.job.fields.units.link?.meter).toBe(false)
+    expect(schema.models.job.created_by).toBeUndefined()
+  })
+})
 
 describe('toSchema: space, sections and facts', () => {
   const declared: EngineSchema = {
@@ -202,7 +224,7 @@ describe('toSchema', () => {
     const schema = toSchema(engine)
 
     expect(schema.tables.map((t) => t.key)).toEqual(['productie', 'activiteit', 'productie_dag'])
-    expect(schema.tables[1]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] })
+    expect(schema.tables[1]).toMatchObject({ label: 'Activiteiten', model: 'activiteit', date_field: 'plandag' })
     expect(schema.views).toEqual([])
     expect(schema.writable).toEqual({ productie: false, activiteit: false, productie_dag: false })
   })
@@ -394,6 +416,17 @@ describe('a hidden column', () => {
     expect(columnsFor(model, { key: 'a', label: 'a', table: 'activiteit', model: 'activiteit' }, true).map((c) => c.id)).not.toContain('plaats')
   })
 
+  it('is still a name a layout may use, so the fit keeps a stored sort on it and a Save sends it back', () => {
+    const model = toSchema({ sources: { ...engine.sources, activiteit: hidden } }).models.activiteit
+    const { arrangement } = fromStoredView({ ...planning, sort: ['-plaats', 'start_at'] }, hidden)
+    const saved = { key: '9', id: 9, label: 'Plaats', table: 'activiteit', model: 'activiteit', type: 'grid', starting: false, arrangement, shared: true, owner: { id: -1, name: '' }, mine: false, editable: true } as SavedView
+
+    const fitted = layoutOf(saved, knownOf(model, saved))
+
+    expect(fitted.sort.map((key) => key.id)).toEqual(['plaats', 'start_at'])
+    expect(toStoredView(toStored({ ...fitted, picked: [] }), {}, hidden).sort).toEqual(['-plaats', 'start_at'])
+  })
+
   it('round-trips a view that names it: the other fields keep their place and it is not written back', () => {
     const { arrangement, fixed } = fromStoredView(planning, hidden)
     expect(arrangement.order).toEqual(['start_at', 'title', 'soort', 'status'])
@@ -579,14 +612,14 @@ describe('the matrix and titles through a relation', () => {
     const table = toSchema(theatre).tables.find((t) => t.key === 'activiteit')
 
     expect(table).toMatchObject({
-      types: ['grid', 'matrix'],
+      types: ['grid', 'calendar', 'timeline', 'board', 'matrix'],
       join: {
         model: 'toewijzing', row_field: 'activiteit_id', column_field: 'persoon_id', name_field: 'naam', cell_field: 'state', note_field: 'notitie',
         keys: { u: 'uitgenodigd', b: 'bevestigd' }, marks: { uitgenodigd: '?', bevestigd: '✓' }, count: 'bevestigd',
       },
       away: { table: 'beschikbaarheid', model: 'beschikbaarheid', column_field: 'persoon_id', label_field: 'reden', date_field: 'start_at', end_field: 'eind_at' },
     })
-    expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')).toMatchObject({ types: ['grid'] })
+    expect(toSchema(theatre).tables.find((t) => t.key === 'toewijzing')?.types).not.toContain('matrix')
   })
 
   it("gives the join the lifecycle column /schema serves on the join dataset, and none without one", () => {
@@ -753,5 +786,41 @@ describe('lookups', () => {
   it('kindOf types a relation lookup as a choice', () => {
     const { arrangement } = fromStoredView({ ...stored, filters: { locatie: 7 } }, act)
     expect(arrangement.filters).toEqual([{ field: 'locatie', op: 'in', values: ['7'] }])
+  })
+})
+
+describe("the skins a source's columns allow", () => {
+  const source = (columns: Record<string, EngineColumn>, extra: Partial<EngineSource> = {}): EngineSource =>
+    ({ kind: 'dataset', label: 'Taken', title: 'titel', date: null, columns, ...extra }) as unknown as EngineSource
+  const tableOf = (s: EngineSource) => toSchema({ sources: { taak: s }, views: [] } as unknown as EngineSchema).tables[0]
+  const titel: EngineColumn = { type: 'text', label: 'Titel' }
+  const status: EngineColumn = { type: 'text', label: 'Status', options: { open: 'Open', gedaan: 'Gedaan' } }
+
+  it('offers only the grid to a source with neither a date nor an options column', () => {
+    expect(tableOf(source({ titel })).types).toEqual(['grid'])
+  })
+
+  it('offers a board on the first options column, with drag, when none is declared', () => {
+    const table = tableOf(source({ titel, status }))
+    expect(table.types).toEqual(['grid', 'board'])
+    expect(table.board).toEqual({ column: 'status' })
+  })
+
+  it("takes no drag on a board over the lifecycle's column: its moves are transitions", () => {
+    expect(tableOf(source({ titel, status }, { lifecycle: { column: 'status' } })).board).toEqual({ column: 'status', drag: false })
+  })
+
+  it('offers a calendar and a timeline on the declared date, else the first date column, with no lanes', () => {
+    const columns = { titel, start: { type: 'datetime', label: 'Start' } as EngineColumn, deadline: { type: 'date', label: 'Deadline' } as EngineColumn }
+    expect(tableOf(source(columns)).calendar).toEqual({ day: 'start', start: null, end: null, lanes: [] })
+    const declared = tableOf(source(columns, { date: 'deadline' }))
+    expect(declared.types).toEqual(['grid', 'calendar', 'timeline'])
+    expect(declared.calendar).toEqual({ day: 'deadline', start: null, end: null, lanes: [] })
+  })
+
+  it('leaves a hidden column out, and a declared need wins', () => {
+    expect(tableOf(source({ titel, geheim: { ...status, hidden: true } })).types).toEqual(['grid'])
+    const declared = tableOf(source({ titel, status, soort: status }, { board: { column: 'soort', drag: false } }))
+    expect(declared.board).toEqual({ column: 'soort', drag: false })
   })
 })

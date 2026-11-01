@@ -11,6 +11,12 @@ afterEach(cleanup)
 const show = () => render(<RailFoot signed={{ email: 'planner@example.test', onSignOut: () => undefined }} />, { container: document.getElementById('root') as HTMLElement })
 
 describe('Bijstellen in the rail foot', () => {
+  it('lines default to on under the v2 key, whatever the old key holds', () => {
+    window.localStorage.setItem('ntdst-views/lines', 'off')
+    show()
+    expect(document.getElementById('root')?.getAttribute('data-lines')).toBe('on')
+  })
+
   it('is collapsed by default and opens on its header', () => {
     show()
     const toggle = screen.getByRole('button', { name: 'Bijstellen' })
@@ -20,14 +26,14 @@ describe('Bijstellen in the rail foot', () => {
     for (const name of ['Rijhoogte', 'Dagkop', 'Rasterlijnen', 'Zebrarijen', 'Thema']) expect(screen.getByRole('radiogroup', { name })).toBeTruthy()
   })
 
-  it('draws the grid lines when Rasterlijnen is on, and keeps the choice', () => {
+  it('draws the grid lines by default, and keeps a choice to hide them', () => {
     show()
     fireEvent.click(screen.getByRole('button', { name: 'Bijstellen' }))
     const root = document.getElementById('root') as HTMLElement
-    expect(root.getAttribute('data-lines')).toBe('off')
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Rasterlijnen' })).getByRole('radio', { name: 'Aan' }))
     expect(root.getAttribute('data-lines')).toBe('on')
-    expect(window.localStorage.getItem('ntdst-views/lines')).toBe('on')
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Rasterlijnen' })).getByRole('radio', { name: 'Uit' }))
+    expect(root.getAttribute('data-lines')).toBe('off')
+    expect(window.localStorage.getItem('ntdst-views/lines/v2')).toBe('off')
   })
 
   it('remembers that it was left open', () => {

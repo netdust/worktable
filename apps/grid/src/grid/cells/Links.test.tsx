@@ -5,7 +5,8 @@ import { filterFields } from '../filter'
 import { Grid } from '../Grid'
 import { defaults } from '../layout'
 import { createStore, type StoreApi } from '../store'
-import type { LinkActions } from './Links'
+import { type LinkActions, LinksCell } from './Links'
+import type { Column } from '../columns'
 import { barOf } from '../../ui/bar'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  records: vi.fn() }))
@@ -241,5 +242,19 @@ describe('a links cell', () => {
     expect(filterFields(day, [lunch]).map((f) => f.field)).not.toContain('people')
     const bar = barOf({ view, model: day, layout: defaults(view), onLayout: () => undefined, scope: null, told: null, period: null })
     expect(bar.group?.options?.map((o) => o.key)).not.toContain('people')
+  })
+})
+
+describe('a link that declares no meter', () => {
+  const cell = (meter?: false) => {
+    const link = { ...day.fields.people.link, ...(meter === false ? { meter } : {}) } as NonNullable<Model['fields'][string]['link']>
+    return render(<LinksCell column={{ id: 'people', field: 'people', link } as unknown as Column} row={lunch} />)
+  }
+
+  it('shows the have/need bar in the cell by default, and none with meter false', () => {
+    const { container, unmount } = cell()
+    expect(container.querySelector('.nv-crew')).not.toBeNull()
+    unmount()
+    expect(cell(false).container.querySelector('.nv-crew')).toBeNull()
   })
 })

@@ -17,6 +17,8 @@ export const ICONS = [
   'flag',
   'user',
   'query',
+  'log-in',
+  'undo',
 ] as const
 export type Icon = (typeof ICONS)[number]
 
@@ -56,6 +58,15 @@ export interface ColumnDecl {
   badge?: Tone
   /** A text the grid edits as long text and the record drawer shows as its own block; never with options or a relation. */
   long?: true
+  /**
+   * Only a service account writes it; a person's write that sends it is refused 403 `service_only` before the writer runs.
+   * Judged on the keys the caller sends, so a writer must not fill it on a person's write: that batch's undo would be refused.
+   */
+  written_by?: 'service'
+  /** A text holding an absolute http(s) address the record's drawer offers to open; a write of anything else is refused `bad_url`. */
+  href?: true
+  /** What the grid's foot adds up: a sum (the default) or nothing; integer and real columns only. */
+  footer?: 'sum' | 'none'
 }
 
 /** A fact the grid computes from a group's rows. */
@@ -98,6 +109,10 @@ export interface LinkDecl {
   target: string
   state?: string
   count?: string
+  /** A column of the link dataset whose text shows under each item; to an owner only when owner_visible. */
+  detail?: string
+  /** `false` keeps the have/need count out of the head. */
+  meter?: false
 }
 
 /** A column not stored: the `field` of the live row `via` names; with `own`, this row's `own` when set. `from` words where an inherited value comes from. `owner_visible` serves it to the row's owner too. */
@@ -116,6 +131,8 @@ export interface AttachmentsDecl {
   max_mb?: number
   owner_visible?: true
   owner_writable?: true
+  /** `person`: a service's delete of a file, and its undo of its own upload, are refused 403 `service_only`. */
+  deleted_by?: 'person'
 }
 
 /** The column that ties a row to an owner account's subject: `id`, or a relation column. */
@@ -133,6 +150,8 @@ export interface CalendarDecl {
 /** The options column a board groups its cards on. */
 export interface BoardDecl {
   column: string
+  /** `false`: the board only groups; its cards open and do not move. */
+  drag?: false
 }
 
 /** The attachment kind a gallery shows of each record. */
@@ -154,6 +173,8 @@ export interface DatasetDecl {
   custom: boolean
   matrix?: MatrixDecl
   owners?: Owners
+  /** Only a service account creates its rows; a person's create is refused 403 `service_only`. */
+  created_by?: 'service'
   /** Its seed rows are configuration, not demo data: --seed-missing writes them into an existing database. */
   config?: boolean
   /** Engine tables only: table constraints in SQL. validateDomain refuses them on a domain dataset. */
@@ -173,6 +194,8 @@ export interface DatasetDecl {
   /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
   record_link?: { email?: string }
   attachments?: AttachmentsDecl
+  /** `false` keeps it out of the grid's tree. Navigation only: the API serves it as before. */
+  listed?: false
 }
 
 export interface QueryDecl {
@@ -191,6 +214,8 @@ export interface QueryDecl {
   icon?: Icon
   /** The dataset a new row from this query is created in. */
   creates?: string
+  /** Its rows' ids are `of` records' ids, so the grid offers that dataset's selection actions on ticked rows. */
+  selectable?: true
   /** The dataset this query reads: the grid lists its views under that dataset. */
   of?: string
   links?: Record<string, LinkDecl>
@@ -240,6 +265,8 @@ export interface SavedViewSeed {
   group_by: string | null
   visible_fields: string[]
   layout?: DashboardLayout
+  /** Read-only to everyone and brought up to its declaration by the seed; unlocked, it is a team view. */
+  locked?: boolean
 }
 
 export interface Domain {
@@ -248,7 +275,7 @@ export interface Domain {
   seed(insert: (dataset: string, rows: Record<string, unknown>[]) => void): void
   views: SavedViewSeed[]
   writers?: Record<string, Writer>
-  actions?: Record<string, ActionDecl>
+  actions?: Record<string, ActionDecl | SelectionActionDecl>
   /** The dataset whose records split the work. A view filter for the grid, never access control. */
   space?: { dataset: string }
   /** The order of the sources in the grid's tree; unlisted sources follow, unlabelled. */
@@ -263,6 +290,8 @@ export interface Actor {
   subject: { dataset: string; id: number } | null
   /** Who signs in: a person by mail (`user`, the default), an agent by Bearer, or a record's link. */
   kind?: 'user' | 'service' | 'link'
+  /** A service account's name. */
+  name?: string
 }
 
 /** What a hook asks the engine to do; `link` is null while no token was minted. */
@@ -275,11 +304,32 @@ export interface HookResult {
   notice?: string
 }
 
+type Scalar = string | number | boolean | null
+
+/** Every key (a column or lookup of the source) equals its value, or is one of `$in`, on the row as the caller reads it; a key it lacks (an owner's lookup that is not owner_visible) never matches. */
+export type Condition = Record<string, Scalar | { $in: Scalar[] }>
+
 /** A write to `column` on an existing row is a transition; a create is not. Hooks run on entering their state. */
 export interface LifecycleDecl {
   column: string
-  /** `label` is the transition's verb, shown on the action token's page. */
-  transitions: { from: string[] | '*'; to: string; roles: Role[]; label?: string }[]
+  /**
+   * `label` is the transition's verb, shown on the action token's page. `button` is its label as a drawer button.
+   * `when` decides only whether that button shows, never whether the write is allowed: a writer mirrors any `when` that matters.
+   */
+  transitions: {
+    from: string[] | '*'
+    to: string
+    roles: Role[]
+    label?: string
+    button?: string
+    /** The button the drawer shows filled; only with `button`. */
+    primary?: true
+    /** The drawer draws the button as this icon alone; `button` stays its name and tooltip. */
+    icon?: Icon
+    when?: Condition
+  }[]
+  /** The states in which an outside process is busy with the record or picks it up next. */
+  live?: string[]
   hooks?: Record<string, (row: Record<string, unknown>, ctx: WriteContext) => HookResult>
   token_projection?: string[]
 }
@@ -338,8 +388,33 @@ export interface ActionDecl {
   label: string
   on: string
   input: Record<string, ActionInput>
+  /** The grid opens the first record the run created, else the record it ran on. */
+  opens?: true
+  /** A button with this icon in the drawer's head, beside the record's address; the label is its name. */
+  head?: { icon: Icon }
+  /** With `head`: after the run the grid reads the handoff of the record the run created and opens it in the tab the click opened. */
+  handoff?: true
+  /** A record that does not match is refused 422 `condition_not_met` before `run`. */
+  when?: Condition
   run(record: Values, input: Record<string, InputValue>, ctx: WriteContext): ActionResult
 }
+
+/** Runs once on every selected record (1 to 500), each read as the caller, in one transaction and one batch. */
+export interface SelectionActionDecl {
+  label: string
+  on: string
+  many: true
+  input: Record<string, ActionInput>
+  opens?: true
+  when?: Condition
+  /** With `when`: refused only when no record matches; every record still goes to `run`, which decides what a misfit gets. */
+  skip?: true
+  run(records: Values[], input: Record<string, InputValue>, ctx: WriteContext): ActionResult
+}
+
+/** Only `many: true` makes a selection action; a stray `many` is refused at validation, never read as one. */
+export const isSelection = (action: ActionDecl | SelectionActionDecl): action is SelectionActionDecl =>
+  (action as { many?: unknown }).many === true
 
 /** An update that adds rows to its own batch: each create runs as an action's does, as the same actor. */
 export interface WriterUpdate {

@@ -15,8 +15,8 @@ const PREFS_DELAY = 500
 /** A run of changes to one's own view is one save. */
 export const AUTOSAVE_DELAY = 400
 
-/** One's own view saves itself; a view one may not write keeps the change here, and so does a public one: a dropped filter would publish rows. */
-export const autosaves = (view: View): view is SavedView => isSaved(view) && view.mine && view.editable && !view.public
+/** A view one may write saves itself, one's own or a team view; a view one may not write keeps the change here, and so does a public one: a dropped filter would publish rows. */
+export const autosaves = (view: View): view is SavedView => isSaved(view) && view.editable && !view.public
 
 interface Options {
   declared: TableDef[]

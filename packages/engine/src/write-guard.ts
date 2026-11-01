@@ -17,6 +17,16 @@ const sizeCap = bodyLimit({
   onError: (c) => deny(c, 413, 'body_too_large', `Body is larger than ${MAX_BODY} bytes`),
 })
 
+// A read that spends state is refused from another site too; no header at all (a tool, a dev proxy) passes.
+export function siteGuard(): MiddlewareHandler {
+  return createMiddleware(async (c, next) => {
+    if (FOREIGN_SITES.has(c.req.header('sec-fetch-site')?.toLowerCase() ?? '')) {
+      return deny(c, 403, 'forbidden_site', 'Requests from another site are not allowed')
+    }
+    return next()
+  })
+}
+
 // Decides before the body is read: a CORS-simple text/plain POST from another page never reaches a writer.
 export function writeGuard(): MiddlewareHandler {
   return createMiddleware(async (c, next) => {

@@ -41,6 +41,10 @@ export interface Field {
   options_from?: OptionsFrom
   /** An integer shown as a tinted count above 0. */
   badge?: Tone
+  /** What a number column's foot says: its sum, or nothing. */
+  footer?: 'sum' | 'none'
+  /** A text holding a web address the record's drawer offers to open. */
+  href?: true
 }
 
 export interface Link {
@@ -50,6 +54,8 @@ export interface Link {
   key: string
   target: string
   target_dataset: string
+  /** `false`: the head shows no have/need count. */
+  meter?: false
   state?: { options: Record<string, string>; tones: Record<string, Tone>; default: string | null }
 }
 
@@ -60,6 +66,16 @@ export interface LinkItem {
   title: string
   state: string | null
   places?: number
+  available?: Available
+  /** The link record's own detail text, under the item. */
+  detail?: string
+}
+
+/** What the server marks on a row or link item: the buttons and actions that apply to this viewer now. `state` is what a press sends as `expect`. */
+export interface Available {
+  state: string | null
+  buttons: { to: string; label: string; primary?: true; icon?: string }[]
+  actions: string[]
 }
 
 export interface Model {
@@ -68,6 +84,8 @@ export interface Model {
   title_label: string
   /** The title's own column, which a condition names; absent for a title through a relation. */
   title_field?: string
+  /** Every column the source has, the ones the grid hides too: a saved view may still sort, filter or group on one. */
+  columns?: string[]
   title_readonly: boolean
   /** The title column is not nullable: absent means required. */
   title_required?: boolean
@@ -77,9 +95,15 @@ export interface Model {
   query?: boolean
   /** Its writer deletes: the drawer offers Verwijderen. */
   deletable?: boolean
+  /** Only a service creates its rows: a person is offered no way to add one. */
+  created_by?: 'service'
+  /** Its lifecycle transitions declare buttons: the column changes through them only. */
+  lifecycle_buttons?: true
+  /** A query whose rows are the records of this dataset: ticked, they run its selection actions. */
+  selectable?: string
   /** A query whose `+ Nieuw` creates a row in this model. */
   creates?: string
-  /** The words of `+ Nieuw` ("Nieuwe activiteit"), while the model keeps its declared name. */
+  /** The words of `+ Nieuw` ("Nieuwe kist"), while the model keeps its declared name. */
   new_label?: string
   /** What the drawer offers to run on one of its records. */
   actions?: ModelAction[]
@@ -87,6 +111,8 @@ export interface Model {
   record_link?: true
   /** The column a write to which is a transition: the record's state. */
   lifecycle?: string
+  /** The states in which an outside process holds the record: an open drawer follows it there. */
+  live?: string[]
   /** The options column whose tone colours each record as a lane and on the rows that point at it. */
   tone?: string
   /** Files its records carry, by kind; the drawer lists and takes them. */
@@ -104,6 +130,24 @@ export interface ModelAction {
   name: string
   label: string
   input: Record<string, ActionInput>
+  /** Runs once on every ticked row of the table, not on one record. */
+  many?: true
+  /** After a run the grid opens the first record it created, else the record it ran on. */
+  opens?: true
+  /** Applies to a record only while a condition holds: a query's rows carry no marks to say whether it does. */
+  conditional?: true
+  /** With `conditional`: runs on the ticked rows that fit and skips the rest, so it is offered once one fits. */
+  skips?: true
+  /** Sits in the drawer's head as an icon-only button, beside the open link. */
+  head?: { icon: string }
+  /** Its run makes a service hand back an address, which the grid opens in a new tab. */
+  handoff?: true
+}
+
+/** A record an action asks the grid to open. */
+export interface Opened {
+  dataset: string
+  id: number
 }
 
 export type ViewType = 'grid' | 'matrix' | 'calendar' | 'board' | 'timeline' | 'gallery' | 'dashboard'
@@ -155,6 +199,8 @@ export interface TableDef {
   space?: 'scoped' | 'global'
   /** A query's rows: joined, never created. */
   query?: boolean
+  /** Kept out of the tree; its records open from a link. */
+  listed?: false
   /** The dataset a query reads: its views sit under that table in the rail. */
   of?: string
   /** A query whose rows flag records of the datasets it marks. */
@@ -170,7 +216,7 @@ export interface TableDef {
   /** A calendar table: how its rows sit on days. */
   calendar?: CalendarDef
   /** A board table: the options column its cards are grouped by. */
-  board?: { column: string }
+  board?: { column: string; drag?: false }
   /** A gallery table: the attachment kind its cards show. */
   gallery?: { kind: string }
   types: ViewType[]
@@ -224,6 +270,8 @@ export interface SavedView extends View {
   public?: boolean
   /** Shown to the people its rows belong to. */
   for_owners?: boolean
+  /** A dashboard's tiles that name a deleted view, as the engine lists them. */
+  gone_views?: number[]
 }
 
 /** What `POST views` takes: a new view, always of no field. */
@@ -336,6 +384,8 @@ export interface Row {
   rollups?: Record<string, number | unknown[]>
   /** The inherited lookups whose value came through the relation, not the row's own. */
   inherited?: string[]
+  /** Absent on a source that declares no button or action condition: everything is then allowed. */
+  available?: Available
 }
 
 export interface Lookup {
@@ -367,6 +417,8 @@ export interface ApiError {
   dataset?: string
   /** On a refusal about one column, such as one not shown to owners. */
   key?: string
+  /** The HTTP status the engine answered with, when it answered. */
+  status?: number
 }
 
 /** A column of a view shown to owners, as the engine describes it beside the view. */

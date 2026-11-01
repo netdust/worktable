@@ -76,6 +76,23 @@ export const recordLink = defineDataset({
   checks: ['UNIQUE (dataset, record_id)'],
 })
 
+// A one-time value a service leaves for a record's creator. Outside every batch; the row outlives the value as a tombstone.
+export const handoff = defineDataset({
+  name: 'handoff',
+  label: 'Handoff',
+  title: 'dataset',
+  custom: false,
+  columns: {
+    dataset: { type: 'text', label: 'Dataset' },
+    record_id: { type: 'integer', label: 'Record' },
+    value: { type: 'text', label: 'Value', nullable: true },
+    creator_id: { type: 'integer', label: 'Creator' },
+    expires_at: { type: 'datetime', label: 'Expires at' },
+    taken_at: { type: 'datetime', label: 'Taken at', nullable: true },
+  },
+  checks: ['UNIQUE (dataset, record_id)'],
+})
+
 // A file on a record; the bytes sit in the files directory under their sha256.
 export const attachment = defineDataset({
   name: 'attachment',
@@ -103,6 +120,7 @@ export const engineTables = [
   ...authTables,
   actionToken,
   recordLink,
+  handoff,
   attachment,
 ]
 

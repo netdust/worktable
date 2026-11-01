@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { state } from './auth'
 import { shot } from './shots'
-import { openWeek } from './tree'
+import { openView, openWeek } from './tree'
 
 test.use({ storageState: state('admin'), viewport: { width: 1280, height: 800 } })
 
@@ -51,3 +51,46 @@ for (const [view, model, open] of [
     await shot(page, `title-line-drawer-${open}`)
   })
 }
+
+// Studio-polish R10: one pill per tone, bad before warn. Toewijzing has two bad options, named together on the red pill.
+test.describe('two-tone title pill at 1440', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test('title-pill-two-tones @e2e: Toewijzingen reads Geweigerd · Geannuleerd in red before Uitgenodigd', async ({
+    page,
+  }) => {
+    const api = page.request
+    const made: number[] = []
+    const add = async (naam: string, to: string) => {
+      const created = await api.post('/api/rows/toewijzing', {
+        data: { activiteit_id: 5, naam, state: 'uitgenodigd' },
+      })
+      expect(created.status(), await created.text()).toBe(201)
+      const id = ((await created.json()) as { id: number }).id
+      made.push(id)
+      const moved = await api.patch(`/api/rows/toewijzing/${id}`, { data: { state: to } })
+      expect(moved.status(), await moved.text()).toBe(200)
+    }
+    try {
+      await add('e2e Gast geweigerd', 'geweigerd')
+      await add('e2e Gast geannuleerd', 'geannuleerd')
+      const listed = await api.get('/api/rows/toewijzing?limit=500')
+      const rows = ((await listed.json()) as { rows: { state: string }[] }).rows
+      const held = (...states: string[]) => rows.filter((row) => states.includes(row.state)).length
+
+      await page.goto('/')
+      await openView(page, 'Toewijzingen', 'Toewijzingen')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen')
+      const pills = page.locator('.nv-toolbar__insight')
+      await expect(pills).toHaveText([
+        `Geweigerd · Geannuleerd${held('geweigerd', 'geannuleerd')}`,
+        `Uitgenodigd${held('uitgenodigd')}`,
+      ])
+      await expect(pills.nth(0).locator('.nv-pill')).toHaveClass(/nv-pill--bad/)
+      await expect(pills.nth(1).locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
+      await shot(page, 'theatre-toewijzingen-pil')
+    } finally {
+      for (const id of made) await api.delete(`/api/rows/toewijzing/${id}`)
+    }
+  })
+})

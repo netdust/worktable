@@ -224,9 +224,15 @@ describe('one team dashboard (I-4)', () => {
     expect({ status: byEditor.status, code: byEditor.body.code }).toEqual({ status: 403, code: 'not_owner' })
     const mine = (await post({ layout })).body
     expect((await other('PATCH', `/api/views/${mine.id}`, { body: json({ name: 'X' }) })).status).toBe(404)
-    const system = await other('PATCH', `/api/views/${OVERVIEW}`, { body: json({ name: 'X' }) })
+    const system = await editor('PATCH', `/api/views/${OVERVIEW}`, { body: json({ name: 'X' }) })
     expect({ status: system.status, code: system.body.code }).toEqual({ status: 403, code: 'read_only_view' })
     expect(stored().filter((r) => (r as { id: number }).id !== mine.id)).toEqual(before)
+    // The seeded dashboard is unlocked: a human administrator changes it in place.
+    const seededRenamed = await other('PATCH', `/api/views/${OVERVIEW}`, { body: json({ name: 'Ons overzicht' }) })
+    expect({ status: seededRenamed.status, name: seededRenamed.body.name }).toEqual({
+      status: 200,
+      name: 'Ons overzicht',
+    })
 
     expect((await other('DELETE', `/api/views/${team.id}`)).status).toBe(200)
     expect((await dashboards(editor)).map((v) => v.id)).toEqual([OVERVIEW])

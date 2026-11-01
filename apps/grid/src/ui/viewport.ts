@@ -2,7 +2,7 @@ import { type RefObject, useEffect } from 'react'
 
 /**
  * The app takes the viewport under whatever wp-admin prints above it (the admin bar, update
- * nags, plugin notices), so the page never scrolls and the sheet scrolls inside.
+ * nags, add-on notices), so the page never scrolls and the sheet scrolls inside.
  */
 export function useFillViewport(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {

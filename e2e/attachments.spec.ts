@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { type APIRequestContext, type Download, expect, type Locator, type Page, test } from '@playwright/test'
 import { state } from './auth'
+import { openTab } from './drawer'
 import { shot } from './shots'
 import { openWeek } from './tree'
 
@@ -78,6 +79,13 @@ async function openDrawer(page: Page, text: string): Promise<Locator> {
 
 const filesOf = (drawer: Locator) => drawer.getByRole('region', { name: 'Bijlagen' })
 
+/** A record's drawer on its Bijlagen tab. */
+async function openFiles(page: Page, text: string): Promise<Locator> {
+  const drawer = await openDrawer(page, text)
+  await openTab(page, 'Bijlagen')
+  return drawer
+}
+
 const uploaded = (page: Page) =>
   page.waitForResponse(
     (res) =>
@@ -135,7 +143,7 @@ test('upload-open-delete-undo @e2e', async ({ page, browser }) => {
     const id = await activity(api, made, omschrijving, DRAWER_WEEK)
     await page.setViewportSize({ width: 1600, height: 900 })
     await openWeek(page, 'Planning', 'Activiteiten', 'plandag', DRAWER_WEEK)
-    const drawer = await openDrawer(page, omschrijving)
+    const drawer = await openFiles(page, omschrijving)
     const files = filesOf(drawer)
     await expect(files.getByRole('heading', { name: 'Bijlagen' })).toBeVisible()
     await expect(files).toContainText('Nog geen bijlagen')
@@ -189,7 +197,7 @@ test('upload-open-delete-undo @e2e', async ({ page, browser }) => {
     // Re-entry: closed and opened again, the drawer reads the server; one more Ctrl+Z takes the photo's upload back.
     await drawer.getByRole('button', { name: 'Sluiten' }).click()
     await expect(page.locator('.nv-drawer')).toHaveCount(0)
-    const again = filesOf(await openDrawer(page, omschrijving))
+    const again = filesOf(await openFiles(page, omschrijving))
     await expect.poll(() => listed(again)).toEqual(['Rider | rider e2e.pdf | 1 kB', 'Foto | zaal e2e.jpg | 1 kB'])
     await undoInSheet(page, omschrijving)
     await expect.poll(() => listed(again)).toEqual(['Rider | rider e2e.pdf | 1 kB'])
@@ -219,7 +227,7 @@ test('refusals-in-dutch @e2e', async ({ page }) => {
     const id = await activity(api, made, omschrijving, REFUSAL_WEEK)
     await page.setViewportSize({ width: 1600, height: 900 })
     await openWeek(page, 'Planning', 'Activiteiten', 'plandag', REFUSAL_WEEK)
-    const files = filesOf(await openDrawer(page, omschrijving))
+    const files = filesOf(await openFiles(page, omschrijving))
     const alert = files.getByRole('alert')
     const refused = [
       {
@@ -309,7 +317,7 @@ test('bijlagen-on-tourstop-and-assignment @e2e', async ({ page }) => {
 
     // A tourstop's drawer has Bijlagen, and takes a file.
     await openWeek(page, 'Tourstops', 'Tourstops', 'start_datum', OTHERS_WEEK)
-    const stop = filesOf(await openDrawer(page, naam))
+    const stop = filesOf(await openFiles(page, naam))
     await expect(stop.getByRole('heading', { name: 'Bijlagen' })).toBeVisible()
     await expect(stop).toContainText('Nog geen bijlagen')
     const answer = await upload(stop, 'Zaalblad', 'zaalblad e2e.pdf', 'application/pdf', PDF)
@@ -326,7 +334,7 @@ test('bijlagen-on-tourstop-and-assignment @e2e', async ({ page }) => {
     await page.reload()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Toewijzingen')
     await expect(page.locator('tbody tr.nv-tr')).toHaveCount(1)
-    const assigned = filesOf(await openDrawer(page, 'Noor Claes'))
+    const assigned = filesOf(await openFiles(page, 'Noor Claes'))
     await expect(assigned.getByRole('heading', { name: 'Bijlagen' })).toBeVisible()
     await expect(assigned).toContainText('Nog geen bijlagen')
     await expect(assigned.getByRole('button', { name: /^Soort: / })).toBeVisible()
@@ -344,6 +352,7 @@ test('bijlagen-on-tourstop-and-assignment @e2e', async ({ page }) => {
     await expect(drawer).toContainText('Ankerdijk 8')
     await expect(filesOf(drawer)).toHaveCount(0)
     await expect(drawer.getByText('Bijlagen', { exact: true })).toHaveCount(0)
+    await expect(drawer.getByRole('radio', { name: 'Bijlagen' })).toHaveCount(0)
     await shot(page, 'organisation-no-bijlagen')
     const anker = await idByName(api, 'organisatie', 'naam', 'Theater Het Anker')
     expect((await api.get(`/api/attachments/organisatie/${anker}`)).status()).toBe(404)

@@ -24,7 +24,7 @@ export function Section({ ref, title, count, action, children }: { ref?: Ref<HTM
 /** Writes a field the drawer edits, on the row it showed. */
 export type WriteField = (row: Row, column: Column, value: unknown) => void
 
-/** A long text as the prototype's Notities: a paragraph; pressed, its field in its place, as the matrix cell edits its note. Read only and empty, no block. */
+/** A long text as the prototype's notes: a paragraph; pressed, its field in its place, as the matrix cell edits its note. Read only and empty, no block. */
 export function LongSection({ column, row, onWrite }: { column: Column; row: Row; onWrite?: WriteField }) {
   const text = column.edit(row)
   if (!onWrite && !text) return null
@@ -65,13 +65,15 @@ function usePlaces(link: Link, id: number, items: LinkItem[], reads: boolean): M
 }
 
 /** A links field as the prototype's Bezetting: who, in what role, in what state; the open places last; have/need in the head. */
-export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLink }: {
+export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLink, onDone }: {
   ref?: Ref<Chooser>
   label: string; link: Link; items: LinkItem[]; schema: Schema | null; id: number
   /** The flags on one link row: a flagged person shows the flag in place of their role and state. */
   flagsOf?: (id: number) => Flag[]
   /** Writes who holds a place; without it, or where the target column offers no candidates, no place is chosen again. */
   onLink?: WriteLink
+  /** Re-reads the record after a link item's button: without it no item shows buttons. */
+  onDone?: () => Promise<Row | null>
 }) {
   const [choosing, setChoosing] = useState<number | null>(null)
   useImperativeHandle(ref, () => ({ choose: setChoosing }), [])
@@ -93,12 +95,12 @@ export function LinkSection({ ref, label, link, items, schema, id, flagsOf, onLi
   const { have, need } = crewOf(items, link)
   const ordered = [...items.filter((item) => !isOpen(item)), ...items.filter(isOpen)]
   return (
-    <Section title={label} count={`${have}/${need}`}>
+    <Section title={label} count={link?.meter === false ? undefined : `${have}/${need}`}>
       {items.length === 0 ? <p className="nv-dw-none">{t('noneOf', { label: label.toLocaleLowerCase(locale()) })}</p> : (
         <ul className="nv-dw-list">
           {ordered.map((item) => (
             <PlaceRow key={item.id} item={item} link={link} role={role ? places.get(item.id)?.lookups?.[role]?.title : undefined}
-              flags={flagsOf?.(item.id) ?? []} choosing={choosingOf(item)} />
+              flags={flagsOf?.(item.id) ?? []} choosing={choosingOf(item)} onDone={onDone} />
           ))}
         </ul>
       )}
@@ -145,15 +147,17 @@ const when = (at: string) =>
   new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at)).replace(/\./g, '')
 
 /** This record's changes, newest first, as the prototype's Geschiedenis: who, what became what, when. */
-export function HistorySection({ model, id }: { model: Model; id: number }) {
+/** Read again whenever the record's own content changes: a press, an undo, a live poll. */
+export function HistorySection({ model, id, row }: { model: Model; id: number; row: Row }) {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
+  const content = JSON.stringify(row.fields)
   useEffect(() => {
     let live = true
     recordHistory(model.key, id).then((e) => live && setEntries(e), () => live && setEntries([]))
     return () => {
       live = false
     }
-  }, [model.key, id])
+  }, [model.key, id, content])
   if (!entries) return null
   return (
     <Section title={t('history')} count={String(entries.length)}>

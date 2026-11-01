@@ -32,6 +32,27 @@ afterEach(() => {
   vi.resetAllMocks()
 })
 
+describe('an unlocked seeded view', () => {
+  const seeded: SavedView = { ...mine, key: '5', id: 5, label: 'Open', mine: false, owner: { id: -1, name: '' }, editable: true, shared: true }
+
+  it("saves for everyone when an administrator changes it: it is a team view, not one's own", async () => {
+    const { result } = hook()
+    changeLocally('5', 'kind')
+    act(() => result.current.changedLayout(seeded))
+    await act(async () => vi.advanceTimersByTime(AUTOSAVE_DELAY))
+    expect(api.updateView).toHaveBeenCalledTimes(1)
+    expect(api.updateView).toHaveBeenCalledWith(seeded, { arrangement: expect.objectContaining({ group: 'kind' }) })
+  })
+
+  it("keeps an editor's change local, with the changed mark", async () => {
+    const { result } = hook()
+    changeLocally('5', 'kind')
+    act(() => result.current.changedLayout({ ...seeded, editable: false } as SavedView))
+    await act(async () => vi.advanceTimersByTime(AUTOSAVE_DELAY * 2))
+    expect(api.updateView).not.toHaveBeenCalled()
+  })
+})
+
 describe('a view saves itself', () => {
   it("sends one's own view once, after the delay, whatever the number of changes in it", async () => {
     const { result } = hook()

@@ -27,6 +27,8 @@ export interface Column {
   options_from?: OptionsFrom
   /** A count shown as a tinted badge. */
   badge?: Tone
+  /** `none`: the column totals nothing. */
+  footer?: 'sum' | 'none'
   /** A `links` column's link: added and removed by its own editor, never written as a value. */
   link?: Link
   value: (row: Row) => unknown
@@ -48,8 +50,11 @@ export interface Column {
 
 const WIDTH: Record<CellKind, number> = {
   title: 280, text: 160, longtext: 220, select: 130, date: 124, datetime: 140, time: 76, relation: 150,
-  bool: 80, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
+  bool: 108, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
 }
+
+/** A header's room: about 7px a character at the header's size, plus its type icon, sort mark and padding. */
+const headerWidth = (label: string) => 7 * label.length + 44
 
 /** "wo 14/10 00:30–02:00" scrolls 184px in a 12px-padded cell; 184 + 24 leaves it whole, and 8 more spare a wider font's glyphs. */
 const RANGE_WIDTH = 216
@@ -135,7 +140,7 @@ function base(id: string, kind: CellKind, label: string, value: (row: Row) => un
   return {
     id, field: null, label, kind, editable: false, required: false,
     align: kind === 'number' || kind === 'rollup' ? 'end' : 'start',
-    width: WIDTH[kind], value,
+    width: Math.max(WIDTH[kind], headerWidth(label)), value,
     text: (row) => scalar(value(row)),
     edit: (row) => scalar(value(row)),
     parse: (draft) => draft,
@@ -182,6 +187,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   column.relation = field.relation
   column.options_from = field.options_from
   column.badge = field.badge
+  column.footer = field.footer
 
   if (kind === 'select') {
     column.text = (row) => field.options?.[scalar(row.fields[key])] ?? scalar(row.fields[key])
@@ -198,7 +204,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   }
   if (kind === 'time') column.parse = column.fromText = parseTime
   if (kind === 'bool') {
-    column.text = (row) => (row.fields[key] ? t('yes') : t('no'))
+    column.text = (row) => (row.fields[key] === null || row.fields[key] === undefined ? '' : row.fields[key] ? t('yes') : t('no'))
     column.fromText = (text) => ['1', 'true', t('yes').toLowerCase()].includes(text.trim().toLowerCase())
   }
   if (kind === 'number') column.parse = column.fromText = (draft) => (draft.trim() === '' ? '' : Number(draft.replace(',', '.')))
@@ -210,7 +216,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   const { via } = field
   if (via) {
     column.via = (row) => (row.inherited?.includes(key) ? via : '')
-    column.width = INHERITED_WIDTH
+    column.width = Math.max(column.width, INHERITED_WIDTH)
   }
   if (kind === 'links') {
     column.editable = writable
@@ -260,11 +266,14 @@ function rollupColumns(view: View): Column[] {
   )
 }
 
+/** A lifecycle column whose transitions declare buttons changes through them only. */
+export const pressedOnly = (model: Model, key: string): boolean => model.lifecycle_buttons === true && model.lifecycle === key
+
 export function columnsFor(model: Model, view: View, writable = true, models: Record<string, Model> = {}): Column[] {
   const shown = (view.columns ?? Object.keys(model.fields)).filter((key) => key !== 'title' && key in model.fields)
   return [
     titleColumn(model, writable),
-    ...shown.map((key) => fieldColumn(key, model.fields[key], writable)),
+    ...shown.map((key) => fieldColumn(key, model.fields[key], writable && !pressedOnly(model, key))),
     ...lookupColumns(model, view, shown, models),
     ...rollupColumns(view),
   ]

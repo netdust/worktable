@@ -42,6 +42,13 @@ export function forbid(message: string): never {
   throw new ApiError(403, 'forbidden', message)
 }
 
+/** A person is any actor that is not a service account: a user, a link, and a kind-less actor. */
+export const isPerson = (actor: Actor): boolean => actor.kind !== 'service'
+
+export function serviceOnly(message: string): never {
+  throw new ApiError(403, 'service_only', message)
+}
+
 /** A person link writes only declared columns; checked on the raw body, before anything drops a key (attack 8). */
 export function linkWritable(dataset: DatasetDecl, body: Record<string, unknown>): void {
   const refused = Object.keys(body).find(

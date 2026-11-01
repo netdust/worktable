@@ -2,13 +2,15 @@ import type { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
-import { linkWritable, readable, scopeOf, visibleSource } from './access'
+import { isPerson, linkWritable, readable, scopeOf, visibleSource } from './access'
 import { actionTokenRoutes } from './action-token'
 import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
+import { markOf } from './available'
 import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, FlagsDecl, LinkDecl, OptionsFrom } from './declare'
 import { displayRoutes, displaysOf } from './display'
+import { handoffRoutes, startSweep } from './handoff'
 import { readHistory } from './history'
 import { lookupColumn, lookupsFor, targetOf } from './lookups'
 import { type Mailer, outboxMailer, silentMailer } from './mailer'
@@ -18,7 +20,7 @@ import { ApiError, parseRowsParams } from './params'
 import { noStoreHeaders } from './public-headers'
 import { recordLinkRequest, recordLinkRoutes } from './record-link'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { cellsOf, linksOf, matrixOf, readRows } from './rows'
+import { cellsOf, linksOf, matrixOf, readRows, servedColumn as servedLinkColumn } from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import {
@@ -41,11 +43,15 @@ function isWritable(domain: Domain, source: Source): boolean {
 function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
   const { domain } = store
 
-  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, created, notices }: Written) => ({
-    ...rowOf(store, dataset, id, scopeOf(actor, dataset)),
-    revision: { batch_id, changed, ...(created && { created }) },
-    notices,
-  })
+  const reply = (dataset: DatasetDecl, actor: Actor, { id, batch_id, changed, created, notices }: Written) => {
+    const row = rowOf(store, dataset, id, scopeOf(actor, dataset))
+    return {
+      ...row,
+      ...markOf(domain, dataset, row, actor),
+      revision: { batch_id, changed, ...(created && { created }) },
+      notices,
+    }
+  }
 
   app.post('/rows/:dataset', async (c) => {
     const target = writableOf(domain, c.req.param('dataset'), 'create', c.get('actor'))
@@ -132,17 +138,32 @@ const servedActions = (domain: Domain, dataset: string, actor: Actor) =>
     ),
   }))
 
+// What a person cannot write is read-only to them; the engine's refusal is the enforcement.
+const readonlyTo = (column: ColumnDecl, actor: Actor): ColumnDecl =>
+  column.written_by && isPerson(actor) ? { ...column, readonly: true } : column
+
 const servedColumns = (domain: Domain, source: Source, actor: Actor): Record<string, ColumnDecl> =>
-  Object.fromEntries(Object.entries(source.columns).map(([name, c]) => [name, servedColumn(domain, c, actor)]))
+  Object.fromEntries(
+    Object.entries(source.columns).map(([name, c]) => [name, readonlyTo(servedColumn(domain, c, actor), actor)]),
+  )
 
 function createsOf(domain: Domain, source: Source, actor: Actor): { creates?: string } {
   const target = source.kind === 'query' && source.creates ? sourceOf(domain, source.creates) : null
   return target && readable(actor, target) ? { creates: target.name } : {}
 }
 
-function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string } {
+function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string; selectable?: true } {
   const target = source.kind === 'query' && source.of ? sourceOf(domain, source.of) : null
-  return target && readable(actor, target) ? { of: target.name } : {}
+  if (!target || !readable(actor, target)) return {}
+  return { of: target.name, ...(source.kind === 'query' && source.selectable ? { selectable: true as const } : {}) }
+}
+
+const hasButtons = (dataset: DatasetDecl): boolean =>
+  dataset.lifecycle?.transitions.some((t) => t.button !== undefined) ?? false
+
+function servedLifecycle(dataset: DatasetDecl) {
+  const { column, live } = dataset.lifecycle as NonNullable<DatasetDecl['lifecycle']>
+  return { lifecycle: { column, ...(live ? { live } : {}), ...(hasButtons(dataset) ? { buttons: true } : {}) } }
 }
 
 // A flag names a dataset only to a caller who can read it, as `of` and `creates` do (threat 5).
@@ -155,7 +176,11 @@ function flagsOf(domain: Domain, source: Source, actor: Actor): { flags?: FlagsD
   return marks.length > 0 ? { flags: { marks: Object.fromEntries(marks), tone: source.flags.tone } } : {}
 }
 
-function servedLink({ label, item, dataset, key, target, state }: LinkDecl, linked: DatasetDecl) {
+function servedLink(
+  { label, item, dataset, key, target, state, detail, meter }: LinkDecl,
+  linked: DatasetDecl,
+  actor: Actor,
+) {
   const column = state === undefined ? undefined : linked.columns[state]
   const options = column && { options: column.options, tones: column.tones ?? {}, default: column.default ?? null }
   return {
@@ -165,7 +190,9 @@ function servedLink({ label, item, dataset, key, target, state }: LinkDecl, link
     key,
     target,
     target_dataset: linked.columns[target]?.relation,
+    ...(servedLinkColumn(detail, linked, scopeOf(actor, linked)) ? { detail } : {}),
     ...(options ? { state: options } : {}),
+    ...(meter === false ? { meter } : {}),
   }
 }
 
@@ -173,7 +200,7 @@ function servedLink({ label, item, dataset, key, target, state }: LinkDecl, link
 function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Record<string, unknown> } {
   const served = Object.entries(source.links ?? {}).flatMap(([name, link]) => {
     const linked = domain.datasets.find((d) => d.name === link.dataset)
-    return linked && readable(actor, linked) ? [[name, servedLink(link, linked)] as const] : []
+    return linked && readable(actor, linked) ? [[name, servedLink(link, linked, actor)] as const] : []
   })
   return served.length ? { links: Object.fromEntries(served) } : {}
 }
@@ -209,6 +236,8 @@ export interface EngineOptions {
   filesDir?: string
   /** The cap on the attachment files' total size, soft-deleted files counted; 5 GiB by default. */
   filesMaxBytes?: number
+  /** Names of the service accounts that may PUT a handoff; none by default, so every PUT is refused. */
+  handoffServices?: string[]
 }
 
 const MIN_LINK_SECRET = 32
@@ -233,6 +262,8 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     throw new Error(`filesMaxBytes must be a positive safe integer, not ${filesMaxBytes}`)
   }
   sqlite.run('PRAGMA foreign_keys = ON')
+  sqlite.run('PRAGMA secure_delete = ON')
+  startSweep(sqlite)
   const db = drizzle(sqlite)
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
   const root = new Hono<AuthEnv>()
@@ -266,6 +297,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
   authRoutes(app, sqlite, { appUrl, mailer, cookieName, clientIp: ipOf, domain, linkSecret })
   if (linkSecret) recordLinkRoutes(app, store, linkSecret)
   attachmentRoutes(app, store)
+  handoffRoutes(app, store, new Set(options.handoffServices))
 
   app.get('/schema', (c) => {
     const format = c.req.query('format')
@@ -298,8 +330,10 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
               ? { gallery: s.gallery }
               : {}),
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
-            ...(s.kind === 'dataset' && s.lifecycle ? { lifecycle: { column: s.lifecycle.column } } : {}),
+            ...(s.kind === 'dataset' && s.lifecycle ? servedLifecycle(s) : {}),
+            ...(s.kind === 'dataset' && s.created_by ? { created_by: s.created_by } : {}),
             ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),
+            ...(s.kind === 'dataset' && s.listed === false ? { listed: false } : {}),
             ...(s.kind === 'dataset' ? { position: true } : {}),
             ...(joinOf(s) ? { matrix_join: joinOf(s) } : {}),
             columns: servedColumns(domain, s, actor),
@@ -338,6 +372,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     const cells = found ? cellsOf(db, domain, found, ids, scopeOf(actor, found.join)) : null
     const rows = read.rows.map((r) => ({
       ...r,
+      ...markOf(domain, source, r, actor),
       ...(links ? { links: links.get(r.id) } : {}),
       ...(cells ? { cells: cells.get(r.id) } : {}),
     }))

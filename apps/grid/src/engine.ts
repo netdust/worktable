@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { Available, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -20,6 +20,8 @@ export interface EngineColumn {
   hidden?: true
   options_from?: OptionsFrom
   badge?: Tone
+  footer?: 'sum' | 'none'
+  href?: true
   /** A text edited as long text, its own block in the drawer. */
   long?: true
 }
@@ -54,11 +56,16 @@ export interface EngineSource {
   matrix_join?: string
   date: string | null
   calendar?: { day: string; start?: string; end?: string; lanes: string[]; spans?: true }
-  board?: { column: string }
+  board?: { column: string; drag?: false }
   gallery?: { kind: string }
+  created_by?: 'service'
+  /** A query's rows are the `of` dataset's records, to tick and act on. */
+  selectable?: true
   /** A dataset with a writer, or a query with a mapped column. */
   writable?: boolean
   deletable?: boolean
+  /** Served `false` on a dataset the tree leaves out. */
+  listed?: false
   actions?: ModelAction[]
   /** Served only beside the schema's `space`. */
   space?: 'scoped' | 'global'
@@ -80,7 +87,7 @@ export interface EngineSource {
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
-  lifecycle?: { column: string }
+  lifecycle?: { column: string; live?: string[]; buttons?: true }
   /** Each record has a link its person reads their views through. */
   record_link?: true
   attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
@@ -109,6 +116,7 @@ export interface EngineView extends EngineArrangement {
   editable: boolean
   public?: boolean
   for_owners?: boolean
+  gone_views?: number[]
 }
 
 export interface EngineSchema {
@@ -130,6 +138,7 @@ export interface EngineRow {
   /** Per link name, the linked rows the caller may read. */
   links?: Record<string, LinkItem[]>
   inherited?: string[]
+  available?: Available
   [column: string]: unknown
 }
 
@@ -170,6 +179,8 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     ...(declared.owner_visible ? { owner_visible: true as const } : {}),
     ...(declared.options_from ? { options_from: declared.options_from } : {}),
     ...(declared.badge ? { badge: declared.badge } : {}),
+    ...(declared.footer ? { footer: declared.footer } : {}),
+    ...(declared.href ? { href: true as const } : {}),
   }
 }
 
@@ -201,16 +212,21 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     label: source.label,
     title_label: titleLabel(source),
     ...(titleColumn(source) ? { title_field: titleColumn(source) as string } : {}),
+    columns: Object.keys(source.columns),
     title_readonly: !source.writable || Boolean(source.title_via) || isReadonly(source.columns[source.title], source),
     ...(source.columns[source.title]?.nullable ? { title_required: false } : {}),
     ...(source.title_via ? { title_derived: true } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.deletable ? { deletable: true } : {}),
     ...(source.creates ? { creates: source.creates } : {}),
+    ...(source.created_by ? { created_by: source.created_by } : {}),
+    ...(source.selectable && source.of ? { selectable: source.of } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
+    ...(source.lifecycle?.live ? { live: source.lifecycle.live } : {}),
+    ...(source.lifecycle?.buttons ? { lifecycle_buttons: true as const } : {}),
     ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
@@ -251,14 +267,32 @@ function awayOf(away: NonNullable<EngineMatrix['away']>, sources: Sources): Matr
   return { table: away.dataset, model: away.dataset, column_field: away.across, label_field: away.label, date_field, end_field: away.end, ...(away.where ? { where: away.where } : {}) }
 }
 
-/** The skins a source declares a need for; every source has the grid, and a calendar source a timeline too. */
+/** The skins a source's columns allow: every source has the grid, a date a calendar and a timeline, an options column a board. */
 function typesOf(source: EngineSource): ViewType[] {
   return [
     'grid',
-    ...(source.calendar ? (['calendar', 'timeline'] as const) : []),
-    ...(source.board ? (['board'] as const) : []),
+    ...(calendarNeed(source) ? (['calendar', 'timeline'] as const) : []),
+    ...(boardNeed(source) ? (['board'] as const) : []),
     ...(source.gallery ? (['gallery'] as const) : []),
   ]
+}
+
+const shown = (source: EngineSource) => Object.entries(source.columns).filter(([, column]) => !column.hidden)
+
+/** The declared calendar, else one on the declared date or the first date column: rows on a day, no lanes declared. */
+function calendarNeed(source: EngineSource): CalendarDef | undefined {
+  if (source.calendar) return calendarOf(source.calendar)
+  const dates = shown(source).filter(([, column]) => column.type === 'date' || column.type === 'datetime').map(([key]) => key)
+  const day = source.date && dates.includes(source.date) ? source.date : dates[0]
+  return day === undefined ? undefined : { day, start: null, end: null, lanes: [] }
+}
+
+/** The declared board, else one on the first options column; a lifecycle column's moves are transitions, so no drag there. */
+function boardNeed(source: EngineSource): EngineSource['board'] {
+  if (source.board) return source.board
+  const column = shown(source).find(([, c]) => c.options !== undefined)?.[0]
+  if (column === undefined) return undefined
+  return source.lifecycle?.column === column ? { column, drag: false } : { column }
 }
 
 function calendarOf({ day, start, end, lanes, spans }: NonNullable<EngineSource['calendar']>): CalendarDef {
@@ -272,12 +306,13 @@ function tableDefOf(name: string, source: EngineSource, sources: Sources): Table
     ...(source.space ? { space: source.space } : {}),
     ...(source.kind === 'query' ? { query: true } : {}),
     ...(source.of ? { of: source.of } : {}),
+    ...(source.listed === false ? { listed: false as const } : {}),
     ...(source.flags ? { flags: source.flags } : {}),
     ...(source.icon ? { icon: source.icon } : {}),
     ...(source.group_facts ? { facts: source.group_facts } : {}),
     types: typesOf(source),
-    ...(source.calendar ? { calendar: calendarOf(source.calendar) } : {}),
-    ...(source.board ? { board: source.board } : {}),
+    ...(calendarNeed(source) ? { calendar: calendarNeed(source) } : {}),
+    ...(boardNeed(source) ? { board: boardNeed(source) } : {}),
     ...(source.gallery ? { gallery: source.gallery } : {}),
   }
   const joined = source.matrix_join ? sources[source.matrix_join] : undefined
@@ -430,6 +465,7 @@ function dashboardOf(view: EngineView): SavedView {
     key: String(view.id), label: view.name, model: '', table: DASHBOARD, type: 'dashboard', types: ['dashboard'],
     layout: view.layout ?? { sections: [], actions: [] }, starting: false, id: view.id, arrangement: NO_ARRANGEMENT, fixed: {},
     shared: view.shared, owner: { id: view.owner_id, name: '' }, mine: view.mine, editable: view.editable,
+    ...(view.gone_views ? { gone_views: view.gone_views } : {}),
   }
 }
 
@@ -439,7 +475,7 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
 
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, available, ...fields } = r
   return {
     id,
     title: title ?? '',
@@ -447,6 +483,7 @@ export function toRow(r: EngineRow): Row {
     fields: { ...fields, ...links },
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
     ...(inherited ? { inherited } : {}),
+    ...(available ? { available } : {}),
     ...(cells ? { rollups: { cells: cells.map(toRow) } } : {}),
   }
 }

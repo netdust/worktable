@@ -63,7 +63,7 @@ function FieldInput({ name, field, value, onChange, autoFocus }: {
  * What the dialog asks, each once: the title where it is required, every required column the writer takes,
  * and the chosen space. A value `+ New` fills in (a day, a first option, the space) shows as the field's start.
  */
-function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
+export function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
   if ('missing' in made) return []
   const required = Object.entries(model.fields)
     .filter(([key, field]) => field.required && !field.defaulted && !field.readonly && key !== model.title_field)
@@ -73,13 +73,17 @@ function askedOf(model: Model, made: NewRow, scope: Scope | null): string[] {
 }
 
 /** A create on one dataset from the dashboard's header: the columns it needs, the space filled in, the writer judging it. */
-export function QuickCreate({ label, model, tables, scope, window = null, preset = {}, onClose, onCreated }: {
+export function QuickCreate({ label, model, tables, scope, window = null, preset = {}, onClose, onCreated, onCreatedRow }: {
   label: string; model: Model; tables: TableDef[]; scope: Scope | null
   /** The days on screen: a date starts on today when it is among them, else on their first. */
   window?: DateWindow | null
   /** Values the place it opens from sets (a board column's option): not asked, always sent. */
   preset?: Record<string, unknown>
-  onClose: () => void; onCreated: () => void
+  onClose: () => void
+  /** Told the create's batch, for a place that keeps its own undo. */
+  onCreated: (batch: string | null) => void
+  /** Told the record it made, for the places that follow what an outside process holds. */
+  onCreatedRow?: (dataset: string, row: Row) => void
 }) {
   const made = madeFrom(model, tables, window, scope)
   const titleField: Field = { type: 'text', label: model.title_label, required: true, fact: false }
@@ -93,13 +97,14 @@ export function QuickCreate({ label, model, tables, scope, window = null, preset
     setBusy(true)
     setRefusal(null)
     create(model.key, { ...values, ...preset }).then(
-      () => {
-        onCreated()
+      ({ batch, row }) => {
+        onCreatedRow?.(model.key, row)
+        onCreated(batch)
         onClose()
       },
       (error: ApiError) => {
         setBusy(false)
-        setRefusal(errorText(error.code, error.message))
+        setRefusal(errorText(error.code, error.message, true))
       },
     )
   }

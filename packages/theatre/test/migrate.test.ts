@@ -76,7 +76,7 @@ test('a step-1 theatre database migrates to step 2 keeping every row, revision a
     toewijzing: ['rol_id', 'aantal'],
     beschikbaarheid: ['soort'],
     productie: ['kleur'],
-    saved_view: ['for_owners', 'layout'],
+    saved_view: ['for_owners', 'layout', 'seed_key'],
     account: ['kind', 'name', 'token_hash'],
   }
   // Every domain dataset gains the engine's rank, unranked.

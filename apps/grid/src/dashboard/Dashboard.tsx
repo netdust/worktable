@@ -1,7 +1,10 @@
 import { Plus } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { columnsFor } from '../grid/columns'
 import { Drawer } from '../grid/Drawer'
+import { useReread } from '../grid/drawerWrite'
+import { rowOf } from '../api'
+import { useRuns } from '../ui/runs'
 import { locale, t } from '../i18n'
 import type { Account, Model, Row, SavedView, Scope, TableDef, Tile } from '../types'
 import { ChipBar } from '../ui/ChipBar'
@@ -45,41 +48,78 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
     return () => window.removeEventListener('focus', refresh)
   }, [])
   const [opened, setOpened] = useState<{ row: Row; view: SavedView; flags?: Flags | null } | null>(null)
+  const reread = useReread()
   const [creating, setCreating] = useState<{ create: string; label: string } | null>(null)
   const drawerColumns = useMemo(() => {
     const model = opened ? models[opened.view.model] : undefined
     return model && opened ? columnsFor(model, { ...opened.view, columns: undefined, lookups: undefined, rollups: undefined }, false, models) : []
   }, [opened, models])
+  const openedNow = useRef(opened)
+  openedNow.current = opened
+  // A re-read lands only on the drawer it was made for. The tiles are read again only when the record's state moved: a press, an Undo, an outside change.
+  const follow = (model: string) => (row: Row) => {
+    const was = openedNow.current
+    if (!was || was.view.model !== model || was.row.id !== row.id) return
+    const column = models[model]?.lifecycle
+    setOpened((now) => (now && now.view.model === model && now.row.id === row.id ? { ...now, row } : now))
+    if (column !== undefined && row.fields[column] !== was.row.fields[column]) refresh()
+  }
+  // The record is gone (deleted, or out of scope): its drawer closes, if it is still the one on screen.
+  const leave = (model: string, id: number) => setOpened((now) => (now && now.view.model === model && now.row.id === id ? null : now))
+  const runs = useRuns()
+  // A record shown in a drawer needs no dock line pointing at it.
+  useEffect(() => runs.viewing(opened?.view.model ?? null, opened?.row.id), [opened?.view.model, opened?.row.id])
+  useEffect(() => () => runs.viewing(null), [])
+  // A followed run ended: the tiles read again, and so does the record open in the drawer.
+  useEffect(() => {
+    if (runs.ended === 0) return
+    refresh()
+    const was = openedNow.current
+    if (was) void reread(was.view.model, was.row.id, follow(was.view.model), () => leave(was.view.model, was.row.id))?.().catch(() => undefined)
+  }, [runs.ended])
+  // The dock's link asked for a record: a drawer from the first view the reader has of its table.
+  useEffect(() => {
+    const asked = runs.opening
+    if (!asked) return
+    let current = true
+    const view = views.find((v) => v.model === asked.dataset)
+    const shown = view ? rowOf(asked.dataset, asked.id).then((row) => row && setOpened({ row, view }), () => undefined) : Promise.resolve()
+    void shown.then(() => current && runs.settled())
+    return () => {
+      current = false
+    }
+  }, [runs.opening])
   const viewOf = (id: number) => views.find((v) => v.id === id)
   const tileOf = (tile: Tile, at: number) => {
     const missing = viewsOf(tile).some((id) => !viewOf(id))
-    if (missing) return <section key={at} className="nv-tile nv-tile--none">{t('noAccess')}</section>
+    const deleted = viewsOf(tile).some((id) => dashboard.gone_views?.includes(id))
+    if (missing) return <section key={at} className="nv-tile nv-tile--none">{t(deleted ? 'viewDeleted' : 'noAccess')}</section>
     if (tile.kind === 'stat') {
       const view = viewOf(tile.view) as SavedView
-      return <StatTile key={at} tile={tile} view={view} model={models[view.model]} scope={scope} version={version} onOpen={() => onOpenView(view.key)} />
+      return <StatTile key={at} tile={tile} view={view} model={models[view.model]} models={models} scope={scope} version={version} onOpen={() => onOpenView(view.key)} />
     }
     if (tile.kind === 'list') {
       const view = viewOf(tile.view) as SavedView
       return (
         <ListTile key={at} tile={tile} view={view} model={models[view.model]} models={models} scope={scope} version={version}
-          onOpen={() => onOpenView(view.key)} onChanged={refresh} />
+          onOpen={() => onOpenView(view.key)} onChanged={refresh} onOpenRow={(row) => setOpened({ row, view })} />
       )
     }
     if (tile.kind === 'week') {
       const view = viewOf(tile.view) as SavedView
       return (
-        <WeekTile key={at} view={view} model={models[view.model]} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
+        <WeekTile key={at} view={view} model={models[view.model]} models={models} scope={scope} version={version} onOpen={() => onOpenView(view.key)}
           onOpenRow={(row, flags) => setOpened({ row, view, flags })} />
       )
     }
     const done = viewOf(tile.done) as SavedView
     return (
-      <ProgressTile key={at} label={tile.label} done={done} total={viewOf(tile.total) as SavedView} scope={scope} version={version}
+      <ProgressTile key={at} label={tile.label} done={done} total={viewOf(tile.total) as SavedView} models={models} scope={scope} version={version}
         onOpen={() => onOpenView(done.key)} />
     )
   }
   const sections = dashboard.layout?.sections ?? []
-  const actions = (dashboard.layout?.actions ?? []).filter((action) => models[action.create])
+  const actions = (dashboard.layout?.actions ?? []).filter((action) => models[action.create] && !models[action.create].created_by)
   return (
     <div className="nv-frame">
       <ChipBar actions={actions.map((action) => (
@@ -102,11 +142,12 @@ export function Dashboard({ dashboard, views, models, tables, scope, role, onOpe
           ))}
         </div>
         )}
-        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags} />}
+        {opened && <Drawer row={opened.row} columns={drawerColumns} focusOnOpen={false} onClose={() => setOpened(null)} model={models[opened.view.model]} flags={opened.flags}
+          onDone={reread(opened.view.model, opened.row.id, follow(opened.view.model), () => leave(opened.view.model, opened.row.id))} />}
       </div>
       {creating && models[creating.create] && (
         <QuickCreate label={creating.label} model={models[creating.create]} tables={tables} scope={scope}
-          onClose={() => setCreating(null)} onCreated={refresh} />
+          onClose={() => setCreating(null)} onCreated={refresh} onCreatedRow={runs.created} />
       )}
     </div>
   )

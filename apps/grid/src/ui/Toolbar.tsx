@@ -25,6 +25,8 @@ export interface Shown {
   menu?: Column[]
   /** Said in place of the counts: a calendar's period. */
   label?: string
+  /** What waits in the shown rows, as the title line's pills: a table reports it from the rows its search leaves. */
+  insight?: Insight[]
   /** How many of the shown rows a flag query flags, its name, and its key to open it by. */
   flagged?: { count: number; label: string; source: string }
   /** A timeline's pairs of bars of one lane that overlap in time. */
@@ -42,8 +44,8 @@ interface Props {
   shown?: Shown | null
   /** The period's name ("Week 42 · 12–18 okt"), which the pill shows in place of the count on every skin. */
   period?: string | null
-  /** What still waits in the rows: the warn option as its badge, and how many. */
-  insight?: Insight | null
+  /** What still waits in the rows: a badge per tone, worst first, and how many. */
+  insight?: Insight[]
   search: ReactNode
   /** A store's state, for the save word; absent while there is no store. */
   saving?: Saving
@@ -99,7 +101,7 @@ export function Toolbar({ title, kind = 'grid', locked, shown, period, insight, 
         <h1 className="nv-toolbar__title">{title}</h1>
         {locked && <span className="nv-toolbar__lock" role="img" aria-label={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')} title={t(locked === 'colleague' ? 'colleagueTitle' : 'readOnlyTitle')}>{locked === 'colleague' ? <Users size={13} aria-hidden="true" /> : <Lock size={13} aria-hidden="true" />}</span>}
         {(period || shown) && <span className="nv-toolbar__summary">{period ?? shown?.label ?? (shown && summary(shown.rows, shown.groups, shown.cut, shown.columns, shown.pictures))}</span>}
-        {insight && <span className="nv-toolbar__insight"><span className="nv-pill nv-pill--warn">{insight.label}</span><b>{insight.count}</b></span>}
+        {insight?.map((one) => <span key={one.tone} className="nv-toolbar__insight"><span className={`nv-pill nv-pill--${one.tone}`}>{one.label}</span><b>{one.count}</b></span>)}
         {flagged && flagged.count > 0 && (
           <button type="button" className="nv-toolbar__flagged" onClick={() => onFlagged?.(flagged.source)}><b>{flagged.count}</b> {flagged.label}</button>
         )}

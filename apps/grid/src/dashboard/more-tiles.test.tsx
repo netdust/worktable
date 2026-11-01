@@ -2,10 +2,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, SavedView, TableDef } from '../types'
 import { iso, weekOf } from '../ui/Window'
+import { actionsOffered, pressAction } from '../test-setup'
 
-const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), create: vi.fn(), records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
+const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  rows: vi.fn(), update: vi.fn(), create: vi.fn(), records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn(), rowOf: vi.fn() }))
 vi.mock('../api', () => api)
 const { Dashboard } = await import('./Dashboard')
+const { TILE_FIT } = await import('./WeekTile')
+const { DrawerWriteContext } = await import('../grid/drawerWrite')
 
 const base = (id: number, label: string, model: string, extra: Partial<SavedView> = {}): SavedView =>
   ({
@@ -64,6 +67,120 @@ describe('the week strip', () => {
     expect(api.rows.mock.calls[0][1]).toEqual(weekOf(new Date()))
     fireEvent.click(within(strip).getByRole('button', { name: /De Kersentuin/ }))
     expect(screen.getByRole('complementary', { name: 'De Kersentuin' })).toBeTruthy()
+  })
+
+  it('a full day shows a few rows and the rest behind "+N meer", which lists the whole day and opens a row', async () => {
+    const today = iso(new Date())
+    const busy: Row[] = Array.from({ length: 12 }, (_, at) => ({ id: 20 + at, title: `afspraak ${at + 1}`, status: '', fields: { plandag: today, productie_id: 1 } }))
+    api.rows.mockResolvedValue({ rows: busy, total: 12 })
+    show([{ kind: 'week', view: 3 }])
+    const strip = screen.getByRole('region', { name: 'Bedrijfsweek' })
+    const day = within(strip).getByRole('group', { current: 'date' })
+    await within(day).findByRole('button', { name: /^afspraak 1$/ })
+    expect(within(day).getAllByRole('button', { name: /^afspraak/ })).toHaveLength(TILE_FIT - 1)
+    fireEvent.click(within(day).getByRole('button', { name: `+${12 - (TILE_FIT - 1)} meer` }))
+    const all = screen.getByRole('dialog')
+    expect(within(all).getAllByRole('button', { name: /^afspraak/ })).toHaveLength(12)
+    fireEvent.click(within(all).getByRole('button', { name: 'afspraak 12' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('complementary', { name: 'afspraak 12' })).toBeTruthy()
+  })
+})
+
+describe("the dashboard's drawer buttons", () => {
+  const marks = (...buttons: [string, string][]) => ({ state: 'open', buttons: buttons.map(([to, label]) => ({ to, label })), actions: [] })
+  const event = (available: ReturnType<typeof marks>, state = 'open'): Row => ({ id: 11, title: 'De Kersentuin', status: '', fields: { plandag: iso(new Date()), productie_id: 1, state }, available })
+  const stateful = { ...models.productie_dag, lifecycle: 'state', fields: { state: { type: 'select', label: 'Stand', required: false, fact: false, options: { open: 'Open', done: 'Klaar' } } } } as unknown as Model
+
+  it('shows the record’s buttons, and after a press re-reads the drawer and the tile, which Undo does the same', async () => {
+    api.rows.mockResolvedValue({ rows: [event(marks(['klaar', 'Afronden']))], total: 1 })
+    api.rowOf.mockResolvedValue(event(marks(['weg', 'Weg']), 'done'))
+    const write = { press: vi.fn(() => Promise.resolve()), fresh: vi.fn() }
+    render(<DrawerWriteContext.Provider value={write}>
+      <Dashboard dashboard={dashboard([{ kind: 'week', view: 3 }])} views={[week, filled, all]} models={{ ...models, productie_dag: stateful }} tables={tables} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />
+    </DrawerWriteContext.Provider>)
+    fireEvent.click(await screen.findByRole('button', { name: /De Kersentuin/ }))
+
+    await pressAction('Afronden')
+    expect(write.press).toHaveBeenCalledOnce()
+    const [model, id, , to, onDone] = (write.press.mock.calls[0] as unknown) as [string, number, unknown, string, () => void]
+    expect([model, id, to]).toEqual(['productie_dag', 11, 'klaar'])
+    const reads = api.rows.mock.calls.length
+    await act(async () => onDone())
+
+    await waitFor(() => expect(write.fresh).toHaveBeenCalled())
+    expect(await actionsOffered()).toEqual(['Weg'])
+    expect(api.rows.mock.calls.length).toBeGreaterThan(reads)
+    expect(write.fresh).toHaveBeenCalledWith('productie_dag', expect.objectContaining({ id: 11 }))
+  })
+})
+
+describe('a live drawer on the dashboard', () => {
+  const stand = { type: 'select', label: 'Stand', required: false, fact: false, options: { busy: 'Bezig', done: 'Klaar' } }
+  const live = { ...models.productie_dag, lifecycle: 'state', live: ['busy'], fields: { state: stand } } as unknown as Model
+  const event = (state: string): Row => ({ id: 11, title: 'De Kersentuin', status: '', fields: { plandag: iso(new Date()), productie_id: 1, state } })
+  const tiles = [{ kind: 'week', view: 3 }, { kind: 'stat', view: 4, measure: 'count' }, { kind: 'stat', view: 5, measure: 'count' }]
+  const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
+  const writes = { press: vi.fn(() => Promise.resolve()), fresh: vi.fn() }
+
+  async function openDrawer() {
+    api.rows.mockImplementation(async (v: SavedView) => (v.id === 3 ? { rows: [event('busy')], total: 1 } : { rows: [], total: 3 }))
+    writes.press.mockClear()
+    render(<DrawerWriteContext.Provider value={writes}>
+      <Dashboard dashboard={dashboard(tiles)} views={[week, filled, all]} models={{ ...models, productie_dag: live }} tables={tables} scope={null} onOpenView={() => undefined} role="administrator" onSaved={() => undefined} />
+    </DrawerWriteContext.Provider>)
+    fireEvent.click(await screen.findByRole('button', { name: /De Kersentuin/ }))
+    await screen.findByRole('complementary', { name: 'De Kersentuin' })
+    await tick(0)
+  }
+
+  beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }))
+  afterEach(() => vi.useRealTimers())
+
+  it('re-reads only its record, never the tiles, while the state stays', async () => {
+    await openDrawer()
+    api.rowOf.mockImplementation(() => Promise.resolve(event('busy')))
+    const tileReads = api.rows.mock.calls.length
+
+    await tick(9200)
+
+    expect(api.rowOf).toHaveBeenCalledTimes(3)
+    expect(api.rows.mock.calls.length).toBe(tileReads)
+  })
+
+  it('reads the tiles again once the record’s state differs from the one shown', async () => {
+    await openDrawer()
+    api.rowOf.mockImplementation(() => Promise.resolve(event('done')))
+    const tileReads = api.rows.mock.calls.length
+
+    await tick(3200)
+
+    expect(api.rows.mock.calls.length).toBeGreaterThan(tileReads)
+  })
+
+  it('closes when the poll finds the record gone', async () => {
+    await openDrawer()
+    api.rowOf.mockImplementation(() => Promise.resolve(null))
+
+    await tick(3200)
+
+    expect(screen.queryByRole('complementary')).toBeNull()
+  })
+
+  it('a reply resolving after close leaves the drawer closed', async () => {
+    await openDrawer()
+    let answer: (row: Row) => void = () => undefined
+    api.rowOf.mockImplementation(() => new Promise<Row>((resolve) => { answer = resolve }))
+    await tick(3200)
+    expect(api.rowOf).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sluiten' }))
+    await tick(0)
+    await act(async () => answer(event('busy')))
+
+    expect(screen.queryByRole('complementary')).toBeNull()
+    await tick(9000)
+    expect(api.rowOf).toHaveBeenCalledTimes(1)
   })
 })
 

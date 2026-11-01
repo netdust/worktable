@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { type ReactNode, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStrings } from '../i18n'
-import { renderNl, typeKeys } from '../test-setup'
+import { openTab, pressTool, renderNl, typeKeys } from '../test-setup'
 import type { LinkItem, Model, Row, Saved, SavedView, Schema, Scope, View } from '../types'
 import { activity, calais, planning, schema } from './calais.test.data'
 import type { LinkActions } from './cells/Links'
@@ -14,6 +14,7 @@ import { barOf } from '../ui/bar'
 import { createHistory } from '../ui/history'
 import { ChipBar } from '../ui/ChipBar'
 import type { Shown } from '../ui/Toolbar'
+import { RunsContext, type Runs } from '../ui/runs'
 
 const remote = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  schema: vi.fn(), rows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(), savedViews: vi.fn((): Promise<unknown[]> => Promise.resolve([])), updateView: vi.fn(),
   me: () => Promise.resolve({ id: 1, email: 'an@example.test', role: 'editor', subject: null }), onUnauthenticated: () => () => undefined, onNotices: () => () => undefined,
@@ -29,7 +30,7 @@ let api: {
 }
 let saved: Layout | null
 
-function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: Shown | null) => void } = {}) {
+function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: Layout; title?: string; filters?: ReactNode; model?: Model; view?: View; cut?: Row | null; scope?: Scope | null; scopeChip?: string; models?: Record<string, Model>; onNotice?: (message: string) => void; onShown?: (shown: Shown | null) => void; runs?: Runs } = {}) {
   api = {
     update: vi.fn<StoreApi['update']>(), create: vi.fn<StoreApi['create']>(), remove: vi.fn<NonNullable<StoreApi['remove']>>(),
     read: vi.fn<NonNullable<StoreApi['read']>>(), undo: vi.fn<NonNullable<StoreApi['undo']>>(),
@@ -49,7 +50,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
     }
     const model = options.model ?? activity
     const view = options.view ?? planning
-    return (
+    const sheet = (
       <>
         <ChipBar {...barOf({ view, model, layout, onLayout: change, scope: options.scopeChip ?? null, filters: options.filters, told, period: null })} />
         <Grid model={model} view={view} store={store} writable layout={layout} onLayout={change} title={options.title}
@@ -57,6 +58,7 @@ function renderGrid(rows: Row[] = calais, options: { query?: string; layout?: La
           cut={options.cut} onShown={shown} models={options.models} onNotice={options.onNotice} scope={options.scope ?? null} />
       </>
     )
+    return options.runs ? <RunsContext.Provider value={options.runs}>{sheet}</RunsContext.Provider> : sheet
   }
   return { store, ...renderNl(<Harness />) }
 }
@@ -857,11 +859,12 @@ describe('long text and bool', () => {
     expect(document.activeElement).toBe(paid)
   })
 
-  it('a click on the switch flips it once', async () => {
+  it('a click on a blank bool cell sets it to true once', async () => {
     renderGrid(calais, { view })
     api.update.mockResolvedValue({ row: calais[1], batch: 'b1' })
+    expect(within(cell('Montage', 'paid')).queryByRole('switch')).toBeNull()
     await act(async () => {
-      fireEvent.click(within(cell('Montage', 'paid')).getByRole('switch'))
+      fireEvent.click(cell('Montage', 'paid').querySelector('.nv-cell__bool') as HTMLElement)
     })
 
     expect(api.update).toHaveBeenCalledTimes(1)
@@ -991,14 +994,28 @@ describe('the group bands', () => {
 })
 
 describe('the drawer', () => {
-  it("shows one row's every field, the long ones too, and closes", () => {
+  it('tells the dock which record it shows, and lets go once that row leaves the sheet', async () => {
+    const viewing = vi.fn()
+    const runs = { follow: () => false, created: () => undefined, ended: 0, running: new Set<string>(), lines: [], dismiss: () => undefined, open: () => undefined, opening: null, settled: () => undefined, viewing, viewed: null } as Runs
+    const { store } = renderGrid(calais, { runs })
+    const row = calais.find((r) => r.title === 'Lunch bistrot')!
+    fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
+    expect(viewing).toHaveBeenLastCalledWith('activity', row.id)
+    api.remove.mockResolvedValue(undefined as never)
+    await act(() => store.remove(row.id))
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(viewing).toHaveBeenLastCalledWith(null, undefined)
+  })
+
+  it("shows one row's every field, the long ones too, and closes", async () => {
     const noted = { ...calais[2], fields: { ...calais[2].fields, notes: 'Twee veggie\nEén glutenvrij' } }
     renderGrid([noted])
 
     fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
 
     const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    expect(within(drawer).getByText('Notities')).toBeTruthy()
+    await openTab('Notities')
+    expect(within(within(drawer).getByRole('region', { name: 'Notities' })).getByText('Notities')).toBeTruthy()
     expect(within(drawer).getByText(/Twee veggie/).textContent).toBe('Twee veggie\nEén glutenvrij')
     fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
     expect(screen.queryByRole('complementary')).toBeNull()
@@ -1013,7 +1030,9 @@ describe('the drawer', () => {
   it('writes the long text edited in its block as the sheet writes a cell, and paints it at once', async () => {
     renderGrid()
     api.update.mockReturnValue(new Promise(() => undefined))
-    const notes = within(within(openDrawer('Montage')).getByRole('region', { name: 'Notities' }))
+    const drawer = openDrawer('Montage')
+    await openTab('Notities')
+    const notes = within(within(drawer).getByRole('region', { name: 'Notities' }))
 
     fireEvent.click(notes.getByRole('button'))
     const area = screen.getByRole('textbox', { name: 'Notities' })
@@ -1032,7 +1051,9 @@ describe('the drawer', () => {
     remote.attachmentsOf.mockResolvedValueOnce([rider]).mockResolvedValueOnce([rider])
     remote.removeAttachment.mockResolvedValueOnce('b-del')
     api.undo.mockResolvedValueOnce('u-del')
-    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const drawer = openDrawer('Montage')
+    await openTab('Bijlagen')
+    const files = within(within(drawer).getByRole('region', { name: 'Bijlagen' }))
 
     const remove = await files.findByRole('button', { name: 'rider.pdf verwijderen' })
     await act(async () => fireEvent.click(remove))
@@ -1059,12 +1080,16 @@ describe('the drawer', () => {
       stored = [rider]
       return Promise.resolve('u-del')
     })
-    const first = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const opened = openDrawer('Montage')
+    await openTab('Bijlagen')
+    const first = within(within(opened).getByRole('region', { name: 'Bijlagen' }))
     const remove = await first.findByRole('button', { name: 'rider.pdf verwijderen' })
     await act(async () => fireEvent.click(remove))
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Montage' })).getByRole('button', { name: 'Sluiten' }))
 
-    const files = within(within(openDrawer('Montage')).getByRole('region', { name: 'Bijlagen' }))
+    const reopened = openDrawer('Montage')
+    await openTab('Bijlagen')
+    const files = within(within(reopened).getByRole('region', { name: 'Bijlagen' }))
     await files.findByText('Nog geen bijlagen')
     fireEvent.click(cell('Montage', 'place'))
     await act(async () => type(cell('Montage', 'place'), 'z', { ctrlKey: true }))
@@ -1174,77 +1199,75 @@ describe('the drawer', () => {
     })
   })
 
-  it('offers Verwijderen only for a deletable model', () => {
+  it('offers Verwijderen, last in the Acties menu, only for a deletable model', async () => {
     renderGrid()
-    expect(within(openDrawer('Lunch bistrot')).queryByRole('button', { name: 'Verwijderen' })).toBeNull()
+    expect(within(openDrawer('Lunch bistrot')).queryByRole('button', { name: 'Acties' })).toBeNull()
     cleanup()
 
     renderGrid(calais, { model: deletable })
-    expect(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
+    fireEvent.click(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Acties' }))
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.at(-1)?.textContent).toBe('Verwijderen')
   })
 
-  it('asks Zeker? on the first press and sends nothing; the second press deletes and the row leaves', async () => {
+  it('asks Zeker? after Verwijderen and sends nothing; the second press deletes and the row leaves', async () => {
     renderGrid(calais, { model: deletable })
     api.remove.mockResolvedValueOnce({ id: 103 })
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await pressTool('Verwijderen')
     expect(api.remove).not.toHaveBeenCalled()
 
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
     expect(api.remove).toHaveBeenCalledWith('activity', 103)
     expect(screen.queryByRole('complementary')).toBeNull()
     expect(screen.getAllByRole('row').some((r) => r.dataset.title === 'Lunch bistrot')).toBe(false)
   })
 
-  it('leaving the drawer resets Zeker? to Verwijderen', () => {
+  it('Escape drops the question, and nothing is sent', async () => {
     renderGrid(calais, { model: deletable })
-    fireEvent.click(within(openDrawer('Lunch bistrot')).getByRole('button', { name: 'Verwijderen' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sluiten' }))
+    openDrawer('Lunch bistrot')
+    await pressTool('Verwijderen')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Zeker?' }), { key: 'Escape' })
 
-    const again = openDrawer('Lunch bistrot')
-    expect(within(again).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
-    expect(within(again).queryByRole('button', { name: 'Zeker?' })).toBeNull()
-
-    fireEvent.click(within(again).getByRole('button', { name: 'Verwijderen' }))
-    const other = openDrawer('Montage')
-    expect(within(other).getByRole('button', { name: 'Verwijderen' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Zeker?' })).toBeNull())
+    expect(screen.getByRole('complementary', { name: 'Lunch bistrot' })).toBeTruthy()
     expect(api.remove).not.toHaveBeenCalled()
   })
 
   it('a double click does not confirm: Zeker? is armed only by a fresh press', async () => {
     renderGrid(calais, { model: deletable })
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
+    await pressTool('Verwijderen')
 
-    const press = (name: string, detail: number) => {
-      const button = within(drawer).getByRole('button', { name })
+    const press = (detail: number) => {
+      const button = screen.getByRole('button', { name: 'Zeker?' })
       fireEvent.mouseDown(button, { detail })
       fireEvent.click(button)
     }
-    press('Verwijderen', 1)
-    press('Zeker?', 2)
+    press(2)
     expect(api.remove).not.toHaveBeenCalled()
 
     api.remove.mockResolvedValueOnce({ id: 103 })
-    await act(async () => press('Zeker?', 1))
+    await act(async () => press(1))
     expect(api.remove).toHaveBeenCalledTimes(1)
   })
 
   it('sends one DELETE however often Zeker? is pressed while it is in flight, and announces the swap', async () => {
     renderGrid(calais, { model: deletable })
     api.remove.mockReturnValueOnce(new Promise(() => undefined))
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
+    await pressTool('Verwijderen')
 
-    const button = within(drawer).getByRole('button', { name: 'Verwijderen' })
+    const button = screen.getByRole('button', { name: 'Zeker?' })
     expect(button.closest('[aria-live="polite"]')).not.toBeNull()
-    fireEvent.click(button)
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(button)
     })
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
 
     expect(api.remove).toHaveBeenCalledTimes(1)
   })
@@ -1252,11 +1275,11 @@ describe('the drawer', () => {
   it('keeps the row and its drawer when the delete is refused', async () => {
     const { store } = renderGrid(calais, { model: deletable })
     api.remove.mockRejectedValueOnce({ code: 'in_use', message: 'Still referenced', by: [{ label: 'Toewijzingen', count: 2 }] })
-    const drawer = openDrawer('Lunch bistrot')
+    openDrawer('Lunch bistrot')
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await pressTool('Verwijderen')
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
 
     expect(screen.getByRole('complementary', { name: 'Lunch bistrot' })).toBeTruthy()
@@ -1347,6 +1370,7 @@ async function addCondition(field: string, value: string) {
     render(<App />)
     await screen.findByText('18 mei')
     fireEvent.click(within(cell('Montage', 'title')).getByRole('button', { name: 'Openen' }))
+    await openTab('Bijlagen')
     const files = within(screen.getByRole('region', { name: 'Bijlagen' }))
     await files.findByText('Nog geen bijlagen')
 
@@ -1366,10 +1390,9 @@ async function addCondition(field: string, value: string) {
     await screen.findByText('18 mei')
 
     fireEvent.click(within(cell('Lunch bistrot', 'title')).getByRole('button', { name: 'Openen' }))
-    const drawer = screen.getByRole('complementary', { name: 'Lunch bistrot' })
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Verwijderen' }))
+    await pressTool('Verwijderen')
     await act(async () => {
-      fireEvent.click(within(drawer).getByRole('button', { name: 'Zeker?' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Zeker?' }))
     })
 
     // The drawer's own header is a banner too: the toolbar is found by its class.
@@ -1843,7 +1866,7 @@ describe('a day plan', () => {
   it('colours an option by its tone and the band by its day, its date and its toned facts', () => {
     renderGrid(rows, { model: plan, view })
 
-    expect(cell('Lunch', 'kind').querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--green')
+    expect(cell('Lunch', 'kind').querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--green')
     expect(bands()[0].querySelector('.nv-group__day')?.textContent).toBe('Maandag')
     expect(bands()[0].querySelector('.nv-group__date')?.textContent).toBe('2 november')
     expect(bands()[0].querySelector('.nv-group__fact i')?.className).toBe('nv-tone--rose')

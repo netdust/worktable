@@ -3,20 +3,27 @@ import type { Model, Row } from '../types'
 export interface Insight {
   label: string
   count: number
+  tone: 'bad' | 'warn'
 }
 
+/** The worst first. */
+const TONES = ['bad', 'warn'] as const
+
 /**
- * What still waits in the view's rows, for the title line: the warn-toned option of the record's state (its lifecycle
- * column, else the first option field with a warn option) and how many rows hold it; none where no row does.
+ * What still waits in the view's rows, for the title line: per tone, bad before warn, the rows whose option has it, named by
+ * those options. The record's state is read (its lifecycle column, else the first option field with such a tone); none where no row holds one.
  */
-export function insightOf(model: Model, rows: Row[]): Insight | null {
-  const warned = (key: string) => Object.values(model.fields[key]?.tones ?? {}).includes('warn')
-  const field = model.lifecycle && warned(model.lifecycle)
+export function insightOf(model: Model, rows: Row[]): Insight[] {
+  const worried = (key: string) => Object.values(model.fields[key]?.tones ?? {}).some((tone) => TONES.some((t) => t === tone))
+  const field = model.lifecycle && worried(model.lifecycle)
     ? model.lifecycle
-    : Object.keys(model.fields).find((key) => model.fields[key].type === 'select' && warned(key))
-  if (!field) return null
-  const tones = model.fields[field].tones ?? {}
-  const option = Object.keys(tones).find((key) => tones[key] === 'warn') as string
-  const count = rows.filter((row) => row.fields[field] === option).length
-  return count > 0 ? { label: model.fields[field].options?.[option] ?? option, count } : null
+    : Object.keys(model.fields).find((key) => model.fields[key].type === 'select' && worried(key))
+  if (!field) return []
+  const { tones = {}, options = {} } = model.fields[field]
+  const held = (option: string) => rows.filter((row) => row.fields[field] === option).length
+  return TONES.flatMap((tone) => {
+    const present = Object.keys(tones).filter((option) => tones[option] === tone && held(option) > 0)
+    const count = present.reduce((sum, option) => sum + held(option), 0)
+    return count > 0 ? [{ label: present.map((option) => options[option] ?? option).join(' · '), count, tone }] : []
+  })
 }

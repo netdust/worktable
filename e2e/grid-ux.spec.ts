@@ -456,20 +456,20 @@ test('dark-and-density @e2e', async ({ page }) => {
   const dark = await root.evaluate((el) => getComputedStyle(el).backgroundColor)
   expect(dark).toBe('rgb(22, 23, 26)')
 
-  expect(Math.round(await rowHeight(page))).toBe(40)
+  expect(Math.round(await rowHeight(page))).toBe(32)
   await density.getByRole('radio', { name: 'Compact' }).click()
-  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(32)
+  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(28)
   await expect(density.getByRole('radio', { name: 'Compact' })).toHaveAttribute('aria-checked', 'true')
   await shot(page, 'dark')
   await density.getByRole('radio', { name: 'Ruim' }).click()
-  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(46)
+  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(40)
 
   await page.reload()
   await pick(page, 'Bevestigd', 'Activiteiten')
   await expect(gridRows(page).first()).toBeVisible()
   await expect(root).toHaveAttribute('data-theme', 'dark')
   expect(await root.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(dark)
-  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(46)
+  await expect.poll(async () => Math.round(await rowHeight(page))).toBe(40)
   await expect(density.getByRole('radio', { name: 'Ruim' })).toHaveAttribute('aria-checked', 'true')
   await expect(theme.getByRole('radio', { name: 'Donker' })).toHaveAttribute('aria-checked', 'true')
 
@@ -508,10 +508,10 @@ test('planning-details @e2e', async ({ page }) => {
   await expect(named(page, 'Overnachting').first().locator('.nv-blank')).toHaveText('zonder tijd')
 
   // R10.3: Maaltijd in its colour, status pills toned.
-  const soort = lunch.locator('td').nth(3).locator('.nv-dot')
+  const soort = lunch.locator('td').nth(3).locator('.nv-pill')
   await expect(soort).toHaveText('Maaltijd')
-  expect(await soort.evaluate((el) => getComputedStyle(el, '::before').backgroundColor)).toBe('rgb(47, 138, 87)')
-  await expect(lunch.locator('.nv-pill')).toHaveClass(/nv-pill--warn/)
+  expect(await soort.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(47, 138, 87)')
+  await expect(lunch.locator('.nv-pill--warn')).toHaveCount(1)
 
   // R10.7: the scope chip.
   await expect(page.locator('.nv-bar .nv-chip--scope')).toHaveText('Productie is Nachtwacht')

@@ -51,6 +51,21 @@ describe('the tree', () => {
     expect(models(rest)).toEqual(['Afwezigheden', 'Leeg'])
   })
 
+  it('leaves out a listed: false dataset, and its neighbours keep their order', () => {
+    const tables = groupTables([
+      { key: 'one', label: 'One', model: 'one', types: ['grid'] },
+      { key: 'tie', label: 'Ties', model: 'tie', types: ['grid'], listed: false },
+      { key: 'two', label: 'Two', model: 'two', types: ['grid'] },
+    ], [
+      { key: 'one', label: 'Tabel', model: 'one', table: 'one', table_label: 'One' },
+      { key: 'tie', label: 'Tabel', model: 'tie', table: 'tie', table_label: 'Ties' },
+      { key: 'two', label: 'Tabel', model: 'two', table: 'two', table_label: 'Two' },
+    ])
+    render(<Rail tables={tables} active="one" onSelect={() => undefined} />)
+
+    expect(models(tree())).toEqual(['One', 'Two'])
+  })
+
   it('shows a section label as text, never as something to click', () => {
     render(<Rail tables={spaced} sections={sections} active="planning" onSelect={() => undefined} />)
 

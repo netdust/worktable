@@ -1,5 +1,6 @@
-import { type CSSProperties, useContext, useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Drawer } from '../grid/Drawer'
+import { useReread } from '../grid/drawerWrite'
 import { SchemaContext } from '../grid/drawer/context'
 import type { Places } from '../grid/drawer/place'
 import { type Column, columnsFor } from '../grid/columns'
@@ -13,6 +14,7 @@ import { FlagMark } from '../ui/Flag'
 import { type Flag, flaggedOf, useFlags } from '../ui/useFlags'
 import { useTones } from '../ui/useTones'
 import { isMonth, iso, isoWeek, parse } from '../ui/Window'
+import { Day } from './Day'
 import { type Bar, type Lane, monthWeeks, type Placed, placeEvents, spanBars, weekGrid } from './layout'
 
 interface Props {
@@ -42,13 +44,21 @@ const TWO_LINES = 40
 const THREE_LINES = 58
 const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+/** A month day's line height and the room its date takes, in pixels: a day holds what fits below its date. */
+export const LINE_PX = 22
+const DATE_PX = 32
+// A month cell's vertical padding and border, outside the block that clips its day.
+const CELL_PAD = 11
+/** What a month day holds before its height is measured, as in jsdom. */
+export const FALLBACK_FIT = 4
+export const fitOf = (rowHeight: number) => Math.max(1, Math.floor((rowHeight - DATE_PX) / LINE_PX))
 const byStart = (a: Placed, b: Placed) => Number(b.allDay) - Number(a.allDay) || a.from - b.from
 
 type ToneOf = (lane: number | null, row?: Row) => CSSProperties
 /** The flags on an event's row. */
 type MarksOf = (row: Row) => Flag[]
 
-/** Laned, an event takes its lane's colour, the lane record's own tone where it has one; unlaned, the tone of its first toned option, as the prototype tints by soort. */
+/** Laned, an event takes its lane's colour, the lane record's own tone where it has one; unlaned, the tone of its first toned option, as the prototype tints by kind. */
 function lanePalette(lanes: Lane[], toned: Column | undefined, tones: Map<number, Tone> | null | undefined): ToneOf {
   return (lane, row) => {
     if (toned && row)
@@ -194,19 +204,41 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
   month: DateWindow; weeks: string[][]; lanes: Lane[]; events: Placed[]; toneOf: ToneOf; marks: MarksOf; onOpen: (row: Row) => void
 }) {
   const titleOf = (id: number | null) => lanes.find((lane) => lane.id === id)?.title || undefined
+  const table = useRef<HTMLTableElement>(null)
+  // Every week gets an equal share of the body's height, whatever its days hold.
+  const [rowHeight, setRowHeight] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const body = table.current?.parentElement
+    const head = table.current?.tHead
+    if (!body || !head || !table.current) return
+    const own = table.current
+    // Below the legend, if a lane draws one: the table starts where it starts.
+    const measure = () => {
+      const room = body.clientHeight - own.offsetTop - head.offsetHeight
+      setRowHeight(room > 0 ? room / weeks.length : null)
+    }
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(body)
+    return () => watch.disconnect()
+    // A legend that comes or goes moves the table, not the body.
+  }, [weeks.length, lanes.length])
+  const fit = rowHeight === null ? FALLBACK_FIT : fitOf(rowHeight)
   return (
-    <table className="nv-cal nv-cal--month">
+    <table ref={table} className="nv-cal nv-cal--month">
       <thead>
         <tr>{weeks[0]?.map((day) => <th key={day} scope="col">{dayHead(day).split(' ')[0]}</th>)}</tr>
       </thead>
       <tbody>
         {weeks.map((week) => (
-          <tr key={week[0]} style={{ height: `${100 / weeks.length}%` }}>
+          <tr key={week[0]} style={{ height: rowHeight === null ? `${100 / weeks.length}%` : `${rowHeight}px` }}>
             {week.map((day) => (
               <td key={day} className={[day < month.from || day > month.to ? 'nv-cal__out' : '', day === iso(new Date()) ? 'nv-cal__today' : ''].filter(Boolean).join(' ') || undefined}>
-                <span className="nv-cal__date">{parse(day)?.getDate()}</span>
-                {events.filter((e) => e.day === day).sort(byStart)
-                  .map((e) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} marks={marks} onOpen={onOpen} />)}
+                <div className="nv-cal__cell" style={rowHeight === null ? undefined : { height: `${rowHeight - CELL_PAD}px` }}>
+                  <span className="nv-cal__date">{parse(day)?.getDate()}</span>
+                  <Day day={day} events={events.filter((e) => e.day === day).sort(byStart)} fit={fit}
+                    line={(e, open) => <Event key={e.row.id} event={e} laneTitle={titleOf(e.lane)} named style={toneOf(e.lane, e.row)} marks={marks} onOpen={open} />} onOpen={onOpen} />
+                </div>
               </td>
             ))}
           </tr>
@@ -219,6 +251,7 @@ function Month({ month, weeks, lanes, events, toneOf, marks, onOpen }: {
 /** Rows on their days, a week or a month, in lanes; read-only: an event opens its row. */
 export function Calendar({ view, model, models, rows, cal, shown, lane, layout, onTitle, places }: Props) {
   const [opened, setOpen] = useState<Row | null>(null)
+  const reread = useReread()
   // The row as the calendar now holds it: a place chosen in the drawer repaints it.
   const open = opened ? (rows.find((row) => row.id === opened.id) ?? opened) : null
   const month = isMonth(shown)
@@ -252,7 +285,7 @@ export function Calendar({ view, model, models, rows, cal, shown, lane, layout, 
           {!month && <Week days={days} lanes={lanes} events={events} timed={cal.start !== null && !cal.spans} spans={cal.spans ? cal : null} toneOf={toneOf} marks={marks} whereOf={whereOf} onOpen={setOpen} />}
         </div>
         )}
-        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)}
+        {open && <Drawer row={open} columns={columns} focusOnOpen={false} onClose={() => setOpen(null)} model={model} view={view} layout={layout} flags={flags} onLink={places?.(model.key, open.id)} onDone={reread(model.key, open.id, undefined, () => setOpen((now) => (now?.id === open.id ? null : now)))}
           nav={{ ids: rows.map((r) => r.id), onStep: (id) => setOpen(rows.find((r) => r.id === id) ?? null) }} />}
       </div>
     </div>

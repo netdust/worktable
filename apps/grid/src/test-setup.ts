@@ -1,4 +1,5 @@
-import { configure, fireEvent, render } from '@testing-library/react'
+import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { expect } from 'vitest'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { Providers } from './ui/Providers'
 
@@ -31,4 +32,43 @@ export function typeKeys(text: string): void {
     fireEvent.keyDown(target, { key })
     fireEvent(target, new InputEvent('beforeinput', { data: key, inputType: 'insertText', bubbles: true, cancelable: true }))
   }
+}
+
+/** The drawer's action row: its visible buttons in order, then (once Meer is opened) what Meer holds. */
+const rowButtons = () => [...document.querySelectorAll<HTMLElement>('.nv-dw-actions__row > .nv-button')]
+
+/** Presses one of the drawer's record actions: its button in the row, or its item behind Meer. */
+export async function pressAction(name: string | RegExp): Promise<void> {
+  const same = (text: string) => (typeof name === 'string' ? text === name : name.test(text))
+  const button = rowButtons().find((one) => same(one.textContent ?? ''))
+  if (button) return void fireEvent.click(button)
+  fireEvent.click(screen.getByRole('button', { name: 'Meer' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name }))
+}
+
+/** One of the record's own tools in the drawer's head: opens its Acties menu and presses an item (Link kopiëren, Nieuwe link, Verwijderen). */
+export async function pressTool(name: string | RegExp): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: 'Acties' }))
+  fireEvent.click(await screen.findByRole('menuitem', { name }))
+}
+
+/** What the drawer's action row offers, in order: its buttons, then what Meer holds; empty when there is no row. */
+export async function actionsOffered(): Promise<string[]> {
+  const shown = rowButtons().map((one) => one.textContent ?? '')
+  const more = screen.queryByRole('button', { name: 'Meer' })
+  if (!more) return shown
+  fireEvent.click(more)
+  const folded = (await screen.findAllByRole('menuitem')).map((item) => item.textContent ?? '')
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  return [...shown, ...folded]
+}
+
+/** Shows one of the drawer's tabs: its icon in the bar, or its entry under Meer tabbladen. */
+export async function openTab(name: string): Promise<void> {
+  const bar = screen.getByRole('toolbar', { name: 'Onderdelen' })
+  const icon = within(bar).queryByRole('radio', { name })
+  if (icon) return void fireEvent.click(icon)
+  fireEvent.click(within(bar).getByRole('button', { name: 'Meer tabbladen' }))
+  fireEvent.click(await screen.findByRole('menuitemradio', { name }))
 }

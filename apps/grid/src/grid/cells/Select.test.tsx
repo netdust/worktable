@@ -20,19 +20,29 @@ describe('a select cell', () => {
     expect(tone('cancelled')).toContain('nv-pill--bad')
   })
 
-  it('is a dot in its tone, never a pill, in any other select column', () => {
+  it('is a pill in its tone in any select column, whatever its id', () => {
     const other = { ...column('status'), id: 'state' }
     const { container } = render(<SelectCell column={other} row={at('cancelled')} />)
 
-    expect(container.querySelector('.nv-pill')).toBeNull()
-    expect(container.querySelector('.nv-dot')?.className).toBe('nv-dot nv-dot--bad')
+    expect(container.querySelector('.nv-dot')).toBeNull()
+    expect(container.querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--bad')
   })
 
-  it('leaves an option without a meaning neutral', () => {
+  it('leaves an option without a tone as plain text', () => {
     const { container } = render(<SelectCell column={column('settled_by')} row={{ ...calais[2], fields: { ...calais[2].fields, settled_by: 'company' } }} />)
 
-    expect(container.querySelector('.nv-dot')?.className).toBe('nv-dot')
+    expect(container.querySelector('.nv-pill, .nv-dot')).toBeNull()
     expect(container.textContent).toBe('Gezelschap')
+  })
+
+  it('a toned option is a pill in a column that is not keyed status, an untoned one is not', () => {
+    const colours = { ...column('settled_by'), id: 'soort', tones: { company: 'teal' as const } }
+    const toned = render(<SelectCell column={colours} row={{ ...calais[2], fields: { ...calais[2].fields, settled_by: 'company' } }} />)
+    expect(toned.container.querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--teal')
+    cleanup()
+    const plain = render(<SelectCell column={colours} row={{ ...calais[2], fields: { ...calais[2].fields, settled_by: 'programmer' } }} />)
+    expect(plain.container.querySelector('.nv-pill')).toBeNull()
+    expect(plain.container.textContent).toBe('Programmator')
   })
 
   it('shows a kind with its icon, beside its word', () => {
@@ -58,9 +68,11 @@ describe('a select cell with declared tones', () => {
     expect(container.querySelector('.nv-pill')?.className).toBe('nv-pill nv-pill--bad')
   })
 
-  it('keeps an undeclared option neutral', () => {
+  it('keeps an undeclared option plain text', () => {
     const none = { ...declared, options: { gamma: 'Gamma' } }
-    expect(render(<SelectCell column={none} row={at('gamma')} />).container.querySelector('.nv-pill')?.className).toBe('nv-pill')
+    const { container } = render(<SelectCell column={none} row={at('gamma')} />)
+    expect(container.querySelector('.nv-pill')).toBeNull()
+    expect(container.textContent).toBe('gamma')
   })
 })
 
@@ -85,7 +97,7 @@ describe('the select editor', () => {
     cleanup()
 
     const settled = open(column('settled_by'))
-    expect(option(settled, 'Gezelschap').querySelector('.nv-dot')).not.toBeNull()
+    expect(option(settled, 'Gezelschap').querySelector('.nv-pill, .nv-dot')).toBeNull()
   })
 
   it('the current option is marked', () => {

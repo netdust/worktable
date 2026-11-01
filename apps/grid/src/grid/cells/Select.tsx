@@ -4,23 +4,26 @@ import { t } from '../../i18n'
 import { Pop } from '../../ui/Pop'
 import type { Column } from '../columns'
 import type { CellProps, EditorProps } from './props'
-import { iconOf, toneOf } from './tones'
+import { iconOf, type Tone, toneOf } from './tones'
 
 export function SelectCell({ column, row }: CellProps) {
   const text = column.text(row)
   return text === '' ? null : <OptionMark column={column} option={column.edit(row)} text={text} />
 }
 
+/** A toned option is a tinted pill; one without a tone is plain text. */
+export function ToneMark({ tone, text }: { tone: Tone | null; text: string }) {
+  return tone ? <span className={`nv-pill nv-pill--${tone}`}>{text}</span> : <>{text}</>
+}
+
 /**
- * A kind reads as its icon and word; a column keyed `status` as a pill toned by what it means; any other option as a dot in that tone.
+ * A kind reads as its icon and word; any other option as a pill in the tone its column declares, or as plain text without one.
  * The cell passes its own text, which an inherited column words for itself.
  */
 export function OptionMark({ column, option, text = column.options?.[option] ?? option }: { column: Column; option: string; text?: string }) {
   const Icon = iconOf(option)
   if (Icon) return <span className="nv-kind"><Icon size={13} aria-hidden="true" />{text}</span>
-  const shape = column.id === 'status' ? 'nv-pill' : 'nv-dot'
-  const tone = toneOf(option, column.tones)
-  return <span className={tone ? `${shape} ${shape}--${tone}` : shape}>{text}</span>
+  return <ToneMark tone={toneOf(option, column.tones)} text={text} />
 }
 
 function choices(options: Record<string, string>, required: boolean): [string, string][] {
@@ -64,7 +67,7 @@ export function SelectEditor({ column, row, editing, onDraft, onCommit, onLeave 
     onDraft(list[at][0])
   }
 
-  // A letter jumps to the first option starting with it, as the field contract says; React Aria's typeahead would search on from the focused option and join letters.
+  // A letter jumps to the first option starting with it, as the field's spec says; React Aria's typeahead would search on from the focused option and join letters.
   const jump = (event: KeyboardEvent) => {
     if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey || !/\S/.test(event.key)) return
     event.preventDefault()

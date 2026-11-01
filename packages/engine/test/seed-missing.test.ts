@@ -258,6 +258,10 @@ describe('seedMissing: system views no longer declared', () => {
   })
 })
 
+// seedMissing keys a declared system view before it reads it; nothing else about the row moves.
+const keyed = (views: Record<string, unknown>[]) =>
+  views.map((view) => ({ ...view, seed_key: JSON.stringify([view.name, view.source]) }))
+
 describe('seedMissing: public and updated system views', () => {
   test('a public system view keeps its filters, fields, public flag, share token and format, and is named', () => {
     const sqlite = existingDb()
@@ -265,7 +269,7 @@ describe('seedMissing: public and updated system views', () => {
     sqlite.query("UPDATE saved_view SET public = 1, share_token = 'tok', format = 'ical' WHERE id = ?").run(id)
     const before = viewsNamed(sqlite, 'Open')
     const report = seedMissing(sqlite, seedDomain)
-    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(keyed(before))
     expect(report.views).toMatchObject({ added: 1, updated: 0, present: 1 })
     expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is public, left alone')
     expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
@@ -277,7 +281,7 @@ describe('seedMissing: public and updated system views', () => {
     sqlite.query('UPDATE saved_view SET for_owners = 1 WHERE id = ?').run(id)
     const before = viewsNamed(sqlite, 'Open')
     const report = seedMissing(sqlite, seedDomain)
-    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(keyed(before))
     expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is for owners, left alone')
     expect(sqlite.query("SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ?").all(id)).toEqual([])
   })
@@ -297,7 +301,7 @@ describe('seedMissing: public and updated system views', () => {
     sqlite.query("UPDATE saved_view SET share_token = 'tok' WHERE id = ?").run(id)
     const before = viewsNamed(sqlite, 'Open')
     const report = seedMissing(sqlite, seedDomain)
-    expect(viewsNamed(sqlite, 'Open')).toEqual(before)
+    expect(viewsNamed(sqlite, 'Open')).toEqual(keyed(before))
     expect(seedLines(report)).toContain('seed-missing: view "Open" (taak) is public, left alone')
   })
 

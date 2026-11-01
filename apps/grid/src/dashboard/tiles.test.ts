@@ -17,29 +17,29 @@ beforeEach(() => api.rows.mockReset())
 describe('statOf', () => {
   it('counts from the total with a one-row read', async () => {
     api.rows.mockResolvedValue({ rows: [{ id: 1, fields: {} }], total: 7 })
-    expect(await statOf(view(), null, 'count')).toBe(7)
+    expect(await statOf(view(), null, 'count', {})).toBe(7)
     expect(api.rows.mock.calls[0][4]).toBe(1)
   })
 
   it('sums a column over every row', async () => {
     api.rows.mockResolvedValue({ rows: [{ id: 1, fields: { n: 2 } }, { id: 2, fields: { n: 3.5 } }, { id: 3, fields: { n: null } }], total: 3 })
-    expect(await statOf(view(), null, { sum: 'n' })).toBe(5.5)
+    expect(await statOf(view(), null, { sum: 'n' }, {})).toBe(5.5)
   })
 
   it('reads the previous period with the date condition moved back, and none without one', async () => {
     api.rows.mockResolvedValue({ rows: [], total: 4 })
     const week = view([{ field: 'plandag', op: 'between', values: ['2026-10-12', '2026-10-18'] }])
-    expect(await statOf(week, null, 'count', true)).toBe(4)
+    expect(await statOf(week, null, 'count', {}, true)).toBe(4)
     const sent = api.rows.mock.calls[0][3].filters
     expect(sent).toEqual([{ field: 'plandag', op: 'between', values: ['2026-10-05', '2026-10-11'] }])
-    expect(await statOf(view(), null, 'count', true)).toBeNull()
+    expect(await statOf(view(), null, 'count', {}, true)).toBeNull()
   })
 
   it('passes the space only to a scoped view', async () => {
     api.rows.mockResolvedValue({ rows: [], total: 0 })
     const scope = { field: 'productie_id', id: 2 }
-    await statOf(view([], { space: 'scoped' }), scope, 'count')
-    await statOf(view([], { space: 'global' }), scope, 'count')
+    await statOf(view([], { space: 'scoped' }), scope, 'count', {})
+    await statOf(view([], { space: 'global' }), scope, 'count', {})
     expect(api.rows.mock.calls.map((c) => c[2])).toEqual([scope, null])
   })
 })

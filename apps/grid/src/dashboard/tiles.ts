@@ -2,7 +2,7 @@ import { rows } from '../api'
 import { complete, isDate, windowOf } from '../grid/conditions'
 import type { Layout } from '../grid/layout'
 import type { DateWindow, Model, SavedView, Scope, Tile, Tone } from '../types'
-import { layoutOf } from '../ui/views'
+import { knownFor, layoutOf } from '../ui/views'
 import { days, isMonth, shift, shiftMonth } from '../ui/Window'
 
 type Stat = Extract<Tile, { kind: 'stat' }>
@@ -27,8 +27,8 @@ function previousLayout(view: SavedView, layout: Layout): Layout | null {
 }
 
 /** A stat's number: the view's row count, or one column's sum over its rows; null for a previous period it has none of. */
-export async function statOf(view: SavedView, scope: Scope | null, measure: Stat['measure'], previous = false): Promise<number | null> {
-  const current = layoutOf(view)
+export async function statOf(view: SavedView, scope: Scope | null, measure: Stat['measure'], models: Record<string, Model>, previous = false): Promise<number | null> {
+  const current = layoutOf(view, knownFor(view, models))
   const layout = previous ? previousLayout(view, current) : current
   if (!layout) return null
   const read = (limit?: number) => rows(view, {}, scopeFor(view, scope), layout, limit)

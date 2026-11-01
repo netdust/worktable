@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react'
+import { columnsFor } from '../grid/columns'
 import { complete, joinOf } from '../grid/conditions'
 import { clearKept, clearLayout, defaults, type Layout, save, saveKept, storedKept, storedLayout, storedRevision, subscribeStored } from '../grid/layout'
 import { savePicked } from '../matrix/columns'
-import type { Arrangement, SavedView, StoredArrangement, View } from '../types'
+import type { Arrangement, Model, SavedView, StoredArrangement, View } from '../types'
 import type { Table } from './tables'
 
 /** The one place an arrangement changes shape: the server keeps widths as a list, the sheet as a record. */
@@ -49,18 +50,56 @@ export function isSaved(view: View): view is SavedView {
 
 const isMatrixKey = (id: string): boolean => id.startsWith('record:') || id.startsWith('name:')
 
+/**
+ * What a layout of this view may name: every column its source has, the ones the grid hides too (the engine takes a sort, filter or
+ * group on one), the model's fields and links, the view's lookups and rollups, and the engine's own `id` and `position` (a board's manual order).
+ */
+export function knownOf(model: Model, view: View, models: Record<string, Model> = {}): ReadonlySet<string> {
+  const ids = columnsFor(model, { ...view, columns: undefined }, false, models).map((column) => column.id)
+  return new Set([...ids, ...(model.columns ?? []), 'id', 'position', ...(model.title_field ? [model.title_field] : [])])
+}
+
+/** The known ids of a tile's view, or none to fit against where its model is not served. */
+export const knownFor = (view: View, models: Record<string, Model>): ReadonlySet<string> | null => {
+  const model = models[view.model]
+  return model ? knownOf(model, view, models) : null
+}
+
+const named = (id: string, known: ReadonlySet<string>): boolean => known.has(id) || isMatrixKey(id)
+
+/** A layout without the sort, filter, group, hidden and order ids its view has no column for; widths stay. */
+function fit<T extends Layout>(layout: T, known: ReadonlySet<string> | null): T {
+  if (!known) return layout
+  const sort = layout.sort.filter((key) => named(key.id, known))
+  const filters = layout.filters.filter((filter) => named(filter.field, known))
+  const hidden = layout.hidden.filter((id) => named(id, known))
+  const order = layout.order.filter((id) => named(id, known))
+  const group = layout.group !== null && !named(layout.group, known) ? null : layout.group
+  const same = sort.length === layout.sort.length && filters.length === layout.filters.length && hidden.length === layout.hidden.length && order.length === layout.order.length && group === layout.group
+  return same ? layout : { ...layout, sort, filters, hidden, order, group }
+}
+
 /** The arrangement a view is saved with: a starting view's declared one, a saved view's stored one; with what this browser keeps of it. */
 export function arrangementOf(view: View): Arrangement {
   const saved = isSaved(view) ? fromStored(view.arrangement) : { ...defaults(view), picked: [] }
-  const { widths = saved.widths, picked = saved.picked, hidden } = storedKept(view) ?? {}
-  return { ...saved, widths, picked, hidden: hidden ? [...saved.hidden.filter((id) => !isMatrixKey(id)), ...hidden] : saved.hidden }
+  const { widths = saved.widths, picked = saved.picked, hidden, known } = storedKept(view) ?? {}
+  const kept = { ...saved, widths, picked, hidden: hidden ? [...saved.hidden.filter((id) => !isMatrixKey(id)), ...hidden] : saved.hidden }
+  return known ? fit(kept, new Set(known)) : kept
+}
+
+/** The ids this view's sheet knows are remembered, so Save, a copy and the changed mark leave a stale one out too. */
+export function rememberKnown(view: View, known: ReadonlySet<string>): void {
+  const now = storedKept(view)
+  const ids = [...known].sort()
+  if (now?.known && now.known.length === ids.length && now.known.every((id, at) => id === ids[at])) return
+  saveKept(view, { ...now, known: ids })
 }
 
 const layoutPart = ({ picked: _, ...layout }: Arrangement): Layout => layout
 
-/** What the sheet shows: this browser's copy, else the saved arrangement. */
-export function layoutOf(view: View): Layout {
-  return storedLayout(view) ?? layoutPart(arrangementOf(view))
+/** What the sheet shows: this browser's copy, else the saved arrangement, fitted to the ids its view knows. */
+export function layoutOf(view: View, known: ReadonlySet<string> | null): Layout {
+  return fit(storedLayout(view) ?? layoutPart(arrangementOf(view)), known)
 }
 
 /** The browser's unsaved copy; null when it keeps none. */

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setStrings } from '../i18n'
+import { actionsOffered, pressAction } from '../test-setup'
+import { errorText, setStrings } from '../i18n'
 import type { SavedView, Schema, View } from '../types'
 import { calais, schema as calaisSchema } from '../grid/calais.test.data'
 import { iso } from './Window'
@@ -9,7 +10,7 @@ const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), re
   schema: vi.fn(), rows: vi.fn(), awayRows: vi.fn(), records: vi.fn(), update: vi.fn(), create: vi.fn(), remove: vi.fn(),
   savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), prefs: vi.fn(), savePrefs: vi.fn(),
   me: vi.fn(), requestLink: vi.fn(), consumeLink: vi.fn(), signOut: vi.fn(), onUnauthenticated: vi.fn(), onNotices: vi.fn(),
-  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
+  rowOf: vi.fn(), undoBatch: vi.fn(), runAction: vi.fn(), runSelection: vi.fn(), setDisplay: vi.fn(), publishView: vi.fn(), history: vi.fn(),
 }))
 vi.mock('../api', () => api)
 const exporter = vi.hoisted(() => ({ exportSheet: vi.fn() }))
@@ -18,7 +19,14 @@ const { App } = await import('./App')
 
 const served: Schema = {
   models: {
-    activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: {} },
+    activity: {
+      key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false,
+      fields: {
+        date: { type: 'date', label: 'Datum', required: false, fact: true },
+        kind: { type: 'text', label: 'Soort', required: false, fact: true },
+        place: { type: 'text', label: 'Plaats', required: false, fact: false },
+      },
+    },
     absence: { key: 'absence', label: 'Afwezigheid', title_label: 'Titel', title_readonly: false, fields: {} },
   },
   tables: [
@@ -1537,23 +1545,287 @@ describe('writes on the engine', () => {
       await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
     })
 
-    it('waits for a pick the dataset needs, and says which', async () => {
+    it('+ Nieuw opens QuickCreate asking Productie, saves into the target, and one Undo removes the record', async () => {
       api.schema.mockResolvedValue(creating({}))
+      api.create.mockResolvedValue({ row: { id: 9, title: '', status: '', fields: {} }, batch: 'b9' })
+      api.undoBatch.mockResolvedValue('u9')
       window.location.hash = '#view=dagplanning'
       render(<App />)
       await screen.findByText('opbouw Gent')
+      const reads = api.rows.mock.calls.length
 
-      expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
-      expect(screen.getByText('Kies eerst Productie')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Nieuwe activiteit' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuwe activiteit' })
+      expect(api.create).not.toHaveBeenCalled()
+      fireEvent.change(await within(dialog).findByRole('combobox', { name: 'Productie' }), { target: { value: '1' } })
+      await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+
+      expect(api.create).toHaveBeenCalledExactlyOnceWith('activiteit', { productie_id: [1] })
+      await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+      await act(async () => {
+        fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true })
+      })
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b9')
     })
   })
 
-  it('+ New is blocked on a query view', async () => {
+  it('keeps + Nieuw blocked, and says why, while the dataset needs a field nothing can fill', async () => {
+    const required = { type: 'file' as never, label: 'Bijlage', required: true, fact: false }
+    api.schema.mockResolvedValue({
+      ...engineSchema,
+      models: {
+        ...engineSchema.models,
+        activiteit: { ...engineSchema.models.activiteit, new_label: 'Nieuwe activiteit', fields: { bijlage: required } },
+        dagplanning: { ...engineSchema.models.dagplanning, creates: 'activiteit' },
+      },
+    })
     window.location.hash = '#view=dagplanning'
     render(<App />)
     await screen.findByText('opbouw Gent')
 
-    expect((screen.getByRole('button', { name: 'Nieuw Dagplanning' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Nieuwe activiteit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Heeft Bijlage nodig: maak het aan vanuit het record')).toBeTruthy()
+  })
+
+  describe('a calendar of a query that creates in a dataset', () => {
+    const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+    const calendars: Schema = {
+      models: {
+        activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { plandag } },
+        agenda: { key: 'agenda', label: 'Agenda', title_label: 'Omschrijving', title_readonly: true, query: true, creates: 'activiteit', fields: { plandag } },
+      },
+      tables: [
+        { key: 'activiteit', label: 'Activiteiten', model: 'activiteit', date_field: 'plandag', types: ['grid'] },
+        { key: 'agenda', label: 'Agenda', model: 'agenda', date_field: 'plandag', query: true, types: ['calendar'] },
+      ],
+      views: [{ key: 'agenda', label: 'Agenda', table: 'agenda', model: 'agenda', date_field: 'plandag', type: 'calendar', calendar: { day: 'plandag', start: null, end: null, lanes: [] } }],
+      writable: { activiteit: true, agenda: false },
+    } as unknown as Schema
+
+    it('+ Nieuw asks the title, keeps the day the add filled in, and saves into the dataset', async () => {
+      api.schema.mockResolvedValue(calendars)
+      api.rows.mockResolvedValue({ rows: [], total: 0 })
+      api.create.mockResolvedValue({ row: { id: 9, title: 'Repetitie', status: '', fields: {} }, batch: 'b9' })
+      window.location.hash = '#view=agenda'
+      render(<App />)
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Activiteit' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuw Activiteit' })
+      fireEvent.change(within(dialog).getByRole('textbox', { name: 'Omschrijving' }), { target: { value: 'Repetitie' } })
+      await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+
+      expect(api.create).toHaveBeenCalledExactlyOnceWith('activiteit', { title: 'Repetitie', plandag: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
+      window.location.hash = ''
+    })
+  })
+
+  describe('a query that creates in a scoped dataset, with a space selected', () => {
+    const production = { key: 'production', label: 'Producties', title_label: 'Titel', title_readonly: false, fields: {} }
+    const owner = { type: 'relation' as const, label: 'Productie', required: true, fact: true, relation: { model: 'production', multiple: false } }
+    const spaced: Schema = {
+      models: {
+        production,
+        activity: { key: 'activity', label: 'Activiteit', title_label: 'Titel', title_readonly: false, fields: { production: owner } },
+        agenda: { key: 'agenda', label: 'Agenda', title_label: 'Titel', title_readonly: true, query: true, creates: 'activity', fields: { production: owner } },
+      },
+      tables: [
+        { key: 'activity', label: 'Activiteiten', model: 'activity', space: 'scoped', types: ['grid'] },
+        { key: 'agenda', label: 'Agenda', model: 'agenda', space: 'scoped', query: true, types: ['grid'] },
+      ],
+      views: [{ key: 'agenda', label: 'Agenda', table: 'agenda', model: 'agenda', space: 'scoped' }],
+      space: { field: 'production', model: 'production' },
+      writable: { activity: true, agenda: false, production: false },
+    } as unknown as Schema
+
+    it("still asks the space, filled in with the selected one", async () => {
+      api.schema.mockResolvedValue(spaced)
+      api.rows.mockResolvedValue({ rows: [], total: 0 })
+      api.records.mockResolvedValue({ rows: [{ id: 7, title: 'Glimworm', status: '', fields: {} }, { id: 9, title: 'Wat de uil zag', status: '', fields: {} }], total: 2 })
+      window.location.hash = '#view=agenda'
+      await shell()
+      fireEvent.click(await within(rail()).findByRole('button', { name: 'Alle producties' }))
+      fireEvent.click(await within(rail()).findByRole('option', { name: 'Glimworm' }))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Activiteit' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Nieuw Activiteit' })
+      const space = (await within(dialog).findByRole('combobox', { name: 'Productie' })) as HTMLSelectElement
+      await waitFor(() => expect(space.value).toBe('7'))
+    })
+  })
+
+  it('a query view that creates nothing shows no + Nieuw', async () => {
+    window.location.hash = '#view=dagplanning'
+    render(<App />)
+    await screen.findByText('opbouw Gent')
+
+    expect(screen.queryByRole('button', { name: 'Nieuw Dagplanning' })).toBeNull()
+  })
+})
+
+describe('a selection action', () => {
+  const gather = { name: 'gather', label: 'Bundelen', many: true as const, input: { name: { type: 'text' as const, label: 'Naam' } } }
+  const grouped: Schema = {
+    models: { member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, actions: [gather], fields: {} } },
+    tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+    views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+    writable: { member: true },
+  }
+  const people = ['Aart', 'Bo', 'Cas'].map((title, i) => ({ id: i + 1, title, status: '', fields: {} }))
+  const reads = () => api.rows.mock.calls.length
+  const tick = async (...titles: string[]) => {
+    await screen.findByRole('grid', { name: 'Leden' })
+    for (const title of titles) fireEvent.click(await screen.findByRole('checkbox', { name: `${title} selecteren` }))
+  }
+  const run = async (name: string) => {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Naam' }), { target: { value: name } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Bundelen' }))
+    })
+  }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(grouped)
+    api.rows.mockResolvedValue({ rows: people, total: 3 })
+    api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+    api.undoBatch.mockResolvedValue('u-1')
+  })
+
+  it('asks its inputs once and sends them once, with every ticked id', async () => {
+    await shell()
+    await tick('Aart', 'Cas')
+
+    await run('Voorjaar')
+
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [1, 3], { name: 'Voorjaar' })
+    expect(api.runAction).not.toHaveBeenCalled()
+  })
+
+  it('says aangevraagd, and follows the dock, when the run made a record in a live state', async () => {
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'stage', live: ['active'], fields: { stage: { type: 'select', label: 'Stand', required: false, fact: true, options: { active: 'Actief', done: 'Klaar' } } } }
+    api.schema.mockResolvedValue({ ...grouped, models: { ...grouped.models, bundle } })
+    api.rowOf.mockResolvedValue({ id: 7, title: 'Voorjaar', status: '', fields: { stage: 'active' } })
+    await shell()
+    await tick('Aart')
+
+    await run('Voorjaar')
+
+    expect(await screen.findByRole('status', { name: 'Bundelen aangevraagd.' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Bundelen uitgevoerd.' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Bundelen · Actief' }).getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('does not say a run is done when the record it made could not be read: it says requested, and a model with no live states is not read at all', async () => {
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', live: ['busy'], fields: { phase: { type: 'select', label: 'Fase', required: false, fact: true, options: { busy: 'Bezig' } } } }
+    const plain = { key: 'plain', label: 'Gewoon', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', fields: {} }
+    api.schema.mockResolvedValue({ ...grouped, models: { ...grouped.models, bundle, plain } })
+    api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }, { dataset: 'plain', id: 8 }] })
+    api.rowOf.mockRejectedValue({ code: 'network', message: 'down' })
+    await shell()
+    await tick('Aart')
+
+    await run('Voorjaar')
+
+    expect(await screen.findByRole('status', { name: 'Bundelen aangevraagd.' })).toBeTruthy()
+    expect(api.rowOf.mock.calls.map((call) => call.join(':'))).toEqual(['bundle:7'])
+  })
+
+  it('opens a waiting run’s record from the dock while a board is on screen, and leaves no open pending behind', async () => {
+    const stage = { type: 'select', label: 'Stand', required: false, fact: true, options: { nieuw: 'Nieuw' } }
+    const phase = { type: 'select', label: 'Fase', required: false, fact: true, options: { busy: 'Bezig', wait: 'Voorbereid' } }
+    const bundle = { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', live: ['busy', 'wait'], fields: { phase } }
+    api.schema.mockResolvedValue({
+      ...grouped,
+      models: { member: { ...grouped.models.member, fields: { stage } }, bundle },
+      writable: { member: true, bundle: true },
+      tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid', 'board'] }, { key: 'bundles', label: 'Bundels', model: 'bundle', types: ['grid'] }],
+      views: [
+        { key: 'members', label: 'Leden', table: 'members', model: 'member' },
+        { key: 'bundles', label: 'Bundels', table: 'bundles', model: 'bundle' },
+        { key: 'bord', label: 'Bord', table: 'members', model: 'member', type: 'board', board: { column: 'stage' } },
+      ],
+    })
+    const at = (state: string, buttons: { to: string; label: string; primary?: true }[] = []) => ({ id: 7, title: 'Voorjaar', status: '', fields: { phase: state }, available: { state, buttons, actions: [] } })
+    api.rowOf.mockResolvedValueOnce(at('busy')).mockResolvedValue(at('wait', [{ to: 'ok', label: 'Bevestigen', primary: true }]))
+    await shell()
+    await tick('Aart')
+    await run('Voorjaar')
+    fireEvent.click(within(typesOf('Leden')).getByRole('button', { name: 'Bord' }))
+    await waitFor(() => expect(document.querySelector('.nv-board')).not.toBeNull())
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bundelen · Voorbereid — openen' }, { timeout: 7000 }))
+
+    expect(await screen.findByRole('complementary', { name: 'Voorjaar' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Bundelen · Voorbereid — openen' })).toBeNull()
+  }, 20_000)
+
+  it('is one batch: one notice, one Undo that takes the whole run back, and the view reloads', async () => {
+    await shell()
+    await tick('Aart', 'Bo', 'Cas')
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    const notices = await screen.findAllByRole('status', { name: 'Bundelen uitgevoerd.' })
+    expect(notices).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: /geselecteerd/ })).toBeNull()
+    await act(async () => {
+      fireEvent.click(within(notices[0]).getByRole('button', { name: 'Ongedaan maken' }))
+    })
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+  })
+
+  it("a drawer run sends the open record alone, and the drawer offers each selection action", async () => {
+    await shell()
+    await screen.findByRole('grid', { name: 'Leden' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Openen' }))[1])
+    await pressAction('Bundelen')
+    const group = screen.getByRole('group', { name: 'Bundelen' })
+
+    fireEvent.change(within(group).getByRole('textbox', { name: 'Naam' }), { target: { value: 'Solo' } })
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Bundelen' }))
+    })
+
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Solo' })
+  })
+
+  it('a run refused as condition_not_met reads the view again and says in Dutch that the row no longer fits', async () => {
+    api.runSelection.mockRejectedValue({ code: 'condition_not_met', message: 'action gather does not apply to record 2' })
+    await shell()
+    await tick('Aart', 'Bo')
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect((await screen.findByRole('alert')).textContent).toBe('Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.')
+  })
+
+  it('a run refused as unknown_record reads the view again, drops the gone row and says so in Dutch', async () => {
+    api.runSelection.mockRejectedValue({ code: 'unknown_record', message: 'unknown record 2' })
+    await shell()
+    await tick('Aart', 'Bo')
+    api.rows.mockResolvedValue({ rows: people.filter((p) => p.title !== 'Bo'), total: 2 })
+    const before = reads()
+
+    await run('Voorjaar')
+
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect((await screen.findByRole('alert')).textContent).toBe('Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.')
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
+  })
+
+  it("clears a ticked row the view's search no longer shows", async () => {
+    await shell()
+    await tick('Aart', 'Bo')
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Zoeken' }), { target: { value: 'Bo' } })
+
+    await waitFor(() => expect(screen.getByRole('region', { name: '1 geselecteerd' })).toBeTruthy())
+    await run('Bo')
+    expect(api.runSelection).toHaveBeenCalledExactlyOnceWith('gather', [2], { name: 'Bo' })
   })
 })
 
@@ -1588,10 +1860,11 @@ describe("a dataset's action and the tab's undo history", () => {
 
   async function applyTemplate() {
     fireEvent.click(await screen.findByRole('button', { name: 'Openen' }))
+    await pressAction('Sjabloon toepassen')
     fireEvent.click(screen.getByRole('button', { name: 'Sjabloon: —' }))
     fireEvent.click(await screen.findByRole('option', { name: 'speeldag op locatie' }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Sjabloon toepassen' }))
+      fireEvent.click(within(screen.getByRole('group', { name: 'Sjabloon toepassen' })).getByRole('button', { name: 'Sjabloon toepassen' }))
     })
   }
   const grid = async (name: string) => {
@@ -1603,12 +1876,12 @@ describe("a dataset's action and the tab's undo history", () => {
   it('shows the action on a Speelreeks row only', async () => {
     await shell()
     fireEvent.click(await screen.findByRole('button', { name: 'Openen' }))
-    expect(screen.getByRole('group', { name: 'Sjabloon toepassen' })).toBeTruthy()
+    expect(await actionsOffered()).toContain('Sjabloon toepassen')
 
     fireEvent.click(tableEntry('Dagplanning'))
     await grid('Dagplanning')
     fireEvent.click(await screen.findByRole('button', { name: 'Openen' }))
-    expect(screen.queryByRole('group', { name: 'Sjabloon toepassen' })).toBeNull()
+    expect(await actionsOffered()).not.toContain('Sjabloon toepassen')
   })
 
   it('an applied action becomes one undo entry, and the view reloads; its notice undoes it on the server', async () => {
@@ -2158,6 +2431,34 @@ describe('the add button on a calendar', () => {
   })
 })
 
+describe('the title line\'s insight, with a search', () => {
+  const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { optie: 'Optie', vast: 'Vast', weg: 'Weg' }, tones: { optie: 'warn', weg: 'bad', vast: 'ok' } }
+  const schema = {
+    models: { activiteit: { key: 'activiteit', label: 'Activiteit', title_label: 'Omschrijving', title_readonly: false, fields: { status } } },
+    tables: [{ key: 'activiteit', label: 'Activiteiten', model: 'activiteit', types: ['grid'] }],
+    views: [{ key: 'lijst', label: 'Lijst', table: 'activiteit', model: 'activiteit' }],
+    writable: { activiteit: true },
+  } as unknown as Schema
+  const rows = [
+    { id: 1, title: 'Montage', status: '', fields: { status: 'optie' } },
+    { id: 2, title: 'Afbraak', status: '', fields: { status: 'weg' } },
+    { id: 3, title: 'Repetitie', status: '', fields: { status: 'vast' } },
+  ]
+
+  it('follows the search box: the pills count the rows the search leaves, as the row count does', async () => {
+    api.schema.mockResolvedValue(schema)
+    api.rows.mockResolvedValue({ rows, total: 3 })
+    window.location.hash = 'view=lijst'
+    render(<App />)
+    await waitFor(() => expect(document.querySelectorAll('.nv-toolbar__insight')).toHaveLength(2))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Repetitie' } })
+    await waitFor(() => expect(document.querySelectorAll('.nv-toolbar__insight')).toHaveLength(0))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Afbraak' } })
+    await waitFor(() => expect([...document.querySelectorAll('.nv-toolbar__insight')].map((p) => p.textContent)).toEqual(['Weg1']))
+    window.location.hash = ''
+  })
+})
+
 describe('the title line\'s insight', () => {
   const status = { type: 'select' as const, label: 'Status', required: false, fact: true, options: { optie: 'Optie', vast: 'Vast' }, tones: { optie: 'warn', vast: 'ok' } }
   const schema = {
@@ -2325,5 +2626,288 @@ describe("the timeline's overlap in the title line", () => {
     await waitFor(() => expect(document.querySelector('.nv-bar__count')?.textContent).toBe('2 rijen'))
     expect(overlaps()).toBeNull()
     window.location.hash = ''
+  })
+})
+
+describe('a drawer button', () => {
+  const marks = (state: string, ...buttons: [string, string][]) => ({ state, buttons: buttons.map(([to, label]) => ({ to, label })), actions: [] })
+  const stages: Schema = {
+    models: { member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, lifecycle: 'stage', fields: {} } },
+    tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+    views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+    writable: { member: true },
+  }
+  const at = (state: string, ...buttons: [string, string][]) => ({ id: 1, title: 'Aart', status: '', fields: { stage: state }, available: marks(state, ...buttons) })
+  const openDrawer = async () => {
+    await shell()
+    await screen.findByRole('grid', { name: 'Leden' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Openen' }))[0])
+    return screen.findByRole('complementary', { name: 'Aart' })
+  }
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(stages)
+    api.rows.mockResolvedValue({ rows: [at('open', ['active', 'Starten'])], total: 1 })
+    api.update.mockResolvedValue({ row: at('active'), batch: 'b-1' })
+    api.undoBatch.mockResolvedValue('u-1')
+  })
+
+  it('writes the transition expecting the marked state, re-reads, and makes one Undo entry', async () => {
+    api.rowOf.mockResolvedValue(at('active', ['done', 'Afronden']))
+    await openDrawer()
+
+    await act(async () => {
+      await pressAction('Starten')
+    })
+
+    expect(api.update).toHaveBeenCalledExactlyOnceWith('member', 1, { stage: 'active' }, undefined, { stage: 'open' })
+    await waitFor(async () => expect(await actionsOffered()).toContain('Afronden'))
+    expect(await actionsOffered()).not.toContain('Starten')
+    const notice = await screen.findByRole('status', { name: 'Starten gedaan.' })
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+    })
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+  })
+
+  it('shows a refusal as a notice and leaves the row as it was', async () => {
+    api.update.mockRejectedValue({ code: 'transition_lost', message: 'moved on' })
+    api.rowOf.mockResolvedValue(at('open', ['active', 'Starten']))
+    await openDrawer()
+
+    await act(async () => {
+      await pressAction('Starten')
+    })
+
+    expect((await screen.findByRole('status', { name: /./ })).getAttribute('aria-label')).toBe(errorText('transition_lost', 'moved on'))
+    expect(await actionsOffered()).toContain('Starten')
+    expect(api.undoBatch).not.toHaveBeenCalled()
+  })
+
+  const stageField = { type: 'select', label: 'Stage', required: false, fact: true, options: { open: 'Open', active: 'Actief' } }
+
+  it('after a press, an inline edit of the sheet shows in the same drawer', async () => {
+    const colour = { type: 'select', label: 'Kleur', required: false, fact: true, options: { rood: 'Rood' } }
+    const own = (state: string, ...buttons: [string, string][]) => ({ ...at(state, ...buttons), fields: { stage: state, colour: 'rood' } })
+    api.schema.mockResolvedValue({ ...stages, models: { member: { ...stages.models.member, fields: { stage: stageField, colour } } } } as unknown as Schema)
+    api.rows.mockResolvedValue({ rows: [own('open', ['active', 'Starten'])], total: 1 })
+    api.rowOf.mockResolvedValue(own('active', ['done', 'Afronden']))
+    const drawer = await openDrawer()
+    await act(async () => {
+      await pressAction('Starten')
+    })
+    await waitFor(async () => expect(await actionsOffered()).toContain('Afronden'))
+    api.update.mockResolvedValue({ row: { ...own('active', ['done', 'Afronden']), fields: { stage: 'active', colour: null } }, batch: 'b-2' })
+
+    const cell = await screen.findByRole('gridcell', { name: /Rood/ })
+    fireEvent.click(cell)
+    fireEvent.keyDown(cell, { key: 'Delete' })
+
+    await waitFor(() => expect(within(drawer).queryByText('Rood')).toBeNull())
+    expect(await actionsOffered()).toContain('Afronden')
+  })
+
+  it("a press in the board's and the calendar's drawer shows the new state and its next button", async () => {
+    const day = { type: 'date', label: 'Dag', required: false, fact: true }
+    const cal = { day: 'day', start: null, end: null, lanes: [] }
+    const skins = {
+      board: { key: 'bord', label: 'Bord', table: 'members', model: 'member', type: 'board', board: { column: 'stage' } },
+      calendar: { key: 'kalender', label: 'Kalender', table: 'members', model: 'member', type: 'calendar', calendar: cal },
+    }
+    for (const [kind, view] of Object.entries(skins)) {
+      const plain = { ...at('open', ['active', 'Starten']), fields: { stage: 'open', day: new Date().toISOString().slice(0, 10) } }
+      api.schema.mockResolvedValue({ ...stages, models: { member: { ...stages.models.member, fields: { stage: stageField, day } } }, tables: [{ ...stages.tables[0], types: ['grid', kind], date_field: 'day' }], views: [view] } as unknown as Schema)
+      api.rows.mockResolvedValue({ rows: [plain], total: 1 })
+      api.rowOf.mockResolvedValue({ ...plain, fields: { ...plain.fields, stage: 'active' }, available: marks('active', ['done', 'Afronden']) })
+      window.location.hash = `view=${view.key}`
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: /Aart/ }))
+      await screen.findByRole('complementary', { name: 'Aart' })
+
+      await act(async () => {
+        await pressAction('Starten')
+      })
+
+      await waitFor(async () => expect(await actionsOffered(), kind).toContain('Afronden'))
+      expect(await actionsOffered()).not.toContain('Starten')
+      cleanup()
+    }
+    window.location.hash = ''
+  })
+
+  describe('in a related record’s drawer', () => {
+    const linked: Schema = {
+      models: {
+        member: { key: 'member', label: 'Lid', title_label: 'Titel', title_readonly: false, fields: { bundle_id: { type: 'relation', label: 'Bundel', required: false, fact: true, relation: { model: 'bundle', multiple: false } } } },
+        bundle: { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, lifecycle: 'phase', fields: { phase: { type: 'select', label: 'Fase', required: false, fact: true, options: { open: 'Open', closed: 'Dicht' } } } },
+      },
+      tables: [{ key: 'members', label: 'Leden', model: 'member', types: ['grid'] }],
+      views: [{ key: 'members', label: 'Leden', table: 'members', model: 'member' }],
+      writable: { member: true, bundle: true },
+    } as unknown as Schema
+    // The bundle shares the member's id: a store patch by id alone would overwrite the member's row.
+    const bundle = (phase: string, ...buttons: [string, string][]) => ({ id: 1, title: 'Alpha', status: '', fields: { phase }, available: marks(phase, ...buttons) })
+    const member = { id: 1, title: 'Aart', status: '', fields: { bundle_id: [1] }, lookups: { bundle_id: { id: 1, title: 'Alpha', status: '', fields: {} } } }
+
+    const related = async () => {
+      api.schema.mockResolvedValue(linked)
+      api.rows.mockResolvedValue({ rows: [member], total: 1 })
+      api.rowOf.mockResolvedValueOnce(bundle('open', ['closed', 'Dichtzetten']))
+      api.update.mockResolvedValue({ row: bundle('closed'), batch: 'b-7' })
+      await shell()
+      await screen.findByRole('grid', { name: 'Leden' })
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Alpha' }))
+      return screen.findByRole('complementary', { name: 'Alpha' })
+    }
+
+    it('a press writes on that record, shows its next state, and leaves the table’s row with the same id as it was', async () => {
+      await related()
+      api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
+
+      await act(async () => {
+        await pressAction('Dichtzetten')
+      })
+
+      expect(api.update).toHaveBeenCalledExactlyOnceWith('bundle', 1, { phase: 'closed' }, undefined, { phase: 'open' })
+      await waitFor(async () => expect(await actionsOffered()).toContain('Heropenen'))
+      expect(screen.getByRole('row', { name: /Aart/ })).toBeTruthy()
+      expect(within(screen.getByRole('grid', { name: 'Leden' })).queryByText('Alpha', { selector: '.nv-cell__text' })).toBeTruthy()
+    })
+
+    it('a reply resolving after close leaves the drawer closed', async () => {
+      const drawer = await related()
+      let answer: (row: unknown) => void = () => undefined
+      api.rowOf.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
+      await act(async () => {
+        await pressAction('Dichtzetten')
+      })
+
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
+      await act(async () => answer(bundle('closed', ['open', 'Heropenen'])))
+
+      expect(screen.queryByRole('complementary', { name: 'Alpha' })).toBeNull()
+    })
+
+    it('Undo after closing the drawer keeps it closed', async () => {
+      const drawer = await related()
+      api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
+      api.undoBatch.mockResolvedValue('u-7')
+      await act(async () => {
+        await pressAction('Dichtzetten')
+      })
+      await waitFor(async () => expect(await actionsOffered()).toContain('Heropenen'))
+      fireEvent.click(within(drawer).getByRole('button', { name: 'Sluiten' }))
+
+      const notice = await screen.findByRole('status', { name: 'Dichtzetten gedaan.' })
+      await act(async () => {
+        fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+      })
+
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-7')
+      expect(screen.queryByRole('complementary', { name: 'Alpha' })).toBeNull()
+    })
+
+    it('Undo re-reads that drawer', async () => {
+      await related()
+      api.rowOf.mockResolvedValue(bundle('closed', ['open', 'Heropenen']))
+      api.undoBatch.mockResolvedValue('u-7')
+      await act(async () => {
+        await pressAction('Dichtzetten')
+      })
+      await waitFor(async () => expect(await actionsOffered()).toContain('Heropenen'))
+      api.rowOf.mockResolvedValue(bundle('open', ['closed', 'Dichtzetten']))
+
+      const notice = await screen.findByRole('status', { name: 'Dichtzetten gedaan.' })
+      await act(async () => {
+        fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+      })
+
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-7')
+      await waitFor(async () => expect(await actionsOffered()).toContain('Dichtzetten'))
+    })
+  })
+
+  describe('on the dashboard, with no store of its own', () => {
+    const saved = (id: number, label: string, extra: object) => ({
+      key: String(id), id, label, table: 'members', table_label: 'Leden', model: 'member', type: 'grid', starting: false,
+      arrangement: { hidden: [], order: [], widths: [], sort: [], filters: [], group: null, picked: [] },
+      shared: true, owner: { id: 1, name: 'Hester' }, mine: true, editable: true, ...extra,
+    })
+    const wachtend = saved(10, 'Wachtend', {})
+    const overzicht = saved(9, 'Overzicht', { type: 'dashboard', layout: { sections: [{ label: 'Nu', tiles: [{ kind: 'list', view: 10, rows: 5, columns: [] }] }], actions: [] } })
+
+    it('shows a refused Undo as a notice in the engine’s words', async () => {
+      api.schema.mockResolvedValue(stages)
+      api.savedViews.mockResolvedValue([overzicht, wachtend])
+      api.rows.mockResolvedValue({ rows: [at('open', ['active', 'Starten'])], total: 1 })
+      api.rowOf.mockResolvedValue(at('active'))
+      api.undoBatch.mockRejectedValue({ code: 'changed_since', message: 'changed since', column: 'stage', label: 'Stage' })
+      window.location.hash = '#view=9'
+      await shell()
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Aart' }))
+      await screen.findByRole('complementary', { name: 'Aart' })
+      await act(async () => {
+        await pressAction('Starten')
+      })
+
+      const notice = await screen.findByRole('status', { name: 'Starten gedaan.' })
+      await act(async () => {
+        fireEvent.click(within(notice).getByRole('button', { name: 'Ongedaan maken' }))
+      })
+
+      expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b-1')
+      await waitFor(() => expect(screen.getAllByRole('status').some((n) => /gewijzigd|Stage|stage/i.test(n.getAttribute('aria-label') ?? ''))).toBe(true))
+      window.location.hash = ''
+    })
+  })
+
+  describe('an action that opens', () => {
+    const settle = { name: 'settle', label: 'Afhandelen', input: {}, opens: true as const }
+    const gatherOpens = { name: 'gather', label: 'Bundelen', many: true as const, input: {}, opens: true as const }
+    const plain = { name: 'tidy', label: 'Opruimen', many: true as const, input: {} }
+    const opening: Schema = {
+      models: {
+        member: { ...stages.models.member, actions: [settle, gatherOpens, plain] },
+        bundle: { key: 'bundle', label: 'Bundel', title_label: 'Titel', title_readonly: false, fields: {} },
+      },
+      tables: stages.tables, views: stages.views, writable: { member: true, bundle: true },
+    } as unknown as Schema
+
+    it('opens what a selection run created, and the record a single run acted on when it created nothing', async () => {
+      api.schema.mockResolvedValue(opening)
+      api.rows.mockResolvedValue({ rows: [{ ...at('open'), available: { ...marks('open'), actions: ['settle', 'gather', 'tidy'] } }], total: 1 })
+      api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+      api.runAction.mockResolvedValue({ batch: 'b-2', created: [] })
+      api.rowOf.mockResolvedValue({ id: 7, title: 'Voorjaar', status: '', fields: {} })
+      await openDrawer()
+
+      await act(async () => {
+        await pressAction('Afhandelen')
+      })
+      expect(api.runAction).toHaveBeenCalledOnce()
+      expect(api.rowOf).not.toHaveBeenCalled()
+      expect(screen.getByRole('complementary', { name: 'Aart' })).toBeTruthy()
+
+      await act(async () => {
+        await pressAction('Bundelen')
+      })
+      expect(await screen.findByRole('complementary', { name: 'Voorjaar' })).toBeTruthy()
+      expect(api.rowOf).toHaveBeenCalledWith('bundle', 7)
+    })
+
+    it('opens nothing for an action that does not declare it', async () => {
+      api.schema.mockResolvedValue(opening)
+      api.rows.mockResolvedValue({ rows: [{ ...at('open'), available: { ...marks('open'), actions: ['settle', 'gather', 'tidy'] } }], total: 1 })
+      api.runSelection.mockResolvedValue({ batch: 'b-1', created: [{ dataset: 'bundle', id: 7 }] })
+      await openDrawer()
+
+      await act(async () => {
+        await pressAction('Opruimen')
+      })
+
+      await screen.findByRole('status', { name: 'Opruimen uitgevoerd.' })
+      expect(api.rowOf).not.toHaveBeenCalled()
+      expect(screen.queryByRole('complementary', { name: 'Voorjaar' })).toBeNull()
+    })
   })
 })

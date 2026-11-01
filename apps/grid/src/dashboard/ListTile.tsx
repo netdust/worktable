@@ -4,7 +4,7 @@ import { Display } from '../grid/cells'
 import { type Column, columnsFor } from '../grid/columns'
 import { errorText, t } from '../i18n'
 import type { ApiError, Model, Row, SavedView, Scope, Tile } from '../types'
-import { layoutOf } from '../ui/views'
+import { knownFor, layoutOf } from '../ui/views'
 import { iso } from '../ui/Window'
 import { whenOf } from '../ui/when'
 import { scopeFor } from './tiles'
@@ -14,19 +14,29 @@ type List = Extract<Tile, { kind: 'list' }>
 const noToggle = () => undefined
 
 /** A row as the prototype's list: its hours, its kind, the title with its context, a day at the end. */
-function Line({ row, shown }: { row: Row; shown: Column[] }) {
-  const hours = whenOf(row, shown.filter((c) => c.kind === 'datetime'))
+function Line({ row, shown, onOpenRow }: { row: Row; shown: Column[]; onOpenRow?: (row: Row) => void }) {
+  const times = shown.filter((c) => c.kind === 'datetime')
+  const hours = whenOf(row, times)
+  // Hours alone read as today's, so a moment on another day shows its day, muted: lateness is the view's to say.
+  const on = times.map((c) => String(c.value(row) ?? '').slice(0, 10)).find(Boolean) ?? ''
+  const today = iso(new Date())
   const kinds = shown.filter((c) => c.kind === 'select')
   const days = shown.filter((c) => c.kind === 'date')
   const rest = shown.filter((c) => !['datetime', 'select', 'date'].includes(c.kind))
   return (
     <>
-      {hours.from && <span className="nv-time nv-list__time">{hours.from}{hours.to && <span className="nv-time__end">–{hours.to}</span>}</span>}
+      {hours.from && (
+        <span className="nv-time nv-list__time">
+          {on !== today && <span className="nv-list__on">{hours.day}</span>}
+          {hours.from}{hours.to && <span className="nv-time__end">–{hours.to}</span>}
+        </span>
+      )}
       {kinds.map((c) => <span key={c.id} className="nv-list__kind"><Display column={c} row={row} onToggle={noToggle} /></span>)}
-      <span className="nv-list__title">{row.title}{rest.map((c) => c.text(row) && <span key={c.id} className="nv-list__cell">{c.text(row)}</span>)}</span>
+      <span className="nv-list__title">{onOpenRow
+        ? <button type="button" className="nv-list__open" aria-label={t('openRecord', { title: row.title })} onClick={() => onOpenRow(row)}>{row.title}</button>
+        : row.title}{rest.map((c) => c.text(row) && <span key={c.id} className="nv-list__cell">{c.text(row)}</span>)}</span>
       {days.map((c) => {
         const day = String(c.value(row) ?? '').slice(0, 10)
-        const today = iso(new Date())
         const when = !day ? '' : day < today ? ' nv-list__day--late' : day === today ? ' nv-list__day--now' : ''
         return <span key={c.id} className={`nv-list__day${when}`}>{whenOf(row, [c]).day ?? c.text(row)}</span>
       })}
@@ -35,15 +45,17 @@ function Line({ row, shown }: { row: Row; shown: Column[] }) {
 }
 
 /** The first rows of a view, its total in the title, "Alles tonen", and the tile's one-click write on each row that takes it. */
-export function ListTile({ tile, view, model, models, scope, version, onOpen, onChanged }: {
+export function ListTile({ tile, view, model, models, scope, version, onOpen, onOpenRow, onChanged }: {
   tile: List; view: SavedView; model?: Model; models: Record<string, Model>; scope: Scope | null; version: number
   onOpen: () => void; onChanged: () => void
+  /** A row of a dataset opens its record in a drawer; a row of a query has no record of its own to open. */
+  onOpenRow?: (row: Row) => void
 }) {
   const [found, setFound] = useState<{ rows: Row[]; total: number } | null>(null)
   const [refusal, setRefusal] = useState<string | null>(null)
   useEffect(() => {
     let live = true
-    readRows(view, {}, scopeFor(view, scope), layoutOf(view), tile.rows).then(
+    readRows(view, {}, scopeFor(view, scope), layoutOf(view, knownFor(view, models)), tile.rows).then(
       (r) => live && setFound({ rows: r.rows.slice(0, tile.rows), total: r.total }),
       () => live && setFound({ rows: [], total: 0 }),
     )
@@ -74,7 +86,7 @@ export function ListTile({ tile, view, model, models, scope, version, onOpen, on
       <ul className="nv-list__rows">
         {found?.rows.map((row) => (
           <li key={row.id} className="nv-list__row">
-            <Line row={row} shown={shown} />
+            <Line row={row} shown={shown} onOpenRow={model?.query ? undefined : onOpenRow} />
             {set && (takes(row) ? <button type="button" className="nv-bar__button nv-list__act" onClick={() => run(row)}>{set.label}</button> : <span className="nv-list__act" />)}
           </li>
         ))}
