@@ -66,13 +66,13 @@ test.describe('step 3e: one period, used the same way on every skin', () => {
       await lit(page, 'Week')
       await expect(pill(page)).toHaveText(/^Week \d+ · /)
       await shot(page, `period-${view.toLowerCase().replaceAll(' ', '-')}`)
-      const thisWeek = await weekNo(page)
+      const shown = await weekNo(page)
       await press(page, bar(page).getByRole('button', { name: 'Volgende periode' }))
-      await expect.poll(() => weekNo(page)).not.toBe(thisWeek)
+      await expect.poll(() => weekNo(page)).not.toBe(shown)
 
-      // Vandaag: back to this week, which the view keeps following.
+      // Vandaag: today's week, which the view keeps following. Maand then Week need not land there: from a week, Maand shows its Thursday's month.
       await press(page, bar(page).getByRole('button', { name: 'Vandaag' }))
-      await expect.poll(() => weekNo(page)).toBe(thisWeek)
+      await expect.poll(() => weekNo(page)).toBe(isoWeekOf(new Date()))
 
       // Removing the period: pressing the lit Week clears it where the skin allows every date.
       await press(page, radio(page, 'Week'))
