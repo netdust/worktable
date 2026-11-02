@@ -204,6 +204,7 @@ describe('validateDomain: board, gallery and spans', () => {
 describe('board, timeline and gallery views and /schema', () => {
   let admin: ReturnType<typeof send>
   let plain: ReturnType<typeof send>
+  let bare: ReturnType<typeof send>
 
   const make = async (d: Domain) => {
     const sqlite = new Database(':memory:')
@@ -213,10 +214,20 @@ describe('board, timeline and gallery views and /schema', () => {
     return send(app, await signIn(app, 'administrator'))
   }
 
+  const undeclared = { board: undefined, gallery: undefined, calendar: undefined }
+  const hide = (names: string[]) =>
+    Object.fromEntries(
+      Object.entries(itemOf().columns).map(([k, c]) => [k, names.includes(k) ? { ...c, hidden: true } : c]),
+    )
+
   beforeEach(async () => {
     admin = await make(domainOf(itemOf()))
-    plain = await make(
-      domainOf(itemOf({ board: undefined, gallery: undefined, calendar: undefined }), listOf({ board: undefined })),
+    plain = await make(domainOf(itemOf(undeclared), listOf({ board: undefined })))
+    bare = await make(
+      domainOf(
+        itemOf({ ...undeclared, date: undefined, columns: hide(['state', 'day', 'until', 'at']) }),
+        listOf({ board: undefined, columns: { ...listOf().columns, state: { type: 'text', label: 'State' } } }),
+      ),
     )
   })
 
@@ -226,18 +237,39 @@ describe('board, timeline and gallery views and /schema', () => {
   test('a timeline view saves where the source declares calendar', async () => {
     const made = await admin('POST', '/api/views', { body: view('timeline', { group_by: 'place_id' }) })
     expect([made.status, made.body.skin, made.body.group_by]).toEqual([201, 'timeline', 'place_id'])
-    const refused = await plain('POST', '/api/views', { body: view('timeline') })
-    expect([refused.status, refused.body.code]).toEqual([400, 'bad_view'])
   })
 
-  test('a board and a gallery view save where the source declares them, and are refused where not', async () => {
-    for (const skin of ['board', 'gallery']) {
-      expect((await admin('POST', '/api/views', { body: view(skin) })).status, skin).toBe(201)
-      const refused = await plain('POST', '/api/views', { body: view(skin) })
+  test('without a declaration, a shown date column allows a calendar and a timeline, ungrouped', async () => {
+    for (const skin of ['calendar', 'timeline']) {
+      const made = await plain('POST', '/api/views', { body: view(skin) })
+      expect([made.status, made.body.skin], skin).toEqual([201, skin])
+      const grouped = await plain('POST', '/api/views', { body: view(skin, { group_by: 'place_id' }) })
+      expect([grouped.status, grouped.body.code], skin).toEqual([400, 'bad_view'])
+      const refused = await bare('POST', '/api/views', { body: view(skin) })
       expect([refused.status, refused.body.code], skin).toEqual([400, 'bad_view'])
     }
-    const board = await admin('POST', '/api/views', { body: view('board', { source: 'item_list' }) })
-    expect(board.status).toBe(201)
+  })
+
+  test('without a declaration, a shown options column allows a board, on a dataset and a query', async () => {
+    for (const source of ['item', 'item_list']) {
+      expect((await plain('POST', '/api/views', { body: view('board', { source }) })).status, source).toBe(201)
+      const refused = await bare('POST', '/api/views', { body: view('board', { source }) })
+      expect([refused.status, refused.body.code], source).toEqual([400, 'bad_view'])
+    }
+  })
+
+  test("a query column that writes an options field allows a board on its target's options", async () => {
+    const state = { type: 'text' as const, label: 'State', writes: { dataset: 'item', field: 'state', key: 'id' } }
+    const d = domainOf(itemOf(undeclared), listOf({ board: undefined, columns: { ...listOf().columns, state } }))
+    const mapped = await make({ ...d, writers: { item: { create: (v) => v, update: (_, v) => v } } })
+    const made = await mapped('POST', '/api/views', { body: view('board', { source: 'item_list' }) })
+    expect(made.status).toBe(201)
+  })
+
+  test('a gallery view saves where the source declares it, and is refused where not', async () => {
+    expect((await admin('POST', '/api/views', { body: view('gallery') })).status).toBe(201)
+    const refused = await plain('POST', '/api/views', { body: view('gallery') })
+    expect([refused.status, refused.body.code]).toEqual([400, 'bad_view'])
   })
 
   test('/schema serves board, gallery and calendar spans as declared', async () => {
