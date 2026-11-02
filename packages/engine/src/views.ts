@@ -4,7 +4,7 @@ import type { Context, Hono } from 'hono'
 import { forbid, may, readable } from './access'
 import { type AuthEnv, secret, sha256 } from './auth'
 import { layoutOf, tileViews } from './dashboard'
-import type { Actor, DashboardLayout, Domain, SavedViewSeed } from './declare'
+import type { Actor, ColumnDecl, DashboardLayout, Domain, SavedViewSeed } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import type { FilterInput } from './filter-compile'
 import { hasColumn, hasField, sortable } from './lookups'
@@ -120,11 +120,24 @@ function sourceNamed(domain: Domain, value: unknown): Source {
   return source
 }
 
+const shown = (source: Source): ColumnDecl[] => Object.values(source.columns).filter((column) => !column.hidden)
+
+// The columns decide the skins, as the grid offers them: a declared need only sets its defaults.
+const allowsCalendar = (source: Source): boolean =>
+  Boolean(source.calendar) || shown(source).some((column) => column.type === 'date' || column.type === 'datetime')
+
+// A mapped query column is served with its target's options, so it carries a board too.
+const optionsOf = (domain: Domain, column: ColumnDecl) =>
+  column.options ?? (column.writes && sourceOf(domain, column.writes.dataset)?.columns[column.writes.field]?.options)
+
+const allowsBoard = (domain: Domain, source: Source): boolean =>
+  Boolean(source.board) || shown(source).some((column) => optionsOf(domain, column) !== undefined)
+
 function skinOf(domain: Domain, source: Source, value: unknown): Skin {
   if (value === 'table') return value
   if (value === 'matrix' && matrixOf(domain, source)) return value
-  if ((value === 'calendar' || value === 'timeline') && source.calendar) return value
-  if (value === 'board' && source.board) return value
+  if ((value === 'calendar' || value === 'timeline') && allowsCalendar(source)) return value
+  if (value === 'board' && allowsBoard(domain, source)) return value
   if (value === 'gallery' && source.kind === 'dataset' && source.gallery) return value
   throw bad(`skin "${String(value)}" is not available on "${source.name}"`)
 }
