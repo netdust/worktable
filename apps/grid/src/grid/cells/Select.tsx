@@ -2,7 +2,7 @@ import { type FocusEvent, type KeyboardEvent, useCallback, useEffect, useRef, us
 import { ListBox, ListBoxItem } from 'react-aria-components'
 import { t } from '../../i18n'
 import { Pop } from '../../ui/Pop'
-import { CATEGORY_MARK } from '../categories'
+import { CategoryMark } from '../CategoryMark'
 import type { Column } from '../columns'
 import type { CellProps, EditorProps } from './props'
 import { iconOf, type Tone, toneOf } from './tones'
@@ -27,7 +27,7 @@ export function OptionMark({ column, option, text = column.options?.[option] ?? 
   const category = column.categories?.[option]
   const tone = toneOf(option, column.tones)
   if (!category) return <ToneMark tone={tone} text={text} />
-  const mark = <span className="nv-category" aria-hidden="true">{CATEGORY_MARK[category]}</span>
+  const mark = <CategoryMark category={category} />
   return <>{mark}{tone ? <ToneMark tone={tone} text={text} /> : <span>{text}</span>}</>
 }
 

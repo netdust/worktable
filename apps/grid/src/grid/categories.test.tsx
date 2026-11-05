@@ -5,7 +5,8 @@ import type { Field, Model, Row, View } from '../types'
 import { FinishedChip } from '../ui/FinishedChip'
 import { SkinChips } from '../ui/SkinChips'
 import { defaults } from './layout'
-import { categoriesFieldOf, categoryOf, CATEGORY_MARK, hideFinished } from './categories'
+import { categoriesFieldOf, categoryOf, hideFinished } from './categories'
+import { CategoryMark } from './CategoryMark'
 import { columnsFor } from './columns'
 import { Display } from './cells'
 
@@ -55,18 +56,25 @@ describe('the mark beside a status', () => {
   const column = columnsFor(model, tableView).find((c) => c.id === 'status')!
   it('shows in a cell before the tone pill, and not on a column without categories', () => {
     const { container } = render(<Display column={column} row={rows[1]} onToggle={() => undefined} />)
-    expect(container.textContent).toContain(CATEGORY_MARK.done)
+    expect(container.querySelector('[data-category="done"]')).not.toBeNull()
     cleanup()
     const bare = columnsFor(plain, tableView).find((c) => c.id === 'status')!
     const again = render(<Display column={bare} row={rows[1]} onToggle={() => undefined} />)
-    expect(again.container.textContent).not.toContain(CATEGORY_MARK.done)
+    expect(again.container.querySelector('[data-category]')).toBeNull()
   })
   it('shows on a board card that is grouped by another field', () => {
     const grouped = { ...model, fields: { ...model.fields, prio: { type: 'select', label: 'Prio', required: false, fact: false, options: { hoog: 'Hoog' } } } } as unknown as Model
     const view = { key: 'b', label: 'Bord', table: 'taak', model: 'taak', type: 'board', board: { column: 'prio' } } as unknown as View
     const card = { ...rows[0], fields: { status: 'todo', prio: 'hoog' } }
     render(<Board view={view} model={grouped} models={{}} rows={[card]} column="prio" layout={defaults(view)} />)
-    expect(screen.getByRole('button', { name: /a/ }).textContent).toContain(CATEGORY_MARK.open)
+    expect(screen.getByRole('button', { name: /a/ }).querySelector('[data-category="open"]')).not.toBeNull()
+  })
+})
+
+describe('CategoryMark', () => {
+  it('draws a distinct shape for each category', () => {
+    const shapes = (['open', 'active', 'done', 'cancelled'] as const).map((category) => render(<CategoryMark category={category} />).container.innerHTML)
+    expect(new Set(shapes).size).toBe(4)
   })
 })
 

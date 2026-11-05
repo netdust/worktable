@@ -1,8 +1,5 @@
 import type { Category, Field, Model, ViewType } from '../types'
 
-/** Empty circle, half circle, check, cross. */
-export const CATEGORY_MARK: Record<Category, string> = { open: '○', active: '◐', done: '✓', cancelled: '✕' }
-
 const HIDING: ViewType[] = ['calendar', 'timeline', 'gallery', 'matrix']
 
 /** The category of an option; undefined for a value that is no option, or a field without categories. */
