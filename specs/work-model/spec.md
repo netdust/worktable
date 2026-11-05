@@ -1,8 +1,9 @@
 # Work model: categories, parents, editable skins, a default view
 
 Written on 2026-11-04 from a conversation with Stefan that started from Orbit (coollabsio/orbit): what a
-dedicated task app has that worktable's generic skins lack. A parent spec, cut into three plans (see "The
-cut"). A requirement marked `invented` is Claude's call and waits for Stefan's approval of this document.
+dedicated task app has that worktable's generic skins lack. A parent spec, cut into plans (see "The
+cut"). Approved by Stefan on 2026-11-05 with the changes recorded below; a requirement still marked
+`invented` is Claude's call and waits for his approval.
 
 ## Why
 
@@ -33,17 +34,28 @@ lifecycle column may declare them too.
 The engine and the grid read categories, never option names, wherever they mean "still to do" or "finished":
 
 - **Progress** (R2) counts `done` over everything that is not `cancelled`.
-- **Every skin but the grid** hides `done` and `cancelled` rows by default, with one toggle in the chip row
-  ("Afgerond tonen") that the view's layout remembers. The grid shows everything, as now.
+- **Every skin but the grid and the board** hides `done` and `cancelled` rows by default, with one toggle in
+  the chip row ("Afgerond tonen") that the view's layout remembers. The grid shows everything, as now. The
+  board keeps its `done` column, since a board without it cannot finish a card; the cleanup below is what
+  stops that column growing.
 - **A status chip** in the grid, on a board card and in the drawer shows the category's mark beside the tone:
   an empty circle, a half circle, a check, a cross.
 - **The timeline** draws a `cancelled` bar as cancelled, instead of reading the tone `bad`.
+
+**Cleanup.** A finished row must not pile up forever in a column or a list. A dataset with categories may
+declare `archive_after: <days>`: a row whose status has been `done` or `cancelled` for that many days is
+archived. An archived row is hidden on every skin, the grid included, until the chip row's "Archief tonen" is
+on; it keeps its revisions and links, is never deleted, and un-archives when its status leaves `done` or
+`cancelled`. The engine does it on read (the row's category and the time of its last status revision), so no
+job runs and nothing goes stale. Studio declares 30 days on `taak`, 14 on `actie`.
 
 A column without categories behaves exactly as today. Declaring categories on a column that has no options is
 refused at startup, as is a category word outside the four, or an option with none.
 
 Source: "Catégories … sound good" — Stefan, 2026-11-04, after Orbit's `StatusCategory`
-(`crates/orbit/src/workspace.rs:201`). The four words and "hidden by default outside the grid" are `invented`.
+(`crates/orbit/src/workspace.rs:201`); "R1 yes, but i dont want endless growing item in done either, so we need
+to have a cleanup of some sort" — Stefan, 2026-11-05. The four words, "hidden by default outside the grid" and
+the shape of the cleanup (archive by age, never delete, 30 and 14 days) are `invented`.
 
 ### R2 — A parent, and progress from children
 
@@ -61,7 +73,7 @@ as it refuses any relation.
   each row (`{ done, total }`, cancelled left out), so no writer computes it and it is never stale. The board
   card, the grid row and the drawer show it as "done/total" with a thin bar.
 
-Source: "parent is sound good" — Stefan, 2026-11-04, after Orbit's sub-issues (`parent_id`,
+Source: "parent is sound good" — Stefan, 2026-11-04; "R2 ok, if you are sure" — Stefan, 2026-11-05, after Orbit's sub-issues (`parent_id`,
 `SubIssueProgress`). The cycle refusal and the cross-dataset `progress` are `invented`.
 
 ### R3 — Every skin is editable, by the action that fits it
@@ -84,23 +96,32 @@ on a query, only through a column that `writes` to a dataset.
 A calendar or timeline item whose dates are a lookup or derived is not draggable and says why on hover. The
 lifecycle column moves only by declared transitions; a drop on a column no transition reaches is not offered.
 
-Source: "Every skin is editable with logical actions for what it is" — Stefan, 2026-11-04. Which edit each skin
-offers is `invented`, after Orbit's timeline (`features/tasks/timeline/useTimelineDrag.ts`: move, resize, draw,
-day snap, Escape cancels).
+**Built last, one skin at a time**, each its own plan, so the work spans several sessions and its progress
+lives in Studio (the `netdust-core:worktable` skill mirrors each plan's tasks).
+
+**Orbit is the reference for how it feels, not how it looks.** Take its attention to detail from its timeline
+(`features/tasks/timeline/useTimelineDrag.ts`: move, resize, draw, day snap, Escape cancels) and the rest of
+its drag handling; take none of its colours, type or spacing, which stay worktable's own.
+
+Source: "Every skin is editable with logical actions for what it is" — Stefan, 2026-11-04; "R3 yes, do it as last
+item, one skin at the time, if we keep track of it in studio, we can do it over several sessions … dont take
+colors etc, but they spend a lot of attention to details, obvious in there timeline skill" — Stefan, 2026-11-05.
+Which edit each skin offers is `invented`.
 
 ### R4 — A default view per source
 
-Each source has one default view: the view the rail opens when the source is chosen, and the view a link to
-the source opens. An administrator marks any shared view of the source as its default from the view's menu
-("Standaardweergave"); marking one unmarks the other. A domain's seed may mark one. Without a mark, the first
-view opens, as now. A planner's own unshared view is never a default.
+Every source has its own default view: the view the rail opens when the source is chosen, and the view a link
+to the source opens. An administrator marks any shared view of the source as its default from the view's menu
+("Standaardweergave"); marking one unmarks the other. A domain's seed marks the default of each dataset it
+seeds. Without a mark, the first view opens, as now. A planner's own unshared view is never a default.
 
-For Studio the seed marks: Taken → a board on status; Features → the board on `fase`; Opdrachten → the board
-on status. A grouped list is the grid grouped by a column (the grid groups today); it is offered as a default
-like any other view.
+For Studio the seed marks: Taken → a board on status; Features → the board on `fase`; Agenda → a calendar.
+Opdrachten, Sites and the rest keep opening the grid until Stefan says otherwise. A grouped list is the grid
+grouped by a column (the grid groups today); it is offered as a default like any other view.
 
 Source: "a skin can be set as default view (tasks for instance are useless as grid, but default could be bord
-or grouped list)" — Stefan, 2026-11-04. Who may set it and the three Studio defaults are `invented`.
+or grouped list)" — Stefan, 2026-11-04; "R4 every dataset has its own default view, Taken are bord, Features
+too, Agenda is calendar" — Stefan, 2026-11-05. Who may set it is `invented`.
 
 ## Studio adopts it
 
@@ -109,6 +130,7 @@ or grouped list)" — Stefan, 2026-11-04. Who may set it and the three Studio de
 - `werkpakket` declares `progress: { dataset: 'taak', key: 'werkpakket_id', column: 'status' }`; the stored
   `voortgang` column and its writer code go, replaced by the engine's progress. The worktable skill in
   netdust-plugins stops naming `voortgang` and keeps writing the werkpakket last for `bijgewerkt`.
+- `taak` declares `archive_after: 30`, `actie` `archive_after: 14` (R1, Cleanup).
 - `actie.status` and `actie_site.state` declare categories; `werkpakket.fase` too (ontwerp, plan → open;
   bouwen, review, geblokkeerd → active; klaar → done; geparkeerd → cancelled).
 
@@ -119,16 +141,20 @@ record; chat; GitHub sync. None is built, stubbed or prepared for here.
 
 ## The cut
 
-Three plans, each its own `feature/<name>` branch, in this order because each builds on the one before:
+Plans, each its own `feature/<name>` branch, in this order because each builds on the one before:
 
-1. **`categories-parent`** — R1 and R2, engine and grid, and Studio adopting them.
-2. **`editable-skins`** — R3, one skin at a time behind the same write path; board first (it is nearly there),
-   then calendar, timeline, gallery.
-3. **`default-view`** — R4.
+1. **`categories-parent`** — R1 (with the cleanup) and R2, engine and grid, and Studio adopting them.
+2. **`default-view`** — R4, with the Studio seed defaults.
+3. **`editable-board`**, **`editable-calendar`**, **`editable-timeline`**, **`editable-gallery`** — R3, last, one
+   skin per plan in that order (the board is nearly there), each with its own Werkpakket in Studio so the work
+   can stop and resume between sessions.
+
+## Decided
+
+1. A parent's status never follows its children by itself; the drawer says "alle subtaken afgerond" and offers
+   the button (proposed, accepted with "R2 ok").
 
 ## Open questions for Stefan
 
-1. Should a parent's status follow its children (all done → parent done)? Proposed: no, never automatic;
-   the drawer says "alle subtaken afgerond" and offers the button.
-2. Calendar and timeline create on an empty day: a quick title field in place, or the full new-row drawer?
-   Proposed: quick title, like the board's "+".
+1. Quick title field in place when creating on an empty calendar day or timeline row, or the full new-row
+   drawer? Proposed: the quick title, like the board's "+". Decided when `editable-calendar` is planned.
