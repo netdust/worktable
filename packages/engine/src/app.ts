@@ -8,7 +8,18 @@ import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
 import { markOf } from './available'
-import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, FlagsDecl, LinkDecl, OptionsFrom } from './declare'
+import {
+  type ActionInput,
+  type Actor,
+  type ColumnDecl,
+  type DatasetDecl,
+  type Domain,
+  type FlagsDecl,
+  type LinkDecl,
+  type OptionsFrom,
+  type ProgressDecl,
+  progressDeclOf,
+} from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { handoffRoutes, startSweep } from './handoff'
 import { readHistory } from './history'
@@ -115,7 +126,12 @@ function servedColumn(domain: Domain, declared: ColumnDecl, actor: Actor): Colum
   const target = sourceOf(domain, column.writes.dataset)
   const decl = target?.columns[column.writes.field]
   if (!target || !decl?.options || !readable(actor, target)) return column
-  return { ...column, options: decl.options, ...(decl.tones ? { tones: decl.tones } : {}) }
+  return {
+    ...column,
+    options: decl.options,
+    ...(decl.tones ? { tones: decl.tones } : {}),
+    ...(decl.categories ? { categories: decl.categories } : {}),
+  }
 }
 
 // A picker's options source is served only to a caller who can read it.
@@ -203,6 +219,13 @@ function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Re
     return linked && readable(actor, linked) ? [[name, servedLink(link, linked, actor)] as const] : []
   })
   return served.length ? { links: Object.fromEntries(served) } : {}
+}
+
+// Own children are served whenever the dataset is; a declared dataset only to a reader of it.
+function servedProgress(domain: Domain, dataset: DatasetDecl, actor: Actor): { progress?: ProgressDecl } {
+  const progress = progressDeclOf(dataset)
+  const counted = progress && domain.datasets.find((d) => d.name === progress.dataset)
+  return progress && counted && readable(actor, counted) ? { progress } : {}
 }
 
 type ServedLookup = ColumnDecl & { inherited?: true; from?: string }
@@ -352,6 +375,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(space ? { space: s.scoped ? 'scoped' : 'global' } : {}),
             ...(s.group_facts ? { group_facts: s.group_facts } : {}),
             ...(s.kind === 'dataset' && s.tone ? { tone: s.tone } : {}),
+            ...(s.kind === 'dataset' && s.parent ? { parent: s.parent } : {}),
+            ...(s.kind === 'dataset' ? servedProgress(domain, s, actor) : {}),
+            ...(s.kind === 'dataset' && s.archive_after ? { archive_after: s.archive_after } : {}),
           },
         ]),
     )
