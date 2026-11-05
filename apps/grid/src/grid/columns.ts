@@ -1,10 +1,11 @@
 import { locale, t } from '../i18n'
 import type { Category, Field, GroupFact, Link, LinkItem, Model, OptionsFrom, Row, Tone, View } from '../types'
+import { PROGRESS } from '../engine'
 import { DRAFT } from './store'
 
 export type CellKind =
   | 'title' | 'text' | 'longtext' | 'select' | 'date' | 'datetime' | 'time' | 'relation' | 'bool' | 'number'
-  | 'lookup' | 'rollup' | 'links' | 'other'
+  | 'lookup' | 'rollup' | 'progress' | 'links' | 'other'
 
 export interface Column {
   /** `title`, a field key, `lookups.<field>.<name>` or `rollups.<key>`. */
@@ -51,7 +52,7 @@ export interface Column {
 
 const WIDTH: Record<CellKind, number> = {
   title: 280, text: 160, longtext: 220, select: 130, date: 124, datetime: 140, time: 76, relation: 150,
-  bool: 108, number: 90, lookup: 170, rollup: 90, links: 200, other: 140,
+  bool: 108, number: 90, lookup: 170, rollup: 90, progress: 120, links: 200, other: 140,
 }
 
 /** A header's room: about 7px a character at the header's size, plus its type icon, sort mark and padding. */
@@ -268,6 +269,14 @@ function rollupColumns(view: View): Column[] {
   )
 }
 
+/** Done over total of the row's children, computed by the engine: shown, sorted here by its share, never sent as a sort. */
+function progressColumn(): Column {
+  const share = (row: Row) => (row.progress && row.progress.total > 0 ? row.progress.done / row.progress.total : '')
+  const column = base(PROGRESS, 'progress', t('progress'), share)
+  column.text = (row) => (row.progress && row.progress.total > 0 ? `${row.progress.done}/${row.progress.total}` : '')
+  return column
+}
+
 /** A lifecycle column whose transitions declare buttons changes through them only. */
 export const pressedOnly = (model: Model, key: string): boolean => model.lifecycle_buttons === true && model.lifecycle === key
 
@@ -278,6 +287,7 @@ export function columnsFor(model: Model, view: View, writable = true, models: Re
     ...shown.map((key) => fieldColumn(key, model.fields[key], writable && !pressedOnly(model, key))),
     ...lookupColumns(model, view, shown, models),
     ...rollupColumns(view),
+    ...(model.progress && !('progress' in model.fields) ? [progressColumn()] : []),
   ]
 }
 

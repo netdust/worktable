@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows, update } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, update } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -60,6 +60,7 @@ import { barOf, boardColumn } from './bar'
 import { SchemaContext } from '../grid/drawer/context'
 import { SkinChips } from './SkinChips'
 import { useFinished } from './useFinished'
+import { readView, rereadsOf } from './readView'
 import { hideFinished } from '../grid/categories'
 import { useViewChoice } from './choice'
 import { useGallerySize } from '../gallery/size'
@@ -328,7 +329,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const timelineShown = timeline && period?.window ? period.window : weekOf(new Date())
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
   // Rows that span days are read by overlap with the window, so one begun before it still shows.
-  const readRows = (calendar ?? timeline)?.spans ? spanRows : rows
   const setPeriod = (next: Filter | null) => {
     if (period && layout) setLayout(withPeriod(layout, period.field, next))
   }
@@ -368,7 +368,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       live = false
     }
   }, [countKey])
-  const { finished: showDone, setFinished: setShowDone } = useFinished(view)
+  const { finished: showDone, setFinished: setShowDone, archived: showArchived, setArchived: setShowArchived } = useFinished(view)
   const [showAway, setShowAway] = useViewChoice<boolean>(view, 'ntdst-views/matrix-away/v1/', (raw) => (typeof raw === 'boolean' ? raw : null), true)
 
   const shownKey = useRef<string | null>(null)
@@ -379,7 +379,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     if (shownKey.current !== view.key) setResult({ status: 'loading' })
     const asked = window
     const away = view.type === 'matrix' ? view.away : undefined
-    Promise.all([readRows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
+    Promise.all([readView(view, asked, scope, layout, showArchived, served?.models[view.model]), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
       ([r, away, titles]) => {
         if (!live) return
         shownKey.current = view.key
@@ -395,7 +395,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       live = false
     }
     // By key, and by what the server applies (filters, sort, group): a width or a hidden column stays in the browser.
-  }, [settled, view?.key, windowKey, scopeId, asks, reloads])
+  }, [settled, view?.key, windowKey, scopeId, asks, reloads, showArchived])
 
   const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
   const model = view ? models[view.model] : undefined
@@ -426,12 +426,12 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
-  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView, runs.created)
+  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView, runs.created, rereadsOf(model))
   const live = useRef(store)
   live.current = store
   const viewNow = useRef(view)
   viewNow.current = view
-  const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
+  const reload = () => (view ? readView(view, window, scope ?? null, layout, showArchived).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
   // The skins that hide finished rows draw, and count, what is left.
   const hiding = (all: Row[]) => (view && model ? hideFinished(model, all, showDone, view.type ?? 'grid') : all)
@@ -713,7 +713,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period: period ? { period, onPeriod: setPeriod } : null,
             told: told?.view === view.key ? told.shown : null,
             ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
-            skin: <SkinChips view={view} model={model} size={size} onSize={setSize} away={showAway} onAway={() => setShowAway(!showAway)} finished={showDone} onFinished={() => setShowDone(!showDone)} />,
+            skin: <SkinChips view={view} model={model} size={size} onSize={setSize} away={showAway} onAway={() => setShowAway(!showAway)} finished={showDone} onFinished={() => setShowDone(!showDone)} archived={showArchived} onArchived={() => setShowArchived(!showArchived)} />,
           })} />
         )}
         <div className="nv-work">

@@ -1,5 +1,6 @@
-import { Fragment, type KeyboardEvent } from 'react'
+import { type CSSProperties, Fragment, type KeyboardEvent } from 'react'
 import { t } from '../i18n'
+import './tree.css'
 import type { Row } from '../types'
 import { Display, Editor } from './cells'
 import type { Pick } from './cells/RelationPicker'
@@ -7,6 +8,7 @@ import { type Column, editableAt } from './columns'
 import { type Fact, type Group, sums } from './group'
 import type { Cell, KeyState, Move } from './keys'
 import { cellKey, type CellError, DRAFT } from './store'
+import type { Place } from './useTree'
 
 export interface BodyActions {
   click: (cell: Cell) => void
@@ -27,6 +29,9 @@ interface Props {
   /** The keys of the groups folded away. */
   shut: Set<string>
   onFold: (key: string) => void
+  /** Where each row sits in the tree; empty for a dataset without a parent. */
+  places?: ReadonlyMap<number, Place>
+  onFoldRow?: (id: number) => void
   columns: Column[]
   keys: KeyState
   errors: Record<string, CellError>
@@ -38,8 +43,8 @@ interface Props {
   running?: ReadonlySet<number>
 }
 
-function GridCell({ row, column, cell, keys, error, actions }: {
-  row: Row; column: Column; cell: Cell; keys: KeyState; error: CellError | undefined; actions: BodyActions
+function GridCell({ row, column, cell, keys, error, actions, place, onFoldRow }: {
+  row: Row; column: Column; cell: Cell; keys: KeyState; error: CellError | undefined; actions: BodyActions; place?: Place; onFoldRow?: (id: number) => void
 }) {
   const active = keys.active?.row === cell.row && keys.active.col === cell.col
   const editing = active && keys.editing !== null
@@ -64,7 +69,9 @@ function GridCell({ row, column, cell, keys, error, actions }: {
         <Editor column={column} row={row} editing={keys.editing} onDraft={actions.draft} onCommit={actions.commit} onLeave={actions.leave}
           onPick={actions.pick} onCancel={actions.cancel} onClose={actions.close} />
       ) : (
-        <Display column={column} row={row} active={active} onToggle={() => actions.toggle(cell)} />
+        <TreeIndent place={column.id === 'title' ? place : undefined} id={row.id} title={row.title} onFold={onFoldRow}>
+          <Display column={column} row={row} active={active} onToggle={() => actions.toggle(cell)} />
+        </TreeIndent>
       )}
       {column.required && column.editable && !editing && column.text(row) === '' && (
         <span className="nv-td__missing" title={t('required')}><span className="nv-sr">{t('required')}</span></span>
@@ -89,6 +96,25 @@ function GridCell({ row, column, cell, keys, error, actions }: {
         </span>
       )}
     </td>
+  )
+}
+
+/** A tree row's title cell: indented by its level, with a chevron where it has children. */
+function TreeIndent({ place, id, title, onFold, children }: { place?: Place; id: number; title: string; onFold?: (id: number) => void; children: React.ReactNode }) {
+  if (!place) return <>{children}</>
+  return (
+    <span className="nv-tree" style={{ '--depth': place.depth } as CSSProperties}>
+      {place.folds ? (
+        <button type="button" className="nv-tree__fold" tabIndex={-1} aria-expanded={place.open} aria-label={t(place.open ? 'foldRow' : 'unfoldRow', { title })}
+          onClick={(event) => {
+            event.stopPropagation()
+            onFold?.(id)
+          }}>
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
+        </button>
+      ) : <span className="nv-tree__fold" aria-hidden="true" />}
+      {children}
+    </span>
   )
 }
 
@@ -130,7 +156,7 @@ function Band({ group, columns, open, onFold }: { group: Group; columns: Column[
   )
 }
 
-export function GridBody({ groups, shut, onFold, columns, keys, errors, actions, emptyText, selection, running }: Props) {
+export function GridBody({ groups, shut, onFold, places, onFoldRow, columns, keys, errors, actions, emptyText, selection, running }: Props) {
   let index = 0
   return (
     <tbody>
@@ -144,8 +170,9 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
           {group.label !== '' && <Band group={group} columns={columns} open={!shut.has(group.key)} onFold={() => onFold(group.key)} />}
           {!shut.has(group.key) && group.rows.map((row) => {
             const r = index++
+            const place = places?.get(row.id)
             return (
-              <tr key={row.id} data-title={row.title} data-ticked={selection?.has(row.id) ? '' : undefined} data-running={running?.has(row.id) ? '' : undefined} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
+              <tr key={row.id} data-title={row.title} data-muted={place?.muted ? '' : undefined} data-ticked={selection?.has(row.id) ? '' : undefined} data-running={running?.has(row.id) ? '' : undefined} className={row.id === DRAFT ? 'nv-tr nv-tr--draft' : 'nv-tr'}>
                 {selection && row.id !== DRAFT ? (
                   <td className="nv-td nv-num">
                     <input type="checkbox" tabIndex={keys.active?.row === r ? 0 : -1} aria-label={t('selectRow', { title: row.title })} checked={selection.has(row.id)} onChange={() => selection.toggle(row.id)} />
@@ -154,7 +181,7 @@ export function GridBody({ groups, shut, onFold, columns, keys, errors, actions,
                 ) : <td className="nv-td nv-num" aria-hidden="true">{r + 1}</td>}
                 {columns.map((column, c) => (
                   <GridCell key={column.id} row={row} column={column} cell={{ row: r, col: c }} keys={keys}
-                    error={column.field ? errors[cellKey(row.id, column.field)] : undefined} actions={actions} />
+                    error={column.field ? errors[cellKey(row.id, column.field)] : undefined} actions={actions} place={place} onFoldRow={onFoldRow} />
                 ))}
               </tr>
             )

@@ -120,6 +120,12 @@ export interface Model {
   live?: string[]
   /** The options column whose tone colours each record as a lane and on the rows that point at it. */
   tone?: string
+  /** The relation column to the dataset itself that makes its rows a tree. */
+  parent?: string
+  /** The dataset counts children into each row's `progress`. */
+  progress?: true
+  /** Days after which a finished row is archived: the chip row offers "Archief tonen". */
+  archive_after?: number
   /** Files its records carry, by kind; the drawer lists and takes them. */
   attachments?: { kinds: Record<string, string>; max_mb: number; writable?: true }
   fields: Record<string, Field>
@@ -387,6 +393,10 @@ export interface Row {
   fields: Record<string, unknown>
   lookups?: Record<string, Lookup | null>
   rollups?: Record<string, number | unknown[]>
+  /** Done over everything not cancelled, counted by the engine from the row's children. */
+  progress?: { done: number; total: number }
+  /** An ancestor read only because a filtered row sits under it: shown greyed. */
+  muted?: true
   /** The inherited lookups whose value came through the relation, not the row's own. */
   inherited?: string[]
   /** Absent on a source that declares no button or action condition: everything is then allowed. */

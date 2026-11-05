@@ -81,7 +81,7 @@ describe('CategoryMark', () => {
 describe('Afgerond tonen', () => {
   const gallery = { key: 'g', label: 'Galerij', table: 'taak', model: 'taak', type: 'gallery' } as unknown as View
   const chips = (skin: View['type'], on = false) => (
-    <SkinChips view={{ ...gallery, type: skin }} model={model} size="M" onSize={() => undefined} away={on} onAway={() => undefined} finished={on} onFinished={() => undefined} />
+    <SkinChips view={{ ...gallery, type: skin }} model={model} size="M" onSize={() => undefined} away={on} onAway={() => undefined} finished={on} onFinished={() => undefined} archived={false} onArchived={() => undefined} />
   )
   it('sits beside the gallery sizes', () => {
     render(chips('gallery'))
