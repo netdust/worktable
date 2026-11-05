@@ -1229,7 +1229,13 @@ test.describe('studio, the toolbar at 1440', () => {
     await expect(drawer).toBeVisible()
     const title = drawer.locator('.nv-dw-title')
     const quiet = (await toolbar.boundingBox())?.height as number
-    const cell = page.getByRole('grid', { name: 'Taken', exact: true }).getByRole('gridcell').nth(6)
+    // The second row's title: a position among all cells moves when a column is appended.
+    const cell = page
+      .getByRole('grid', { name: 'Taken', exact: true })
+      .getByRole('row')
+      .nth(2)
+      .getByRole('gridcell')
+      .first()
     await cell.click({ position: { x: 6, y: 6 } })
     await page.keyboard.press('Enter')
     await page.keyboard.type('x')
