@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, type SQL, 
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
+import { archivedWhere } from './archive'
 import { type Available, declaresMarks, markOf } from './available'
 import { POSITION } from './ddl'
 import { type Actor, type DatasetDecl, type Domain, type LinkDecl, type MatrixDecl, progressDeclOf } from './declare'
@@ -37,6 +38,9 @@ function hiddenLookup(source: Source, scope: Scope): (key: string) => boolean {
   return (key) => lookupOf(source, key) !== undefined && !served.has(key)
 }
 
+const archiveCutoff = (decl: DatasetDecl): string =>
+  new Date(Date.now() - (decl.archive_after ?? 0) * 86_400_000).toISOString()
+
 function whereOf(
   domain: Domain,
   source: Source,
@@ -51,8 +55,10 @@ function whereOf(
   const dateColumn = source.date ? columnOf(table, source.date) : null
   const window = (op: '>=' | '<=', day: string | null): SQL | undefined =>
     day && dateColumn ? sql`substr(${dateColumn}, 1, 10) ${sql.raw(op)} ${day}` : undefined
+  const archived = source.kind === 'dataset' && !params.archived ? archivedWhere(source, archiveCutoff(source)) : null
   const parts = [
     source.kind === 'dataset' ? isNull(columnOf(table, 'deleted_at')) : undefined,
+    archived ? sql`NOT ${archived}` : undefined,
     scopeWhere(table, scope),
     params.stored ? filterWhere(params.stored, source, table, undefined, domain) : undefined,
     params.filter ? filterWhere(params.filter, source, table, undefined, domain) : undefined,
