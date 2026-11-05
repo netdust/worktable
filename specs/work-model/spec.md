@@ -66,10 +66,12 @@ the shape of the cleanup (archive by age, never delete, 30 and 14 days) are `inv
 ### R2 — A parent, and progress from children
 
 A dataset may declare `parent: <column>`, a relation column to the dataset itself. The engine refuses a write
-that would make a row its own ancestor (422 `parent_cycle`, undo and import included; a real chain deeper than 64 levels is 422 `parent_too_deep`), and a parent that is
+that would make a row its own ancestor (422 `parent_cycle`, undo included; a real chain deeper than 64 levels is 422 `parent_too_deep`), and a parent that is
 not a live row as it refuses any relation (400 `bad_relation`). The engine has no scope check on a relation
 target, and this spec adds none: a space is a grid filter, not access. A parent with live children cannot be
 deleted (409 `in_use`, as any referenced row); the grid says why.
+
+A dataset with a parent cannot be imported today: the generic import refuses any self-relation dataset up front. Follow-up if Stefan needs to import tasks.
 
 - **The grid** shows a dataset with a parent as a tree: children indented under their parent, collapsed or
   open per view, sorting within each level. Filtering keeps a matching child's ancestors, greyed: the grid
