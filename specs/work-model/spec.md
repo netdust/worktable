@@ -40,14 +40,20 @@ The engine and the grid read categories, never option names, wherever they mean 
   stops that column growing.
 - **A status chip** in the grid, on a board card and in the drawer shows the category's mark beside the tone:
   an empty circle, a half circle, a check, a cross.
-- **The timeline** draws a `cancelled` bar as cancelled, instead of reading the tone `bad`.
+- **The timeline** draws a `cancelled` bar as cancelled (it already draws a bar toned `bad` that way, and keeps
+  it out of overlap checks), by category where the column declares them, by tone where it does not. The matrix,
+  the runs list and the flag keep reading the tone `bad`; moving them is not part of this work.
+- **"Afgerond tonen" and "Archief tonen"** are per-view choices the browser remembers (the grid's
+  `useViewChoice`), not part of the saved view.
 
 **Cleanup.** A finished row must not pile up forever in a column or a list. A dataset with categories may
 declare `archive_after: <days>`: a row whose status has been `done` or `cancelled` for that many days is
 archived. An archived row is hidden on every skin, the grid included, until the chip row's "Archief tonen" is
 on; it keeps its revisions and links, is never deleted, and un-archives when its status leaves `done` or
-`cancelled`. The engine does it on read (the row's category and the time of its last status revision), so no
-job runs and nothing goes stale. Studio declares 30 days on `taak`, 14 on `actie`.
+`cancelled`. The engine does it on read, so no job runs and nothing goes stale: the time is that of the row's last revision
+of the categories column, else, for a row that never had one (seeded or imported), its `created_at`. The rows
+route hides archived rows unless asked (`archived=1`); that is a display switch, not access control. Rows read
+through a matrix cell or a link are not filtered. Studio declares 30 days on `taak`, 14 on `actie`.
 
 A column without categories behaves exactly as today. Declaring categories on a column that has no options is
 refused at startup, as is a category word outside the four, or an option with none.
@@ -60,13 +66,16 @@ the shape of the cleanup (archive by age, never delete, 30 and 14 days) are `inv
 ### R2 — A parent, and progress from children
 
 A dataset may declare `parent: <column>`, a relation column to the dataset itself. The engine refuses a write
-that would make a row its own ancestor (422 `parent_cycle`), and refuses a parent outside the caller's scope
-as it refuses any relation.
+that would make a row its own ancestor (422 `parent_cycle`, undo and import included), and a parent that is
+not a live row as it refuses any relation (400 `bad_relation`). The engine has no scope check on a relation
+target, and this spec adds none: a space is a grid filter, not access. A parent with live children cannot be
+deleted (409 `in_use`, as any referenced row); the grid says why.
 
 - **The grid** shows a dataset with a parent as a tree: children indented under their parent, collapsed or
-  open per view, sorting within each level. Filtering keeps a matching child's ancestors, greyed.
-- **The drawer** lists a row's children with their status chips and offers "+ Subtaak" (the dataset's new
-  label), which creates a child with the parent set.
+  open per view, sorting within each level. Filtering keeps a matching child's ancestors, greyed: the grid
+  reads the ancestors a filter dropped in one extra read per level, to a depth of 5.
+- **The drawer** lists a row's children with their status chips and offers "+" with the dataset's `new_label`
+  ("Nieuwe taak"), which creates a child with the parent set.
 - **Progress.** A dataset may declare `progress: { dataset, key, column }`: the rows of `dataset` whose `key`
   is this row's id, counted by the categories of their `column`. A dataset with a `parent` and categories gets
   progress from its own children without declaring it. The engine serves progress as a read-only value on
