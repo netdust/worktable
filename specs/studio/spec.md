@@ -114,7 +114,7 @@ The approved mockup is the worktable dashboard prototype (`design/dashboard-prot
   - A Claude session finds its row by repo path plus branch, and creates it if missing. Parallel sessions on one repo each have their own branch, so they never overwrite each other.
   - "Waar we stopten" lists werkpakketten as "project · werkpakket", as the mockup showed.
   - Plan content stays in the repo. Studio holds status and the path.
-  - **voortgang** ("14/32") is derived, never typed: every write to a werkpakket counts its plan steps (S7), the done and skipped ones over all of them, and stores the result. A werkpakket without steps has none. The agent touches the werkpakket at every stop anyway, so the count is as fresh as `laatste_stap`.
+  - **progress** ("14/32") is derived by the engine, never stored: a werkpakket row reads the done and total of its taken, counted by the categories of `taak.status` (work-model spec). A werkpakket without steps shows none.
   Source: "today I don't see fine-grained work of the agent. Each feature are big plans that can take a full day to complete" — Stefan, 2026-10-31.
   Source: "a planner for todos, plans, building where claude code can write/access status of a project. this way i can see whats going on during development" — Stefan. The two-level split, the matching key and the stage names are invented — approved 2026-10-21 (the builder check found about 15 worktable worktrees in flight at once).
 - **S7 Taak.** titel, status (open · bezig · geblokkeerd · gedaan · overgeslagen), deadline, wie, notities, stap, and optional relations to project, organisatie, werkpakket, site and actie.

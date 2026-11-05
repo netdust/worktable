@@ -103,6 +103,7 @@ export const actie = defineDataset({
   title: 'titel',
   date: 'gepland_op',
   board: { column: 'status', drag: false },
+  archive_after: 14,
   custom: true,
   columns: {
     titel: text('Titel'),
@@ -296,6 +297,7 @@ export const werkpakket = defineDataset({
   title: 'naam',
   date: 'bijgewerkt',
   board: { column: 'fase' },
+  progress: { dataset: 'taak', key: 'werkpakket_id', column: 'status' },
   scoped: 'organisatie_id',
   custom: true,
   columns: {
@@ -332,7 +334,6 @@ export const werkpakket = defineDataset({
     volgende_stap: text('Volgende stap'),
     geblokkeerd_door: text('Geblokkeerd door'),
     bijgewerkt: { type: 'datetime', label: 'Bijgewerkt', nullable: true, readonly: true },
-    voortgang: { type: 'text', label: 'Voortgang', nullable: true, readonly: true },
     organisatie_id: relation('Organisatie', 'organisatie'),
   },
   lookups: { project: { label: 'Project', via: 'project_id', field: 'naam' } },
@@ -346,6 +347,8 @@ export const taak = defineDataset({
   icon: 'check',
   title: 'titel',
   date: 'deadline',
+  parent: 'parent_id',
+  archive_after: 30,
   scoped: 'organisatie_id',
   custom: true,
   columns: {
@@ -373,6 +376,7 @@ export const taak = defineDataset({
     werkpakket_id: relation('Werkpakket', 'werkpakket'),
     site_id: relation('Site', 'site'),
     actie_id: relation('Actie', 'actie'),
+    parent_id: relation('Bovenliggende taak', 'taak'),
   },
   indexes: [['deadline'], ['status'], ['werkpakket_id', 'stap']],
 })

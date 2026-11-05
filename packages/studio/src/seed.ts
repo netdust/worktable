@@ -176,6 +176,8 @@ const taken = [
   { titel: 'TLS van bestel.testmans verlengen', deadline: localDay(thisWeek(4)), organisatie_id: KLANT, site_id: 2 },
   { titel: 'Storing voorbeeld-blog bekijken', deadline: localDay(), wie: 'stefan', organisatie_id: INTERN, site_id: 4 },
   { titel: 'Dashboard-plan nalezen', wie: 'claude', organisatie_id: INTERN, project_id: 1, werkpakket_id: 1 },
+  { titel: 'Dashboard nalezen: copy', wie: 'stefan', organisatie_id: INTERN, parent_id: 4 },
+  { titel: 'Dashboard nalezen: kleuren', wie: 'stefan', organisatie_id: INTERN, parent_id: 4 },
 ]
 
 const agendapunten = [
