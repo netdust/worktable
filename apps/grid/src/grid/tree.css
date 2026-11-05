@@ -1,5 +1,5 @@
 /* A tree row: indent by level, a chevron to fold, an ancestor greyed; a row's children in the drawer. */
-.nv-tree {
+.nv-rowtree {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -7,7 +7,7 @@
   padding-left: calc(var(--depth, 0) * 18px);
 }
 
-.nv-tree__fold {
+.nv-rowtree__fold {
   display: inline-grid;
   flex: none;
   width: 16px;
@@ -19,7 +19,7 @@
   place-items: center;
 }
 
-.nv-tree__fold svg {
+.nv-rowtree__fold svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
@@ -28,7 +28,7 @@
   transition: transform 0.12s;
 }
 
-.nv-tree__fold[aria-expanded="true"] svg {
+.nv-rowtree__fold[aria-expanded="true"] svg {
   transform: rotate(90deg);
 }
 

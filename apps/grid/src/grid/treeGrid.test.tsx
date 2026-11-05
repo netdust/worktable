@@ -30,7 +30,7 @@ function draw(rows: Row[], onShown = vi.fn()) {
   return onShown
 }
 const titles = () => screen.getAllByRole('row').flatMap((r) => (r.dataset.title ? [r.dataset.title] : []))
-const depthOf = (title: string) => screen.getAllByRole('row').find((r) => r.dataset.title === title)!.querySelector<HTMLElement>('.nv-tree')?.style.getPropertyValue('--depth')
+const depthOf = (title: string) => screen.getAllByRole('row').find((r) => r.dataset.title === title)!.querySelector<HTMLElement>('.nv-rowtree')?.style.getPropertyValue('--depth')
 
 describe('the grid as a tree', () => {
   const rows = [row(1, 'Bouwen', null, { progress: { done: 1, total: 2 } }), row(2, 'Fundering', 1), row(3, 'Muren', 1), row(4, 'Verven', null)]

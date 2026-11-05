@@ -103,16 +103,16 @@ function GridCell({ row, column, cell, keys, error, actions, place, onFoldRow }:
 function TreeIndent({ place, id, title, onFold, children }: { place?: Place; id: number; title: string; onFold?: (id: number) => void; children: React.ReactNode }) {
   if (!place) return <>{children}</>
   return (
-    <span className="nv-tree" style={{ '--depth': place.depth } as CSSProperties}>
+    <span className="nv-rowtree" style={{ '--depth': place.depth } as CSSProperties}>
       {place.folds ? (
-        <button type="button" className="nv-tree__fold" tabIndex={-1} aria-expanded={place.open} aria-label={t(place.open ? 'foldRow' : 'unfoldRow', { title })}
+        <button type="button" className="nv-rowtree__fold" tabIndex={-1} aria-expanded={place.open} aria-label={t(place.open ? 'foldRow' : 'unfoldRow', { title })}
           onClick={(event) => {
             event.stopPropagation()
             onFold?.(id)
           }}>
           <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
         </button>
-      ) : <span className="nv-tree__fold" aria-hidden="true" />}
+      ) : <span className="nv-rowtree__fold" aria-hidden="true" />}
       {children}
     </span>
   )
