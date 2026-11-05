@@ -25,8 +25,10 @@ export function OptionMark({ column, option, text = column.options?.[option] ?? 
   const Icon = iconOf(option)
   if (Icon) return <span className="nv-kind"><Icon size={13} aria-hidden="true" />{text}</span>
   const category = column.categories?.[option]
-  const pill = <ToneMark tone={toneOf(option, column.tones)} text={text} />
-  return category ? <><span className="nv-category" aria-hidden="true">{CATEGORY_MARK[category]}</span>{pill}</> : pill
+  const tone = toneOf(option, column.tones)
+  if (!category) return <ToneMark tone={tone} text={text} />
+  const mark = <span className="nv-category" aria-hidden="true">{CATEGORY_MARK[category]}</span>
+  return <>{mark}{tone ? <ToneMark tone={tone} text={text} /> : <span>{text}</span>}</>
 }
 
 function choices(options: Record<string, string>, required: boolean): [string, string][] {
