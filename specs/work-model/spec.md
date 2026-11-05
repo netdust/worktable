@@ -158,6 +158,15 @@ Plans, each its own `feature/<name>` branch, in this order because each builds o
    skin per plan in that order (the board is nearly there), each with its own Werkpakket in Studio so the work
    can stop and resume between sessions.
 
+4. **`state-unify`** — a follow-up to plan 1, not yet planned, order open: make state the one thing the engine
+   knows about "in flight" and "finished". A lifecycle's `live` list is derived from the `active` category where
+   the column declares them (one fact, said once), and the matrix, the runs list and the flag stop reading the
+   tone `bad` as "cancelled" and read the category. Plan 1 deliberately leaves `live` and those tone readers
+   alone.
+
+   Source: "this is a change with far reaching consequences. it should make state a prime thing. yes?" /
+   "yes followup too" — Stefan, 2026-11-05. The two halves are `invented`.
+
 ## Decided
 
 1. A parent's status never follows its children by itself; the drawer says "alle subtaken afgerond" and offers
