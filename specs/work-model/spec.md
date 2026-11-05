@@ -71,7 +71,7 @@ not a live row as it refuses any relation (400 `bad_relation`). The engine has n
 target, and this spec adds none: a space is a grid filter, not access. A parent with live children cannot be
 deleted (409 `in_use`, as any referenced row); the grid says why.
 
-A dataset with a parent cannot be imported today: the generic import refuses any self-relation dataset up front. Follow-up if Stefan needs to import tasks.
+Known limitation, not a decision: the generic import orders datasets by their relations and refuses any dataset related to itself, so a dataset with a parent cannot be imported yet. Supporting it means ordering rows within a dataset, parents first; that needs its own spec when a client needs to import tasks.
 
 - **The grid** shows a dataset with a parent as a tree: children indented under their parent, collapsed or
   open per view, sorting within each level. Filtering keeps a matching child's ancestors, greyed: the grid
