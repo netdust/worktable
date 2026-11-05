@@ -9,3 +9,8 @@ it('the row tree sheet styles no class the rail uses: the rail tree once took th
   const railed = [...read('ui/Rail.tsx').matchAll(/className="(nv-[\w-]+)/g)].map((m) => m[1])
   expect(railed.filter((name) => styled.has(name))).toEqual([])
 })
+
+it('the row tree wrapper sits on the cell middle: left on the baseline its 16px chevron button lifted the title off the other cells', () => {
+  const rule = read('grid/tree.css').match(/\.nv-rowtree\s*\{([^}]*)\}/)?.[1] ?? ''
+  expect(rule).toMatch(/vertical-align:\s*middle/)
+})

@@ -2,6 +2,7 @@
 .nv-rowtree {
   display: inline-flex;
   align-items: center;
+  vertical-align: middle;
   gap: 4px;
   max-width: 100%;
   padding-left: calc(var(--depth, 0) * 18px);
