@@ -34,6 +34,21 @@ describe('readView', () => {
     const read = await readView(view, {}, null, null, false, model)
     expect(read.rows.map((r) => [r.id, r.muted])).toEqual([[2, undefined], [1, true]])
   })
+
+  it('adds no ancestors on a board, calendar, gallery or timeline, only on the grid', async () => {
+    remote.rows.mockResolvedValue({ rows: [{ id: 2, title: 'b', status: '', fields: { parent_id: [1] } }], total: 1 })
+    remote.spanRows.mockResolvedValue({ rows: [{ id: 2, title: 'b', status: '', fields: { parent_id: [1] } }], total: 1 })
+    for (const type of ['board', 'calendar', 'gallery', 'timeline']) {
+      remote.rowsWhere.mockReset()
+      const other = { ...view, type } as unknown as View
+      const read = await readView(other, {}, null, null, false, model)
+      expect(remote.rowsWhere, type).not.toHaveBeenCalled()
+      expect(read.rows.map((r) => r.id), type).toEqual([2])
+    }
+    remote.rowsWhere.mockResolvedValue({ rows: [], total: 0 })
+    await readView({ ...view, type: undefined } as unknown as View, {}, null, null, false, model)
+    expect(remote.rowsWhere).toHaveBeenCalled()
+  })
 })
 
 describe('rereadsOf', () => {
