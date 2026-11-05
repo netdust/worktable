@@ -4,6 +4,7 @@ import { BoolCell } from './Bool'
 import { DateCell, DateEditor, DateTimeEditor } from './Date'
 import { LinksCell, LinksEditor } from './Links'
 import { NumberCell, NumberEditor } from './Number'
+import { ProgressCell } from './Progress'
 import type { CellProps, EditorProps } from './props'
 import { RelationCell, RelationEditor } from './Relation'
 import { SelectCell, SelectEditor } from './Select'
@@ -40,6 +41,8 @@ function Value({ column, row, onToggle, active }: CellProps & { onToggle: () => 
       return column.badge ? <BadgeCell column={column} row={row} /> : <NumberCell column={column} row={row} />
     case 'rollup':
       return <NumberCell column={column} row={row} />
+    case 'progress':
+      return <ProgressCell column={column} row={row} />
     default:
       return <TextCell column={column} row={row} />
   }

@@ -1684,6 +1684,13 @@
   gap: 6px;
 }
 
+.nv-category {
+  flex: none;
+  margin-right: 6px;
+  vertical-align: -2px;
+  color: var(--color-fg-subtle);
+}
+
 .nv-kind svg {
   color: var(--color-fg-subtle);
   flex: none;

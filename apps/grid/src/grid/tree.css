@@ -1,0 +1,52 @@
+/* A tree row: indent by level, a chevron to fold, an ancestor greyed; a row's children in the drawer. */
+.nv-rowtree {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 4px;
+  max-width: 100%;
+  padding-left: calc(var(--depth, 0) * 18px);
+}
+
+.nv-rowtree__fold {
+  display: inline-grid;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg-subtle);
+  place-items: center;
+}
+
+.nv-rowtree__fold svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.12s;
+}
+
+.nv-rowtree__fold[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.nv-tr[data-muted] .nv-td,
+.nv-tr[data-muted] .nv-cell__title {
+  color: var(--color-fg-subtle);
+}
+
+.nv-dw-children li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nv-dw-children__all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}

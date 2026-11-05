@@ -34,6 +34,8 @@ export interface RowsParams {
   limit: number
   offset: number
   cells: boolean
+  /** Show the finished rows an archive_after hides; a display switch, never a permission. */
+  archived?: boolean
 }
 
 export const MAX_LIMIT = 5000
@@ -50,6 +52,7 @@ const shape = z.object({
   limit: z.string().optional(),
   offset: z.string().optional(),
   cells: z.string().optional(),
+  archived: z.string().optional(),
 })
 
 export function isRealDate(value: string): boolean {
@@ -125,7 +128,7 @@ function parseGroup(raw: string | undefined, source: Source): string | null {
 export function parseRowsParams(source: Source, query: Record<string, string | undefined>): RowsParams {
   const parsed = shape.safeParse(query)
   if (!parsed.success) throw new ApiError(400, 'bad_window', 'from and to must be YYYY-MM-DD')
-  const { filter, sort, group, from, to, limit, offset, cells } = parsed.data
+  const { filter, sort, group, from, to, limit, offset, cells, archived } = parsed.data
   for (const day of [from, to]) {
     if (day && !isRealDate(day)) throw new ApiError(400, 'bad_window', `"${day}" is not a calendar date`)
   }
@@ -145,5 +148,6 @@ export function parseRowsParams(source: Source, query: Record<string, string | u
     limit: parseLimit(limit),
     offset: parseOffset(offset),
     cells: cells === '1',
+    archived: archived === '1',
   }
 }

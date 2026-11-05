@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
+import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
 import { isPerson, linkWritable, readable, scopeOf, visibleSource } from './access'
@@ -8,7 +8,18 @@ import { actionsOn, runAction } from './actions'
 import { attachmentRoutes, servedAttachments } from './attachments'
 import { type AuthEnv, authRoutes } from './auth'
 import { markOf } from './available'
-import type { ActionInput, Actor, ColumnDecl, DatasetDecl, Domain, FlagsDecl, LinkDecl, OptionsFrom } from './declare'
+import {
+  type ActionInput,
+  type Actor,
+  type ColumnDecl,
+  type DatasetDecl,
+  type Domain,
+  type FlagsDecl,
+  type LinkDecl,
+  type OptionsFrom,
+  type ProgressDecl,
+  progressDeclOf,
+} from './declare'
 import { displayRoutes, displaysOf } from './display'
 import { handoffRoutes, startSweep } from './handoff'
 import { readHistory } from './history'
@@ -20,7 +31,15 @@ import { ApiError, parseRowsParams } from './params'
 import { noStoreHeaders } from './public-headers'
 import { recordLinkRequest, recordLinkRoutes } from './record-link'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { cellsOf, linksOf, matrixOf, readRows, servedColumn as servedLinkColumn } from './rows'
+import {
+  cellsOf,
+  childProgress,
+  linksOf,
+  matrixOf,
+  type Progress,
+  readRows,
+  servedColumn as servedLinkColumn,
+} from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import {
@@ -48,6 +67,7 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     return {
       ...row,
       ...markOf(domain, dataset, row, actor),
+      ...progressOn(store.db, domain, dataset, [row.id], actor).get(row.id),
       revision: { batch_id, changed, ...(created && { created }) },
       notices,
     }
@@ -115,7 +135,12 @@ function servedColumn(domain: Domain, declared: ColumnDecl, actor: Actor): Colum
   const target = sourceOf(domain, column.writes.dataset)
   const decl = target?.columns[column.writes.field]
   if (!target || !decl?.options || !readable(actor, target)) return column
-  return { ...column, options: decl.options, ...(decl.tones ? { tones: decl.tones } : {}) }
+  return {
+    ...column,
+    options: decl.options,
+    ...(decl.tones ? { tones: decl.tones } : {}),
+    ...(decl.categories ? { categories: decl.categories } : {}),
+  }
 }
 
 // A picker's options source is served only to a caller who can read it.
@@ -203,6 +228,25 @@ function servedLinks(domain: Domain, source: Source, actor: Actor): { links?: Re
     return linked && readable(actor, linked) ? [[name, servedLink(link, linked, actor)] as const] : []
   })
   return served.length ? { links: Object.fromEntries(served) } : {}
+}
+
+// Own children are served whenever the dataset is; a declared dataset only to a reader of it.
+function servedProgress(domain: Domain, dataset: DatasetDecl, actor: Actor): { progress?: ProgressDecl } {
+  const progress = progressDeclOf(dataset)
+  const counted = progress && domain.datasets.find((d) => d.name === progress.dataset)
+  return progress && counted && readable(actor, counted) ? { progress } : {}
+}
+
+// The `progress` key of each row, present only where the counted dataset is readable (the rule servedProgress holds).
+export function progressOn(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  dataset: DatasetDecl,
+  ids: number[],
+  actor: Actor,
+): Map<number, { progress: Progress }> {
+  if (!servedProgress(domain, dataset, actor).progress) return new Map()
+  return new Map([...childProgress(db, domain, dataset, ids, actor)].map(([id, progress]) => [id, { progress }]))
 }
 
 type ServedLookup = ColumnDecl & { inherited?: true; from?: string }
@@ -352,6 +396,9 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
             ...(space ? { space: s.scoped ? 'scoped' : 'global' } : {}),
             ...(s.group_facts ? { group_facts: s.group_facts } : {}),
             ...(s.kind === 'dataset' && s.tone ? { tone: s.tone } : {}),
+            ...(s.kind === 'dataset' && s.parent ? { parent: s.parent } : {}),
+            ...(s.kind === 'dataset' ? servedProgress(domain, s, actor) : {}),
+            ...(s.kind === 'dataset' && s.archive_after ? { archive_after: s.archive_after } : {}),
           },
         ]),
     )
@@ -370,9 +417,11 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     const ids = read.rows.map((r) => r.id)
     const links = source.links ? linksOf(db, domain, source, ids, actor) : null
     const cells = found ? cellsOf(db, domain, found, ids, scopeOf(actor, found.join)) : null
+    const progress = source.kind === 'dataset' ? progressOn(db, domain, source, ids, actor) : new Map()
     const rows = read.rows.map((r) => ({
       ...r,
       ...markOf(domain, source, r, actor),
+      ...progress.get(r.id),
       ...(links ? { links: links.get(r.id) } : {}),
       ...(cells ? { cells: cells.get(r.id) } : {}),
     }))

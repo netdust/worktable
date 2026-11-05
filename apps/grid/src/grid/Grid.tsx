@@ -8,14 +8,17 @@ import { type Column, columnsFor, editableAt, inDays } from './columns'
 import { rowOf } from '../api'
 import { Drawer, type RunAction } from './Drawer'
 import { useReread } from './drawerWrite'
+import { categoriesFieldOf } from './categories'
 import { filterRows } from './filter'
 import { type Group, groupRows, sums, total } from './group'
 import { useFolded } from './hooks'
+import { useTree } from './useTree'
 import { type BodyActions, GridBody } from './GridBody'
 import { EmptyState } from '../ui/EmptyState'
 import type { Shown } from '../ui/Toolbar'
 import { flaggedOf, useFlags, windowOfRows } from '../ui/useFlags'
 import { SchemaContext } from './drawer/context'
+import { ChildrenSection } from './drawer/ChildrenSection'
 import { placeWriter } from './drawer/place'
 import { GridFoot } from './GridFoot'
 import { GridHeader, NUMBER_WIDTH, SELECT_WIDTH } from './GridHeader'
@@ -120,7 +123,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   const unshown = [...(day ? [day] : []), ...(scope ? [scope.field] : [])]
   const table = useGridTable(columns, shown, layout, onLayout, unshown, wanted)
   const visible = table.getVisibleLeafColumns().map((c) => byId.get(c.id)!)
-  const groups = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by, { facts: view.facts ?? [], columns: every, cut })
+  const flat = groupRows([...drafts, ...table.getRowModel().rows.map((r) => r.original)], by, { facts: view.facts ?? [], columns: every, cut })
+  const { groups, places, fold: foldRow } = useTree(model, view.key, flat)
   const [folded, fold] = useFolded(view.key, by?.id ?? null)
   // A group holding the draft stays open: the row being written must stay in reach.
   const shut = new Set(groups.filter((g) => folded.has(g.key) && !g.rows.some((r) => r.id === DRAFT)).map((g) => g.key))
@@ -145,7 +149,8 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
     }
   })
 
-  const shownRows = total(groups)
+  const greyed = [...places.values()].filter((place) => place.muted).length
+  const shownRows = total(groups) - greyed
   const insightKey = JSON.stringify(insightOf(model, shown))
   const shownGroups = by ? groups.length : null
   const flags = useFlags(useContext(SchemaContext), scope, windowOfRows(state.rows, view.date_field), model.key, state.rows)
@@ -384,6 +389,12 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
   }
 
   const open = drawer === null ? undefined : state.rows.find((r) => r.id === drawer)
+  const schema = useContext(SchemaContext)
+  const statusColumn = every.find((c) => c.id === categoriesFieldOf(model))
+  const children = open && open.id !== DRAFT && model.parent ? (
+    <ChildrenSection model={model} row={open} tables={schema?.tables ?? []} scope={scope} version={`${reloads}:${state.rows.length}`}
+      onCreate={writable ? store.create : undefined} onFinish={writable && statusColumn ? (done) => apply(open, statusColumn, done) : undefined} />
+  ) : undefined
 
   // A record shown in a drawer needs no dock line pointing at it: read from the drawer on screen, not the id asked for.
   const viewedKey = related ? related.model.key : open ? model.key : null
@@ -422,10 +433,10 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
           <table ref={tableRef} role="grid" aria-label={title ?? view.label} className="nv-grid" data-ticking={ticking.selected.size > 0 ? '' : undefined} style={{ width: table.getTotalSize() + numberWidth, '--nv-num-width': `${numberWidth}px` } as CSSProperties} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
             <GridHeader table={table} byId={byId} numberWidth={numberWidth}
               selection={selectable ? { all: ids.length > 0 && ticking.selected.size === ids.length, some: ticking.selected.size > 0, onToggle: ticking.selected.size === ids.length ? ticking.clear : ticking.all } : undefined} />
-            <GridBody running={running} groups={groups} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
+            <GridBody running={running} groups={groups} places={places} onFoldRow={foldRow} shut={shut} onFold={fold} columns={visible} keys={onScreen} errors={state.errors} actions={actions}
               selection={selectable ? { has: (id) => ticking.selected.has(id), toggle: ticking.toggle } : undefined}
               emptyText={total(groups) === 0 ? t('noRowsMatch') : null} />
-            <GridFoot columns={visible} count={total(groups) - drafts.length} cut={cut !== null} sums={sums(shown, visible)} />
+            <GridFoot columns={visible} count={total(groups) - drafts.length - greyed} cut={cut !== null} sums={sums(shown, visible)} />
           </table>
         </div>
         {related && <Drawer row={related.row} columns={related.columns} onClose={() => setRelated(null)} model={related.model}
@@ -434,7 +445,7 @@ export function Grid({ model, view, title, store, writable, layout, onLayout, qu
         {!related && open && <Drawer row={open} columns={every} onClose={() => setDrawer(null)} actions={model.actions?.filter((a) => (a.many ? onSelection : onAction))} model={model} view={view} layout={layout} flags={flags}
           nav={{ ids: groups.flatMap((g) => g.rows.map((r) => r.id)).filter((id) => id !== DRAFT), onStep: setDrawer }} recordLink={open.id === DRAFT ? undefined : recordLink}
           attachments={filesOf(model, open.id)} onBatch={batchOn(model, open.id)} onDone={open.id === DRAFT ? undefined : reread(model.key, open.id, undefined, () => setDrawer((now) => (now === open.id ? null : now)))}
-          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then((opened) => (action.handoff ? opened : show(opened))) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined}
+          onAction={(onAction || onSelection) && open.id !== DRAFT ? (action, input) => (action.many ? onSelection?.(action, [open.id], input) : onAction?.(open, action, input))?.then((opened) => (action.handoff ? opened : show(opened))) ?? Promise.resolve() : undefined} onWrite={writable ? apply : undefined} sections={children}
           onLink={open.id === DRAFT ? undefined : placeWriter(store, model.key, open.id, onNotice)}
           onDelete={model.deletable ? () => store.remove(open.id) : undefined} onSaid={onNotice} />}
       </div>

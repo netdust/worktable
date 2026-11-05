@@ -2,7 +2,7 @@ import { Dialog, Modal, ModalOverlay } from 'react-aria-components'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, rows, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, spanRows, update } from '../api'
+import { awayRows, create as createRow, recordCount, history as readHistory, me, publishView, onNotices, onUnauthenticated, prefs, records, remove as removeRow, rowOf, runAction, runSelection, savedViews, schema, setDisplay, signOut, undoBatch, update } from '../api'
 import { filterFields } from '../grid/filter'
 import { OPERATORS } from './FilterBuilder'
 import { exportSheet } from '../export/download'
@@ -58,7 +58,10 @@ import { Dashboard } from '../dashboard/Dashboard'
 import { askedOf, QuickCreate } from '../dashboard/QuickCreate'
 import { barOf, boardColumn } from './bar'
 import { SchemaContext } from '../grid/drawer/context'
-import { AwayChip, SizeChips } from './SizeChips'
+import { SkinChips } from './SkinChips'
+import { useFinished } from './useFinished'
+import { readView, rereadsOf } from './readView'
+import { hideFinished } from '../grid/categories'
 import { useViewChoice } from './choice'
 import { useGallerySize } from '../gallery/size'
 import { ChipBar } from './ChipBar'
@@ -326,7 +329,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const timelineShown = timeline && period?.window ? period.window : weekOf(new Date())
   const window = view?.type === 'matrix' ? matrixDays : calendar ? calendarDays : timeline ? timelineShown : {}
   // Rows that span days are read by overlap with the window, so one begun before it still shows.
-  const readRows = (calendar ?? timeline)?.spans ? spanRows : rows
   const setPeriod = (next: Filter | null) => {
     if (period && layout) setLayout(withPeriod(layout, period.field, next))
   }
@@ -366,6 +368,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       live = false
     }
   }, [countKey])
+  const { finished: showDone, setFinished: setShowDone, archived: showArchived, setArchived: setShowArchived } = useFinished(view)
   const [showAway, setShowAway] = useViewChoice<boolean>(view, 'ntdst-views/matrix-away/v1/', (raw) => (typeof raw === 'boolean' ? raw : null), true)
 
   const shownKey = useRef<string | null>(null)
@@ -376,7 +379,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     if (shownKey.current !== view.key) setResult({ status: 'loading' })
     const asked = window
     const away = view.type === 'matrix' ? view.away : undefined
-    Promise.all([readRows(view, asked, scope, layout), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
+    Promise.all([readView(view, asked, scope, layout, showArchived, served?.models[view.model]), away ? awayRows(away, asked) : [], titlesOf(view, served)]).then(
       ([r, away, titles]) => {
         if (!live) return
         shownKey.current = view.key
@@ -392,7 +395,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
       live = false
     }
     // By key, and by what the server applies (filters, sort, group): a width or a hidden column stays in the browser.
-  }, [settled, view?.key, windowKey, scopeId, asks, reloads])
+  }, [settled, view?.key, windowKey, scopeId, asks, reloads, showArchived])
 
   const models = useMemo(() => renamed(served?.models ?? {}, served?.tables ?? [], displays), [served, displays])
   const model = view ? models[view.model] : undefined
@@ -423,13 +426,17 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const matrix = view?.type === 'matrix'
   // The stores hold the rows as edited and their undo: a view's new arrangement must not rebuild them.
   const stores = useMemo(() => view, [view?.key, served])
-  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView, runs.created)
+  const [store, state] = useGridStore(model && !matrix ? stores : undefined, loaded, history, reloadView, runs.created, rereadsOf(model))
   const live = useRef(store)
   live.current = store
   const viewNow = useRef(view)
   viewNow.current = view
-  const reload = () => (view ? readRows(view, window, scope ?? null, layout).then((r) => r.rows) : Promise.resolve([]))
+  const reload = () => (view ? readView(view, window, scope ?? null, layout, showArchived).then((r) => r.rows) : Promise.resolve([]))
   const [cells, cellsState] = useMatrixStore(matrix && model ? stores : undefined, matrix ? loaded : null, reload, (message) => notify({ message }))
+  // The skins that hide finished rows draw, and count, what is left.
+  const hiding = (all: Row[]) => (view && model ? hideFinished(model, all, showDone, view.type ?? 'grid') : all)
+  const sheetRows = useMemo(() => hiding(store ? state.rows : result.status === 'ready' ? result.rows : []), [store, state.rows, result, model, showDone, view?.type])
+  const matrixRows = useMemo(() => hiding(cellsState.rows), [cellsState.rows, model, showDone, view?.type])
   const joinWritable = view?.join ? served?.writable[view.join.model] === true : false
   const saves = store ? { state, undo: store.undo, redo: store.redo } : cells ? { state: cellsState, undo: cells.undo, redo: cells.redo } : null
   usePageUndo(saves)
@@ -475,7 +482,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const spaceName = space.status === 'ready' && served?.space ? (space.selected?.title ?? t('allSpace', { label: (served.models[served.space.model]?.label ?? '').toLocaleLowerCase() })) : null
   const dashboardSum = spaceName ? t('dashboardSum', { space: spaceName, week: isoWeek(new Date()) }) : t('dashboardSum', { space: '', week: isoWeek(new Date()) }).replace(/^ · /, '')
   // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
-  const shownRows = store ? state.rows : result.status === 'ready' ? result.rows : null
+  const shownRows = store || result.status === 'ready' ? sheetRows : null
   const grouped = view && model && layout ? boardColumn(view, model, layout) : null
   const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped))
   // A table reports the pills for the rows its search leaves, as its count does; the other skins count their own rows.
@@ -706,8 +713,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
             view, model, layout, onLayout: setLayout, scope: scopeChip, filters, period: period ? { period, onPeriod: setPeriod } : null,
             told: told?.view === view.key ? told.shown : null,
             ...(matrix ? { adding: { open: picking, onToggle: () => setPicking(!picking) } } : {}),
-            ...(view.type === 'gallery' ? { skin: <SizeChips size={size} onSize={setSize} /> } : {}),
-            ...(matrix && view.away ? { skin: <AwayChip on={showAway} onToggle={() => setShowAway(!showAway)} /> } : {}),
+            skin: <SkinChips view={view} model={model} size={size} onSize={setSize} away={showAway} onAway={() => setShowAway(!showAway)} finished={showDone} onFinished={() => setShowDone(!showDone)} archived={showArchived} onArchived={() => setShowArchived(!showArchived)} />,
           })} />
         )}
         <div className="nv-work">
@@ -717,19 +723,19 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
               onSaved={(saved) => savedViews().then((list) => { load(list); setActiveKey(saved.key) }, () => undefined)}
               views={tables.flatMap((table) => table.views).filter(isSaved)} scope={space.status === 'ready' ? space.scope : null} />
           ) : calendar && model && view && layout && result.status === 'ready' ? (
-            <Calendar key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} cal={calendar} shown={calendarShown}
+            <Calendar key={view.key} view={view} model={model} models={models} rows={sheetRows} cal={calendar} shown={calendarShown}
               lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : timeline && model && view && layout && result.status === 'ready' ? (
-            <Timeline key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} cal={timeline} shown={timelineShown}
+            <Timeline key={view.key} view={view} model={model} models={models} rows={sheetRows} cal={timeline} shown={timelineShown}
               lane={layout.group} layout={layout} onTitle={setShown} places={places} />
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
               onCreate={writable && !model.query && !model.created_by && canSet(model, boardColumn(view, model, layout) as string) ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
-            <Gallery key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
+            <Gallery key={view.key} view={view} model={model} models={models} rows={sheetRows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
-            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={cellsState.rows} query={query} away={showAway ? result.away : []}
+            <Matrix key={`${view.key}:${resets}`} view={view} title={title} models={models} rows={matrixRows} query={query} away={showAway ? result.away : []}
               titles={result.titles} emptyTitle={t(conditioned ? 'noRowsMatch' : 'noRowsInWindow')} emptyHint={formatWindow(matrixDays)} store={cells} writable={joinWritable}
               layout={layout} onLayout={setLayout} picking={picking} onPicking={setPicking} onShown={setShown} />
           ) : grid ? (

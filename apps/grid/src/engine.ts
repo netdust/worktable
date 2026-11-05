@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { Available, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { Available, Category, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -10,6 +10,7 @@ export interface EngineColumn {
   default?: unknown
   options?: Record<string, string>
   tones?: Record<string, Tone>
+  categories?: Record<string, Category>
   /** The dataset its integer points at. */
   relation?: string
   readonly?: true
@@ -59,6 +60,11 @@ export interface EngineSource {
   board?: { column: string; drag?: false }
   gallery?: { kind: string }
   created_by?: 'service'
+  /** The relation column to the dataset itself; its rows form a tree. */
+  parent?: string
+  /** Served beside rows that carry `progress`. */
+  progress?: { dataset: string; key: string; column: string }
+  archive_after?: number
   /** A query's rows are the `of` dataset's records, to tick and act on. */
   selectable?: true
   /** A dataset with a writer, or a query with a mapped column. */
@@ -173,6 +179,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     fact: false,
     ...(column.options ? { options: column.options } : {}),
     ...(column.tones ? { tones: column.tones } : {}),
+    ...(column.categories ? { categories: column.categories } : {}),
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),
@@ -222,6 +229,9 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.created_by ? { created_by: source.created_by } : {}),
     ...(source.selectable && source.of ? { selectable: source.of } : {}),
     ...(source.new_label ? { new_label: source.new_label } : {}),
+    ...(source.parent ? { parent: source.parent } : {}),
+    ...(source.progress ? { progress: true as const } : {}),
+    ...(source.archive_after ? { archive_after: source.archive_after } : {}),
     ...(actions?.length ? { actions } : {}),
     ...(source.record_link ? { record_link: true as const } : {}),
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
@@ -473,9 +483,12 @@ function lookupOf(found: { id: number; title: string } | null): Lookup | null {
   return found ? { id: found.id, title: found.title, status: '', fields: {} } : null
 }
 
+const isProgress = (value: unknown): value is NonNullable<Row['progress']> =>
+  typeof value === 'object' && value !== null && 'done' in value && 'total' in value
+
 /** The engine titles every row; a matrix row's join rows become its `rollups.cells`. */
 export function toRow(r: EngineRow): Row {
-  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, available, ...fields } = r
+  const { id, custom: _custom, lookups, title, cells, revision: _revision, links, inherited, available, progress, ...fields } = r
   return {
     id,
     title: title ?? '',
@@ -484,6 +497,7 @@ export function toRow(r: EngineRow): Row {
     lookups: Object.fromEntries(Object.entries(lookups).map(([key, found]) => [key, lookupOf(found)])),
     ...(inherited ? { inherited } : {}),
     ...(available ? { available } : {}),
+    ...(isProgress(progress) ? { progress } : {}),
     ...(cells ? { rollups: { cells: cells.map(toRow) } } : {}),
   }
 }
@@ -505,9 +519,12 @@ export function toEngineData(data: Record<string, unknown>, source: EngineSource
   }))
 }
 
+/** The grid's computed progress column: the engine knows it only as a read-only value on each row. */
+export const PROGRESS = 'progress'
+
 /** A grid column id as the engine's column; null for what only the grid computes. */
 function engineColumn(id: string, title: string | null): string | null {
-  if (id.startsWith('lookups.') || id.startsWith('rollups.')) return null
+  if (id.startsWith('lookups.') || id.startsWith('rollups.') || id === PROGRESS) return null
   return id === 'title' ? title : id
 }
 
@@ -516,8 +533,8 @@ function engineColumn(id: string, title: string | null): string | null {
  * The rows request. A table's date condition travels in `filter`; a matrix passes its window as `from`/`to`,
  * and its date condition stays out of `filter`, so the two never narrow each other to nothing.
  */
-export function rowsQuery(view: Pick<View, 'date_field' | 'fixed'>, layout: Layout, window: Partial<DateWindow>, title: string | null, source?: EngineSource): Record<string, string> {
-  const query: Record<string, string> = {}
+export function rowsQuery(view: Pick<View, 'date_field' | 'fixed'>, layout: Layout, window: Partial<DateWindow>, title: string | null, source?: EngineSource, archived = false): Record<string, string> {
+  const query: Record<string, string> = archived ? { archived: '1' } : {}
   const windowed = Boolean(view.date_field && window.from && window.to)
   const conditions = windowed ? layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op))) : layout.filters
   const filters = mergeFilters(conditions, view.fixed ?? {}, source, layout.join)

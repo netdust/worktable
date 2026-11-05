@@ -10,6 +10,7 @@ function sortValue(column: Column, row: Row): string | number {
   switch (column.kind) {
     case 'number':
     case 'rollup':
+    case 'progress':
       return Number(column.value(row)) || 0
     case 'date':
     case 'datetime':
@@ -29,7 +30,7 @@ export function useGridTable(columns: Column[], rows: Row[], layout: Layout, onL
       accessorFn: (row: Row) => sortValue(column, row),
       size: column.width,
       minSize: 48,
-      sortingFn: column.kind === 'number' || column.kind === 'rollup' ? 'basic' : 'text',
+      sortingFn: column.kind === 'number' || column.kind === 'rollup' || column.kind === 'progress' ? 'basic' : 'text',
       enableHiding: column.id !== 'title',
       enableSorting: column.sortable !== false,
     })),

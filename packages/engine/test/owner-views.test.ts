@@ -388,6 +388,10 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
       status: 400,
       body: { code: 'bad_param' },
     })
+    expect(await asLink(`/api/owner/views/${id}/rows?archived=1`)).toMatchObject({
+      status: 400,
+      body: { code: 'bad_param' },
+    })
     expect(await asLink(`/api/owner/views/${id}/rows?limit=5001`)).toMatchObject({
       status: 400,
       body: { code: 'bad_limit' },
