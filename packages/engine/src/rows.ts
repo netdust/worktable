@@ -4,7 +4,7 @@ import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { readable, type Scope, scopeOf } from './access'
 import { type Available, declaresMarks, markOf } from './available'
 import { POSITION } from './ddl'
-import type { Actor, DatasetDecl, Domain, LinkDecl, MatrixDecl } from './declare'
+import { type Actor, type DatasetDecl, type Domain, type LinkDecl, type MatrixDecl, progressDeclOf } from './declare'
 import { filterKeys, filterWhere } from './filter'
 import { INHERITED, lookupColumn, lookupOf, lookupSelect, lookupsFor, lookupValue } from './lookups'
 import { ApiError, type RowsParams } from './params'
@@ -239,6 +239,36 @@ export function cellsOf(
     cells.get((raws[i] as Raw)[matrix.down] as number)?.push(row)
   })
   return cells
+}
+
+export interface Progress {
+  done: number
+  total: number
+}
+
+// Counted through the viewer's scope on the counted dataset; the caller serves it only to a reader of that dataset (threat 3).
+export function childProgress(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  decl: DatasetDecl,
+  ids: number[],
+  actor: Actor,
+): Map<number, Progress> {
+  const found = new Map<number, Progress>(ids.map((id) => [id, { done: 0, total: 0 }]))
+  const progress = progressDeclOf(decl)
+  const counted = progress && domain.datasets.find((d) => d.name === progress.dataset)
+  if (!progress || !counted) return found
+  const categories = counted.columns[progress.column]?.categories ?? {}
+  const table = tableOf(counted)
+  const select = { key: columnOf(table, progress.key), state: columnOf(table, progress.column) }
+  for (const raw of pointingAt(db, counted, progress.key, ids, scopeOf(actor, counted), select)) {
+    const category = categories[raw.state as string]
+    const tally = found.get(raw.key as number)
+    if (!tally || category === 'cancelled') continue
+    tally.total++
+    if (category === 'done') tally.done++
+  }
+  return found
 }
 
 export interface LinkRow {

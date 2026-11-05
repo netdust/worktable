@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
+import { type BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite'
 import { type Context, Hono } from 'hono'
 import { getConnInfo } from 'hono/bun'
 import { isPerson, linkWritable, readable, scopeOf, visibleSource } from './access'
@@ -31,7 +31,15 @@ import { ApiError, parseRowsParams } from './params'
 import { noStoreHeaders } from './public-headers'
 import { recordLinkRequest, recordLinkRoutes } from './record-link'
 import { type Source, sourceOf, sourcesOf, writerOf } from './registry'
-import { cellsOf, linksOf, matrixOf, readRows, servedColumn as servedLinkColumn } from './rows'
+import {
+  cellsOf,
+  childProgress,
+  linksOf,
+  matrixOf,
+  type Progress,
+  readRows,
+  servedColumn as servedLinkColumn,
+} from './rows'
 import { publicRoutes, shareRoutes, viewRoutes } from './views'
 import { writeGuard } from './write-guard'
 import {
@@ -59,6 +67,7 @@ function writeRoutes(app: Hono<AuthEnv>, store: Store): void {
     return {
       ...row,
       ...markOf(domain, dataset, row, actor),
+      ...progressOn(store.db, domain, dataset, [row.id], actor).get(row.id),
       revision: { batch_id, changed, ...(created && { created }) },
       notices,
     }
@@ -226,6 +235,18 @@ function servedProgress(domain: Domain, dataset: DatasetDecl, actor: Actor): { p
   const progress = progressDeclOf(dataset)
   const counted = progress && domain.datasets.find((d) => d.name === progress.dataset)
   return progress && counted && readable(actor, counted) ? { progress } : {}
+}
+
+// The `progress` key of each row, present only where the counted dataset is readable (the rule servedProgress holds).
+export function progressOn(
+  db: BunSQLiteDatabase,
+  domain: Domain,
+  dataset: DatasetDecl,
+  ids: number[],
+  actor: Actor,
+): Map<number, { progress: Progress }> {
+  if (!servedProgress(domain, dataset, actor).progress) return new Map()
+  return new Map([...childProgress(db, domain, dataset, ids, actor)].map(([id, progress]) => [id, { progress }]))
 }
 
 type ServedLookup = ColumnDecl & { inherited?: true; from?: string }
@@ -396,9 +417,11 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
     const ids = read.rows.map((r) => r.id)
     const links = source.links ? linksOf(db, domain, source, ids, actor) : null
     const cells = found ? cellsOf(db, domain, found, ids, scopeOf(actor, found.join)) : null
+    const progress = source.kind === 'dataset' ? progressOn(db, domain, source, ids, actor) : new Map()
     const rows = read.rows.map((r) => ({
       ...r,
       ...markOf(domain, source, r, actor),
+      ...progress.get(r.id),
       ...(links ? { links: links.get(r.id) } : {}),
       ...(cells ? { cells: cells.get(r.id) } : {}),
     }))
