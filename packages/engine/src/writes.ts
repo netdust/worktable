@@ -184,6 +184,21 @@ export function checkRelations(sqlite: Database, dataset: DatasetDecl, values: V
   }
 }
 
+const MAX_PARENT_DEPTH = 64
+
+// Walks live ancestors from the new parent; the cap also stops a legacy loop.
+function checkParent(sqlite: Database, dataset: DatasetDecl, id: number | null, values: Values): void {
+  const column = dataset.parent
+  if (!column) return
+  let at = values[column] ?? null
+  for (let depth = 1; at !== null; depth++) {
+    if (at === id) throw new ApiError(422, 'parent_cycle', `"${column}" would make the row its own ancestor`)
+    if (depth > MAX_PARENT_DEPTH)
+      throw new ApiError(422, 'parent_too_deep', `"${column}" is nested deeper than ${MAX_PARENT_DEPTH}`)
+    at = (liveRow(sqlite, dataset.name, at)?.[column] as Values[string]) ?? null
+  }
+}
+
 function encode(column: ColumnDecl, value: unknown): string | number | null {
   if (value === null) return null
   if (column.type === 'boolean') return value ? 1 : 0
@@ -650,6 +665,9 @@ function answeredOf(
   checkValues(dataset, values)
   checkOptions(dataset, values)
   checkRelations(store.sqlite, dataset, values)
+  if (dataset.parent && values[dataset.parent] !== ctx.current?.[dataset.parent]) {
+    checkParent(store.sqlite, dataset, (ctx.current?.id as number | undefined) ?? null, values)
+  }
   if (op === 'create') checkRequired(dataset, values)
   return { values, creates }
 }
