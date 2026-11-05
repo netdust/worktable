@@ -1,5 +1,5 @@
 import { locale, t } from '../i18n'
-import type { Field, GroupFact, Link, LinkItem, Model, OptionsFrom, Row, Tone, View } from '../types'
+import type { Category, Field, GroupFact, Link, LinkItem, Model, OptionsFrom, Row, Tone, View } from '../types'
 import { DRAFT } from './store'
 
 export type CellKind =
@@ -21,6 +21,7 @@ export interface Column {
   width: number
   options?: Record<string, string>
   tones?: Record<string, Tone>
+  categories?: Record<string, Category>
   /** A relation's target model; single relations are picked in the cell. */
   relation?: { model: string; multiple: boolean }
   /** Where an empty relation's picker finds its candidates. */
@@ -184,6 +185,7 @@ function fieldColumn(key: string, field: Field, writable: boolean): Column {
   column.editable = writable && !field.readonly && (EDITABLE.includes(kind) || (kind === 'relation' && field.relation?.multiple === false))
   column.options = field.options
   column.tones = field.tones
+  column.categories = field.categories
   column.relation = field.relation
   column.options_from = field.options_from
   column.badge = field.badge

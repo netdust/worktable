@@ -1,6 +1,6 @@
 import { type Filter, fromEngine, isDate, type Join, type Kind, toEngine } from './grid/conditions'
 import type { Layout, SortKey } from './grid/layout'
-import type { Available, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
+import type { Available, Category, CalendarDef, DashboardLayout, DateWindow, OptionsFrom, Field, FieldType, FlagsDef, GroupFact, Link, LinkItem, Lookup, MatrixAway, MatrixJoin, Model, ModelAction, Row, SavedView, Schema, Scope, Space, StoredArrangement, TableDef, Tone, View, ViewType } from './types'
 
 /** A column as `GET /api/schema` declares it. */
 export interface EngineColumn {
@@ -10,6 +10,7 @@ export interface EngineColumn {
   default?: unknown
   options?: Record<string, string>
   tones?: Record<string, Tone>
+  categories?: Record<string, Category>
   /** The dataset its integer points at. */
   relation?: string
   readonly?: true
@@ -173,6 +174,7 @@ function fieldOf(declared: EngineColumn, source: EngineSource, sources: Sources)
     fact: false,
     ...(column.options ? { options: column.options } : {}),
     ...(column.tones ? { tones: column.tones } : {}),
+    ...(column.categories ? { categories: column.categories } : {}),
     ...(column.relation ? { relation: { model: column.relation, multiple: false } } : {}),
     ...(isReadonly(column, source) ? { readonly: true } : {}),
     ...(column.writes ? { writes: column.writes } : {}),

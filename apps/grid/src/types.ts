@@ -15,6 +15,9 @@ export interface OptionsFrom {
   sort?: string[]
 }
 
+/** What an option of a status column means. */
+export type Category = 'open' | 'active' | 'done' | 'cancelled'
+
 export interface Field {
   type: FieldType
   label: string
@@ -24,6 +27,8 @@ export interface Field {
   defaulted?: boolean
   fact: boolean
   options?: Record<string, string>
+  /** What each option means: open, active, done or cancelled. */
+  categories?: Record<string, Category>
   /** A tone per option key; an option not listed falls back to the built-in defaults. */
   tones?: Record<string, Tone>
   relation?: { model: string; multiple: boolean }

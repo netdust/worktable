@@ -316,6 +316,7 @@ const strings = {
   cardSize: 'Kaartgrootte',
   // The engine's away layer (a matrix's `away`), in the words its legend uses.
   awayLayer: 'Afwezigheden',
+  showFinished: 'Afgerond tonen',
   updatedAt: 'bijgewerkt {time}',
   dashboardSum: '{space} · week {week}',
   crewOf: '{have} van {need} plaatsen bezet',

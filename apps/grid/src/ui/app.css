@@ -1684,6 +1684,11 @@
   gap: 6px;
 }
 
+.nv-category {
+  margin-right: 6px;
+  color: var(--color-fg-subtle);
+}
+
 .nv-kind svg {
   color: var(--color-fg-subtle);
   flex: none;
