@@ -66,6 +66,7 @@ type Row = { id: number; progress?: { done: number; total: number }; links?: Rec
 let sqlite: Database
 let editor: Request
 let owner: Request
+let admin: Request
 
 const DAY = 86_400_000
 const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString()
@@ -95,6 +96,7 @@ beforeEach(async () => {
   const app = testEngine(sqlite, domain)
   editor = send(app, await signIn(app, 'editor'))
   owner = send(app, await signIn(app, 'owner', { dataset: 'werk', id: 1 }))
+  admin = send(app, await signIn(app, 'administrator'))
 })
 
 describe('the cutoff', () => {
@@ -184,6 +186,22 @@ describe('archived is a display switch, never a permission (threat 5)', () => {
   test('an archived row stays out of the owner read without archived=1', async () => {
     row('fin', 60, 1)
     expect((await list(owner)).total).toBe(0)
+  })
+})
+
+describe('an owner view cannot reach the archive', () => {
+  test('a dataset view is refused for owners, and one stored that way is served as unknown_view', async () => {
+    row('fin', 60, 1)
+    const saved = await admin('POST', '/api/views', {
+      body: JSON.stringify({ name: 'Items', source: 'item', visible_fields: ['name'] }),
+    })
+    expect(saved.status).toBe(201)
+    const id = (saved.body as { id: number }).id
+    const refused = await admin('PUT', `/api/views/${id}/for-owners`, { body: '{}' })
+    expect([refused.status, refused.body.code]).toEqual([400, 'not_query'])
+    sqlite.query('UPDATE saved_view SET for_owners = 1 WHERE id = ?').run(id)
+    const read = await owner('GET', `/api/owner/views/${id}/rows?archived=1`)
+    expect([read.status, read.body.code]).toEqual([404, 'unknown_view'])
   })
 })
 
