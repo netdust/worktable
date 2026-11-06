@@ -9,6 +9,8 @@ export type Drop =
 
 interface Input {
   manual: boolean
+  /** A board that never takes a manual order (a query's): a drop within a column writes nothing. */
+  sorted?: boolean
   /** The dragged card's index in `cards` before it was taken out; null when it comes from another column. */
   from: number | null
   index: number
@@ -39,8 +41,8 @@ export function staleOf(columns: Row[][]): number[] {
  * What a drop at `index` writes. Every card above the slot whose rank does not already fall between its
  * shown neighbours gets one first, in the shown order, so nothing on the board moves but the dropped card.
  */
-export function dropOf({ manual, from, index, cards: shown, value, others = [] }: Input): Drop {
-  if (from === index) return { kind: 'none' }
+export function dropOf({ manual, sorted = false, from, index, cards: shown, value, others = [] }: Input): Drop {
+  if (from === index || (sorted && from !== null)) return { kind: 'none' }
   if (!manual && from === null) return { kind: 'regroup', value }
   // A sorted board turning manual: a rank that disagrees with the order shown is cleared, so the switch moves nothing.
   const stale = new Set(manual ? [] : staleOf([shown, ...others]))

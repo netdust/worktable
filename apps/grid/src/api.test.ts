@@ -731,6 +731,33 @@ describe('the matrix on the engine', () => {
     ])
   })
 
+  it('a query column that writes a lifecycle sends expect, the value the row showed; another mapped column none; an explicit expect wins', async () => {
+    const dag = {
+      kind: 'query', label: 'Per dag', title: 'naam', date: null, writable: true,
+      columns: {
+        toewijzing_id: { type: 'integer', label: 'Toewijzing' },
+        naam: { type: 'text', label: 'Naam', nullable: true, writes: { dataset: 'toewijzing', field: 'naam', key: 'toewijzing_id' } },
+        state: { type: 'text', label: 'Status', writes: { dataset: 'toewijzing', field: 'state', key: 'toewijzing_id' } },
+      },
+    } as const
+    const schema = { sources: { ...matrixEngine.sources, dag } } as unknown as EngineSchema
+    fetcher.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/schema') return json(schema)
+      return init?.method === 'PATCH' ? json({ ...cell, revision: { batch_id: 'b1', changed: ['state'] } }) : json({ rows: [], total: 0 })
+    })
+    const shown: Row = { id: 30, title: 'Lotte', status: '', fields: { toewijzing_id: 4, naam: 'Lotte', state: 'uitgenodigd' }, lookups: {} }
+
+    await update('dag', 30, { state: 'bevestigd' }, shown)
+    await update('dag', 30, { naam: 'Gast' }, shown)
+    await update('dag', 30, { state: 'bevestigd' }, shown, { state: 'bevestigd' })
+
+    expect(sent().filter(([, method]) => method === 'PATCH')).toEqual([
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ state: 'bevestigd', expect: { state: 'uitgenodigd' } })],
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ naam: 'Gast' })],
+      ['/api/rows/toewijzing/4', 'PATCH', JSON.stringify({ state: 'bevestigd', expect: { state: 'bevestigd' } })],
+    ])
+  })
+
   it('the matrix on a lifecycle join sends the confirmed state as expect, and undoes by the batch', async () => {
     on((path, init) => (path.endsWith('/undo') ? json({ batch_id: 'u1' }) : json({ ...cell, ...JSON.parse(String(init?.body)), revision: { batch_id: 'b1', changed: ['state'] } })))
     const view: View = { ...matrixView, join: { ...matrixView.join!, lifecycle: 'state', keys: { u: 'uitgenodigd', b: 'bevestigd' } } }

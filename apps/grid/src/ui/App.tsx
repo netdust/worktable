@@ -484,7 +484,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
   const shownRows = store || result.status === 'ready' ? sheetRows : null
   const grouped = view && model && layout ? boardColumn(view, model, layout) : null
-  const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped, models))
+  // A query board's + creates in the dataset its column writes, where the viewer may write that dataset.
+  const boardCreates = (model: Model, column: string) => canSet(model, column, models) && (model.query
+    ? Boolean(target && !target.created_by && model.fields[column]?.writes?.dataset === target.key && served?.writable[target.key])
+    : writable && !model.created_by)
+  const boardDrops = Boolean(store && writable && view && model && grouped && draggable(view, model, grouped, models))
   // A table reports the pills for the rows its search leaves, as its count does; the other skins count their own rows.
   const reported = told?.view === view?.key ? told?.shown?.insight : undefined
   const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? (reported ?? insightOf(model, shownRows)) : undefined), [dashboard, model, shownRows, matrix, reported])
@@ -731,7 +735,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
-              onCreate={writable && !model.query && !model.created_by && canSet(model, boardColumn(view, model, layout) as string, models) ? (preset) => setQuick(preset) : undefined} places={places} />
+              onCreate={boardCreates(model, boardColumn(view, model, layout) as string) ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={sheetRows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (

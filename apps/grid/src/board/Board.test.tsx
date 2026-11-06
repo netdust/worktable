@@ -178,6 +178,44 @@ describe('a keyboard drag on a sorted board', () => {
   })
 })
 
+describe('a keyboard drag on a query board', () => {
+  const query = { ...model, query: true, fields: { status: { ...model.fields.status, writes: { dataset: 'taak', field: 'staat', key: 'taak_id' } } } } as unknown as Model
+  const rows = [row(1, 'Repetitie', 'optie', '1'), row(2, 'Opbouw', 'optie', '2'), row(3, 'Afbraak', 'optie', '3'), row(4, 'Voorstelling', 'bevestigd')]
+
+  it('writes nothing for a drop within a column and keeps its order, whatever the sort', async () => {
+    for (const layout of [manual, sorted]) {
+      const onDrop = vi.fn((_drop: Drop, _id: number) => Promise.resolve(true))
+      const onLayout = vi.fn()
+      board({ model: query, rows, layout, onDrop, onLayout })
+      await press('Repetitie', 'Space', 'ArrowDown', 'ArrowDown', 'Space')
+      expect(onDrop).not.toHaveBeenCalled()
+      expect(onLayout).not.toHaveBeenCalled()
+      expect(order('Optie')).toEqual(['Repetitie', 'Opbouw', 'Afbraak'])
+      cleanup()
+    }
+  })
+
+  it('regroups a card dropped in another column, and puts it back where the write is refused', async () => {
+    const onDrop = vi.fn((_drop: Drop, _id: number) => Promise.resolve(true))
+    const onLayout = vi.fn()
+    board({ model: query, rows, layout: manual, onDrop, onLayout })
+    await press('Voorstelling', 'Space', 'ArrowLeft', 'Space')
+    expect(onDrop).toHaveBeenCalledWith({ kind: 'regroup', value: 'optie' }, 4)
+    expect(onLayout).not.toHaveBeenCalled()
+    cleanup()
+    board({ model: query, rows, layout: sorted, onDrop: vi.fn(() => Promise.resolve(false)) })
+    await press('Voorstelling', 'Space', 'ArrowLeft', 'Space')
+    expect(order('Bevestigd')).toEqual(['Voorstelling'])
+  })
+
+  it('presets a new record by the field the column writes', () => {
+    const onCreate = vi.fn()
+    board({ model: query, onCreate })
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw in Bevestigd' }))
+    expect(onCreate).toHaveBeenCalledWith({ staat: 'bevestigd' })
+  })
+})
+
 describe('a drop that switches a sorted board holding stale ranks', () => {
   // Shown by date, their ranks left by another manual view: Optie's run against the order, Bevestigd's last after an unranked card.
   const rows = [row(1, 'Repetitie', 'optie', 'C'), row(2, 'Opbouw', 'optie', 'a'), row(3, 'Afbraak', 'optie', 'I'), row(4, 'Pauze', 'optie', '6'),

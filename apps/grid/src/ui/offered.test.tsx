@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Schema } from '../types'
 
@@ -124,6 +124,71 @@ describe('a board', () => {
   it('does not drag by a column the person only reads', async () => {
     await open(schemaOf(unit({ fields: { status: { ...state, readonly: true } } })), 'bord')
     expect(cardClass()).not.toContain('nv-board__card--drags')
+  })
+})
+
+describe('a board on a query', () => {
+  const cardClass = () => screen.getByRole('button', { name: /Alpha/ }).className
+  const writes = { dataset: 'taak', field: 'staat', key: 'taak_id' }
+  const taak = (extra: object = {}) => ({ key: 'taak', label: 'Taak', title_label: 'Naam', title_readonly: false, title_required: false, fields: { staat: state }, ...extra })
+  const overview = (extra: object = {}, column: object = { writes }) => unit({ query: true, fields: { status: { ...state, ...column } }, ...extra })
+  const schemaWith = (query: object, target: object = taak(), writable: object = { unit: true, taak: true }): Schema =>
+    ({ ...schemaOf(query), models: { unit: query, taak: target }, writable }) as unknown as Schema
+  const plus = () => screen.queryAllByRole('button', { name: /^Nieuw in/ })
+
+  it('drags through a column that writes, and offers + only where it creates in the dataset that column writes and may write it', async () => {
+    await open(schemaWith(overview({ creates: 'taak' })), 'bord')
+    expect(cardClass()).toContain('nv-board__card--drags')
+    expect(plus().length).toBeGreaterThan(0)
+    cleanup()
+    await open(schemaWith(overview({ creates: 'taak' }), taak(), { unit: true, taak: false }), 'bord')
+    expect(plus()).toEqual([])
+    cleanup()
+    await open(schemaWith(overview({ creates: 'ander' })), 'bord')
+    expect(cardClass()).toContain('nv-board__card--drags')
+    expect(plus()).toEqual([])
+  })
+
+  it('drags but offers no + where the query creates nothing', async () => {
+    await open(schemaWith(overview()), 'bord')
+    expect(cardClass()).toContain('nv-board__card--drags')
+    expect(plus()).toEqual([])
+  })
+
+  it('neither drags nor offers + by a column that writes nothing', async () => {
+    await open(schemaWith(overview({ creates: 'taak' }, { readonly: true })), 'bord')
+    expect(cardClass()).not.toContain('nv-board__card--drags')
+    expect(plus()).toEqual([])
+  })
+
+  it("greys the lanes the target's lifecycle cannot reach on a lift, and never targets Geen", async () => {
+    const life = taak({ lifecycle: 'staat', lifecycle_transitions: [{ from: ['klaar'], to: 'open' }] })
+    api.schema.mockResolvedValue(schemaWith(overview(), life))
+    api.rows.mockResolvedValue({ rows: [row, { id: 2, title: 'Beta', status: '', fields: { status: null } }], total: 2 })
+    window.location.hash = '#view=bord'
+    render(<App />)
+    await screen.findByText('Alpha')
+    expect(cardClass()).toContain('nv-board__card--drags')
+    fireEvent.keyDown(screen.getByRole('button', { name: /Alpha/ }), { code: 'Space', key: ' ' })
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    const lane = (name: string) => screen.getByRole('region', { name }).className
+    expect(lane('Klaar')).toContain('nv-board__column--blocked')
+    expect(lane('Geen')).toContain('nv-board__column--blocked')
+    expect(lane('Open')).not.toContain('nv-board__column--blocked')
+  })
+
+  it('a + opens the quick create on the target with the lane preset under the field it writes, and one undo takes the row back', async () => {
+    api.create.mockResolvedValue({ row: { id: 9, title: '', status: '', fields: { staat: 'klaar' } }, batch: 'b9' })
+    api.undoBatch.mockResolvedValue('u9')
+    await open(schemaWith(overview({ creates: 'taak' })), 'bord')
+    const reads = api.rows.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw in Klaar' }))
+    const dialog = await screen.findByRole('dialog')
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+    expect(api.create).toHaveBeenCalledExactlyOnceWith('taak', { staat: 'klaar' })
+    await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+    await act(async () => fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true }))
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b9')
   })
 })
 

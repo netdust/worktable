@@ -50,6 +50,8 @@ interface Target {
 interface Options {
   lanes: BoardLane[]
   manual: boolean
+  /** The board never takes a manual order: a drop within a column writes nothing. */
+  sorted?: boolean
   layout: Layout
   /** The lifecycle the board's column moves: a card lands only in a lane a transition reaches. */
   lifecycle?: ReturnType<typeof lifecycleOf>
@@ -107,7 +109,7 @@ function pointOf(lists: Lists, at: Target, from: Lifted) {
 }
 
 /** The board's drag: the sensors, the lifted card, where it lands, and the drop it writes. */
-export function useBoardDrag({ lanes, manual, layout, lifecycle = null, onDrop, onLayout }: Options) {
+export function useBoardDrag({ lanes, manual, sorted = false, layout, lifecycle = null, onDrop, onLayout }: Options) {
   const [lifted, setLifted] = useState<Lifted | null>(null)
   const [target, setTarget] = useState<Target | null>(null)
   // A sorted board's dropped column, in the drop's ranks until its writes answer.
@@ -117,8 +119,8 @@ export function useBoardDrag({ lanes, manual, layout, lifecycle = null, onDrop, 
     [lanes, pending],
   )
   const root = useRef<HTMLDivElement>(null)
-  const latest = useRef({ shown, manual, layout, lifecycle, onDrop, onLayout })
-  latest.current = { shown, manual, layout, lifecycle, onDrop, onLayout }
+  const latest = useRef({ shown, manual, sorted, layout, lifecycle, onDrop, onLayout })
+  latest.current = { shown, manual, sorted, layout, lifecycle, onDrop, onLayout }
   const drag = useRef<Lifted | null>(null)
   const live = useRef<Target | null>(null)
   const heard = useRef<Target | null>(null)
@@ -241,12 +243,12 @@ export function useBoardDrag({ lanes, manual, layout, lifecycle = null, onDrop, 
   }
 
   const land = async (from: Lifted, at: Target) => {
-    const { manual, onDrop } = latest.current
+    const { manual, sorted, onDrop } = latest.current
     const lane = laneOf(at.lane)
     if (!lane || !onDrop || !reaches(from, lane)) return
     const cards = lane.cards.filter((row) => row.id !== from.id)
     const others = latest.current.shown.filter((one) => one.key !== at.lane).map((one) => one.cards)
-    const drop = dropOf({ manual, from: at.lane === from.lane ? from.index : null, index: at.index, cards, value: lane.value, others })
+    const drop = dropOf({ manual, sorted, from: at.lane === from.lane ? from.index : null, index: at.index, cards, value: lane.value, others })
     if (drop.kind === 'none') return
     const switching = drop.kind === 'place' && !drop.manual
     if (switching) setPending({ lane: at.lane, ranks: new Map([...drop.clears.map((id) => [id, null] as const), ...drop.ranks.map((r) => [r.id, r.position] as const), [from.id, drop.position]]) })

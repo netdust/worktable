@@ -70,6 +70,14 @@ describe('dropOf', () => {
     expect(dropOf({ manual: true, from: 2, index: 2, cards: column, value: 'todo' })).toEqual({ kind: 'none' })
     expect(dropOf({ manual: false, from: 1, index: 1, cards: column, value: 'todo' })).toEqual({ kind: 'none' })
   })
+
+  it('on a board that stays sorted, a drop within its own column writes nothing and one across regroups', () => {
+    const column = [card(1, '1'), card(2), card(3)]
+
+    expect(dropOf({ manual: false, sorted: true, from: 0, index: 2, cards: column, value: 'todo' })).toEqual({ kind: 'none' })
+    expect(dropOf({ manual: false, sorted: true, from: 2, index: 0, cards: column, value: 'todo', others: [[card(4, '9'), card(5, '1')]] })).toEqual({ kind: 'none' })
+    expect(dropOf({ manual: false, sorted: true, from: null, index: 1, cards: column, value: 'done' })).toEqual({ kind: 'regroup', value: 'done' })
+  })
 })
 
 describe('a switch to manual', () => {
