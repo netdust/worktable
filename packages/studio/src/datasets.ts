@@ -348,6 +348,7 @@ export const taak = defineDataset({
   title: 'titel',
   date: 'deadline',
   parent: 'parent_id',
+  board: { column: 'status' },
   archive_after: 30,
   scoped: 'organisatie_id',
   custom: true,

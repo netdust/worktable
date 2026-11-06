@@ -272,6 +272,7 @@ describe('the default views', () => {
   })
 
   test('the taak board keeps its manual rank and shows deadline, wie, organisatie and site', () => {
+    expect(schema.taak).toMatchObject({ board: { column: 'status' } })
     expect(viewNamed('Per status')).toMatchObject({
       source: 'taak',
       skin: 'board',
