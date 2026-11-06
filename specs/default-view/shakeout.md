@@ -20,6 +20,7 @@ Sweep:
   tests in 14 files, green;
 - the grid's Vitest suites the diff touches (views, ViewList, Toolbar, useSavedViews, App, i18n): 264 tests in 6
   files, green;
+- row 3 re-driven alone on c8de21e (the fix), 1 test, green;
 - the flows, the hunt's repro, the two registered checks the diff touches and the smoke, in one run, 11:59–12:00: 7
   tests, 6 passed. mark-on-a-gone-view failed on its assertion (row 3), as a repro should. mark-a-default passed alone
   again at 12:05 after its boundary edges were added.
@@ -54,7 +55,7 @@ Bite check, the diff's dangerous paths and the test that goes RED:
 - one default per node, across a node's queries: row 2 (exactly one default after each mark, Op tafel opens Taken);
 - `markable` (shared, not a dashboard): row 2 (own unshared view);
 - the grid's handling of a refused mark (`markDefault` in useSavedViews.ts): nothing caught it before this shake-out.
-  Row 3 now does, and it is RED.
+  Row 3 now does: RED at 554e6ea, green after the fix c8de21e.
 
 Where the tests are:
 - the flows and the repro: `e2e/studio.spec.ts`, describe "default-view, the shake-out" (`@e2e`);
@@ -65,7 +66,7 @@ Where the tests are:
 |---|---|---|---|---|
 | 1 | taken-opens-on-board. The seed holds one default in Taken's node, Per status. From Overzicht, a rail click on Taken opens Per status: a board with Open, Bezig, Geblokkeerd and Gedaan lanes, and the house "Standaardweergave" on its rail row. Features opens Per fase (lanes Ontwerp, Bouwen, Klaar) and Agenda opens its calendar. Sites, with no mark, opens Sites. Op tafel is then chosen in Taken, Sites opened, and Taken clicked again: Op tafel. A new visit (the landing page) opens Per status again. The house reads in dark too (taken-per-status-donker.png). | browser | pass | Browser: http://127.0.0.1:5176/#view=18 · shakeout/taken-per-status.png — Test: `e2e/studio.spec.ts` › `taken-opens-on-board @e2e` |
 | 2 | mark-a-default. The administrator opens ⋯ on the Taken table: Kopie maken, Naam wijzigen, Standaardweergave, Verwijderen. Standaardweergave moves the house from Per status to Taken, and `/api/views` holds one default in the node, Taken. A second PUT changes nothing. On a new visit, a rail click on Taken opens the table, with no board columns (taken-opent-op-tabel.png). The editor's rail shows the house on Taken beside the lock "Systeemweergave, alleen te kopiëren" and none on Per status (redacteur-rail-huis-en-slot.png). Their toolbar lock reads "Systeemweergave: maak een kopie om aan te passen". Their ⋯ on Taken and on Per status offers only Kopie maken. "Geen standaardweergave meer" takes the house off, the node has no default, and Taken opens its first view. One's own unshared view "e2e eigen taken" offers Delen met het team and no mark. Marking Op tafel (a query of taak) makes Taken open on Op tafel. The `finally` marks Per status again. | browser | pass | Browser: http://127.0.0.1:5176/#view=18 · shakeout/beheerder-menu-standaardweergave.png — Test: `e2e/studio.spec.ts` › `mark-a-default @e2e` |
-| 3 | mark-on-a-gone-view (hunt, confirmed bug). The editor makes a shared view "e2e weg gedeeld" on taak (POST /api/views, `shared: true`). The administrator opens Taken from the landing page, sees the view in the rail with the colleague mark, and opens its ⋯. The editor then deletes it (DELETE /api/views/:id → 200). The administrator clicks Standaardweergave. The PUT answers 404 `unknown_view`. The toolbar shows "unknown view 25", the engine's English message. The gone view stays listed in Taken's rail, with its colleague mark and ⋯. Expected: the row leaves the rail, as every other write refused with `unknown_view` does through `vanished()` in useSavedViews.ts. `markDefault` (useSavedViews.ts:221) only notes the refusal and never refreshes. The same happens when the editor unshares the view instead of deleting it: the administrator gets the same 404 and the same stale row. RED at 554e6ea: `expect(row(page, 'Taken', 'e2e weg gedeeld')).toHaveCount(0)`, received 1. The server keeps Per status as the default. | browser | fail | Browser: http://127.0.0.1:5176/#view=18 · shakeout/markeren-weggehaalde-weergave.png — Test: `e2e/studio.spec.ts` › `mark-on-a-gone-view @e2e` |
+| 3 | mark-on-a-gone-view (hunt, confirmed bug, fixed in c8de21e). The editor makes a shared view "e2e weg gedeeld" on taak (POST /api/views, `shared: true`). The administrator opens Taken from the landing page, sees the view in the rail with the colleague mark, and opens its ⋯. The editor then deletes it (DELETE /api/views/:id → 200). The administrator clicks Standaardweergave; the PUT answers 404 `unknown_view`. At 554e6ea the gone view stayed listed in Taken's rail with its ⋯, because `markDefault` only noted the refusal (RED: expected 0 rows, received 1). At c8de21e `markDefault` rejects through `refused()` like every other view write: the row leaves the rail at once, the toolbar shows the refusal, and the server keeps Per status as the default (re-driven alone, green). The note's wording (the engine's "unknown view N" unless the site declares `error.unknown_view`) is shared with every view write and deferred as a minor by the coordinator, not part of this row. | browser | pass | Browser: http://127.0.0.1:5176/#view=18 · shakeout/markeren-weggehaalde-weergave.png — Test: `e2e/studio.spec.ts` › `mark-on-a-gone-view @e2e` |
 | 4 | mark-a-default, denied actors on the wire. As the signed-in editor (their session cookie, through the grid's proxy): PUT /api/views/:id/default on Per status and DELETE on the marked Taken are each 403 `{code: forbidden}`. As the service account `claude` (bearer token straight to the engine on 4313): PUT on Per status is 403. After all three, `/api/views` still holds one default in Taken's node, Taken. The administrator's PUT on an own unshared view is 400 `not_shared`, and on the dashboard Overzicht 400 `dashboard_not_default`. | wire | pass | Test: `e2e/studio.spec.ts` › `mark-a-default @e2e` |
 | 5 | seeded-view-menu-by-role (registered, re-driven). The administrator's ⋯ on the seeded SLA-sites reads Kopie maken, Naam wijzigen, Standaardweergave, Verwijderen, and the rename works. The editor sees the new name and is offered only Kopie maken. | browser | pass | Browser: http://127.0.0.1:5176/#view=1 · shakeout/rail-menu-beheerder.png — Test: `e2e/studio.spec.ts` › `seeded-view-menu-by-role @e2e` |
 | 6 | colleague-shared-view (registered, re-driven, theatre). A colleague's shared view carries the people mark and the toolbar's "Gedeeld door een collega" lock, never the Systeemweergave lock. The seeded Tourstops keeps "Systeemweergave, alleen te kopiëren". | browser | pass | Browser: http://127.0.0.1:5174/#view=34 · shakeout/colleague-view.png — Test: `e2e/grid-ux.spec.ts` › `colleague-shared-view @e2e` |
@@ -100,10 +101,10 @@ calendar, Features opens Per fase, and Opdrachten opens Opdrachten. Enter on the
 After landing on the table by its link, a later rail click on Taken opens Per status, not the table. See the second
 rejected line.
 
-confirmed bug 1, row 3. A mark refused with 404 because the view is gone leaves the gone view in the rail. The toolbar
+confirmed bug 1, row 3, fixed in c8de21e and re-driven green. A mark refused with 404 because the view is gone left the gone view in the rail. The toolbar
 shows the engine's English message. Cause: `markDefault` in useSavedViews.ts skips `refused()` / `vanished()`, which
-every other view write uses. useSavedViews.ts is in this branch's diff, so the bug is ours. RED: expected 0 rows,
-received 1.
+every other view write uses. useSavedViews.ts is in this branch's diff, so the bug is ours. RED at 554e6ea: expected
+0 rows, received 1; green at c8de21e.
 
 rejected: Undo after deleting the default brings the view back without its house. The spec intends it: deleting a view
 clears its mark, so a restore never brings it back (docs/SPEC.md, Default view).

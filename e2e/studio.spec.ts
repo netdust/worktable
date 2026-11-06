@@ -2878,7 +2878,7 @@ test.describe('default-view, the shake-out', () => {
     }
   })
 
-  // The hunt's confirmed bug (specs/default-view/shakeout.md row 3), RED at 554e6ea: every other write refused with
+  // The hunt's confirmed bug (specs/default-view/shakeout.md row 3), RED at 554e6ea, green at c8de21e: every other write refused with
   // unknown_view drops the gone view from the rail (useSavedViews vanished()); the mark only shows the refusal.
   test('mark-on-a-gone-view @e2e: a mark refused because a colleague deleted the view drops it from the rail, as any other refused write does', async ({
     page,
