@@ -61,6 +61,10 @@ describe('errorText()', () => {
     expect(errorText('dashboard_not_default', 'A dashboard is never a default')).toBe('Een dashboard is nooit de standaardweergave.')
   })
 
+  it('says in Dutch that a view is gone, with no site strings set', () => {
+    expect(errorText('unknown_view', 'unknown view 25')).toBe('Deze weergave bestaat niet meer')
+  })
+
   it("keeps the site's own words first, and the server's message for a code it does not know", () => {
     setStrings({ 'error.transition_lost': 'Iemand was je voor.' })
     expect(errorText('transition_lost', 'lost')).toBe('Iemand was je voor.')

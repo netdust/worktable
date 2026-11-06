@@ -292,6 +292,7 @@ const strings = {
   selectionNoneFits: 'Geen van deze rijen komt in aanmerking.',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
+  viewGone: 'Deze weergave bestaat niet meer',
   notShared: 'Alleen een gedeelde weergave kan de standaardweergave zijn.',
   dashboardNotDefault: 'Een dashboard is nooit de standaardweergave.',
   selectedCount: '{n} geselecteerd',
@@ -476,6 +477,7 @@ const ENGINE_CODES: Record<string, StringKey> = {
   unknown_record: 'recordGoneRun',
   condition_not_met: 'conditionNotMet',
   not_shared: 'notShared',
+  unknown_view: 'viewGone',
   dashboard_not_default: 'dashboardNotDefault',
 }
 

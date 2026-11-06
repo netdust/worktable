@@ -1209,7 +1209,7 @@ describe('saved views', () => {
 
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
 
-    expect(await screen.findByText('unknown view 42 · Bewaar je wijziging met “Kopie maken” voor je weggaat')).toBeTruthy()
+    expect(await screen.findByText('Deze weergave bestaat niet meer · Bewaar je wijziging met “Kopie maken” voor je weggaat')).toBeTruthy()
     expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
     expect(hash()).toBe('42')
     expect(within(types()).getByRole('button', { name: /^Calais techniek/ })).toBeTruthy()
@@ -1227,7 +1227,7 @@ describe('saved views', () => {
 
     fireEvent.click(within(more()).getByRole('menuitem', { name: 'Publieke weergave bijwerken' }))
 
-    expect(await screen.findByText('unknown view 42 · Bewaar je wijziging met “Kopie maken” voor je weggaat')).toBeTruthy()
+    expect(await screen.findByText('Deze weergave bestaat niet meer · Bewaar je wijziging met “Kopie maken” voor je weggaat')).toBeTruthy()
     expect(JSON.parse(local('planning') ?? '{}').hidden).toEqual(['kind'])
     expect(JSON.parse(local('42') ?? '{}').hidden).toEqual(['place'])
   })

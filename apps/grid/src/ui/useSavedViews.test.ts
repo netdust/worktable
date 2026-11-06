@@ -1,6 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setStrings } from '../i18n'
 import type { SavedView } from '../types'
 import { AUTOSAVE_DELAY, useSavedViews } from './useSavedViews'
 
@@ -156,7 +155,6 @@ describe("a node's default", () => {
   })
 
   it('drops a view another user took away, and says so in the grid\'s words', async () => {
-    setStrings({ 'error.unknown_view': 'Deze weergave bestaat niet meer' })
     const note = vi.fn()
     api.setDefault.mockRejectedValue({ code: 'unknown_view', message: 'unknown view 44', status: 404 })
     const { result } = renderHook(() => useSavedViews({
@@ -167,6 +165,5 @@ describe("a node's default", () => {
     await act(async () => result.current.markDefault(team, true))
     expect(result.current.tables[0]!.views.map((v) => v.key)).toEqual(['43'])
     expect(note).toHaveBeenCalledWith('Deze weergave bestaat niet meer')
-    setStrings(undefined)
   })
 })

@@ -2897,7 +2897,7 @@ test.describe('default-view, the shake-out', () => {
       await page.getByRole('button', { name: 'More actions: e2e weg gedeeld', exact: true }).click()
       expect((await editor.request.delete(`/api/views/${id}`)).status()).toBe(200)
       await page.getByRole('menuitem', { name: 'Standaardweergave', exact: true }).click()
-      await expect(page.locator('.nv-toolbar').getByRole('alert')).toBeVisible()
+      await expect(page.locator('.nv-toolbar').getByRole('alert')).toHaveText('Deze weergave bestaat niet meer')
       await shot(page, 'markeren-weggehaalde-weergave')
       await expect(row(page, 'Taken', 'e2e weg gedeeld')).toHaveCount(0)
       expect(await defaultsOf(page.request, TAKEN)).toEqual(['Per status'])
