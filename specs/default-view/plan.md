@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bun, Hono, Drizzle, SQLite, Zod, Biome, TypeScript; React + vitest in `apps/grid`; Playwright e2e.
 
-**Spec:** `specs/work-model/spec.md` (R4, with the 2026-11-06 rulings: per rail node, administrator only, rail only with source links noted, the lock renamed "Systeemweergave").
+**Spec:** `specs/work-model/spec.md` (R4, with the 2026-11-06 rulings: per rail node, administrator only, rail only with source links noted, the lock renamed "Systeemweergave"); the spec of record `docs/SPEC.md` (SavedView, Work model *Default view*, Administrator, Routes) carries the same rulings since this plan's first commit.
 
 **First working version:** Task 3 — Studio's Taken open on a board on status, Features on "Per fase", Agenda on its calendar. Tasks 1 and 2 are what it stands on.
 
@@ -34,7 +34,7 @@
 4. Two administrators mark two views of one node at once, leaving two defaults → the unmark of the node's other views and the mark run in one `immediate` transaction, and a test asserts one default after two marks.
 5. Reseed overwrites an administrator's choice → seeding marks a node's default only when the node has none; a person's mark is never undone by `--seed-missing`. Changing the mark through the route does not count as "touched" for the reseed of the view's declared fields (the route writes no field `DECLARED` lists).
 
-**Deferrals.** A public or for-owners view can be a default (it is shared); its publication rules are unchanged. Deleting the default view leaves the node without a default until someone marks one; restoring it restores its mark only if the node still has none.
+**Deferrals.** A public or for-owners view can be a default if it is shared; its publication rules are unchanged. Deleting the default view clears its mark (as a delete clears the share token, views.ts:424), so the node has no default until someone marks one and a restored view comes back unmarked. If a query's `of` changes, two nodes can merge holding two defaults; the grid takes the first `default` it lists (deterministic), and the next mark repairs it.
 
 ## Test map
 
@@ -43,13 +43,13 @@
 | Column, serving, mark route | `GET /views`, `PUT`/`DELETE /views/:id/default` (denials: editor, owner, service token; colleague's unshared view; own unshared view; dashboard) | integration · `packages/engine/test/default-view.test.ts`, `packages/engine/test/route-matrix.test.ts` · `bun test packages/engine/test/default-view.test.ts packages/engine/test/route-matrix.test.ts` | none — proven by tests |
 | Seeded defaults | `seedDomain`, `--seed-missing` | integration · `packages/engine/test/default-view.test.ts` · same | none — proven by tests |
 | Studio seeds | Studio `/views` after migrate and after seed-missing on an old database | integration · `packages/studio/test/seed.test.ts` · `bun test packages/studio` | none — proven by tests |
-| Grid opens the default | `lastIn`, the rail, the landing view | unit (vitest) · `apps/grid/src/ui/views.test.ts`, `apps/grid/src/ui/App.test.tsx` · `bun run --filter @worktable/grid test` | taken-opens-on-board (written and registered by `/shakeout`) |
+| Grid opens the default | `lastIn`, the rail | unit (vitest) · `apps/grid/src/ui/views.test.ts`, `apps/grid/src/ui/App.test.tsx` · `bun run --filter @worktable/grid test` | taken-opens-on-board (written and registered by `/shakeout`) |
 | Grid menu, mark, lock wording | `ViewList` menu and marks, `Toolbar` lock | unit (vitest) · `apps/grid/src/ui/ViewList.test.tsx`, `apps/grid/src/ui/Toolbar.test.tsx`; e2e wording · `e2e/grid-ux.spec.ts:642-645` · same + `bun run gate` | mark-a-default (written and registered by `/shakeout`) |
 
 ## Review Focus
 
 - A non-administrator or a service token cannot mark or unmark a default, and a colleague's unshared view cannot be marked (Test map row 1, threat 1-2).
-- After two marks in one node there is exactly one default, and marking in one node leaves the other nodes' defaults alone (row 1, threat 4).
+- After two marks in one node there is exactly one default, marking in one node leaves the other nodes' defaults alone, and a delete then restore never brings a second default back (row 1, threat 4).
 - `--seed-missing` on a database whose administrator chose another default leaves that choice; on a database with no default in the node it marks the seed's (row 2, threat 5).
 - A node whose default is not readable to the viewer opens its first listed view (row 4, threat 3).
 - A query view (Agenda) is the default of its `of` dataset's node, and the node key is the same in the engine and the grid (rows 1 and 4).
@@ -63,15 +63,15 @@ The simplest design is a client-only choice per browser, which fails the ask: th
 ### Task 1: Engine column, serving and the mark route
 
 **Files:**
-- Modify: `packages/engine/src/saved-view.ts` (add `is_default`), `packages/engine/src/views.ts` (`SavedViewRow`/`outOf` :19-33/:93-108 serve `default`; `shareRoutes` :520-555 gains the two routes; a `nodeOf(domain, source)` helper), `packages/engine/test/route-matrix.test.ts` (two rows)
+- Modify: `packages/engine/src/saved-view.ts` (add `is_default`), `packages/engine/src/views.ts` (`SavedViewRow` :19 omits `'default'` as it omits `'locked'`; `outOf` :93-108 serves `default`; the DELETE route's `gone` :424-427 adds `is_default: 0`; `shareRoutes` :520-555 gains the two routes), `packages/engine/src/registry.ts` (`nodeOf`, here so `validate.ts` needs no import of `views.ts`), `packages/engine/src/seed-missing.ts` (`touched()` :119-122), `packages/engine/test/route-matrix.test.ts` (two rows, on `/api/views/1`, the fixture's seeded shared view; views 2-5 are unshared, :309-314)
 - Test: `packages/engine/test/default-view.test.ts`
 
 **Interfaces:**
 - Produces: `saved_view.is_default` (boolean, default false); `ViewOut.default: boolean`; `export function nodeOf(domain: Domain, source: string): string` (`sourceOf(domain, source)?.of ?? source`); `PUT /views/:id/default` → `{ id, default: true }`; `DELETE /views/:id/default` → `{ id, default: false }`.
 
-- [ ] **Step 1: Write the failing tests:** `/views` serves `default: false` on every view of a fresh fixture; an administrator marks a shared view and `/views` serves `default: true` on it only; marking a second view of the same node unmarks the first; a query view whose `of` names a dataset unmarks that dataset's default (one node); marking in one node leaves another node's default; `DELETE` unmarks; an editor, an owner and a service token with the administrator role get 403; a colleague's unshared view is 404 `unknown_view`; an own unshared view is 400 `not_shared`; a dashboard is 400 `dashboard_not_default`; a deleted view is 404; the mark writes a revision with the administrator as actor and does not make `touched()`-gated reseed skip the view's declared fields (assert by a reseed that updates `filters`).
+- [ ] **Step 1: Write the failing tests:** `/views` serves `default: false` on every view of a fresh fixture; an administrator marks a shared view and `/views` serves `default: true` on it only; marking a second view of the same node unmarks the first; a query view whose `of` names a dataset unmarks that dataset's default (one node); marking in one node leaves another node's default; `DELETE` unmarks; an editor, an owner and a service token with the administrator role get 403; a colleague's unshared view is 404 `unknown_view`; an own unshared view is 400 `not_shared`; a dashboard is 400 `dashboard_not_default`; a deleted view is 404; mark A, delete A, mark B, restore A leaves exactly one default (B) and A unmarked; the mark writes a revision with the administrator as actor and does not make `touched()`-gated reseed skip the view's declared fields (assert by a reseed that updates `filters`).
 - [ ] **Step 2: Run** `bun test packages/engine/test/default-view.test.ts`. Expected: FAIL.
-- [ ] **Step 3: Implement** the column; `outOf` serves `default: raw.is_default === 1`; `marking(actor)` = `sharing()`'s check; `PUT` in one `write()`: `shareable()`, refuse unshared and dashboard, `UPDATE saved_view SET is_default = 0 WHERE deleted_at IS NULL AND id != ? AND source IN (<node's sources>)`, set the mark, `save()` so a revision is written; make `touched()` (seed-missing.ts:119) ignore revisions whose only field is `is_default`; add both routes to the route matrix.
+- [ ] **Step 3: Implement** the column; `outOf` serves `default: raw.is_default === 1`; `marking(actor)` = `sharing()`'s check; `PUT` in one `write()`: `shareable()`, refuse unshared and dashboard, unmark every other row of the node whose `is_default = 1` (live or deleted) through `save()` so both sides of the move carry a revision, then set the mark through `save()`; the DELETE route clears `is_default` with the delete; `touched()` gains `AND field != 'is_default'` (revisions are one row per field, writes.ts:564-570); add both routes to the route matrix.
 - [ ] **Step 4: Run** the same command plus `bun test packages/engine` and `bun run check`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(engine): a rail node's default view, marked by an administrator`.
 
@@ -81,7 +81,7 @@ The simplest design is a client-only choice per browser, which fails the ask: th
 - Modify: `packages/engine/src/declare.ts` (`SavedViewSeed` :275-287 gains `default?: boolean`), `packages/engine/src/migrate.ts` (`seedDomain`/`systemRow` :162-193), `packages/engine/src/seed-missing.ts` (`seedViews` :223-232)
 - Test: `packages/engine/test/default-view.test.ts`
 
-- [ ] **Step 1: Write the failing tests:** a fresh database seeds the declared default; two seeds marked default in one node are refused at startup (`validate.ts` gains the check, `DomainError`); `--seed-missing` on a database whose node has no default marks the seed's; on a database where an administrator marked another view it changes nothing and names the view in its lines ("default left as chosen"); a node whose default was deleted gets the seed's default back only if the seed's view is live.
+- [ ] **Step 1: Write the failing tests:** a fresh database seeds the declared default; two seeds marked default in one node, or `default: true` on a dashboard seed, are refused at startup (a new seeded-view check in `validate.ts`, the first that reads `domain.views`; its `DomainError` names the view's source and the seed's name); `--seed-missing` on a database whose node has no default marks the seed's; on a database where an administrator marked another view it changes nothing and names the view in its lines ("default left as chosen"); a node whose default was deleted gets the seed's default back only if the seed's view is live.
 - [ ] **Step 2: Run** `bun test packages/engine/test/default-view.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement:** `systemRow` writes `is_default` from `seed.default`; after `seedViews`, a `seedDefaults(run)` pass marks each declared default whose node has no live default, with a system revision; the startup check in `validate.ts` beside the other domain checks.
 - [ ] **Step 4: Run** the command plus `bun test packages/engine`. Expected: PASS.
@@ -90,10 +90,10 @@ The simplest design is a client-only choice per browser, which fails the ask: th
 ### Task 3: Studio seeds its defaults, and the grid opens them
 
 **Files:**
-- Modify: `packages/studio/src/seed.ts` (taak :375-391 gains a board "Per status" on `status` marked default; werkpakket "Per fase" :367-374 marked default; "Agenda" calendar :392-399 marked default), `apps/grid/src/engine.ts` (`EngineView` :111-126, `toSavedViews` :440-465), `apps/grid/src/types.ts` (`SavedView.default`), `apps/grid/src/ui/views.ts` (`lastIn` :201-204, a `defaultIn(table)` helper), `apps/grid/src/ui/Rail.tsx` (:50 fallback), `apps/grid/src/ui/App.tsx` (:250 landing)
+- Modify: `packages/studio/src/seed.ts` (taak :375-391 gains a board "Per status" on `status` marked default; werkpakket "Per fase" :367-374 marked default; "Agenda" calendar :392-399 marked default), `apps/grid/src/engine.ts` (`EngineView` :111-126, `toSavedViews` :440-465), `apps/grid/src/types.ts` (`SavedView.default`), `apps/grid/src/ui/views.ts` (`lastIn` :201-204, a `defaultIn(table)` helper; `openTable` calls `lastIn`, so `Rail.tsx:50` and the no-hash landing `App.tsx:250` stay as they are: the rail is the ruling's only surface)
 - Test: `packages/studio/test/seed.test.ts`, `apps/grid/src/ui/views.test.ts`, `apps/grid/src/ui/App.test.tsx`
 
-- [ ] **Step 1: Write the failing tests:** Studio's `/views` serves exactly one default per node for taak (the new board on `status`), werkpakket ("Per fase") and the agenda node ("Agenda", source `agenda`), and none for site, actie, project or organisatie; `--seed-missing` on a database made before this plan (an existing test fixture database migrated without the column) marks those three; `lastIn` returns the last view used in the visit, else the node's default, else the first view; a node whose default is not in its listed views (unreadable) opens the first; the landing view without a hash is the first node's default when it has one; a rail click on Taken opens the board.
+- [ ] **Step 1: Write the failing tests:** Studio's `/views` serves exactly one default per node for taak (the new board on `status`), werkpakket ("Per fase") and the agenda node ("Agenda", source `agenda`), and none for site, actie, project or organisatie; `--seed-missing` on a database made before this plan marks those three (build it by migrating a fresh Studio database, then `ALTER TABLE saved_view DROP COLUMN is_default`, deleting the new board on taak, and deleting the `saved_view` row of the migrations hash table so the next migrate adds the column back; the categories-parent migration test in `packages/studio/test/adoption.test.ts` is the pattern); `lastIn` returns the last view used in the visit, else the node's default, else the first view; a node whose default is not in its listed views (unreadable) opens the first; a rail click on Taken opens the board.
 - [ ] **Step 2: Run** `bun test packages/studio` and `bun run --filter @worktable/grid test`. Expected: FAIL.
 - [ ] **Step 3: Implement** as above; the grid's node key is the existing `view.of ?? view.table` (useSavedViews.ts:78-81), the same rule as the engine's `nodeOf`.
 - [ ] **Step 4: Run** both commands plus `bun run check`; then load a throwaway Studio and click Taken, Features and Agenda.
@@ -102,12 +102,12 @@ The simplest design is a client-only choice per browser, which fails the ask: th
 ### Task 4: The view menu marks a default; the lock says Systeemweergave
 
 **Files:**
-- Modify: `apps/grid/src/ui/ViewList.tsx` (`choices()` :46-58, `Mark` :33-44), `apps/grid/src/ui/useSavedViews.ts` (`ViewActions` :222-226), `apps/grid/src/api.ts` (two calls), `apps/grid/src/ui/App.tsx` (:680 passes the role), `apps/grid/src/i18n.ts` (:218-219 and new keys), `e2e/grid-ux.spec.ts` (:642-645 wording)
+- Modify: `apps/grid/src/ui/ViewList.tsx` (the `ViewActions` type :14-21 gains an optional `onDefault`; `choices()` :46-58 offers it only when present; `Mark` :33-44 renders the default mark beside the lock, a seeded default carrying both), `apps/grid/src/ui/useSavedViews.ts` (builds the actions :222-226), `apps/grid/src/api.ts` (two calls), `apps/grid/src/ui/App.tsx` (:680 adds `onDefault` to `actions` only when `role === 'administrator'`, so `Rail.tsx` stays untouched), `apps/grid/src/i18n.ts` (:218-219 and new keys), `e2e/grid-ux.spec.ts` (:642-645 wording)
 - Test: `apps/grid/src/ui/ViewList.test.tsx`, `apps/grid/src/ui/Toolbar.test.tsx`
 
 - [ ] **Step 1: Write the failing tests:** an administrator sees "Standaardweergave" on a shared or system view that is not the default and "Geen standaardweergave meer" on the default; an editor sees neither; an own unshared view and a dashboard never offer it; choosing it calls the route and the list reloads with the mark moved; the default view carries a mark with the label "Standaardweergave"; the seeded-view lock reads "Systeemweergave, alleen te kopiëren" in the rail and "Systeemweergave: maak een kopie om aan te passen" in the toolbar.
 - [ ] **Step 2: Run** `bun run --filter @worktable/grid test`. Expected: FAIL.
-- [ ] **Step 3: Implement** the menu items gated on `role === 'administrator'` (as App.tsx:681 gates dashboards), the two api calls, the mark, the copy; update the two e2e assertions to the new lock wording.
+- [ ] **Step 3: Implement** the menu items, present only when App passes `onDefault` for an administrator (as App.tsx:681 gates dashboards), the two api calls, the mark, the copy; update the two e2e assertions to the new lock wording.
 - [ ] **Step 4: Run** the command plus `bun run check` and `bun run gate`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(grid): an administrator marks a view as the node's default`.
 
