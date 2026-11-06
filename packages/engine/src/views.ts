@@ -422,7 +422,6 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
       if (current.skin === 'dashboard' && !sent && merged.layout) merged.layout = withoutGone(sqlite, merged.layout)
       const next = stored(viewBody(merged, domain, false, { sqlite, actor }))
       if (current.skin === 'dashboard' && !sent) next.layout = current.layout ?? null
-      // An unshared view is never a default.
       if (next.shared === 0) next.is_default = 0
       // A view for owners must not gain a hidden column later (attack 13).
       const problem = isForOwners(current) ? forOwnersProblem(domain, { ...current, ...next }) : null
@@ -533,8 +532,8 @@ function checkMarkable(raw: Raw): void {
   if (raw.shared !== 1) throw new ApiError(400, 'not_shared', 'only a shared view can be a default')
 }
 
-// Live and deleted rows alike, so a restore can never bring back a second default.
-function nodeDefaults(sqlite: Database, domain: Domain, source: string, except: number): Raw[] {
+/** The node's marked views other than `except`, live and deleted alike, so a restore can never bring back a second default. */
+export function nodeDefaults(sqlite: Database, domain: Domain, source: string, except: number): Raw[] {
   const node = nodeOf(domain, source)
   const names = sourcesOf(domain)
     .map((s) => s.name)

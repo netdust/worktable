@@ -1,9 +1,11 @@
-import type { Database } from 'bun:sqlite'
+import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { Domain } from '../src'
+import type { Domain, SavedViewSeed } from '../src'
 import { createService } from '../src/auth'
+import { migrate, seedDomain } from '../src/migrate'
 import { nodeOf } from '../src/registry'
 import { seedMissing } from '../src/seed-missing'
+import { DomainError, validateDomain } from '../src/validate'
 import { domain as fixture, freshDb, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
@@ -127,6 +129,14 @@ describe('one default per node', () => {
     expect(markedIds()).toEqual([b])
     expect(await defaults()).toEqual([b])
   })
+
+  test('mark A, delete A, restore A leaves no view in the node marked', async () => {
+    const a = await shared()
+    await mark(a)
+    expect((await send(app, admin)('DELETE', `/api/views/${a}`, { type: null })).status).toBe(200)
+    expect((await send(app, admin)('POST', `/api/views/${a}/restore`, { body: '{}' })).status).toBe(200)
+    expect(markedIds()).toEqual([])
+  })
 })
 
 describe('unsharing', () => {
@@ -153,8 +163,7 @@ describe('who may mark', () => {
     const owner = await signIn(app, 'owner', { dataset: 'project', id: 1 })
     const token = createService(sqlite, 'bot', 'administrator')
     for (const cookie of [editor, owner]) {
-      expect((await mark(a, cookie)).body.code).toBe('forbidden')
-      expect((await mark(a, cookie)).status).toBe(403)
+      expect(await mark(a, cookie)).toMatchObject({ status: 403, body: { code: 'forbidden' } })
       expect((await unmark(a, cookie)).status).toBe(403)
     }
     for (const method of ['PUT', 'DELETE']) {
@@ -217,5 +226,108 @@ describe('the mark and its history', () => {
     seedMissing(sqlite, changed)
     const row = sqlite.query('SELECT filters, is_default FROM saved_view WHERE id = 1').get()
     expect(row).toEqual({ filters: json({ status: 'klaar' }), is_default: 1 })
+  })
+})
+
+const openDefault: Domain = {
+  ...domain,
+  views: domain.views.map((v) => (v.name === 'Open' ? { ...v, default: true } : v)),
+}
+const perProject: SavedViewSeed = {
+  name: 'Per project',
+  source_type: 'query',
+  source: 'per_project',
+  skin: 'table',
+  filters: {},
+  sort: [],
+  group_by: null,
+  visible_fields: ['name'],
+}
+const refusal = (d: Domain): DomainError => {
+  try {
+    validateDomain(d)
+  } catch (err) {
+    if (err instanceof DomainError) return err
+    throw err
+  }
+  throw new Error('validateDomain accepted the domain')
+}
+
+describe('a seed declares a default', () => {
+  test('a fresh database writes the declared default', () => {
+    const d: Domain = { ...openDefault, views: [...openDefault.views, perProject] }
+    const fresh = new Database(':memory:')
+    migrate(fresh, d)
+    seedDomain(fresh, d)
+    const rows = fresh.query('SELECT name, is_default FROM saved_view ORDER BY id').all()
+    expect(rows).toEqual([
+      { name: 'Open', is_default: 1 },
+      { name: 'Per project', is_default: 0 },
+    ])
+  })
+
+  test('two seeds marked default in one node are refused at startup, naming the source and the seed', () => {
+    const err = refusal({ ...openDefault, views: [...openDefault.views, { ...perProject, default: true }] })
+    expect(err.declaration).toBe('per_project')
+    expect(err.bad).toBe('Per project')
+  })
+
+  test('a dashboard seed marked default is refused at startup', () => {
+    const dashboard: SavedViewSeed = {
+      name: 'Overzicht',
+      skin: 'dashboard',
+      filters: {},
+      sort: [],
+      group_by: null,
+      visible_fields: [],
+      layout: { sections: [], actions: [] },
+      default: true,
+    }
+    const err = refusal({ ...domain, views: [...domain.views, dashboard] })
+    expect(err.bad).toBe('Overzicht')
+    expect(err.message).toContain('dashboard')
+  })
+
+  test('--seed-missing marks the declared default of a node without one, with a system revision, once', () => {
+    const report = seedMissing(sqlite, openDefault)
+    expect(report.batch).not.toBeNull()
+    expect(markedIds()).toEqual([1])
+    const marked = sqlite
+      .query(
+        "SELECT old, new, actor_id FROM revision WHERE entity = 'saved_view' AND record_id = 1 AND field = 'is_default' AND new = 'true'",
+      )
+      .all()
+    expect(marked).toEqual([{ old: 'false', new: 'true', actor_id: -1 }])
+    expect(seedMissing(sqlite, openDefault).batch).toBeNull()
+  })
+
+  test("--seed-missing leaves an administrator's choice and names the seed's view", async () => {
+    const b = await shared()
+    await mark(b)
+    const report = seedMissing(sqlite, openDefault)
+    expect(markedIds()).toEqual([b])
+    expect(report.named).toContain('view "Open" (taak) default left as chosen')
+  })
+
+  test("a node whose default was deleted gets the seed's default back", async () => {
+    const b = await shared()
+    await mark(b)
+    expect((await send(app, admin)('DELETE', `/api/views/${b}`, { type: null })).status).toBe(200)
+    seedMissing(sqlite, openDefault)
+    expect(markedIds()).toEqual([1])
+  })
+
+  test("a seed's deleted view is not marked", async () => {
+    expect((await send(app, admin)('DELETE', '/api/views/1', { type: null })).status).toBe(200)
+    seedMissing(sqlite, openDefault)
+    expect(markedIds()).toEqual([])
+  })
+
+  test("an editor unsharing an administrator's mark lets --seed-missing mark the seed's default", async () => {
+    const id = await viewAs(editor, { shared: true })
+    await mark(id)
+    expect((await send(app, editor)('PATCH', `/api/views/${id}`, { body: json({ shared: false }) })).status).toBe(200)
+    seedMissing(sqlite, openDefault)
+    expect(markedIds()).toEqual([1])
   })
 })

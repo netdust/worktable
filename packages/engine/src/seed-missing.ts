@@ -7,7 +7,7 @@ import { keySeeded } from './migrate'
 import { ApiError } from './params'
 import { sourceOf } from './registry'
 import { savedView, seedKey } from './saved-view'
-import { SYSTEM, SYSTEM_OWNER } from './views'
+import { nodeDefaults, SYSTEM, SYSTEM_OWNER } from './views'
 import { contextOf, create, encodeAll, recordBatch, revise, type Store, valuesOf, writableOf } from './writes'
 
 type Row = Record<string, unknown>
@@ -229,7 +229,30 @@ function seedViews(run: Run): SeedReport['views'] {
   for (const seed of ordered) counts[seedView(run, seed)]++
   removeUndeclared(run)
   nameOrphans(run)
+  seedDefaults(run)
   return counts
+}
+
+// A declared default is written only while its node has none live, so an administrator's choice stands.
+function seedDefaults(run: Run): void {
+  const { sqlite, domain } = run.store
+  const sql = 'SELECT * FROM saved_view WHERE seed_key = ? AND owner_id = ? AND deleted_at IS NULL'
+  for (const seed of domain.views.filter((v) => v.default === true)) {
+    const view = sqlite.query(sql).get(seedKey(seed.name, seed.source), SYSTEM_OWNER) as Stored | null
+    if (!view || view.is_default === 1) continue
+    const others = nodeDefaults(sqlite, domain, String(view.source), view.id as number)
+    if (others.some((other) => other.deleted_at === null)) {
+      run.named.push(`${labelOf(view)} default left as chosen`)
+      continue
+    }
+    markSeeded(run, view.id as number)
+  }
+}
+
+function markSeeded(run: Run, id: number): void {
+  run.store.sqlite.query('UPDATE saved_view SET is_default = 1, updated_at = ? WHERE id = ?').run(run.now, id)
+  revise(run.store.sqlite, savedView, id, [['is_default', 0, 1]], run.now, SYSTEM_OWNER, run.batch)
+  run.written++
 }
 
 // A system view whose seed is no longer declared is removed, unless a person touched it or an administrator published it.

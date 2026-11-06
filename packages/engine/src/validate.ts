@@ -19,7 +19,7 @@ import {
 } from './declare'
 import { reservedNames } from './engine-tables'
 import { lookupOf } from './lookups'
-import { sourceOf, sourcesOf, writerOf } from './registry'
+import { nodeOf, sourceOf, sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
   constructor(
@@ -923,4 +923,19 @@ export function validateDomain(domain: Domain): void {
     }
   }
   checkActions(domain)
+  checkSeededDefaults(domain)
+}
+
+// At most one default per rail node, and never a dashboard.
+function checkSeededDefaults(domain: Domain): void {
+  const nodes = new Set<string>()
+  for (const seed of domain.views.filter((v) => v.default === true)) {
+    if (seed.skin === 'dashboard')
+      throw new DomainError(seed.name, seed.name, `dashboard "${seed.name}" is never a default view`)
+    const source = String(seed.source)
+    const node = nodeOf(domain, source)
+    if (nodes.has(node))
+      throw new DomainError(source, seed.name, `view "${seed.name}" is a second default in the node of "${node}"`)
+    nodes.add(node)
+  }
 }
