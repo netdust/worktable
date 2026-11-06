@@ -422,6 +422,8 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
       if (current.skin === 'dashboard' && !sent && merged.layout) merged.layout = withoutGone(sqlite, merged.layout)
       const next = stored(viewBody(merged, domain, false, { sqlite, actor }))
       if (current.skin === 'dashboard' && !sent) next.layout = current.layout ?? null
+      // An unshared view is never a default.
+      if (next.shared === 0) next.is_default = 0
       // A view for owners must not gain a hidden column later (attack 13).
       const problem = isForOwners(current) ? forOwnersProblem(domain, { ...current, ...next }) : null
       if (problem) throw problem

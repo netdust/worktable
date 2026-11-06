@@ -129,6 +129,24 @@ describe('one default per node', () => {
   })
 })
 
+describe('unsharing', () => {
+  test('an editor unsharing a marked view clears its mark, with a revision', async () => {
+    const id = await viewAs(editor, { shared: true })
+    expect((await mark(id)).status).toBe(200)
+    const res = await send(app, editor)('PATCH', `/api/views/${id}`, { body: json({ shared: false }) })
+    expect(res.status).toBe(200)
+    expect(markedIds()).toEqual([])
+    const me = (await send(app, editor)('GET', '/api/auth/me')).body.id
+    const unmarked = sqlite
+      .query(
+        "SELECT old, new, actor_id FROM revision WHERE entity = 'saved_view' AND record_id = ? AND field = 'is_default' AND old = 'true'",
+      )
+      .all(id)
+    expect(unmarked).toEqual([{ old: 'true', new: 'false', actor_id: me }])
+    expect(await defaults(editor)).toEqual([])
+  })
+})
+
 describe('who may mark', () => {
   test('an editor, an owner and an administrator service account are refused 403', async () => {
     const a = await shared()
