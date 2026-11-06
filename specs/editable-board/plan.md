@@ -18,6 +18,7 @@
 - The engine stays the authority: every drop is an ordinary write through the writer and `checkTransition` (writes.ts:314-332) with its `expect`; the served transitions only decide what the grid offers, never what the engine accepts. The existing refusals (422 `transition_not_allowed`, 409 `transition_lost`) and their Dutch texts stay.
 - A lifecycle with button transitions (`lifecycle_buttons`) offers no drag, as `pressedOnly` (grid/columns.ts:281) decides today. Studio's Opdrachten board keeps its declared `drag: false`.
 - On a lifecycle board the "Geen" lane (`value: null`) is never reachable.
+- A board column's lifecycle is the effective one: its own model's lifecycle, or, on a query, the target model's lifecycle when the column `writes` to that model's lifecycle column (e.g. theatre's `persoon_dag.state` → `toewijzing.state`). Greying, the "Geen" rule and the button-only rule apply through `writes` exactly as on the dataset board.
 - A query board is always sorted: no `position`, no ranks, no manual order, no within-column reorder; a drop is a regroup through the `writes` column only.
 - Undo: one ⌘Z per drop and per "+"; a refused write leaves no step.
 - No colours from Orbit; the greyed state uses worktable's own tokens (memory: no coloured rounded borders, text-colour focus ring).
@@ -30,8 +31,8 @@
 
 **Attacks and mitigations**
 1. A client ignores the greying and sends a drop to an unreachable state, or forges the served transitions → nothing changes server-side: `checkTransition` judges every PATCH with the actor's role (writes.ts:304-332); a test sends the forbidden PATCH directly and expects 422.
-2. The served transitions leak what another role may do → `/schema` serves only the transitions whose `roles` include the viewer's role, and nothing for an owner or a link account that cannot write the dataset; a test reads `/schema` as each role.
-3. A query board's drop writes a column the query does not map → the grid offers drag only on a board column whose field has `writes`, and `updateThrough` (api.ts:327-340) sends only that mapped field (plus `expect` when it is the target's lifecycle column); the engine's query write path refuses anything else (existing).
+2. The served transitions leak what another role may do → `/schema` serves every role only the transitions whose `roles` include it (an owner user included: owners are declared on transitions and `checkTransition` lets them make those), and no `transitions` key to an actor of kind `link`, which may never write a state (validate.ts:285-294); a test reads `/schema` as administrator, editor, owner and link.
+3. A query board's drop writes a column the query does not map → the grid offers drag only on a board column whose field has `writes`, and `updateThrough` (api.ts:326-340) PATCHes only that mapped field on the target dataset (plus `expect` when it is the target's lifecycle column). The engine has no query write route (writableOf answers 405, writes.ts:71-75): the PATCH is an ordinary dataset write, judged by `cutBody`, `checkTransition` and the role, so a client gains nothing by bypassing the board.
 4. A stale board (the row moved under the viewer) drops on a state no longer reachable → the `expect` is sent as today (api.ts:301-305) and the engine answers 409 `transition_lost`; the grid re-reads (store.ts:288-291), unchanged.
 
 **Deferrals.** A transition's `when` condition gates only its button (declare.ts:331-354), so it is not part of what the board offers. An inherited lookup chosen as the group column stays as it is today (passes `canSet`); not changed here.
@@ -40,37 +41,38 @@
 
 | Unit | Seam | Tests: tier · file · command | E2E flows |
 |---|---|---|---|
-| Served transitions | `GET /schema` lifecycle (denial: an owner, a link account and an editor see only their own role's transitions) | integration · `packages/engine/test/lifecycle.test.ts` · `bun test packages/engine/test/lifecycle.test.ts` | none — proven by tests |
-| Reachable lanes on the board | `reachable()`, `useBoardDrag` collision, keyboard step and land, `Column` look | unit (vitest) · `apps/grid/src/board/reachable.test.ts`, `apps/grid/src/board/Board.test.tsx` · `bun run --filter @worktable/grid test` | board-drag-not-offered (changes `e2e/step-3f.spec.ts` board-drag-refused; registered by `/shakeout`) |
+| Served transitions | `GET /schema` lifecycle (denial: each role sees only its own transitions; a link account sees none) | integration · `packages/engine/test/lifecycle.test.ts` · `bun test packages/engine/test/lifecycle.test.ts` | none — proven by tests |
+| Reachable lanes on the board | `reachable()`, `useBoardDrag` collision, keyboard step and land, `Column` look | unit (vitest) · `apps/grid/src/board/reachable.test.ts`, `apps/grid/src/board/Board.test.tsx`; e2e · `e2e/step-3f.spec.ts` (board-drag-refused becomes not-offered plus a stale drop) · `bun run --filter @worktable/grid test` | board-drag-not-offered, board-drop-stale (registered by `/shakeout`) |
 | Lifecycle board drag rule | `boardNeed` (grid engine.ts:302-307), `draggable`/`canSet` (App.tsx:798-801) | unit (vitest) · `apps/grid/src/engine.test.ts`, `apps/grid/src/ui/offered.test.tsx` · same | none — proven by tests |
 | Query board drag | `App.tsx:487`/`:734` offer, `updateThrough`, "+" through `createThrough` | unit (vitest) · `apps/grid/src/ui/offered.test.tsx`, `apps/grid/src/board/Board.test.tsx`, `apps/grid/src/api.test.ts` · same | query-board-drag (Studio "Op tafel"; registered by `/shakeout`) |
 | "+" undo | `onCreated` (App.tsx:765-773) | unit (vitest) · `apps/grid/src/ui/App.test.tsx` · same | board-column-plus-undo (registered by `/shakeout`) |
 
 ## Review Focus
 
-- A forbidden transition sent directly (bypassing the board) is still 422, and a stale drop still 409 with a re-read (row 1, threats 1 and 4).
-- `/schema` serves each role only its own transitions; an owner and a link account get none (row 1, threat 2).
+- A forbidden transition sent directly (bypassing the board) is still 422 (row 1, threat 1); a stale drop is 409 `transition_lost`, the card re-read, and on a manual board one ⌘Z undoes the edit before it (row 2, threat 4).
+- `/schema` serves each role only its own transitions, an owner user its declared ones; a link account gets none (row 1, threat 2).
 - While a card is dragged, an unreachable lane takes no drop by mouse or keyboard (←→ skips it), is drawn greyed, and the "Geen" lane on a lifecycle board is never a target (row 2).
 - A lifecycle with buttons still offers no drag; a derived board on a lifecycle without buttons now drags (row 3).
-- A query board drags only through a `writes` column, sends only the mapped field, never a `position`, and its "+" creates through the query's `creates` (row 4, threat 3).
+- A query board drags only through a `writes` column, sends only the mapped field, never a `position`, and its "+" presets the target field (row 4, threat 3).
+- A query board whose `writes` column is a target's lifecycle column greys unreachable lanes, never targets "Geen", and does not drag when the target declares buttons (row 4, B1).
 - "+" leaves exactly one undo step; a refused create none (row 5).
 
 ## Simplest design
 
-The simplest design is to keep today's behaviour (any lane accepts the drop, the engine refuses after), which fails the approved "not offered" rule. The next simplest, used here, serves the role's transitions and filters lanes in the grid: one served list, one pure function, and three call sites in the drag hook. Asking the engine per card which states it may reach (an `available` per row) was rejected: it adds a read per drag for an answer the declaration already holds, and `when` gates only buttons.
+The simplest design is to keep today's behaviour (any lane accepts the drop, the engine refuses after), which fails the approved "not offered" rule. The next simplest, used here, serves the role's transitions and filters lanes in the grid: one served list, one pure function, and three call sites in the drag hook. Asking the engine per card which states it may reach (an `available` per row) was rejected: `available` is served only where buttons or `when` actions are declared (available.ts:28-32), which are exactly the boards that do not drag, and it would add a payload to every row of every lifecycle dataset for an answer the declaration plus the role give once.
 
 ---
 
 ### Task 1: The engine serves the viewer's transitions
 
 **Files:**
-- Modify: `packages/engine/src/app.ts` (`servedLifecycle` :189-192)
-- Test: `packages/engine/test/lifecycle.test.ts` (the `/schema` case :436-441)
+- Modify: `packages/engine/src/app.ts` (`servedLifecycle` :189-192 gains the `actor`; called at :377)
+- Test: `packages/engine/test/lifecycle.test.ts` (the `/schema` case :436-441; its own `ticket` fixture :32-38 gains an administrator-only transition)
 
 **Interfaces:**
-- Produces: `/schema` source `lifecycle.transitions?: { from: string[] | '*'; to: string }[]`, only the transitions whose `roles` include the viewer's role, and absent when the viewer may not write the dataset.
+- Produces: `/schema` source `lifecycle.transitions?: { from: string[] | '*'; to: string }[]`, only the transitions whose `roles` include the viewer's role; absent for an actor of kind `link`.
 
-- [ ] **Step 1: Write the failing tests:** an editor reads the theatre fixture's lifecycle and gets exactly the editor's transitions as `{from, to}`; an administrator gets its own (a superset where declared); an owner and a link account get no `transitions` key; a transition declared for administrators only is absent for an editor; a forbidden PATCH by an editor is still 422 `transition_not_allowed` (the backstop).
+- [ ] **Step 1: Write the failing tests** on the `ticket` fixture: an editor gets exactly the editor's transitions as `{from, to}`; an administrator gets its own; an owner user gets the owner's declared transition (b→c); a link account gets no `transitions` key; the administrator-only transition is absent for an editor; a forbidden PATCH by an editor is still 422 `transition_not_allowed` (the backstop).
 - [ ] **Step 2: Run** `bun test packages/engine/test/lifecycle.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement** in `servedLifecycle`, beside `buttons`; `roles` and `button`/`when` are not served.
 - [ ] **Step 4: Run** the same command plus `bun test packages/engine` and `bun run check`. Expected: PASS.
@@ -80,27 +82,27 @@ The simplest design is to keep today's behaviour (any lane accepts the drop, the
 
 **Files:**
 - Create: `apps/grid/src/board/reachable.ts`
-- Modify: `apps/grid/src/engine.ts` (`EngineSource.lifecycle` :96, `modelOf` :239-241; remove the lifecycle `drag:false` in `boardNeed` :302-307), `apps/grid/src/types.ts` (`Model` :117-118), `apps/grid/src/board/useBoardDrag.ts` (`collide` :236-262, `step` :264-278, `land` :228-244), `apps/grid/src/board/Column.tsx` (`ColumnLook` :8-12), `apps/grid/src/board/board.css`, `apps/grid/src/engine.test.ts` (:809-811), `e2e/step-3f.spec.ts` (`board-drag-refused` :641-777)
+- Modify: `apps/grid/src/engine.ts` (`EngineSource.lifecycle` :96, `modelOf` :239-241; remove the lifecycle `drag:false` in `boardNeed` :302-307), `apps/grid/src/types.ts` (`Model` lifecycle fields :105-106, :113-116), `apps/grid/src/board/Board.tsx` (the only caller of `useBoardDrag`, :73: passes the effective lifecycle and the dragged card's state; computes `manual` :71), `apps/grid/src/board/useBoardDrag.ts` (`collide` :138, `step` :166, `land` :230), `apps/grid/src/board/Column.tsx` (`ColumnLook` :12-17), `apps/grid/src/board/board.css`, `apps/grid/src/grid/columns.ts` (`pressedOnly` :281 resolves through `writes`), `apps/grid/src/engine.test.ts` (:809-811), `apps/grid/src/ui/offered.test.tsx` (:107), `e2e/step-3f.spec.ts` (`board-drag-refused` :641-777)
 - Test: `apps/grid/src/board/reachable.test.ts`, `apps/grid/src/board/Board.test.tsx`
 
 **Interfaces:**
-- Produces: `export function reachable(model: Model, column: string, from: string | null, to: string | null): boolean` — true for any lane when `column` is not the model's lifecycle; else `to !== null` and `to === from` (staying is a reorder, not a transition) or some served transition has `to` and `from` either `'*'` or containing `from`.
+- Produces: `export function lifecycleOf(model: Model, column: string, models: Record<string, Model>): { model: Model; column: string } | null` — the effective lifecycle of a board column (its own, or its `writes` target's when that is the target's lifecycle column); `export function reachable(life: ReturnType<typeof lifecycleOf>, from: string | null, to: string | null): boolean` — true for any lane when `life` is null; else `to !== null` and `to === from` (staying is a reorder, not a transition) or some served transition has `to` and `from` either `'*'` or containing `from`.
 
-- [ ] **Step 1: Write the failing tests:** `reachable` per case (non-lifecycle column, `'*'`, listed `from`, unlisted, the null lane, the same lane); on a lifecycle board a lifted card draws the unreachable lanes with the greyed look and its own lane plain; a pointer drop on an unreachable lane writes nothing and leaves no undo step; ←→ with the keyboard skips unreachable lanes; a reachable drop writes as today with one undo; a derived board on a lifecycle without buttons now drags (the `boardNeed` test flips); a lifecycle with buttons still does not drag.
+- [ ] **Step 1: Write the failing tests:** `reachable` per case (non-lifecycle column, `'*'`, listed `from`, unlisted, the null lane, the same lane); on a lifecycle board a lifted card draws the unreachable lanes with the greyed look and its own lane plain; a pointer drop on an unreachable lane writes nothing and leaves no undo step; ←→ with the keyboard skips unreachable lanes; a reachable drop writes as today with one undo; a derived board on a lifecycle without buttons now drags (the `boardNeed` test flips); a lifecycle with buttons still does not drag; `pressedOnly` through `writes` blocks a query board over a button lifecycle.
 - [ ] **Step 2: Run** `bun run --filter @worktable/grid test`. Expected: FAIL.
-- [ ] **Step 3: Implement:** serve `transitions` into `Model.lifecycle_transitions`; pass the dragged card's state to the hook; filter `droppableContainers` in `collide`, skip in `step`, return `kind: 'none'` in `land` for an unreachable lane; a `blocked` flag on `ColumnLook` with a CSS state (muted header and body, no drop tint) in worktable's tokens; drop the lifecycle clause of `boardNeed`. Rewrite `board-drag-refused` to "not offered": the Bevestigd → Geweigerd drag is no longer possible by mouse or keyboard (the card stays, no request is sent), keeping its reload and undo assertions.
+- [ ] **Step 3: Implement:** serve `transitions` into `Model.lifecycle_transitions`; pass the dragged card's state to the hook; filter `droppableContainers` in `collide`, skip in `step`, return `kind: 'none'` in `land` for an unreachable lane; a `blocked` flag on `ColumnLook` with a CSS state (muted header and body, no drop tint) in worktable's tokens; drop the lifecycle clause of `boardNeed`. Rewrite `board-drag-refused` in two parts. Not offered: the Bevestigd → Geweigerd drag is no longer possible by mouse or keyboard (the card stays, no request is sent). Stale: load the board, move the row by API to a state from which the target lane is no longer valid, then drop on a lane reachable from the shown state; expect 409 `transition_lost`, the card re-read, and on the manual board the existing "one ⌘Z undoes the edit before" assertion (so the refused-write path keeps its e2e).
 - [ ] **Step 4: Run** the command plus `bun run check`; then look at "Bord toewijzingen" in a throwaway theatre engine and grid, and lift a Bevestigd card.
 - [ ] **Step 5: Commit** `feat(grid): a lifecycle board offers only the lanes a transition reaches`.
 
 ### Task 3: A query board drags through its `writes` column
 
 **Files:**
-- Modify: `apps/grid/src/ui/App.tsx` (`boardDrops` :487, "+" :734, `draggable`/`canSet` :798-801), `apps/grid/src/api.ts` (`updateThrough` :327-340), `apps/grid/src/board/drop.ts` (a query board is never manual), `apps/grid/src/ui/hints.ts` (:11-13 follows `boardDrops`)
+- Modify: `apps/grid/src/ui/App.tsx` (`boardDrops` :487 and "+" :734 drop `!model.query`: `canSet` already refuses a query column without `writes`, since `isReadonly` marks it readonly, engine.ts:158-159), `apps/grid/src/api.ts` (`updateThrough` :326-340), `apps/grid/src/board/Board.tsx` (`manual` :71 false for a query; the "+" preset :83 keyed by `writes.field`), `apps/grid/src/board/drop.ts` (a query board is never manual), `apps/grid/src/ui/hints.ts` (:11-13 follows `boardDrops`)
 - Test: `apps/grid/src/ui/offered.test.tsx`, `apps/grid/src/board/Board.test.tsx`, `apps/grid/src/api.test.ts`
 
-- [ ] **Step 1: Write the failing tests:** a board on a query whose board column `writes` to a dataset column offers drag and "+", one whose column has no `writes` offers neither; its drop is a regroup through `updateThrough` with only the mapped field, and with `expect` when that field is the target's lifecycle column; within a column a query board does not reorder (no rank write, no switch to manual); "+" on a query board creates through the query's `creates` with the lane value mapped to the target field; a refused write snaps back as on a dataset board.
+- [ ] **Step 1: Write the failing tests:** a board on a query whose board column `writes` to a dataset column offers drag and "+", one whose column has no `writes` offers neither; its drop is a regroup through `updateThrough` with only the mapped field, and with `expect` when that field is the target's lifecycle column; within a column a query board does not reorder (no rank write, no switch to manual); "+" on a query board goes through `QuickCreate` (App.tsx:765-772, as on a dataset board) with the lane value under the target field; a query board whose `writes` column is a target's lifecycle (theatre's `persoon_dag.state`) greys unreachable lanes, never targets "Geen", and does not drag when the target declares buttons; a refused write snaps back as on a dataset board.
 - [ ] **Step 2: Run** `bun run --filter @worktable/grid test`. Expected: FAIL.
-- [ ] **Step 3: Implement** replacing `!model.query` with "the board column has `writes`" at both sites; never-manual for a query board in `drop.ts`; `updateThrough` adds the `expect`; the "+" preset mapped through `writes.field` into `createThrough` (App.tsx:471).
+- [ ] **Step 3: Implement** dropping `!model.query` at both sites; never-manual for a query board in `Board.tsx`/`drop.ts`; `updateThrough` adds the `expect`; the "+" preset keyed by `writes.field` into `QuickCreate`.
 - [ ] **Step 4: Run** the command plus `bun run check`; then on a throwaway Studio make a board on "Op tafel" grouped by status and drag a card to Bezig.
 - [ ] **Step 5: Commit** `feat(grid): a board on a query drags through its writes column`.
 
@@ -110,7 +112,7 @@ The simplest design is to keep today's behaviour (any lane accepts the drop, the
 - Modify: `apps/grid/src/ui/App.tsx` (`onCreated` :765-773)
 - Test: `apps/grid/src/ui/App.test.tsx`
 
-- [ ] **Step 1: Write the failing tests:** "+" in a dataset board's column creates the row with the column's value, and one ⌘Z removes it; a refused create leaves no step; a query board's "+" keeps its undo (already pushed through `target`).
+- [ ] **Step 1: Write the failing tests:** "+" in a dataset board's column creates the row with the column's value, and one ⌘Z removes it; the same holds for every `QuickCreate` (the single `onCreated` at App.tsx:768 serves the calendar's quick create too); a refused create leaves no step; a query's create keeps its undo (already pushed through `target`).
 - [ ] **Step 2: Run** `bun run --filter @worktable/grid test`. Expected: FAIL.
 - [ ] **Step 3: Implement** pushing the create's batch into `history` for a dataset source too.
 - [ ] **Step 4: Run** the command plus `bun run check` and `bun run gate`. Expected: PASS.
