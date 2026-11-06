@@ -45,13 +45,13 @@ describe('the toolbar', () => {
     const { rerender } = render(<Toolbar {...base} title="Dagplanning" shown={{ rows: 21, groups: 3, cut: false }} locked="standard" />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Dagplanning' })).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Standaardweergave: maak een kopie om aan te passen' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Systeemweergave: maak een kopie om aan te passen' })).toBeTruthy()
     expect(screen.getByText('21 rijen · 3 groepen')).toBeTruthy()
 
     rerender(<Toolbar {...base} title="Ploeg" shown={{ rows: 1, groups: null, cut: false }} locked="colleague" />)
 
     expect(screen.getByRole('img', { name: 'Gedeeld door een collega: maak een kopie om aan te passen' })).toBeTruthy()
-    expect(screen.queryByRole('img', { name: /Standaardweergave/ })).toBeNull()
+    expect(screen.queryByRole('img', { name: /Systeemweergave/ })).toBeNull()
 
     rerender(<Toolbar {...base} title="Mijn week" shown={{ rows: 1, groups: null, cut: false }} />)
 

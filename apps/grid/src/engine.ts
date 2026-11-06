@@ -122,6 +122,8 @@ export interface EngineView extends EngineArrangement {
   editable: boolean
   public?: boolean
   for_owners?: boolean
+  /** The view its rail node opens on when none was used there. */
+  default?: boolean
   gone_views?: number[]
 }
 
@@ -460,6 +462,7 @@ export function toSavedViews(views: EngineView[], sources: Sources): SavedView[]
       editable: view.editable,
       ...(view.public ? { public: true } : {}),
       ...(view.for_owners ? { for_owners: true } : {}),
+      ...(view.default ? { default: true } : {}),
     }]
   })
 }

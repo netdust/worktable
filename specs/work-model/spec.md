@@ -130,9 +130,16 @@ For Studio the seed marks: Taken → a board on status; Features → the board o
 Opdrachten, Sites and the rest keep opening the grid until Stefan says otherwise. A grouped list is the grid
 grouped by a column (the grid groups today); it is offered as a default like any other view.
 
+The default belongs to a rail node: a dataset together with the queries read from it (`of`). One view in the node
+is its default, whatever its source; marking one unmarks the other in that node, so Agenda opens the `agenda`
+query's calendar. Only a human administrator marks or unmarks it. No link names a source today (every link names
+a view); a source link, when one is built, opens the node's default. The seeded-view lock, which said
+"Standaardweergave", says "Systeemweergave" from now on, so the word means one thing.
+
 Source: "a skin can be set as default view (tasks for instance are useless as grid, but default could be bord
 or grouped list)" — Stefan, 2026-11-04; "R4 every dataset has its own default view, Taken are bord, Features
-too, Agenda is calendar" — Stefan, 2026-11-05. Who may set it is `invented`.
+too, Agenda is calendar" — Stefan, 2026-11-05. Administrator only, per rail node, rail only with links noted,
+and renaming the lock: Stefan, 2026-11-06, choosing each from the options asked.
 
 ## Studio adopts it
 

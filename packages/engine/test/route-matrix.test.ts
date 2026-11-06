@@ -187,6 +187,17 @@ const EXPECTED: { method: string; path: string; body?: unknown; type?: string; s
     status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403, service: 403 },
   },
   {
+    method: 'PUT',
+    path: '/api/views/1/default',
+    body: {},
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403, service: 403 },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/views/1/default',
+    status: { none: 401, owner: 403, editor: 403, administrator: 200, link: 403, service: 403 },
+  },
+  {
     method: 'GET',
     path: '/api/owner/views',
     status: { none: 401, owner: 200, editor: 403, administrator: 403, link: 200, service: 403 },

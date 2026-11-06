@@ -173,6 +173,7 @@ function systemRow(seed: SavedViewSeed, layout?: SavedViewSeed['layout']): Recor
     ...(layout ? { layout } : {}),
     owner_id: SYSTEM_OWNER,
     shared: true,
+    is_default: seed.default === true,
     seed_key: seedKey(name, source),
   }
 }

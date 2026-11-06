@@ -1,5 +1,5 @@
 import { type MutableRefObject, useEffect, useMemo, useRef, useState } from 'react'
-import { createView, deleteView, restoreView, savePrefs, savedViews, updateView } from '../api'
+import { createView, deleteView, restoreView, savePrefs, savedViews, setDefault, updateView } from '../api'
 import { errorText, t } from '../i18n'
 import { timelineStart } from '../timeline/layout'
 import type { ApiError, Prefs, SavedView, TableDef, View, ViewType } from '../types'
@@ -79,7 +79,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     const node = view.of ?? view.table
     changePrefs((current) => (current.last[node] === view.key ? current : { ...current, last: { ...current.last, [node]: view.key } }))
   }
-  /** A click on a table: the view last used there, else the first in this user's order. */
+  /** A click on a table: the view last used there, else the node's default, else the first in this user's order. */
   const openTable = (table: Table) => {
     const view = lastIn(table, prefs.last)
     if (view) open(view.key)
@@ -217,7 +217,12 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
     )
   }
 
+  /** The engine moves the mark off the node's other view: the list is read back. */
+  const markDefault = (view: SavedView, on: boolean) =>
+    setDefault(view.id, on).then(refresh, (error: ApiError) => refused(view, error))
+
   return {
+    markDefault,
     dashboards, load: setSaved, loadPrefs, tables, busy, create, saveAs, save, changedLayout, remember, openTable,
     actions: {
       rename: (view: SavedView, name: string) => void write(view, { name }),

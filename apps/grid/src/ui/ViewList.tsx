@@ -1,4 +1,4 @@
-import { Combine, GripVertical, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
+import { Combine, GripVertical, House, Lock, Table as TableIcon, UserRound, Users } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { usePress } from 'react-aria'
 import { Button, DropIndicator, type DropTarget, GridList, GridListItem, type Key, useDragAndDrop } from 'react-aria-components'
@@ -18,6 +18,8 @@ export interface ViewActions {
   share: (view: SavedView, shared: boolean) => void
   /** One source's views in this user's new order, by key. */
   order: (source: string, keys: string[]) => void
+  /** Marks or unmarks the view its rail node opens on; an administrator's only. */
+  onDefault?: (view: SavedView, on: boolean) => void
 }
 
 interface Props {
@@ -30,27 +32,45 @@ interface Props {
 
 const editable = (view: View): view is SavedView => isSaved(view) && view.editable
 
-/** A view's mark: a lock on a default, a pair of people on a colleague's, a person on one's own unshared view. */
-function Mark({ view }: { view: View }) {
+/** Whose a view is: a lock on a system view, a pair of people on a colleague's, a person on one's own unshared view. */
+function whoseMark(view: View): { word: string; Icon: typeof Lock } | null {
   const lock = lockOf(view)
   if (!lock && !(isSaved(view) && view.mine && !view.shared)) return null
   const word = t(lock === 'standard' ? 'readOnlyView' : lock === 'colleague' ? 'colleagueView' : 'mine')
-  const Icon = lock === 'standard' ? Lock : lock === 'colleague' ? Users : UserRound
+  return { word, Icon: lock === 'standard' ? Lock : lock === 'colleague' ? Users : UserRound }
+}
+
+/** A view's marks: the house on its node's default, then whose it is. */
+function Mark({ view }: { view: View }) {
+  const marks = [
+    ...(isSaved(view) && view.default ? [{ word: t('defaultView'), Icon: House }] : []),
+    ...[whoseMark(view)].filter((mark) => mark !== null),
+  ]
+  if (marks.length === 0) return null
   return (
-    <span className={lock ? 'nv-view__mark nv-view__lock' : 'nv-view__mark nv-view__own'} role="img" aria-label={word} title={word}>
-      <Icon size={12} aria-hidden="true" />
+    <span className="nv-view__mark">
+      {marks.map(({ word, Icon }) => (
+        <span key={word} role="img" aria-label={word} title={word}>
+          <Icon size={12} aria-hidden="true" />
+        </span>
+      ))}
     </span>
   )
 }
 
-/** A copy of any; rename, share, move and delete on one's own: the engine makes only the owner's views editable. */
+/** Only a shared, saved view other than a dashboard may be its node's default. */
+const markable = (view: View): view is SavedView => isSaved(view) && view.shared && view.type !== 'dashboard'
+
+/** A copy of any; rename, share, move and delete on one's own: the engine makes only the owner's views editable. The default where onDefault is given. */
 function choices(view: View, block: string[], actions: ViewActions, rename: () => void, move: (step: -1 | 1) => void): Action[] {
   const own = editable(view) && view.mine ? view : null
   const at = block.indexOf(view.key)
+  const { onDefault } = actions
   return [
     { label: t('duplicate'), run: () => actions.duplicate(view) },
     ...(editable(view) ? [{ label: t('renameView'), run: rename }] : []),
     ...(own ? [{ label: t(own.shared ? 'unshare' : 'share'), run: () => actions.share(own, !own.shared) }] : []),
+    ...(onDefault && markable(view) ? [{ label: t(view.default ? 'unmarkDefault' : 'markDefault'), run: () => onDefault(view, !view.default) }] : []),
     ...(own && at > 0 ? [{ label: t('moveUp'), run: () => move(-1) }] : []),
     ...(own && at < block.length - 1 ? [{ label: t('moveDown'), run: () => move(1) }] : []),
     ...(editable(view) ? [{ label: t('delete'), run: () => actions.remove(view) }] : []),

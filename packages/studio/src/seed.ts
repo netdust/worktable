@@ -371,6 +371,7 @@ export const views: SavedViewSeed[] = [
     skin: 'board',
     sort: ['-bijgewerkt'],
     visible_fields: ['project', 'laatste_stap', 'bijgewerkt'],
+    default: true,
   }),
   view({
     name: 'Taken',
@@ -380,6 +381,14 @@ export const views: SavedViewSeed[] = [
     filters: { status: 'open' },
     sort: ['deadline'],
     visible_fields: ['titel', 'deadline', 'wie', 'organisatie_id', 'site_id', 'status'],
+  }),
+  view({
+    name: 'Per status',
+    source_type: 'dataset',
+    source: 'taak',
+    skin: 'board',
+    visible_fields: ['deadline', 'wie', 'organisatie_id', 'site_id'],
+    default: true,
   }),
   view({
     name: 'Op tafel',
@@ -396,6 +405,7 @@ export const views: SavedViewSeed[] = [
     skin: 'calendar',
     sort: ['datum', 'start_at'],
     visible_fields: [],
+    default: true,
   }),
   view({
     name: 'Vandaag',

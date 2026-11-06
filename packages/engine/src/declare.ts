@@ -284,6 +284,8 @@ export interface SavedViewSeed {
   layout?: DashboardLayout
   /** Read-only to everyone and brought up to its declaration by the seed; unlocked, it is a team view. */
   locked?: boolean
+  /** The view its rail node opens with; at most one per node, never a dashboard. */
+  default?: boolean
 }
 
 export interface Domain {

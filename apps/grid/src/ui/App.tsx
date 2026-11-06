@@ -245,7 +245,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   const starting = served?.views ?? []
   const declared = useMemo(() => (served?.tables ?? []).map((table) => displayed(table, displays[table.key])), [served, displays])
   const current = useRef<string | undefined>(undefined)
-  const { dashboards, load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
+  const { dashboards, load, loadPrefs, tables, create, save, changedLayout, remember, openTable, actions, markDefault } = useSavedViews({ declared, starting, active: current, open: setActiveKey, note: setViewNote, notify })
   // The grid opens on the first dashboard the reader can open, else on its first view.
   const view = [...dashboards, ...tables.flatMap((table) => table.views)].find((v) => v.key === activeKey) ?? dashboards[0] ?? tables[0]?.views[0] ?? starting[0]
   const dashboard = view?.type === 'dashboard' ? view : undefined
@@ -677,7 +677,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
     <DrawerWriteContext.Provider value={drawerWrite}>
     <div className="nv-app" ref={frame}>
       <Rail signed={signed} tables={tables} counts={counts} dashboards={dashboards} sections={served.sections} active={view?.key} onSelect={setActiveKey} onTable={openTable}
-        onNewView={(table, type) => setAdding({ table, type })} actions={actions} modelActions={modelActions}
+        onNewView={(table, type) => setAdding({ table, type })} actions={role === 'administrator' ? { ...actions, onDefault: markDefault } : actions} modelActions={modelActions}
         onRemoveDashboard={role === 'administrator' ? actions.remove : undefined} space={space.status === 'ready' && served?.space && (
         <SpaceSelect label={models[served.space.model]?.label ?? ''} records={space.records} selected={space.selected} onSelect={select} />
       )} />

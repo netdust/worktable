@@ -7,7 +7,7 @@ import { offered, openTab, pressInMenu } from './drawer'
 import { openLooks } from './editor'
 import { forget } from './forget'
 import { shot } from './shots'
-import { openView } from './tree'
+import { modelNode, openModel, openView } from './tree'
 
 // Studio's own instance (invented fixtures, packages/studio/src/seed.ts), driven as Stefan, the administrator.
 // The seed: sites 1 testmans-winkel (ok), 2 testmans-bestel (let op), 3 voorbeeld-site (ok), 4 voorbeeld-blog
@@ -1855,7 +1855,12 @@ test.describe('views-and-actions, the shake-out', () => {
     try {
       await open(page, 'Sites', 'Sites')
       await page.getByRole('button', { name: 'More actions: SLA-sites', exact: true }).click()
-      await expect(page.getByRole('menuitem')).toHaveText(['Kopie maken', 'Naam wijzigen', 'Verwijderen'])
+      await expect(page.getByRole('menuitem')).toHaveText([
+        'Kopie maken',
+        'Naam wijzigen',
+        'Standaardweergave',
+        'Verwijderen',
+      ])
       await shot(page, 'rail-menu-beheerder')
       await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
       await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('SLA-klanten')
@@ -2677,5 +2682,227 @@ test.describe('drawer-tabs, the shake-out', () => {
         await setTheme(page, 'Licht')
       }
     })
+  })
+})
+
+// The default-view shake-out (specs/default-view/shakeout.md): a rail node opens on the view last used in the visit,
+// else its default, else its first view. The seed marks Taken → Per status, Features → Per fase, Agenda → Agenda.
+test.describe('default-view, the shake-out', () => {
+  type ViewOut = { id: number; name: string; source: string | null; default: boolean; shared: boolean }
+  const viewsOf = async (on: Api) => ((await (await on.get('/api/views')).json()) as { views: ViewOut[] }).views
+  const viewId = async (on: Api, name: string) => (await viewsOf(on)).find((v) => v.name === name)?.id as number
+  const defaultsOf = async (on: Api, sources: string[]) =>
+    (await viewsOf(on)).filter((v) => v.default && sources.includes(v.source ?? '')).map((v) => v.name)
+  const TAKEN = ['taak', 'op_tafel']
+  const row = (page: Page, model: string, view: string) =>
+    modelNode(page, model)
+      .locator('[data-view]')
+      .filter({ has: page.getByRole('button', { name: view, exact: true }) })
+  const house = (page: Page, model: string, view: string) =>
+    row(page, model, view).getByRole('img', { name: 'Standaardweergave', exact: true })
+  const heading = (page: Page) => page.getByRole('heading', { level: 1 })
+
+  async function setTheme(page: Page, theme: 'Licht' | 'Donker') {
+    await openLooks(page)
+    await page.getByRole('radiogroup', { name: 'Thema' }).getByRole('radio', { name: theme }).click()
+    await expect(page.locator('#root')).toHaveAttribute('data-theme', theme === 'Donker' ? 'dark' : 'light')
+    await page.getByRole('button', { name: 'Bijstellen' }).click()
+  }
+
+  test('taken-opens-on-board @e2e: a rail click opens Taken on Per status, Features on Per fase and Agenda on its calendar; within the visit it returns to the view last chosen there', async ({
+    page,
+  }) => {
+    expect(await defaultsOf(page.request, TAKEN)).toEqual(['Per status'])
+    await landing(page)
+
+    await openModel(page, 'Taken')
+    await expect(heading(page)).toHaveText('Per status')
+    for (const status of ['Open', 'Bezig', 'Geblokkeerd', 'Gedaan']) await expect(lane(page, status)).toBeVisible()
+    await expect(house(page, 'Taken', 'Per status')).toBeVisible()
+    await shot(page, 'taken-per-status')
+
+    await openModel(page, 'Features')
+    await expect(heading(page)).toHaveText('Per fase')
+    for (const fase of ['Ontwerp', 'Bouwen', 'Klaar']) await expect(lane(page, fase)).toBeVisible()
+
+    await openModel(page, 'Agenda')
+    await expect(heading(page)).toHaveText('Agenda')
+    await expect(page.locator('.nv-cal__body')).toBeVisible()
+
+    // A node without a mark (Sites) still opens its first view.
+    await openModel(page, 'Sites')
+    await expect(heading(page)).toHaveText('Sites')
+
+    // Re-entry: the view chosen last in Taken wins over its default for the rest of the visit, a query view too.
+    await openView(page, 'Op tafel', 'Taken')
+    await expect(heading(page)).toHaveText('Op tafel')
+    await openModel(page, 'Sites')
+    await expect(heading(page)).toHaveText('Sites')
+    await openModel(page, 'Taken')
+    await expect(heading(page)).toHaveText('Op tafel')
+
+    // A new visit, on the landing page, forgets it: the default again.
+    await landing(page)
+    await openModel(page, 'Taken')
+    await expect(heading(page)).toHaveText('Per status')
+
+    await setTheme(page, 'Donker')
+    try {
+      await expect(house(page, 'Taken', 'Per status')).toBeVisible()
+      await shot(page, 'taken-per-status-donker')
+    } finally {
+      await setTheme(page, 'Licht')
+    }
+  })
+
+  test('mark-a-default @e2e: an administrator marks Taken’s table as Standaardweergave, the house moves and a rail click opens it; Geen standaardweergave meer takes it off; an editor is never offered it and is refused it on the wire; an own unshared view and a dashboard never take it', async ({
+    page,
+    browser,
+  }) => {
+    const api = page.request
+    const [board, table, opTafel] = [
+      await viewId(api, 'Per status'),
+      await viewId(api, 'Taken'),
+      await viewId(api, 'Op tafel'),
+    ]
+    const editor = await browser.newContext({
+      storageState: state('studio-editor'),
+      viewport: { width: 1440, height: 900 },
+    })
+    let ownId: number | undefined
+    try {
+      await landing(page)
+      await openModel(page, 'Taken')
+      await expect(heading(page)).toHaveText('Per status')
+
+      // The administrator's menu on the seeded table offers the mark.
+      await page.getByRole('button', { name: 'More actions: Taken', exact: true }).click()
+      await expect(page.getByRole('menuitem', { name: 'Standaardweergave', exact: true })).toBeVisible()
+      await shot(page, 'beheerder-menu-standaardweergave')
+      await page.getByRole('menuitem', { name: 'Standaardweergave', exact: true }).click()
+      await expect(house(page, 'Taken', 'Taken')).toBeVisible()
+      await expect(house(page, 'Taken', 'Per status')).toHaveCount(0)
+      expect(await defaultsOf(api, TAKEN)).toEqual(['Taken'])
+
+      // Re-entry: marking it again changes nothing; its menu now offers only the unmark.
+      expect((await api.put(`/api/views/${table}/default`, { data: {} })).status()).toBe(200)
+      expect(await defaultsOf(api, TAKEN)).toEqual(['Taken'])
+
+      await landing(page)
+      await openModel(page, 'Taken')
+      await expect(heading(page)).toHaveText('Taken')
+      await expect(page.locator('.nv-board__column')).toHaveCount(0)
+      await shot(page, 'taken-opent-op-tabel')
+
+      // The editor: the moved mark, a lock beside it, and no item in the menu.
+      const other = await editor.newPage()
+      await other.goto(STUDIO.app)
+      await openModel(other, 'Taken')
+      await expect(heading(other)).toHaveText('Taken')
+      await expect(house(other, 'Taken', 'Taken')).toBeVisible()
+      await expect(house(other, 'Taken', 'Per status')).toHaveCount(0)
+      await expect(
+        row(other, 'Taken', 'Taken').getByRole('img', { name: 'Systeemweergave, alleen te kopiëren', exact: true }),
+      ).toBeVisible()
+      await expect(other.locator('.nv-toolbar__lock')).toHaveAccessibleName(
+        'Systeemweergave: maak een kopie om aan te passen',
+      )
+      await other.getByRole('button', { name: 'More actions: Taken', exact: true }).click()
+      await expect(other.getByRole('menuitem')).toHaveText(['Kopie maken'])
+      await other.keyboard.press('Escape')
+      await other.getByRole('button', { name: 'More actions: Per status', exact: true }).click()
+      await expect(other.getByRole('menuitem')).toHaveText(['Kopie maken'])
+      await other.keyboard.press('Escape')
+      await shot(other, 'redacteur-rail-huis-en-slot')
+
+      // Denied actors on the wire: the editor and a service account, each 403, the mark unchanged.
+      for (const [method, id] of [
+        ['put', board],
+        ['delete', table],
+      ] as const) {
+        const refused = await other.request[method](`/api/views/${id}/default`, { data: {} })
+        expect(refused.status(), `editor ${method}`).toBe(403)
+        expect(((await refused.json()) as { code: string }).code).toBe('forbidden')
+      }
+      const service = await claude()
+      try {
+        expect((await service.put(`/api/views/${board}/default`, { data: {} })).status()).toBe(403)
+      } finally {
+        await service.dispose()
+      }
+      expect(await defaultsOf(api, TAKEN)).toEqual(['Taken'])
+
+      // Geen standaardweergave meer: the node has no default and opens its first view.
+      await page.getByRole('button', { name: 'More actions: Taken', exact: true }).click()
+      await page.getByRole('menuitem', { name: 'Geen standaardweergave meer', exact: true }).click()
+      await expect(house(page, 'Taken', 'Taken')).toHaveCount(0)
+      await expect.poll(() => defaultsOf(api, TAKEN)).toEqual([])
+      await landing(page)
+      await openModel(page, 'Taken')
+      const first = await modelNode(page, 'Taken').locator('[data-view] .nv-view__button').first().textContent()
+      await expect(heading(page)).toHaveText(first ?? '')
+
+      // Boundaries: one's own unshared view is never offered the mark and is refused it; a dashboard is refused it.
+      const own = await api.post('/api/views', {
+        data: { name: 'e2e eigen taken', source_type: 'dataset', source: 'taak', skin: 'table' },
+      })
+      expect(own.status(), await own.text()).toBe(201)
+      ownId = ((await own.json()) as { id: number }).id
+      await landing(page)
+      await openModel(page, 'Taken')
+      await page.getByRole('button', { name: 'More actions: e2e eigen taken', exact: true }).click()
+      await expect(page.getByRole('menuitem', { name: 'Delen met het team' })).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: /standaardweergave/i })).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      const notShared = await api.put(`/api/views/${ownId}/default`, { data: {} })
+      expect([notShared.status(), ((await notShared.json()) as { code: string }).code]).toEqual([400, 'not_shared'])
+      const dashboard = (await viewsOf(api)).find((v) => v.name === 'Overzicht')?.id
+      const onDashboard = await api.put(`/api/views/${dashboard}/default`, { data: {} })
+      expect([onDashboard.status(), ((await onDashboard.json()) as { code: string }).code]).toEqual([
+        400,
+        'dashboard_not_default',
+      ])
+      expect(await defaultsOf(api, TAKEN)).toEqual([])
+
+      // Within the node a query view may be the default: Op tafel opens Taken.
+      expect((await api.put(`/api/views/${opTafel}/default`, { data: {} })).status()).toBe(200)
+      await landing(page)
+      await openModel(page, 'Taken')
+      await expect(heading(page)).toHaveText('Op tafel')
+      await expect(house(page, 'Taken', 'Op tafel')).toBeVisible()
+    } finally {
+      await editor.close()
+      if (ownId) await api.delete(`/api/views/${ownId}`)
+      expect((await api.put(`/api/views/${board}/default`, { data: {} })).status()).toBe(200)
+      expect(await defaultsOf(api, TAKEN)).toEqual(['Per status'])
+    }
+  })
+
+  // The hunt's confirmed bug (specs/default-view/shakeout.md row 3), RED at 554e6ea, green at c8de21e: every other write refused with
+  // unknown_view drops the gone view from the rail (useSavedViews vanished()); the mark only shows the refusal.
+  test('mark-on-a-gone-view @e2e: a mark refused because a colleague deleted the view drops it from the rail, as any other refused write does', async ({
+    page,
+    browser,
+  }) => {
+    const editor = await browser.newContext({ storageState: state('studio-editor') })
+    try {
+      const made = await editor.request.post('/api/views', {
+        data: { name: 'e2e weg gedeeld', source_type: 'dataset', source: 'taak', skin: 'table', shared: true },
+      })
+      expect(made.status(), await made.text()).toBe(201)
+      const id = ((await made.json()) as { id: number }).id
+      await landing(page)
+      await openModel(page, 'Taken')
+      await expect(row(page, 'Taken', 'e2e weg gedeeld')).toHaveCount(1)
+      await page.getByRole('button', { name: 'More actions: e2e weg gedeeld', exact: true }).click()
+      expect((await editor.request.delete(`/api/views/${id}`)).status()).toBe(200)
+      await page.getByRole('menuitem', { name: 'Standaardweergave', exact: true }).click()
+      await expect(page.locator('.nv-toolbar').getByRole('alert')).toHaveText('Deze weergave bestaat niet meer')
+      await shot(page, 'markeren-weggehaalde-weergave')
+      await expect(row(page, 'Taken', 'e2e weg gedeeld')).toHaveCount(0)
+      expect(await defaultsOf(page.request, TAKEN)).toEqual(['Per status'])
+    } finally {
+      await editor.close()
+    }
   })
 })
