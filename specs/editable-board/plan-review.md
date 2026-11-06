@@ -1,4 +1,69 @@
-# Plan review — editable-board (second review)
+# Plan review: editable-board (third review)
+Reviewed-plan: 90e094bca9dfe7c58d3558484b2e590e5ae78f2d specs/editable-board/plan.md
+Verdict: ready
+
+There are no Blocking or Should-fix findings. Every second-review finding I was asked to check is fixed in the plan text. Every new premise the fixes introduced holds in the source. The four notes below are small enough to settle while the plan is being executed.
+
+## Second-review findings, status
+
+- **P1 (link accounts and `/schema`): fixed.**
+  - Task 1 Interfaces (line 73) says "no branch for it". Threat 2 (line 34) cites the 403 from `confineLinkActor`. Step 1, Test map row 1 and Review Focus line 53 no longer mention a link account.
+- **SF1 ("+" on a query): fixed.**
+  - Task 3 Files (line 100) offers "+" only when `model.creates === field.writes.dataset`.
+  - Step 1 adds the `persoon_dag` case: drag is offered, "+" is not.
+- **SF2 (CHECKS.md): fixed.**
+  - Task 2 Files edits `specs/CHECKS.md:152`, and the new test titles are stated.
+  - Test map row 2 now has a Playwright command that runs.
+- **SF3 (collide keeps the last aim): fixed.**
+  - Step 3 re-aims to the card's own place.
+  - Step 1 adds a test that crosses a reachable lane and then lets go on an unreachable one.
+- **SF4 (`pressedOnly` through `writes`): fixed by narrowing.**
+  - Only `canSet` and `draggable` gain `models`; `columnsFor` and `pressedOnly` stay as they are (Global Constraints line 25, Task 2 Interfaces).
+  - The effect of `updateThrough` sending `expect` on grid cell edits is stated as intended.
+- **N-a (target not served): fixed.** Deferrals, line 38.
+- **N-c (keyboard skip): fixed.** Task 2 Step 3 checks that → from Bevestigd skips Geweigerd and that the announcement names the next reachable lane.
+
+## Blocking
+None.
+
+## Should fix
+None.
+
+## Note
+
+- **N1. "Never manual for a query board" says what, not how.**
+  - **Where:** Task 3 Files and Step 3.
+  - **Source:** `dropOf` (`apps/grid/src/board/drop.ts:46-61`) has no input meaning "sorted only". With `manual: false` and the card dropped in its own column (`from !== null`), it returns `kind: 'place'`: the board switches to manual and `position` is written. On a query, `updateThrough` would then refuse that `position` write (`api.ts:328-329`).
+  - **Why it is only a note:** the Step 1 test pins the behaviour.
+  - **Suggested change:** name the mechanism, e.g. a `sorted` input on `dropOf` that turns a drop in the card's own column into `none`, or `land` returning early on a query board when `at.lane === from.lane`.
+- **N2. `hints.ts` needs no change.**
+  - The plan lists it under Modify (`hints.ts:11-13` follows `boardDrops`).
+  - `hintsOf(skin, drags)` already takes `boardDrops` from App.tsx, so dropping `!model.query` at `:487` reaches the footer hints on its own. The entry can go.
+- **N3. "+" on a query board does not check that the viewer may write the target.**
+  - **Where:** Task 3, the "+" gate.
+  - **Source:** `writable` is `served.writable[view.model]`, the query (`App.tsx:424`). The query's own "+ Nieuw" also checks `served.writable[target.key]` through `createBlocked` (`App.tsx:456-457`).
+  - **Effect:** for a viewer who reads the query but cannot write the target, "+" is offered and the engine refuses it.
+  - **Suggested change:** add `served.writable[target.key]` to the "+" condition. This is about what the board offers, not about safety.
+- **N4. The Test map and Task 2 disagree on who registers the board flows.**
+  - Row 2 says `board-drag-not-offered` and `board-drop-stale` are "registered by `/shakeout`".
+  - Task 2 edits CHECKS.md itself, which is correct, because `check-checks.ts` would otherwise fail `bun run check` at Step 4.
+  - Suggested change: make row 2 say Task 2 registers them, so `/shakeout` does not add the rows a second time.
+
+## Premises checked
+
+- A link account gets 403 on `/schema` → `packages/engine/src/record-link.ts:64-81` (`OPEN_TO_LINKS` has no schema route; `confineLinkActor`), `test/record-link.test.ts:269-278` → holds
+- `canSet` and `draggable` gaining `models`, with both call sites → `apps/grid/src/ui/App.tsx:798-801`; `draggable` at `:487`, `canSet` at `:734`; `models` is in scope → holds
+- `columnsFor` and `pressedOnly` unchanged → `apps/grid/src/grid/columns.ts:281`, `:287` → holds; `canSet` stops calling `pressedOnly` only through `lifecycleOf`
+- `updateThrough` sending `expect` also reaches grid cell edits through a query → `apps/grid/src/api.ts:315` (every query `update` goes through `updateThrough`), `:326-340` (sends no `expect` today) → holds
+- "+" on a query only when `creates === writes.dataset` → `App.tsx:454` (`target = models[model.creates]`), `:765-772`; Studio's `op_tafel` has `creates: taak` and `status` writes `taak.status` (`packages/studio/src/queries.ts:57-76`) → holds
+- `isReadonly` refuses a query column without `writes` → `apps/grid/src/engine.ts:158-159` → holds
+- Re-aiming `collide` to the card's own place gives `none` → `useBoardDrag.ts:149-150` (old `last.current`), `end` at `:222-228` lands at `live.current`, `dropOf` at `drop.ts:46` gives `from === index` → `none` → holds
+- `CHECKS.md:152` registers `board-drag-refused @e2e`; `scripts/check-checks.ts` fails a grep that matches no test; the test is at `e2e/step-3f.spec.ts:641` → holds
+- Anchors: `servedLifecycle` at `app.ts:189-192`, its call at `:377`; the ticket fixture at `lifecycle.test.ts:32-38`; the `/schema` case at `:436-441` (its `toEqual({column})` will change); the `boardNeed` test at `engine.test.ts:809-811`; the button-lifecycle test at `offered.test.tsx:107`; `ColumnLook` at `Column.tsx:12-17`; `Board.tsx:71`, `:73`, `:83`; `boardNeed` at `engine.ts:302-307` → hold
+
+---
+
+## Second review (plan blob 054e575)
 Reviewed-plan: 054e575015bece83845f813d6423bb5fdd21e2c2 specs/editable-board/plan.md
 Verdict: not ready. There is one Blocking finding, and it is a one-line fix. With that and the four Should-fix items, the plan is ready.
 
