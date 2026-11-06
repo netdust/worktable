@@ -1,4 +1,128 @@
-# Plan review — editable-board
+# Plan review — editable-board (second review)
+Reviewed-plan: 054e575015bece83845f813d6423bb5fdd21e2c2 specs/editable-board/plan.md
+Verdict: not ready. There is one Blocking finding, and it is a one-line fix. With that and the four Should-fix items, the plan is ready.
+
+Note: the working-tree `specs/editable-board/plan-review.md` hashes to ce18536…, not the 59885a9… you gave. Its own `Reviewed-plan` line is 59885a9…, which is the plan sha it reviewed, so that is probably what you meant. I reviewed the plan at 054e575 against that file.
+
+## First-review findings, status
+
+- **B1 (lifecycle through `writes`):** fixed.
+  - Global Constraints line 21 states the rule.
+  - Task 2 Interfaces add `lifecycleOf(model, column, models)`, and `pressedOnly` resolves through `writes`.
+  - Task 3 Step 1 adds the `persoon_dag.state` test, and a Review Focus line points at row 4.
+- **S1 (owners served):** fixed for owner users. The link-account half introduced a false premise; see Blocking P1.
+- **S2 (stale-drop e2e):** fixed in Task 2 Step 3, and Review Focus points at row 2. The rewrite misses its CHECKS.md registration; see Should fix SF2.
+- **S3 (threat 3 wording):** fixed. Threat 3 now names `writableOf` 405 and the ordinary dataset PATCH.
+- **N1 (rejection reason):** fixed. The Simplest design paragraph now gives the `declaresMarks` and payload reasons.
+- **N2 (simpler Task 3 gate):** adopted. Task 3 Files drop `!model.query` and rely on `isReadonly`.
+- **N3 (files and anchors):** fixed. `Board.tsx` and `offered.test.tsx` are listed, and every anchor now matches the source (checked below).
+- **N4 (fixture):** fixed. The plan uses the `ticket` fixture and adds an administrator-only transition.
+- **N5 (QuickCreate preset):** half fixed. It is named `QuickCreate` and keyed by `writes.field`, but the QuickCreate model is the query's `creates` dataset, not the `writes` target; see Should fix SF1.
+- **N6 (single `onCreated`):** fixed. Task 4 Step 1 names the calendar's quick create.
+
+## Blocking
+
+**P1. A link account never reads `/schema`, so the "no `transitions` key" test and branch cannot exist.**
+- **Plan:**
+  - Task 1 Step 1: "a link account gets no `transitions` key".
+  - Task 1 Interfaces: "absent for an actor of kind `link`".
+  - Threat 2: "no `transitions` key to an actor of kind `link` … a test reads `/schema` as administrator, editor, owner and link".
+  - Test map row 1 and Review Focus line 2 say the same.
+- **Source:**
+  - `packages/engine/src/record-link.ts:64-81`: `OPEN_TO_LINKS` has no `GET /api/schema`, and `confineLinkActor` sends every other route a 403.
+  - `packages/engine/src/auth.ts:300` installs it on `/*`.
+  - `packages/engine/test/record-link.test.ts:269-278` already asserts "403 on /schema …".
+- **Effect:** the link case of the test cannot be written as stated. A `kind === 'link'` branch in `servedLifecycle` would be dead code. The first review's S1 suggested that branch, and it was wrong on this point.
+- **Smallest change:**
+  - Task 1 serves every actor that reads `/schema` its role-filtered transitions, with no link branch.
+  - Threat 2's link clause becomes: "a link account never reads `/schema` (403, `confineLinkActor`; held by `record-link.test.ts:269-278`)".
+  - Remove "link" from the Task 1 Step 1 test list, the Interfaces line, row 1's denial text and Review Focus line 2. The ticket fixture also has no `record_link`, so a link session would need fixture work the plan does not plan.
+
+## Should fix
+
+**SF1. "+" on a query board without `creates`, or whose `creates` is not the `writes` target, is offered and can only fail.**
+- **Plan:**
+  - Task 3 Files: "+" at `:734` drops `!model.query`.
+  - Task 3 Step 1: "+" "goes through `QuickCreate` … with the lane value under the target field".
+- **Source:**
+  - `QuickCreate`'s model is `target ?? model` (`apps/grid/src/ui/App.tsx:765-766`), with `target = models[model.creates]` (`:454`).
+  - `persoon_dag` declares no `creates` (`packages/theatre/src/queries.ts:123-131`), but its `state` writes `toewijzing.state` (`:146-149`).
+  - `writable` is true for any query with a `writes` column (`packages/engine/src/app.ts:57-60`, `apps/grid/src/ui/App.tsx:424`).
+- **What goes wrong:** after Task 3, a `persoon_dag` board grouped by `state` shows a "+" that POSTs to `/rows/persoon_dag`, and the engine answers 405 `read_only` (`writes.ts:71-75`).
+- **Smallest change:** in Task 3, offer "+" on a query board only when `model.creates === field.writes.dataset`, with the preset `{ [writes.field]: lane.value }`. Add one test: a query with `writes` and no `creates` offers drag but no "+". Studio "Op tafel" (`creates: taak`, `status` writes `taak.status`, `packages/studio/src/queries.ts:57-76`) still gets its "+".
+
+**SF2. Renaming `board-drag-refused` breaks `bun run check` unless CHECKS.md moves with it.**
+- **Plan:** Task 2 Step 3 rewrites it, and Test map row 2 names the flows `board-drag-not-offered` and `board-drop-stale`.
+- **Source:**
+  - `specs/CHECKS.md:152` registers `` `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag-refused @e2e"` `` and describes a 422 refusal.
+  - `scripts/check-checks.ts` (in `bun run check`, root `package.json:14`) fails when a registered grep matches no test.
+- **What goes wrong:** if the title changes, Task 2 Step 4's `bun run check` goes red. If it does not change, the CHECKS.md row describes behaviour that no longer exists.
+- **Smallest change:**
+  - Add `specs/CHECKS.md` (row :152) to Task 2 Files: new grep, and a description for not offered plus the stale 409.
+  - Say whether the test title changes.
+  - Give row 2's e2e its runnable command, e.g. `bunx playwright test e2e/step-3f.spec.ts --grep "board-drag"`. Row 2 lists the e2e file today, but only the vitest command.
+
+**SF3. Filtering lanes in `collide` alone makes a pointer drop on an unreachable lane land in the last reachable lane crossed.**
+- **Plan:** Task 2 Step 3: "filter `droppableContainers` in `collide` … return `kind: 'none'` in `land` for an unreachable lane".
+- **Source:** `apps/grid/src/board/useBoardDrag.ts:149-150`. When `pointerWithin` finds no lane it does `if (!hit) return last.current` and leaves `live.current` at the previous aim. `end` (`:222-228`) then lands at `live.current`.
+- **What goes wrong:** with unreachable lanes filtered out, the pointer resting on one keeps the previous target, which is the own lane or any reachable lane passed on the way. `land` never sees the unreachable lane, so the `kind: 'none'` there never fires.
+- **Test gap:** a glide from Bevestigd sideways past Geannuleerd (reachable) to a further unreachable lane would write `geannuleerd`. The planned test ("a pointer drop on an unreachable lane writes nothing") passes trivially on adjacent lanes.
+- **Smallest change:**
+  - In `collide`, a pointer over an unreachable lane re-aims to the card's own place: `aim(from)`, `last.current = []`.
+  - Add a Task 2 Step 1 test that crosses a reachable lane before releasing on an unreachable one, and expects no request.
+
+**SF4. The `pressedOnly`-through-`writes` change has no stated signature, and it also changes grid cells.**
+- **Plan:** Task 2 Files: "`pressedOnly` :281 resolves through `writes`". Global Constraints: "No … grid edits".
+- **Source:**
+  - `pressedOnly(model, key)` is called by `columnsFor` (`apps/grid/src/grid/columns.ts:287`, which has a `models` param defaulting to `{}`).
+  - It is also called by the module-level `canSet(model, column)` (`apps/grid/src/ui/App.tsx:801`), which has no `models` in scope. So `canSet` and `draggable` (`:798`) need a new parameter at both call sites.
+  - Resolving through `writes` in `columnsFor` makes a query grid cell over a button lifecycle read-only, which is a grid behaviour change. No current query writes a button lifecycle (`writes` only at `theatre/queries.ts:149`, `:230` and `studio/queries.ts:75`, none on Studio's button datasets), so nothing visible moves today.
+- **Related:** Task 3's `updateThrough` `expect` also reaches grid cell edits on `persoon_dag.state`.
+- **Smallest change:**
+  - Write the new signatures into Interfaces: `pressedOnly(model, key, models)` and `canSet(model, column, models)`.
+  - State that both the grid-cell and `updateThrough` effects are intended (the spec's "on a lifecycle column only where a declared transition reaches" covers every skin), or narrow the change to `canSet`.
+
+## Note
+
+- **N-a.** `lifecycleOf` returns null when `models[writes.dataset]` is not served to the viewer, and `reachable(null, …)` then allows every lane. The engine still refuses the write (threat 1), so this is UX only. One line in Deferrals would settle it.
+- **N-b.** The stale-drop rewrite works:
+  - With `expect` sent, any API move makes `checkTransition` answer 409 before the reachability check (`packages/engine/src/writes.ts:323-325`).
+  - The store re-reads on `transition_lost` in the same catch as the 422 (`apps/grid/src/grid/store.ts:280-291`), so the manual-board "one ⌘Z undoes the edit before" assertion carries over.
+  - The existing keyboard path for `e2e h voorlopig` (Voorlopig → Uitgenodigd → Bevestigd) stays reachable (`packages/theatre/src/datasets.ts:282-284`).
+- **N-c.** The "not offered" keyboard assertion needs a new expected announcement. From Bevestigd, → skips Geweigerd, because only Voorlopig and Geannuleerd are reachable (`datasets.ts:282`, `:288`). The rewrite should assert that skip, not just "no request".
+
+## Premises checked
+
+- Link account reads `/schema` → `packages/engine/src/record-link.ts:64-81`, `auth.ts:300`, `test/record-link.test.ts:269-278` → **does not hold** (P1)
+- Owner user reads `ticket` in `/schema` and may make b→c → `access.ts:66-68` (`owners` declared, `lifecycle.test.ts:65`), `lifecycle.test.ts:36`, `:253-254` → holds
+- `/schema` handler has the actor for `servedLifecycle` → `packages/engine/src/app.ts:351`, `servedLifecycle` `:189-192`, call `:377` → holds
+- `checkTransition` 409 before 422, role-checked → `packages/engine/src/writes.ts:304-332` → holds
+- Link never writes a state → `packages/engine/src/validate.ts:298` (refuses `owner_writable` on the lifecycle column), `app.ts:87-89` → holds
+- `isReadonly` makes `canSet` refuse a query column without `writes` → `apps/grid/src/engine.ts:158-159`, `fieldOf` `:185`, `canSet` `App.tsx:801` → holds
+- Field carries `writes { dataset, field, key }` for `lifecycleOf` → `apps/grid/src/types.ts:39`, `engine.ts:186` → holds
+- Target `Model.lifecycle` / `lifecycle_buttons` available via `models[writes.dataset]` → `apps/grid/src/engine.ts:239-241` → holds (when the target is served; N-a)
+- `persoon_dag.state` writes `toewijzing.state`, a lifecycle with no `button` transitions → `packages/theatre/src/queries.ts:146-149`, `datasets.ts:279-288`, `app.ts:186-187` → holds
+- `pressedOnly` callers → `apps/grid/src/grid/columns.ts:281`, `:287`, `apps/grid/src/ui/App.tsx:801` → holds (SF4: signature unstated)
+- `updateThrough` sends no `expect`, PATCHes the target directly → `apps/grid/src/api.ts:326-340` → holds
+- `Board.tsx` `manual` :71, `useBoardDrag` call :73, "+" preset `{ [column]: lane.value }` :83 → `apps/grid/src/board/Board.tsx:71`, `:73`, `:83` → holds
+- QuickCreate creates in `target ?? model`, target = `creates` → `apps/grid/src/ui/App.tsx:454`, `:765-772`, `dashboard/QuickCreate.tsx:96-99` → holds, but `persoon_dag` has no `creates` (SF1)
+- Studio "Op tafel" `creates: taak`, `status` writes `taak.status` → `packages/studio/src/queries.ts:57-76` → holds
+- Query writable when any column writes → `packages/engine/src/app.ts:57-60` → holds
+- `drop.ts`: a within-column drop on a sorted board becomes a `place` that writes `position` → `apps/grid/src/board/drop.ts:42-61`, `:68-74` → holds (the never-manual change is needed)
+- `collide` :138, `step` :166, `land` :230; no-hit falls back to `last.current` → `apps/grid/src/board/useBoardDrag.ts:138-160`, `:166-179`, `:230-245` → holds (SF3)
+- `ColumnLook` → `apps/grid/src/board/Column.tsx:13-17` → holds
+- `boardNeed` lifecycle `drag:false` → `apps/grid/src/engine.ts:302-307`; test `engine.test.ts:809-811` → holds
+- `offered.test.tsx:107` button-lifecycle test → holds
+- `hints.ts:11-13` follows `drags` → holds
+- `onCreated` pushes only for `target` → `apps/grid/src/ui/App.tsx:768-772` → holds
+- Store re-reads on `transition_lost` → `apps/grid/src/grid/store.ts:288-291` → holds
+- `board-drag-refused` → `e2e/step-3f.spec.ts:641-777`; registered at `specs/CHECKS.md:152`, enforced by `scripts/check-checks.ts` in `bun run check` → holds (SF2)
+- `ticket` fixture → `packages/engine/test/lifecycle.test.ts:32-38`, `:59-73`; `/schema` case `:436-441` → holds
+- Spec R3 board row and 2026-11-06 rulings → `specs/work-model/spec.md:100`, `:120-123`; `docs/SPEC.md` Work model *Editable skins*, Board → holds
+
+---
+
+## First review (plan blob 59885a9)
 Reviewed-plan: 59885a9d738440fec6483c87c8e758f162130b4a specs/editable-board/plan.md
 Verdict: not ready (one Blocking finding, and the fix is small)
 
