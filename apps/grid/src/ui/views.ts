@@ -198,9 +198,14 @@ export function stepped(keys: string[], key: string, step: -1 | 1): string[] {
   return at < 0 || to === undefined ? keys : moved(keys, key, to, step < 0 ? 'before' : 'after')
 }
 
-/** Where a click on a table opens: the view last used there while it is still listed, else the first in the list. */
+/** Where a click on a table opens: the view last used there while it is still listed, else its default, else the first in the list. */
 export function lastIn(table: Table, last: Record<string, string>): View | undefined {
-  return table.views.find((view) => view.key === last[table.key]) ?? table.views[0]
+  return table.views.find((view) => view.key === last[table.key]) ?? defaultIn(table) ?? table.views[0]
+}
+
+/** The table's listed default; a default the user cannot read is not listed, so the first view opens instead. */
+export function defaultIn(table: Table): View | undefined {
+  return table.views.find((view) => isSaved(view) && view.default === true)
 }
 
 /** Re-renders on any write to this browser's stored arrangements. */

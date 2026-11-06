@@ -987,6 +987,17 @@ describe('saved views', () => {
 
   const items = () => within(more()).getAllByRole('menuitem').map((item) => item.textContent)
 
+  it("opens a node on its default view on a rail click when none was used there", async () => {
+    window.location.hash = '#view=absences'
+    api.savedViews.mockResolvedValue([{ ...calais, shared: true, default: true }])
+    render(<App />)
+    await screen.findByText('Geen rijen')
+
+    fireEvent.click(tableEntry('Planning'))
+
+    expect(hash()).toBe('42')
+  })
+
   it('says no save word for a change kept here, and offers Terugzetten in the ⋯', async () => {
     window.location.hash = '#view=42'
     api.savedViews.mockResolvedValue([{ ...calais, mine: false, editable: false, owner: { id: -1, name: '' } }])

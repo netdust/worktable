@@ -222,6 +222,24 @@ describe('the view a table opens on', () => {
 
     expect(lastIn({ ...table, views: [...table.views, query] }, { planning: 'dag' })?.key).toBe('dag')
   })
+
+  it("is the node's default when none was used there, and the last one used over it", () => {
+    const marked = { ...table, views: [bezetting, tabel, { ...calais, default: true }] }
+
+    expect(lastIn(marked, {})?.key).toBe('42')
+    expect(lastIn(marked, { planning: '99' })?.key).toBe('42')
+    expect(lastIn(marked, { planning: 'planning' })?.key).toBe('planning')
+  })
+
+  it('is the first in the list when the default is not listed, as one the user cannot read is not', () => {
+    expect(lastIn({ ...table, views: [bezetting, tabel, calais] }, {})?.key).toBe('bezetting')
+  })
+
+  it('takes the first marked view when more than one is listed as default', () => {
+    const second = { ...calais, key: '43', id: 43, default: true }
+
+    expect(lastIn({ ...table, views: [bezetting, second, { ...calais, default: true }] }, {})?.key).toBe('43')
+  })
 })
 
 describe('a layout fitted to the columns its view has', () => {

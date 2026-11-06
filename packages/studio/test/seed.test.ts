@@ -1,6 +1,8 @@
 import { Database } from 'bun:sqlite'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { migrate, seedDomain } from '@worktable/engine'
+import { MIGRATIONS } from '@worktable/engine/src/engine-tables'
+import { seedMissing } from '@worktable/engine/src/seed-missing'
 import { signIn, testEngine } from '@worktable/engine/test/sign-in'
 import studio from '../src'
 
@@ -19,7 +21,17 @@ type Source = {
 }
 type Available = { buttons: { label: string; icon?: string }[] }
 type Link = { state?: string; detail?: string | null; available?: Available }
-type View = { id: number; name: string; source: string | null; skin: string; filters: Body; layout?: Layout }
+type View = {
+  id: number
+  name: string
+  source: string | null
+  skin: string
+  filters: Body
+  sort?: string[]
+  visible_fields?: string[]
+  default?: boolean
+  layout?: Layout
+}
 type Tile = { kind: string; view?: number; done?: number; total?: number; set?: Body }
 type Layout = { sections: { label: string; tiles: Tile[] }[]; actions: { create: string; label: string }[] }
 
@@ -245,5 +257,50 @@ describe('Sites met aandacht', () => {
         .sort(),
     ).toEqual(['cache_legen', 'cron_draaien', 'onderhoudsmodus_aan', 'onderhoudsmodus_uit'])
     expect(actions.filter((a) => a.many && a.conditional && !a.skips)).toEqual([])
+  })
+})
+
+const nodeOfView = (view: View) => schema[view.source as string]?.of ?? (view.source as string)
+const defaultsUnder = (node: string) => views.filter((v) => v.default && nodeOfView(v) === node).map((v) => v.name)
+
+describe('the default views', () => {
+  test('taak opens on its board per status, werkpakket on Per fase and the agenda on Agenda', () => {
+    expect(defaultsUnder('taak')).toEqual(['Per status'])
+    expect(defaultsUnder('werkpakket')).toEqual(['Per fase'])
+    expect(defaultsUnder('agendapunt')).toEqual(['Agenda'])
+    expect(viewNamed('Agenda').source).toBe('agenda')
+  })
+
+  test('the taak board keeps its manual rank and shows deadline, wie, organisatie and site', () => {
+    expect(viewNamed('Per status')).toMatchObject({
+      source: 'taak',
+      skin: 'board',
+      filters: {},
+      sort: [],
+      visible_fields: ['deadline', 'wie', 'organisatie_id', 'site_id'],
+    })
+  })
+
+  test('site, actie, project and organisatie have none', () => {
+    for (const node of ['site', 'actie', 'project', 'organisatie']) expect(defaultsUnder(node)).toEqual([])
+  })
+
+  test('--seed-missing marks all three on a database made before default views', () => {
+    const sqlite = new Database(':memory:')
+    migrate(sqlite, studio)
+    seedDomain(sqlite, studio)
+    sqlite.run('ALTER TABLE saved_view DROP COLUMN is_default')
+    sqlite.run("DELETE FROM saved_view WHERE name = 'Per status' AND source = 'taak'")
+    sqlite.run(`UPDATE ${MIGRATIONS} SET hash = 'before default views' WHERE source = 'saved_view'`)
+    migrate(sqlite, studio)
+    seedMissing(sqlite, studio)
+    const marked = sqlite
+      .query('SELECT name, source FROM saved_view WHERE is_default = 1 AND deleted_at IS NULL ORDER BY name')
+      .all()
+    expect(marked).toEqual([
+      { name: 'Agenda', source: 'agenda' },
+      { name: 'Per fase', source: 'werkpakket' },
+      { name: 'Per status', source: 'taak' },
+    ])
   })
 })

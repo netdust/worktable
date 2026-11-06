@@ -281,6 +281,8 @@ export interface SavedView extends View {
   public?: boolean
   /** Shown to the people its rows belong to. */
   for_owners?: boolean
+  /** The view its rail node opens on when none was used there. */
+  default?: boolean
   /** A dashboard's tiles that name a deleted view, as the engine lists them. */
   gone_views?: number[]
 }
