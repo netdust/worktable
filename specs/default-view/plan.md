@@ -34,7 +34,7 @@
 4. Two administrators mark two views of one node at once, leaving two defaults → the unmark of the node's other views and the mark run in one `immediate` transaction, and a test asserts one default after two marks.
 5. Reseed overwrites an administrator's choice → seeding marks a node's default only when the node has none; a person's mark is never undone by `--seed-missing`. Changing the mark through the route does not count as "touched" for the reseed of the view's declared fields (the route writes no field `DECLARED` lists).
 
-**Deferrals.** A public or for-owners view can be a default if it is shared; its publication rules are unchanged. Deleting the default view clears its mark (as a delete clears the share token, views.ts:424), so the node has no default until someone marks one and a restored view comes back unmarked. If a query's `of` changes, two nodes can merge holding two defaults; the grid takes the first `default` it lists (deterministic), and the next mark repairs it.
+**Deferrals.** A public or for-owners view can be a default if it is shared; its publication rules are unchanged. Deleting the default view clears its mark (as a delete clears the share token, views.ts:424), so the node has no default until someone marks one and a restored view comes back unmarked. If a query's `of` changes, two nodes can merge holding two defaults; the grid takes the first `default` it lists (deterministic), and the next mark repairs it. An editor who owns a marked shared view can still change it, and so what everyone opens: that is the ordinary rule for shared views, and the administrator chose to mark an editor's view (feature review N7, ruled by the reviewer).
 
 ## Test map
 

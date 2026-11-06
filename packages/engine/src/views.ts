@@ -532,12 +532,17 @@ function checkMarkable(raw: Raw): void {
   if (raw.shared !== 1) throw new ApiError(400, 'not_shared', 'only a shared view can be a default')
 }
 
-/** The node's marked views other than `except`, live and deleted alike, so a restore can never bring back a second default. */
-export function nodeDefaults(sqlite: Database, domain: Domain, source: string, except: number): Raw[] {
+/** The declared sources under the same rail node as `source`. */
+export function nodeSources(domain: Domain, source: string): string[] {
   const node = nodeOf(domain, source)
-  const names = sourcesOf(domain)
+  return sourcesOf(domain)
     .map((s) => s.name)
     .filter((name) => nodeOf(domain, name) === node)
+}
+
+/** The node's marked views other than `except`, live and deleted alike, so a restore can never bring back a second default. */
+export function nodeDefaults(sqlite: Database, domain: Domain, source: string, except: number): Raw[] {
+  const names = nodeSources(domain, source)
   const sql = `SELECT * FROM saved_view WHERE is_default = 1 AND id != ? AND source IN (${names.map(() => '?').join(', ')})`
   return sqlite.query(sql).all(except, ...names) as Raw[]
 }

@@ -309,12 +309,12 @@ describe('a seed declares a default', () => {
     expect(report.named).toContain('view "Open" (taak) default left as chosen')
   })
 
-  test("a node whose default was deleted gets the seed's default back", async () => {
+  test('a node whose marked view a person deleted stays without a default', async () => {
     const b = await shared()
     await mark(b)
     expect((await send(app, admin)('DELETE', `/api/views/${b}`, { type: null })).status).toBe(200)
     seedMissing(sqlite, openDefault)
-    expect(markedIds()).toEqual([1])
+    expect(markedIds()).toEqual([])
   })
 
   test("a seed's deleted view is not marked", async () => {
@@ -323,12 +323,20 @@ describe('a seed declares a default', () => {
     expect(markedIds()).toEqual([])
   })
 
-  test("an editor unsharing an administrator's mark lets --seed-missing mark the seed's default", async () => {
+  test('an administrator unmarks the seeded default; --seed-missing leaves the node without a default', async () => {
+    seedMissing(sqlite, openDefault)
+    expect((await unmark(1)).status).toBe(200)
+    const report = seedMissing(sqlite, openDefault)
+    expect(markedIds()).toEqual([])
+    expect(report.named).toContain('view "Open" (taak) default left as chosen')
+  })
+
+  test("an editor unsharing an administrator's mark leaves the node without a default", async () => {
     const id = await viewAs(editor, { shared: true })
     await mark(id)
     expect((await send(app, editor)('PATCH', `/api/views/${id}`, { body: json({ shared: false }) })).status).toBe(200)
     seedMissing(sqlite, openDefault)
-    expect(markedIds()).toEqual([1])
+    expect(markedIds()).toEqual([])
   })
 })
 

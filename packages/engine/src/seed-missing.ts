@@ -7,7 +7,7 @@ import { keySeeded } from './migrate'
 import { ApiError } from './params'
 import { sourceOf } from './registry'
 import { savedView, seedKey } from './saved-view'
-import { nodeDefaults, SYSTEM, SYSTEM_OWNER } from './views'
+import { nodeDefaults, nodeSources, SYSTEM, SYSTEM_OWNER } from './views'
 import { contextOf, create, encodeAll, recordBatch, revise, type Store, valuesOf, writableOf } from './writes'
 
 type Row = Record<string, unknown>
@@ -233,7 +233,7 @@ function seedViews(run: Run): SeedReport['views'] {
   return counts
 }
 
-// A declared default is written only while its node has none live, so an administrator's choice stands.
+// A declared default is written only until a person chose for its node, so an administrator's choice stands.
 function seedDefaults(run: Run): void {
   const { sqlite, domain } = run.store
   const sql = 'SELECT * FROM saved_view WHERE seed_key = ? AND owner_id = ? AND deleted_at IS NULL'
@@ -241,12 +241,21 @@ function seedDefaults(run: Run): void {
     const view = sqlite.query(sql).get(seedKey(seed.name, seed.source), SYSTEM_OWNER) as Stored | null
     if (!view || view.is_default === 1) continue
     const others = nodeDefaults(sqlite, domain, String(view.source), view.id as number)
-    if (others.some((other) => other.deleted_at === null)) {
+    if (others.some((other) => other.deleted_at === null) || chosen(run, String(view.source))) {
       run.named.push(`${labelOf(view)} default left as chosen`)
       continue
     }
     markSeeded(run, view.id as number)
   }
+}
+
+/** A person chose for a node once any view of it, live or deleted, carries their default-mark revision. */
+function chosen(run: Run, source: string): boolean {
+  const names = nodeSources(run.store.domain, source)
+  const sql = `SELECT 1 FROM revision r JOIN saved_view v ON v.id = r.record_id
+    WHERE r.entity = 'saved_view' AND r.field = 'is_default' AND r.actor_id IS NOT ?
+    AND v.source IN (${names.map(() => '?').join(', ')}) LIMIT 1`
+  return run.store.sqlite.query(sql).get(SYSTEM_OWNER, ...names) !== null
 }
 
 function markSeeded(run: Run, id: number): void {
