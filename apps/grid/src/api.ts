@@ -308,6 +308,7 @@ function expectedOf(source: EngineSource, sent: Record<string, unknown>, row?: R
 /**
  * A query's row is written through its mapped column, so `row` is needed to find the target record.
  * `expect` goes beside the engine data, never through `toEngineData`; without it, it is read off `row`.
+ * For a query an explicit `expect` is keyed by the target's field (`{ [writes.field]: … }`): that is what the PATCH carries.
  */
 export async function update(model: string, id: number, data: Record<string, unknown>, row?: Row, expect?: Record<string, string>): Promise<Saved> {
   const source = await sourceOf(model)
@@ -326,6 +327,7 @@ export async function rowOf(model: string, id: number): Promise<Row | null> {
 
 /** The write lands on the target record; the row is then read again as the query now computes it. */
 async function updateThrough(model: string, source: EngineSource, id: number, sent: Record<string, unknown>, sources: Record<string, EngineSource>, row?: Row, expect?: Record<string, string>): Promise<Saved> {
+  if (Object.keys(sent).length > 1) throw { code: 'read_only', message: `"${model}" writes one column at a time` } satisfies ApiError
   const [[column, value] = ['', undefined]] = Object.entries(sent)
   const writes = source.columns[column]?.writes
   if (!writes || !row) throw { code: 'read_only', message: `"${column}" of "${model}" is not written` } satisfies ApiError
@@ -334,7 +336,7 @@ async function updateThrough(model: string, source: EngineSource, id: number, se
   const data = { [writes.field]: value }
   const shown = row.fields[column]
   const expected = expect ?? (sources[writes.dataset]?.lifecycle?.column === writes.field && typeof shown === 'string' && shown !== '' ? { [writes.field]: shown } : undefined)
-  const reply = await request<EngineRow>('PATCH', `/rows/${writes.dataset}/${target}`, {}, expected ? { ...data, expect: expected } : data)
+  const reply = await request<EngineRow>('PATCH', `/rows/${writes.dataset}/${encodeURIComponent(String(target))}`, {}, expected ? { ...data, expect: expected } : data)
   heard(reply)
   const written = column === source.title ? { ...row, title: String(value ?? '') } : { ...row, fields: { ...row.fields, [column]: value } }
   // An edit can move the row out of the query; the write still landed.

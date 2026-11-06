@@ -18,7 +18,7 @@ import { CardFace, type TonedLine } from './Card'
 import { Column } from './Column'
 import type { Drop } from './drop'
 import { byRank } from './rank'
-import { lifecycleOf } from './reachable'
+import { lifecycleOf, reachable } from './reachable'
 import { type BoardLane, useBoardDrag } from './useBoardDrag'
 
 const NONE = '\u0000'
@@ -71,7 +71,8 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
   const toned: TonedLine | undefined = useMemo(() => (line && tones ? { column: line.id, tones } : undefined), [line, tones])
   const manual = !model.query && layout.sort[0]?.id === 'position'
   const lanes = useMemo(() => lanesOf(rows, column, field, manual), [rows, column, field, manual])
-  const drag = useBoardDrag({ lanes, manual, sorted: model.query, layout, lifecycle: lifecycleOf(model, column, models), onDrop, onLayout })
+  const life = lifecycleOf(model, column, models)
+  const drag = useBoardDrag({ lanes, manual, sorted: model.query, layout, lifecycle: life, onDrop, onLayout })
   useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all, flagged }), [rows.length, lanes.length, all, flagged?.count])
   const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   return (
@@ -81,7 +82,7 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
           <DndContext {...drag.context}>
             {drag.shown.map((lane) => (
               <Column key={lane.key} lane={lane} tone={toneColor(field?.tones?.[lane.key])} columns={shown} toned={toned} marks={marks} none={none} open={open} drags={onDrop !== undefined}
-                look={drag.lookOf(lane.key)} onOpen={openRow} onCreate={onCreate ? () => onCreate(lane.value === null ? {} : { [field?.writes?.field ?? column]: lane.value }) : undefined} />
+                look={drag.lookOf(lane.key)} onOpen={openRow} onCreate={onCreate && (life === null || reachable(life, null, lane.value)) ? () => onCreate(lane.value === null ? {} : { [field?.writes?.field ?? column]: lane.value }) : undefined} />
             ))}
             {/* In #root, where the theme's tokens live; fixed above every column. */}
             {createPortal(

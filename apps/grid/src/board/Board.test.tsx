@@ -208,6 +208,16 @@ describe('a keyboard drag on a query board', () => {
     expect(order('Bevestigd')).toEqual(['Voorstelling'])
   })
 
+  it('keeps a lifted card on its own place in its own column: the arrows move nothing and Space writes nothing', async () => {
+    const onDrop = vi.fn((_drop: Drop, _id: number) => Promise.resolve(true))
+    board({ model: query, rows, layout: manual, onDrop })
+    await press('Repetitie', 'Space', 'ArrowDown')
+    expect(screen.getByRole('status').textContent).toContain('plaats 1 van 3')
+    await press('Repetitie', 'Space')
+    expect(onDrop).not.toHaveBeenCalled()
+    expect(order('Optie')).toEqual(['Repetitie', 'Opbouw', 'Afbraak'])
+  })
+
   it('presets a new record by the field the column writes', () => {
     const onCreate = vi.fn()
     board({ model: query, onCreate })
@@ -305,6 +315,15 @@ describe('a lifted card on a lifecycle board', () => {
     board({ model: life, rows, onDrop: vi.fn(() => Promise.resolve(false)) })
     await press('Repetitie', 'Space', 'ArrowRight', 'Space')
     expect(order('Optie')).toEqual(['Repetitie'])
+  })
+
+  it('offers "+" only on a lane a transition from any state reaches, and on every lane of a board without a lifecycle', () => {
+    const plus = () => screen.queryAllByRole('button', { name: /^Nieuw in / }).map((b) => b.getAttribute('aria-label'))
+    board({ model: life, rows, onCreate: vi.fn() })
+    expect(plus()).toEqual(['Nieuw in Weg'])
+    cleanup()
+    board({ rows, onCreate: vi.fn() })
+    expect(plus()).toEqual(['Nieuw in Optie', 'Nieuw in Bevestigd', 'Nieuw in Geen'])
   })
 
   it('never takes a card to the lane of no state', async () => {

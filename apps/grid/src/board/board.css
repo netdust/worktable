@@ -26,7 +26,7 @@
 }
 
 /* A column the lifted card's state has no transition to: greyed, and it takes no drop. */
-.nv-board__column--blocked .nv-board__head > *,
+#root .nv-board__column--blocked .nv-board__head > *,
 #root .nv-board__column--blocked .nv-board__card {
   opacity: 0.4;
 }

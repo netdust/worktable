@@ -157,8 +157,8 @@ export function useBoardDrag({ lanes, manual, sorted = false, layout, lifecycle 
     if (!hit) return last.current
     const key = String(hit.id).slice(LANE.length)
     const over = laneOf(key)
-    // Over a lane no transition reaches, the card would land back in its own place.
-    if (over && !reaches(from, over)) {
+    // Over a lane no transition reaches, or its own on a board that keeps no order, the card would land back in its own place.
+    if ((over && !reaches(from, over)) || (latest.current.sorted && key === from.lane)) {
       aim({ lane: from.lane, index: from.index })
       last.current = []
       return []
@@ -189,7 +189,8 @@ export function useBoardDrag({ lanes, manual, sorted = false, layout, lifecycle 
     const lane = ahead.find((one) => reaches(from, one)) ?? all[at]
     if (!lane) return
     const slots = lane.cards.filter((row) => row.id !== from.id).length
-    aim({ lane: lane.key, index: Math.max(0, Math.min(slots, now.index + move[1])) })
+    const stays = latest.current.sorted && lane.key === from.lane
+    aim({ lane: lane.key, index: stays ? from.index : Math.max(0, Math.min(slots, now.index + move[1])) })
     setTarget(live.current)
     return (live.current && pointOf(measured.current, live.current, from)) ?? currentCoordinates
   }

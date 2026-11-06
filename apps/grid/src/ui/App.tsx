@@ -452,6 +452,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
 
   const plan = model && view && !model.creates ? newRow(model, view, dated ? conditionDays : null, new Date(), scope ?? null) : null
   const target = model?.creates ? models[model.creates] : undefined
+  const into = target ?? model
   const made = target ? madeFrom(target, served?.tables ?? [], dated ? conditionDays : null, space.status === 'ready' ? space.scope : null) : null
   const addBlocked = target ? createBlocked(made, served?.writable[target.key] === true)
     : !writable || model?.query || !store || !plan ? t('readOnly') : 'missing' in plan ? t('needsFields', { fields: plan.missing.join(', ') }) : null
@@ -484,10 +485,6 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
   const shownRows = store || result.status === 'ready' ? sheetRows : null
   const grouped = view && model && layout ? boardColumn(view, model, layout) : null
-  // A query board's + creates in the dataset its column writes, where the viewer may write that dataset.
-  const boardCreates = (model: Model, column: string) => canSet(model, column, models) && (model.query
-    ? Boolean(target && !target.created_by && model.fields[column]?.writes?.dataset === target.key && served?.writable[target.key])
-    : writable && !model.created_by)
   const boardDrops = Boolean(store && writable && view && model && grouped && draggable(view, model, grouped, models))
   // A table reports the pills for the rows its search leaves, as its count does; the other skins count their own rows.
   const reported = told?.view === view?.key ? told?.shown?.insight : undefined
@@ -735,7 +732,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
-              onCreate={boardCreates(model, boardColumn(view, model, layout) as string) ? (preset) => setQuick(preset) : undefined} places={places} />
+              onCreate={boardCreates(model, boardColumn(view, model, layout) as string, models, target, writable, served?.writable ?? {}) ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={sheetRows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
@@ -766,12 +763,11 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         </div>
       </main>
       <div className="nv-drawer-slot" ref={setDrawerSlot} />
-      {quick && (target ?? model) && (
-        <QuickCreate label={newLabel(target ?? model)} model={(target ?? model) as Model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
+      {quick && into && (
+        <QuickCreate label={newLabel(into)} model={into} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
           window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreatedRow={runs.created}
           onCreated={(batch) => {
-            const owner = target ?? model
-            if (owner && batch) history.push({ batch: Promise.resolve(batch), model: owner.key, id: null })
+            if (batch) history.push({ batch: Promise.resolve(batch), model: into.key, id: null })
             setQuick(null)
             reloadView()
           }} />
@@ -805,6 +801,12 @@ const draggable = (view: View, model: Model, column: string, models: Record<stri
 /** The person may set the column: a lane's + presets it, a drop writes it; never a lifecycle, its own or the one it writes, that changes through buttons. */
 const canSet = (model: Model, column: string, models: Record<string, Model>): boolean =>
   !model.fields[column]?.readonly && lifecycleOf(model, column, models)?.model.lifecycle_buttons !== true
+
+/** A query board's + creates in the dataset its column writes, where the viewer may write that dataset. */
+const boardCreates = (model: Model, column: string, models: Record<string, Model>, target: Model | undefined, writable: boolean, allowed: Record<string, boolean>): boolean =>
+  canSet(model, column, models) && (model.query
+    ? Boolean(target && !target.created_by && model.fields[column]?.writes?.dataset === target.key && allowed[target.key])
+    : writable && !model.created_by)
 
 /** Why a query's `+ Nieuw` is off: its dataset is read-only, or the dataset has a required column nothing can fill. */
 function createBlocked(made: NewRow | null, writable: boolean): string | null {

@@ -121,7 +121,9 @@ Which edit each skin offers is `invented`, except the board's: approved by Stefa
 with three rulings chosen from the options asked: on a lifecycle column the columns no transition reaches are greyed
 and take no drop (the engine stays the backstop); a lifecycle with button transitions stays button-only (no drag);
 a board on a query drags through its `writes` column, always sorted. This replaces step 3f's B9 ("a board over a
-query does not drag").
+query does not drag"). A fourth, ruled by Stefan 2026-11-06 after the review: on a lifecycle board "+" shows only on
+the columns reachable as a first state (a transition from `*`), so a create cannot enter a state no drag reaches; the
+API is unchanged and the engine still judges a create.
 
 ### R4 — A default view per source
 

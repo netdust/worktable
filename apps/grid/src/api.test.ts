@@ -464,6 +464,20 @@ describe('writes', () => {
     expect(urls()).toEqual(['/api/schema'])
   })
 
+  it('a query write of more than one column is refused read_only before any request', async () => {
+    await expect(update('dagplanning', 40, { status: 'bevestigd', omschrijving: 'y' }, planned)).rejects.toMatchObject({ code: 'read_only' })
+    expect(urls()).toEqual(['/api/schema'])
+  })
+
+  it("a query row's target key is encoded in the path", async () => {
+    fetcher.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/schema') return json(engine)
+      return init?.method === 'PATCH' ? json(stored) : json({ rows: [], total: 0 })
+    })
+    await update('dagplanning', 40, { status: 'bevestigd' }, { ...planned, fields: { activiteit_id: 'a b/7', status: 'optie' } })
+    expect(urls()).toContain('/api/rows/activiteit/a%20b%2F7')
+  })
+
   it('a 422 reaches the store as {code:\'refused\', message}', async () => {
     fetcher.mockImplementation(async (input) =>
       String(input) === '/api/schema' ? json(engine) : json({ code: 'refused', message: 'Een bevestigde activiteit heeft een starttijd nodig.' }, 422),
