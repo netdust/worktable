@@ -56,6 +56,11 @@ describe('errorText()', () => {
     expect(errorText('transition_lost', '"state" is no longer uitgenodigd')).toBe('De status is intussen gewijzigd. De cel toont nu wat er staat.')
   })
 
+  it('says in Dutch why a view cannot be the default', () => {
+    expect(errorText('not_shared', 'Only a shared view can be a default')).toBe('Alleen een gedeelde weergave kan de standaardweergave zijn.')
+    expect(errorText('dashboard_not_default', 'A dashboard is never a default')).toBe('Een dashboard is nooit de standaardweergave.')
+  })
+
   it("keeps the site's own words first, and the server's message for a code it does not know", () => {
     setStrings({ 'error.transition_lost': 'Iemand was je voor.' })
     expect(errorText('transition_lost', 'lost')).toBe('Iemand was je voor.')

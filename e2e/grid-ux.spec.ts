@@ -631,7 +631,7 @@ test('colleague-shared-view @e2e', async ({ page, browser }) => {
     await newView(theirs, 'Tourstops', name, 'Het team')
     const made = (await views(theirs.request)).find((v) => v.name === name) as SavedView
 
-    // The editor sees it shared by a colleague: a people mark, never the default's lock.
+    // The editor sees it shared by a colleague: a people mark, never the system view's lock.
     await page.goto('/')
     await pick(page, name, 'Tourstops')
     const mark = viewRow(page, 'Tourstops', name).getByRole('img')
@@ -640,7 +640,7 @@ test('colleague-shared-view @e2e', async ({ page, browser }) => {
       'Gedeeld door een collega: maak een kopie om aan te passen',
     )
     await expect(viewRow(page, 'Tourstops', name).getByRole('img', { name: /^Systeemweergave/ })).toHaveCount(0)
-    // The seeded default keeps its lock.
+    // The seeded view keeps its lock.
     await expect(
       viewRow(page, 'Tourstops', 'Tourstops').getByRole('img', { name: 'Systeemweergave, alleen te kopiëren' }),
     ).toBeVisible()

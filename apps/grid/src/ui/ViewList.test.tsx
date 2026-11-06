@@ -144,7 +144,7 @@ describe("a view's actions", () => {
     const views = [tabel, own, sharedOwn, theirs, seeded, { ...saved(49, 'Week', { shared: true }), default: true }, dashboard]
     const offered = (name: string, run: ViewActions = marking()) => {
       render(<ViewList table={{ ...table, views }} active="planning" onSelect={() => undefined} actions={run} />)
-      const items = choices(name).filter((label) => label?.includes('tandaardweergave'))
+      const items = choices(name).filter((label) => label === 'Standaardweergave' || label === 'Geen standaardweergave meer')
       cleanup()
       return items
     }

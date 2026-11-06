@@ -292,6 +292,8 @@ const strings = {
   selectionNoneFits: 'Geen van deze rijen komt in aanmerking.',
   recordGoneRun: 'Een of meer rijen bestaan niet meer; de lijst is bijgewerkt.',
   conditionNotMet: 'Deze actie past niet meer bij deze rij; de lijst is bijgewerkt.',
+  notShared: 'Alleen een gedeelde weergave kan de standaardweergave zijn.',
+  dashboardNotDefault: 'Een dashboard is nooit de standaardweergave.',
   selectedCount: '{n} geselecteerd',
   selectionClear: 'Selectie wissen',
   selectionBusy: 'Er loopt al een actie',
@@ -473,6 +475,8 @@ const ENGINE_CODES: Record<string, StringKey> = {
   transition_lost: 'transitionLost',
   unknown_record: 'recordGoneRun',
   condition_not_met: 'conditionNotMet',
+  not_shared: 'notShared',
+  dashboard_not_default: 'dashboardNotDefault',
 }
 
 /** A refusal in the site's words (`error.<code>`), else the grid's own for an engine code, else as the server said it. */
