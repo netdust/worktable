@@ -157,6 +157,16 @@ describe('unsharing', () => {
   })
 })
 
+describe('the view body', () => {
+  test("an editor's POST and PATCH carrying default and is_default mark nothing", async () => {
+    const id = await viewAs(editor, { shared: true, default: true, is_default: 1 })
+    const res = await send(app, editor)('PATCH', `/api/views/${id}`, { body: json({ default: true, is_default: 1 }) })
+    expect(res.status).toBe(200)
+    expect(await defaults(editor)).toEqual([])
+    expect(markedIds()).toEqual([])
+  })
+})
+
 describe('who may mark', () => {
   test('an editor, an owner and an administrator service account are refused 403', async () => {
     const a = await shared()
@@ -190,6 +200,13 @@ describe('who may mark', () => {
   test('a dashboard is 400 dashboard_not_default', async () => {
     const id = await viewAs(admin, { skin: 'dashboard', source: null, shared: true })
     expect(await mark(id)).toMatchObject({ status: 400, body: { code: 'dashboard_not_default' } })
+  })
+
+  test('a view whose source the domain no longer declares is 400 unknown_source', async () => {
+    const a = await shared()
+    sqlite.query("UPDATE saved_view SET source = 'vervallen' WHERE id = ?").run(a)
+    expect(await mark(a)).toMatchObject({ status: 400, body: { code: 'unknown_source' } })
+    expect(markedIds()).toEqual([])
   })
 
   test('a deleted view is 404', async () => {
@@ -284,6 +301,7 @@ describe('a seed declares a default', () => {
       default: true,
     }
     const err = refusal({ ...domain, views: [...domain.views, dashboard] })
+    expect(err.declaration).toBe('views')
     expect(err.bad).toBe('Overzicht')
     expect(err.message).toContain('dashboard')
   })

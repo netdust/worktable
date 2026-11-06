@@ -527,9 +527,11 @@ function marking(actor: Actor): Actor {
   return actor
 }
 
-function checkMarkable(raw: Raw): void {
+function checkMarkable(domain: Domain, raw: Raw): void {
   if (raw.skin === 'dashboard') throw new ApiError(400, 'dashboard_not_default', 'a dashboard is never a default view')
   if (raw.shared !== 1) throw new ApiError(400, 'not_shared', 'only a shared view can be a default')
+  if (!sourceOf(domain, raw.source as string | null))
+    throw new ApiError(400, 'unknown_source', `unknown source "${raw.source}"`)
 }
 
 /** The declared sources under the same rail node as `source`. */
@@ -549,7 +551,7 @@ export function nodeDefaults(sqlite: Database, domain: Domain, source: string, e
 
 function markDefault(sqlite: Database, domain: Domain, id: number, actor: Actor): void {
   const raw = shareable(sqlite, id, actor)
-  checkMarkable(raw)
+  checkMarkable(domain, raw)
   if (raw.is_default === 1) return
   for (const other of nodeDefaults(sqlite, domain, raw.source as string, id))
     save(sqlite, actor, other.id as number, { is_default: 0 }, other)

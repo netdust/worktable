@@ -931,7 +931,7 @@ function checkSeededDefaults(domain: Domain): void {
   const nodes = new Set<string>()
   for (const seed of domain.views.filter((v) => v.default === true)) {
     if (seed.skin === 'dashboard')
-      throw new DomainError(seed.name, seed.name, `dashboard "${seed.name}" is never a default view`)
+      throw new DomainError(seed.source ?? 'views', seed.name, `dashboard "${seed.name}" is never a default view`)
     const source = String(seed.source)
     const node = nodeOf(domain, source)
     if (nodes.has(node))
