@@ -35,6 +35,7 @@ const lifecycle: LifecycleDecl = {
     { from: ['a'], to: 'b', roles: ['editor', 'administrator'] },
     { from: ['b'], to: 'c', roles: ['owner'] },
     { from: '*', to: 'c', roles: ['editor', 'administrator'] },
+    { from: ['c'], to: 'a', roles: ['administrator'] },
   ],
   hooks: {
     b: (row): HookResult => {
@@ -434,9 +435,40 @@ describe('hooks', () => {
 })
 
 describe('/schema', () => {
-  test('serves lifecycle: { column } for a source declaring one, and nothing for one that does not', async () => {
+  const served = async (as: Request) => (await as('GET', '/api/schema', { type: null })).body.sources.ticket.lifecycle
+
+  test('serves the editor its own transitions as { from, to } and no administrator-only one', async () => {
+    const lifecycle = await served(editor)
+    expect(lifecycle).toEqual({
+      column: 'state',
+      transitions: [
+        { from: ['a'], to: 'b' },
+        { from: '*', to: 'c' },
+      ],
+    })
+    expect(lifecycle.transitions).not.toContainEqual({ from: ['c'], to: 'a' })
+  })
+
+  test('serves an administrator its own, including the administrator-only one', async () => {
+    const admin = send(app, await signIn(app, 'administrator'))
+    expect((await served(admin)).transitions).toEqual([
+      { from: ['a'], to: 'b' },
+      { from: '*', to: 'c' },
+      { from: ['c'], to: 'a' },
+    ])
+  })
+
+  test('serves an owner the transition declared for owners', async () => {
+    expect((await served(owner)).transitions).toEqual([{ from: ['b'], to: 'c' }])
+  })
+
+  test('serves no lifecycle for a source declaring none', async () => {
     const { body } = await editor('GET', '/api/schema', { type: null })
-    expect(body.sources.ticket.lifecycle).toEqual({ column: 'state' })
     expect(body.sources.member.lifecycle).toBeUndefined()
+  })
+
+  test("the engine still refuses what is declared but not the editor's", async () => {
+    expect((await patch(editor, 2, { state: 'c' })).status).toBe(200)
+    await denied(patch(editor, 2, { state: 'a' }), 422, 'transition_not_allowed')
   })
 })

@@ -186,9 +186,17 @@ function ofOf(domain: Domain, source: Source, actor: Actor): { of?: string; sele
 const hasButtons = (dataset: DatasetDecl): boolean =>
   dataset.lifecycle?.transitions.some((t) => t.button !== undefined) ?? false
 
-function servedLifecycle(dataset: DatasetDecl) {
-  const { column, live } = dataset.lifecycle as NonNullable<DatasetDecl['lifecycle']>
-  return { lifecycle: { column, ...(live ? { live } : {}), ...(hasButtons(dataset) ? { buttons: true } : {}) } }
+function servedLifecycle(dataset: DatasetDecl, actor: Actor) {
+  const { column, live, transitions } = dataset.lifecycle as NonNullable<DatasetDecl['lifecycle']>
+  const mine = transitions.filter((t) => t.roles.includes(actor.role)).map(({ from, to }) => ({ from, to }))
+  return {
+    lifecycle: {
+      column,
+      ...(live ? { live } : {}),
+      ...(hasButtons(dataset) ? { buttons: true } : {}),
+      transitions: mine,
+    },
+  }
 }
 
 // A flag names a dataset only to a caller who can read it, as `of` and `creates` do (threat 5).
@@ -374,7 +382,7 @@ export function createEngine(sqlite: Database, domain: Domain, options: EngineOp
               ? { gallery: s.gallery }
               : {}),
             ...(s.kind === 'dataset' && s.matrix ? { matrix: s.matrix } : {}),
-            ...(s.kind === 'dataset' && s.lifecycle ? servedLifecycle(s) : {}),
+            ...(s.kind === 'dataset' && s.lifecycle ? servedLifecycle(s, actor) : {}),
             ...(s.kind === 'dataset' && s.created_by ? { created_by: s.created_by } : {}),
             ...(s.kind === 'dataset' && s.record_link ? { record_link: true } : {}),
             ...(s.kind === 'dataset' && s.listed === false ? { listed: false } : {}),
