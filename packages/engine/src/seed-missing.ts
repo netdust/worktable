@@ -115,9 +115,10 @@ function dashboardLayout(run: Run, seed: SavedViewSeed, dropped: string[]) {
 
 const labelOf = (view: Stored): string => `view "${view.name}"${view.source === null ? '' : ` (${view.source})`}`
 
-/** A person touched a seeded view when a revision of it names an actor other than the system owner. */
+/** A person touched a seeded view when a revision of it names an actor other than the system owner; a default mark is no touch. */
 export function touched(sqlite: Database, id: number): boolean {
-  const sql = "SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ? AND actor_id IS NOT ? LIMIT 1"
+  const sql =
+    "SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ? AND actor_id IS NOT ? AND field != 'is_default' LIMIT 1"
   return sqlite.query(sql).get(id, SYSTEM_OWNER) !== null
 }
 

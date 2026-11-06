@@ -10,13 +10,13 @@ import type { FilterInput } from './filter-compile'
 import { hasColumn, hasField, sortable } from './lookups'
 import { ApiError, keysProblem, parseRowsParams } from './params'
 import { checkLimits } from './rate-limit'
-import { type Source, sourceOf } from './registry'
+import { nodeOf, type Source, sourceOf, sourcesOf } from './registry'
 import { matrixOf, readRows } from './rows'
 import { savedView, seedKey } from './saved-view'
 import { tableOf } from './tables'
 import { bodyOf, revise, type Store } from './writes'
 
-export type SavedViewRow = Omit<SavedViewSeed, 'source_type' | 'source' | 'layout' | 'locked'> & {
+export type SavedViewRow = Omit<SavedViewSeed, 'source_type' | 'source' | 'layout' | 'locked' | 'default'> & {
   id: number
   source_type: 'dataset' | 'query' | null
   source: string | null
@@ -27,6 +27,7 @@ export type ViewOut = SavedViewRow & {
   shared: boolean
   public: boolean
   for_owners: boolean
+  default: boolean
   owner_id: number
   mine: boolean
   editable: boolean
@@ -101,6 +102,7 @@ function outOf(raw: Raw, actor: Actor, domain: Domain): ViewOut {
     shared: raw.shared === 1,
     public: isPublic(raw),
     for_owners: isForOwners(raw),
+    default: raw.is_default === 1,
     owner_id: raw.owner_id as number,
     mine,
     editable,
@@ -431,8 +433,8 @@ export function viewRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void 
   app.delete('/views/:id', (c) => {
     const actor = changing(c.get('actor'))
     const id = viewId(c.req.param('id'))
-    // A delete also revokes the share token and the owners' access, so a restore never brings either back.
-    const gone = { deleted_at: new Date().toISOString(), public: 0, share_token: null, for_owners: 0 }
+    // A delete also revokes the share token, the owners' access and the default mark, so a restore never brings them back.
+    const gone = { deleted_at: new Date().toISOString(), public: 0, share_token: null, for_owners: 0, is_default: 0 }
     write(() => save(sqlite, actor, id, gone, ownedView(sqlite, domain, id, actor)))
     return c.json({ id })
   })
@@ -517,6 +519,37 @@ export function setForOwners(sqlite: Database, domain: Domain, id: number, actor
   save(sqlite, actor, id, { for_owners: 1 }, raw)
 }
 
+// A human administrator only, as sharing(); a service account is refused whatever its role.
+function marking(actor: Actor): Actor {
+  if (!may(actor, 'views.share') || (actor.kind ?? 'user') !== 'user')
+    forbid('only an administrator may mark a default view')
+  return actor
+}
+
+function checkMarkable(raw: Raw): void {
+  if (raw.skin === 'dashboard') throw new ApiError(400, 'dashboard_not_default', 'a dashboard is never a default view')
+  if (raw.shared !== 1) throw new ApiError(400, 'not_shared', 'only a shared view can be a default')
+}
+
+// Live and deleted rows alike, so a restore can never bring back a second default.
+function nodeDefaults(sqlite: Database, domain: Domain, source: string, except: number): Raw[] {
+  const node = nodeOf(domain, source)
+  const names = sourcesOf(domain)
+    .map((s) => s.name)
+    .filter((name) => nodeOf(domain, name) === node)
+  const sql = `SELECT * FROM saved_view WHERE is_default = 1 AND id != ? AND source IN (${names.map(() => '?').join(', ')})`
+  return sqlite.query(sql).all(except, ...names) as Raw[]
+}
+
+function markDefault(sqlite: Database, domain: Domain, id: number, actor: Actor): void {
+  const raw = shareable(sqlite, id, actor)
+  checkMarkable(raw)
+  if (raw.is_default === 1) return
+  for (const other of nodeDefaults(sqlite, domain, raw.source as string, id))
+    save(sqlite, actor, other.id as number, { is_default: 0 }, other)
+  save(sqlite, actor, id, { is_default: 1 }, raw)
+}
+
 export function shareRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void {
   const write = <T>(work: () => T): T => sqlite.transaction(work).immediate()
 
@@ -551,6 +584,20 @@ export function shareRoutes(app: Hono<AuthEnv>, { sqlite, domain }: Store): void
     const id = viewId(c.req.param('id'))
     write(() => save(sqlite, actor, id, { for_owners: 0 }, shareable(sqlite, id, actor)))
     return c.json({ id, for_owners: false })
+  })
+
+  app.put('/views/:id/default', (c) => {
+    const actor = marking(c.get('actor'))
+    const id = viewId(c.req.param('id'))
+    write(() => markDefault(sqlite, domain, id, actor))
+    return c.json({ id, default: true })
+  })
+
+  app.delete('/views/:id/default', (c) => {
+    const actor = marking(c.get('actor'))
+    const id = viewId(c.req.param('id'))
+    write(() => save(sqlite, actor, id, { is_default: 0 }, shareable(sqlite, id, actor)))
+    return c.json({ id, default: false })
   })
 }
 
