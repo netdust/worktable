@@ -117,7 +117,11 @@ its drag handling; take none of its colours, type or spacing, which stay worktab
 Source: "Every skin is editable with logical actions for what it is" — Stefan, 2026-11-04; "R3 yes, do it as last
 item, one skin at the time, if we keep track of it in studio, we can do it over several sessions … dont take
 colors etc, but they spend a lot of attention to details, obvious in there timeline skill" — Stefan, 2026-11-05.
-Which edit each skin offers is `invented`.
+Which edit each skin offers is `invented`, except the board's: approved by Stefan 2026-11-06 as the table says,
+with three rulings chosen from the options asked: on a lifecycle column the columns no transition reaches are greyed
+and take no drop (the engine stays the backstop); a lifecycle with button transitions stays button-only (no drag);
+a board on a query drags through its `writes` column, always sorted. This replaces step 3f's B9 ("a board over a
+query does not drag").
 
 ### R4 — A default view per source
 
