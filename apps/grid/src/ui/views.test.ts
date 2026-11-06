@@ -231,6 +231,12 @@ describe('the view a table opens on', () => {
     expect(lastIn(marked, { planning: 'planning' })?.key).toBe('planning')
   })
 
+  it("is the node's default when that default is a saved view of a query `of` the table", () => {
+    const perDag: SavedView = { ...calais, key: '51', id: 51, model: 'per_dag', table: 'per_dag', of: 'planning', query: true, default: true }
+
+    expect(lastIn({ ...table, views: [bezetting, tabel, perDag] }, {})?.key).toBe('51')
+  })
+
   it('is the first in the list when no default is listed: a default the user cannot read is left out of it', () => {
     expect(lastIn({ ...table, views: [bezetting, tabel, calais] }, {})?.key).toBe('bezetting')
   })

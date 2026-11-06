@@ -418,7 +418,7 @@ export async function restoreView(id: number): Promise<SavedView> {
   return savedOf(await request<EngineView>('POST', `/views/${id}/restore`, {}, {}))
 }
 
-/** No prefs are stored yet: every table opens on its first view. */
+/** No prefs are stored yet: every table opens on its default, else its first view. */
 export function prefs(): Promise<Prefs> {
   return Promise.resolve({ order: {}, last: {} })
 }
