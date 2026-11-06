@@ -770,7 +770,8 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
         <QuickCreate label={newLabel(target ?? model)} model={(target ?? model) as Model} tables={served.tables} scope={space.status === 'ready' ? space.scope : null}
           window={calendar ? calendarShown : (period?.window ?? null)} preset={quick} onClose={() => setQuick(null)} onCreatedRow={runs.created}
           onCreated={(batch) => {
-            if (target && batch) history.push({ batch: Promise.resolve(batch), model: target.key, id: null })
+            const owner = target ?? model
+            if (owner && batch) history.push({ batch: Promise.resolve(batch), model: owner.key, id: null })
             setQuick(null)
             reloadView()
           }} />

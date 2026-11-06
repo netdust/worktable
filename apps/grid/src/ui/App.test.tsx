@@ -2922,3 +2922,70 @@ describe('a drawer button', () => {
     })
   })
 })
+
+describe('a quick create on a dataset leaves one undo step', () => {
+  const stage = { type: 'select' as const, label: 'Fase', required: false, fact: false, options: { open: 'Open', klaar: 'Klaar' } }
+  const plandag = { type: 'date' as const, label: 'Plandag', required: false, fact: true }
+  const dataset: Schema = {
+    models: { lid: { key: 'lid', label: 'Lid', title_label: 'Naam', title_readonly: false, title_required: false, new_label: 'Nieuw Lid', fields: { stage, plandag } } },
+    tables: [{ key: 'leden', label: 'Leden', model: 'lid', types: ['board', 'calendar'] }],
+    views: [
+      { key: 'bord', label: 'Bord', table: 'leden', model: 'lid', type: 'board', board: { column: 'stage' } },
+      { key: 'kalender', label: 'Kalender', table: 'leden', model: 'lid', type: 'calendar', calendar: { day: 'plandag', start: null, end: null, lanes: [] } },
+    ],
+    writable: { lid: true },
+  } as unknown as Schema
+  const created = { row: { id: 9, title: '', status: '', fields: {} }, batch: 'b9' }
+  const undo = () => act(async () => { fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true }) })
+
+  beforeEach(() => {
+    api.schema.mockResolvedValue(dataset)
+    api.rows.mockResolvedValue({ rows: [{ id: 1, title: 'Alpha', status: '', fields: { stage: 'open' } }], total: 1 })
+    api.undoBatch.mockResolvedValue('u9')
+  })
+  afterEach(() => { window.location.hash = '' })
+
+  const submit = async () => {
+    const dialog = await screen.findByRole('dialog')
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Aanmaken' })))
+  }
+
+  it("a board's + creates with the lane's value and one undo removes the row", async () => {
+    api.create.mockResolvedValue(created)
+    window.location.hash = '#view=bord'
+    render(<App />)
+    await screen.findByText('Alpha')
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw in Klaar' }))
+    await submit()
+    expect(api.create).toHaveBeenCalledExactlyOnceWith('lid', { stage: 'klaar' })
+    const reads = api.rows.mock.calls.length
+    await undo()
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b9')
+    await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+  })
+
+  it("a calendar's quick create undoes the same way", async () => {
+    api.create.mockResolvedValue(created)
+    window.location.hash = '#view=kalender'
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Nieuw Lid' }))
+    await submit()
+    expect(api.create).toHaveBeenCalledOnce()
+    const reads = api.rows.mock.calls.length
+    await undo()
+    expect(api.undoBatch).toHaveBeenCalledExactlyOnceWith('b9')
+    await waitFor(() => expect(api.rows.mock.calls.length).toBeGreaterThan(reads))
+  })
+
+  it('a refused create leaves no step', async () => {
+    api.create.mockRejectedValue({ code: 'refused', message: 'Nee' })
+    window.location.hash = '#view=bord'
+    render(<App />)
+    await screen.findByText('Alpha')
+    fireEvent.click(screen.getByRole('button', { name: 'Nieuw in Klaar' }))
+    await submit()
+    await waitFor(() => expect(api.create).toHaveBeenCalledOnce())
+    await undo()
+    expect(api.undoBatch).not.toHaveBeenCalled()
+  })
+})
