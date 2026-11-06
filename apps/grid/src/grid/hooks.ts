@@ -37,19 +37,36 @@ const idle: StoreState = { rows: [], save: 'saved', error: null, errors: {}, can
 const never = () => () => undefined
 
 /** One store per loaded window of one view; the undo history is the tab's, so it outlives the store. */
-export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void, onCreated?: (dataset: string, row: Row) => void): [Store | null, StoreState] {
+export function useGridStore(view: View | undefined, rows: Row[] | null, history: History, reload: () => void, onCreated?: (dataset: string, row: Row) => void, rereads?: string[]): [Store | null, StoreState] {
   const latest = useRef(reload)
   latest.current = reload
   const told = useRef(onCreated)
   told.current = onCreated
+  const again = useRef(rereads)
+  again.current = rereads
+  // A tree's progress is on the parent, not on the row written: a new row, or a write to the parent or the status, reads the view again.
+  const reread = (data?: Record<string, unknown>) => {
+    if (again.current && (!data || again.current.some((field) => field in data))) latest.current()
+  }
   // One wrap covers a created row and a draft's commit: both go through the api's create.
   const made = useCallback(async (model: string, data: Record<string, unknown>) => {
     const saved = await create(model, data)
     told.current?.(model, saved.row)
+    reread()
     return saved
   }, [])
+  const changed = useCallback(async (...args: Parameters<typeof update>) => {
+    const saved = await update(...args)
+    reread(args[2])
+    return saved
+  }, [])
+  const removed = useCallback(async (...args: Parameters<typeof remove>) => {
+    const gone = await remove(...args)
+    reread()
+    return gone
+  }, [])
   const store = useMemo(
-    () => (view && rows ? createStore({ model: view.model, rows, api: { update, create: made, remove, read: rowOf }, history, reload: () => latest.current() }) : null),
+    () => (view && rows ? createStore({ model: view.model, rows, api: { update: changed, create: made, remove: removed, read: rowOf }, history, reload: () => latest.current() }) : null),
     [view, rows, history],
   )
   const state = useSyncExternalStore(store?.subscribe ?? never, store?.getState ?? (() => idle))

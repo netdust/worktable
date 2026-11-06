@@ -11,6 +11,7 @@ export type {
   Actor,
   BoardDecl,
   CalendarDecl,
+  Category,
   ColumnDecl,
   ColumnType,
   Condition,
@@ -29,6 +30,7 @@ export type {
   MatrixDecl,
   OptionsFrom,
   Owners,
+  ProgressDecl,
   QueryDecl,
   QuickAction,
   Role,
@@ -40,7 +42,15 @@ export type {
   Writer,
   WriterUpdate,
 } from './declare'
-export { defineDataset, defineQuery, ICONS, TONES } from './declare'
+export {
+  CATEGORIES,
+  categoriesColumnOf,
+  defineDataset,
+  defineQuery,
+  ICONS,
+  progressDeclOf,
+  TONES,
+} from './declare'
 export type { FilterAST, FilterInput, JsonValue, Operator } from './filter-compile'
 export { FilterCompileError, filterCompile } from './filter-compile'
 export { type ImportResult, importExport, type Refusal, readExportFile } from './import'

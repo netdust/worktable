@@ -29,9 +29,10 @@ export const agendapuntWriter = named('titel', 'Een agendapunt heeft een titel.'
 
 const absent = (value: unknown): boolean => value === undefined || value === null
 
-// A task without a client takes the one of what it is about, the most specific first, so the space switcher keeps it.
+// A task without a client takes the one of what it is about, the most specific first, a subtask's parent before all, so the space switcher keeps it.
 function clientOf(values: Values, ctx: WriteContext): unknown {
   const about: [string, unknown][] = [
+    ['taak', values.parent_id],
     ['site', values.site_id],
     ['werkpakket', values.werkpakket_id],
     ['project', values.project_id],
@@ -104,22 +105,11 @@ function checkOneFeature(values: Values, ctx: WriteContext): void {
   if (ctx.exists('werkpakket', { repo, branch }, current.id as number | undefined)) refuse(ONE_FEATURE)
 }
 
-const FINISHED = new Set(['gedaan', 'overgeslagen'])
-
-// Done and skipped plan steps over all of them, counted at each write of the feature; none without steps.
-function progressOf(ctx: WriteContext): string | null {
-  const id = (ctx.current as Values | null)?.id
-  if (absent(id)) return null
-  const steps = ctx.findAll('taak', { werkpakket_id: id })
-  if (steps.length === 0) return null
-  return `${steps.filter((step) => FINISHED.has(step.status as string)).length}/${steps.length}`
-}
-
 function featureOf(values: Values, ctx: WriteContext, creating: boolean): Values {
   checkNamed(values, 'naam', FEATURE, creating)
   const own = fromProject(values, ctx)
   checkOneFeature(own, ctx)
-  return { ...own, bijgewerkt: localTime(), voortgang: progressOf(ctx) }
+  return { ...own, bijgewerkt: localTime() }
 }
 
 export const werkpakketWriter: Writer = {

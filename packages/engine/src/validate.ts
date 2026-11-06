@@ -3,8 +3,10 @@ import { POSITION } from './ddl'
 import {
   type ActionDecl,
   type ActionInput,
+  CATEGORIES,
   type ColumnDecl,
   type Condition,
+  categoriesColumnOf,
   type DatasetDecl,
   type Domain,
   ICONS,
@@ -17,7 +19,7 @@ import {
 } from './declare'
 import { reservedNames } from './engine-tables'
 import { lookupOf } from './lookups'
-import { sourceOf, sourcesOf, writerOf } from './registry'
+import { nodeOf, sourceOf, sourcesOf, writerOf } from './registry'
 
 export class DomainError extends Error {
   constructor(
@@ -73,6 +75,35 @@ function checkTones(source: DatasetDecl | QueryDecl): void {
     for (const tone of Object.values(decl.tones)) {
       if (!(TONES as readonly string[]).includes(tone)) {
         throw new DomainError(source.name, tone, `${column} has tone "${tone}", not one of ${TONES.join(', ')}`)
+      }
+    }
+  }
+}
+
+function checkCategories(source: DatasetDecl | QueryDecl): void {
+  for (const [column, decl] of Object.entries(source.columns)) {
+    if (!decl.categories) continue
+    const options = decl.options
+    if (!options) throw new DomainError(source.name, column, `${column} declares categories but has no options`)
+    for (const [key, category] of Object.entries(decl.categories)) {
+      if (!Object.hasOwn(options, key)) {
+        throw new DomainError(
+          source.name,
+          key,
+          `${column} has a category for "${key}", which is not one of its options`,
+        )
+      }
+      if (!(CATEGORIES as readonly string[]).includes(category)) {
+        throw new DomainError(
+          source.name,
+          category,
+          `${column} has category "${category}", not one of ${CATEGORIES.join(', ')}`,
+        )
+      }
+    }
+    for (const key of Object.keys(options)) {
+      if (!Object.hasOwn(decl.categories, key)) {
+        throw new DomainError(source.name, key, `${column} has no category for its option "${key}"`)
       }
     }
   }
@@ -287,6 +318,7 @@ const OVERWRITTEN = [
   ['links', "the row's link rows"],
   ['inherited', "the row's inherited lookups"],
   ['available', "the row's buttons and actions"],
+  ['progress', "the row's progress from its children"],
 ] as const
 
 function checkRelations(domain: Domain, source: DatasetDecl | QueryDecl): void {
@@ -350,6 +382,7 @@ const LOOKUP_RESERVED = new Set([
   'links',
   'revision',
   'available',
+  'progress',
   'notices',
   'expect',
 ])
@@ -573,6 +606,39 @@ function checkLifecycle(domain: Domain, dataset: DatasetDecl): void {
     checkColumn(dataset, 'token_projection column', column)
     if (!dataset.columns[column]?.owner_visible)
       throw at(column, `token_projection column "${column}" is not owner_visible`)
+  }
+}
+
+function checkParentDecl(dataset: DatasetDecl): void {
+  const column = dataset.parent
+  if (column === undefined) return
+  if (dataset.columns[column]?.relation !== dataset.name) {
+    throw new DomainError(dataset.name, column, `parent "${column}" is not a relation column to "${dataset.name}"`)
+  }
+}
+
+function checkProgressDecl(domain: Domain, dataset: DatasetDecl): void {
+  const progress = dataset.progress
+  if (!progress) return
+  const at = (bad: string, message: string) => new DomainError(dataset.name, bad, `progress ${message}`)
+  const counted = domain.datasets.find((d) => d.name === progress.dataset)
+  if (!counted) throw at(progress.dataset, `dataset "${progress.dataset}" is not a dataset`)
+  if (counted.columns[progress.key]?.relation !== dataset.name) {
+    throw at(progress.key, `key "${progress.key}" is not a relation column of "${counted.name}" to "${dataset.name}"`)
+  }
+  if (!counted.columns[progress.column]?.categories) {
+    throw at(progress.column, `column "${progress.column}" of "${counted.name}" declares no categories`)
+  }
+}
+
+function checkArchive(dataset: DatasetDecl): void {
+  const days = dataset.archive_after
+  if (days === undefined) return
+  if (!(Number.isInteger(days) && days >= 1)) {
+    throw new DomainError(dataset.name, 'archive_after', 'archive_after must be a whole number of days, 1 or more')
+  }
+  if (categoriesColumnOf(dataset) === null) {
+    throw new DomainError(dataset.name, 'archive_after', 'archive_after needs exactly one column with categories')
   }
 }
 
@@ -800,6 +866,7 @@ export function validateDomain(domain: Domain): void {
     checkOwnerVisible(source)
     checkHidden(source)
     checkTones(source)
+    checkCategories(source)
     checkLong(source)
     checkHref(source)
     checkEnforced(source)
@@ -835,6 +902,9 @@ export function validateDomain(domain: Domain): void {
     checkMatrix(domain, dataset, downs)
     checkNewLabel(dataset)
     checkTone(dataset)
+    checkParentDecl(dataset)
+    checkProgressDecl(domain, dataset)
+    checkArchive(dataset)
     checkLifecycle(domain, dataset)
     checkRecordLink(dataset)
     checkOwnerWritable(dataset)
@@ -853,4 +923,19 @@ export function validateDomain(domain: Domain): void {
     }
   }
   checkActions(domain)
+  checkSeededDefaults(domain)
+}
+
+// At most one default per rail node, and never a dashboard.
+function checkSeededDefaults(domain: Domain): void {
+  const nodes = new Set<string>()
+  for (const seed of domain.views.filter((v) => v.default === true)) {
+    if (seed.skin === 'dashboard')
+      throw new DomainError(seed.source ?? 'views', seed.name, `dashboard "${seed.name}" is never a default view`)
+    const source = String(seed.source)
+    const node = nodeOf(domain, source)
+    if (nodes.has(node))
+      throw new DomainError(source, seed.name, `view "${seed.name}" is a second default in the node of "${node}"`)
+    nodes.add(node)
+  }
 }

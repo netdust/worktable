@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Model, Row, View } from './types'
 import { defaults } from './grid/layout'
+import { hideFinished } from './grid/categories'
 
 const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),  filesOf: vi.fn(), fileUrl: (id: number) => `/api/attachments/file/${id}`, records: vi.fn(), recordLink: vi.fn(), rotateRecordLink: vi.fn(), attachmentsOf: vi.fn() }))
 vi.mock('./api', () => api)
@@ -138,6 +139,22 @@ describe('the gallery by Groep', () => {
     expect(within(screen.getByRole('region', { name: 'Dinsdag' })).getAllByRole('button').map((b) => b.querySelector('.nv-gallery__title')?.textContent)).toEqual(['Repetitie', 'Voorstelling'])
     expect((container.querySelector('.nv-gallery') as HTMLElement).style.getPropertyValue('--min')).toBe('330px')
     document.documentElement.lang = ''
+  })
+})
+
+describe('the count on a skin that hides finished rows', () => {
+  it('follows the rows left after hideFinished, and grows when the finished are shown', async () => {
+    api.filesOf.mockResolvedValue({})
+    const status = { type: 'select', label: 'Status', required: true, fact: false, options: { todo: 'Te doen', klaar: 'Klaar' }, categories: { todo: 'open', klaar: 'done' } }
+    const taken = { ...model, key: 'taak', fields: { status } } as unknown as Model
+    const gallery = { ...view, model: 'taak', type: 'gallery' } as View
+    const all = [row(1, 'a', 'todo'), row(2, 'b', 'klaar'), row(3, 'c', 'klaar')].map((r) => ({ ...r, fields: { status: r.fields.state } }))
+    const onShown = vi.fn()
+    const draw = (show: boolean) => <Gallery view={gallery} model={taken} models={{}} rows={hideFinished(taken, all, show, 'gallery')} kind="foto" layout={defaults(view)} onShown={onShown} />
+    const { rerender } = render(draw(false))
+    await waitFor(() => expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 1 })))
+    rerender(draw(true))
+    await waitFor(() => expect(onShown).toHaveBeenLastCalledWith(expect.objectContaining({ rows: 3 })))
   })
 })
 

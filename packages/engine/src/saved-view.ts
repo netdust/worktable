@@ -44,6 +44,7 @@ export const savedView = defineDataset({
     format: { type: 'text', label: 'Format', default: 'html', options: { html: 'html', ical: 'ical', pdf: 'pdf' } },
     public: { type: 'boolean', label: 'Public', default: false },
     for_owners: { type: 'boolean', label: 'For owners', default: false },
+    is_default: { type: 'boolean', label: 'Default', default: false },
     seed_key: { type: 'text', label: 'Seed key', nullable: true },
   },
 })

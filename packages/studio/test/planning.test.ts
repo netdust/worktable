@@ -154,24 +154,22 @@ describe('plan steps', () => {
     expect((await step(id, 'Task 1')).status).toBe(201)
   })
 
-  test('voortgang counts done and skipped steps at each write of the feature', async () => {
+  test('a feature reads its progress from its steps', async () => {
     const id = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s4' })).body.id as number
-    expect(row('werkpakket', id).voortgang).toBeNull()
     const ids: number[] = []
     for (const label of ['Task 1', 'Task 2', 'Task 3', 'Task 4']) ids.push((await step(id, label)).body.id as number)
     await claude('PATCH', `/api/rows/taak/${ids[0]}`, { status: 'gedaan' })
     await claude('PATCH', `/api/rows/taak/${ids[1]}`, { status: 'overgeslagen' })
     await claude('PATCH', `/api/rows/taak/${ids[2]}`, { status: 'geblokkeerd' })
-    expect((await claude('PATCH', `/api/rows/werkpakket/${id}`, { laatste_stap: 'Task 2 overgeslagen' })).status).toBe(
-      200,
-    )
-    expect(row('werkpakket', id).voortgang).toBe('2/4')
+    // A skipped step is cancelled and leaves the count.
+    const read = await claude('PATCH', `/api/rows/werkpakket/${id}`, { laatste_stap: 'Task 3 loopt' })
+    expect(read.body.progress).toMatchObject({ done: 1, total: 3 })
   })
 
-  test('nobody writes voortgang by hand', async () => {
+  test('a feature write still stamps bijgewerkt', async () => {
     const id = (await feature({ project_id: STUDIO_PROJECT, branch: 'feature/s5' })).body.id as number
-    await claude('PATCH', `/api/rows/werkpakket/${id}`, { voortgang: '9/9', laatste_stap: 'x' })
-    expect(row('werkpakket', id).voortgang).toBeNull()
+    await claude('PATCH', `/api/rows/werkpakket/${id}`, { laatste_stap: 'x' })
+    expect(row('werkpakket', id).bijgewerkt).not.toBeNull()
   })
 })
 

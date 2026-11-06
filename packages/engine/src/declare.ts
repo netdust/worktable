@@ -36,6 +36,9 @@ export interface OptionsFrom {
   sort?: string[]
 }
 
+export const CATEGORIES = ['open', 'active', 'done', 'cancelled'] as const
+export type Category = (typeof CATEGORIES)[number]
+
 export interface ColumnDecl {
   type: ColumnType
   label: string
@@ -44,6 +47,8 @@ export interface ColumnDecl {
   options?: Record<string, string>
   /** A tone per option key, for the grid to colour the option. */
   tones?: Record<string, Tone>
+  /** What each option means (open, active, done, cancelled), one per option; the engine and grid read these, never the option names. */
+  categories?: Record<string, Category>
   relation?: string
   readonly?: boolean
   writes?: { dataset: string; field: string; key: string }
@@ -159,6 +164,12 @@ export interface GalleryDecl {
   kind: string
 }
 
+export interface ProgressDecl {
+  dataset: string
+  key: string
+  column: string
+}
+
 export interface DatasetDecl {
   kind: 'dataset'
   name: string
@@ -194,6 +205,12 @@ export interface DatasetDecl {
   /** Its records carry a stable link that reads as the record's owner; `email` is the text column it is mailed to. */
   record_link?: { email?: string }
   attachments?: AttachmentsDecl
+  /** A relation column to this dataset: a row's parent. */
+  parent?: string
+  /** The rows of `dataset` whose `key` is this row's id, counted by the categories of their `column`. */
+  progress?: ProgressDecl
+  /** Days after which a row that has been done or cancelled is archived; needs exactly one categories column. */
+  archive_after?: number
   /** `false` keeps it out of the grid's tree. Navigation only: the API serves it as before. */
   listed?: false
 }
@@ -267,6 +284,8 @@ export interface SavedViewSeed {
   layout?: DashboardLayout
   /** Read-only to everyone and brought up to its declaration by the seed; unlocked, it is a team view. */
   locked?: boolean
+  /** The view its rail node opens with; at most one per node, never a dashboard. */
+  default?: boolean
 }
 
 export interface Domain {
@@ -453,4 +472,17 @@ export function defineQuery(q: Omit<QueryDecl, 'kind'>): QueryDecl {
   assertNames(q)
   if (!q.columns.id) throw new Error(`query "${q.name}" must declare an id column`)
   return { kind: 'query', ...q }
+}
+
+/** The one column that declares categories, else null. */
+export function categoriesColumnOf(decl: DatasetDecl): string | null {
+  const names = Object.keys(decl.columns).filter((name) => decl.columns[name]?.categories)
+  return names.length === 1 ? (names[0] ?? null) : null
+}
+
+/** The declared progress, else a dataset's own children when it has a parent and one categories column, else null. */
+export function progressDeclOf(decl: DatasetDecl): ProgressDecl | null {
+  if (decl.progress) return decl.progress
+  const column = categoriesColumnOf(decl)
+  return decl.parent && column ? { dataset: decl.name, key: decl.parent, column } : null
 }

@@ -1,4 +1,5 @@
 import { type CSSProperties, useContext, useEffect, useMemo, useRef } from 'react'
+import { categoriesFieldOf, categoryOf } from '../grid/categories'
 import { type Column, columnsFor } from '../grid/columns'
 import { SchemaContext } from '../grid/drawer/context'
 import type { Places } from '../grid/drawer/place'
@@ -60,7 +61,7 @@ const overlapFlag = (others: Row[] = []): Flag[] =>
 /** A day's width on the scale, as the prototype's week zoom. */
 const DAY_PX = 44
 
-const TONE_CLASS = { warn: 'nv-tl__bar--option', bad: 'nv-tl__bar--cancelled' } as const
+const TONE_CLASS = { warn: 'nv-tl__bar--option' } as const
 
 /** Rows as bars across the window's days, in lanes; read-only, a bar opens its row. */
 export function Timeline({ view, model, models, rows, cal, shown, lane, layout, onTitle, places }: {
@@ -80,13 +81,16 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
   // A bar's second line: its place, the first shown fact naming another record that is not the lane; its tone: the first toned option, as optie is hatched.
   const place: Column | undefined = useMemo(() => placeOf(factsOf(columns, layout), [lane]), [columns, layout, lane])
   const toned: Column | undefined = columns.find((c) => c.kind === 'select' && c.tones)
-  // Bars of one lane sharing a day, or their times where they carry them, a cancelled (bad-toned) one left out.
+  // Cancelled is the category where the model has categories, else the bad tone.
+  const categorized = categoriesFieldOf(model)
+  const isCancelled = (r: Row) => categorized ? categoryOf(model.fields[categorized], r.fields[categorized]) === 'cancelled' : toned?.tones?.[String(toned.value(r) ?? '')] === 'bad'
+  // Bars of one lane sharing a day, or their times where they carry them, a cancelled one left out.
   const clashes = useMemo(() => {
     const at = new Map(laid.lanes.flatMap((l) => l.bars).map((bar) => [bar.row.id, bar]))
     const first = (r: Row) => at.get(r.id)?.start ?? 0
     return overlapsOf([...at.values()].map((bar) => bar.row), (r) => String(lane ? r.fields[lane] ?? '' : ''), first, (r) => first(r) + (at.get(r.id)?.length ?? 1) - 1,
-      (r) => toned?.tones?.[String(toned.value(r) ?? '')] === 'bad', cal.start ? timesOf(cal.start, cal.end) : undefined)
-  }, [laid, lane, toned, cal.start, cal.end])
+      isCancelled, cal.start ? timesOf(cal.start, cal.end) : undefined)
+  }, [laid, lane, toned, categorized, model, cal.start, cal.end])
   const overlaps = pairsOf(clashes)
   const window = useMemo(() => Array.from({ length: laid.days }, (_, i) => iso(new Date((parse(shown.from) as Date).getTime() + i * 86_400_000 + 43_200_000))), [shown.from, laid.days])
   const today = iso(new Date())
@@ -154,7 +158,7 @@ export function Timeline({ view, model, models, rows, cal, shown, lane, layout, 
                       const narrow = bar.length < 3
                       return (
                         <button key={bar.row.id} type="button" data-tip={tip}
-                          className={['nv-tl__bar', tone && tone in TONE_CLASS ? TONE_CLASS[tone as keyof typeof TONE_CLASS] : '', open?.id === bar.row.id ? 'nv-tl__bar--open' : '', narrow ? 'nv-tl__bar--narrow' : ''].filter(Boolean).join(' ')}
+                          className={['nv-tl__bar', isCancelled(bar.row) ? 'nv-tl__bar--cancelled' : tone && tone in TONE_CLASS ? TONE_CLASS[tone as keyof typeof TONE_CLASS] : '', open?.id === bar.row.id ? 'nv-tl__bar--open' : '', narrow ? 'nv-tl__bar--narrow' : ''].filter(Boolean).join(' ')}
                           style={{ left: `calc(${pct(bar.start)} + 2px)`, width: `calc(${pct(bar.length)} - 4px)`, top: 9 + row * 48 }}
                           onClick={() => openRow(bar.row)}>
                           <strong><FlagMark flags={flags?.marksOf(model.key, bar.row.id) ?? []} bare /><FlagMark flags={overlapFlag(clashes.get(bar.row.id))} bare />{bar.row.title}</strong>

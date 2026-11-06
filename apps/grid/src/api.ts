@@ -117,18 +117,19 @@ export function schema(): Promise<Schema> {
 }
 
 /** A source's rows with the layout's filters, sort and group applied by the engine; a matrix's rows with their cells. The scope is one more filter. */
-export async function rows(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null, limit?: number): Promise<RowsResponse> {
-  const query = { ...(await viewQuery(view, window, scope, layout)), ...(limit ? { limit: String(limit) } : {}) }
+export async function rows(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null, limit?: number, archived = false): Promise<RowsResponse> {
+  const query = { ...(await viewQuery(view, window, scope, layout, archived)), ...(limit ? { limit: String(limit) } : {}) }
   return rowsOf(view.model, view.type === 'matrix' ? { ...query, cells: '1' } : query)
 }
 
 type ViewRead = Pick<View, 'model' | 'table' | 'type' | 'date_field' | 'fixed'>
 
-async function viewQuery(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null, layout: Layout | null): Promise<Query> {
+async function viewQuery(view: ViewRead, window: Partial<DateWindow>, scope: Scope | null, layout: Layout | null, archived = false): Promise<Query> {
   const source = await sourceOf(view.model)
   const title = titleColumn(source)
   const scoped = { ...view, fixed: withScope(view.fixed ?? {}, scope) }
-  return layout ? rowsQuery(scoped, layout, window, title, source) : { ...window, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
+  const shown = archived ? { archived: '1' } : {}
+  return layout ? rowsQuery(scoped, layout, window, title, source, archived) : { ...window, ...shown, ...(scope ? { filter: JSON.stringify(scoped.fixed) } : {}) }
 }
 
 /** Makes a saved view public, or gives it a new link, the old one stopping: the token comes back once. */
@@ -139,6 +140,11 @@ export async function publishView(id: number): Promise<string> {
 /** Shows a saved view to the people its rows belong to, or stops showing it; an administrator's. */
 export async function setForOwners(id: number, on: boolean): Promise<void> {
   await request(on ? 'PUT' : 'DELETE', `/views/${id}/for-owners`, {}, on ? {} : undefined)
+}
+
+/** Makes a shared view the one its rail node opens on, or stops it being that; an administrator's. */
+export async function setDefault(id: number, on: boolean): Promise<void> {
+  await request(on ? 'PUT' : 'DELETE', `/views/${id}/default`, {}, on ? {} : undefined)
 }
 
 /** A record's current link, as the administrator copies it for its person. */
@@ -221,11 +227,11 @@ async function everyRow(model: string): Promise<Row[]> {
 }
 
 /** A spanning view's rows over a window by overlap: begun before its end and ended after its start; its own date condition steps aside. */
-export async function spanRows(view: View, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null): Promise<RowsResponse> {
+export async function spanRows(view: View, window: Partial<DateWindow>, scope: Scope | null = null, layout: Layout | null = null, archived = false): Promise<RowsResponse> {
   const cal = view.calendar
-  if (!cal?.spans || !window.from || !window.to || !layout) return rows(view, window, scope, layout)
+  if (!cal?.spans || !window.from || !window.to || !layout) return rows(view, window, scope, layout, undefined, archived)
   const filters = layout.filters.filter((f) => !(f.field === view.date_field && isDate(f.op)))
-  const query = await viewQuery({ ...view, date_field: undefined }, {}, scope, { ...layout, filters })
+  const query = await viewQuery({ ...view, date_field: undefined }, {}, scope, { ...layout, filters }, archived)
   const own = query.filter ? (JSON.parse(query.filter) as Record<string, unknown>) : {}
   const overlap = { [cal.day]: { $lte: `${window.to}T23:59:59` }, ...(cal.end ? { [cal.end]: { $gte: window.from } } : {}) }
   return rowsOf(view.model, { ...query, filter: JSON.stringify({ ...own, ...overlap }) })
@@ -258,8 +264,8 @@ export async function optionsFrom(from: OptionsFrom, record: Record<string, unkn
 
 /** A model's records for a picker: titles holding `search`, every record without one. The engine has no search: the titles are narrowed here. */
 /** A source's rows whose columns equal `where`, in `sort` order, at most `limit`; the total counts them all. */
-export async function rowsWhere(source: string, where: Record<string, unknown>, sort: string[] = [], limit = 5): Promise<RowsResponse> {
-  return rowsOf(source, { filter: JSON.stringify(where), limit: String(limit), ...(sort.length > 0 ? { sort: sort.join(',') } : {}) })
+export async function rowsWhere(source: string, where: Record<string, unknown>, sort: string[] = [], limit = 5, archived = false): Promise<RowsResponse> {
+  return rowsOf(source, { filter: JSON.stringify(where), limit: String(limit), ...(archived ? { archived: '1' } : {}), ...(sort.length > 0 ? { sort: sort.join(',') } : {}) })
 }
 
 /** How many records a source holds, the scope aside: the rail's count. */
@@ -412,7 +418,7 @@ export async function restoreView(id: number): Promise<SavedView> {
   return savedOf(await request<EngineView>('POST', `/views/${id}/restore`, {}, {}))
 }
 
-/** No prefs are stored yet: every table opens on its first view. */
+/** No prefs are stored yet: every table opens on its default, else its first view. */
 export function prefs(): Promise<Prefs> {
   return Promise.resolve({ order: {}, last: {} })
 }

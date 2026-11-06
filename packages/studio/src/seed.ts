@@ -176,6 +176,8 @@ const taken = [
   { titel: 'TLS van bestel.testmans verlengen', deadline: localDay(thisWeek(4)), organisatie_id: KLANT, site_id: 2 },
   { titel: 'Storing voorbeeld-blog bekijken', deadline: localDay(), wie: 'stefan', organisatie_id: INTERN, site_id: 4 },
   { titel: 'Dashboard-plan nalezen', wie: 'claude', organisatie_id: INTERN, project_id: 1, werkpakket_id: 1 },
+  { titel: 'Dashboard nalezen: copy', wie: 'stefan', organisatie_id: INTERN, parent_id: 4 },
+  { titel: 'Dashboard nalezen: kleuren', wie: 'stefan', organisatie_id: INTERN, parent_id: 4 },
 ]
 
 const agendapunten = [
@@ -369,6 +371,7 @@ export const views: SavedViewSeed[] = [
     skin: 'board',
     sort: ['-bijgewerkt'],
     visible_fields: ['project', 'laatste_stap', 'bijgewerkt'],
+    default: true,
   }),
   view({
     name: 'Taken',
@@ -378,6 +381,14 @@ export const views: SavedViewSeed[] = [
     filters: { status: 'open' },
     sort: ['deadline'],
     visible_fields: ['titel', 'deadline', 'wie', 'organisatie_id', 'site_id', 'status'],
+  }),
+  view({
+    name: 'Per status',
+    source_type: 'dataset',
+    source: 'taak',
+    skin: 'board',
+    visible_fields: ['deadline', 'wie', 'organisatie_id', 'site_id'],
+    default: true,
   }),
   view({
     name: 'Op tafel',
@@ -394,6 +405,7 @@ export const views: SavedViewSeed[] = [
     skin: 'calendar',
     sort: ['datum', 'start_at'],
     visible_fields: [],
+    default: true,
   }),
   view({
     name: 'Vandaag',

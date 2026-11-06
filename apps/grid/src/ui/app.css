@@ -1684,6 +1684,13 @@
   gap: 6px;
 }
 
+.nv-category {
+  flex: none;
+  margin-right: 6px;
+  vertical-align: -2px;
+  color: var(--color-fg-subtle);
+}
+
 .nv-kind svg {
   color: var(--color-fg-subtle);
   flex: none;
@@ -4233,6 +4240,14 @@
   padding-right: 50px;
 }
 
+#root .nv-view:has(.nv-view__mark > :nth-child(2)) .nv-view__button {
+  padding-right: 42px;
+}
+
+#root .nv-views--actions .nv-view:has(.nv-view__mark > :nth-child(2)) .nv-view__button {
+  padding-right: 66px;
+}
+
 .nv-views--actions .nv-view__mark {
   right: 32px;
 }
@@ -4416,6 +4431,7 @@
   top: 50%;
   right: 8px;
   display: flex;
+  gap: 4px;
   color: var(--color-fg-subtle);
   transform: translateY(-50%);
   pointer-events: none;

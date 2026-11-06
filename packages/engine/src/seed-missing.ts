@@ -7,7 +7,7 @@ import { keySeeded } from './migrate'
 import { ApiError } from './params'
 import { sourceOf } from './registry'
 import { savedView, seedKey } from './saved-view'
-import { SYSTEM, SYSTEM_OWNER } from './views'
+import { nodeDefaults, nodeSources, SYSTEM, SYSTEM_OWNER } from './views'
 import { contextOf, create, encodeAll, recordBatch, revise, type Store, valuesOf, writableOf } from './writes'
 
 type Row = Record<string, unknown>
@@ -115,9 +115,10 @@ function dashboardLayout(run: Run, seed: SavedViewSeed, dropped: string[]) {
 
 const labelOf = (view: Stored): string => `view "${view.name}"${view.source === null ? '' : ` (${view.source})`}`
 
-/** A person touched a seeded view when a revision of it names an actor other than the system owner. */
+/** A person touched a seeded view when a revision of it names an actor other than the system owner; a default mark is no touch. */
 export function touched(sqlite: Database, id: number): boolean {
-  const sql = "SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ? AND actor_id IS NOT ? LIMIT 1"
+  const sql =
+    "SELECT 1 FROM revision WHERE entity = 'saved_view' AND record_id = ? AND actor_id IS NOT ? AND field != 'is_default' LIMIT 1"
   return sqlite.query(sql).get(id, SYSTEM_OWNER) !== null
 }
 
@@ -228,7 +229,39 @@ function seedViews(run: Run): SeedReport['views'] {
   for (const seed of ordered) counts[seedView(run, seed)]++
   removeUndeclared(run)
   nameOrphans(run)
+  seedDefaults(run)
   return counts
+}
+
+// A declared default is written only until a person chose for its node, so an administrator's choice stands.
+function seedDefaults(run: Run): void {
+  const { sqlite, domain } = run.store
+  const sql = 'SELECT * FROM saved_view WHERE seed_key = ? AND owner_id = ? AND deleted_at IS NULL'
+  for (const seed of domain.views.filter((v) => v.default === true)) {
+    const view = sqlite.query(sql).get(seedKey(seed.name, seed.source), SYSTEM_OWNER) as Stored | null
+    if (!view || view.is_default === 1) continue
+    const others = nodeDefaults(sqlite, domain, String(view.source), view.id as number)
+    if (others.some((other) => other.deleted_at === null) || chosen(run, String(view.source))) {
+      run.named.push(`${labelOf(view)} default left as chosen`)
+      continue
+    }
+    markSeeded(run, view.id as number)
+  }
+}
+
+/** A person chose for a node once any view of it, live or deleted, carries their default-mark revision. */
+function chosen(run: Run, source: string): boolean {
+  const names = nodeSources(run.store.domain, source)
+  const sql = `SELECT 1 FROM revision r JOIN saved_view v ON v.id = r.record_id
+    WHERE r.entity = 'saved_view' AND r.field = 'is_default' AND r.actor_id IS NOT ?
+    AND v.source IN (${names.map(() => '?').join(', ')}) LIMIT 1`
+  return run.store.sqlite.query(sql).get(SYSTEM_OWNER, ...names) !== null
+}
+
+function markSeeded(run: Run, id: number): void {
+  run.store.sqlite.query('UPDATE saved_view SET is_default = 1, updated_at = ? WHERE id = ?').run(run.now, id)
+  revise(run.store.sqlite, savedView, id, [['is_default', 0, 1]], run.now, SYSTEM_OWNER, run.batch)
+  run.written++
 }
 
 // A system view whose seed is no longer declared is removed, unless a person touched it or an administrator published it.
@@ -247,21 +280,19 @@ function removeUndeclared(run: Run): void {
       run.named.push(`${label} changed by a person, left alone`)
       continue
     }
-    run.store.sqlite
-      .query('UPDATE saved_view SET deleted_at = ?, updated_at = ? WHERE id = ?')
-      .run(run.now, run.now, view.id as number)
-    revise(
-      run.store.sqlite,
-      savedView,
-      view.id as number,
-      [['deleted_at', null, run.now]],
-      run.now,
-      SYSTEM_OWNER,
-      run.batch,
-    )
+    removeView(run, view)
     run.written++
     run.named.push(`${label} removed, no longer declared`)
   }
+}
+
+// As a person's delete, a removal clears the default mark, so a restore never brings it back.
+function removeView(run: Run, view: Stored): void {
+  const changes: Change[] = [['deleted_at', null, run.now]]
+  if (view.is_default === 1) changes.push(['is_default', 1, 0])
+  const sql = 'UPDATE saved_view SET deleted_at = ?, is_default = 0, updated_at = ? WHERE id = ?'
+  run.store.sqlite.query(sql).run(run.now, run.now, view.id as number)
+  revise(run.store.sqlite, savedView, view.id as number, changes, run.now, SYSTEM_OWNER, run.batch)
 }
 
 // A person's view on a source the domain no longer declares is theirs to keep; system views were handled above.

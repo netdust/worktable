@@ -76,7 +76,7 @@ test('a step-1 theatre database migrates to step 2 keeping every row, revision a
     toewijzing: ['rol_id', 'aantal'],
     beschikbaarheid: ['soort'],
     productie: ['kleur'],
-    saved_view: ['for_owners', 'layout', 'seed_key'],
+    saved_view: ['for_owners', 'layout', 'seed_key', 'is_default'],
     account: ['kind', 'name', 'token_hash'],
   }
   // Every domain dataset gains the engine's rank, unranked.
@@ -87,6 +87,7 @@ test('a step-1 theatre database migrates to step 2 keeping every row, revision a
     const stripped = rows(n).map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !dropped.includes(k))))
     expect(stripped).toEqual(before[n] as Record<string, unknown>[])
   }
+  expect(rows('saved_view').every((r) => r.is_default === 0)).toBe(true)
   expect(sqlite.query('PRAGMA foreign_key_check').all()).toEqual([])
   expect(sqlite.query('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
 })

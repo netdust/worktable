@@ -460,3 +460,111 @@ describe('a mapped query column', () => {
     expect(columns.state.tones).toBeUndefined()
   })
 })
+
+describe('categories, parent, progress and archive_after', () => {
+  const status: ColumnDecl = {
+    type: 'text',
+    label: 'Status',
+    default: 'new',
+    options: { new: 'New', going: 'Going', fin: 'Finished', off: 'Off' },
+    categories: { new: 'open', going: 'active', fin: 'done', off: 'cancelled' },
+  }
+  const parentId: ColumnDecl = { type: 'integer', label: 'Parent', nullable: true, relation: 'job' }
+  const withJob = (columns: Record<string, ColumnDecl>, over: Partial<DatasetDecl> = {}) =>
+    withDataset('job', { columns: { ...dataset('job').columns, ...columns }, ...over })
+  const withStatus = (over: Partial<ColumnDecl>) => withJob({ status: { ...status, ...over } })
+  const full = (over: Partial<DatasetDecl> = {}) =>
+    withJob({ status, parent_id: parentId }, { parent: 'parent_id', archive_after: 30, ...over })
+
+  test('categories on a column without options are refused', () => {
+    expect(refused(withJob({ status: { ...status, options: undefined } }))).toEqual(['job', 'status'])
+  })
+
+  test('a word outside the four, a missing option and an unknown option are refused', () => {
+    expect(refused(withStatus({ categories: { ...status.categories, fin: 'finished' as 'done' } }))).toEqual([
+      'job',
+      'finished',
+    ])
+    expect(refused(withStatus({ categories: { new: 'open', going: 'active', fin: 'done' } }))).toEqual(['job', 'off'])
+    expect(refused(withStatus({ categories: { ...status.categories, ghost: 'open' } }))).toEqual(['job', 'ghost'])
+  })
+
+  test('a query column that declares its own options is judged on them', () => {
+    const domain = withQuery('job_room', {
+      columns: {
+        ...query('job_room').columns,
+        room_from: { ...query('job_room').columns.room_from, categories: { own: 'open' } },
+      },
+    })
+    expect(refused(domain)).toEqual(['job_room', 'team'])
+  })
+
+  test('a parent that is not a relation to its own dataset is refused', () => {
+    expect(refused(full({ parent: 'ghost' }))).toEqual(['job', 'ghost'])
+    expect(refused(full({ parent: 'name' }))).toEqual(['job', 'name'])
+    expect(refused(full({ parent: 'team_id' }))).toEqual(['job', 'team_id'])
+  })
+
+  test('a progress naming an unknown dataset, a foreign key or a column without categories is refused', () => {
+    const progress = { dataset: 'job', key: 'parent_id', column: 'status' }
+    expect(() => validateDomain(full({ progress }))).not.toThrow()
+    expect(refused(full({ progress: { ...progress, dataset: 'ghost' } }))).toEqual(['job', 'ghost'])
+    expect(refused(full({ progress: { ...progress, key: 'team_id' } }))).toEqual(['job', 'team_id'])
+    expect(refused(full({ progress: { ...progress, column: 'kind' } }))).toEqual(['job', 'kind'])
+  })
+
+  test('an archive_after that is not a whole number of days, or has no one categories column, is refused', () => {
+    expect(() => validateDomain(full())).not.toThrow()
+    for (const days of [0, 1.5, -2]) expect(refused(full({ archive_after: days }))).toEqual(['job', 'archive_after'])
+    expect(refused(withDataset('job', { archive_after: 30 }))).toEqual(['job', 'archive_after'])
+    const two = withJob({ status, stage: { ...status, label: 'Stage' } }, { archive_after: 30 })
+    expect(refused(two)).toEqual(['job', 'archive_after'])
+  })
+
+  test('a column named progress is refused', () => {
+    expect(refused(withJob({ progress: { type: 'integer', label: 'Progress', nullable: true } }))).toEqual([
+      'job',
+      'progress',
+    ])
+  })
+
+  test('/schema serves the declarations', async () => {
+    const progress = { dataset: 'job', key: 'parent_id', column: 'status' }
+    const job = (await schemaOf(full({ progress }), 'editor')).sources.job
+    expect(job.columns.status.categories).toEqual(status.categories)
+    expect([job.parent, job.progress, job.archive_after]).toEqual(['parent_id', progress, 30])
+    const bare = (await schemaOf(spaced, 'editor')).sources.job
+    expect([bare.parent, bare.progress, bare.archive_after]).toEqual([undefined, undefined, undefined])
+  })
+
+  test('a mapped query column is served the categories of its target', async () => {
+    const room = dataset('room')
+    const state: ColumnDecl = { ...status, categories: { ...status.categories } }
+    const domain = withStates()
+    const withCategories = {
+      ...domain,
+      datasets: domain.datasets.map((d) =>
+        d.name === 'room' ? { ...room, columns: { ...room.columns, state: { ...state, tones: undefined } } } : d,
+      ),
+    }
+    const columns = (await schemaOf(withCategories, 'editor')).sources.job_state.columns
+    expect(columns.state.categories).toEqual(status.categories)
+    expect(columns.own_state.categories).toBeUndefined()
+  })
+
+  test('an owner who cannot read the counted dataset gets no progress', async () => {
+    const room = dataset('room')
+    const columns = {
+      ...room.columns,
+      state: status,
+      job_id: { type: 'integer', label: 'Job', nullable: true, relation: 'job' } as ColumnDecl,
+    }
+    const progress = { dataset: 'room', key: 'job_id', column: 'state' }
+    const domain = {
+      ...withDataset('job', { progress }),
+      datasets: withDataset('job', { progress }).datasets.map((d) => (d.name === 'room' ? { ...room, columns } : d)),
+    }
+    expect((await schemaOf(domain, 'editor')).sources.job.progress).toEqual(progress)
+    expect((await schemaOf(domain, 'owner')).sources.job.progress).toBeUndefined()
+  })
+})

@@ -2,6 +2,7 @@ import { type FocusEvent, type KeyboardEvent, useCallback, useEffect, useRef, us
 import { ListBox, ListBoxItem } from 'react-aria-components'
 import { t } from '../../i18n'
 import { Pop } from '../../ui/Pop'
+import { CategoryMark } from '../CategoryMark'
 import type { Column } from '../columns'
 import type { CellProps, EditorProps } from './props'
 import { iconOf, type Tone, toneOf } from './tones'
@@ -17,13 +18,17 @@ export function ToneMark({ tone, text }: { tone: Tone | null; text: string }) {
 }
 
 /**
- * A kind reads as its icon and word; any other option as a pill in the tone its column declares, or as plain text without one.
+ * A kind reads as its icon and word; any other option as a pill in the tone its column declares, or as plain text without one, after the mark of its category.
  * The cell passes its own text, which an inherited column words for itself.
  */
 export function OptionMark({ column, option, text = column.options?.[option] ?? option }: { column: Column; option: string; text?: string }) {
   const Icon = iconOf(option)
   if (Icon) return <span className="nv-kind"><Icon size={13} aria-hidden="true" />{text}</span>
-  return <ToneMark tone={toneOf(option, column.tones)} text={text} />
+  const category = column.categories?.[option]
+  const tone = toneOf(option, column.tones)
+  if (!category) return <ToneMark tone={tone} text={text} />
+  const mark = <CategoryMark category={category} />
+  return <>{mark}{tone ? <ToneMark tone={tone} text={text} /> : <span>{text}</span>}</>
 }
 
 function choices(options: Record<string, string>, required: boolean): [string, string][] {
