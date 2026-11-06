@@ -142,6 +142,11 @@ export async function setForOwners(id: number, on: boolean): Promise<void> {
   await request(on ? 'PUT' : 'DELETE', `/views/${id}/for-owners`, {}, on ? {} : undefined)
 }
 
+/** Makes a shared view the one its rail node opens on, or stops it being that; an administrator's. */
+export async function setDefault(id: number, on: boolean): Promise<void> {
+  await request(on ? 'PUT' : 'DELETE', `/views/${id}/default`, {}, on ? {} : undefined)
+}
+
 /** A record's current link, as the administrator copies it for its person. */
 export async function recordLink(dataset: string, id: number): Promise<string> {
   return (await request<{ link: string }>('GET', `/record-links/${encodeURIComponent(dataset)}/${id}`)).link

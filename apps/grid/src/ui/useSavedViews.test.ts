@@ -4,7 +4,7 @@ import type { SavedView } from '../types'
 import { AUTOSAVE_DELAY, useSavedViews } from './useSavedViews'
 
 const api = vi.hoisted(() => ({ recordCount: vi.fn(() => Promise.resolve(0)), recordHistory: vi.fn(() => Promise.resolve([])), rowsWhere: vi.fn(() => Promise.resolve({ rows: [], total: 0 })), 
-  savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), savePrefs: vi.fn(),
+  savedViews: vi.fn(), createView: vi.fn(), updateView: vi.fn(), deleteView: vi.fn(), restoreView: vi.fn(), savePrefs: vi.fn(), setDefault: vi.fn(),
 }))
 vi.mock('../api', () => api)
 
@@ -116,5 +116,41 @@ describe('a new timeline view', () => {
     expect(api.createView).toHaveBeenCalledWith(expect.objectContaining({
       arrangement: expect.objectContaining({ filters: [{ field: 'plandag', op: 'month', values: [] }], group: 'productie_id' }),
     }))
+  })
+})
+
+describe("a node's default", () => {
+  const planning = { key: 'planning', label: 'Planning', model: 'activity', types: ['grid' as const] }
+  const week: SavedView = { ...mine, key: '43', id: 43, label: 'Week', shared: true, default: true }
+  const team: SavedView = { ...mine, key: '44', id: 44, label: 'Team', shared: true }
+  const marks = (views: { key: string; default?: boolean }[]) => views.filter((v) => v.default).map((v) => v.key)
+
+  it('marks the chosen view through the engine, and the list it reloads moves the mark', async () => {
+    api.setDefault.mockResolvedValue(undefined)
+    api.savedViews.mockResolvedValue([{ ...week, default: false }, { ...team, default: true }])
+    const { result } = renderHook(() => useSavedViews({
+      declared: [planning], starting: [], active: { current: '43' }, open: () => undefined, note: () => undefined, notify: () => undefined,
+    }))
+    act(() => result.current.load([week, team]))
+    expect(marks(result.current.tables[0]!.views)).toEqual(['43'])
+
+    await act(async () => result.current.markDefault(team, true))
+    expect(api.setDefault).toHaveBeenCalledWith(44, true)
+    expect(marks(result.current.tables[0]!.views)).toEqual(['44'])
+  })
+
+  it('says why the engine refused, and keeps the mark where it was', async () => {
+    const note = vi.fn()
+    api.setDefault.mockRejectedValue({ code: 'forbidden', message: 'Only an administrator marks a default' })
+    const { result } = renderHook(() => useSavedViews({
+      declared: [planning], starting: [], active: { current: '43' }, open: () => undefined, note, notify: () => undefined,
+    }))
+    act(() => result.current.load([week, team]))
+
+    await act(async () => result.current.markDefault(week, false))
+    expect(api.setDefault).toHaveBeenCalledWith(43, false)
+    expect(note).toHaveBeenCalledWith(expect.any(String))
+    expect(api.savedViews).not.toHaveBeenCalled()
+    expect(marks(result.current.tables[0]!.views)).toEqual(['43'])
   })
 })

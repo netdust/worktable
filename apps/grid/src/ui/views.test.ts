@@ -231,7 +231,7 @@ describe('the view a table opens on', () => {
     expect(lastIn(marked, { planning: 'planning' })?.key).toBe('planning')
   })
 
-  it('is the first in the list when the default is not listed, as one the user cannot read is not', () => {
+  it('is the first in the list when no default is listed: a default the user cannot read is left out of it', () => {
     expect(lastIn({ ...table, views: [bezetting, tabel, calais] }, {})?.key).toBe('bezetting')
   })
 

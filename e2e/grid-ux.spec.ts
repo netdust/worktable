@@ -639,10 +639,10 @@ test('colleague-shared-view @e2e', async ({ page, browser }) => {
     await expect(page.locator('.nv-toolbar__lock')).toHaveAccessibleName(
       'Gedeeld door een collega: maak een kopie om aan te passen',
     )
-    await expect(viewRow(page, 'Tourstops', name).getByRole('img', { name: /^Standaardweergave/ })).toHaveCount(0)
+    await expect(viewRow(page, 'Tourstops', name).getByRole('img', { name: /^Systeemweergave/ })).toHaveCount(0)
     // The seeded default keeps its lock.
     await expect(
-      viewRow(page, 'Tourstops', 'Tourstops').getByRole('img', { name: 'Standaardweergave, alleen te kopiëren' }),
+      viewRow(page, 'Tourstops', 'Tourstops').getByRole('img', { name: 'Systeemweergave, alleen te kopiëren' }),
     ).toBeVisible()
     await shot(page, 'colleague-view')
 

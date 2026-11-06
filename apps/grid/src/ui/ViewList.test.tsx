@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SavedView, View } from '../types'
 import type { Table } from './tables'
-import { landing, ViewList } from './ViewList'
+import { landing, type ViewActions, ViewList } from './ViewList'
 
 const tabel: View = { key: 'planning', label: 'Tabel', model: 'activity', table: 'planning', starting: true }
 const matrix: View = { ...tabel, key: 'bezetting', label: 'Matrix', type: 'matrix' }
@@ -41,9 +41,9 @@ describe('the views list', () => {
     expect(within(group()).getByRole('button', { name: 'Calais techniek' })).toBeTruthy()
   })
 
-  it("marks a starting or seeded view with the Standaardweergave lock, a colleague's shared view with its own mark, and one's own unshared view with a person", () => {
+  it("marks a starting or seeded view with the Systeemweergave lock, a colleague's shared view with its own mark, and one's own unshared view with a person", () => {
     render(<ViewList table={{ ...table, views: [...table.views, seeded] }} active="planning" onSelect={() => undefined} />)
-    const lock = 'Standaardweergave, alleen te kopiëren'
+    const lock = 'Systeemweergave, alleen te kopiëren'
     const colleague = 'Gedeeld door een collega, alleen te kopiëren'
 
     expect(within(item('Calais techniek')).getByRole('img', { name: 'Alleen voor jou' })).toBeTruthy()
@@ -53,6 +53,17 @@ describe('the views list', () => {
     expect(within(item('Rooster')).queryByRole('img', { name: colleague })).toBeNull()
     expect(within(item('Montage')).queryByRole('img')).toBeNull()
     expect(within(item('Calais techniek')).queryByRole('img', { name: lock })).toBeNull()
+  })
+
+  it('marks the default view, and a seeded default carries both its lock and the mark', () => {
+    const views = [tabel, { ...sharedOwn, default: true }, { ...seeded, default: true }, theirs]
+    render(<ViewList table={{ ...table, views }} active="planning" onSelect={() => undefined} />)
+
+    expect(within(item('Montage')).getByRole('img', { name: 'Standaardweergave' }).getAttribute('title')).toBe('Standaardweergave')
+    expect(within(item('Rooster')).getByRole('img', { name: 'Standaardweergave' })).toBeTruthy()
+    expect(within(item('Rooster')).getByRole('img', { name: 'Systeemweergave, alleen te kopiëren' })).toBeTruthy()
+    expect(within(item('Ploeg')).queryByRole('img', { name: 'Standaardweergave' })).toBeNull()
+    expect(within(item('Tabel')).queryByRole('img', { name: 'Standaardweergave' })).toBeNull()
   })
 
   it('renders a name made of markup as its characters', () => {
@@ -125,6 +136,41 @@ describe("a view's actions", () => {
     cleanup()
     render(<ViewList table={{ ...table, views: [open, locked] }} active="planning" onSelect={() => undefined} actions={actions()} />)
     expect(choices('Vast')).toEqual(['Kopie maken'])
+  })
+
+  describe('the default', () => {
+    const marking = () => ({ ...actions(), onDefault: vi.fn() })
+    const dashboard = saved(48, 'Overzicht', { type: 'dashboard', shared: true })
+    const views = [tabel, own, sharedOwn, theirs, seeded, { ...saved(49, 'Week', { shared: true }), default: true }, dashboard]
+    const offered = (name: string, run: ViewActions = marking()) => {
+      render(<ViewList table={{ ...table, views }} active="planning" onSelect={() => undefined} actions={run} />)
+      const items = choices(name).filter((label) => label?.includes('tandaardweergave'))
+      cleanup()
+      return items
+    }
+
+    it('offers an administrator Standaardweergave on a shared or system view, and its undoing on the default', () => {
+      for (const name of ['Montage', 'Ploeg', 'Rooster']) expect(offered(name)).toEqual(['Standaardweergave'])
+      expect(offered('Week')).toEqual(['Geen standaardweergave meer'])
+    })
+
+    it("never offers it on one's own unshared view, a dashboard or a starting view", () => {
+      for (const name of ['Calais techniek', 'Overzicht', 'Tabel']) expect(offered(name)).toEqual([])
+    })
+
+    it('offers neither to one without the action, as an editor is', () => {
+      for (const name of ['Montage', 'Week']) expect(offered(name, actions())).toEqual([])
+    })
+
+    it('marks or unmarks the chosen view', () => {
+      const run = marking()
+      render(<ViewList table={{ ...table, views }} active="planning" onSelect={() => undefined} actions={run} />)
+
+      fireEvent.click(within(open('Ploeg')).getByRole('menuitem', { name: 'Standaardweergave' }))
+      expect(run.onDefault).toHaveBeenCalledWith(theirs, true)
+      fireEvent.click(within(open('Week')).getByRole('menuitem', { name: 'Geen standaardweergave meer' }))
+      expect(run.onDefault).toHaveBeenCalledWith(views[5], false)
+    })
   })
 
   it('offers no move up on the first view of the list and no move down on the last', () => {
