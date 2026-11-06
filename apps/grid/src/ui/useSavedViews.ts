@@ -219,7 +219,7 @@ export function useSavedViews({ declared, starting, active, open, note, notify }
 
   /** The engine moves the mark off the node's other view: the list is read back. */
   const markDefault = (view: SavedView, on: boolean) =>
-    setDefault(view.id, on).then(refresh, (error: ApiError) => note(errorText(error.code, error.message)))
+    setDefault(view.id, on).then(refresh, (error: ApiError) => refused(view, error))
 
   return {
     markDefault,
