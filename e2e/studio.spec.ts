@@ -1855,7 +1855,12 @@ test.describe('views-and-actions, the shake-out', () => {
     try {
       await open(page, 'Sites', 'Sites')
       await page.getByRole('button', { name: 'More actions: SLA-sites', exact: true }).click()
-      await expect(page.getByRole('menuitem')).toHaveText(['Kopie maken', 'Naam wijzigen', 'Verwijderen'])
+      await expect(page.getByRole('menuitem')).toHaveText([
+        'Kopie maken',
+        'Naam wijzigen',
+        'Standaardweergave',
+        'Verwijderen',
+      ])
       await shot(page, 'rail-menu-beheerder')
       await page.getByRole('menuitem', { name: 'Naam wijzigen' }).click()
       await page.getByRole('textbox', { name: 'Nieuwe naam' }).fill('SLA-klanten')
