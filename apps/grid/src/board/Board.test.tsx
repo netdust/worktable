@@ -230,6 +230,54 @@ describe('the drag in words and keys', () => {
   })
 })
 
+describe('a lifted card on a lifecycle board', () => {
+  const options = { optie: 'Optie', terug: 'Terug', bevestigd: 'Bevestigd', weg: 'Weg' }
+  const life = {
+    ...model,
+    lifecycle: 'status',
+    lifecycle_transitions: [{ from: ['optie'], to: 'bevestigd' }, { from: '*', to: 'weg' }],
+    fields: { status: { ...model.fields.status, options } },
+  } as unknown as Model
+  const rows = [row(1, 'Repetitie', 'optie'), row(2, 'Voorstelling', 'weg'), row(3, 'Zonder', '')]
+  const column = (label: string) => screen.getByRole('region', { name: label }).className
+
+  it('draws the lanes no transition reaches greyed, and its own lane and the reachable ones plain', async () => {
+    board({ model: life, rows, onDrop: vi.fn(() => Promise.resolve(true)) })
+    await press('Repetitie', 'Space')
+    expect(column('Terug')).toContain('nv-board__column--blocked')
+    expect(column('Geen')).toContain('nv-board__column--blocked')
+    expect(column('Optie')).not.toContain('nv-board__column--blocked')
+    expect(column('Bevestigd')).not.toContain('nv-board__column--blocked')
+    expect(column('Weg')).not.toContain('nv-board__column--blocked')
+    await press('Repetitie', 'Escape')
+    expect(column('Terug')).not.toContain('nv-board__column--blocked')
+  })
+
+  it('skips an unreachable lane with the arrows, and a reachable drop writes once', async () => {
+    const onDrop = vi.fn((_drop: Drop, _id: number) => Promise.resolve(true))
+    board({ model: life, rows, onDrop })
+    await press('Repetitie', 'Space', 'ArrowRight')
+    expect(screen.getByRole('status').textContent).toBe('Repetitie boven Bevestigd, plaats 1 van 1.')
+    await press('Repetitie', 'Space')
+    expect(onDrop).toHaveBeenCalledTimes(1)
+    expect(onDrop).toHaveBeenCalledWith({ kind: 'regroup', value: 'bevestigd' }, 1)
+  })
+
+  it('puts the card back where a reachable drop is refused', async () => {
+    board({ model: life, rows, onDrop: vi.fn(() => Promise.resolve(false)) })
+    await press('Repetitie', 'Space', 'ArrowRight', 'Space')
+    expect(order('Optie')).toEqual(['Repetitie'])
+  })
+
+  it('never takes a card to the lane of no state', async () => {
+    const onDrop = vi.fn((_drop: Drop, _id: number) => Promise.resolve(true))
+    board({ model: life, rows, onDrop })
+    await press('Voorstelling', 'Space', 'ArrowRight', 'Space')
+    expect(onDrop).not.toHaveBeenCalled()
+    expect(order('Weg')).toEqual(['Voorstelling'])
+  })
+})
+
 describe("a flagged place in the board's drawer", () => {
   const from = { source: 'candidates', match: { assignment_id: 'id' }, value: 'person_id' }
   const link = { item: 'Plaats', dataset: 'assignment', key: 'activity_id', target: 'person_id', target_dataset: 'person' }

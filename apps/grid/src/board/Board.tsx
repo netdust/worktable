@@ -18,6 +18,7 @@ import { CardFace, type TonedLine } from './Card'
 import { Column } from './Column'
 import type { Drop } from './drop'
 import { byRank } from './rank'
+import { lifecycleOf } from './reachable'
 import { type BoardLane, useBoardDrag } from './useBoardDrag'
 
 const NONE = '\u0000'
@@ -70,7 +71,7 @@ export function Board({ view, model, models, rows, column, layout, onShown, onDr
   const toned: TonedLine | undefined = useMemo(() => (line && tones ? { column: line.id, tones } : undefined), [line, tones])
   const manual = layout.sort[0]?.id === 'position'
   const lanes = useMemo(() => lanesOf(rows, column, field, manual), [rows, column, field, manual])
-  const drag = useBoardDrag({ lanes, manual, layout, onDrop, onLayout })
+  const drag = useBoardDrag({ lanes, manual, layout, lifecycle: lifecycleOf(model, column, models), onDrop, onLayout })
   useEffect(() => onShown?.({ rows: rows.length, groups: null, cut: false, columns: lanes.length, menu: all, flagged }), [rows.length, lanes.length, all, flagged?.count])
   const none = t('noneOf', { label: model.label.toLocaleLowerCase(locale()) })
   return (

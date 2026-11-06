@@ -109,6 +109,18 @@ describe('a board', () => {
     expect(cardClass()).not.toContain('nv-board__card--drags')
   })
 
+  it('drags by a lifecycle column without buttons', async () => {
+    await open(schemaOf(unit({ lifecycle: 'status', lifecycle_transitions: [{ from: '*', to: 'klaar' }] })), 'bord')
+    expect(cardClass()).toContain('nv-board__card--drags')
+  })
+
+  it('does not drag a query board whose column writes a lifecycle that changes through its buttons only', async () => {
+    const taak = unit({ key: 'taak', lifecycle: 'status', lifecycle_buttons: true })
+    const overzicht = unit({ query: true, fields: { status: { ...state, writes: { dataset: 'taak', field: 'status', key: 'taak_id' } } } })
+    await open({ ...schemaOf(overzicht), models: { unit: overzicht, taak } } as unknown as Schema, 'bord')
+    expect(cardClass()).not.toContain('nv-board__card--drags')
+  })
+
   it('does not drag by a column the person only reads', async () => {
     await open(schemaOf(unit({ fields: { status: { ...state, readonly: true } } })), 'bord')
     expect(cardClass()).not.toContain('nv-board__card--drags')

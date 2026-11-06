@@ -20,7 +20,6 @@ import { Matrix } from '../matrix/Matrix'
 import { errorText, setStrings, t, undoText } from '../i18n'
 import { useSpace } from '../space'
 import type { Account, ApiError, DateWindow, Model, ModelAction, Opened, Row, SavedView, Schema, Scope, TableDef, View, ViewType } from '../types'
-import { pressedOnly } from '../grid/columns'
 import { Act } from './Act'
 import { Confirm } from './Confirm'
 import { LinkPage } from './LinkPage'
@@ -53,6 +52,7 @@ import { formatWindow, isMonth, isoWeek, weekOf } from './Window'
 import { Calendar } from '../calendar/Calendar'
 import { Board } from '../board/Board'
 import { writeDrop } from '../board/drop'
+import { lifecycleOf } from '../board/reachable'
 import { placeWriter } from '../grid/drawer/place'
 import { Dashboard } from '../dashboard/Dashboard'
 import { askedOf, QuickCreate } from '../dashboard/QuickCreate'
@@ -484,7 +484,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
   // What still waits, counted on the rows as the sheet now holds them: an edit or a drop moves the count with it.
   const shownRows = store || result.status === 'ready' ? sheetRows : null
   const grouped = view && model && layout ? boardColumn(view, model, layout) : null
-  const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped))
+  const boardDrops = Boolean(store && writable && view && model && !model.query && grouped && draggable(view, model, grouped, models))
   // A table reports the pills for the rows its search leaves, as its count does; the other skins count their own rows.
   const reported = told?.view === view?.key ? told?.shown?.insight : undefined
   const insight = useMemo(() => (!dashboard && model && shownRows && !matrix ? (reported ?? insightOf(model, shownRows)) : undefined), [dashboard, model, shownRows, matrix, reported])
@@ -731,7 +731,7 @@ function Workspace({ signed, role }: { signed: Signed; role: Account['role'] }) 
           ) : view?.type === 'board' && model && layout && boardColumn(view, model, layout) && result.status === 'ready' ? (
             <Board key={view.key} view={view} model={model} models={models} rows={store ? state.rows : result.rows} column={boardColumn(view, model, layout) as string} layout={layout} onShown={setShown}
               onDrop={store && boardDrops ? (drop, id) => writeDrop(store, boardColumn(view, model, layout) as string, drop, id) : undefined} onLayout={setLayout}
-              onCreate={writable && !model.query && !model.created_by && canSet(model, boardColumn(view, model, layout) as string) ? (preset) => setQuick(preset) : undefined} places={places} />
+              onCreate={writable && !model.query && !model.created_by && canSet(model, boardColumn(view, model, layout) as string, models) ? (preset) => setQuick(preset) : undefined} places={places} />
           ) : view?.type === 'gallery' && view.gallery && model && layout && result.status === 'ready' ? (
             <Gallery key={view.key} view={view} model={model} models={models} rows={sheetRows} kind={view.gallery.kind} layout={layout} size={size} onShown={setShown} />
           ) : matrix && model && view && result.status === 'ready' && cells && layout ? (
@@ -795,10 +795,11 @@ function monthSpan(month: DateWindow): DateWindow {
 
 
 /** A board drags cards through the column it groups by, unless it declares otherwise or that column changes through its buttons only. */
-const draggable = (view: View, model: Model, column: string): boolean => view.board?.drag !== false && canSet(model, column)
+const draggable = (view: View, model: Model, column: string, models: Record<string, Model>): boolean => view.board?.drag !== false && canSet(model, column, models)
 
-/** The person may set the column: a lane's + presets it, a drop writes it. */
-const canSet = (model: Model, column: string): boolean => !model.fields[column]?.readonly && !pressedOnly(model, column)
+/** The person may set the column: a lane's + presets it, a drop writes it; never a lifecycle, its own or the one it writes, that changes through buttons. */
+const canSet = (model: Model, column: string, models: Record<string, Model>): boolean =>
+  !model.fields[column]?.readonly && lifecycleOf(model, column, models)?.model.lifecycle_buttons !== true
 
 /** Why a query's `+ Nieuw` is off: its dataset is read-only, or the dataset has a required column nothing can fill. */
 function createBlocked(made: NewRow | null, writable: boolean): string | null {

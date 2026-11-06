@@ -116,6 +116,8 @@ export interface Model {
   record_link?: true
   /** The column a write to which is a transition: the record's state. */
   lifecycle?: string
+  /** The transitions the person's role may make on the lifecycle column: the states a board lets a card reach. */
+  lifecycle_transitions?: { from: string[] | '*'; to: string }[]
   /** The states in which an outside process holds the record: an open drawer follows it there. */
   live?: string[]
   /** The options column whose tone colours each record as a lane and on the rows that point at it. */

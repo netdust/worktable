@@ -637,84 +637,169 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
     }
   })
 
-  // Moved from step 3e, where it failed only on a board crowded by the earlier specs: now crowded on purpose.
-  test('board-drag-refused @e2e', async ({ page }) => {
-    test.setTimeout(240_000)
+  // An editor's Bevestigd reaches Voorlopig and Geannuleerd only: Geweigerd, Uitgenodigd and Open take no drop.
+  test('board-drag-not-offered @e2e', async ({ page }) => {
     const api = page.request
     const made = activities(api)
-    const toewijzingen: number[] = []
-    let activiteit = 0
+    let id = 0
     let view = 0
-    const place = async (naam: string, state: string, on = activiteit) => {
-      const id = await posted(api, '/api/rows/toewijzing', { activiteit_id: on, naam, state })
-      toewijzingen.push(id)
-      return id
-    }
+    const writes: string[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'PATCH' || new URL(r.url()).pathname.startsWith('/api/batches/'))
+        writes.push(`${r.method()} ${r.url()}`)
+    })
     try {
-      activiteit = await made.add('e2e weiger mij', plusDays(WEEK.refused, 1), 'bevestigd')
-      // Geweigerd runs far below the screen; Bevestigd holds enough above the card that the board scrolls to it.
-      for (let n = 1; n <= 64; n++) await place(`e2e geweigerd ${n}`, 'geweigerd')
-      for (let n = 1; n <= 20; n++) await place(`e2e bevestigd ${n}`, 'bevestigd')
-      const id = await place('e2e bevestigd blijft', 'bevestigd')
+      const activiteit = await made.add('e2e niet aangeboden', plusDays(WEEK.refused, 1), 'bevestigd')
+      id = await posted(api, '/api/rows/toewijzing', {
+        activiteit_id: activiteit,
+        naam: 'e2e bevestigd blijft',
+        state: 'bevestigd',
+      })
+      // Its own board: every column holds at most this card, so none runs below the screen.
+      view = await posted(api, '/api/views', {
+        name: 'e2e Bord niet aangeboden',
+        source: 'toewijzing',
+        skin: 'board',
+        filters: { activiteit_id: activiteit },
+        sort: ['naam'],
+        group_by: null,
+        visible_fields: ['rol_id'],
+      })
       await page.goto('/')
-      await open(page, 'Bord toewijzingen', id, 'Toewijzingen')
-      const both = async () => {
-        const all = await orders(page)
-        return { Bevestigd: all.Bevestigd, Geweigerd: all.Geweigerd }
-      }
-      const first = await both()
-      expect(first.Geweigerd?.length).toBeGreaterThanOrEqual(64)
-      const refusal = () =>
-        page.waitForResponse(
-          (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/toewijzing/${id}`,
-        )
-      // Bevestigd never goes to Geweigerd (only an invitation is declined): the writer refuses, the card snaps back and the refusal shows.
-      const back = async () => {
-        await expect(page.getByText(/statuswijziging is niet toegestaan/).first()).toBeVisible()
+      await open(page, 'e2e Bord niet aangeboden', id, 'Toewijzingen')
+      const first = await orders(page)
+      const stays = async () => {
+        await page.waitForTimeout(500)
+        expect(writes).toEqual([])
         await expect(lane(page, 'Bevestigd').locator(`[data-card="${id}"]`)).toBeVisible()
-        await expect.poll(both).toEqual(first)
-        await reopen(page, 'Bord toewijzingen', id, 'Toewijzingen')
-        await expect.poll(both).toEqual(first)
+        expect(await orders(page)).toEqual(first)
+        const response = await api.get(`/api/rows/toewijzing?filter=${encodeURIComponent(JSON.stringify({ id }))}`)
+        expect(((await response.json()) as { rows: { state: string }[] }).rows[0]?.state).toBe('bevestigd')
       }
 
-      // Mouse: the board scrolled to the card, Geweigerd beside it; the pointer sideways only, so the board stays put.
-      await card(page, id).evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }))
+      // Geweigerd in the middle of the board, the card beside it: every lane the glides cross is on screen.
       const scroller = page.locator('.nv-board')
-      const scrolled = await scroller.evaluate((el) => ({ top: el.scrollTop, left: el.scrollLeft }))
-      expect(scrolled.top).toBeGreaterThan(200)
       const target = await lane(page, 'Geweigerd').boundingBox()
-      if (!target) throw new Error('no Geweigerd column')
-      let refused = refusal()
-      const from = await lift(page, card(page, id))
-      await glide(page, from, { x: target.x + target.width / 2, y: from.y })
-      await expect(lane(page, 'Geweigerd')).toHaveClass(/nv-board__column--drop/)
-      expect(await scroller.evaluate((el) => ({ top: el.scrollTop, left: el.scrollLeft }))).toEqual(scrolled)
-      await shot(page, 'board-drag-refused')
-      await page.mouse.up()
-      expect((await refused).status()).toBe(422)
-      await back()
+      const frame = await scroller.boundingBox()
+      if (!target || !frame) throw new Error('no Geweigerd column')
+      await scroller.evaluate(
+        (el, by) => el.scrollBy({ left: by }),
+        target.x + target.width / 2 - (frame.x + frame.width / 2),
+      )
+      // A point in a column's head: inside the column however few cards it holds.
+      const head = async (label: string) => {
+        const box = await lane(page, label).boundingBox()
+        if (!box) throw new Error(`no ${label} column`)
+        return { x: box.x + box.width / 2, y: box.y + 20 }
+      }
 
-      // Keyboard: Space lifts, → takes it to Geweigerd at its place, Space drops.
-      refused = refusal()
+      // Mouse: over Geweigerd the column is greyed, never tinted, and a release there leaves the card where it was.
+      let at = await lift(page, card(page, id))
+      at = await glide(page, at, await head('Geweigerd'))
+      await expect(lane(page, 'Geweigerd')).toHaveClass(/nv-board__column--blocked/)
+      await expect(lane(page, 'Geweigerd')).not.toHaveClass(/nv-board__column--drop/)
+      await expect(lane(page, 'Geannuleerd')).not.toHaveClass(/nv-board__column--blocked/)
+      await shot(page, 'board-drag-not-offered')
+      await page.mouse.up()
+      await stays()
+
+      // Mouse, past a lane it reaches: over Geannuleerd the column is tinted; back on Geweigerd and released, nothing is written.
+      at = await lift(page, card(page, id))
+      at = await glide(page, at, await head('Geannuleerd'))
+      await expect(lane(page, 'Geannuleerd')).toHaveClass(/nv-board__column--drop/)
+      at = await glide(page, at, await head('Geweigerd'))
+      await expect(lane(page, 'Geannuleerd')).not.toHaveClass(/nv-board__column--drop/)
+      await expect(lane(page, 'Geweigerd')).not.toHaveClass(/nv-board__column--drop/)
+      await page.mouse.up()
+      await stays()
+
+      // Keyboard: → passes Geweigerd to Geannuleerd, ← from Bevestigd passes Uitgenodigd to Voorlopig; Escape puts it back.
       await card(page, id).focus()
       await page.keyboard.press('Space')
       await expect(page.locator('.nv-board__card--lifted')).toBeVisible()
       await listening(page)
       await page.keyboard.press('ArrowRight')
-      await expect(said(page)).toHaveText(/^e2e bevestigd blijft boven Geweigerd, plaats \d+ van \d+\.$/)
-      await page.keyboard.press('Space')
-      expect((await refused).status()).toBe(422)
-      await back()
+      await expect(said(page)).toHaveText(/^e2e bevestigd blijft boven Geannuleerd, plaats \d+ van \d+\.$/)
+      await page.keyboard.press('ArrowLeft')
+      await expect(said(page)).toHaveText(/^e2e bevestigd blijft boven Bevestigd, plaats \d+ van \d+\.$/)
+      await page.keyboard.press('ArrowLeft')
+      await expect(said(page)).toHaveText(/^e2e bevestigd blijft boven Voorlopig, plaats \d+ van \d+\.$/)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('.nv-board__card--lifted')).toHaveCount(0)
+      await stays()
 
-      // On a manual board the refused drop first ranks the card above its slot: that leaves no undo step either,
+      // Nothing was a step: ⌘Z has nothing to take back.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+      await page.keyboard.press('ControlOrMeta+z')
+      await stays()
+    } finally {
+      if (view) await api.delete(`/api/views/${view}`)
+      if (id) await api.delete(`/api/rows/toewijzing/${id}`)
+      await made.remove()
+    }
+  })
+
+  // A drop the board offered from the state it shows, while the stored state moved on: the engine answers 409.
+  test('board-drop-stale @e2e', async ({ page }) => {
+    test.setTimeout(180_000)
+    const api = page.request
+    const made = activities(api)
+    const toewijzingen: number[] = []
+    let view = 0
+    const place = async (on: number, naam: string, state: string) => {
+      const id = await posted(api, '/api/rows/toewijzing', { activiteit_id: on, naam, state })
+      toewijzingen.push(id)
+      return id
+    }
+    const stateOf = async (one: number) =>
+      (
+        (await (
+          await api.get(`/api/rows/toewijzing?filter=${encodeURIComponent(JSON.stringify({ id: one }))}`)
+        ).json()) as { rows: { state: string; position: string | null }[] }
+      ).rows[0]
+    const confirm = async (one: number) => {
+      const response = await api.patch(`/api/rows/toewijzing/${one}`, { data: { state: 'bevestigd' } })
+      expect(response.status(), await response.text()).toBe(200)
+    }
+    const lost = (one: number) =>
+      page.waitForResponse(
+        (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/toewijzing/${one}`,
+      )
+    const press = async (key: string, words: RegExp) => {
+      await page.keyboard.press(key)
+      await expect(said(page)).toHaveText(words)
+      if (key === 'Space' && /opgepakt/.test(words.source)) await listening(page)
+    }
+    try {
+      // Shown Uitgenodigd, stored Bevestigd: Geweigerd is reachable from the one, not from the other.
+      const activiteit = await made.add('e2e verouderd', plusDays(WEEK.refused, 3), 'bevestigd')
+      const id = await place(activiteit, 'e2e uitgenodigd verouderd', 'uitgenodigd')
+      await page.goto('/')
+      await open(page, 'Bord toewijzingen', id, 'Toewijzingen')
+      await expect(lane(page, 'Uitgenodigd').locator(`[data-card="${id}"]`)).toBeVisible()
+      await confirm(id)
+      let refused = lost(id)
+      await card(page, id).focus()
+      await press('Space', /^e2e uitgenodigd verouderd opgepakt in Uitgenodigd/)
+      await press('ArrowRight', /^e2e uitgenodigd verouderd boven Bevestigd/)
+      await press('ArrowRight', /^e2e uitgenodigd verouderd boven Geweigerd/)
+      await page.keyboard.press('Space')
+      const answer = await refused
+      expect(answer.status()).toBe(409)
+      expect(((await answer.json()) as { code: string }).code).toBe('transition_lost')
+      await expect(page.getByText(/De status is intussen gewijzigd/).first()).toBeVisible()
+      await expect(lane(page, 'Bevestigd').locator(`[data-card="${id}"]`)).toBeVisible()
+      expect((await stateOf(id))?.state).toBe('bevestigd')
+
+      // On a manual board the stale drop first ranks the card above its slot: that leaves no undo step either,
       // so the one ⌘Z after the refusal undoes the edit made before it.
-      await test.step('a manual board: one ⌘Z after a refusal undoes the edit before it', async () => {
-        const handmatig = await made.add('e2e weiger handmatig', plusDays(WEEK.refused, 2), 'bevestigd')
-        const above = await place('e2e h geweigerd', 'geweigerd', handmatig)
-        const held = await place('e2e h bevestigd', 'bevestigd', handmatig)
-        const earlier = await place('e2e h voorlopig', 'voorlopig', handmatig)
+      await test.step('a manual board: one ⌘Z after a stale drop undoes the edit before it', async () => {
+        const handmatig = await made.add('e2e verouderd handmatig', plusDays(WEEK.refused, 2), 'bevestigd')
+        const above = await place(handmatig, 'e2e h geweigerd', 'geweigerd')
+        const held = await place(handmatig, 'e2e h uitgenodigd', 'uitgenodigd')
+        const earlier = await place(handmatig, 'e2e h voorlopig', 'voorlopig')
         view = await posted(api, '/api/views', {
-          name: 'e2e Bord weigeren',
+          name: 'e2e Bord verouderd',
           source: 'toewijzing',
           skin: 'board',
           filters: { activiteit_id: handmatig },
@@ -722,39 +807,29 @@ test.describe('step 3f: the board drags on dnd-kit', () => {
           group_by: null,
           visible_fields: ['rol_id'],
         })
-        const stateOf = async (one: number) =>
-          (
-            (await (
-              await api.get(`/api/rows/toewijzing?filter=${encodeURIComponent(JSON.stringify({ id: one }))}`)
-            ).json()) as { rows: { state: string; position: string | null }[] }
-          ).rows[0]
         await page.goto('/')
-        await open(page, 'e2e Bord weigeren', held, 'Toewijzingen')
-        const press = async (key: string, words: RegExp) => {
-          await page.keyboard.press(key)
-          await expect(said(page)).toHaveText(words)
-          if (key === 'Space' && /opgepakt/.test(words.source)) await listening(page)
-        }
+        await open(page, 'e2e Bord verouderd', held, 'Toewijzingen')
 
         // The edit before: Voorlopig to the top of Bevestigd.
         await card(page, earlier).focus()
         await press('Space', /^e2e h voorlopig opgepakt in Voorlopig/)
         await press('ArrowRight', /^e2e h voorlopig boven Uitgenodigd/)
-        await press('ArrowRight', /^e2e h voorlopig boven Bevestigd, plaats 1 van 2\.$/)
+        await press('ArrowRight', /^e2e h voorlopig boven Bevestigd, plaats 1 van 1\.$/)
         await press('Space', /^e2e h voorlopig neergezet in Bevestigd/)
         await expect.poll(async () => (await stateOf(earlier))?.state).toBe('bevestigd')
 
-        // Refused below the card in Geweigerd: that card is ranked first, then the dropped card's own write is refused.
+        // Stale below the card in Geweigerd: that card is ranked first, then the held card's own write answers 409.
+        await confirm(held)
         await lane(page, 'Geweigerd').evaluate((el) => el.scrollIntoView({ block: 'nearest', inline: 'center' }))
-        const refused = page.waitForResponse(
-          (r) => r.request().method() === 'PATCH' && new URL(r.url()).pathname === `/api/rows/toewijzing/${held}`,
-        )
+        refused = lost(held)
         await card(page, held).focus()
-        await press('Space', /^e2e h bevestigd opgepakt in Bevestigd, plaats 2 van 2\.$/)
-        await press('ArrowRight', /^e2e h bevestigd boven Geweigerd, plaats 2 van 2\.$/)
+        await press('Space', /^e2e h uitgenodigd opgepakt in Uitgenodigd, plaats 1 van 1\.$/)
+        await press('ArrowRight', /^e2e h uitgenodigd boven Bevestigd, plaats 1 van 2\.$/)
+        await press('ArrowRight', /^e2e h uitgenodigd boven Geweigerd, plaats 1 van 2\.$/)
+        await press('ArrowDown', /^e2e h uitgenodigd boven Geweigerd, plaats 2 van 2\.$/)
         await page.keyboard.press('Space')
-        expect((await refused).status()).toBe(422)
-        await expect(page.getByText(/statuswijziging is niet toegestaan/).first()).toBeVisible()
+        expect((await refused).status()).toBe(409)
+        await expect(page.getByText(/De status is intussen gewijzigd/).first()).toBeVisible()
         await expect(lane(page, 'Bevestigd').locator(`[data-card="${held}"]`)).toBeVisible()
         await expect.poll(async () => (await stateOf(above))?.position).not.toBeNull()
 

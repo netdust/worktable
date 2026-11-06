@@ -21,6 +21,7 @@ import type { Row } from '../types'
 import type { ColumnLook } from './Column'
 import { type Drop, dropOf } from './drop'
 import { byRank } from './rank'
+import { type lifecycleOf, reachable } from './reachable'
 import { type Measured, targetOf, within } from './target'
 
 export interface BoardLane {
@@ -50,6 +51,8 @@ interface Options {
   lanes: BoardLane[]
   manual: boolean
   layout: Layout
+  /** The lifecycle the board's column moves: a card lands only in a lane a transition reaches. */
+  lifecycle?: ReturnType<typeof lifecycleOf>
   onDrop?: (drop: Exclude<Drop, { kind: 'none' }>, id: number) => Promise<boolean>
   onLayout?: (next: Layout) => void
 }
@@ -104,7 +107,7 @@ function pointOf(lists: Lists, at: Target, from: Lifted) {
 }
 
 /** The board's drag: the sensors, the lifted card, where it lands, and the drop it writes. */
-export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Options) {
+export function useBoardDrag({ lanes, manual, layout, lifecycle = null, onDrop, onLayout }: Options) {
   const [lifted, setLifted] = useState<Lifted | null>(null)
   const [target, setTarget] = useState<Target | null>(null)
   // A sorted board's dropped column, in the drop's ranks until its writes answer.
@@ -114,8 +117,8 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     [lanes, pending],
   )
   const root = useRef<HTMLDivElement>(null)
-  const latest = useRef({ shown, manual, layout, onDrop, onLayout })
-  latest.current = { shown, manual, layout, onDrop, onLayout }
+  const latest = useRef({ shown, manual, layout, lifecycle, onDrop, onLayout })
+  latest.current = { shown, manual, layout, lifecycle, onDrop, onLayout }
   const drag = useRef<Lifted | null>(null)
   const live = useRef<Target | null>(null)
   const heard = useRef<Target | null>(null)
@@ -134,6 +137,8 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     const now = live.current
     if (!now || now.lane !== next.lane || now.index !== next.index) live.current = next
   }
+  const reaches = (from: Lifted, lane: BoardLane) =>
+    lane.key === from.lane || reachable(latest.current.lifecycle, laneOf(from.lane)?.value ?? null, lane.value)
 
   const collide: CollisionDetection = (args) => {
     const from = drag.current
@@ -149,6 +154,13 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     const hit = pointerWithin({ ...args, droppableContainers: args.droppableContainers.filter((c) => isLane(c.id)) })[0]
     if (!hit) return last.current
     const key = String(hit.id).slice(LANE.length)
+    const over = laneOf(key)
+    // Over a lane no transition reaches, the card would land back in its own place.
+    if (over && !reaches(from, over)) {
+      aim({ lane: from.lane, index: from.index })
+      last.current = []
+      return []
+    }
     if (key === from.lane) {
       const own = args.droppableContainers.filter((c) => !isLane(c.id) && c.data.current?.lane === key)
       const near = closestCenter({ ...args, droppableContainers: own }).slice(0, 1)
@@ -171,7 +183,8 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     const at = all.findIndex((lane) => lane.key === now.lane)
     const move = ARROWS[event.code]
     if (!move) return
-    const lane = all[Math.max(0, Math.min(all.length - 1, at + move[0]))]
+    const ahead = move[0] > 0 ? all.slice(at + 1) : move[0] < 0 ? all.slice(0, at).reverse() : []
+    const lane = ahead.find((one) => reaches(from, one)) ?? all[at]
     if (!lane) return
     const slots = lane.cards.filter((row) => row.id !== from.id).length
     aim({ lane: lane.key, index: Math.max(0, Math.min(slots, now.index + move[1])) })
@@ -230,7 +243,7 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
   const land = async (from: Lifted, at: Target) => {
     const { manual, onDrop } = latest.current
     const lane = laneOf(at.lane)
-    if (!lane || !onDrop) return
+    if (!lane || !onDrop || !reaches(from, lane)) return
     const cards = lane.cards.filter((row) => row.id !== from.id)
     const others = latest.current.shown.filter((one) => one.key !== at.lane).map((one) => one.cards)
     const drop = dropOf({ manual, from: at.lane === from.lane ? from.index : null, index: at.index, cards, value: lane.value, others })
@@ -264,7 +277,9 @@ export function useBoardDrag({ lanes, manual, layout, onDrop, onLayout }: Option
     if (!lifted || !target) return null
     const away = target.lane !== lifted.lane
     const here = away && target.lane === key
+    const lane = laneOf(key)
     return {
+      blocked: lane !== undefined && !reaches(lifted, lane),
       dragged: lifted.lane === key ? { id: lifted.id, look: away ? 'ghost' : 'slot' } : null,
       tint: here,
       slot: here && manual ? { index: target.index, height: lifted.height } : null,

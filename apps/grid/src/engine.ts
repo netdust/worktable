@@ -93,7 +93,7 @@ export interface EngineSource {
   /** The rows of other datasets that point at a row, by link name; served only to a reader of that dataset. */
   links?: Record<string, Link & { label: string }>
   /** A write to this column is a transition: the grid sends the value it showed as `expect`. */
-  lifecycle?: { column: string; live?: string[]; buttons?: true }
+  lifecycle?: { column: string; live?: string[]; buttons?: true; transitions?: { from: string[] | '*'; to: string }[] }
   /** Each record has a link its person reads their views through. */
   record_link?: true
   attachments?: { kinds: Record<string, string>; max_mb: number; owner_visible?: true; owner_writable?: true }
@@ -239,6 +239,7 @@ function modelOf(name: string, source: EngineSource, sources: Sources): Model {
     ...(source.lifecycle ? { lifecycle: source.lifecycle.column } : {}),
     ...(source.lifecycle?.live ? { live: source.lifecycle.live } : {}),
     ...(source.lifecycle?.buttons ? { lifecycle_buttons: true as const } : {}),
+    ...(source.lifecycle?.transitions ? { lifecycle_transitions: source.lifecycle.transitions } : {}),
     ...(source.tone ? { tone: source.tone } : {}),
     ...(source.attachments ? { attachments: attachable(source.attachments, source.writable === true) } : {}),
     fields: {
@@ -299,12 +300,11 @@ function calendarNeed(source: EngineSource): CalendarDef | undefined {
   return day === undefined ? undefined : { day, start: null, end: null, lanes: [] }
 }
 
-/** The declared board, else one on the first options column; a lifecycle column's moves are transitions, so no drag there. */
+/** The declared board, else one on the first options column. */
 function boardNeed(source: EngineSource): EngineSource['board'] {
   if (source.board) return source.board
   const column = shown(source).find(([, c]) => c.options !== undefined)?.[0]
-  if (column === undefined) return undefined
-  return source.lifecycle?.column === column ? { column, drag: false } : { column }
+  return column === undefined ? undefined : { column }
 }
 
 function calendarOf({ day, start, end, lanes, spans }: NonNullable<EngineSource['calendar']>): CalendarDef {

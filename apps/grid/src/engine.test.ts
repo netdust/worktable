@@ -806,8 +806,14 @@ describe("the skins a source's columns allow", () => {
     expect(table.board).toEqual({ column: 'status' })
   })
 
-  it("takes no drag on a board over the lifecycle's column: its moves are transitions", () => {
-    expect(tableOf(source({ titel, status }, { lifecycle: { column: 'status' } })).board).toEqual({ column: 'status', drag: false })
+  it("drags on a board over the lifecycle's column: the board offers only the lanes a transition reaches", () => {
+    expect(tableOf(source({ titel, status }, { lifecycle: { column: 'status' } })).board).toEqual({ column: 'status' })
+  })
+
+  it('serves the transitions the viewer may make beside the lifecycle column', () => {
+    const transitions = [{ from: ['open'], to: 'gedaan' }]
+    const model = toSchema({ sources: { taak: source({ titel, status }, { lifecycle: { column: 'status', transitions } }) }, views: [] } as unknown as EngineSchema).models.taak
+    expect(model?.lifecycle_transitions).toEqual(transitions)
   })
 
   it('offers a calendar and a timeline on the declared date, else the first date column, with no lanes', () => {

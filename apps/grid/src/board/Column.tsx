@@ -9,8 +9,9 @@ import type { Flag } from '../ui/useFlags'
 import { Card, type Look, type TonedLine } from './Card'
 import { type BoardLane, laneId } from './useBoardDrag'
 
-/** What a drag draws in a column: its own card's look, the tint of a target column, and the slot a card lands in there. */
+/** What a drag draws in a column: its own card's look, the tint of a target column, the slot a card lands in there, and whether the card may land here at all. */
 export interface ColumnLook {
+  blocked: boolean
   dragged: { id: number; look: Look } | null
   tint: boolean
   slot: { index: number; height: number } | null
@@ -30,7 +31,7 @@ export function Column({ lane, tone, columns, toned, marks, none, open, drags, l
   ))
   if (slot) cards.splice(slot.index, 0, <div key="slot" className="nv-board__slot" style={{ height: slot.height }} aria-hidden="true">{lane.label}</div>)
   return (
-    <section ref={setNodeRef} className={look?.tint ? 'nv-board__column nv-board__column--drop' : 'nv-board__column'} aria-label={lane.label}>
+    <section ref={setNodeRef} className={['nv-board__column', look?.tint && 'nv-board__column--drop', look?.blocked && 'nv-board__column--blocked'].filter(Boolean).join(' ')} aria-label={lane.label}>
       <header className="nv-board__head">
         <span className="nv-board__name" style={{ '--tone': tone } as CSSProperties}>{lane.label}</span>
         <span className="nv-board__count">{lane.cards.length}</span>

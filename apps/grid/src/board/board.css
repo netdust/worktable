@@ -25,6 +25,12 @@
   background: color-mix(in srgb, var(--color-accent-subtle) 60%, var(--color-bg-column));
 }
 
+/* A column the lifted card's state has no transition to: greyed, and it takes no drop. */
+.nv-board__column--blocked .nv-board__head > *,
+#root .nv-board__column--blocked .nv-board__card {
+  opacity: 0.4;
+}
+
 .nv-board__list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
