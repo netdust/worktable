@@ -271,21 +271,19 @@ function removeUndeclared(run: Run): void {
       run.named.push(`${label} changed by a person, left alone`)
       continue
     }
-    run.store.sqlite
-      .query('UPDATE saved_view SET deleted_at = ?, updated_at = ? WHERE id = ?')
-      .run(run.now, run.now, view.id as number)
-    revise(
-      run.store.sqlite,
-      savedView,
-      view.id as number,
-      [['deleted_at', null, run.now]],
-      run.now,
-      SYSTEM_OWNER,
-      run.batch,
-    )
+    removeView(run, view)
     run.written++
     run.named.push(`${label} removed, no longer declared`)
   }
+}
+
+// As a person's delete, a removal clears the default mark, so a restore never brings it back.
+function removeView(run: Run, view: Stored): void {
+  const changes: Change[] = [['deleted_at', null, run.now]]
+  if (view.is_default === 1) changes.push(['is_default', 1, 0])
+  const sql = 'UPDATE saved_view SET deleted_at = ?, is_default = 0, updated_at = ? WHERE id = ?'
+  run.store.sqlite.query(sql).run(run.now, run.now, view.id as number)
+  revise(run.store.sqlite, savedView, view.id as number, changes, run.now, SYSTEM_OWNER, run.batch)
 }
 
 // A person's view on a source the domain no longer declares is theirs to keep; system views were handled above.

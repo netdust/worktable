@@ -331,3 +331,19 @@ describe('a seed declares a default', () => {
     expect(markedIds()).toEqual([1])
   })
 })
+
+describe("a seed's removal", () => {
+  test('clears the removed view’s mark, so a re-declared seed restores it unmarked', async () => {
+    expect((await mark(1)).status).toBe(200)
+    seedMissing(sqlite, { ...domain, views: [] })
+    expect(
+      sqlite.query('SELECT deleted_at IS NOT NULL AS gone, is_default FROM saved_view WHERE id = 1').get(),
+    ).toEqual({
+      gone: 1,
+      is_default: 0,
+    })
+    seedMissing(sqlite, domain)
+    expect(sqlite.query('SELECT deleted_at FROM saved_view WHERE id = 1').get()).toEqual({ deleted_at: null })
+    expect(markedIds()).toEqual([])
+  })
+})
