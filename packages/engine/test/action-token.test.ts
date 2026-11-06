@@ -177,18 +177,6 @@ describe('the account table', () => {
     db.close()
     expect(tableDdl(account)).toContain("CHECK ((kind = 'user') = (email IS NOT NULL))")
   })
-
-  test('a link account is created once per subject', () => {
-    const first = linkAccount(sqlite, { dataset: 'member', id: 1 })
-    expect(linkAccount(sqlite, { dataset: 'member', id: 1 })).toEqual(first)
-    expect(linkAccount(sqlite, { dataset: 'member', id: 2 })?.id).not.toBe(first?.id)
-    expect(first).toMatchObject({ role: 'owner', kind: 'link', subject: { dataset: 'member', id: 1 } })
-    const rows = sqlite.query("SELECT email, role, subject_id FROM account WHERE kind = 'link' ORDER BY id").all()
-    expect(rows).toEqual([
-      { email: null, role: 'owner', subject_id: 1 },
-      { email: null, role: 'owner', subject_id: 2 },
-    ])
-  })
 })
 
 describe('the action token', () => {

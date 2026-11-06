@@ -99,8 +99,6 @@ const withMatrix = (over: Record<string, unknown>): Domain =>
   domainOf(member, taak, verlof, join({ matrix: { ...matrix, ...over } as DatasetDecl['matrix'] }))
 
 describe('validateDomain: matrix', () => {
-  test('a valid matrix passes', () => expect(() => validateDomain(full())).not.toThrow())
-
   const bad: [string, Record<string, unknown>, string][] = [
     ['down not a relation', { down: 'name' }, 'name'],
     ['down undeclared', { down: 'nope' }, 'nope'],

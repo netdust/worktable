@@ -45,8 +45,6 @@ function refusal(d: Domain): DomainError {
 }
 
 describe('validateDomain refuses a bad options_from', () => {
-  test('accepts the fixture', () => expect(() => validateDomain(domain)).not.toThrow())
-
   test('refuses an unknown source', () => {
     expect(refusal(withColumnFrom({ ...PICKS, source: 'nowhere' })).message).toContain('nowhere')
     expect(refusal(withInputFrom({ ...PICKS, source: 'nowhere' })).message).toContain('nowhere')

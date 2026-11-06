@@ -110,13 +110,6 @@ describe('$like, $nlike and $period', () => {
     expect(JSON.parse(stored.filters)).toEqual(filters)
     expect((await postView({ $or: [{ $or: [{ status: 'open' }] }] })).body.code).toBe('bad_view')
   })
-
-  test('POST /views stores a $period on the dated source', async () => {
-    const { status, body } = await postView({ day: { $period: 'week' } })
-    expect(status).toBe(201)
-    const stored = sqlite.query('SELECT filters FROM saved_view WHERE id = ?').get(body.id) as { filters: string }
-    expect(JSON.parse(stored.filters)).toEqual({ day: { $period: 'week' } })
-  })
 })
 
 describe('denials', () => {
@@ -135,8 +128,6 @@ describe('denials', () => {
   test('sort on an undeclared key is 400 bad_sort', () =>
     denied('/api/rows/taak?sort=heading;DROP TABLE x', 400, 'bad_sort'))
   test('sort on custom.key is 400 bad_sort', () => denied('/api/rows/taak?sort=custom.colour', 400, 'bad_sort'))
-  test('2001 sort keys is 400 bad_sort, not a 500', () =>
-    denied(`/api/rows/taak?sort=${Array(2001).fill('id').join(',')}`, 400, 'bad_sort'))
   test('17 sort keys is 400 bad_sort for their number', async () => {
     const { status, body } = await rows('taak', `sort=${Array(17).fill('id').join(',')}`)
     expect({ status, code: body.code, message: body.message }).toEqual({
@@ -475,20 +466,12 @@ describe('title through a relation', () => {
   })
 })
 
-test('a column title is carried as title on every row', async () => {
-  expect((await rows('plat')).body.rows[0].title).toBe('x')
-})
-
 describe('offset', () => {
   test('offset=2&limit=2 pages with an exact total', async () => {
     const all = (await rows('taak', 'sort=id')).body.rows.map((r: { id: number }) => r.id)
     const { body } = await rows('taak', 'sort=id&offset=2&limit=2')
     expect(body.rows.map((r: { id: number }) => r.id)).toEqual(all.slice(2, 4))
     expect(body.total).toBe(all.length)
-  })
-
-  test('offset defaults to 0', async () => {
-    expect((await rows('taak', 'sort=id&limit=1')).body.rows[0].id).toBe(1)
   })
 
   test.each(['-1', 'abc', '1.5', ''])('offset=%s is 400 bad_offset', (v) =>

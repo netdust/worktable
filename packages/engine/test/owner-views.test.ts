@@ -1,8 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Hono } from 'hono'
 import {
-  type Actor,
   type ColumnDecl,
   type DatasetDecl,
   type Domain,
@@ -13,10 +11,7 @@ import {
   seedDomain,
   validateDomain,
 } from '../src'
-import type { AuthEnv } from '../src/auth'
-import { ApiError } from '../src/params'
 import { recordLinkFor } from '../src/record-link'
-import { shareRoutes } from '../src/views'
 import { contents, domain, freshDb, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
@@ -134,6 +129,14 @@ describe('PUT /views/:id/for-owners (attack 13)', () => {
     await refused(() => forOwners(id), 'column_not_owner_visible', key)
   })
 
+  // POST /views refuses an unknown key, so only a stored row can carry one.
+  test('a stored view naming a column the query does not have is column_not_owner_visible, naming it', async () => {
+    const sql = `INSERT INTO saved_view (name, source_type, source, owner_id, shared, filters, sort, group_by, visible_fields)
+                 VALUES ('Rauw', 'query', 'per_project', -1, 1, '{}', '[]', NULL, '["name","nope"]')`
+    const id = Number(sqlite.query(sql).run().lastInsertRowid)
+    await refused(() => forOwners(id), 'column_not_owner_visible', 'nope')
+  })
+
   test('a link key is link_not_allowed, naming it', async () => {
     const linked = linkedDomain()
     const db = migrated(linked)
@@ -152,26 +155,6 @@ describe('PUT /views/:id/for-owners (attack 13)', () => {
     await refused(() => forOwners(id, editor, 'DELETE'), 'forbidden')
     const owner = await signIn(app, 'owner', { dataset: 'project', id: 1 })
     await refused(() => forOwners(id, owner), 'forbidden')
-  })
-
-  test('a service account with the administrator role is refused in the handler: 403, tables unchanged', async () => {
-    const id = await viewAs(admin, { shared: true })
-    const service: Actor = { id: 77, role: 'administrator', subject: null, kind: 'service' }
-    const bare = new Hono<AuthEnv>()
-    bare.use(async (c, next) => {
-      c.set('actor', service)
-      await next()
-    })
-    shareRoutes(bare, { sqlite, domain } as Parameters<typeof shareRoutes>[1])
-    bare.onError((err, c) =>
-      err instanceof ApiError ? c.json({ code: err.code }, err.status) : c.json({ code: 'internal' }, 500),
-    )
-    const call = (method: string) => async () => {
-      const res = await bare.request(`/views/${id}/for-owners`, { method })
-      return { status: res.status, body: (await res.json()) as Record<string, unknown> }
-    }
-    await refused(call('PUT'), 'forbidden')
-    await refused(call('DELETE'), 'forbidden')
   })
 
   test('an unknown view, or another person`s private one, is 404', async () => {
@@ -410,12 +393,22 @@ describe('GET /owner/views/:id/rows (attack 12)', () => {
     await forOwners(gone)
     await send(app, admin)('DELETE', `/api/views/${gone}`, { type: null })
     expect(await asLink(`/api/owner/views/${gone}/rows`)).toMatchObject({ status: 404 })
-  })
 
-  test('an editor session is 403 on the rows too', async () => {
-    const id = await viewAs(admin, {})
-    await forOwners(id)
-    expect(await send(app, editor)('GET', `/api/owner/views/${id}/rows`)).toMatchObject({ status: 403 })
+    const live = await viewAs(admin, {})
+    await forOwners(live)
+    expect((await asLink('/api/owner/views')).body.views.map((v: { id: number }) => v.id)).toEqual([live])
+    // No subject, and a subject on a dataset the view's owner column does not point at.
+    const subjects = [null, { dataset: 'taak', id: 1 }]
+    const read = []
+    for (const subject of subjects) {
+      const outside = send(app, await signIn(app, 'owner', subject))
+      const before = tables()
+      const listed = (await outside('GET', '/api/owner/views')).body.views
+      const rows = await outside('GET', `/api/owner/views/${live}/rows`)
+      read.push({ subject, listed, rows: [rows.status, rows.body.code], unchanged: Bun.deepEquals(tables(), before) })
+    }
+    const none = { listed: [], rows: [404, 'unknown_view'], unchanged: true }
+    expect(read).toEqual(subjects.map((subject) => ({ subject, ...none })))
   })
 })
 

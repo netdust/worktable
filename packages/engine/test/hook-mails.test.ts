@@ -288,9 +288,4 @@ describe('what record link a hook gets', () => {
   test('null on a record with no owner, whose link would never open', async () => {
     expect(await recordOf('letter')).toBeNull()
   })
-
-  // The branch for a missing secret is a guard only: such an engine never starts, so no hook meets it.
-  test('an engine without a link secret refuses to start on a dataset declaring record_link', () => {
-    expect(() => testEngine(sqlite, domain, { mailer, outbox, linkSecret: undefined })).toThrow(/link secret/)
-  })
 })

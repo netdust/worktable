@@ -143,17 +143,9 @@ describe('Bearer authentication (attacks 17, 18)', () => {
     expect(tablesBut('rate_limit')).toEqual(before)
   })
 
-  test('a valid cookie with a bad Bearer is 401: the header wins', async () => {
-    const cookie = await signIn(app, 'administrator')
-    expect((await call('GET', '/api/auth/me', { cookie })).status).toBe(200)
-    const mixed = await call('GET', '/api/auth/me', { cookie, ...bearer('not-a-token') })
-    expect(mixed.status).toBe(401)
-    expect(mixed.body).toEqual(UNAUTHENTICATED)
-  })
-
   test('a valid cookie with any other Authorization scheme is 401: the header still wins', async () => {
     const cookie = await signIn(app, 'administrator')
-    for (const authorization of ['Basic x', 'Bearer', 'Token abc', '']) {
+    for (const authorization of ['Bearer not-a-token', 'Basic x', 'Bearer', 'Token abc', '']) {
       const mixed = await call('GET', '/api/auth/me', { cookie, authorization })
       expect({ authorization, status: mixed.status, body: mixed.body }).toEqual({
         authorization,

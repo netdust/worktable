@@ -170,10 +170,6 @@ function failure(d: Domain): DomainError {
 }
 
 describe('validateDomain: board, gallery and spans', () => {
-  test('a valid board, gallery and spanning calendar pass', () => {
-    expect(() => validateDomain(domainOf(itemOf()))).not.toThrow()
-  })
-
   test('refuses a board on a column without options, or undeclared', () => {
     expect(failure(domainOf(itemOf({ board: { column: 'name' } }))).bad).toBe('name')
     expect(failure(domainOf(itemOf({ board: { column: 'nope' } }))).bad).toBe('nope')
@@ -237,6 +233,8 @@ describe('board, timeline and gallery views and /schema', () => {
   test('a timeline view saves where the source declares calendar', async () => {
     const made = await admin('POST', '/api/views', { body: view('timeline', { group_by: 'place_id' }) })
     expect([made.status, made.body.skin, made.body.group_by]).toEqual([201, 'timeline', 'place_id'])
+    const nonLane = await admin('POST', '/api/views', { body: view('timeline', { group_by: 'state' }) })
+    expect([nonLane.status, nonLane.body.code]).toEqual([400, 'bad_view'])
   })
 
   test('without a declaration, a shown date column allows a calendar and a timeline, ungrouped', async () => {

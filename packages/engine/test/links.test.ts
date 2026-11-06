@@ -94,9 +94,8 @@ describe('validateDomain refuses a links declaration', () => {
     throw new Error('expected DomainError')
   }
 
-  test('the fixture and a query that creates its key dataset pass', () => {
+  test('the fixture passes', () => {
     expect(() => validateDomain(domain)).not.toThrow()
-    expect(() => validateDomain(withQuery)).not.toThrow()
   })
 
   test('a link dataset that does not exist', () => {
@@ -351,6 +350,31 @@ describe('a link in a view', () => {
       status: 200,
       fields: ['koppels', 'merken'],
     })
+  })
+
+  test('every column, the id and every link of a source wider than 16 keys is accepted; one key more is refused', async () => {
+    const taak = withQuery.datasets.find((d) => d.name === 'taak') as ReturnType<typeof defineDataset>
+    const extra = [1, 2, 3, 4, 5, 6].map((n): [string, ColumnDecl] => [
+      `extra_${n}`,
+      { type: 'text', label: `Extra ${n}`, nullable: true },
+    ])
+    const wide = { ...taak, columns: { ...taak.columns, ...Object.fromEntries(extra) } }
+    const wideDomain: Domain = {
+      ...withQuery,
+      datasets: withQuery.datasets.map((d) => (d.name === 'taak' ? wide : d)),
+    }
+    const db = new Database(':memory:')
+    migrate(db, wideDomain)
+    const app = testEngine(db, wideDomain)
+    const as = send(app, await signIn(app, 'editor'))
+    const post = (visible_fields: string[]) =>
+      as('POST', '/api/views', { body: json({ name: 'Every field', source: 'taak', visible_fields }) })
+
+    const every = [...Object.keys(wide.columns), 'id', ...Object.keys(wide.links ?? {})]
+    expect(every.length).toBeGreaterThan(16)
+    expect((await post(every)).status).toBe(201)
+    const more = await post([...every, 'one_more'])
+    expect([more.status, more.body.message]).toEqual([400, `visible_fields takes at most ${every.length} keys`])
   })
 
   test('a view cannot sort or group on a link', async () => {

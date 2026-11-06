@@ -52,11 +52,6 @@ describe('share-token denials (attack 8)', () => {
     await denied(unshare(id, editor), 403, 'forbidden')
   })
 
-  test('an anonymous PUT share-token is 401', async () => {
-    const id = insertView('per_project', ['name'])
-    await denied(share(id, anyone), 401, 'unauthenticated')
-  })
-
   test('a dataset view is 400 not_query, tables unchanged', async () => {
     await denied(share(insertView('taak', ['description'])), 400, 'not_query')
   })

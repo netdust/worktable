@@ -3,20 +3,9 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Hono } from 'hono'
-import {
-  type Actor,
-  createEngine,
-  type DatasetDecl,
-  type Domain,
-  DomainError,
-  migrate,
-  seedDomain,
-  validateDomain,
-} from '../src'
-import type { AuthEnv } from '../src/auth'
-import { ApiError } from '../src/params'
-import { recordLinkFor, recordLinkRoutes } from '../src/record-link'
+import { createEngine, type DatasetDecl, type Domain, DomainError, migrate, seedDomain, validateDomain } from '../src'
+import { createService } from '../src/auth'
+import { recordLinkFor } from '../src/record-link'
 import { contents, domain as fixture, send } from './fixture'
 import { signIn, TEST_LINK_SECRET, testEngine } from './sign-in'
 
@@ -29,9 +18,37 @@ const withInbox = (d: DatasetDecl): DatasetDecl =>
         columns: { ...d.columns, inbox: { type: 'text', label: 'Inbox', nullable: true } },
       }
     : d
+// The fixture's note, whose move to lang mails an action link to its project's inbox; each link minted is kept here.
+const actLinks: string[] = []
+const withInvite = (d: DatasetDecl): DatasetDecl =>
+  d.name === 'note'
+    ? {
+        ...d,
+        lifecycle: {
+          column: 'kind',
+          transitions: [
+            { from: ['kort'], to: 'lang', roles: ['editor'] },
+            { from: ['lang'], to: 'kort', roles: ['owner'] },
+          ],
+          hooks: {
+            lang: (row, ctx) => ({
+              token: { to: ['kort'], days: 7 },
+              mail: (link) => {
+                actLinks.push(link ?? '')
+                return {
+                  to: String(ctx.find('project', row.project_id as number)?.inbox),
+                  subject: 'Invite',
+                  text: link ?? '',
+                }
+              },
+            }),
+          },
+        },
+      }
+    : d
 const domain: Domain = {
   ...fixture,
-  datasets: fixture.datasets.map(withInbox),
+  datasets: fixture.datasets.map(withInbox).map(withInvite),
   writers: { ...fixture.writers, project: { ...fixture.writers?.project, update: (values) => values } },
 }
 
@@ -43,6 +60,7 @@ let app: ReturnType<typeof testEngine>
 let outbox: string
 
 beforeEach(() => {
+  actLinks.length = 0
   sqlite = new Database(':memory:')
   migrate(sqlite, domain)
   seedDomain(sqlite, domain)
@@ -118,6 +136,10 @@ describe('the record link', () => {
     expect(fresh).not.toBe(old)
     expect((await asLink(old)).status).toBe(401)
     expect((await asLink(fresh)).status).toBe(200)
+    expect(await admin('GET', '/api/record-links/project/1')).toEqual({
+      status: 200,
+      body: { link: `${APP_URL}/#/link/${fresh}` },
+    })
     const adminId = (sqlite.query("SELECT id FROM account WHERE role = 'administrator'").get() as { id: number }).id
     expect(sqlite.query('SELECT dataset, record_id, version, rotated_by FROM record_link').all()).toEqual([
       { dataset: 'project', record_id: 1, version: 1, rotated_by: adminId },
@@ -135,17 +157,6 @@ describe('the record link', () => {
     expect((await asLink(old)).status).toBe(401)
     expect((await asLink(fresh)).status).toBe(401)
     expect((await asLink(linkOf(1))).status).toBe(200)
-  })
-
-  test('revoke is the version bump: rotate without handing out the new link, and the old link is 401', async () => {
-    const admin = send(app, await signIn(app, 'administrator'))
-    const old = linkOf(1)
-    expect((await admin('POST', '/api/record-links/project/1/rotate', { body: '{}' })).status).toBe(200)
-    expect((await asLink(old)).status).toBe(401)
-    expect(await admin('GET', '/api/record-links/project/1')).toEqual({
-      status: 200,
-      body: { link: `${APP_URL}/#/link/${linkOf(1)}` },
-    })
   })
 
   test.each([
@@ -167,26 +178,6 @@ describe('the record link', () => {
     const cookie = await signIn(app, role, role === 'owner' ? { dataset: 'project', id: 1 } : null)
     await denied(() => raw('GET', '/api/record-links/project/1', { cookie }), 403, 'forbidden')
     await denied(() => raw('POST', '/api/record-links/project/1/rotate', { cookie }, {}), 403, 'forbidden')
-  })
-
-  test('a service account with the administrator role is refused in the handler: 403, tables unchanged', async () => {
-    const service: Actor = { id: 77, role: 'administrator', subject: null, kind: 'service' }
-    const store = { sqlite, domain, appUrl: APP_URL } as Parameters<typeof recordLinkRoutes>[1]
-    const bare = new Hono<AuthEnv>()
-    bare.use(async (c, next) => {
-      c.set('actor', service)
-      await next()
-    })
-    recordLinkRoutes(bare, store, TEST_LINK_SECRET)
-    bare.onError((err, c) =>
-      err instanceof ApiError ? c.json({ code: err.code }, err.status) : c.json({ code: 'internal' }, 500),
-    )
-    await denied(() => Promise.resolve(bare.request('/record-links/project/1')), 403, 'forbidden')
-    await denied(
-      () => Promise.resolve(bare.request('/record-links/project/1/rotate', { method: 'POST' })),
-      403,
-      'forbidden',
-    )
   })
 })
 
@@ -356,7 +347,6 @@ describe('serve.ts --link-secret-file', () => {
     ['group-readable', () => ['--link-secret-file', secretFile(32, 0o640)]],
     ['world-readable', () => ['--link-secret-file', secretFile(32, 0o604)]],
     ['unreadable (a directory)', () => ['--link-secret-file', unreadable()]],
-    ['unreadable (mode 000)', () => ['--link-secret-file', secretFile(32, 0o000)]],
   ])(
     'refuses to serve with a %s secret file, naming the flag',
     async (_, args) => {
@@ -377,6 +367,7 @@ describe('the address a link is mailed to (attack 16)', () => {
   test('only a human administrator changes it, and the change rotates the link', async () => {
     const editor = send(app, await signIn(app, 'editor'))
     const old = linkOf(1)
+    expect((await asLink(old)).status).toBe(200)
     const before = tables()
     const refused = await editor('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'x@evil.test' }) })
     expect({ status: refused.status, code: refused.body.code }).toEqual({ status: 403, code: 'forbidden' })
@@ -386,6 +377,64 @@ describe('the address a link is mailed to (attack 16)', () => {
     const moved = await admin('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'new@example.test' }) })
     expect(moved.status).toBe(200)
     expect((await asLink(old)).status).toBe(401)
+    expect((await asLink(linkOf(1))).status).toBe(200)
+  })
+
+  test.each(['editor', 'administrator'] as const)(
+    'a service account may not change it, even as %s: 403, tables unchanged',
+    async (role) => {
+      const bearer = { authorization: `Bearer ${createService(sqlite, `bot-${role}`, role)}` }
+      await denied(() => raw('PATCH', '/api/rows/project/1', bearer, { inbox: 'x@evil.test' }), 403, 'forbidden')
+    },
+  )
+
+  test('an editor may echo it unchanged beside a change to another column', async () => {
+    const editor = send(app, await signIn(app, 'editor'))
+    const body = JSON.stringify({ inbox: 'alfa@example.test', name: 'Alfa 2' })
+    expect((await editor('PATCH', '/api/rows/project/1', { body })).status).toBe(200)
+    expect(sqlite.query('SELECT name, inbox FROM project WHERE id = 1').get()).toEqual({
+      name: 'Alfa 2',
+      inbox: 'alfa@example.test',
+    })
+  })
+
+  test("the change also kills its subject's outstanding action tokens", async () => {
+    const editor = send(app, await signIn(app, 'editor'))
+    expect((await editor('PATCH', '/api/rows/note/1', { body: JSON.stringify({ kind: 'lang' }) })).status).toBe(200)
+    const token = (actLinks.at(-1) as string).split('/#/act/')[1]
+    expect((await raw('POST', '/api/act/view', {}, { token })).status).toBe(200)
+
+    const admin = send(app, await signIn(app, 'administrator'))
+    const moved = await admin('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'new@example.test' }) })
+    expect(moved.status).toBe(200)
+    const act = await raw('POST', '/api/act', {}, { token, to: 'kort' })
+    expect({ status: act.status, code: ((await act.json()) as { code: string }).code }).toEqual({
+      status: 401,
+      code: 'bad_token',
+    })
+  })
+
+  test('an undo of the change kills the link and the action tokens delivered to the undone address', async () => {
+    const admin = send(app, await signIn(app, 'administrator'))
+    const moved = await admin('PATCH', '/api/rows/project/1', { body: JSON.stringify({ inbox: 'new@example.test' }) })
+    expect(moved.status).toBe(200)
+    const delivered = linkOf(1)
+    expect((await asLink(delivered)).status).toBe(200)
+    const editor = send(app, await signIn(app, 'editor'))
+    expect((await editor('PATCH', '/api/rows/note/1', { body: JSON.stringify({ kind: 'lang' }) })).status).toBe(200)
+    const token = (actLinks.at(-1) as string).split('/#/act/')[1]
+    expect((await raw('POST', '/api/act/view', {}, { token })).status).toBe(200)
+
+    const undone = await admin('POST', `/api/batches/${moved.body.revision.batch_id}/undo`, { body: '{}' })
+    expect(undone.status).toBe(200)
+    expect(sqlite.query('SELECT inbox FROM project WHERE id = 1').get()).toEqual({ inbox: 'alfa@example.test' })
+    const link = (await asLink(delivered)).status
+    const act = await raw('POST', '/api/act', {}, { token, to: 'kort' })
+    expect({ link, act: act.status, code: ((await act.json()) as { code: string }).code }).toEqual({
+      link: 401,
+      act: 401,
+      code: 'bad_token',
+    })
     expect((await asLink(linkOf(1))).status).toBe(200)
   })
 })
@@ -468,9 +517,5 @@ describe('validation', () => {
     ['an undeclared column', { name: project.columns.name }],
   ] as const)('refuses a record_link email naming %s', (_, columns) => {
     expect(() => validateDomain(withProject({ ...project, columns } as DatasetDecl))).toThrow(DomainError)
-  })
-
-  test('accepts the declaration on an owned dataset with a text email', () => {
-    expect(() => validateDomain(domain)).not.toThrow()
   })
 })

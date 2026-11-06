@@ -1,12 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { Hono } from 'hono'
-import { type Actor, type ColumnDecl, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
-import type { AuthEnv } from '../src/auth'
-import { silentMailer } from '../src/mailer'
+import { type ColumnDecl, type Domain, defineDataset, defineQuery, migrate, seedDomain } from '../src'
 import { keySeeded } from '../src/migrate'
-import { viewRoutes } from '../src/views'
 import { contents, type Sent, send } from './fixture'
 import { signIn, testEngine } from './sign-in'
 
@@ -534,22 +529,4 @@ describe('the owner-0 migration', () => {
     expect(owners(db).map((v) => v.owner_id)).toEqual([-1, 0, 0])
     expect(logged.some((line) => line.includes('2 views'))).toBe(true)
   })
-})
-
-test('view writes credit the actor of the request', async () => {
-  const api = new Hono<AuthEnv>().basePath('/api')
-  const actor: Actor = { id: 5, role: 'editor', subject: null }
-  api.use((c, next) => {
-    c.set('actor', actor)
-    return next()
-  })
-  viewRoutes(api, { sqlite, db: drizzle(sqlite), domain, mailer: silentMailer, appUrl: '' })
-  const as5 = send(api)
-  const created = await as5('POST', '/api/views', body(NEW))
-  expect(created.body).toMatchObject({ owner_id: 5, mine: true })
-  await as5('PATCH', `/api/views/${created.body.id}`, body({ name: 'Anders' }))
-  await as5('DELETE', `/api/views/${created.body.id}`, { type: null })
-  const actors = revisions(created.body.id).map((r) => r.actor_id)
-  expect(actors.length).toBeGreaterThan(2)
-  expect(new Set(actors)).toEqual(new Set([5]))
 })

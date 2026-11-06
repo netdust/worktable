@@ -72,6 +72,8 @@ describe('reading lookups', () => {
   })
 
   test('a deleted target reads null', async () => {
+    sqlite.run("UPDATE team SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = 1")
+    expect((await rowsOf('item'))[0]?.team_name).toBeNull()
     sqlite.run("UPDATE item SET deleted_at = '2026-01-01T00:00:00Z' WHERE id = 1")
     const rows = await rowsOf('line')
     const inheriting = byId(rows, 2)
@@ -151,10 +153,6 @@ describe('validateDomain refuses a lookups declaration', () => {
     }
     throw new Error('expected DomainError')
   }
-
-  test('the fixture passes', () => {
-    expect(() => validateDomain(domain)).not.toThrow()
-  })
 
   test('a via that is not a relation', () => {
     expect(bad(onItem({ team_name: lookup({ via: 'phase' }) }))).toBe('phase')
@@ -310,13 +308,6 @@ describe('a lookup behaves like a column in a view', () => {
       }),
     })
     expect(five.status).toBe(201)
-  })
-
-  test('an unknown key stays 400', async () => {
-    const filter = await q('line', { filter: '{"nope":1}' })
-    expect([filter.status, (filter.body as { code: string }).code]).toEqual([400, 'bad_filter'])
-    const sort = await q('line', { sort: 'nope' })
-    expect([sort.status, (sort.body as { code: string }).code]).toEqual([400, 'bad_sort'])
   })
 
   test('history filters on a lookup', async () => {

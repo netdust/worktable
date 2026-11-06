@@ -188,10 +188,6 @@ describe('lifecycle validation', () => {
     expect((error as DomainError).bad).toBe(bad)
   }
 
-  test('the test domain is valid', () => {
-    expect(() => validateDomain(domain)).not.toThrow()
-  })
-
   test('the column must be an options column', () => {
     refused(ticketOf({ lifecycle: { ...lifecycle, column: 'note' } }), 'note')
     refused(ticketOf({ lifecycle: { ...lifecycle, column: 'nope' } }), 'nope')
@@ -368,10 +364,6 @@ describe('checkTransition', () => {
     expect(codeOf(() => checkTransition(ticket, { state: 'c' }, { state: 'a' }, ed, mode))).toBe(
       'transition_not_allowed',
     )
-  })
-
-  test('a create is no transition', () => {
-    expect(() => checkTransition(ticket, null, { state: 'c' }, ed, { kind: 'write' })).not.toThrow()
   })
 })
 

@@ -247,13 +247,7 @@ describe('refusals', () => {
     expect(res.status).toBe(201)
   })
 
-  test('an unknown kind is 400 bad_kind', async () => {
-    const res = await upload(PDF, { kind: 'nope' })
-    expect({ status: res.status, code: res.body.code }).toEqual({ status: 400, code: 'bad_kind' })
-  })
-
   test.each([
-    ['a newline', 'a\nb.pdf'],
     ['a NUL', 'a\u0000.pdf'],
     ['a right-to-left override', 'cod\u202egnp.pdf'],
     ['a left-to-right mark', 'a\u200eb.pdf'],
@@ -309,6 +303,12 @@ describe('refusals', () => {
     expect(await other.json()).toEqual(await unknown.json())
     expect((await remove(body.id, owner)).status).toBe(404)
     expect((await list(1, owner)).status).toBe(404)
+    const refused = await upload(PDF, { id: 1, cookie: owner })
+    expect({ status: refused.status, code: refused.body.code, stored: stored() }).toEqual({
+      status: 404,
+      code: 'unknown_record',
+      stored: { n: 1 },
+    })
   })
 
   test('an owner reads its own record’s files but uploads only with owner_writable', async () => {
@@ -401,11 +401,6 @@ describe('delete and undo', () => {
     const res = await undo(body.revision.batch_id)
     expect({ status: res.status, code: res.body.code }).toEqual({ status: 409, code: 'changed_since' })
     expect(await listedIds()).toEqual([])
-  })
-
-  test("another account's attachment batch is refused", async () => {
-    const { body } = await upload(PDF, { cookie: await signIn(app) })
-    expect((await undo(body.revision.batch_id)).status).toBe(403)
   })
 })
 

@@ -420,12 +420,6 @@ describe('auth', () => {
     expect((await request('GET', '/api/auth/me', { cookie })).status).toBe(401)
   })
 
-  test('a signed-in request reaches the routes as before', async () => {
-    const cookie = await signIn(app)
-    const rows = await request('GET', '/api/rows/taak', { cookie })
-    expect({ status: rows.status, count: rows.body.rows.length }).toEqual({ status: 200, count: 4 })
-  })
-
   test('a consume sweeps expired links and sessions', async () => {
     createAccount(sqlite, domain, 'known@example.test', 'editor')
     await signInAs(app, 'known@example.test')
@@ -491,6 +485,7 @@ describe('serve.ts', () => {
     ['an unknown role', ['--role', 'planner']],
     ['no role', []],
     ['a subject naming an undeclared dataset', ['--role', 'owner', '--subject', 'nope:1']],
+    ['a subject naming an engine table', ['--role', 'owner', '--subject', 'saved_view:1']],
     ['a malformed subject', ['--role', 'owner', '--subject', 'project']],
     ['a subject row that does not exist', ['--role', 'owner', '--subject', 'project:99']],
   ])(
